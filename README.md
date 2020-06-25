@@ -11,15 +11,16 @@ also a gui editor could be created (or even prelaunched - maybe depending on a b
 
 # installation: 
 this is one single bash script. just copy it wherever you want, f.e. /usr/local/bin/
-to initially create a default config template "$HOME/.stl/default_template"
+to initially create a default config template "$HOME/.stl/default_template.conf"
+and a default global config "$HOME/.stl/global.conf"
 just call the script without any arguments
 you might want to change the created config to your needs before use
 
 
 usage: add this program to your steam game command line like 'stl %command%'
 -----------------------------------
-stl will check if a config file exists in "$HOME/.stl/" for the game exename and will source it if available
-if it is not available it is created from a default config file "$HOME/.stl/default_template" (which is created from the stl script if not found)
+stl will check if a config file exists in "$HOME/.stl/$GAMENAME.conf" for the game and will source it if available
+if it is not available it is created from the default config file (which is created from the stl script if not found)
 
 most options shipped with the (autowritten) default config are commented out.
 described are only the variables which come from stl, for all others please check their upstream project:
