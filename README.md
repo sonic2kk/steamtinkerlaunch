@@ -7,6 +7,12 @@ with its help every proton game creates/reads its own custom launch settings lik
 
 the idea was that you just have to edit the steam command line once (imho the editor is not very usable ) and every thing else can be changed easily with the parsed per-game config. also a gui editor could be created (or even prelaunched - maybe depending on a boolean set) for editing the custom settings
 
+# installation: 
+this is one single bash script. just copy it wherever you want, f.e. /usr/local/bin/
+to initially create a default config template "$HOME/.$(basename "$0")/default_template"
+just call the script without any arguments
+you might want to change the created config to your needs before use
+
 
 usage: add this program to your steam game command line like 'stl %command%'
 -----------------------------------
