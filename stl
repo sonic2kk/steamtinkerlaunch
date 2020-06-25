@@ -2,20 +2,21 @@
 # shellcheck source=/dev/null
 
 function howto {
-	echo "SteamTinkerLaunch v0.01"
+	echo "SteamTinkerLaunch v0.02"
 	echo " usage: add this program to your steam game command line like 'stl %command%'"
 	echo "-----------------------------------"
 	echo "  $(basename "$0") will check if a config file exists in $STLCFGDIR for the game exename and will source it if available"
-	echo "  if it is not available it is created from a default config file $STLDEFCFG (which is created from the createDefaultCfg function if not available)"
+	echo "  if it is not available it is created from a default config file $STLDEFGAMECFG (which is created from the createDefaultCfg function if not available)"
 }
 
 #STLLOG="/tmp/$(basename "$0").log"															# log file of this script - currently unused
 STLCFGDIR="$HOME/.$(basename "$0")"															# base config dir for this script
 STLDXVKDIR="$STLCFGDIR/dxvk"																# base dxvk config dir from where default per game configs are automatically parsed
-STLDEFCFG="$STLCFGDIR/default_template"														# the default config template used to create new per game configs - will be autocreated if not found
+STLDEFGAMECFG="$STLCFGDIR/default_template.conf"											# the default config template used to create new per game configs - will be autocreated if not found
+STLDEFGLOBALCFG="$STLCFGDIR/global.conf"
 GP="$(awk -F 'waitforexitandrun ' '{print $NF}' <<< "$@" | awk -F ' GID=' '{print $1}')"	# the absolute game path of the windows game exe
 GE="$(basename "$GP" | awk -F '.exe' '{print $1}')"											# just the windows game exe name - will be used as game identifier, as we don't have the steamid here :(
-STLGAMECFG="$STLCFGDIR/$GE"																	# the game specific config file which is used by the launched game - created from $STLDEFCFG if not found
+STLGAMECFG="$STLCFGDIR/$GE.conf"																	# the game specific config file which is used by the launched game - created from $STLDEFGAMECFG if not found
 #GFD="$(dirname "$GP")"																		# the absolute directory where the game exe lives - currently unused
 
 # create project dirs:
@@ -29,55 +30,78 @@ function createProjectDirs {
 	fi
 }
 
-#create the default cfg "$STLDEFCFG" if not found:
-function createDefaultCfg {
-	if [ ! -f "$STLDEFCFG" ]; then
-		echo "default template config not found - creating it"
-		echo "# set JUSTWRITECFG to 1 to exit after writing the default config for the launched game:" | tee "$STLDEFCFG"
-		echo "JUSTWRITECFG=0" | tee -a "$STLDEFCFG"
-		echo "# set the default config file for DXVK_CONFIG_FILE which is used when found - defaults to config found in $STLDXVKDIR" | tee -a "$STLDEFCFG"
-		echo "STLDXVKCFG=$STLDXVKDIR/$GE.conf" | tee -a "$STLDEFCFG"
-		echo "# start game with gamemoderun:" | tee -a "$STLDEFCFG"
-		echo "USEGAMEMODERUN=1" | tee -a "$STLDEFCFG"
-		echo "# use mangohud:" | tee -a "$STLDEFCFG"
-		echo "MANGOHUD=1" | tee -a "$STLDEFCFG"
-		echo "# set radv mode:" | tee -a "$STLDEFCFG"
-		echo "RADV_PERFTEST=aco" | tee -a "$STLDEFCFG"
-		echo "NOTY=notify-send" | tee -a "$STLDEFCFG"
-		echo "# proton vars:" | tee -a "$STLDEFCFG"
-		echo "PROTON_LOG=0" | tee -a "$STLDEFCFG"
-		echo "#PROTON_DUMP_DEBUG_COMMANDS=0" | tee -a "$STLDEFCFG"
-		echo "#PROTON_DEBUG_DIR=/tmp" | tee -a "$STLDEFCFG"
-		echo "#PROTON_USE_WINED3D=0" | tee -a "$STLDEFCFG"
-		echo "#PROTON_NO_D3D11=0" | tee -a "$STLDEFCFG"
-		echo "#PROTON_NO_D3D10=0" | tee -a "$STLDEFCFG"
-		echo "#PROTON_NO_ESYNC=0" | tee -a "$STLDEFCFG"
-		echo "#PROTON_NO_FSYNC=0" | tee -a "$STLDEFCFG"
-		echo "#PROTON_FORCE_LARGE_ADDRESS_AWARE=1" | tee -a "$STLDEFCFG"
-		echo "#PROTON_OLD_GL_STRING=0" | tee -a "$STLDEFCFG"
-		echo "#PROTON_USE_SECCOMP=0" | tee -a "$STLDEFCFG"
-		echo "#PROTON_NO_WRITE_WATCH=0" | tee -a "$STLDEFCFG"
-		echo "# dxvk vars - see https://github.com/doitsujin/dxvk" | tee -a "$STLDEFCFG"
-		echo "#DXVK_HUD=0" | tee -a "$STLDEFCFG"
-		echo "#DXVK_LOG_LEVEL=none|error|warn|info|debug Controls message logging." | tee -a "$STLDEFCFG"
-		echo "#DXVK_LOG_PATH=/some/directory Changes path where log files are stored." | tee -a "$STLDEFCFG"
-		echo "# wine vars:" | tee -a "$STLDEFCFG"
-		echo "#WINE_FULLSCREEN_INTEGER_SCALING=0" | tee -a "$STLDEFCFG"
+# create the default global config if not found:
+function createDefaultGlobalCfg {
+	if [ ! -f "$STLDEFGLOBALCFG" ]; then
+		echo "default global config not found - creating it"
+		echo "# set JUSTWRITECFG to 1 to exit after writing the default config for the launched game:" | tee "$STLDEFGLOBALCFG"
+		echo "JUSTWRITECFG=0" | tee -a "$STLDEFGLOBALCFG"	
+		echo "# create an empty \$STLDXVKCFG_tmpl for easier editing when required" | tee -a "$STLDEFGLOBALCFG"
+		echo "CREATESTLDXVKCFGTMPL=0" | tee -a "$STLDEFGLOBALCFG"
+	fi
+}
+
+# create the default cfg "$STLDEFGAMECFG" if not found:
+function createDefaultGameCfg {
+	if [ ! -f "$STLDEFGAMECFG" ]; then
+		echo "default game template config not found - creating it"
+		echo "# set the default config file for DXVK_CONFIG_FILE which is used when found - defaults to config found in $STLDXVKDIR" | tee "$STLDEFGAMECFG"
+		echo "STLDXVKCFG=$STLDXVKDIR/$GE.conf" | tee -a "$STLDEFGAMECFG"
+		echo "# start game with gamemoderun:" | tee -a "$STLDEFGAMECFG"
+		echo "USEGAMEMODERUN=1" | tee -a "$STLDEFGAMECFG"
+		echo "# use mangohud:" | tee -a "$STLDEFGAMECFG"
+		echo "MANGOHUD=1" | tee -a "$STLDEFGAMECFG"
+		echo "# set radv mode:" | tee -a "$STLDEFGAMECFG"
+		echo "RADV_PERFTEST=aco" | tee -a "$STLDEFGAMECFG"
+		echo "NOTY=notify-send" | tee -a "$STLDEFGAMECFG"
+		echo "# proton vars:" | tee -a "$STLDEFGAMECFG"
+		echo "PROTON_LOG=0" | tee -a "$STLDEFGAMECFG"
+		echo "#PROTON_DUMP_DEBUG_COMMANDS=0" | tee -a "$STLDEFGAMECFG"
+		echo "#PROTON_DEBUG_DIR=/tmp" | tee -a "$STLDEFGAMECFG"
+		echo "#PROTON_USE_WINED3D=0" | tee -a "$STLDEFGAMECFG"
+		echo "#PROTON_NO_D3D11=0" | tee -a "$STLDEFGAMECFG"
+		echo "#PROTON_NO_D3D10=0" | tee -a "$STLDEFGAMECFG"
+		echo "#PROTON_NO_ESYNC=0" | tee -a "$STLDEFGAMECFG"
+		echo "#PROTON_NO_FSYNC=0" | tee -a "$STLDEFGAMECFG"
+		echo "#PROTON_FORCE_LARGE_ADDRESS_AWARE=1" | tee -a "$STLDEFGAMECFG"
+		echo "#PROTON_OLD_GL_STRING=0" | tee -a "$STLDEFGAMECFG"
+		echo "#PROTON_USE_SECCOMP=0" | tee -a "$STLDEFGAMECFG"
+		echo "#PROTON_NO_WRITE_WATCH=0" | tee -a "$STLDEFGAMECFG"
+		echo "# dxvk vars - see https://github.com/doitsujin/dxvk" | tee -a "$STLDEFGAMECFG"
+		echo "#DXVK_HUD=0" | tee -a "$STLDEFGAMECFG"
+		echo "#DXVK_LOG_LEVEL=none|error|warn|info|debug Controls message logging." | tee -a "$STLDEFGAMECFG"
+		echo "#DXVK_LOG_PATH=/some/directory Changes path where log files are stored." | tee -a "$STLDEFGAMECFG"
+		echo "# wine vars:" | tee -a "$STLDEFGAMECFG"
+		echo "#WINE_FULLSCREEN_INTEGER_SCALING=0" | tee -a "$STLDEFGAMECFG"
 		echo "default config $STLCFGDIR created - you might want to edit it before use"
 	fi
 }
 
-# create the game config from $STLDEFCFG if not found
+# create the game config from $STLDEFGAMECFG if not found
 function createGameCfg {
 	if [ ! -f "$STLGAMECFG" ] ; then
-		grep -v "JUSTWRITECFG" "$STLDEFCFG" > "$STLGAMECFG"
+		cp "$STLDEFGAMECFG" "$STLGAMECFG"
 
 	# exit after creating the game config without starting the game if JUSTWRITECFG is 1:
-		source "$STLDEFCFG"
+		source "$STLDEFGLOBALCFG"
+	# create "$STLDXVKCFG"_tmpl if configured
+		source "$STLGAMECFG"
+		if [ ! -f "$STLDXVKCFG" ]; then
+			if [ "$CREATESTLDXVKCFGTMPL" -eq 1 ]; then
+				touch "$STLDXVKCFG"_tmpl
+			fi
+		fi
+
 		if [ "$JUSTWRITECFG" -eq 1 ]; then
 			exit
 		fi
 	fi
+}
+
+function createDefaultsCfgs {
+	createProjectDirs
+	createDefaultGlobalCfg
+	createDefaultGameCfg
 }
 
 
@@ -85,8 +109,7 @@ function createGameCfg {
 
 function launchsteamprotongame {
 
-createProjectDirs
-createDefaultCfg
+createDefaultsCfgs
 createGameCfg
 
 # export game specific variables, exports die with this script, so no worries:
@@ -124,7 +147,7 @@ fi
 # main:
 if [ -z "$1" ]; then
 	echo "no arguments provided - you probably didn't launch this via steam command line arguments"
-	createDefaultCfg
+	createDefaultsCfgs
 	howto
 else
 	if echo "$@" | grep "waitforexitandrun"; then
@@ -133,7 +156,7 @@ else
 	else
 		echo "$@"
 		echo "doesn't contain waitforexitandrun - this doesn't look like a steam proton launch command"
-		createDefaultCfg
+		createDefaultsCfgs
 		howto
 	fi
 fi
