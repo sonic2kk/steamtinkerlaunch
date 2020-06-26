@@ -24,7 +24,27 @@ if it is not available it is created from the default config file (which is crea
 
 most options shipped with the (autowritten) default config are commented out.
 described are only the variables which come from stl, for all others please check their upstream project:
-* JUSTWRITECFG=1 # set JUSTWRITECFG to 1 to exit after writing the default config for the selected game without starting the game - useful for quickly creating a configuration
-* USEGAMEMODERUN=1 # start game with gamemoderun
-* NOTY=notify-send # the notifier used
-* RADV_PERFTEST=aco # radv mode - default is aco
+
+global settings:
+
+* JUSTWRITECFG=1 							# set to 1 to exit after writing the default config for the selected game without starting the game - useful for quickly creating a configuration
+* CREATESTLDXVKCFGTMPL						# create an empty $STLDXVKCFG_tmpl for easier editing when required
+* STRACEDIR=/tmp/ 							# the base strace path used to optionally dump strace logs
+* STLLOG=/tmp/$(basename "$0").log			# the stl logfile
+* WRITELOG=0								# write logfile if enabled
+
+
+per game settings:
+
+* USEGAMEMODERUN=1							# start game with gamemoderun
+* NOTY=notify-send							# the notifier used
+* RADV_PERFTEST=aco							# radv mode - default is aco
+* STRACERUN=0 								# if set to one stl will write a strace log of the launched game
+* STRACEOPTS=-f -t -e trace=file			# the strace options used for strace
+
+
+strace:
+when STRACERUN is enabled make sure
+/proc/sys/kernel/yama/ptrace_scope is set to 0
+else your user will get access denied when trying to attach a process
+either "echo 0 > /proc/sys/kernel/yama/ptrace_scope" as root or enable it persistent in sysctl

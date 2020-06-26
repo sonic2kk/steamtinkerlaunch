@@ -9,14 +9,13 @@ function howto {
 	echo "  if it is not available it is created from a default config file $STLDEFGAMECFG (which is created from the createDefaultCfg function if not available)"
 }
 
-#STLLOG="/tmp/$(basename "$0").log"															# log file of this script - currently unused
 STLCFGDIR="$HOME/.$(basename "$0")"															# base config dir for this script
 STLDXVKDIR="$STLCFGDIR/dxvk"																# base dxvk config dir from where default per game configs are automatically parsed
 STLDEFGAMECFG="$STLCFGDIR/default_template.conf"											# the default config template used to create new per game configs - will be autocreated if not found
 STLDEFGLOBALCFG="$STLCFGDIR/global.conf"
 GP="$(awk -F 'waitforexitandrun ' '{print $NF}' <<< "$@" | awk -F ' GID=' '{print $1}')"	# the absolute game path of the windows game exe
 GE="$(basename "$GP" | awk -F '.exe' '{print $1}')"											# just the windows game exe name - will be used as game identifier, as we don't have the steamid here :(
-STLGAMECFG="$STLCFGDIR/$GE.conf"																	# the game specific config file which is used by the launched game - created from $STLDEFGAMECFG if not found
+STLGAMECFG="$STLCFGDIR/$GE.conf"															# the game specific config file which is used by the launched game - created from $STLDEFGAMECFG if not found
 #GFD="$(dirname "$GP")"																		# the absolute directory where the game exe lives - currently unused
 
 # create project dirs:
@@ -38,6 +37,13 @@ function createDefaultGlobalCfg {
 		echo "JUSTWRITECFG=0" | tee -a "$STLDEFGLOBALCFG"	
 		echo "# create an empty \$STLDXVKCFG_tmpl for easier editing when required" | tee -a "$STLDEFGLOBALCFG"
 		echo "CREATESTLDXVKCFGTMPL=0" | tee -a "$STLDEFGLOBALCFG"
+		echo "# the base strace path used to optionally dump strace logs" | tee -a "$STLDEFGLOBALCFG"
+		echo "STRACEDIR=/tmp/" | tee -a "$STLDEFGLOBALCFG"
+		echo "# stl logfile" | tee -a "$STLDEFGLOBALCFG"
+		echo "STLLOG=/tmp/$(basename "$0").log" | tee -a "$STLDEFGLOBALCFG"
+		echo "#write logfile if enabled" | tee -a "$STLDEFGLOBALCFG"
+		echo "WRITELOG=0" | tee -a "$STLDEFGLOBALCFG"
+
 	fi
 }
 
@@ -72,6 +78,9 @@ function createDefaultGameCfg {
 		echo "# wine vars:" | tee -a "$STLDEFGAMECFG"
 		echo "#WINE_FULLSCREEN_INTEGER_SCALING=0" | tee -a "$STLDEFGAMECFG"
 		echo "default config $STLCFGDIR created - you might want to edit it before use"
+		echo "# strace settings:" | tee -a "$STLDEFGAMECFG"
+		echo "#STRACERUN=0" | tee -a "$STLDEFGAMECFG"
+		echo "#STRACEOPTS=-f -t -e trace=file" | tee -a "$STLDEFGAMECFG"
 	fi
 }
 
@@ -104,6 +113,27 @@ function createDefaultsCfgs {
 	createDefaultGameCfg
 }
 
+function writelog {
+	source "$STLDEFGLOBALCFG"
+
+	if [ "$WRITELOG" -eq 1 ]; then
+		echo "$1" | tee -a "$STLLOG"
+	fi
+}
+
+# shellcheck disable=SC2086	# $STRACEOPTS wasn't accepted as array either, so *worksforme* for now
+
+function stracerun {
+	writelog "$(date) - starting stracerun"
+
+	while ! pgrep "$GE" ; do
+		writelog "$(date) - waiting for process $GE"
+		sleep 0.1
+	done
+	writelog "$(date) - process $GE found at $(pgrep "$GE")"
+	writelog "$(date) - strace -p $(pgrep "$GE") $STRACEOPTS -o $STRACEDIR/$GE.log"
+	strace -p "$(pgrep "$GE")" $STRACEOPTS -o "$STRACEDIR/$GE.log"
+}
 
 ## launchsteamprotongame:
 
@@ -115,7 +145,7 @@ createGameCfg
 # export game specific variables, exports die with this script, so no worries:
 	while read -r line; do
 		if  echo "$line" | grep -v "^#"; then
-#			echo "line ${line?}" | tee -a "$STLLOG"
+#			writelog "line ${line?}"
 			export "${line?}"
 		fi
 	done < "$STLGAMECFG"
@@ -135,8 +165,12 @@ fi
 		export DXVK_CONFIG_FILE="$STLDXVKCFG"
 	fi
 
-	# the actual game launch - either with or without gamemoderun:
+# start strace process in the background
+	if [ "$STRACERUN" -eq 1 ]; then
+		stracerun &
+	fi
 
+# the actual game launch - either with or without gamemoderun:
 	if [ "$USEGAMEMODERUN" -eq 1 ]; then
 		gamemoderun "$@"
 	else
@@ -151,7 +185,7 @@ if [ -z "$1" ]; then
 	howto
 else
 	if echo "$@" | grep "waitforexitandrun"; then
-#		echo args "$@" | tee -a "$STLLOG"
+		writelog "$(date) - game launch args $*"
 		launchsteamprotongame "$@"
 	else
 		echo "$@"
