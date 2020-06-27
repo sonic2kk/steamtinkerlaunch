@@ -8,10 +8,11 @@ With its help every proton game creates/reads a config file with its own custom 
 * gamemoderun
 * notifier
 * strace
+* optionally start editor with game-specific config before game launch via keypress
 
 TODO:
-* add zenity gui, which optionally opens on keypress on gamelaunch
 * it doesn't seem to work to launch a windows exe as custom command via proton...
+* maybe get protontricks $APPID --gui working
 * more
 
 the idea is that you just have to edit the steam command line once (imho the editor is not very usable)
@@ -47,6 +48,10 @@ global settings:
 * STLLOG=/tmp/$(basename "$0").log			# the stl logfile
 * WRITELOG=0								# write logfile if enabled
 * WAITGUI=0									# number of seconds to wait for a keypress on gamelaunch to start the gui - TODO (not implemented yet)
+* STLEDITOR=geany							# the texteditor to use for opening the gameconfig - f.e. with WAITEDITOR
+* WAITEDITOR=2								# wait WAITEDITOR seconds for a keypress to open the texteditor STLEDITOR with the game config
+
+if you do not want to start the editor requester on game launch just set WAITEDITOR=0 - it will be skipped then
 
 #################
 
@@ -87,7 +92,6 @@ mangohud:
 radv aco:
 ----------
 * #RADV_PERFTEST=aco						# this is mesa upstream default so will probably disappear in the default config here
-
 
 strace:
 ----------

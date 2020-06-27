@@ -3,7 +3,7 @@
 # shellcheck disable=SC2154 # we work with steam variables here which are unknown to shellcheck
  
 function howto {
-	echo "SteamTinkerLaunch v0.02"
+	echo "SteamTinkerLaunch v0.1"
 	echo " usage: add this program to your steam game command line like 'stl %command%'"
 	echo "-----------------------------------"
 	echo "  $(basename "$0") will check if a config file exists in $STLCFGDIR for the game exename and will source it if available"
@@ -21,19 +21,19 @@ STLGAMECFG="$STLCFGDIR/$AID.conf"															# the game specific config file 
 GFD="$(dirname "$GP")"																		# the absolute directory where the game exe lives - unused for optional custom program
 GN="$(basename "$PWD")"																		# we are in the gamedir, so this is basically the proper game name
 
-function zenityCheck {
-# or directly STEAM_ZENITY / SYSTEM_ZENITY
-	if [ -x "$(command -v "zenity" 2>/dev/null)" ]; then
-	echo zenity found
-	fi
-}
 
-function wantLaunchGui {
-	if [ "$WAITGUI" -gt 0 ]; then
-# TODO we need the focus on our gui here to recognize the input
-#		if read -r -t "$WAITGUI" -n 1 ; then
-			writelog "$(date) - key pressed on launch - starting stl gui)"
-#		fi
+function editGameConfig {
+	if [ "$WAITEDITOR" -gt 0 ]; then
+		if [ -x "$(command -v "$STEAM_ZENITY" 2>/dev/null)" ]; then
+			writelog "$(date) - $STEAM_ZENITY found"
+			"$STEAM_ZENITY" --question --text="start editor" --ok-label=edit --cancel-label=cancel --timeout="$WAITEDITOR"
+			case $? in
+				0) writelog "$(date) - key pressed on launch - starting STLEDITOR $STLEDITOR with config STLGAMECFG $STLGAMECFG)"; "$STLEDITOR" "$STLGAMECFG"
+				;;
+				1) writelog "$(date) - key not pressed - starting game"
+				;;
+			esac
+		fi
 	fi
 }
 
@@ -62,8 +62,10 @@ function createDefaultGlobalCfg {
 		echo "STLLOG=/tmp/$(basename "$0").log" | tee -a "$STLDEFGLOBALCFG"
 		echo "#write logfile if enabled" | tee -a "$STLDEFGLOBALCFG"
 		echo "WRITELOG=0" | tee -a "$STLDEFGLOBALCFG"
-		echo "#wait WAITGUI seconds for a keypress to open the stl gui" | tee -a "$STLDEFGLOBALCFG"
-		echo "WAITGUI=0" | tee -a "$STLDEFGLOBALCFG"
+		echo "#texteditor to use for opening the gameconfig - f.e. with WAITEDITOR" | tee -a "$STLDEFGLOBALCFG"
+		echo "STLEDITOR=geany" | tee -a "$STLDEFGLOBALCFG"
+		echo "#wait WAITEDITOR seconds for a keypress to open the texteditor STLEDITOR with the game config" | tee -a "$STLDEFGLOBALCFG"
+		echo "WAITEDITOR=2" | tee -a "$STLDEFGLOBALCFG"
 	fi
 }
 
@@ -88,6 +90,8 @@ function createDefaultGameCfg {
 		echo "MANGOHUD=1" | tee -a "$STLDEFGAMECFG"
 		echo "# set radv mode:" | tee -a "$STLDEFGAMECFG"
 		echo "#RADV_PERFTEST=aco" | tee -a "$STLDEFGAMECFG"
+		echo "# start protontricks gui before game launch TODO - broken!:" | tee -a "$STLDEFGAMECFG"
+		echo "#RUN_PROTONTRICKS=1" | tee -a "$STLDEFGAMECFG"
 		echo "NOTY=notify-send" | tee -a "$STLDEFGAMECFG"
 		echo "# proton vars:" | tee -a "$STLDEFGAMECFG"
 		echo "PROTON_LOG=0" | tee -a "$STLDEFGAMECFG"
@@ -222,6 +226,20 @@ function launchCustomProg {
 			$LACO $STL_CMD_ARGS
 		fi
 	fi
+
+}
+
+# start protontricks gui before game launch:
+function checkProtontricksLaunch {
+	if [ "$RUN_PROTONTRICKS" -eq 1 ]; then
+		if  [ -x "$(command -v "protontricks" 2>/dev/null)" ]; then
+			writelog "$(date) - launching protontricks before game start"
+			writelog "$(date) - protontricks $AID --gui"
+			protontricks "$AID" --gui &
+		else
+			writelog "$(date) - protontricks not found - skipping"
+		fi
+	fi
 }
 
 function checkCustomLaunch {
@@ -253,10 +271,10 @@ function checkCustomLaunch {
 
 function launchSteamProtonGame {
 
-createDefaultCfgs
-createGameCfg
-
-wantLaunchGui
+	createDefaultCfgs
+	createGameCfg
+	
+	editGameConfig
 
 # export game specific variables, exports die with this script, so no worries:
 	while read -r line; do
@@ -265,6 +283,9 @@ wantLaunchGui
 			export "${line?}"
 		fi
 	done < "$STLGAMECFG"
+
+# maybe start protontricks
+#	checkProtontricksLaunch	# broken - no idea if fixable, steam is picky with its pfxes
 
 # maybe start a custom program:
 	checkCustomLaunch "$@"
