@@ -1,6 +1,7 @@
 #!/bin/bash
 # shellcheck source=/dev/null
-
+# shellcheck disable=SC2154 # we work with steam variables here which are unknown to shellcheck
+ 
 function howto {
 	echo "SteamTinkerLaunch v0.02"
 	echo " usage: add this program to your steam game command line like 'stl %command%'"
@@ -9,14 +10,31 @@ function howto {
 	echo "  if it is not available it is created from a default config file $STLDEFGAMECFG (which is created from the createDefaultCfg function if not available)"
 }
 
+AID="$SteamAppId"
 STLCFGDIR="$HOME/.$(basename "$0")"															# base config dir for this script
 STLDXVKDIR="$STLCFGDIR/dxvk"																# base dxvk config dir from where default per game configs are automatically parsed
 STLDEFGAMECFG="$STLCFGDIR/default_template.conf"											# the default config template used to create new per game configs - will be autocreated if not found
 STLDEFGLOBALCFG="$STLCFGDIR/global.conf"
 GP="$(awk -F 'waitforexitandrun ' '{print $NF}' <<< "$@" | awk -F ' GID=' '{print $1}')"	# the absolute game path of the windows game exe
 GE="$(basename "$GP" | awk -F '.exe' '{print $1}')"											# just the windows game exe name - will be used as game identifier, as we don't have the steamid here :(
-STLGAMECFG="$STLCFGDIR/$GE.conf"															# the game specific config file which is used by the launched game - created from $STLDEFGAMECFG if not found
-#GFD="$(dirname "$GP")"																		# the absolute directory where the game exe lives - currently unused
+STLGAMECFG="$STLCFGDIR/$AID.conf"															# the game specific config file which is used by the launched game - created from $STLDEFGAMECFG if not found
+GFD="$(dirname "$GP")"																		# the absolute directory where the game exe lives - unused for optional custom program
+GN="$(basename "$PWD")"																		# we are in the gamedir, so this is basically the proper game name
+
+function zenityCheck {
+	if [ -x "$(command -v "zenity" 2>/dev/null)" ]; then
+	echo zenity found
+	fi
+}
+
+function wantLaunchGui {
+	if [ "$WAITGUI" -gt 0 ]; then
+# TODO we need the focus on our gui here to recognize the input
+#		if read -r -t "$WAITGUI" -n 1 ; then
+			writelog "$(date) - key pressed on launch - starting stl gui)"
+#		fi
+	fi
+}
 
 # create project dirs:
 function createProjectDirs {
@@ -43,20 +61,37 @@ function createDefaultGlobalCfg {
 		echo "STLLOG=/tmp/$(basename "$0").log" | tee -a "$STLDEFGLOBALCFG"
 		echo "#write logfile if enabled" | tee -a "$STLDEFGLOBALCFG"
 		echo "WRITELOG=0" | tee -a "$STLDEFGLOBALCFG"
-
+		echo "#wait WAITGUI seconds for a keypress to open the stl gui" | tee -a "$STLDEFGLOBALCFG"
+		echo "WAITGUI=0" | tee -a "$STLDEFGLOBALCFG"
 	fi
 }
 
 # create the default cfg "$STLDEFGAMECFG" if not found:
 function createDefaultGameCfg {
 	if [ ! -f "$STLDEFGAMECFG" ]; then
-		echo "default game template config not found - creating it"
-		echo "# start game with gamemoderun:" | tee "$STLDEFGAMECFG"
+		writelog "$(date) - default game template config $STLDEFGAMECFG for not found - creating it"
+
+		echo "#game:$GN" | tee "$STLDEFGAMECFG"
+		echo "#########" | tee -a "$STLDEFGAMECFG"
+		echo "#GAMENAME=$GN" | tee -a "$STLDEFGAMECFG"
+		echo "#GAMEEXE=$GE" | tee -a "$STLDEFGAMECFG"
+		echo "#GAMEID=$AID" | tee -a "$STLDEFGAMECFG"
+		echo "# set to 1 to enable the custom command STL_CMD:" | tee -a "$STLDEFGAMECFG"
+		echo "#RUN_STL_CMD=0" | tee -a "$STLDEFGAMECFG"
+		echo "# start this custom command:" | tee -a "$STLDEFGAMECFG"
+		echo "#STL_CMD=yourProgram" | tee -a "$STLDEFGAMECFG"
+		echo "# start STL_CMD command with following args:" | tee -a "$STLDEFGAMECFG"
+		echo "#STL_CMD_ARGS=--some --args" | tee -a "$STLDEFGAMECFG"
+		echo "# set to 1 to only start above STL_CMD and not the game command itself:" | tee -a "$STLDEFGAMECFG"
+		echo "#ONLY_STL_CMD=0" | tee -a "$STLDEFGAMECFG"
+		echo "# set to 1 to fork the custom STL_CMD into the background and continue with starting %command%" | tee -a "$STLDEFGAMECFG"
+		echo "#FORK_STL_CMD=0" | tee -a "$STLDEFGAMECFG"
+		echo "# start game with gamemoderun:" | tee -a "$STLDEFGAMECFG"
 		echo "USEGAMEMODERUN=1" | tee -a "$STLDEFGAMECFG"
 		echo "# use mangohud:" | tee -a "$STLDEFGAMECFG"
 		echo "MANGOHUD=1" | tee -a "$STLDEFGAMECFG"
 		echo "# set radv mode:" | tee -a "$STLDEFGAMECFG"
-		echo "RADV_PERFTEST=aco" | tee -a "$STLDEFGAMECFG"
+		echo "#RADV_PERFTEST=aco" | tee -a "$STLDEFGAMECFG"
 		echo "NOTY=notify-send" | tee -a "$STLDEFGAMECFG"
 		echo "# proton vars:" | tee -a "$STLDEFGAMECFG"
 		echo "PROTON_LOG=0" | tee -a "$STLDEFGAMECFG"
@@ -89,7 +124,7 @@ function createGameCfg {
 	if [ ! -f "$STLGAMECFG" ] ; then
 		cp "$STLDEFGAMECFG" "$STLGAMECFG"
 		echo "# set the default config file for DXVK_CONFIG_FILE which is used when found - defaults to config found in $STLDXVKDIR" | tee -a "$STLGAMECFG"
-		echo "STLDXVKCFG=$STLDXVKDIR/$GE.conf" | tee -a "$STLGAMECFG"
+		echo "STLDXVKCFG=$STLDXVKDIR/$AID.conf" | tee -a "$STLGAMECFG"
 		
 	# exit after creating the game config without starting the game if JUSTWRITECFG is 1:
 		source "$STLDEFGLOBALCFG"
@@ -107,15 +142,18 @@ function createGameCfg {
 	fi
 }
 
-function createDefaultsCfgs {
+function createDefaultCfgs {
 	createProjectDirs
 	createDefaultGlobalCfg
 	createDefaultGameCfg
 }
 
 function writelog {
-	source "$STLDEFGLOBALCFG"
 
+	if [ -z "$WRITELOG" ]; then
+		source "$STLDEFGLOBALCFG"
+	fi
+	
 	if [ "$WRITELOG" -eq 1 ]; then
 		echo "$1" | tee -a "$STLLOG"
 	fi
@@ -131,16 +169,90 @@ function stracerun {
 		sleep 0.1
 	done
 	writelog "$(date) - process $GE found at $(pgrep "$GE")"
-	writelog "$(date) - strace -p $(pgrep "$GE") $STRACEOPTS -o $STRACEDIR/$GE.log"
-	strace -p "$(pgrep "$GE")" $STRACEOPTS -o "$STRACEDIR/$GE.log"
+	writelog "$(date) - strace -p $(pgrep "$GE") $STRACEOPTS -o $STRACEDIR/$AID.log"
+	strace -p "$(pgrep "$GE")" $STRACEOPTS -o "$STRACEDIR/$AID.log"
 }
 
-## launchsteamprotongame:
 
-function launchsteamprotongame {
+# shellcheck disable=SC2086	# $STL_CMD_ARGS *worksforme* for now
 
-createDefaultsCfgs
+function launchCustomProg {
+	writelog "$(date) - starting the custom program $STL_CMD with args: $STL_CMD_ARGS"
+
+	if  [ -x "$(command -v "$STL_CMD" 2>/dev/null)" ]; then
+		writelog "$(date) - $STL_CMD found in $PATH"
+		LACO="$STL_CMD"
+		CUSTCOM="$(which "$STL_CMD")"
+	else
+		if [ -f "$GFD/$STL_CMD" ]; then
+			writelog "$(date) - $STL_CMD was found in game dir $GFD"
+			LACO="$GFD/$STL_CMD"
+			CUSTCOM="$GFD/$STL_CMD"
+		else
+			if [ -f "$STL_CMD" ]; then
+				writelog "$(date) - $STL_CMD is absolute path"
+				LACO="$STL_CMD"
+				CUSTCOM="$STL_CMD"
+			else
+				writelog "$(date) - error - $STL_CMD not found - skipping launch"
+			fi
+		fi
+	fi
+
+	if [ -z "$LACO" ]; then
+		writelog "$(date) - error - launch command $LACO empty- skipping launch"
+	else
+		writelog "$(date) - launching custom command with $LACO $STL_CMD_ARGS"
+
+# for whatever reason 'file' doesn't work from here, so using a workaround
+# hexdump taken from https://bbs.archlinux.org/viewtopic.php?id=101254
+#		if [ "$(file "$CUSTCOM" | grep -c "PE32")" -eq 1 ]; then
+		DAMNFILE=31
+		if [ "$DAMNFILE" -eq 337 ]; then
+			writelog "$(date) - $CUSTCOM seems to be a MS Windows exe - starting through proton"
+			CUSTOM_PROTON="$(echo "$*" | awk -F 'waitforexitandrun' '{print $1}')"
+			writelog "$(date) - $CUSTOM_PROTON waitforexitandrun $LACO $STL_CMD_ARGS"
+			$CUSTOM_PROTON waitforexitandrun $LACO $STL_CMD_ARGS
+		else
+			writelog "$(date) - $CUSTCOM doesn't seem to be a MS Windows exe - regular start (without further analysing)"
+			$LACO $STL_CMD_ARGS
+		fi
+	fi
+}
+
+function checkCustomLaunch {
+	# start a custom program:
+	if [ "$RUN_STL_CMD" -eq 1 ] ; then
+		writelog "$(date) - RUN_STL_CMD is set to 1 - trying to start custom program STL_CMD"
+	# fork in background and continue
+		if [ "$FORK_STL_CMD" -eq 1 ]; then
+			writelog "$(date) - FORK_STL_CMD is set to 1 -  forking the custom program in background and continue"
+			launchCustomProg "$@" &
+	# or wait
+		else
+			writelog "$(date) - FORK_STL_CMD is set to 0 - starting the custom program regularly"
+			launchCustomProg "$@"
+		fi
+
+
+		if [ "$ONLY_STL_CMD" -eq 1 ]; then
+			writelog "$(date) - ONLY_STL_CMD is set to 1 - only custom program $STL_CMD is supposed to start - exiting here"
+			exit
+		fi
+	else
+		writelog "$(date) - RUN_STL_CMD is set to 0 - skipping the custom program STL_CMD"
+	fi
+}
+
+
+## launchSteamProtonGame:
+
+function launchSteamProtonGame {
+
+createDefaultCfgs
 createGameCfg
+
+wantLaunchGui
 
 # export game specific variables, exports die with this script, so no worries:
 	while read -r line; do
@@ -150,10 +262,13 @@ createGameCfg
 		fi
 	done < "$STLGAMECFG"
 
+# maybe start a custom program:
+	checkCustomLaunch "$@"
+
 # dirtly HACK - todo: just found out that all VR games don't work with MANGOHUD=1 so checking here if vcrompositor is running and disabling it if true
-if pgrep "vrcompositor" 2>/dev/null; then
-	export MANGOHUD=0
-fi
+	if pgrep "vrcompositor" 2>/dev/null; then
+		export MANGOHUD=0
+	fi
 
 # notifier:
 	if  [ -x "$(command -v "$NOTY" 2>/dev/null)" ]; then
@@ -178,19 +293,20 @@ fi
 	fi
 }
 
-# main:
+# main:#################
+
 if [ -z "$1" ]; then
 	echo "no arguments provided - you probably didn't launch this via steam command line arguments"
-	createDefaultsCfgs
+	createDefaultCfgs
 	howto
 else
 	if echo "$@" | grep "waitforexitandrun"; then
 		writelog "$(date) - game launch args $*"
-		launchsteamprotongame "$@"
+		launchSteamProtonGame "$@"
 	else
 		echo "$@"
 		echo "doesn't contain waitforexitandrun - this doesn't look like a steam proton launch command"
-		createDefaultsCfgs
+		createDefaultCfgs
 		howto
 	fi
 fi
