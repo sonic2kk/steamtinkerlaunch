@@ -55,25 +55,25 @@ if you do not want to start the editor requester on game launch just set WAITEDI
 
 #################
 
-loose function description:
+# loose function description:
 
 custom game launch:
 ---------------------
 when enabled you can also start custom programs easily with the following per-game config options:
 
-# set to 1 to enable the custom command STL_CMD:
+set to 1 to enable the custom command STL_CMD:
 * RUN_STL_CMD=1
 
-# start this custom command:
+start this custom command:
 * STL_CMD=yourProgram
 
-# start STL_CMD command with following args:
+start STL_CMD command with following args:
 * STL_CMD_ARGS=--some --args
 
-# set to 1 to only start above STL_CMD and not the game command itself:
+set to 1 to only start above STL_CMD and not the game command itself:
 * ONLY_STL_CMD=0
 
-# set to 1 to fork the custom STL_CMD into the background and continue with starting %command%
+set to 1 to fork the custom STL_CMD into the background and continue with starting %command%
 * FORK_STL_CMD=1
 
 gamemoderun:
