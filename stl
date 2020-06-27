@@ -14,7 +14,7 @@ AID="$SteamAppId"
 STLCFGDIR="$HOME/.$(basename "$0")"															# base config dir for this script
 STLDXVKDIR="$STLCFGDIR/dxvk"																# base dxvk config dir from where default per game configs are automatically parsed
 STLDEFGAMECFG="$STLCFGDIR/default_template.conf"											# the default config template used to create new per game configs - will be autocreated if not found
-STLDEFGLOBALCFG="$STLCFGDIR/global.conf"
+STLDEFGLOBALCFG="$STLCFGDIR/global.conf"													# global config
 GP="$(awk -F 'waitforexitandrun ' '{print $NF}' <<< "$@" | awk -F ' GID=' '{print $1}')"	# the absolute game path of the windows game exe
 GE="$(basename "$GP" | awk -F '.exe' '{print $1}')"											# just the windows game exe name - will be used as game identifier, as we don't have the steamid here :(
 STLGAMECFG="$STLCFGDIR/$AID.conf"															# the game specific config file which is used by the launched game - created from $STLDEFGAMECFG if not found
@@ -22,6 +22,7 @@ GFD="$(dirname "$GP")"																		# the absolute directory where the game 
 GN="$(basename "$PWD")"																		# we are in the gamedir, so this is basically the proper game name
 
 function zenityCheck {
+# or directly STEAM_ZENITY / SYSTEM_ZENITY
 	if [ -x "$(command -v "zenity" 2>/dev/null)" ]; then
 	echo zenity found
 	fi
@@ -174,7 +175,6 @@ function stracerun {
 	strace -p "$(pgrep "$GE")" $STRACEOPTS -o "$STRACEDIR/$AID.log"
 }
 
-
 # shellcheck disable=SC2086	# $STL_CMD_ARGS *worksforme* for now
 
 function launchCustomProg {
@@ -195,7 +195,7 @@ function launchCustomProg {
 				LACO="$STL_CMD"
 				CUSTCOM="$STL_CMD"
 			else
-				writelog "$(date) - error - $STL_CMD not found - skipping launch"
+				writelog "$(date) - error - custom command STL_CMD $STL_CMD not found - skipping launch"
 			fi
 		fi
 	fi
@@ -205,15 +205,18 @@ function launchCustomProg {
 	else
 		writelog "$(date) - launching custom command with $LACO $STL_CMD_ARGS"
 
-# for whatever reason 'file' doesn't work from here, so using a workaround
+# for whatever reason 'file' doesn't work from here, so using this basic workaround - won't be enough for all windows binaries but better than nothing
 # hexdump taken from https://bbs.archlinux.org/viewtopic.php?id=101254
+
+		offset=$(hexdump -e '1/4 "0x%x"' -s 0x3c -n 4 "$CUSTCOM")
+		machine=$(hexdump -e '1/2 "0x%04x"' -s $((offset + 0x4)) -n 2 "$CUSTCOM")
+		if [ "$machine" == "0x014c" ] || [ "$machine" == "0x8664" ]; then
 #		if [ "$(file "$CUSTCOM" | grep -c "PE32")" -eq 1 ]; then
-		DAMNFILE=31
-		if [ "$DAMNFILE" -eq 337 ]; then
-			writelog "$(date) - $CUSTCOM seems to be a MS Windows exe - starting through proton"
+			writelog "$(date) - with $machine $CUSTCOM seems to be a MS Windows exe - starting through proton"
 			CUSTOM_PROTON="$(echo "$*" | awk -F 'waitforexitandrun' '{print $1}')"
 			writelog "$(date) - $CUSTOM_PROTON waitforexitandrun $LACO $STL_CMD_ARGS"
-			$CUSTOM_PROTON waitforexitandrun $LACO $STL_CMD_ARGS
+#			"$CUSTOM_PROTON" waitforexitandrun $LACO $STL_CMD_ARGS >> "$STLLOG"
+			WINEDEBUG="-all" WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx" "$(dirname "$CUSTOM_PROTON")/dist/bin/wine" "$LACO" "$STL_CMD_ARGS"
 		else
 			writelog "$(date) - $CUSTCOM doesn't seem to be a MS Windows exe - regular start (without further analysing)"
 			$LACO $STL_CMD_ARGS

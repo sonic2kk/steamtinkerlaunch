@@ -11,6 +11,7 @@ With its help every proton game creates/reads a config file with its own custom 
 
 TODO:
 * add zenity gui, which optionally opens on keypress on gamelaunch
+* it doesn't seem to work to launch a windows exe as custom command via proton...
 * more
 
 the idea is that you just have to edit the steam command line once (imho the editor is not very usable)
