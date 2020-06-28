@@ -32,6 +32,17 @@ and a default global config
 
 you might want to change the default configs to your needs before use!
 
+requirements:
+--------------
+the script itself doesn't have any special dependencies 
+(maybe "hexdump" from util-linux, if implementing windows exe as custom command succeeds)
+
+for the optional features you need:
+- strace
+- zenity (optional, $STEAM_ZENITY is used)
+- gamemoderun
+- mangohud
+- winetricks
 
 usage: add this program to your steam game command line like 'stl %command%'
 -----------------------------------
