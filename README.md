@@ -12,7 +12,6 @@ With its help every proton game creates/reads a config file with its own custom 
 
 TODO:
 * it doesn't seem to work to launch a windows exe as custom command via proton...
-* winetricks/protontricks going crazy currently, probably conflicting env variables
 * more
 
 the idea is that you just have to edit the steam command line once (imho the editor is not very usable)
@@ -46,8 +45,7 @@ global settings:
 * CREATESTLDXVKCFGTMPL						# create an empty $STLDXVKCFG_tmpl for easier editing when required
 * STRACEDIR=/tmp/ 							# the base strace path used to optionally dump strace logs
 * STLLOG=/tmp/$(basename "$0").log			# the stl logfile
-* WRITELOG=0								# write logfile if enabled
-* WAITGUI=0									# number of seconds to wait for a keypress on gamelaunch to start the gui - TODO (not implemented yet)
+* WRITELOG=1								# write logfile if enabled
 * STLEDITOR=geany							# the texteditor to use for opening the gameconfig - f.e. with WAITEDITOR
 * WAITEDITOR=2								# wait WAITEDITOR seconds for a keypress to open the texteditor STLEDITOR with the game config
 
@@ -75,6 +73,10 @@ set to 1 to only start above STL_CMD and not the game command itself:
 
 set to 1 to fork the custom STL_CMD into the background and continue with starting %command%
 * FORK_STL_CMD=1
+
+winetricks:
+------------
+* RUN_WINETRICKS=1							# set to 1 to start winetricks gui before game launch
 
 gamemoderun:
 -------------

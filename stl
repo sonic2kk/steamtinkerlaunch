@@ -33,6 +33,8 @@ function editGameConfig {
 				1) writelog "$(date) - key not pressed - starting game"
 				;;
 			esac
+		else
+			writelog "$(date) - $STEAM_ZENITY not found"
 		fi
 	fi
 }
@@ -61,7 +63,7 @@ function createDefaultGlobalCfg {
 		echo "# stl logfile" | tee -a "$STLDEFGLOBALCFG"
 		echo "STLLOG=/tmp/$(basename "$0").log" | tee -a "$STLDEFGLOBALCFG"
 		echo "#write logfile if enabled" | tee -a "$STLDEFGLOBALCFG"
-		echo "WRITELOG=0" | tee -a "$STLDEFGLOBALCFG"
+		echo "WRITELOG=1" | tee -a "$STLDEFGLOBALCFG"
 		echo "#texteditor to use for opening the gameconfig - f.e. with WAITEDITOR" | tee -a "$STLDEFGLOBALCFG"
 		echo "STLEDITOR=geany" | tee -a "$STLDEFGLOBALCFG"
 		echo "#wait WAITEDITOR seconds for a keypress to open the texteditor STLEDITOR with the game config" | tee -a "$STLDEFGLOBALCFG"
@@ -87,14 +89,14 @@ function createDefaultGameCfg {
 		echo "# start game with gamemoderun:" | tee -a "$STLDEFGAMECFG"
 		echo "USEGAMEMODERUN=1" | tee -a "$STLDEFGAMECFG"
 		echo "# use mangohud:" | tee -a "$STLDEFGAMECFG"
-		echo "MANGOHUD=1" | tee -a "$STLDEFGAMECFG"
+		echo "#MANGOHUD=1" | tee -a "$STLDEFGAMECFG"
 		echo "# set radv mode:" | tee -a "$STLDEFGAMECFG"
 		echo "#RADV_PERFTEST=aco" | tee -a "$STLDEFGAMECFG"
-		echo "# start protontricks gui before game launch TODO - broken!:" | tee -a "$STLDEFGAMECFG"
-		echo "#RUN_PROTONTRICKS=1" | tee -a "$STLDEFGAMECFG"
-		echo "NOTY=notify-send" | tee -a "$STLDEFGAMECFG"
+		echo "# start winetricks gui before game launch:" | tee -a "$STLDEFGAMECFG"
+		echo "#RUN_WINETRICKS=1" | tee -a "$STLDEFGAMECFG"
+		echo "#NOTY=notify-send" | tee -a "$STLDEFGAMECFG"
 		echo "# proton vars:" | tee -a "$STLDEFGAMECFG"
-		echo "PROTON_LOG=0" | tee -a "$STLDEFGAMECFG"
+		echo "#PROTON_LOG=0" | tee -a "$STLDEFGAMECFG"
 		echo "#PROTON_DUMP_DEBUG_COMMANDS=0" | tee -a "$STLDEFGAMECFG"
 		echo "#PROTON_DEBUG_DIR=/tmp" | tee -a "$STLDEFGAMECFG"
 		echo "#PROTON_USE_WINED3D=0" | tee -a "$STLDEFGAMECFG"
@@ -112,7 +114,6 @@ function createDefaultGameCfg {
 		echo "#DXVK_LOG_PATH=/some/directory Changes path where log files are stored." | tee -a "$STLDEFGAMECFG"
 		echo "# wine vars:" | tee -a "$STLDEFGAMECFG"
 		echo "#WINE_FULLSCREEN_INTEGER_SCALING=0" | tee -a "$STLDEFGAMECFG"
-		echo "default config $STLCFGDIR created - you might want to edit it before use"
 		echo "# strace settings:" | tee -a "$STLDEFGAMECFG"
 		echo "#STRACERUN=0" | tee -a "$STLDEFGAMECFG"
 		echo "#STRACEOPTS=-f -t -e trace=file" | tee -a "$STLDEFGAMECFG"
@@ -229,15 +230,15 @@ function launchCustomProg {
 
 }
 
-# start protontricks gui before game launch:
-function checkProtontricksLaunch {
-	if [ "$RUN_PROTONTRICKS" -eq 1 ]; then
-		if  [ -x "$(command -v "protontricks" 2>/dev/null)" ]; then
-			writelog "$(date) - launching protontricks before game start"
-			writelog "$(date) - protontricks $AID --gui"
-			protontricks "$AID" --gui &
+# start winetricks gui before game launch:
+function checkWinetricksLaunch {
+	if [ "$RUN_WINETRICKS" -eq 1 ]; then
+		if  [ -x "$(command -v "winetricks" 2>/dev/null)" ]; then
+			writelog "$(date) - launching winetricks before game start with following commandline:"
+			writelog "NO_AT_BRIDGE=1  LC_ALL=\"\" PATH=\"/usr/local/bin:/usr/bin\" LD_LIBRARY_PATH=\"\" LD_PRELOAD=\"\" MANGOHUD=0 WINEPREFIX=\"$STEAM_COMPAT_DATA_PATH/pfx\" winetricks --gui"
+			NO_AT_BRIDGE=1  LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" MANGOHUD=0 WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx" winetricks --gui
 		else
-			writelog "$(date) - protontricks not found - skipping"
+			writelog "$(date) - winetricks not found - skipping"
 		fi
 	fi
 }
@@ -284,13 +285,13 @@ function launchSteamProtonGame {
 		fi
 	done < "$STLGAMECFG"
 
-# maybe start protontricks
-#	checkProtontricksLaunch	# broken - no idea if fixable, steam is picky with its pfxes
+# maybe start winetricks
+	checkWinetricksLaunch
 
 # maybe start a custom program:
 	checkCustomLaunch "$@"
 
-# dirtly HACK - todo: just found out that all VR games don't work with MANGOHUD=1 so checking here if vcrompositor is running and disabling it if true
+# dirtly HACK - MANGOHUD conflicts with VR currently (on amd?) - see https://github.com/flightlessmango/MangoHud/issues/258
 	if pgrep "vrcompositor" 2>/dev/null; then
 		export MANGOHUD=0
 	fi
