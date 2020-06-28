@@ -1,10 +1,13 @@
 # steamtinkerlaunch
 
 steamtinkerlaunch or short stl - is a linux wrapper bashscript for steam.
-With its help every proton game creates/reads a config file with its own custom launch settings like:
+With its help every proton game creates/reads a config file with its own custom launch settings.
 
-* every env variable, like all PROTON* , DXVK* variables, MANGOHUD, RADV_PERFTEST, WINE* and so on
+# features:
+
+* define any env variable you want for every single game, f.e PROTON* , DXVK* variables, MANGOHUD, RADV_PERFTEST, WINE* and so on* custom program launch before or instead the game itself
 * custom program launch before or instead the game itself
+* winetricks before game launch
 * gamemoderun
 * notifier
 * strace
