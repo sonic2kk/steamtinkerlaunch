@@ -6,7 +6,7 @@ With its help every proton game creates/reads a config file with its own custom 
 # features:
 
 * define any env variable you want for every single game, f.e PROTON* , DXVK* variables, MANGOHUD, RADV_PERFTEST, WINE* and so on* custom program launch before or instead the game itself
-* custom program launch before or instead the game itself
+* custom program launch before or instead the game itself (also windows exes in the same proton WINEPREFIX)
 * winetricks before game launch
 * gamemoderun
 * notifier
@@ -14,8 +14,7 @@ With its help every proton game creates/reads a config file with its own custom 
 * optionally start editor with game-specific config before game launch via keypress
 
 TODO:
-* it doesn't seem to work to launch a windows exe as custom command via proton...
-* more
+* good feature requests
 
 the idea is that you just have to edit the steam command line once (imho the editor is not very usable)
 and everything else can be changed easily using stl
@@ -35,7 +34,6 @@ you might want to change the default configs to your needs before use!
 requirements:
 --------------
 the script itself doesn't have any special dependencies 
-(maybe "hexdump" from util-linux, if implementing windows exe as custom command succeeds)
 
 for the optional features you need:
 - strace

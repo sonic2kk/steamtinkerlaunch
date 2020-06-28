@@ -209,19 +209,11 @@ function launchCustomProg {
 		writelog "$(date) - error - launch command $LACO empty- skipping launch"
 	else
 		writelog "$(date) - launching custom command with $LACO $STL_CMD_ARGS"
-
-# for whatever reason 'file' doesn't work from here, so using this basic workaround - won't be enough for all windows binaries but better than nothing
-# hexdump taken from https://bbs.archlinux.org/viewtopic.php?id=101254
-
-		offset=$(hexdump -e '1/4 "0x%x"' -s 0x3c -n 4 "$CUSTCOM")
-		machine=$(hexdump -e '1/2 "0x%04x"' -s $((offset + 0x4)) -n 2 "$CUSTCOM")
-		if [ "$machine" == "0x014c" ] || [ "$machine" == "0x8664" ]; then
-#		if [ "$(file "$CUSTCOM" | grep -c "PE32")" -eq 1 ]; then
-			writelog "$(date) - with $machine $CUSTCOM seems to be a MS Windows exe - starting through proton"
+# several variables coming from steam have to be cleaned in order to get wine to work here
+		if [ "$(LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" MANGOHUD=0 file "$CUSTCOM" | grep -c "PE32")" -eq 1 ]; then
+			writelog "$(date) - $CUSTCOM seems to be a MS Windows exe - starting through proton"
 			CUSTOM_PROTON="$(echo "$*" | awk -F 'waitforexitandrun' '{print $1}')"
-			writelog "$(date) - $CUSTOM_PROTON waitforexitandrun $LACO $STL_CMD_ARGS"
-#			"$CUSTOM_PROTON" waitforexitandrun $LACO $STL_CMD_ARGS >> "$STLLOG"
-			WINEDEBUG="-all" WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx" "$(dirname "$CUSTOM_PROTON")/dist/bin/wine" "$LACO" "$STL_CMD_ARGS"
+			LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" MANGOHUD=0 WINEDEBUG="-all" WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx" "$(dirname "$CUSTOM_PROTON")/dist/bin/wine" "$LACO" "$STL_CMD_ARGS"
 		else
 			writelog "$(date) - $CUSTCOM doesn't seem to be a MS Windows exe - regular start (without further analysing)"
 			$LACO $STL_CMD_ARGS
@@ -235,9 +227,9 @@ function checkWinetricksLaunch {
 	if [ "$RUN_WINETRICKS" -eq 1 ]; then
 		if  [ -x "$(command -v "winetricks" 2>/dev/null)" ]; then
 			writelog "$(date) - launching winetricks before game start with following commandline:"
-			# several variables coming from steam have to be cleaned in order to get wine to work here - NO_AT_BRIDGE=1 only disables a harmless warning from gnome and could be removed
-			writelog "NO_AT_BRIDGE=1  LC_ALL=\"\" PATH=\"/usr/local/bin:/usr/bin\" LD_LIBRARY_PATH=\"\" LD_PRELOAD=\"\" MANGOHUD=0 WINEPREFIX=\"$STEAM_COMPAT_DATA_PATH/pfx\" winetricks --gui"
-			NO_AT_BRIDGE=1  LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" MANGOHUD=0 WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx" winetricks --gui
+			# several variables coming from steam have to be cleaned in order to get wine to work here
+			writelog "LC_ALL=\"\" PATH=\"/usr/local/bin:/usr/bin\" LD_LIBRARY_PATH=\"\" LD_PRELOAD=\"\" MANGOHUD=0 WINEPREFIX=\"$STEAM_COMPAT_DATA_PATH/pfx\" winetricks --gui"
+			LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" MANGOHUD=0 WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx" winetricks --gui
 		else
 			writelog "$(date) - winetricks not found - skipping"
 		fi
