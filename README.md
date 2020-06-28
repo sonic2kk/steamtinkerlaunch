@@ -12,7 +12,7 @@ With its help every proton game creates/reads a config file with its own custom 
 
 TODO:
 * it doesn't seem to work to launch a windows exe as custom command via proton...
-* maybe get protontricks $APPID --gui working
+* winetricks/protontricks going crazy currently, probably conflicting env variables
 * more
 
 the idea is that you just have to edit the steam command line once (imho the editor is not very usable)
