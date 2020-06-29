@@ -3,7 +3,7 @@
 # shellcheck disable=SC2154 # we work with steam variables here which are unknown to shellcheck
  
 function howto {
-	echo "SteamTinkerLaunch v0.1"
+	echo "SteamTinkerLaunch v0.815"
 	echo " usage: add this program to your steam game command line like 'stl %command%'"
 	echo "-----------------------------------"
 	echo "  $(basename "$0") will check if a config file exists in $STLCFGDIR for the game exename and will source it if available"
@@ -21,8 +21,214 @@ STLGAMECFG="$STLCFGDIR/$AID.conf"															# the game specific config file 
 GFD="$(dirname "$GP")"																		# the absolute directory where the game exe lives - unused for optional custom program
 GN="$(basename "$PWD")"																		# we are in the gamedir, so this is basically the proper game name
 
+# ReShade:
+STLRSCFG="$STLCFGDIR/reshade.conf"													# reshade config
+RS_D3D47_DEST="d3dcompiler_47.dll"
+RS_DX_DEST="dxgi.dll"
+RS_D9_DEST="d3d9.dll"
+
+
+# prepare reshade files if not found:
+function prepareReshadeFiles {
+# create config if not found:
+	if [ ! -f "$STLRSCFG" ]; then
+
+		writelog "$(date) - creating $STLRSCFG"
+
+		echo "#ReShade online ressources - see README:" | tee -a "$STLRSCFG"
+		echo "DL_D3D47_64=https://lutris.net/files/tools/dll/d3dcompiler_47.dll" | tee -a "$STLRSCFG"
+		echo "DL_D3D47_32=http://dege.freeweb.hu/dgVoodoo2/D3DCompiler_47.zip" | tee -a "$STLRSCFG"
+		echo "RSSETUP=https://reshade.me/downloads/ReShade_Setup_4.7.0.exe" | tee -a "$STLRSCFG"
+		echo "#allow download of ReShade sourcefiles:" | tee -a "$STLRSCFG"
+		echo "#DOWNLOAD_RESHADE=1" | tee -a "$STLRSCFG"
+		echo "#ReShade sourcefiles:" | tee -a "$STLRSCFG"
+		echo "RESHADESRCDIR=$STLCFGDIR/reshade" | tee -a "$STLRSCFG"
+		echo "RS_D3D47_64=d3dcompiler_47_64.dll" | tee -a "$STLRSCFG"
+		echo "RS_D3D47_32=d3dcompiler_47_32.dll" | tee -a "$STLRSCFG"
+		echo "RS_64=ReShade64.dll" | tee -a "$STLRSCFG"
+		echo "RS_32=ReShade32.dll" | tee -a "$STLRSCFG"
+		echo "##### SideBySide #####" | tee -a "$STLRSCFG"
+		echo "#Depth3D git project:" | tee -a "$STLRSCFG"
+		echo "DEPTH3DURL=https://github.com/BlueSkyDefender/Depth3D.git" | tee -a "$STLRSCFG"
+		echo "#allow git clone of Depth3D shaderfiles :" | tee -a "$STLRSCFG"
+		echo "#CLONE_DEPTH3D=1" | tee -a "$STLRSCFG"
+		echo "#Depth3D sourcefiles:" | tee -a "$STLRSCFG"
+		echo "DEPTH3DSRCDIR=$STLCFGDIR/reshade/Depth3D" | tee -a "$STLRSCFG"
+	fi
+
+	source "$STLRSCFG"
+
+	if [ ! -d "$RESHADESRCDIR" ]; then
+		mkdir -p "$RESHADESRCDIR" 2>/dev/null >/dev/null
+	fi
+
+	if [ "$DOWNLOAD_RESHADE" -eq 1 ]; then
+# could be cleaner...
+		writelog "$(date) - DOWNLOAD_RESHADE enabled"
+		if [ ! -f "$RESHADESRCDIR/$RS_D3D47_32" ]; then
+			writelog "$(date) - $RESHADESRCDIR/$RS_D3D47_32 missing - downloading" 
+			DLDST="$RESHADESRCDIR/d3dcompiler_47.zip"
+			wget "$DL_D3D47_32" -O "$DLDST"
+			cd "$RESHADESRCDIR" || die
+			unzip "$DLDST"
+			mv "d3dcompiler_47.dll" "$RS_D3D47_32"
+			cd - || die
+		fi
+
+		if [ ! -f "$RESHADESRCDIR/$RS_D3D47_64" ]; then
+			writelog "$(date) - $RESHADESRCDIR/$RS_D3D47_64 missing - downloading" 
+			wget "$DL_D3D47_64" -O "$RESHADESRCDIR/$RS_D3D47_64"
+		fi
+
+		if [ ! -f "$RESHADESRCDIR/$RS_64" ] || [ ! -f "$RESHADESRCDIR/$RS_32" ] ; then
+			writelog "$(date) - $RESHADESRCDIR/$RS_64 and/or $RS_32 missing - downloading"
+			DLDST="$RESHADESRCDIR/ReShade_Setup.exe"
+			wget "$RSSETUP" -O "$DLDST"
+			cd "$RESHADESRCDIR" || die
+			unzip "$DLDST"
+			cd - || die
+		fi
+	else
+			writelog "$(date) - DOWNLOAD_RESHADE not enabled"
+	fi
+
+# make sure Depth3D is even wanted
+	if [ "$RESHADE_DEPTH3D" -eq 1 ]; then
+		writelog "$(date) - RESHADE_DEPTH3D enabled"
+# and then only pull/clone it when CLONE_DEPTH3D is allowed
+		if [ "$CLONE_DEPTH3D" -eq 1 ]; then
+			writelog "$(date) - CLONE_DEPTH3D enabled"
+			if [ -d "$DEPTH3DSRCDIR" ]; then
+				cd "$DEPTH3DSRCDIR" || die
+				writelog "$(date) - cloning $DEPTH3DURL in $PWD"
+				LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" git pull
+			else
+				cd "$RESHADESRCDIR" || die
+				writelog "$(date) - cloning $DEPTH3DURL in $PWD"
+				LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" git clone "$DEPTH3DURL"
+			fi
+		else
+			writelog "$(date) - CLONE_DEPTH3D not enabled"
+		fi
+	else
+		writelog "$(date) - RESHADE_DEPTH3D not enabled"
+	fi
+}
+
+# install reshade:
+function installReshade {
+	if [ "$INSTALL_RESHADE" -eq 1 ]; then
+
+		prepareReshadeFiles
+
+		writelog "$(date) - INSTALL_RESHADE enabled"
+#32bit:
+		if [ "$(LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" file "$GP" | grep -c "PE32 ")" -eq 1 ]; then
+			writelog "$(date) - installing 32bit Reshade as $GE is 32bit" 
+
+			export WINEDLLOVERRIDES="dxgi=n,b;d3d9=n,b;d3dcompiler_47=n,b"
+
+			if [ ! -f "$GFD/$RS_D3D47_DEST" ]; then
+				if [ ! -f "$RESHADESRCDIR/$RS_D3D47_32" ]; then
+					writelog "$(date) - sourcefile $RESHADESRCDIR/$RS_D3D47_32 missing - skipping this file" 
+				else
+					cp "$RESHADESRCDIR/$RS_D3D47_32" "$GFD/$RS_D3D47_DEST" >/dev/null 2>/dev/null
+					writelog "$(date) - copied $RESHADESRCDIR/$RS_D3D47_32 to $GFD/$RS_D3D47_DEST" 
+				fi
+			else
+				writelog "$(date) - destfile $GFD/$RS_D3D47_DEST already exists - skipping this file" 
+			fi
+
+#dxgi:
+			if [ ! -f "$GFD/$RS_DX_DEST" ]; then
+				if [ ! -f "$RESHADESRCDIR/$RS_32" ]; then
+					writelog "$(date) - sourcefile $RESHADESRCDIR/$RS_32 missing - skipping this file" 
+				else
+					cp "$RESHADESRCDIR/$RS_32" "$GFD/$RS_DX_DEST" >/dev/null 2>/dev/null
+					writelog "$(date) - copied $RESHADESRCDIR/$RS_32 to $GFD/$RS_DX_DEST" 
+				fi
+			else
+				writelog "$(date) - destfile $GFD/$RS_DX_DEST already exists - skipping this file" 
+			fi
+
+#d3d9:
+			if [ ! -f "$GFD/$RS_D9_DEST" ]; then
+				if [ ! -f "$RESHADESRCDIR/$RS_32" ]; then
+					writelog "$(date) - sourcefile $RESHADESRCDIR/$RS_32 missing - skipping this file" 
+				else
+					cp "$RESHADESRCDIR/$RS_32" "$GFD/$RS_D9_DEST" >/dev/null 2>/dev/null
+					writelog "$(date) - copied $RESHADESRCDIR/$RS_32 to $GFD/$RS_D9_DEST" 
+				fi
+			else
+				writelog "$(date) - destfile $GFD/$RS_D9_DEST already exists - skipping this file" 
+			fi
+
+# 64bit:
+		elif  [ "$(LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" file "$GP" | grep -c "PE32+ ")" -eq 1 ]; then
+			writelog "$(date) - installing 64bit Reshade as $GE is 64bit" 
+
+			export WINEDLLOVERRIDES="dxgi=n,b;d3d9=n,b;d3dcompiler_47=n,b"
+
+			if [ ! -f "$GFD/$RS_D3D47_DEST" ]; then
+				if [ ! -f "$RESHADESRCDIR/$RS_D3D47_64" ]; then
+					writelog "$(date) - sourcefile $RESHADESRCDIR/$RS_D3D47_64 missing - skipping this file" 
+				else
+					cp "$RESHADESRCDIR/$RS_D3D47_64" "$GFD/$RS_D3D47_DEST" >/dev/null 2>/dev/null
+					writelog "$(date) - copied $RESHADESRCDIR/$RS_D3D47_64 to $GFD/$RS_D3D47_DEST" 
+				fi
+			else
+				writelog "$(date) - destfile $GFD/$RS_D3D47_DEST already exists - skipping this file" 
+			fi
+
+#dxgi:
+			if [ ! -f "$GFD/$RS_DX_DEST" ]; then
+				if [ ! -f "$RESHADESRCDIR/$RS_64" ]; then
+					writelog "$(date) - sourcefile $RESHADESRCDIR/$RS_64 missing - skipping this file" 
+				else
+					cp "$RESHADESRCDIR/$RS_64" "$GFD/$RS_DX_DEST" >/dev/null 2>/dev/null
+					writelog "$(date) - copied $RESHADESRCDIR/$RS_64 to $GFD/$RS_DX_DEST" 
+				fi
+			else
+				writelog "$(date) - destfile $GFD/$RS_DX_DEST already exists - skipping this file" 
+			fi
+#d3d9:
+			if [ ! -f "$GFD/$RS_D9_DEST" ]; then
+				if [ ! -f "$RESHADESRCDIR/$RS_64" ]; then
+					writelog "$(date) - sourcefile $RESHADESRCDIR/$RS_64 missing - skipping this file" 
+				else
+					cp "$RESHADESRCDIR/$RS_64" "$GFD/$RS_D9_DEST" >/dev/null 2>/dev/null
+					writelog "$(date) - copied $RESHADESRCDIR/$RS_64 to $GFD/$RS_D9_DEST" 
+				fi
+			else
+				writelog "$(date) - destfile $GFD/$RS_D9_DEST already exists - skipping this file" 
+			fi
+
+		fi
+	else
+		writelog "$(date) - INSTALL_RESHADE disabled"
+	fi
+
+	writelog "$(date) - RESHADE_DEPTH3D check"
+
+	if [ "$RESHADE_DEPTH3D" -eq 1 ]; then
+		find "$DEPTH3DSRCDIR/Shaders/" -maxdepth 1 -name "*.fx*" | while read -r file; do
+		if [ -f "$GFD"/"$(basename "$file")" ]; then
+			writelog "$(date) - $GFD/$(basename "$file") already exists - skipping"
+		else
+			cp "$file" "$GFD" >/dev/null 2>/dev/null
+			writelog "$(date) - copied $file to $GFD"
+		fi
+		done
+	else
+		writelog "$(date) - RESHADE_DEPTH3D disabled"
+	fi
+}
 
 function editGameConfig {
+# sourcing gameconfig, to optionally override global WAITEDITOR
+	source "$STLGAMECFG"
+
+# open editor requester 
 	if [ "$WAITEDITOR" -gt 0 ]; then
 		if [ -x "$(command -v "$STEAM_ZENITY" 2>/dev/null)" ]; then
 			writelog "$(date) - $STEAM_ZENITY found"
@@ -43,10 +249,6 @@ function editGameConfig {
 function createProjectDirs {
 	if [ ! -d "$STLCFGDIR" ]; then
 		mkdir -p "$STLCFGDIR" 2>/dev/null >/dev/null
-	fi
-
-	if [ ! -d "$STLDXVKDIR" ]; then
-		mkdir -p "$STLDXVKDIR" 2>/dev/null >/dev/null
 	fi
 }
 
@@ -76,16 +278,16 @@ function createDefaultGameCfg {
 	if [ ! -f "$STLDEFGAMECFG" ]; then
 		writelog "$(date) - default game template config $STLDEFGAMECFG for not found - creating it"
 
-		echo "# set to 1 to enable the custom command STL_CMD:" | tee "$STLDEFGAMECFG"
-		echo "#RUN_STL_CMD=0" | tee -a "$STLDEFGAMECFG"
+		echo "# set to 1 to enable the custom command CUSTOMCMD:" | tee "$STLDEFGAMECFG"
+		echo "#RUN_CUSTOMCMD=0" | tee -a "$STLDEFGAMECFG"
 		echo "# start this custom command:" | tee -a "$STLDEFGAMECFG"
-		echo "#STL_CMD=yourProgram" | tee -a "$STLDEFGAMECFG"
-		echo "# start STL_CMD command with following args:" | tee -a "$STLDEFGAMECFG"
-		echo "#STL_CMD_ARGS=--some --args" | tee -a "$STLDEFGAMECFG"
-		echo "# set to 1 to only start above STL_CMD and not the game command itself:" | tee -a "$STLDEFGAMECFG"
-		echo "#ONLY_STL_CMD=0" | tee -a "$STLDEFGAMECFG"
-		echo "# set to 1 to fork the custom STL_CMD into the background and continue with starting %command%" | tee -a "$STLDEFGAMECFG"
-		echo "#FORK_STL_CMD=0" | tee -a "$STLDEFGAMECFG"
+		echo "#CUSTOMCMD=yourProgram" | tee -a "$STLDEFGAMECFG"
+		echo "# start CUSTOMCMD command with following args:" | tee -a "$STLDEFGAMECFG"
+		echo "#CUSTOMCMD_ARGS=--some --args" | tee -a "$STLDEFGAMECFG"
+		echo "# set to 1 to only start above CUSTOMCMD and not the game command itself:" | tee -a "$STLDEFGAMECFG"
+		echo "#ONLY_CUSTOMCMD=0" | tee -a "$STLDEFGAMECFG"
+		echo "# set to 1 to fork the custom CUSTOMCMD into the background and continue with starting %command%" | tee -a "$STLDEFGAMECFG"
+		echo "#FORK_CUSTOMCMD=0" | tee -a "$STLDEFGAMECFG"
 		echo "# start game with gamemoderun:" | tee -a "$STLDEFGAMECFG"
 		echo "USEGAMEMODERUN=1" | tee -a "$STLDEFGAMECFG"
 		echo "# use mangohud:" | tee -a "$STLDEFGAMECFG"
@@ -94,28 +296,37 @@ function createDefaultGameCfg {
 		echo "#RADV_PERFTEST=aco" | tee -a "$STLDEFGAMECFG"
 		echo "# start winetricks gui before game launch:" | tee -a "$STLDEFGAMECFG"
 		echo "#RUN_WINETRICKS=1" | tee -a "$STLDEFGAMECFG"
+		echo "# start winecfg before game launch:" | tee -a "$STLDEFGAMECFG"
+		echo "#RUN_WINECFG=1" | tee -a "$STLDEFGAMECFG"
+		echo "# set to 1 to install ReShade:" | tee -a "$STLDEFGAMECFG"
+		echo "#INSTALL_RESHADE=1" | tee -a "$STLDEFGAMECFG"
+		echo "# set to 1 to install ReShade Depth3D Shader into gamedir:" | tee -a "$STLDEFGAMECFG"
+		echo "#RESHADE_DEPTH3D=1" | tee -a "$STLDEFGAMECFG"
+		echo "#overrides global WAITEDITOR config:" | tee -a "$STLDEFGAMECFG"
+		echo "#WAITEDITOR=0" | tee -a "$STLDEFGLOBALCFG"
+		echo "# notifier command:" | tee -a "$STLDEFGAMECFG"
 		echo "#NOTY=notify-send" | tee -a "$STLDEFGAMECFG"
 		echo "# proton vars:" | tee -a "$STLDEFGAMECFG"
-		echo "#PROTON_LOG=0" | tee -a "$STLDEFGAMECFG"
-		echo "#PROTON_DUMP_DEBUG_COMMANDS=0" | tee -a "$STLDEFGAMECFG"
+		echo "#PROTON_LOG=1" | tee -a "$STLDEFGAMECFG"
+		echo "#PROTON_DUMP_DEBUG_COMMANDS=1" | tee -a "$STLDEFGAMECFG"
 		echo "#PROTON_DEBUG_DIR=/tmp" | tee -a "$STLDEFGAMECFG"
-		echo "#PROTON_USE_WINED3D=0" | tee -a "$STLDEFGAMECFG"
-		echo "#PROTON_NO_D3D11=0" | tee -a "$STLDEFGAMECFG"
-		echo "#PROTON_NO_D3D10=0" | tee -a "$STLDEFGAMECFG"
-		echo "#PROTON_NO_ESYNC=0" | tee -a "$STLDEFGAMECFG"
-		echo "#PROTON_NO_FSYNC=0" | tee -a "$STLDEFGAMECFG"
+		echo "#PROTON_USE_WINED3D=1" | tee -a "$STLDEFGAMECFG"
+		echo "#PROTON_NO_D3D11=1" | tee -a "$STLDEFGAMECFG"
+		echo "#PROTON_NO_D3D10=1" | tee -a "$STLDEFGAMECFG"
+		echo "#PROTON_NO_ESYNC=1" | tee -a "$STLDEFGAMECFG"
+		echo "#PROTON_NO_FSYNC=1" | tee -a "$STLDEFGAMECFG"
 		echo "#PROTON_FORCE_LARGE_ADDRESS_AWARE=1" | tee -a "$STLDEFGAMECFG"
-		echo "#PROTON_OLD_GL_STRING=0" | tee -a "$STLDEFGAMECFG"
-		echo "#PROTON_USE_SECCOMP=0" | tee -a "$STLDEFGAMECFG"
-		echo "#PROTON_NO_WRITE_WATCH=0" | tee -a "$STLDEFGAMECFG"
+		echo "#PROTON_OLD_GL_STRING=1" | tee -a "$STLDEFGAMECFG"
+		echo "#PROTON_USE_SECCOMP=1" | tee -a "$STLDEFGAMECFG"
+		echo "#PROTON_NO_WRITE_WATCH=1" | tee -a "$STLDEFGAMECFG"
 		echo "# dxvk vars - see https://github.com/doitsujin/dxvk" | tee -a "$STLDEFGAMECFG"
-		echo "#DXVK_HUD=0" | tee -a "$STLDEFGAMECFG"
+		echo "#DXVK_HUD=1" | tee -a "$STLDEFGAMECFG"
 		echo "#DXVK_LOG_LEVEL=none|error|warn|info|debug Controls message logging." | tee -a "$STLDEFGAMECFG"
 		echo "#DXVK_LOG_PATH=/some/directory Changes path where log files are stored." | tee -a "$STLDEFGAMECFG"
 		echo "# wine vars:" | tee -a "$STLDEFGAMECFG"
 		echo "#WINE_FULLSCREEN_INTEGER_SCALING=0" | tee -a "$STLDEFGAMECFG"
 		echo "# strace settings:" | tee -a "$STLDEFGAMECFG"
-		echo "#STRACERUN=0" | tee -a "$STLDEFGAMECFG"
+		echo "#STRACERUN=1" | tee -a "$STLDEFGAMECFG"
 		echo "#STRACEOPTS=-f -t -e trace=file" | tee -a "$STLDEFGAMECFG"
 	fi
 }
@@ -137,8 +348,11 @@ function createGameCfg {
 		source "$STLDEFGLOBALCFG"
 	# create "$STLDXVKCFG"_tmpl if configured
 		source "$STLGAMECFG"
-		if [ ! -f "$STLDXVKCFG" ]; then
-			if [ "$CREATESTLDXVKCFGTMPL" -eq 1 ]; then
+		if [ "$CREATESTLDXVKCFGTMPL" -eq 1 ]; then
+			if [ ! -f "$STLDXVKCFG" ]; then
+				if [ ! -d "$STLDXVKDIR" ]; then
+					mkdir -p "$STLDXVKDIR" 2>/dev/null >/dev/null
+				fi
 				touch "$STLDXVKCFG"_tmpl
 			fi
 		fi
@@ -153,6 +367,7 @@ function createDefaultCfgs {
 	createProjectDirs
 	createDefaultGlobalCfg
 	createDefaultGameCfg
+	
 }
 
 function writelog {
@@ -180,27 +395,27 @@ function stracerun {
 	strace -p "$(pgrep "$GE")" $STRACEOPTS -o "$STRACEDIR/$AID.log"
 }
 
-# shellcheck disable=SC2086	# $STL_CMD_ARGS *worksforme* for now
+# shellcheck disable=SC2086	# $CUSTOMCMD_ARGS *worksforme* for now
 
 function launchCustomProg {
-	writelog "$(date) - starting the custom program $STL_CMD with args: $STL_CMD_ARGS"
+	writelog "$(date) - starting the custom program $CUSTOMCMD with args: $CUSTOMCMD_ARGS"
 
-	if  [ -x "$(command -v "$STL_CMD" 2>/dev/null)" ]; then
-		writelog "$(date) - $STL_CMD found in $PATH"
-		LACO="$STL_CMD"
-		CUSTCOM="$(which "$STL_CMD")"
+	if  [ -x "$(command -v "$CUSTOMCMD" 2>/dev/null)" ]; then
+		writelog "$(date) - $CUSTOMCMD found in $PATH"
+		LACO="$CUSTOMCMD"
+		CUSTCOM="$(which "$CUSTOMCMD")"
 	else
-		if [ -f "$GFD/$STL_CMD" ]; then
-			writelog "$(date) - $STL_CMD was found in game dir $GFD"
-			LACO="$GFD/$STL_CMD"
-			CUSTCOM="$GFD/$STL_CMD"
+		if [ -f "$GFD/$CUSTOMCMD" ]; then
+			writelog "$(date) - $CUSTOMCMD was found in game dir $GFD"
+			LACO="$GFD/$CUSTOMCMD"
+			CUSTCOM="$GFD/$CUSTOMCMD"
 		else
-			if [ -f "$STL_CMD" ]; then
-				writelog "$(date) - $STL_CMD is absolute path"
-				LACO="$STL_CMD"
-				CUSTCOM="$STL_CMD"
+			if [ -f "$CUSTOMCMD" ]; then
+				writelog "$(date) - $CUSTOMCMD is absolute path"
+				LACO="$CUSTOMCMD"
+				CUSTCOM="$CUSTOMCMD"
 			else
-				writelog "$(date) - error - custom command STL_CMD $STL_CMD not found - skipping launch"
+				writelog "$(date) - error - custom command CUSTOMCMD $CUSTOMCMD not found - skipping launch"
 			fi
 		fi
 	fi
@@ -208,15 +423,15 @@ function launchCustomProg {
 	if [ -z "$LACO" ]; then
 		writelog "$(date) - error - launch command $LACO empty- skipping launch"
 	else
-		writelog "$(date) - launching custom command with $LACO $STL_CMD_ARGS"
+		writelog "$(date) - launching custom command with $LACO $CUSTOMCMD_ARGS"
 # several variables coming from steam have to be cleaned in order to get wine to work here
-		if [ "$(LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" MANGOHUD=0 file "$CUSTCOM" | grep -c "PE32")" -eq 1 ]; then
+		if [ "$(LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" file "$CUSTCOM" | grep -c "PE32")" -eq 1 ]; then
 			writelog "$(date) - $CUSTCOM seems to be a MS Windows exe - starting through proton"
 			CUSTOM_PROTON="$(echo "$*" | awk -F 'waitforexitandrun' '{print $1}')"
-			LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" MANGOHUD=0 WINEDEBUG="-all" WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx" "$(dirname "$CUSTOM_PROTON")/dist/bin/wine" "$LACO" "$STL_CMD_ARGS"
+			LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" WINEDEBUG="-all" WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx" "$(dirname "$CUSTOM_PROTON")/dist/bin/wine" "$LACO" "$CUSTOMCMD_ARGS"
 		else
 			writelog "$(date) - $CUSTCOM doesn't seem to be a MS Windows exe - regular start (without further analysing)"
-			$LACO $STL_CMD_ARGS
+			$LACO $CUSTOMCMD_ARGS
 		fi
 	fi
 
@@ -228,35 +443,49 @@ function checkWinetricksLaunch {
 		if  [ -x "$(command -v "winetricks" 2>/dev/null)" ]; then
 			writelog "$(date) - launching winetricks before game start with following commandline:"
 			# several variables coming from steam have to be cleaned in order to get wine to work here
-			writelog "LC_ALL=\"\" PATH=\"/usr/local/bin:/usr/bin\" LD_LIBRARY_PATH=\"\" LD_PRELOAD=\"\" MANGOHUD=0 WINEPREFIX=\"$STEAM_COMPAT_DATA_PATH/pfx\" winetricks --gui"
-			LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" MANGOHUD=0 WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx" winetricks --gui
+			writelog "$(date) - LC_ALL=\"\" PATH=\"/usr/local/bin:/usr/bin\" LD_LIBRARY_PATH=\"\" LD_PRELOAD=\"\" WINEPREFIX=\"$STEAM_COMPAT_DATA_PATH/pfx\" winetricks --gui"
+			LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx" winetricks --gui
 		else
 			writelog "$(date) - winetricks not found - skipping"
 		fi
 	fi
 }
 
+# start winecfg before game launch:
+function checkWineCfgLaunch {
+	if [ "$RUN_WINECFG" -eq 1 ]; then
+		if  [ -x "$(command -v "winecfg" 2>/dev/null)" ]; then
+			writelog "$(date) - starting winecfg before game start:"
+			# several variables coming from steam have to be cleaned in order to get wine to work here
+			writelog "$(date) - LC_ALL=\"\" PATH=\"/usr/local/bin:/usr/bin\" LD_LIBRARY_PATH=\"\" LD_PRELOAD=\"\" WINEPREFIX=\"$STEAM_COMPAT_DATA_PATH/pfx\" winecfg"
+			LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx" winecfg
+		else
+			writelog "$(date) - winecfg not found - skipping"
+		fi
+	fi
+}
+
 function checkCustomLaunch {
 	# start a custom program:
-	if [ "$RUN_STL_CMD" -eq 1 ] ; then
-		writelog "$(date) - RUN_STL_CMD is set to 1 - trying to start custom program STL_CMD"
+	if [ "$RUN_CUSTOMCMD" -eq 1 ] ; then
+		writelog "$(date) - RUN_CUSTOMCMD is set to 1 - trying to start custom program CUSTOMCMD"
 	# fork in background and continue
-		if [ "$FORK_STL_CMD" -eq 1 ]; then
-			writelog "$(date) - FORK_STL_CMD is set to 1 -  forking the custom program in background and continue"
+		if [ "$FORK_CUSTOMCMD" -eq 1 ]; then
+			writelog "$(date) - FORK_CUSTOMCMD is set to 1 -  forking the custom program in background and continue"
 			launchCustomProg "$@" &
 	# or wait
 		else
-			writelog "$(date) - FORK_STL_CMD is set to 0 - starting the custom program regularly"
+			writelog "$(date) - FORK_CUSTOMCMD is set to 0 - starting the custom program regularly"
 			launchCustomProg "$@"
 		fi
 
 
-		if [ "$ONLY_STL_CMD" -eq 1 ]; then
-			writelog "$(date) - ONLY_STL_CMD is set to 1 - only custom program $STL_CMD is supposed to start - exiting here"
+		if [ "$ONLY_CUSTOMCMD" -eq 1 ]; then
+			writelog "$(date) - ONLY_CUSTOMCMD is set to 1 - only custom program $CUSTOMCMD is supposed to start - exiting here"
 			exit
 		fi
 	else
-		writelog "$(date) - RUN_STL_CMD is set to 0 - skipping the custom program STL_CMD"
+		writelog "$(date) - RUN_CUSTOMCMD is set to 0 - skipping the custom program CUSTOMCMD"
 	fi
 }
 
@@ -271,9 +500,9 @@ function launchSteamProtonGame {
 	editGameConfig
 
 # export game specific variables, exports die with this script, so no worries:
+	writelog "$(date) - exporting game specific variables"
 	while read -r line; do
 		if  echo "$line" | grep -v "^#"; then
-#			writelog "line ${line?}"
 			export "${line?}"
 		fi
 	done < "$STLGAMECFG"
@@ -281,8 +510,14 @@ function launchSteamProtonGame {
 # maybe start winetricks
 	checkWinetricksLaunch
 
+# maybe start winecfg
+	checkWineCfgLaunch
+
 # maybe start a custom program:
 	checkCustomLaunch "$@"
+
+# maybe install ReShade
+	installReshade "$@"
 
 # notifier:
 	if  [ -x "$(command -v "$NOTY" 2>/dev/null)" ]; then
