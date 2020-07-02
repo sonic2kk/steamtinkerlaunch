@@ -1,144 +1,220 @@
-# steamtinkerlaunch
+# SteamTinkerLaunch
 
-steamtinkerlaunch or short stl - is a linux wrapper bashscript for steam.
-With its help every proton game creates/reads a config file with its own custom launch settings.
+SteamTinkerLaunch or short **stl** - is a linux wrapper script for steam.
+It creates/reads game config files on the fly, making it very easy to setup and use,
+but still giving you the possibility to fully customize game configurations live on game start. 
+The idea is that you just have to edit the steam command line once (imho the editor is not very usable)
+and everything else can be changed and controlled easily using **stl**
 
-# features:
+## How to use
 
-* define any env variable you want for every single game, f.e PROTON* , DXVK* variables, MANGOHUD, RADV_PERFTEST, WINE* and so on* custom program launch before or instead the game itself
-* custom program launch before or instead the game itself (also windows exes in the same proton WINEPREFIX)
-* winetricks before game launch
-* winecfg before game launch
-* gamemoderun
-* notifier
-* strace
-* optionally start editor with game-specific config before game launch via keypress
-* automatic reshade configuration for launched game (including optional Depth3D shader installation)
+### general usage:
+Just add this program to your steam game command line like:
+'stl %command%'
 
-TODO:
-* good feature requests
+### game specific use:
 
-the idea is that you just have to edit the steam command line once (imho the editor is not very usable)
-and everything else can be changed easily using stl
+When starting a game with **stl** it will check if a config file exists in `$HOME/.stl/$SteamAppId.conf` for the game
+if it is not available it is created from the default config file (which is automatically created if not found).
 
-# installation: 
-this is one single bash script. just copy it wherever you want, f.e. /usr/local/bin/
+When starting the game a small requester will popup (default 2 seconds).
+When you want to change settings for that game press space to open the game configuration and adjust it to your needs.
+The game start will wait until you're done and your changes are used on the fly.
 
-just call the script without any arguments
-to initially create a default config template
-"$HOME/.stl/default_template.conf"
+
+## Installation: 
+This is one single bash script. Just copy it whereever you want, f.e. /usr/local/bin/
+
+When you call the script without any arguments from commandline
+it will initially create the default config structure
+`$HOME/.stl/default_template.conf`
 and a default global config
-"$HOME/.stl/global.conf"
+`$HOME/.stl/global.conf`
+
+As `$HOME/.stl/default_template.conf` is the template for creating the game configs 
+you might want to adjust its options to your needs before use.
 
 
-you might want to change the default configs to your needs before use!
+## Quickstart:
+In the shipped default configs almost everything is disabled.
+* at least make sure that STLEDITOR is a valid text editor (per default set to "geany") in `$HOME/.stl/global.conf`
+Also enable everything you want in the freshly created
+`$HOME/.stl/default_template.conf`
 
-requirements:
---------------
-the script itself doesn't have any special dependencies 
+## Features:
 
-for the optional features you need:
+* **env variables** can be easily set for every single game (f.e `PROTON`* , `DXVK`* variables, `MANGOHUD`, `RADV_PERFTEST`, `WINE`...)
+* **custom program** launch before or instead the game itself (also windows exes)
+* **winetricks**
+* **winecfg**
+* **gamemoderun**
+* **notifier**
+* **strace**
+* **editor hotkey** for editing the gameconfig
+* **open protondb** page for the launched game with the editor
+* **automatic ReShade installation and configuration** for launched game (including optional Depth3D shader installation)
+* **automatically play regular games in side-by-side mode in VR! (including "sbs tweaks"**
+* **tweaks**
+
+# Requirements:
+
+The script itself doesn't have any special dependencies 
+
+For the optional features you need:
 - strace
-- zenity (optional, $STEAM_ZENITY is used)
+- zenity (optional, `STEAM_ZENITY` is used)
 - gamemoderun
 - mangohud
 - winetricks
 - wget, unzip for optional reshade download, git for pulling optional shaders
+- xdotool, xwininfo, vr-video-player for playing regular games side-by-side in VR
+- your favourite editor for editor mode and otionally xdg-open for opening the protondb url of started game
 
-usage: add this program to your steam game command line like 'stl %command%'
------------------------------------
+## Configuration:
 
-stl will check if a config file exists in "$HOME/.stl/$SteamAppId.conf" for the game and will source it if available
-if it is not available it is created from the default config file (which is automatically created if not found)
+Most options shipped with the (autowritten) default config are commented out.
+Described are only the variables which come from **stl**, for all others please check their upstream project:
 
-most options shipped with the (autowritten) default config are commented out.
-described are only the variables which come from stl, for all others please check their upstream project:
+### Global Settings:
 
-global settings:
+`$HOME/.stl/global.conf`
+- `LOGDIR`: default logfile dir
+- `WRITELOG`: write logfile if enabled
+- `STLEDITOR`: the texteditor to use for opening the gameconfig
+- `WAITEDITOR`: wait `WAITEDITOR` seconds for a keypress to open the texteditor `STLEDITOR` with the game config; **can be overridden in the gameconfig**
+- `PROTONDB`: set `PROTONDB` to 1 to also directly xdg-open the protondb page](https://www.protondb.com/) for the game when starting the editor `STLEDITOR`
+- `PDBURL`: protondb base url - for optional `PROTONDB`
+- `VRVIDEOPLAYER`: vr-video-player - the program used to play regular games in **VR**
+- `CREATESTLDXVKCFGTMPL`: create an empty `STLDXVKCFG`_tmpl for easier editing when required
+- `STRACEDIR`: the base strace path used to optionally dump strace logs
+- `STLLOG=/tmp/$(basename "$0").log`: the stl logfile
+- `USETWEAKS`: set to 1 to override settings with tweaks when found
+- `CREATETWEAKS`: set to 1 create tweak config templates (just the header) for the launched game if not found
 
-* JUSTWRITECFG=1 							# set to 1 to exit after writing the default config for the selected game without starting the game - useful for quickly creating a configuration
-* CREATESTLDXVKCFGTMPL						# create an empty $STLDXVKCFG_tmpl for easier editing when required
-* STRACEDIR=/tmp/ 							# the base strace path used to optionally dump strace logs
-* STLLOG=/tmp/$(basename "$0").log			# the stl logfile
-* WRITELOG=1								# write logfile if enabled
-* STLEDITOR=geany							# the texteditor to use for opening the gameconfig - f.e. with WAITEDITOR
-* WAITEDITOR=2								# wait WAITEDITOR seconds for a keypress to open the texteditor STLEDITOR with the game config; override via game config
+If you do not want to start the editor requester on game launch generally just set `WAITEDITOR=0` - it will be skipped then for all games
 
-if you do not want to start the editor requester on game launch just set WAITEDITOR=0 - it will be skipped then
+### Functions in detail:
 
-#################
+#### Custom Game Launch:
+When enabled you can start custom programs easily with the following per-game config options:
 
-# loose function description:
+- `RUN_CUSTOMCMD`: set to 1 to start the custom command `CUSTOMCMD`
+- `CUSTOMCMD`: start this custom command
+- `CUSTOMCMD_ARGS`: start `CUSTOMCMD` command with those args
+- `ONLY_CUSTOMCMD`: set to 1 to only start `CUSTOMCMD` and not the game command itself
+- `FORK_CUSTOMCMD`: set to 1 to fork the custom `CUSTOMCMD` into the background and continue with starting `%command%`
 
-custom game launch:
----------------------
-when enabled you can also start custom programs easily with the following per-game config options:
+#### winetricks
+- `RUN_WINETRICKS`: set to 1 to start winetricks gui before game launch
 
-set to 1 to enable the custom command CUSTOMCMD:
-* RUN_CUSTOMCMD=1
+#### winecfg
+- `RUN_WINECFG`: set to 1 to start winecfg before game launch
 
-start this custom command:
-* CUSTOMCMD=yourProgram
+#### [gamemode](https://github.com/FeralInteractive/gamemode)
+- `USEGAMEMODERUN`: set to 1 to start game with gamemoderun
 
-start CUSTOMCMD command with following args:
-* CUSTOMCMD_ARGS=--some --args
+#### notifier
+- `NOTY`: the notifier used
 
-set to 1 to only start above CUSTOMCMD and not the game command itself:
-* ONLY_CUSTOMCMD=0
+#### [MangoHud](https://github.com/flightlessmango/MangoHud)
+* - `MANGOHUD`: set to 1 to enable mangohud - does nothing in stl itself, but just exports the upstream variable
 
-set to 1 to fork the custom CUSTOMCMD into the background and continue with starting %command%
-* FORK_CUSTOMCMD=1
+#### radv [Mesa](https://www.mesa3d.org/)
+- `#RADV_PERFTEST=aco`: aco is default starting with mesa 20.2 
 
-winetricks:
-------------
-* RUN_WINETRICKS=1							# set to 1 to start winetricks gui before game launch
+#### strace
+- `STRACERUN`: if set to 1 stl will write a strace log of the launched game
+- `STRACEOPTS`: the strace options used for strace
 
-winecfg:
-------------
-* RUN_WINECFG=1								# set to 1 to start winecfg before game launch
+When `STRACERUN` is enabled make sure
+`/proc/sys/kernel/yama/ptrace_scope` is set to 0.
+else your user will get access denied when trying to attach a process.
+Either 
+`echo 0 > /proc/sys/kernel/yama/ptrace_scope`
+as root or enable it persistent in sysctl
 
-gamemoderun:
--------------
-* USEGAMEMODERUN=1							# set to 1 to start game with gamemoderun
+#### [ReShade](https://reshade.me)
+- `INSTALL_RESHADE`: set to 1 to automatically install reshade into the selected game dir.
+- `USERESHADE`: set to 1 to start game with ReShade enabled
 
-notifier:
------------
-* NOTY=notify-send							# the notifier used
-
-mangohud:
-----------
-* MANGOHUD=1								# set to 1 to enable mangohud - does nothing in stl itself, but just exports the upstream variable
-
-radv aco:
-----------
-* #RADV_PERFTEST=aco						# aco is default starting with mesa 20.2 
-
-strace:
-----------
-* STRACERUN=0 								# if set to 1 stl will write a strace log of the launched game
-* STRACEOPTS=-f -t -e trace=file			# the strace options used for strace
-
-when STRACERUN is enabled make sure
-/proc/sys/kernel/yama/ptrace_scope is set to 0
-else your user will get access denied when trying to attach a process
-either "echo 0 > /proc/sys/kernel/yama/ptrace_scope" as root or enable it persistent in sysctl
-
-reshade:
----------
-* INSTALL_RESHADE=0							# set to 1 to automatically install reshade into the selected game dir.
-
-the required reshade.conf is autogenerated on the first run with INSTALL_RESHADE enabled.
-if DOWNLOAD_RESHADE in reshade.conf is set to 1 all required files for ReShade are downloaded once into RESHADESRCDIR
+	
+The required `$HOME/.stl/reshade.conf` is autogenerated on the first run with `INSTALL_RESHADE` enabled.
+if `DOWNLOAD_RESHADE` is set to 1 all required files for ReShade are downloaded once into `RESHADESRCDIR`
 of course you can install all files manually as well. make sure to rename all files correctly:
-64bit d3dcompiler_47.dll: -> d3dcompiler_47_64.dll
-32bit d3dcompiler_47.dll: -> d3dcompiler_47_32.dll
-ReShade64.dll,ReShade32.dll: renaming not required as they will be placed in the gamedir under the required name
+
+**64bit** `d3dcompiler_47.dll`: -> d3dcompiler_47_64.dll
+**32bit** `d3dcompiler_47.dll`: -> d3dcompiler_47_32.dll
+`ReShade64.dll`, `ReShade32.dll`: renaming not required as they will be placed in the gamedir under the required name
+
 
 the required architecture is autodetected from the game.exe and the matching files are copied from RESHADESRCDIR into the selected game dir
-both downloadfiles and basic configuration were taken from (updated ReShade version)
-https://www.reddit.com/r/linux_gaming/comments/b2hi3g/reshade_working_in_wine_43
+both downloadfiles and basic configuration were taken from [r/linux_gaming](https://www.reddit.com/r/linux_gaming/comments/b2hi3g/reshade_working_in_wine_43) 
 
-* RESHADE_DEPTH3D=1		# set to 1 to install ReShade Depth3D Shader into gamedir
-if CLONE_DEPTH3D is set to 1 the git repository will be automatically cloned/pulled (only when RESHADE_DEPTH3D=1)
-with RESHADE_DEPTH3D enabled Overwatch.fxh, SuperDepth3D.fx, SuperDepth3D_VR.fx from Depth3D are copied to the gamedir.
-when the game started just create a initial profile by selecting the autodetected SuperDepth3D_VR.fx
+#### [Depth3D](https://github.com/BlueSkyDefender/Depth3D)
+ - `RESHADE_DEPTH3D`: set to 1 to install ReShade Depth3D Shader into gamedir
+
+if `CLONE_DEPTH3D` is set to 1 the git repository will be automatically cloned/pulled (only when `RESHADE_DEPTH3D=1`)
+with `RESHADE_DEPTH3D` enabled `Overwatch.fxh`, `SuperDepth3D.fx`, `SuperDepth3D_VR.fx` from Depth3D are copied to the gamedir.
+when the game started just create a initial profile by selecting the autodetected `SuperDepth3D_VR.fx`
+
+SBS-VR (regular games side-by-side in **VR**):
+--------------------------------------------
+
+currently experimental - it often works very good and sometimes not.
+For me it works good enough to have much fun with it.
+- sometimes setting the focus back to the main window or adjusting the direction of the vr view automatically fails (timing)
+- sometimes steamvr doesn't start correctly (probably related to the ancient upstream bug, where games fail to start steamvr if not running yet)
+- in rare cases even amdgpu fails, but that is very likely a steamvr bug as well (timing?)
+
+To use it you just have to enable `RUNSBSVR=1` in the game specific config, with some luck everything else is done (almost) automatically:
+
+- start SteamVR
+- start the game (game settings required to enable sbs are not automatically enabled! added an auto config setting for **Crysis 2** though )
+- start [vr-video-player](https://git.dec05eba.com/vr-video-player)
+- when exiting the game, vr-video-player wil be closed as well.
+
+Some games start own launchers before the actual game and autodetecting the correct window is not easy
+(searching for the biggest window from the game process, which may not be always the correct one)
+That's why you can configure the exact window name to look for, which makes the whole process much more straighter.
+
+There are also specific sbs game config overrides, which have optimal settings for **VR** (f.e. predefined game window, or launcher skips).
+
+here's an example config for trine 2 `~/.stl/sbs/35720.conf`
+
+```
+#########
+#GAMENAME=Trine 2
+#GAMEEXE=trine2_launcher
+#GAMEID=35720
+RUN_CUSTOMCMD=1
+CUSTOMCMD=trine2_32bit.exe
+ONLY_CUSTOMCMD=1
+VRGAMEWINDOW=Trine 2
+```
+
+Means, when `RUNSBSVR=1` is set in the main Trine2 config file it will autodetect above sbs tweak config and use the defined variables:
+Trine 2 won't start it's original launcher (`ONLY_CUSTOMCMD=1`), but only the custom command `trine2_32bit.exe` and will wait for a `Trine 2` window to open in **VR**
+
+So in general sbs configs are automatically loaded when found and override settings in the mainconfig
+so you just have to enable `RUNSBSVR=1` in `~/.stl/35720.conf` and everything else is configured automatically.
+
+I added some initial preconfigured sbs tweak configs into this project.
+For now just copy them into your `~/.stl/sbs/` directory if you want to use them.
+
+some gamewindows are causing trouble with vr-video-player (f.e. reproducable with `Giana Sisters 2D (350770)`).
+I try to exit the SBSVR routines as graceful as possible, keeping the game open.
+
+#### Tweaks
+function similar to above sbs override.
+- `USETWEAKS`: set to 1 to override settings with tweaks when found
+When enabled (gameconfig overrides global config) an existing tweak config in `~/.stl/sbs/$SteamAppId.conf`
+overrides the settings in the main gameconfig. Using this it would be possible to contribute tweak configs required to get games to work hazzlefree out of the box to the community.
+Only useful if some people contribute gamespecific tweaks, else this will vanish:
+global settings are `USETWEAKS` and `CREATETWEAKS` (see above).
+Depending on general contribution of community tweak configs `USETWEAKS` could be also expanded with a game specific `TWEAKCMD` -
+community contributed scripts with commands required to get a game working (install deps via winetricks, create configs and so on)
+
+I added a preconfigured tweak config for 'SonicGenerations (71340)' into this project, which disables ESYNC and FSYNC required to play the game.
+For now just copy tweak configs into your `~/.stl/tweaks/` directory if you want to use them.
+If you use/create tweaks make sure to retest your game with later proton versions without the tweak (`USETWEAKS=0`) and report upstream if the bug is fixed!
+The used proton Version is automatically written into the tweak file when created with `CREATETWEAKS`
