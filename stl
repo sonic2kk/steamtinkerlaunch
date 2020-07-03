@@ -4,7 +4,7 @@
 # shellcheck disable=SC2086	# for $STRACEOPTS $CUSTOMCMD_ARGS- *worksforme* for now
 
 PROGNAME="SteamTinkerLaunch"
-PROGVERS="v0.90"
+PROGVERS="v0.91"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
 function howto {
@@ -18,7 +18,7 @@ function howto {
 	echo ""
 	echo "  game specific use:"
 	echo "-----------------------"
-	echo "  When starting a game with $(basename "$0") it will check if a config file exists in \$HOME/.stl/\$SteamAppId.conf for the game"
+	echo "  When starting a game with $(basename "$0") it will check if a config file exists in $SteamAppId.conf for the game"
 	echo "  if it is not available it is created from the default config file (which is automatically created if not found)."
 	echo ""
 	echo "  When starting the game a small requester will popup (default 2 seconds)."
@@ -33,7 +33,12 @@ else
 	AID="$SteamAppId"
 fi
 
-STLCFGDIR="$HOME/.$(basename "$0")"															# base config dir for this script
+if [ -z "$XDG_CONFIG_HOME" ]; then
+	STLCFGDIR="$HOME/.config/$(basename "$0")"												# either hardcoded config dir
+else
+	STLCFGDIR="$XDG_CONFIG_HOME/$(basename "$0")"											# or in XDG_CONFIG_HOME if the useer set the variable
+fi
+
 STLDEFGLOBALCFG="$STLCFGDIR/global.conf"													# global config
 STLDEFGAMECFG="$STLCFGDIR/default_template.conf"											# the default config template used to create new per game configs - will be autocreated if not found
 LOGDIR="$STLCFGDIR/logs"																	# default logfile dir
@@ -53,10 +58,47 @@ GFD="$(dirname "$GP")"																		# the absolute directory where the game 
 #GN="$(basename "$PWD")"																	# not always correct as we are sometimes in a subdir, so
 GN="$(dirname "$(awk -F 'common/' '{print $2}' <<< "$PWD")")"								# this is basically the proper game name
 
+#### VKBASALT BLOCK START ####
+
+function usevkBasalt {
+	if [ "$ENABLE_VKBASALT" -eq 1 ] ; then
+		writelog "$(date) - ${FUNCNAME[0]} - vkBasalt enabled"
+		if [ ! -f "$VKBASALT_CONFIG_FILE" ]; then
+			writelog "$(date) - ${FUNCNAME[0]} - creating default VKBASALT_CONFIG_FILE $VKBASALT_CONFIG_FILE"
+			{
+			echo "effects = reshade"
+			echo "reshadeIncludePath = $STLCFGDIR/Depth3D/Shaders"
+			echo "reshade = $STLCFGDIR/Depth3D/Shaders/SuperDepth3D_VR.fx"
+			} >> "$VKBASALT_CONFIG_FILE"
+		else
+			writelog "$(date) - ${FUNCNAME[0]} - default VKBASALT_CONFIG_FILE $VKBASALT_CONFIG_FILE already exists"
+		fi
+		
+		if [ ! -f "$STLCFGDIR/Depth3D/Shaders/SuperDepth3D_VR.fx" ]; then
+			writelog "$(date) - ${FUNCNAME[0]} - Depth3D shader $STLCFGDIR/Depth3D/Shaders/SuperDepth3D_VR.fx not found"
+			if [ "$CLONE_DEPTH3D" -eq 1 ]; then
+				writelog "$(date) - ${FUNCNAME[0]} - CLONE_DEPTH3D is enabled so checking it out"
+				checkReShadeDepth3D
+			else
+				writelog "$(date) - ${FUNCNAME[0]} - CLONE_DEPTH3D skipping the installation"
+				export ENABLE_VKBASALT=0
+			fi
+		else
+			writelog "$(date) - ${FUNCNAME[0]} - looks like Depth3D shader is ready at $STLCFGDIR/Depth3D/Shaders/SuperDepth3D_VR.fx"
+		fi
+	fi
+}
+
+#### VKBASALT BLOCK END ####
+
+
 #### SBS VR BLOCK START ####
 
 SBSVRVIDEOPLAYER=vr-video-player
-SBSVRWINNAME=hellovr	#	xdotool only searches for partial match, so fortunately this is enough
+
+#SBSVRWINNAME=hellovr	#	xdotool only searches for partial match, so fortunately this is enough
+SBSVRWINNAME=vr-video-player	
+
 STEAMVRARGS=(-applaunch 250820)
 
 # returns the windowid of the biggest window of the main proton exe (a/the exe with win drive Z:) 
@@ -335,13 +377,6 @@ function prepareReshadeFiles {
 		echo "RS_D3D47_32=d3dcompiler_47_32.dll"
 		echo "RS_64=ReShade64.dll"
 		echo "RS_32=ReShade32.dll"
-		echo "##### SideBySide #####"
-		echo "## Depth3D git project:"
-		echo "DEPTH3DURL=https://github.com/BlueSkyDefender/Depth3D.git"
-		echo "## allow git clone of Depth3D shaderfiles :"
-		echo "#CLONE_DEPTH3D=1"
-		echo "## Depth3D sourcefiles:"
-		echo "DEPTH3DSRCDIR=$STLCFGDIR/reshade/Depth3D"
 		} >> "$STLRSCFG"
 	fi
 
@@ -376,11 +411,16 @@ function prepareReshadeFiles {
 	else
 			writelog "$(date) - ${FUNCNAME[0]} - DOWNLOAD_RESHADE not enabled"
 	fi
-
+	
 # make sure Depth3D is even wanted
 	if [ "$RESHADE_DEPTH3D" -eq 1 ]; then
 		writelog "$(date) - ${FUNCNAME[0]} - RESHADE_DEPTH3D enabled"
 # and then only pull/clone it when CLONE_DEPTH3D is allowed
+	checkReShadeDepth3D
+	fi	
+}
+
+function checkReShadeDepth3D {
 		if [ "$CLONE_DEPTH3D" -eq 1 ]; then
 			writelog "$(date) - ${FUNCNAME[0]} - CLONE_DEPTH3D enabled"
 			if [ -d "$DEPTH3DSRCDIR" ]; then
@@ -388,12 +428,11 @@ function prepareReshadeFiles {
 				writelog "$(date) - ${FUNCNAME[0]} - cloning $DEPTH3DURL in $PWD"
 				LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" git pull
 			else
-				cd "$RESHADESRCDIR" || die
+				cd "$STLCFGDIR" || die
 				writelog "$(date) - ${FUNCNAME[0]} - cloning $DEPTH3DURL in $PWD"
 				LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" git clone "$DEPTH3DURL"
 			fi
 		fi
-	fi
 }
 
 # install reshade:
@@ -484,7 +523,9 @@ function installReshade {
 				export USERESHADE=0
 		fi
 	fi
+}
 
+function installReshadeDepth3D {
 	if [ "$RESHADE_DEPTH3D" -eq 1 ]; then
 		writelog "$(date) - ${FUNCNAME[0]} - copying shaders into gamedir"
 		find "$DEPTH3DSRCDIR/Shaders/" -maxdepth 1 -name "*.fx*" | while read -r file; do
@@ -495,9 +536,8 @@ function installReshade {
 			writelog "$(date) - ${FUNCNAME[0]} - copied $file to $GFD"
 		fi
 		done
-	fi
+	fi	
 }
-
 
 function useReshade {
 	if [ "$USERESHADE" -eq 1 ]; then
@@ -607,6 +647,14 @@ function createDefaultGlobalCfg {
 		echo "#USETWEAKS=1"
 		echo "## set to 1 create tweak config templates for the launched game if not found"
 		echo "#CREATETWEAKS=1"
+		echo "##### SideBySide #####"
+		echo "## Depth3D git project:"
+		echo "DEPTH3DURL=https://github.com/BlueSkyDefender/Depth3D.git"
+		echo "## allow git clone of Depth3D shaderfiles :"
+		echo "#CLONE_DEPTH3D=1"
+		echo "## Depth3D sourcefiles:"
+		echo "DEPTH3DSRCDIR=$STLCFGDIR/Depth3D"
+
 		} >> "$STLDEFGLOBALCFG"
 	fi
 }
@@ -632,6 +680,8 @@ function createDefaultGameCfg {
 		echo "USEGAMEMODERUN=1"
 		echo "## use mangohud:"
 		echo "#MANGOHUD=1"
+		echo "## set to 1 to start the game with vkbasalt:"
+		echo "#ENABLE_VKBASALT=1"
 		echo "## set radv mode:"
 		echo "#RADV_PERFTEST=aco"
 		echo "## start winetricks gui before game launch:"
@@ -695,6 +745,8 @@ function createGameCfg {
 		echo "#########"
 		echo "## set the default config file for DXVK_CONFIG_FILE which is used when found - defaults to config found in $STLDXVKDIR"
 		echo "#STLDXVKCFG=$STLDXVKDIR/$AID.conf"
+		echo "## vkbasalt source config file:"
+		echo "VKBASALT_CONFIG_FILE=$STLCFGDIR/vkBasalt.conf"
 		cat "$STLDEFGAMECFG"
 		} >> "$STLGAMECFG"
 	fi
@@ -953,9 +1005,15 @@ function launchSteamProtonGame {
 # install ReShade if INSTALL_RESHADE is 1
 	installReshade "$@"
 
+# install Depth3D Shader if RESHADE_DEPTH3D is 1
+	installReshadeDepth3D
+
 # start game wih Reshade if USERESHADE is 1
 	useReshade
 
+# start game wih usevkBasalt ENABLE_VKBASALT is 1
+	usevkBasalt
+	
 # override tweak settings if USETWEAKS is 1
 	checkTweakLaunch
 
