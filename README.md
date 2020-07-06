@@ -27,6 +27,11 @@ The game start will wait until you're done and your changes are used on the fly.
 ## Installation: 
 This is one single bash script. Just copy it whereever you want, f.e. /usr/local/bin/
 
+alanjjenkins was so kind to create a PKGBUILD, so if you are on arch linux you can install it from aur
+`yay -S steamtinkerlaunch`
+or for git
+`yay -S steamtinkerlaunch-git`
+
 When you call the script without any arguments from commandline
 it will initially create the default config structure
 `$STLCFGDIR/default_template.conf`
