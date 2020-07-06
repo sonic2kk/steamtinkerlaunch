@@ -2,9 +2,10 @@
 # shellcheck source=/dev/null
 # shellcheck disable=SC2154 # we work with steam variables here which are unknown to shellcheck
 # shellcheck disable=SC2086	# for $STRACEOPTS $CUSTOMCMD_ARGS- *worksforme* for now
+# shellcheck disable=SC2206	# for $GAMEARGS *worksforme* for now
 
 PROGNAME="SteamTinkerLaunch"
-PROGVERS="v0.91"
+PROGVERS="v0.92"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
 function howto {
@@ -18,7 +19,7 @@ function howto {
 	echo ""
 	echo "  game specific use:"
 	echo "-----------------------"
-	echo "  When starting a game with $(basename "$0") it will check if a config file exists in $SteamAppId.conf for the game"
+	echo "  When starting a game with $(basename "$0") it will check if a config file exists in $STLGAMEDIR/$SteamAppId.conf for the game"
 	echo "  if it is not available it is created from the default config file (which is automatically created if not found)."
 	echo ""
 	echo "  When starting the game a small requester will popup (default 2 seconds)."
@@ -676,6 +677,8 @@ function createDefaultGameCfg {
 		echo "#ONLY_CUSTOMCMD=0"
 		echo "## set to 1 to fork the custom CUSTOMCMD into the background and continue with starting %command%"
 		echo "#FORK_CUSTOMCMD=0"
+		echo "## additional game args, so you don't have to append them in steam after %command%:"
+		echo "#GAMEARGS=--some --args"
 		echo "## start game with gamemoderun:"
 		echo "USEGAMEMODERUN=1"
 		echo "## use mangohud:"
@@ -1029,12 +1032,17 @@ function launchSteamProtonGame {
 ########################
 
 # the actual game launch - either with or without gamemoderun:
+
+	declare -a PROTONCMD=("${@}" ${GAMEARGS[@]})
+
+	writelog "$(date) - ${FUNCNAME[0]} - ${PROTONCMD[*]}"
+
 	if [ "$USEGAMEMODERUN" -eq 1 ]; then
 		writelog "$(date) - ${FUNCNAME[0]} - starting $GAMENAME ($AID) with Proton: $(PROTONVERSION "$@") with gamemoderun"
-		gamemoderun "$@"
+		gamemoderun "${PROTONCMD[@]}"
 	else
 		writelog "$(date) - ${FUNCNAME[0]} - starting $GAMENAME ($AID) with Proton: $(PROTONVERSION "$@")"
-		"$@"
+		"${PROTONCMD[@]}"
 	fi
 	writelog "$(date) - ######### STOP $PROGNAME $PROGVERS #########"
 }

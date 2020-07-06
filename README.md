@@ -112,6 +112,9 @@ When enabled you can start custom programs easily with the following per-game co
 - `ONLY_CUSTOMCMD`: set to 1 to only start `CUSTOMCMD` and not the game command itself
 - `FORK_CUSTOMCMD`: set to 1 to fork the custom `CUSTOMCMD` into the background and continue with starting `%command%`
 
+#### additional game arguments:
+- `GAMEARGS`: additional command line args for the game itself
+
 #### winetricks
 - `RUN_WINETRICKS`: set to 1 to start winetricks gui before game launch
 
@@ -187,13 +190,21 @@ To use it you just have to enable `RUNSBSVR=1` in the game specific config, with
 - start [vr-video-player](https://git.dec05eba.com/vr-video-player)
 - when exiting the game, vr-video-player wil be closed as well.
 
+**
+to start SBS-VR with a complete new configuration with vkBasalt you need to do the following:
+- ( allow cloning the Depth3D shader repo `DEPTH3DSRCDIR` by setting `CLONE_DEPTH3D` in the global config `$STLCFGDIR/global.conf` at least once )
+- start the game, enter the editor and comment in `ENABLE_VKBASALT=1` and `RUNSBSVR=1`
+- exit the editor and if everything goes well the game should start in SBS-VR now
+**
+
+
 Some games start own launchers before the actual game and autodetecting the correct window is not easy
 (searching for the biggest window from the game process, which may not be always the correct one)
 That's why you can configure the exact window name to look for, which makes the whole process much more straighter.
 
 There are also specific sbs game config overrides, which have optimal settings for **VR** (f.e. predefined game window, or launcher skips).
 
-here's an example config for trine 2 `~/.stl/sbs/35720.conf`
+here's an example config for trine 2 `STLCFGDIR/sbs/35720.conf`
 
 ```
 #########
@@ -210,10 +221,10 @@ Means, when `RUNSBSVR=1` is set in the main Trine2 config file it will autodetec
 Trine 2 won't start it's original launcher (`ONLY_CUSTOMCMD=1`), but only the custom command `trine2_32bit.exe` and will wait for a `Trine 2` window to open in **VR**
 
 So in general sbs configs are automatically loaded when found and override settings in the mainconfig
-so you just have to enable `RUNSBSVR=1` in `~/.stl/35720.conf` and everything else is configured automatically.
+so you just have to enable `RUNSBSVR=1` in `STLCFGDIR/gamecfgs/35720.conf` and everything else is configured automatically.
 
 I added some initial preconfigured sbs tweak configs into this project.
-For now just copy them into your `~/.stl/sbs/` directory if you want to use them.
+For now just copy them into your `STLCFGDIR/sbs/` directory if you want to use them.
 
 some gamewindows are causing trouble with vr-video-player (f.e. reproducable with `Giana Sisters 2D (350770)`).
 I try to exit the SBSVR routines as graceful as possible, keeping the game open.
@@ -224,7 +235,7 @@ where Reshade probably has more features and vkBasalt is probably more stable
 #### Tweaks
 function similar to above sbs override.
 - `USETWEAKS`: set to 1 to override settings with tweaks when found
-When enabled (gameconfig overrides global config) an existing tweak config in `~/.stl/sbs/$SteamAppId.conf`
+When enabled (gameconfig overrides global config) an existing tweak config in `STLCFGDIR/sbs/$SteamAppId.conf`
 overrides the settings in the main gameconfig. Using this it would be possible to contribute tweak configs required to get games to work hazzlefree out of the box to the community.
 Only useful if some people contribute gamespecific tweaks, else this will vanish:
 global settings are `USETWEAKS` and `CREATETWEAKS` (see above).
@@ -232,6 +243,6 @@ Depending on general contribution of community tweak configs `USETWEAKS` could b
 community contributed scripts with commands required to get a game working (install deps via winetricks, create configs and so on)
 
 I added a preconfigured tweak config for 'SonicGenerations (71340)' into this project, which disables ESYNC and FSYNC required to play the game.
-For now just copy tweak configs into your `~/.stl/tweaks/` directory if you want to use them.
+For now just copy tweak configs into your `STLCFGDIR/tweaks/` directory if you want to use them.
 If you use/create tweaks make sure to retest your game with later proton versions without the tweak (`USETWEAKS=0`) and report upstream if the bug is fixed!
 The used proton Version is automatically written into the tweak file when created with `CREATETWEAKS`
