@@ -41,6 +41,11 @@ and a default global config
 As `$STLCFGDIR/default_template.conf` is the template for creating the game configs 
 you might want to adjust its options to your needs before use.
 
+optionally you can copy files in `sbs` to `/usr/share/stl/sbs/`
+and
+files in `tweaks` to `/usr/share/stl/tweaks/`, they will be found there
+(if this gets bigger, a `Makefile` would make sense)
+
 
 ## Quickstart:
 In the shipped default configs almost everything is disabled.
@@ -103,7 +108,9 @@ Described are only the variables which come from **stl**, for all others please 
 - `DEPTH3DURL`:Depth3D git project
 - `CLONE_DEPTH3D`: allow git clone of Depth3D shaderfiles
 - `DEPTH3DSRCDIR`: Depth3D sourcefiles
-		
+- `GLOBALSBSTWEAKDIR`: directory with global sbs-tweaks
+- `GLOBALTWEAKDIR`: directory with global tweaks
+
 If you do not want to start the editor requester on game launch generally just set `WAITEDITOR=0` - it will be skipped then for all games
 
 ### Functions in detail:
@@ -229,7 +236,8 @@ So in general sbs configs are automatically loaded when found and override setti
 so you just have to enable `RUNSBSVR=1` in `STLCFGDIR/gamecfgs/35720.conf` and everything else is configured automatically.
 
 I added some initial preconfigured sbs tweak configs into this project.
-For now just copy them into your `STLCFGDIR/sbs/` directory if you want to use them.
+For now just copy them into your `SBSTWEAKDIR` directory if you want to use them.
+user sbs-tweak-files in `SBSTWEAKDIR` override global ones in `GLOBALSBSTWEAKDIR`
 
 some gamewindows are causing trouble with vr-video-player (f.e. reproducable with `Giana Sisters 2D (350770)`).
 I try to exit the SBSVR routines as graceful as possible, keeping the game open.
@@ -248,6 +256,7 @@ Depending on general contribution of community tweak configs `USETWEAKS` could b
 community contributed scripts with commands required to get a game working (install deps via winetricks, create configs and so on)
 
 I added a preconfigured tweak config for 'SonicGenerations (71340)' into this project, which disables ESYNC and FSYNC required to play the game.
-For now just copy tweak configs into your `STLCFGDIR/tweaks/` directory if you want to use them.
+For now just copy tweak configs into your `TWEAKDIR` directory if you want to use them.
 If you use/create tweaks make sure to retest your game with later proton versions without the tweak (`USETWEAKS=0`) and report upstream if the bug is fixed!
 The used proton Version is automatically written into the tweak file when created with `CREATETWEAKS`
+user tweak-files in `TWEAKDIR` override global ones in `GLOBALTWEAKDIR`

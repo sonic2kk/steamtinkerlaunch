@@ -1,9 +1,10 @@
 #!/bin/bash
-# shellcheck source=/dev/null	# some sourced files are determined at runtime, therefore disabling the check
+# shellcheck source=/dev/null
 # shellcheck disable=SC2154		# we work with steam variables here which are unknown to shellcheck
 
 PROGNAME="SteamTinkerLaunch"
-PROGVERS="v0.93"
+PROGVERS="v0.94"
+PROGCMD="$(basename "$0")"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
 function howto {
@@ -17,7 +18,7 @@ function howto {
 	echo ""
 	echo "  game specific use:"
 	echo "-----------------------"
-	echo "  When starting a game with $(basename "$0") it will check if a config file exists in $STLGAMEDIR/$SteamAppId.conf for the game"
+	echo "  When starting a game with $PROGCMD it will check if a config file exists in $STLGAMEDIR/$SteamAppId.conf for the game"
 	echo "  if it is not available it is created from the default config file (which is automatically created if not found)."
 	echo ""
 	echo "  When starting the game a small requester will popup (default 2 seconds)."
@@ -27,15 +28,15 @@ function howto {
 }
 
 if [ -z "$SteamAppId" ];then
-	AID="$(basename "$0")"
+	AID="$PROGCMD"
 else
 	AID="$SteamAppId"
 fi
 
 if [ -z "$XDG_CONFIG_HOME" ]; then
-	STLCFGDIR="$HOME/.config/$(basename "$0")"												# either hardcoded config dir
+	STLCFGDIR="$HOME/.config/$PROGCMD"														# either hardcoded config dir
 else
-	STLCFGDIR="$XDG_CONFIG_HOME/$(basename "$0")"											# or in XDG_CONFIG_HOME if the useer set the variable
+	STLCFGDIR="$XDG_CONFIG_HOME/$PROGCMD"													# or in XDG_CONFIG_HOME if the useer set the variable
 fi
 
 STLDEFGLOBALCFG="$STLCFGDIR/global.conf"													# global config
@@ -318,8 +319,19 @@ function runSBSVR {
 # start game in side-by-side VR:
 function checkSBSVRLaunch {
 	if [ "$RUNSBSVR" -eq 1 ]; then
-
 	# override game configs with a sbs-tweak config if available:
+
+	# first look for a global tweak:
+		if [ -f "$GLOBALSBSTWEAKDIR/$AID.conf" ]; then
+			writelog "$(date) - ${FUNCNAME[0]} - VR using overrides found in $GLOBALSBSTWEAKDIR/$AID.conf"
+			while read -r line; do
+				if  echo "$line" | grep -v "^#"; then
+					export "${line?}"
+				fi
+			done < "$GLOBALSBSTWEAKDIR/$AID.conf"
+		fi
+
+	# then for a user tweak - (overriding the global one):
 		if [ -f "$SBSTWEAKDIR/$AID.conf" ]; then
 			writelog "$(date) - ${FUNCNAME[0]} - VR using overrides found in $SBSTWEAKDIR/$AID.conf"
 			while read -r line; do
@@ -646,6 +658,10 @@ function createDefaultGlobalCfg {
 		echo "#USETWEAKS=1"
 		echo "## set to 1 create tweak config templates for the launched game if not found"
 		echo "#CREATETWEAKS=1"
+		echo "## directory with global sbs-tweaks"
+		echo "GLOBALSBSTWEAKDIR=/usr/share/$PROGCMD/sbs"
+		echo "## directory with global tweaks"
+		echo "GLOBALTWEAKDIR=/usr/share/$PROGCMD/tweaks"
 		echo "##### SideBySide #####"
 		echo "## Depth3D git project:"
 		echo "DEPTH3DURL=https://github.com/BlueSkyDefender/Depth3D.git"
@@ -793,6 +809,17 @@ function checkTweakLaunch {
 	if [ "$USETWEAKS" -eq 1 ]; then
 		writelog "$(date) - ${FUNCNAME[0]} - tweaks enabled"
 
+# first try global config
+		if [ -f "$GLOBALTWEAKDIR/$AID.conf" ]; then
+			writelog "$(date) - ${FUNCNAME[0]} - using overrides found in $GLOBALTWEAKDIR/$AID.conf"
+			while read -r line; do
+				if  echo "$line" | grep -v "^#"; then
+					export "${line?}"
+				fi
+			done < "$GLOBALTWEAKDIR/$AID.conf"
+		fi
+
+# then user config - (overriding the global one)
 		if [ -f "$TWEAKDIR/$AID.conf" ]; then
 			writelog "$(date) - ${FUNCNAME[0]} - using overrides found in $TWEAKDIR/$AID.conf"
 			while read -r line; do
