@@ -1,8 +1,6 @@
 #!/bin/bash
-# shellcheck source=/dev/null
-# shellcheck disable=SC2154 # we work with steam variables here which are unknown to shellcheck
-# shellcheck disable=SC2086	# for $STRACEOPTS $CUSTOMCMD_ARGS- *worksforme* for now
-# shellcheck disable=SC2206	# for $GAMEARGS *worksforme* for now
+# shellcheck source=/dev/null	# some sourced files are determined at runtime, therefore disabling the check
+# shellcheck disable=SC2154		# we work with steam variables here which are unknown to shellcheck
 
 PROGNAME="SteamTinkerLaunch"
 PROGVERS="v0.921"
@@ -842,7 +840,8 @@ function stracerun {
 	done
 	writelog "$(date) - ${FUNCNAME[0]} - process $GE found at $(pgrep "$GE")"
 	writelog "$(date) - ${FUNCNAME[0]} - strace -p $(pgrep "$GE") $STRACEOPTS -o $STRACEDIR/$AID.log"
-	strace -p "$(pgrep "$GE")" $STRACEOPTS -o "$STRACEDIR/$AID.log"
+	IFS=" " read -r -a RUNSTRACEOPTS <<< "$STRACEOPTS"
+	strace -p "$(pgrep "$GE")" "${RUNSTRACEOPTS[@]}" -o "$STRACEDIR/$AID.log"
 }
 
 function checkStraceLaunch {
@@ -894,15 +893,16 @@ function launchCustomProg {
 	if [ -z "$LACO" ]; then
 		writelog "$(date) - ${FUNCNAME[0]} - error - launch command $LACO empty- skipping launch"
 	else
+		IFS=" " read -r -a RUNCUSTOMCMD_ARGS <<< "$CUSTOMCMD_ARGS"
 		writelog "$(date) - ${FUNCNAME[0]} - launching custom command with $LACO $CUSTOMCMD_ARGS"
 # several variables coming from steam have to be cleaned in order to get wine to work here
 		if [ "$(LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" file "$CUSTCOM" | grep -c "PE32")" -eq 1 ]; then
 			writelog "$(date) - ${FUNCNAME[0]} - $CUSTCOM seems to be a MS Windows exe - starting through proton"
 			CUSTOM_PROTON="$(echo "$*" | awk -F 'waitforexitandrun' '{print $1}')"
-			LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" WINEDEBUG="-all" WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx" "$(dirname "$CUSTOM_PROTON")/dist/bin/wine" "$LACO" $CUSTOMCMD_ARGS
+			LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" WINEDEBUG="-all" WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx" "$(dirname "$CUSTOM_PROTON")/dist/bin/wine" "$LACO" "${RUNCUSTOMCMD_ARGS[@]}"
 		else
 			writelog "$(date) - ${FUNCNAME[0]} - $CUSTCOM doesn't seem to be a MS Windows exe - regular start (without further analysing)"
-			$LACO $CUSTOMCMD_ARGS
+			$LACO "${RUNCUSTOMCMD_ARGS[@]}"
 		fi
 	fi
 
@@ -1036,8 +1036,8 @@ function launchSteamProtonGame {
 ########################
 
 # the actual game launch - either with or without gamemoderun:
-
-	declare -a PROTONCMD=("${@}" ${GAMEARGS[@]})
+	IFS=" " read -r -a RUNGAMEARGS <<< "$GAMEARGS"
+	PROTONCMD=("${@}" "${RUNGAMEARGS[@]}")
 
 	writelog "$(date) - ${FUNCNAME[0]} - ${PROTONCMD[*]}"
 
