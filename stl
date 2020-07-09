@@ -3,7 +3,7 @@
 # shellcheck disable=SC2154		# we work with steam variables here which are unknown to shellcheck
 
 PROGNAME="SteamTinkerLaunch"
-PROGVERS="v0.94"
+PROGVERS="v0.95"
 PROGCMD="$(basename "$0")"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -36,7 +36,7 @@ fi
 if [ -z "$XDG_CONFIG_HOME" ]; then
 	STLCFGDIR="$HOME/.config/$PROGCMD"														# either hardcoded config dir
 else
-	STLCFGDIR="$XDG_CONFIG_HOME/$PROGCMD"													# or in XDG_CONFIG_HOME if the useer set the variable
+	STLCFGDIR="$XDG_CONFIG_HOME/$PROGCMD"													# or in XDG_CONFIG_HOME if the user set the variable
 fi
 
 STLDEFGLOBALCFG="$STLCFGDIR/global.conf"													# global config
@@ -184,7 +184,7 @@ function SBSstartSVR {
 }
 
 function SBSgetGamePID {
-	if [ "$RUNSBSVR" -eq 1 ]; then
+	if [ "$RUNSBSVR" -ge 1 ]; then
 		if [ -n "$VRGAMEWINDOW" ]; then
 			writelog "$(date) - ${FUNCNAME[0]} - windowname VRGAMEWINDOW $VRGAMEWINDOW provided, explicit search for the game window"
 		else
@@ -220,7 +220,7 @@ function SBSgetGamePID {
 function SBSrunVRVideoPlayer {
 	VRGAMEWINDOWID="$1"
 
-	if [ "$RUNSBSVR" -eq 1 ]; then
+	if [ "$RUNSBSVR" -ge 1 ]; then
 		if [ -z "$VRGAMEWINDOWID" ]; then
 			writelog "$(date) - ${FUNCNAME[0]} - ERROR - VRGAMEWINDOWID $VRGAMEWINDOWID is empty - "
 			writelog "$(date) - ${FUNCNAME[0]} - ERROR - forcefully killing game with pkill -9 $SBSVRKGPID - should exit this script as well"
@@ -238,7 +238,7 @@ function SBSrunVRVideoPlayer {
 				if [[ "$COUNTER" -ge "MAXWAIT" ]]; then
 					writelog "$(date) - ${FUNCNAME[0]} - ERROR - timeout waiting for $SBSVRVIDEOPLAYER - exit"
 					pkill -9 "$SBSVRVIDEOPLAYER"
-					RUNSBSVR=1
+					RUNSBSVR=0
 					exit 1
 				fi
 				writelog "$(date) - ${FUNCNAME[0]} - sec - $COUNTER/$MAXWAIT sec waiting for $SBSVRVIDEOPLAYER window $SBSVRWINNAME"
@@ -263,7 +263,7 @@ function SBSrunVRVideoPlayer {
 }
 
 function SBSinitVRVideoPlayer {
-	if [ "$RUNSBSVR" -eq 1 ]; then
+	if [ "$RUNSBSVR" -ge 1 ]; then
 		if [ -x "$(command -v "$SBSVRVIDEOPLAYER" 2>/dev/null)" ]; then
 			if [ -z "$VRGAMEWINDOW" ]; then
 				if [ -n "$(VRAUTOWINDOWID)" ]; then
@@ -288,7 +288,7 @@ function SBSinitVRVideoPlayer {
 }
 
 function SBSstopVRVideoPlayer {
-	if [ "$RUNSBSVR" -eq 1 ]; then
+	if [ "$RUNSBSVR" -ge 1 ]; then
 		writelog "$(date) - ${FUNCNAME[0]} - waiting for game process $SBSVRKGPID to finish..."
 		
 		if [ "$(pgrep "" -a | grep -v grep | grep "/vrcompositor" -c)" -eq 0 ] ; then
@@ -308,7 +308,7 @@ function SBSstopVRVideoPlayer {
 }
 
 function runSBSVR {
-	if [ "$RUNSBSVR" -eq 1 ]; then
+	if [ "$RUNSBSVR" -ge 1 ]; then
 		SBSstartSVR
 		SBSgetGamePID
 		SBSinitVRVideoPlayer
@@ -318,7 +318,7 @@ function runSBSVR {
 
 # start game in side-by-side VR:
 function checkSBSVRLaunch {
-	if [ "$RUNSBSVR" -eq 1 ]; then
+	if [ "$RUNSBSVR" -ge 1 ]; then
 	# override game configs with a sbs-tweak config if available:
 
 	# first look for a global tweak:
@@ -355,8 +355,15 @@ function checkSBSVRLaunch {
 	# start the whole side-by-side process:
 		export VRGAMEWINDOW="$VRGAMEWINDOW"
 		writelog "$(date) - ${FUNCNAME[0]} - ${FUNCNAME[0]} - starting VRlaunch $VRGAMEWINDOW for $AID"
-
+		if [ "$RUNSBSVR" -eq 1 ]; then
 		runSBSVR &
+		elif [ "$RUNSBSVR" -gt 1 ]; then
+			writelog "$(date) - ${FUNCNAME[0]} - RUNSBSVR is greater than 1 - starting SteamVR and SBS delayed for RUNSBSVR $RUNSBSVR seconds"
+			( sleep "$RUNSBSVR"; runSBSVR) &
+		else
+			writelog "$(date) - ${FUNCNAME[0]} - ${FUNCNAME[0]} error - RUNSBSVR is $RUNSBSVR which is invalid - setting to 0"
+			RUNSBSVR=0
+		fi
 	fi
 }
 
@@ -715,7 +722,7 @@ function createDefaultGameCfg {
 		echo "#RESHADE_DEPTH3D=1"
 		echo "## set to 1 to start game with ReShade enabled:"
 		echo "#USERESHADE=1"
-		echo "## set to 1 to start the game with VRVIDEOPLAYER in VR:"
+		echo "## set to 1 to start the game with VRVIDEOPLAYER in VR at once or to a greater value to delay SteamVR and SBS for RUNSBSVR seconds"
 		echo "#RUNSBSVR=1"
 		echo "## optional name of the gamewindow for VRVIDEOPLAYER - works more stable and is faster:"
 		echo "#VRGAMEWINDOW="
@@ -1051,7 +1058,7 @@ function launchSteamProtonGame {
 # override tweak settings if USETWEAKS is 1
 	checkTweakLaunch
 
-# start game with side-by-side VR if RUNSBSVR is 1 
+# start game with side-by-side VR if RUNSBSVR is not 0 
 	checkSBSVRLaunch
 
 # start a custom program if RUN_CUSTOMCMD is 1

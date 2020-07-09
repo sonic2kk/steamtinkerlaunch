@@ -195,7 +195,7 @@ For me it works good enough to have much fun with it.
 - sometimes steamvr doesn't start correctly (probably related to the ancient upstream bug, where games fail to start steamvr if not running yet)
 - in rare cases even amdgpu fails, but that is very likely a steamvr bug as well (timing?)
 
-To use it you just have to enable `RUNSBSVR=1` in the game specific config, with some luck everything else is done (almost) automatically:
+To use it you just have to set `RUNSBSVR` to 1 (or greater to delay the VR start for `RUNSBSVR` seconds) in the game specific config, with some luck everything else is done (almost) automatically:
 
 - start SteamVR
 - start the game (game settings required to enable sbs are not automatically enabled! added an auto config setting for **Crysis 2** though )
@@ -205,7 +205,7 @@ To use it you just have to enable `RUNSBSVR=1` in the game specific config, with
 **
 to start SBS-VR with a complete new configuration with vkBasalt you need to do the following:
 - ( allow cloning the Depth3D shader repo `DEPTH3DSRCDIR` by setting `CLONE_DEPTH3D` in the global config `$STLCFGDIR/global.conf` at least once )
-- start the game, enter the editor and comment in `ENABLE_VKBASALT=1` and `RUNSBSVR=1`
+- start the game, enter the editor and comment in `ENABLE_VKBASALT=1` and `RUNSBSVR=1 (or greater for delayed VR start)`
 - exit the editor and if everything goes well the game should start in SBS-VR now
 **
 
@@ -229,11 +229,11 @@ ONLY_CUSTOMCMD=1
 VRGAMEWINDOW=Trine 2
 ```
 
-Means, when `RUNSBSVR=1` is set in the main Trine2 config file it will autodetect above sbs tweak config and use the defined variables:
+Means, when `RUNSBSVR` is not 0 in the main Trine2 config file it will autodetect above sbs tweak config and use the defined variables:
 Trine 2 won't start it's original launcher (`ONLY_CUSTOMCMD=1`), but only the custom command `trine2_32bit.exe` and will wait for a `Trine 2` window to open in **VR**
 
 So in general sbs configs are automatically loaded when found and override settings in the mainconfig
-so you just have to enable `RUNSBSVR=1` in `STLCFGDIR/gamecfgs/35720.conf` and everything else is configured automatically.
+so you just have to enable `RUNSBSVR` in `STLCFGDIR/gamecfgs/35720.conf` and everything else is configured automatically.
 
 I added some initial preconfigured sbs tweak configs into this project.
 For now just copy them into your `SBSTWEAKDIR` directory if you want to use them.
