@@ -3,7 +3,7 @@
 # shellcheck disable=SC2154		# we work with steam variables here which are unknown to shellcheck
 
 PROGNAME="SteamTinkerLaunch"
-PROGVERS="v0.95"
+PROGVERS="v0.96"
 PROGCMD="$(basename "$0")"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -576,18 +576,33 @@ function PROTONVERSION {
 	PROTONCMD="$(echo "$*" | awk -F ' waitforexitandrun' '{print $1}')"
 	PROTONVERSION="$(dirname "$PROTONCMD")/version"
 	awk '{print $2}' < "$PROTONVERSION"
- }
+}
+
 
 
 function startEditor {
+
+	KILLBROWSER=0
+
 	writelog "$(date) - ${FUNCNAME[0]} - key pressed on launch - starting STLEDITOR $STLEDITOR with config STLGAMECFG $STLGAMECFG)"
 	if [ "$PROTONDB" -eq 1 ]; then
 		writelog "$(date) - ${FUNCNAME[0]} - PROTONDB is set to 1 - also opening the protondb url in the browser"
-		if [ -x "$(command -v "xdg-open" 2>/dev/null)" ]; then
-			xdg-open "$PDBURL/$AID" & 
+		if [ -x "$(command -v "$BROWSER" 2>/dev/null)" ]; then
+		
+			# if we open a new BROWSER instance here, we're going to kill it when the game launches, else the game won't "exit" in steam 
+			if pgrep "$BROWSER" ; then
+				KILLBROWSER=0
+			else
+				KILLBROWSER=1
+			fi
+		
+			"$BROWSER" "$PDBURL/$AID" & 
 		fi
 	fi
 	"$STLEDITOR" "$STLGAMECFG"
+	if [ "$KILLBROWSER" -eq 1 ]; then
+		pkill -9 "$BROWSER"
+	fi
 }
 
 function editGameConfig {
@@ -654,10 +669,12 @@ function createDefaultGlobalCfg {
 		echo "STLEDITOR=geany"
 		echo "## wait WAITEDITOR seconds for a keypress to open the texteditor STLEDITOR with the game config"
 		echo "WAITEDITOR=2"
-		echo "## set PROTONDB to 1 to also xdg-open the protondb.com page for the game when starting the editor STLEDITOR:"
+		echo "## set PROTONDB to 1 to also open protondb.com for the game in your $BROWSER when starting the editor STLEDITOR:"
 		echo "#PROTONDB=1"
 		echo "## protondb base url - for optional PROTONDB"
 		echo "PDBURL=https://www.protondb.com/app"
+		echo "## Browser used for PROTONDB:"
+		echo "BROWSER=firefox"
 		echo "## vr-video-player"
 		echo "VRVIDEOPLAYER=vr-video-player"
 		echo "## tweaks are only useful if some people contribute gamespecific tweaks, else this will vanish:"
@@ -676,7 +693,6 @@ function createDefaultGlobalCfg {
 		echo "#CLONE_DEPTH3D=1"
 		echo "## Depth3D sourcefiles:"
 		echo "DEPTH3DSRCDIR=$STLCFGDIR/Depth3D"
-
 		} >> "$STLDEFGLOBALCFG"
 	fi
 }

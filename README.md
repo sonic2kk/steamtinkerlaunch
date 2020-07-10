@@ -82,7 +82,7 @@ For the optional features you need:
 - winetricks
 - wget, unzip for optional reshade download, git for pulling optional shaders
 - xdotool, xwininfo, vr-video-player for playing regular games side-by-side in VR
-- your favourite editor for editor mode and otionally xdg-open for opening the protondb url of started game
+- your favourite editor for editor mode and optionally a internetbrowser of your choice (default "firefox") for opening the protondb url of started game
 - vkbasalt
 
 ## Configuration:
@@ -97,12 +97,12 @@ Described are only the variables which come from **stl**, for all others please 
 - `WRITELOG`: write logfile if enabled
 - `STLEDITOR`: the texteditor to use for opening the gameconfig
 - `WAITEDITOR`: wait `WAITEDITOR` seconds for a keypress to open the texteditor `STLEDITOR` with the game config; **can be overridden in the gameconfig**
-- `PROTONDB`: set `PROTONDB` to 1 to also directly xdg-open the protondb page](https://www.protondb.com/) for the game when starting the editor `STLEDITOR`
+- `PROTONDB`: set `PROTONDB` to 1 to also directly open the protondb page](https://www.protondb.com/) for the game in your $BROWSER when starting the editor `STLEDITOR`
+- `BROWSER`: the browser used to open PROTONDB
 - `PDBURL`: protondb base url - for optional `PROTONDB`
 - `VRVIDEOPLAYER`: vr-video-player - the program used to play regular games in **VR**
 - `CREATESTLDXVKCFGTMPL`: create an empty `STLDXVKCFG`_tmpl for easier editing when required
 - `STRACEDIR`: the base strace path used to optionally dump strace logs
-- `STLLOG=/tmp/$(basename "$0").log`: the stl logfile
 - `USETWEAKS`: set to 1 to override settings with tweaks when found
 - `CREATETWEAKS`: set to 1 create tweak config templates (just the header) for the launched game if not found
 - `DEPTH3DURL`:Depth3D git project
