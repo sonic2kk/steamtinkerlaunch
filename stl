@@ -3,7 +3,7 @@
 # shellcheck disable=SC2154		# we work with steam variables here which are unknown to shellcheck
 
 PROGNAME="SteamTinkerLaunch"
-PROGVERS="v0.96"
+PROGVERS="v0.97"
 PROGCMD="$(basename "$0")"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -94,8 +94,6 @@ function usevkBasalt {
 
 #### SBS VR BLOCK START ####
 
-SBSVRVIDEOPLAYER=vr-video-player
-
 #SBSVRWINNAME=hellovr	#	xdotool only searches for partial match, so fortunately this is enough
 SBSVRWINNAME=vr-video-player	
 
@@ -163,7 +161,7 @@ function SBSstartSVR {
 		while ! pgrep "" -a | grep -v grep | grep "/vrcompositor" -q; do
 			if [[ "$COUNTER" -ge "MAXWAIT" ]]; then
 				writelog "$(date) - ${FUNCNAME[0]} - ERROR - timeout waiting for SteamVR - exit"
-				pkill -9 "$SBSVRVIDEOPLAYER"
+				pkill -9 "$VRVIDEOPLAYER"
 				RUNSBSVR=0
 				exit 1
 			fi
@@ -226,22 +224,29 @@ function SBSrunVRVideoPlayer {
 			writelog "$(date) - ${FUNCNAME[0]} - ERROR - forcefully killing game with pkill -9 $SBSVRKGPID - should exit this script as well"
 			pkill -9 "$SBSVRKGPID"
 		else
+			if [ -z "$VRVIDEOPLAYERARGS" ];
+			then
+				writelog "$(date) - ${FUNCNAME[0]} - ERROR - no VRVIDEOPLAYERARGS $VRVIDEOPLAYERARGS"
+			fi
+			
+			IFS=" " read -r -a RUNVRVIDEOPLAYERARGS <<< "$VRVIDEOPLAYERARGS"
+			writelog "$(date) - ${FUNCNAME[0]} - starting $VRVIDEOPLAYER with args ${RUNVRVIDEOPLAYERARGS[*]} for windowid $VRGAMEWINDOWID"
 
-#			"$SBSVRVIDEOPLAYER" --flat "$VRGAMEWINDOWID"  2>/dev/null &
+#			"$VRVIDEOPLAYER" "${RUNVRVIDEOPLAYERARGS[@]}" "$VRGAMEWINDOWID"  2>/dev/null &
 # for 5 seconds delayed into background for now WIP - TODO?
-			( sleep 5; "$SBSVRVIDEOPLAYER" --flat "$VRGAMEWINDOWID"  2>/dev/null ) &
+			( sleep 5; "$VRVIDEOPLAYER" "${RUNVRVIDEOPLAYERARGS[@]}" "$VRGAMEWINDOWID"  2>/dev/null ) &
 
-			writelog "$(date) - ${FUNCNAME[0]} - waiting for $SBSVRVIDEOPLAYER window $SBSVRWINNAME for VRGAMEWINDOWID $VRGAMEWINDOWID"
+			writelog "$(date) - ${FUNCNAME[0]} - waiting for $VRVIDEOPLAYER window $SBSVRWINNAME for VRGAMEWINDOWID $VRGAMEWINDOWID"
 	MAXWAIT=10
 	COUNTER=0
 			while [ -z "$(xdotool search --name "$SBSVRWINNAME" getwindowpid)"  ]; do
 				if [[ "$COUNTER" -ge "MAXWAIT" ]]; then
-					writelog "$(date) - ${FUNCNAME[0]} - ERROR - timeout waiting for $SBSVRVIDEOPLAYER - exit"
-					pkill -9 "$SBSVRVIDEOPLAYER"
+					writelog "$(date) - ${FUNCNAME[0]} - ERROR - timeout waiting for $VRVIDEOPLAYER - exit"
+					pkill -9 "$VRVIDEOPLAYER"
 					RUNSBSVR=0
 					exit 1
 				fi
-				writelog "$(date) - ${FUNCNAME[0]} - sec - $COUNTER/$MAXWAIT sec waiting for $SBSVRVIDEOPLAYER window $SBSVRWINNAME"
+				writelog "$(date) - ${FUNCNAME[0]} - sec - $COUNTER/$MAXWAIT sec waiting for $VRVIDEOPLAYER window $SBSVRWINNAME"
 				COUNTER=$((COUNTER+1))
 				sleep 1
 			done
@@ -251,7 +256,7 @@ function SBSrunVRVideoPlayer {
 #			SBSVRWID=$(xwininfo -name "$SBSVRWINNAME" -stats | grep "$SBSVRWINNAME" | awk -F 'id: ' '{print $2}' | cut -d ' ' -f1)
 			SBSVRWID=$(printf 0x%x "$(xdotool search --name "$SBSVRWINNAME")")
 
-			writelog "$(date) - ${FUNCNAME[0]} - pressing w in $SBSVRVIDEOPLAYER window $SBSVRWINNAME to adjust view: xdotool windowactivate --sync $SBSVRWID key w"
+			writelog "$(date) - ${FUNCNAME[0]} - pressing w in $VRVIDEOPLAYER window $SBSVRWINNAME to adjust view: xdotool windowactivate --sync $SBSVRWID key w"
 			xdotool windowactivate --sync "$SBSVRWID" key w
 
 			writelog "$(date) - ${FUNCNAME[0]} - activating gamewindow with id $VRGAMEWINDOWID for input"
@@ -264,10 +269,10 @@ function SBSrunVRVideoPlayer {
 
 function SBSinitVRVideoPlayer {
 	if [ "$RUNSBSVR" -ge 1 ]; then
-		if [ -x "$(command -v "$SBSVRVIDEOPLAYER" 2>/dev/null)" ]; then
+		if [ -x "$(command -v "$VRVIDEOPLAYER" 2>/dev/null)" ]; then
 			if [ -z "$VRGAMEWINDOW" ]; then
 				if [ -n "$(VRAUTOWINDOWID)" ]; then
-					writelog "$(date) - ${FUNCNAME[0]} - trying to start $SBSVRVIDEOPLAYER with automatically detected windowID $(VRAUTOWINDOWID):"
+					writelog "$(date) - ${FUNCNAME[0]} - trying to start $VRVIDEOPLAYER with automatically detected windowID $(VRAUTOWINDOWID):"
 					writelog "$(date) - ${FUNCNAME[0]} - calling SBSrunVRVideoPlayer $(VRAUTOWINDOWID)"
 					SBSrunVRVideoPlayer	"$(VRAUTOWINDOWID)" 2>/dev/null &
 				else
@@ -280,7 +285,7 @@ function SBSinitVRVideoPlayer {
 				SBSrunVRVideoPlayer	"$VRGAMEWINDOWID" 2>/dev/null &
 			fi
 		else
-			writelog "$(date) - ${FUNCNAME[0]} - command $SBSVRVIDEOPLAYER not found - skipping"
+			writelog "$(date) - ${FUNCNAME[0]} - command $VRVIDEOPLAYER not found - skipping"
 		fi
 	else
 		writelog "$(date) - ${FUNCNAME[0]} - skipping because RUNSBSVR was set to 0"
@@ -293,14 +298,14 @@ function SBSstopVRVideoPlayer {
 		
 		if [ "$(pgrep "" -a | grep -v grep | grep "/vrcompositor" -c)" -eq 0 ] ; then
 			writelog "$(date) - ${FUNCNAME[0]} - ERROR - vrcompositor not running but it should - bailing out DRYRUN"
-#			pkill -9 "$SBSVRVIDEOPLAYER"
+#			pkill -9 "$VRVIDEOPLAYER"
 #			writelog "$(date) - ${FUNCNAME[0]} - ########## killed SBS-VR ##########"
 #			exit
 		fi
 
 		tail --pid="$SBSVRKGPID" -f /dev/null
-		writelog "$(date) - ${FUNCNAME[0]} - game process $SBSVRKGPID finished - closing $SBSVRVIDEOPLAYER"
-		pkill -9 "$SBSVRVIDEOPLAYER"
+		writelog "$(date) - ${FUNCNAME[0]} - game process $SBSVRKGPID finished - closing $VRVIDEOPLAYER"
+		pkill -9 "$VRVIDEOPLAYER"
 		writelog "$(date) - ${FUNCNAME[0]} - -------- finished SBS-VR --------"
 	else
 		writelog "$(date) - ${FUNCNAME[0]} - skipping because RUNSBSVR was set to 0"
@@ -324,21 +329,13 @@ function checkSBSVRLaunch {
 	# first look for a global tweak:
 		if [ -f "$GLOBALSBSTWEAKDIR/$AID.conf" ]; then
 			writelog "$(date) - ${FUNCNAME[0]} - VR using overrides found in $GLOBALSBSTWEAKDIR/$AID.conf"
-			while read -r line; do
-				if  echo "$line" | grep -v "^#"; then
-					export "${line?}"
-				fi
-			done < "$GLOBALSBSTWEAKDIR/$AID.conf"
+			exportCfgFile "$GLOBALSBSTWEAKDIR/$AID.conf"
 		fi
 
 	# then for a user tweak - (overriding the global one):
 		if [ -f "$SBSTWEAKDIR/$AID.conf" ]; then
 			writelog "$(date) - ${FUNCNAME[0]} - VR using overrides found in $SBSTWEAKDIR/$AID.conf"
-			while read -r line; do
-				if  echo "$line" | grep -v "^#"; then
-					export "${line?}"
-				fi
-			done < "$SBSTWEAKDIR/$AID.conf"
+			exportCfgFile "$SBSTWEAKDIR/$AID.conf"
 		fi
 	# Crysis 2 enable SBS in gameconfig:
 	if [ "$AID" -eq "108800" ]; then
@@ -398,7 +395,7 @@ function prepareReshadeFiles {
 		} >> "$STLRSCFG"
 	fi
 
-	source "$STLRSCFG"
+	exportCfgFile "$STLRSCFG"
 
 	if [ "$DOWNLOAD_RESHADE" -eq 1 ]; then
 # could be cleaner...
@@ -572,13 +569,23 @@ function useReshade {
 
 #### CONFIG BLOCK START ####
 
+
+function exportCfgFile {
+	CFGFILE="$1"
+	while read -r line; do
+		if  echo "$line" | grep -v "^#"; then
+			export "${line?}"
+		fi
+	done < "$CFGFILE"
+	
+	source "$CFGFILE"
+}
+
 function PROTONVERSION {
 	PROTONCMD="$(echo "$*" | awk -F ' waitforexitandrun' '{print $1}')"
 	PROTONVERSION="$(dirname "$PROTONCMD")/version"
 	awk '{print $2}' < "$PROTONVERSION"
 }
-
-
 
 function startEditor {
 
@@ -607,7 +614,7 @@ function startEditor {
 
 function editGameConfig {
 # sourcing gameconfig, to optionally override global WAITEDITOR
-	source "$STLGAMECFG"
+	exportCfgFile "$STLGAMECFG"
 
 # open editor requester 
 	if [ "$WAITEDITOR" -gt 0 ]; then
@@ -677,6 +684,8 @@ function createDefaultGlobalCfg {
 		echo "BROWSER=firefox"
 		echo "## vr-video-player"
 		echo "VRVIDEOPLAYER=vr-video-player"
+		echo "## vr-video-player args"
+		echo "VRVIDEOPLAYERARGS=--flat --cursor-wrap"
 		echo "## tweaks are only useful if some people contribute gamespecific tweaks, else this will vanish:"
 		echo "## set to 1 to override settings with tweaks when found "
 		echo "#USETWEAKS=1"
@@ -789,14 +798,11 @@ function createGameCfg {
 		echo "#########"
 		echo "## set the default config file for DXVK_CONFIG_FILE which is used when found - defaults to config found in $STLDXVKDIR"
 		echo "#STLDXVKCFG=$STLDXVKDIR/$AID.conf"
-		echo "## vkbasalt source config file:"
+		echo "## vkbasalt config file:"
 		echo "VKBASALT_CONFIG_FILE=$STLCFGDIR/vkBasalt.conf"
 		cat "$STLDEFGAMECFG"
 		} >> "$STLGAMECFG"
 	fi
-
-#	source "$STLDEFGLOBALCFG"
-#	source "$STLGAMECFG"
 
 # DXVK CONFIG TEMPLATE:
 # create "$STLDXVKCFG"_tmpl if CREATESTLDXVKCFGTMPL is set to 1
@@ -855,17 +861,14 @@ function checkTweakLaunch {
 }
 
 function createDefaultCfgs {
-	loadGlobalCfg
-	createProjectDirs
-	createDefaultGameCfg
-}
-
-function loadGlobalCfg {
 	createDefaultGlobalCfg
 
 	if [ -f "$STLDEFGLOBALCFG" ]; then
-		source "$STLDEFGLOBALCFG"
+		exportCfgFile "$STLDEFGLOBALCFG"
 	fi
+
+	createProjectDirs
+	createDefaultGameCfg
 }
 
 ##### CONFIG BLOCK END #####
@@ -1040,11 +1043,7 @@ function launchSteamProtonGame {
 
 # export game specific variables, exports die with this script, so no worries:
 	writelog "$(date) - ${FUNCNAME[0]} - exporting game specific variables"
-	while read -r line; do
-		if  echo "$line" | grep -v "^#"; then
-			export "${line?}"
-		fi
-	done < "$STLGAMECFG"
+	exportCfgFile "$STLGAMECFG"
 
 # notifier:
 	if  [ -x "$(command -v "$NOTY" 2>/dev/null)" ]; then

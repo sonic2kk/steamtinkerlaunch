@@ -101,6 +101,7 @@ Described are only the variables which come from **stl**, for all others please 
 - `BROWSER`: the browser used to open PROTONDB
 - `PDBURL`: protondb base url - for optional `PROTONDB`
 - `VRVIDEOPLAYER`: vr-video-player - the program used to play regular games in **VR**
+- `VRVIDEOPLAYERARGS`: the commandline arguments for `VRVIDEOPLAYER`
 - `CREATESTLDXVKCFGTMPL`: create an empty `STLDXVKCFG`_tmpl for easier editing when required
 - `STRACEDIR`: the base strace path used to optionally dump strace logs
 - `USETWEAKS`: set to 1 to override settings with tweaks when found
