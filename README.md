@@ -57,7 +57,7 @@ Also enable everything you want in the freshly created
 
 * **env variables** can be easily set for every single game (f.e `PROTON`* , `DXVK`* variables, `MANGOHUD`, `RADV_PERFTEST`, `WINE`...)
 * **custom program** launch before or instead the game itself (also windows exes)
-* **winetricks**
+* **winetricks (gui and silent install)**
 * **winecfg**
 * **gamemoderun**
 * **notifier**
@@ -69,6 +69,7 @@ Also enable everything you want in the freshly created
 * **basic vkBasalt configuration using Depth3D 
 * **automatically play regular games in side-by-side mode in VR! (including "sbs tweaks"**
 * **tweaks**
+* **32bit wineprefix**
 
 # Requirements:
 
@@ -111,6 +112,7 @@ Described are only the variables which come from **stl**, for all others please 
 - `DEPTH3DSRCDIR`: Depth3D sourcefiles
 - `GLOBALSBSTWEAKDIR`: directory with global sbs-tweaks
 - `GLOBALTWEAKDIR`: directory with global tweaks
+- `SAVESBSWINNAME`: seconds to wait to automatically save a new basic SBS tweak config of the running game with the gamewindow name after game launch - 0 to disable - 1 to pick a window"
 
 If you do not want to start the editor requester on game launch generally just set `WAITEDITOR=0` - it will be skipped then for all games
 
@@ -131,8 +133,14 @@ When enabled you can start custom programs easily with the following per-game co
 #### winetricks
 - `RUN_WINETRICKS`: set to 1 to start winetricks gui before game launch
 
+#### silent wintricks installation
+- `WINETRICKSPAKS`: install all packages in WINETRICKSPAKS silently with winetricks
+
 #### winecfg
 - `RUN_WINECFG`: set to 1 to start winecfg before game launch
+
+#### virtual wine desktop
+- `VIRTUALDESKTOP`: set to 1 to enable virtualdesktop for the game
 
 #### [gamemode](https://github.com/FeralInteractive/gamemode)
 - `USEGAMEMODERUN`: set to 1 to start game with gamemoderun
@@ -140,6 +148,9 @@ When enabled you can start custom programs easily with the following per-game co
 #### notifier
 - `NOTY`: the notifier used
 
+#### 32bit WINEPREFIX (experimental):
+- `FORCE32BITPFX`: set to 1 to force 32bit pfx
+		
 #### [MangoHud](https://github.com/flightlessmango/MangoHud)
 * - `MANGOHUD`: set to 1 to enable mangohud - does nothing in stl itself, but just exports the upstream variable
 
@@ -190,32 +201,29 @@ when the game started just create a initial profile by selecting the autodetecte
 SBS-VR (regular games side-by-side in **VR**):
 --------------------------------------------
 
-Currently experimental - it often works very good and sometimes not.
-For me it works good enough to have much fun with it.
-- sometimes setting the focus back to the main window or adjusting the direction of the vr view automatically fails (timing)
-- sometimes steamvr doesn't start correctly (probably related to the ancient upstream bug, where games fail to start steamvr if not running yet)
-- in rare cases even amdgpu fails, but that is very likely a steamvr bug as well (timing?)
+(sometimes setting the focus back to the main window or adjusting the direction of the vr view automatically fails (timing))
 
-To use it you just have to set `RUNSBSVR` to 1 (or greater to delay the VR start for `RUNSBSVR` seconds) in the game specific config, with some luck everything else is done (almost) automatically:
+To play games with built in side-by-side you just have to set `RUNSBSVR` to 1 (or greater to delay the VR start for `RUNSBSVR` seconds) in the game specific config,
+everything else is done (almost) automatically:
 
 - start SteamVR
 - start the game (game settings required to enable sbs are not automatically enabled! added an auto config setting for **Crysis 2** though )
 - start [vr-video-player](https://git.dec05eba.com/vr-video-player)
 - when exiting the game, vr-video-player wil be closed as well.
 
-**
-to start SBS-VR with a complete new configuration with vkBasalt you need to do the following:
-- ( allow cloning the Depth3D shader repo `DEPTH3DSRCDIR` by setting `CLONE_DEPTH3D` in the global config `$STLCFGDIR/global.conf` at least once )
-- start the game, enter the editor and comment in `ENABLE_VKBASALT=1` and `RUNSBSVR=1 (or greater for delayed VR start)`
-- exit the editor and if everything goes well the game should start in SBS-VR now
-**
-
 
 Some games start own launchers before the actual game and autodetecting the correct window is not easy
 (searching for the biggest window from the game process, which may not be always the correct one)
 That's why you can configure the exact window name to look for, which makes the whole process much more straighter.
 
-There are also specific sbs game config overrides, which have optimal settings for **VR** (f.e. predefined game window, or launcher skips).
+**
+since v.0.98 there is the global option SAVESBSWINNAME which saves the game window name into a freshly created sbs tweak config (so this is only done once and used from now on automatically).
+with the game window name available SBS VR starting works much better and faster than without, so you should enable that option:
+setting SAVESBSWINNAME to 1 allows you to pick the game window name, which is the fastest method to get the window name. It usually works very good, but when f.e. the game has a launcher which you have to click this won't work of course
+if SAVESBSWINNAME is greater than 1 the program will wait SAVESBSWINNAME seconds long to get the name of the currently active window and save that into the sbs tweak config.So setting this f.e. to 60 seconds and playing the game for 2 minutes is enough :)
+** 
+
+There are also other specific sbs game config overrides, which have optimal settings for **VR** (f.e. launcher skips using the game exe as custom command).
 
 here's an example config for trine 2 `STLCFGDIR/sbs/35720.conf`
 
@@ -245,6 +253,14 @@ I try to exit the SBSVR routines as graceful as possible, keeping the game open.
 
 To play regular games in VR which do not have builtin SBS, you can either enable ReShade or vkBasalt,
 where Reshade probably has more features and vkBasalt is probably more stable
+
+**
+since v0.98:
+there are two quickstart options to choose from to directly start regular games in SBS mode without any further configuration:
+ - `SBSVRVK`: set to 1 as shortcut to enable all required flags for SBSVR with vkbasalt
+ - `SBSVRRS`: set to 1 as shortcut to enable all required flags for SBSVR with ReShade
+** 
+
 
 #### Tweaks
 function similar to above sbs override.

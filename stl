@@ -3,7 +3,7 @@
 # shellcheck disable=SC2154		# we work with steam variables here which are unknown to shellcheck
 
 PROGNAME="SteamTinkerLaunch"
-PROGVERS="v0.97"
+PROGVERS="v0.98"
 PROGCMD="$(basename "$0")"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -52,7 +52,7 @@ TWEAKCFG="$TWEAKDIR/$AID.conf"																# the game specific shareable conf
 
 STLDXVKDIR="$STLCFGDIR/dxvk"																# base dxvk config dir from where default per game configs are automatically parsed
 
-GP="$(awk -F 'waitforexitandrun ' '{print $NF}' <<< "$@" | awk -F ' GID=' '{print $1}' | awk -F '.exe' '{print $1".exe"}')"	# the absolute game path of the windows game exe - dirty hack to remove command line parameters TODO
+GP="$(awk -F 'waitforexitandrun ' '{print $NF}' <<< "$@" | awk -F ' GID=' '{print $1}' | awk -F '.exe' '{print $1".exe"}')"	# the absolute game path of the windows game exe - dirty hack to remove command line parameters
 GE="$(basename "$GP" | awk -F '.exe' '{print $1}')"											# just the windows game exe name - will be used as game identifier, as we don't have the steamid here :(
 GFD="$(dirname "$GP")"																		# the absolute directory where the game exe lives - unused for optional custom program
 #GN="$(basename "$PWD")"																	# not always correct as we are sometimes in a subdir, so
@@ -94,9 +94,7 @@ function usevkBasalt {
 
 #### SBS VR BLOCK START ####
 
-#SBSVRWINNAME=hellovr	#	xdotool only searches for partial match, so fortunately this is enough
 SBSVRWINNAME=vr-video-player	
-
 STEAMVRARGS=(-applaunch 250820)
 
 # returns the windowid of the biggest window of the main proton exe (a/the exe with win drive Z:) 
@@ -183,6 +181,22 @@ function SBSstartSVR {
 
 function SBSgetGamePID {
 	if [ "$RUNSBSVR" -ge 1 ]; then
+
+		if [ "$SAVESBSWINNAME" -gt 0 ]; then
+			if [ ! -f "$SBSTWEAKDIR/$AID.conf" ]; then
+				writelog "$(date) - ${FUNCNAME[0]} - SAVESBSWINNAME is $SAVESBSWINNAME so waiting for $SBSTWEAKDIR/$AID.conf to appear holding the window name"
+				while [ ! -f "$SBSTWEAKDIR/$AID.conf" ]; do
+					writelog "$(date) - ${FUNCNAME[0]} - waiting for $SBSTWEAKDIR/$AID.conf to appear"
+					sleep 1
+				done
+			fi
+
+			if [ -f "$SBSTWEAKDIR/$AID.conf" ]; then
+				writelog "$(date) - ${FUNCNAME[0]} - config $SBSTWEAKDIR/$AID.conf is ready, getting the window name"
+				exportCfgFile "$SBSTWEAKDIR/$AID.conf"
+			fi
+		fi
+
 		if [ -n "$VRGAMEWINDOW" ]; then
 			writelog "$(date) - ${FUNCNAME[0]} - windowname VRGAMEWINDOW $VRGAMEWINDOW provided, explicit search for the game window"
 		else
@@ -232,12 +246,12 @@ function SBSrunVRVideoPlayer {
 			IFS=" " read -r -a RUNVRVIDEOPLAYERARGS <<< "$VRVIDEOPLAYERARGS"
 			writelog "$(date) - ${FUNCNAME[0]} - starting $VRVIDEOPLAYER with args ${RUNVRVIDEOPLAYERARGS[*]} for windowid $VRGAMEWINDOWID"
 
-#			"$VRVIDEOPLAYER" "${RUNVRVIDEOPLAYERARGS[@]}" "$VRGAMEWINDOWID"  2>/dev/null &
-# for 5 seconds delayed into background for now WIP - TODO?
-			( sleep 5; "$VRVIDEOPLAYER" "${RUNVRVIDEOPLAYERARGS[@]}" "$VRGAMEWINDOWID"  2>/dev/null ) &
+			"$VRVIDEOPLAYER" "${RUNVRVIDEOPLAYERARGS[@]}" "$VRGAMEWINDOWID"  2>/dev/null &
+#			( sleep 5; "$VRVIDEOPLAYER" "${RUNVRVIDEOPLAYERARGS[@]}" "$VRGAMEWINDOWID"  2>/dev/null ) &
 
 			writelog "$(date) - ${FUNCNAME[0]} - waiting for $VRVIDEOPLAYER window $SBSVRWINNAME for VRGAMEWINDOWID $VRGAMEWINDOWID"
-	MAXWAIT=10
+
+	MAXWAIT=20
 	COUNTER=0
 			while [ -z "$(xdotool search --name "$SBSVRWINNAME" getwindowpid)"  ]; do
 				if [[ "$COUNTER" -ge "MAXWAIT" ]]; then
@@ -246,14 +260,19 @@ function SBSrunVRVideoPlayer {
 					RUNSBSVR=0
 					exit 1
 				fi
+
+				if ! pgrep "$VRVIDEOPLAYER" ; then
+					writelog "$(date) - ${FUNCNAME[0]} - ERROR - $VRVIDEOPLAYER not running (crashed?) no need to wait for its window to appear - exit"
+					RUNSBSVR=0
+					exit 1
+				fi
+				
 				writelog "$(date) - ${FUNCNAME[0]} - sec - $COUNTER/$MAXWAIT sec waiting for $VRVIDEOPLAYER window $SBSVRWINNAME"
 				COUNTER=$((COUNTER+1))
 				sleep 1
 			done
 
 # player windowid:
-# WARNING: xwininfo searches for full windowname, xdotool searches partial match - we require partial match here!
-#			SBSVRWID=$(xwininfo -name "$SBSVRWINNAME" -stats | grep "$SBSVRWINNAME" | awk -F 'id: ' '{print $2}' | cut -d ' ' -f1)
 			SBSVRWID=$(printf 0x%x "$(xdotool search --name "$SBSVRWINNAME")")
 
 			writelog "$(date) - ${FUNCNAME[0]} - pressing w in $VRVIDEOPLAYER window $SBSVRWINNAME to adjust view: xdotool windowactivate --sync $SBSVRWID key w"
@@ -270,6 +289,23 @@ function SBSrunVRVideoPlayer {
 function SBSinitVRVideoPlayer {
 	if [ "$RUNSBSVR" -ge 1 ]; then
 		if [ -x "$(command -v "$VRVIDEOPLAYER" 2>/dev/null)" ]; then
+
+# reduntant as this is already checked before in function SBSgetGamePID, but just in case (for now):
+			if [ "$SAVESBSWINNAME" -gt 0 ]; then
+				if [ ! -f "$SBSTWEAKDIR/$AID.conf" ]; then
+					writelog "$(date) - ${FUNCNAME[0]} - SAVESBSWINNAME is $SAVESBSWINNAME so waiting for $SBSTWEAKDIR/$AID.conf to appear holding the window name"
+					while [ ! -f "$SBSTWEAKDIR/$AID.conf" ]; do
+						writelog "$(date) - ${FUNCNAME[0]} - waiting for $SBSTWEAKDIR/$AID.conf to appear"
+						sleep 1
+					done
+				fi
+
+				if [ -f "$SBSTWEAKDIR/$AID.conf" ]; then
+					writelog "$(date) - ${FUNCNAME[0]} - config $SBSTWEAKDIR/$AID.conf is ready, getting the window name"
+					exportCfgFile "$SBSTWEAKDIR/$AID.conf"
+				fi
+			fi
+
 			if [ -z "$VRGAMEWINDOW" ]; then
 				if [ -n "$(VRAUTOWINDOWID)" ]; then
 					writelog "$(date) - ${FUNCNAME[0]} - trying to start $VRVIDEOPLAYER with automatically detected windowID $(VRAUTOWINDOWID):"
@@ -337,6 +373,7 @@ function checkSBSVRLaunch {
 			writelog "$(date) - ${FUNCNAME[0]} - VR using overrides found in $SBSTWEAKDIR/$AID.conf"
 			exportCfgFile "$SBSTWEAKDIR/$AID.conf"
 		fi
+
 	# Crysis 2 enable SBS in gameconfig:
 	if [ "$AID" -eq "108800" ]; then
 		CRY2CFG="$STEAM_COMPAT_DATA_PATH/pfx/drive_c/users/steamuser/Saved Games/Crysis2/game.cfg"
@@ -567,8 +604,8 @@ function useReshade {
 
 #### RESHADE BLOCK END ####
 
-#### CONFIG BLOCK START ####
 
+#### CONFIG BLOCK START ####
 
 function exportCfgFile {
 	CFGFILE="$1"
@@ -620,7 +657,7 @@ function editGameConfig {
 	if [ "$WAITEDITOR" -gt 0 ]; then
 		if [ -x "$(command -v "$STEAM_ZENITY" 2>/dev/null)" ]; then
 
-			"$STEAM_ZENITY" --question --text="start editor" --ok-label=edit --cancel-label=cancel --timeout="$WAITEDITOR"
+			"$STEAM_ZENITY" --title="$PROGNAME-$PROGVERS" --question --text="start editor" --ok-label=edit --cancel-label=cancel --timeout="$WAITEDITOR"
 			case $? in
 				0) startEditor
 				;;
@@ -648,7 +685,6 @@ function mkProjDir {
 function createProjectDirs {
 	mkProjDir "$LOGDIR" 1
 	mkProjDir "$STLGAMEDIR" 1
-	mkProjDir "$SBSTWEAKDIR" "$RUNSBSVR"
 	mkProjDir "$STLDXVKDIR" "$CREATESTLDXVKCFGTMPL"
 	mkProjDir "$TWEAKDIR" "$CREATETWEAKS"
 	mkProjDir "$TWEAKDIR" "$USETWEAKS"
@@ -691,6 +727,8 @@ function createDefaultGlobalCfg {
 		echo "#USETWEAKS=1"
 		echo "## set to 1 create tweak config templates for the launched game if not found"
 		echo "#CREATETWEAKS=1"
+		echo "## seconds to wait to automatically save a new basic SBS tweak config of the running game with the gamewindow name after game launch - 0 to disable - 1 to pick a window"
+		echo "#SAVESBSWINNAME=1"
 		echo "## directory with global sbs-tweaks"
 		echo "GLOBALSBSTWEAKDIR=/usr/share/$PROGCMD/sbs"
 		echo "## directory with global tweaks"
@@ -714,19 +752,21 @@ function createDefaultGameCfg {
 		echo "## set to 1 to override settings with tweaks when found - overrides USETWEAKS in global config"
 		echo "#USETWEAKS=1"
 		echo "## set to 1 to enable the custom command CUSTOMCMD:"
-		echo "#RUN_CUSTOMCMD=0"
+		echo "#RUN_CUSTOMCMD=1"
 		echo "## start this custom command:"
 		echo "#CUSTOMCMD=yourProgram"
 		echo "## start CUSTOMCMD command with following args:"
 		echo "#CUSTOMCMD_ARGS=--some --args"
 		echo "## set to 1 to only start above CUSTOMCMD and not the game command itself:"
-		echo "#ONLY_CUSTOMCMD=0"
+		echo "#ONLY_CUSTOMCMD=1"
 		echo "## set to 1 to fork the custom CUSTOMCMD into the background and continue with starting %command%"
 		echo "#FORK_CUSTOMCMD=0"
 		echo "## additional game args, so you don't have to append them in steam after %command%:"
 		echo "#GAMEARGS=--some --args"
 		echo "## start game with gamemoderun:"
 		echo "USEGAMEMODERUN=1"
+		echo "## force 32bit pfx:"
+		echo "#FORCE32BITPFX=1"
 		echo "## use mangohud:"
 		echo "#MANGOHUD=1"
 		echo "## set to 1 to start the game with vkbasalt:"
@@ -739,8 +779,12 @@ function createDefaultGameCfg {
 		echo "#VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/radeon_icd.i686.json:/usr/share/vulkan/icd.d/radeon_icd.x86_64.json"
 		echo "## start winetricks gui before game launch:"
 		echo "#RUN_WINETRICKS=1"
+		echo "## install all packages in WINETRICKSPAKS silently with winetricks:"
+		echo "#WINETRICKSPAKS=vcrun2015 xact"
 		echo "## start winecfg before game launch:"
 		echo "#RUN_WINECFG=1"
+		echo "## set to 1 to enable virtualdesktop for the game"
+		echo "#VIRTUALDESKTOP=1"
 		echo "## set to 1 to install ReShade:"
 		echo "#INSTALL_RESHADE=1"
 		echo "## set to 1 to install ReShade Depth3D Shader into gamedir:"
@@ -749,6 +793,10 @@ function createDefaultGameCfg {
 		echo "#USERESHADE=1"
 		echo "## set to 1 to start the game with VRVIDEOPLAYER in VR at once or to a greater value to delay SteamVR and SBS for RUNSBSVR seconds"
 		echo "#RUNSBSVR=1"
+		echo "## shortcut to enable all required flags for SBSVR with vkbasalt"
+		echo "#SBSVRVK=1"
+		echo "## shortcut to enable all required flags for SBSVR with ReShade"
+		echo "#SBSVRRS=1"	
 		echo "## optional name of the gamewindow for VRVIDEOPLAYER - works more stable and is faster:"
 		echo "#VRGAMEWINDOW="
 		echo "## overrides global WAITEDITOR config:"
@@ -809,9 +857,6 @@ function createGameCfg {
 	if [ "$CREATESTLDXVKCFGTMPL" -eq 1 ]; then
 		if [ ! -f "$STLDXVKCFG" ]; then
 			touch "$STLDXVKCFG"_tmpl
-		else
-# export DXVK_CONFIG_FILE if STLDXVKCFG was found:	# TODO wrong place here
-			export DXVK_CONFIG_FILE="$STLDXVKCFG"
 		fi
 	fi
 
@@ -829,6 +874,36 @@ function createGameCfg {
 			echo "#PROTONVERSION=$(PROTONVERSION "$@")"
 			echo "#########"
 			} >> "$TWEAKCFG"
+		fi
+	fi
+}
+
+function saveSBSWinName {
+	if [ "$SAVESBSWINNAME" -gt 0 ]; then
+		if [ -f "$SBSTWEAKDIR/$AID.conf" ]; then
+			writelog "$(date) - ${FUNCNAME[0]} - $SBSTWEAKDIR/$AID.conf does already exist - skipping"
+		else
+		if [ "$SAVESBSWINNAME" -eq 1 ]; then
+			writelog "$(date) - ${FUNCNAME[0]} - SAVESBSWINNAME is 1 so picking the window"
+			NEWVRGAMEWINDOW=$(xdotool selectwindow getwindowname)
+		else
+			writelog "$(date) - ${FUNCNAME[0]} - waiting $SAVESBSWINNAME seconds to get the windowname"
+			NEWVRGAMEWINDOW=$(sleep "$SAVESBSWINNAME"; xdotool getactivewindow getwindowname)	
+		fi
+			if [ -n "$NEWVRGAMEWINDOW" ]; then
+				{
+					echo "#########"
+					echo "#GAMENAME=$GN"
+					echo "#GAMEEXE=$GE"
+					echo "#GAMEID=$AID"
+					echo "#PROTONVERSION=$(PROTONVERSION "$@")"
+					echo "#########"
+					echo "VRGAMEWINDOW=$NEWVRGAMEWINDOW"
+				} >> "$SBSTWEAKDIR/$AID.conf"
+				writelog "$(date) - ${FUNCNAME[0]} - created config $SBSTWEAKDIR/$AID.conf with windowname $NEWVRGAMEWINDOW"
+			else
+				writelog "$(date) - ${FUNCNAME[0]} - found windowname $NEWVRGAMEWINDOW is invalid"
+			fi
 		fi
 	fi
 }
@@ -993,14 +1068,68 @@ function checkCustomLaunch {
 
 ### WINE START ###
 
-# start winetricks gui before game launch:
+function createW32PFX {
+	WPFX="$1"
+	LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" WINEARCH=win32 WINEPREFIX="$WPFX" winecfg
+}
+
+# force 32bit pfx if FORCE32BITPFX is set
+
+function check32BitForce {
+	if [ "$FORCE32BITPFX" -eq 1 ]; then
+		writelog "$(date) - ${FUNCNAME[0]} - forcing 32bit prefix"
+		WPFX="$STEAM_COMPAT_DATA_PATH/pfx"
+		if [ -d "$WPFX" ];then
+			writelog "$(date) - ${FUNCNAME[0]} - wineprefix $WPFX exists - checking architecture"
+			if [ -f "$WPFX/drive_c/windows/syswow64/avifile.dll" ];then	# the dir alone is not enough as proton installs dxvk dlls into this dir, so looking for a random file from a clean win64 pfx
+				PFXBACK64="$WPFX"-BACK64
+				writelog "$(date) - ${FUNCNAME[0]} - wineprefix $WPFX is 64bit - creating a 32bit prefix instead"
+				if [ ! -d "$PFXBACK64" ];then
+					mv "$WPFX" "$PFXBACK64"
+					writelog "$(date) - ${FUNCNAME[0]} - backed the 64bit pfx $WPFX to $PFXBACK64 - creating a 32bit prefix now"
+					createW32PFX "$WPFX"
+					mkdir "$WPFX"/drive_c/windows/syswow64
+					writelog "$(date) - ${FUNCNAME[0]} - 32bit wineprefix $WPFX created"
+				else
+					writelog "$(date) - ${FUNCNAME[0]} - 64bit backup $PFXBACK64 already exists - please remove it manually if n longer required! - skipping FORCE32BITPFX"
+					FORCE32BITPFX=0
+				fi
+			else
+				writelog "$(date) - ${FUNCNAME[0]} - wineprefix $WPFX already is 32bit - nothing to do"
+			fi
+		else
+			writelog "$(date) - ${FUNCNAME[0]} - wineprefix $WPFX does not exist - creating a fresh 32bit prefix"
+			createW32PFX "$WPFX"
+		fi
+	fi
+}
+
+# start winetricks before game launch:
 function checkWinetricksLaunch {
+# gui:
 	if [ "$RUN_WINETRICKS" -eq 1 ]; then
 		if  [ -x "$(command -v "winetricks" 2>/dev/null)" ]; then
 			writelog "$(date) - ${FUNCNAME[0]} - launching winetricks before game start with following commandline:"
 			# several variables coming from steam have to be cleaned in order to get wine to work here
-			writelog "$(date) - ${FUNCNAME[0]} - LC_ALL=\"\" PATH=\"/usr/local/bin:/usr/bin\" LD_LIBRARY_PATH=\"\" LD_PRELOAD=\"\" WINEPREFIX=\"$STEAM_COMPAT_DATA_PATH/pfx\" winetricks --gui"
-			LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx" winetricks --gui
+			if [ "$FORCE32BITPFX" -eq 1 ]; then
+				writelog "$(date) - ${FUNCNAME[0]} - LC_ALL=\"\" PATH=\"/usr/local/bin:/usr/bin\" LD_LIBRARY_PATH=\"\" LD_PRELOAD=\"\" WINEARCH=win32 WINEPREFIX=\"$STEAM_COMPAT_DATA_PATH/pfx\" winetricks --gui"
+				mv "$WPFX/drive_c/windows/syswow64" "$WPFX/drive_c/windows/syswow64-off"
+				LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" WINEARCH=win32 WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx" winetricks --gui
+				mv "$WPFX/drive_c/windows/syswow64-off" "$WPFX/drive_c/windows/syswow64"
+			else
+				writelog "$(date) - ${FUNCNAME[0]} - LC_ALL=\"\" PATH=\"/usr/local/bin:/usr/bin\" LD_LIBRARY_PATH=\"\" LD_PRELOAD=\"\" WINEPREFIX=\"$STEAM_COMPAT_DATA_PATH/pfx\" winetricks --gui"
+				LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx" winetricks --gui
+			fi
+		else
+			writelog "$(date) - ${FUNCNAME[0]} - winetricks not found - skipping"
+		fi
+	fi
+# silent
+	if [ -n "$WINETRICKSPAKS" ]; then
+		if  [ -x "$(command -v "winetricks" 2>/dev/null)" ]; then
+			writelog "$(date) - ${FUNCNAME[0]} - installing $WINETRICKSPAKS silently with winetricks"
+			IFS=" " read -r -a INSTWINETRICKSPAKS <<< "$WINETRICKSPAKS"
+			LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx" winetricks "${INSTWINETRICKSPAKS[@]}" -q
 		else
 			writelog "$(date) - ${FUNCNAME[0]} - winetricks not found - skipping"
 		fi
@@ -1013,10 +1142,46 @@ function checkWineCfgLaunch {
 		if  [ -x "$(command -v "winecfg" 2>/dev/null)" ]; then
 			writelog "$(date) - ${FUNCNAME[0]} - starting winecfg before game start:"
 			# several variables coming from steam have to be cleaned in order to get wine to work here
-			writelog "$(date) - ${FUNCNAME[0]} - LC_ALL=\"\" PATH=\"/usr/local/bin:/usr/bin\" LD_LIBRARY_PATH=\"\" LD_PRELOAD=\"\" WINEPREFIX=\"$STEAM_COMPAT_DATA_PATH/pfx\" winecfg"
-			LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx" winecfg
+			if [ "$FORCE32BITPFX" -eq 1 ]; then
+				writelog "$(date) - ${FUNCNAME[0]} - LC_ALL=\"\" PATH=\"/usr/local/bin:/usr/bin\" LD_LIBRARY_PATH=\"\" LD_PRELOAD=\"\" WINEARCH=win32 WINEPREFIX=\"$STEAM_COMPAT_DATA_PATH/pfx\" winecfg"
+				mv "$WPFX/drive_c/windows/syswow64" "$WPFX/drive_c/windows/syswow64-off"
+				LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" WINEARCH=win32 WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx" winecfg
+				mv "$WPFX/drive_c/windows/syswow64-off" "$WPFX/drive_c/windows/syswow64"
+			else
+				writelog "$(date) - ${FUNCNAME[0]} - LC_ALL=\"\" PATH=\"/usr/local/bin:/usr/bin\" LD_LIBRARY_PATH=\"\" LD_PRELOAD=\"\" WINEPREFIX=\"$STEAM_COMPAT_DATA_PATH/pfx\" winecfg"
+				LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx" winecfg
+			fi
 		else
 			writelog "$(date) - ${FUNCNAME[0]} - winecfg not found - skipping"
+		fi
+	fi
+}
+
+function customRegs {
+	if [ "$VIRTUALDESKTOP" -eq 1 ]; then
+		TEMPREG="/tmp/temp.reg"
+		if [ -f "$TEMPREG" ]; then
+			rm "$TEMPREG"
+		fi
+
+		if touch "$TEMPREG"; then
+			writelog "$(date) - ${FUNCNAME[0]} - VIRTUALDESKTOP is set to 1 - enabling virtual desktop"
+			{
+			echo "Windows Registry Editor Version 5.00"
+			echo "[HKEY_CURRENT_USER\Software\Wine\Explorer]"
+			echo "\"Desktop\"=\"Default\""
+			echo "[HKEY_CURRENT_USER\Software\Wine\Explorer\Desktops]"
+			echo "\"Default\"=\"$(xrandr | grep "\*" | awk '{print $1}')\""
+			} >> "$TEMPREG"
+
+			LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx" regedit "$TEMPREG"
+
+			if [ -f "$TEMPREG" ]; then
+				rm "$TEMPREG"
+			fi
+
+		else
+			writelog "$(date) - ${FUNCNAME[0]} - could not create $TEMPREG - skipping!"
 		fi
 	fi
 }
@@ -1045,18 +1210,43 @@ function launchSteamProtonGame {
 	writelog "$(date) - ${FUNCNAME[0]} - exporting game specific variables"
 	exportCfgFile "$STLGAMECFG"
 
+# export DXVK_CONFIG_FILE if STLDXVKCFG was found:
+	if [ -f "$STLDXVKCFG" ]; then
+		export DXVK_CONFIG_FILE="$STLDXVKCFG"
+	fi
+
+# shortcut to enable all required flags for SBSVR with vkbasalt
+	if [ "$SBSVRVK" -eq 1 ]; then
+		export RUNSBSVR=1
+		export RESHADE_DEPTH3D=1
+		export ENABLE_VKBASALT=1
+	fi
+	
+# shortcut to enable all required flags for SBSVR with ReShade
+	if [ "$SBSVRRS" -eq 1 ]; then
+		export RUNSBSVR=1
+		export INSTALL_RESHADE=1
+		export RESHADE_DEPTH3D=1
+		export USERESHADE=1
+	fi
+
 # notifier:
 	if  [ -x "$(command -v "$NOTY" 2>/dev/null)" ]; then
 		"$NOTY" "Steam Tinker Launch started"
 	fi
 
 #################
-
-# start winetricks if RUN_WINETRICKS is 1
+# force 32bit pfx if  if FORCE32BITPFX is 1
+	check32BitForce "$@"
+	
+# start winetricks gui if RUN_WINETRICKS is 1 or silently if WINETRICKSPAKS is not empty
 	checkWinetricksLaunch
 
 # start winecfg if RUN_WINECFG is 1
 	checkWineCfgLaunch
+
+# apply some regs if requested
+	customRegs
 
 # install ReShade if INSTALL_RESHADE is 1
 	installReshade "$@"
@@ -1072,6 +1262,9 @@ function launchSteamProtonGame {
 	
 # override tweak settings if USETWEAKS is 1
 	checkTweakLaunch
+
+# save game window name after SAVESBSWINNAME seconds
+	saveSBSWinName "$@" &
 
 # start game with side-by-side VR if RUNSBSVR is not 0 
 	checkSBSVRLaunch
@@ -1102,6 +1295,25 @@ function launchSteamProtonGame {
 
 ### CORE LAUNCH END ###
 
+### CLOSE STL START ###
+
+function closeSTL {
+	writelog "$(date) - ${FUNCNAME[0]} - game $GAMENAME ($AID) exited - cleaning up custom processes if necessary"
+
+# kill $VRVIDEOPLAYER in case it wasn't closed before
+	if [ "$RUNSBSVR" -ge 1 ]; then
+		if pgrep "$VRVIDEOPLAYER" ; then
+			pkill -9 "$VRVIDEOPLAYER" 
+		fi
+	fi
+
+# should not be necessary, but in case a game forks and partly hangs this could help to gracefully exit wine. if you have doubts feel free to open an issue:
+	WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx" wineserver -k
+	pkill -9 "$PROGCMD" # wip - if the game quit this script should as well, but in theory it could still wait for something with a user defined duration (f.e. SAVESBSWINNAME)
+	writelog "$(date) - ${FUNCNAME[0]} - finished"
+}
+
+### CLOSE STL END ###
 
 # main:#################
 
@@ -1112,6 +1324,8 @@ if [ -z "$1" ]; then
 else
 	if echo "$@" | grep "waitforexitandrun"; then
 		launchSteamProtonGame "$@"
+		closeSTL
+		writelog "$(date) - ######### STOP $PROGNAME $PROGVERS #########"
 	else
 		echo "$@"
 		echo "doesn't contain waitforexitandrun - this doesn't look like a steam proton launch command"
