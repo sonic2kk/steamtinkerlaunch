@@ -3,7 +3,7 @@
 # shellcheck disable=SC2154		# we work with steam variables here which are unknown to shellcheck
 
 PROGNAME="SteamTinkerLaunch"
-PROGVERS="v0.98"
+PROGVERS="v0.98.1"
 PROGCMD="$(basename "$0")"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -55,8 +55,7 @@ STLDXVKDIR="$STLCFGDIR/dxvk"																# base dxvk config dir from where de
 GP="$(awk -F 'waitforexitandrun ' '{print $NF}' <<< "$@" | awk -F ' GID=' '{print $1}' | awk -F '.exe' '{print $1".exe"}')"	# the absolute game path of the windows game exe - dirty hack to remove command line parameters
 GE="$(basename "$GP" | awk -F '.exe' '{print $1}')"											# just the windows game exe name - will be used as game identifier, as we don't have the steamid here :(
 GFD="$(dirname "$GP")"																		# the absolute directory where the game exe lives - unused for optional custom program
-#GN="$(basename "$PWD")"																	# not always correct as we are sometimes in a subdir, so
-GN="$(dirname "$(awk -F 'common/' '{print $2}' <<< "$PWD")")"								# this is basically the proper game name
+GN="$(awk -F '/' '{print $1}' <<< "$(awk -F 'common/' '{print $2}' <<< "$PWD")")"			# this is hopefully the proper game name
 
 #### VKBASALT BLOCK START ####
 
@@ -207,7 +206,7 @@ function SBSgetGamePID {
 
 		while true; do
 			if [ -n "$VRGAMEWINDOW" ]; then
-				GPID="$(xwininfo -name "$VRGAMEWINDOW" -wm | grep "Process id:"   | awk -F 'Process id: ' '{print $2}' | cut -d ' ' -f1)"
+				GPID="$(xwininfo -name "${VRGAMEWINDOW//\"/}" -wm | grep "Process id:"   | awk -F 'Process id: ' '{print $2}' | cut -d ' ' -f1)"
 				if [ -n "$GPID" ]; then
 					writelog "$(date) - ${FUNCNAME[0]} - game pid $GPID found for VRGAMEWINDOW $VRGAMEWINDOW"
 					export SBSVRKGPID="$GPID"
@@ -315,10 +314,15 @@ function SBSinitVRVideoPlayer {
 					writelog "$(date) - ${FUNCNAME[0]} - VRAUTOWINDOWID $(VRAUTOWINDOWID) empty - error"
 				fi
 			else
-				VRGAMEWINDOWID="$(xwininfo -name "$VRGAMEWINDOW" -stats | grep "$VRGAMEWINDOW" | awk -F 'id: ' '{print $2}' | cut -d ' ' -f1)"
-				writelog "$(date) - ${FUNCNAME[0]} - found windowid $VRGAMEWINDOWID for the windowname $VRGAMEWINDOW"
-				writelog "$(date) - ${FUNCNAME[0]} - calling SBSrunVRVideoPlayer $VRGAMEWINDOWID"
-				SBSrunVRVideoPlayer	"$VRGAMEWINDOWID" 2>/dev/null &
+				VRGAMEWINDOWID="$(xwininfo -name "${VRGAMEWINDOW//\"/}" -stats | grep "^xwininfo" | awk -F 'id: ' '{print $2}' | cut -d ' ' -f1)"
+				if [ -z "$VRGAMEWINDOWID" ]; then
+					writelog "$(date) - ${FUNCNAME[0]} - ERROR - could not find windowid $VRGAMEWINDOWID for the windowname $VRGAMEWINDOW"
+					RUNSBSVR=0
+				else
+					writelog "$(date) - ${FUNCNAME[0]} - found windowid $VRGAMEWINDOWID for the windowname $VRGAMEWINDOW"
+					writelog "$(date) - ${FUNCNAME[0]} - calling SBSrunVRVideoPlayer $VRGAMEWINDOWID"
+					SBSrunVRVideoPlayer	"$VRGAMEWINDOWID" 2>/dev/null &
+				fi
 			fi
 		else
 			writelog "$(date) - ${FUNCNAME[0]} - command $VRVIDEOPLAYER not found - skipping"
@@ -898,7 +902,7 @@ function saveSBSWinName {
 					echo "#GAMEID=$AID"
 					echo "#PROTONVERSION=$(PROTONVERSION "$@")"
 					echo "#########"
-					echo "VRGAMEWINDOW=$NEWVRGAMEWINDOW"
+					echo "VRGAMEWINDOW=\"$NEWVRGAMEWINDOW\""
 				} >> "$SBSTWEAKDIR/$AID.conf"
 				writelog "$(date) - ${FUNCNAME[0]} - created config $SBSTWEAKDIR/$AID.conf with windowname $NEWVRGAMEWINDOW"
 			else
