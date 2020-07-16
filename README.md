@@ -70,6 +70,7 @@ Also enable everything you want in the freshly created
 * **automatically play regular games in side-by-side mode in VR! (including "sbs tweaks"**
 * **tweaks**
 * **32bit wineprefix**
+* **nyrna per game**
 
 # Requirements:
 
@@ -85,6 +86,7 @@ For the optional features you need:
 - xdotool, xwininfo, vr-video-player for playing regular games side-by-side in VR
 - your favourite editor for editor mode and optionally a internetbrowser of your choice (default "firefox") for opening the protondb url of started game
 - vkbasalt
+- nyrna
 
 ## Configuration:
 
@@ -154,6 +156,9 @@ When enabled you can start custom programs easily with the following per-game co
 #### [MangoHud](https://github.com/flightlessmango/MangoHud)
 * - `MANGOHUD`: set to 1 to enable mangohud - does nothing in stl itself, but just exports the upstream variable
 
+#### [Nyrna](https://github.com/Merrit/nyrna)
+* - `RUN_NYRNA`: "set to 1 to enable nyrna while game is running - overrides global config
+
 #### radv [Mesa](https://www.mesa3d.org/)
 - `#RADV_PERFTEST=aco`: aco is default starting with mesa 20.2 
 
@@ -217,12 +222,16 @@ Some games start own launchers before the actual game and autodetecting the corr
 That's why you can configure the exact window name to look for, which makes the whole process much more straighter.
 
 **
-since v.0.98 there is the global option SAVESBSWINNAME which saves the game window name into a freshly created sbs tweak config (so this is only done once and used from now on automatically).
+since v0.98 there is the global option SAVESBSWINNAME which saves the game window name into a freshly created sbs tweak config (so this is only done once and used from now on automatically).
 with the game window name available SBS VR starting works much better and faster than without, so you should enable that option:
 setting SAVESBSWINNAME to 1 allows you to pick the game window name, which is the fastest method to get the window name. It usually works very good, but when f.e. the game has a launcher which you have to click this won't work of course
 if SAVESBSWINNAME is greater than 1 the program will wait SAVESBSWINNAME seconds long to get the name of the currently active window and save that into the sbs tweak config.So setting this f.e. to 60 seconds and playing the game for 2 minutes is enough :)
 ** 
 
+**
+v0.99.0
+implemented live zoom in vr-video-player and the some state is saved in stl per game, so every game starts with your prefered settings
+** 
 There are also other specific sbs game config overrides, which have optimal settings for **VR** (f.e. launcher skips using the game exe as custom command).
 
 here's an example config for trine 2 `STLCFGDIR/sbs/35720.conf`
