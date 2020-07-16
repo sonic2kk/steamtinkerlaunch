@@ -3,7 +3,7 @@
 # shellcheck disable=SC2154		# we work with steam variables here which are unknown to shellcheck
 
 PROGNAME="SteamTinkerLaunch"
-PROGVERS="v0.99.1"
+PROGVERS="v0.99.2"
 PROGCMD="$(basename "$0")"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -122,6 +122,7 @@ function SBSstartSVR {
 			writelog "$(date) - SKIP - ${FUNCNAME[0]} - starting SteamVR FAILED - skipping SBS-VR"
 			export RUNSBSVR=0
 		else
+			writelog "$(date) - INFO - ${FUNCNAME[0]} - started SteamVR"
 			SVRJUSTSTARTED=1
 		fi
 	fi
@@ -147,6 +148,7 @@ function SBSstartSVR {
 	if [ "$SVRJUSTSTARTED" -eq 1 ]; then
 		while true; do
 			if [ "$(pgrep "" -a | grep -v grep | grep "/vrstartup" -c)" -eq 0 ] ; then
+				writelog "$(date) - WAIT - ${FUNCNAME[0]} - no vrstartup instance running"
 				break
 			fi
 			writelog "$(date) - WAIT - ${FUNCNAME[0]} - waiting for end of vrstartup TIMEOUT?"
@@ -172,7 +174,18 @@ function SBSstartSVR {
 	fi
 
 	if pgrep "" -a | grep -v grep | grep "/vrcompositor" -q ; then
-		writelog "$(date) - OK - ${FUNCNAME[0]} - success SteamVR running"
+		while true; do
+			if [ "$(pgrep "" -a | grep -v grep | grep "/vrstartup" -c)" -eq 0 ] ; then
+				writelog "$(date) - WAIT - ${FUNCNAME[0]} - no vrstartup instance running - looks good"
+				break
+			fi
+			sleep 1
+			writelog "$(date) - WAIT - ${FUNCNAME[0]} - waiting for end of vrstartup"
+		done
+
+		writelog "$(date) - OK - ${FUNCNAME[0]} - success - SteamVR running"
+		sleep 1 # better safe than sorry
+		
 	else
 		writelog "$(date) - SKIP - ${FUNCNAME[0]} - SteamVR start failed - vrcompositor still not running - skipping SBS-VR!"
 		export RUNSBSVR=0
@@ -715,7 +728,7 @@ function editGameConfig {
 	if [ "$WAITEDITOR" -gt 0 ]; then
 		if [ -x "$(command -v "$STEAM_ZENITY" 2>/dev/null)" ]; then
 
-			"$STEAM_ZENITY" --title="$PROGNAME ($PROGCMD) - $PROGVERS" --question --text="start editor" --ok-label=edit --cancel-label=cancel --timeout="$WAITEDITOR" --width 400
+			"$STEAM_ZENITY" --title="$PROGNAME ($PROGCMD) - $PROGVERS" --question --text="start editor" --ok-label=edit --cancel-label=cancel --timeout="$WAITEDITOR" --width 350
 			case $? in
 				0) startEditor
 				;;
@@ -776,9 +789,11 @@ function createDefaultGlobalCfg {
 		echo "PDBURL=https://www.protondb.com/app"
 		echo "## Browser used for PROTONDB:"
 		echo "BROWSER=firefox"
-		echo "## vr-video-player"
 		echo "## set to 1 to enable nyrna while game is running"
 		echo "#RUN_NYRNA=1"
+		echo "## toggle visibility of all open windows on start/stop"
+		echo "#TOGGLEWINDOWS=1"
+		echo "## vr-video-player"
 		echo "VRVIDEOPLAYER=vr-video-player"
 		echo "## vr-video-player args"
 		echo "VRVIDEOPLAYERARGS=--flat"
@@ -833,6 +848,8 @@ function createDefaultGameCfg {
 		echo "#ENABLE_VKBASALT=1"
 		echo "## set to 1 to enable nyrna while game is running - overrides global config"
 		echo "#RUN_NYRNA=1"
+		echo "## toggle visibility of all open windows on start/stop - overrides global config"
+		echo "#TOGGLEWINDOWS=1"
 		echo "## set radv mode:"
 		echo "#RADV_PERFTEST=aco"
 		echo "## comment in to use amdvlk"
@@ -1155,6 +1172,18 @@ function checkCustomLaunch {
 	fi
 }
 
+function toggleWindows {
+	if [ "$TOGGLEWINDOWS" -eq 1 ]; then
+		WMCTRL="wmctrl"
+		if  [ -x "$(command -v "$WMCTRL" 2>/dev/null)" ]; then
+			writelog "$(date) - INFO - ${FUNCNAME[0]} - hiding windows is $1"
+			"$WMCTRL" -k "$1"
+		else
+			writelog "$(date) - SKIP - ${FUNCNAME[0]} - $WMCTRL not found"
+		fi
+	fi
+}
+
 ### CUSTOM PROGRAM END ###
 
 
@@ -1297,7 +1326,6 @@ function useNyrna {
 
 ### WINE END ###
 
-
 ### CORE LAUNCH START ###
 
 ## launchSteamProtonGame:
@@ -1363,6 +1391,9 @@ function launchSteamProtonGame {
 # apply some regs if requested
 	customRegs
 
+# minimize all open windows if TOGGLEWINDOWS is 1
+	toggleWindows on
+	
 # install ReShade if INSTALL_RESHADE is 1
 	installReshade "$@"
 
@@ -1432,6 +1463,8 @@ function closeSTL {
 			pkill -9 "$NYRNA" 
 		fi
 	fi
+
+	toggleWindows off
 
 # should not be necessary, but in case a game forks and partly hangs this could help to gracefully exit wine. if you have doubts feel free to open an issue:
 	WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx" wineserver -k

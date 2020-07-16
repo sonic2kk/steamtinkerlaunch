@@ -87,6 +87,7 @@ For the optional features you need:
 - your favourite editor for editor mode and optionally a internetbrowser of your choice (default "firefox") for opening the protondb url of started game
 - vkbasalt
 - nyrna
+- wmctrl to optionally minimize/maximize all open windows on game start/stop
 
 ## Configuration:
 
@@ -102,6 +103,8 @@ Described are only the variables which come from **stl**, for all others please 
 - `WAITEDITOR`: wait `WAITEDITOR` seconds for a keypress to open the texteditor `STLEDITOR` with the game config; **can be overridden in the gameconfig**
 - `PROTONDB`: set `PROTONDB` to 1 to also directly open the protondb page](https://www.protondb.com/) for the game in your $BROWSER when starting the editor `STLEDITOR`
 - `BROWSER`: the browser used to open PROTONDB
+- `RUN_NYRNA`: set to 1 to enable nyrna while game is running
+- `TOGGLEWINDOWS`: toggle visibility of all open windows on start/stop
 - `PDBURL`: protondb base url - for optional `PROTONDB`
 - `VRVIDEOPLAYER`: vr-video-player - the program used to play regular games in **VR**
 - `VRVIDEOPLAYERARGS`: the commandline arguments for `VRVIDEOPLAYER`
@@ -158,6 +161,9 @@ When enabled you can start custom programs easily with the following per-game co
 
 #### [Nyrna](https://github.com/Merrit/nyrna)
 * - `RUN_NYRNA`: "set to 1 to enable nyrna while game is running - overrides global config
+
+#### minimize all open windows on game start and maximize them when game exited using wmctrl
+- `TOGGLEWINDOWS`: toggle visibility of all open windows on start/stop
 
 #### radv [Mesa](https://www.mesa3d.org/)
 - `#RADV_PERFTEST=aco`: aco is default starting with mesa 20.2 
