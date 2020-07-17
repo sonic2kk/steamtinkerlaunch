@@ -2,10 +2,29 @@
 # shellcheck source=/dev/null
 # shellcheck disable=SC2154		# we work with steam variables here which are unknown to shellcheck
 
+### project ###
+
 PROGNAME="SteamTinkerLaunch"
-PROGVERS="v0.99.2"
+PROGVERS="v0.99.3"
 PROGCMD="$(basename "$0")"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
+
+### (optionally) used programs ###
+
+GAMEMODERUN="gamemoderun"
+GIT="git"
+NYRNA="nyrna"
+STEAM="steam"
+STRACE="strace"
+UNZIP="unzip"
+WGET="wget"
+WINECFG="winecfg"
+WINETRICKS="winetricks"
+WMCTRL="wmctrl"
+XDO="xdotool"
+XWININFO="xwininfo"
+
+### howto ###
 
 function howto {
 	echo "========================="
@@ -27,6 +46,8 @@ function howto {
 	echo "  for more functions please check the configs and or the README - if something is not clear please file a bugreport on the projectpage $PROJECTPAGE"
 }
 
+### default vars ###
+
 if [ -z "$SteamAppId" ];then
 	AID="$PROGCMD"
 else
@@ -42,40 +63,39 @@ fi
 STLDEFGLOBALCFG="$STLCFGDIR/global.conf"													# global config
 STLDEFGAMECFG="$STLCFGDIR/default_template.conf"											# the default config template used to create new per game configs - will be autocreated if not found
 LOGDIR="$STLCFGDIR/logs"																	# default logfile dir
-
 STLGAMEDIR="$STLCFGDIR/gamecfgs"															# default basedir for game the gamespecific configs
 STLGAMECFG="$STLGAMEDIR/$AID.conf"															# the game specific config file which is used by the launched game - created from $STLDEFGAMECFG if not found
-
 SBSTWEAKDIR="$STLCFGDIR/sbs"																# directory for optional config overrides for easier side-by-side VR gaming
 TWEAKDIR="$STLCFGDIR/tweaks"																# directory for optional config overrides for easier general VR gaming
 TWEAKCFG="$TWEAKDIR/$AID.conf"																# the game specific shareable config tweak overrides - header autocreated if global CREATETWEAKS is set to 1
-
 STLDXVKDIR="$STLCFGDIR/dxvk"																# base dxvk config dir from where default per game configs are automatically parsed
-
 GP="$(awk -F 'waitforexitandrun ' '{print $NF}' <<< "$@" | awk -F ' GID=' '{print $1}' | awk -F '.exe' '{print $1".exe"}')"	# the absolute game path of the windows game exe - dirty hack to remove command line parameters
 GE="$(basename "$GP" | awk -F '.exe' '{print $1}')"											# just the windows game exe name - will be used as game identifier, as we don't have the steamid here :(
 GFD="$(dirname "$GP")"																		# the absolute directory where the game exe lives - unused for optional custom program
 GN="$(awk -F '/' '{print $1}' <<< "$(awk -F 'common/' '{print $2}' <<< "$PWD")")"			# this is hopefully the proper game name
-GWIDFILE=/tmp/stl-sbsgwid																	# temp file holding the game window id - TODO fix export later
+GWIDFILE="/tmp/stl-sbsgwid"																	# temp file holding the game window id - worksforme
 
 #### VKBASALT BLOCK START ####
 
 function usevkBasalt {
+SBSSHADERDIR="Depth3D/Shaders"
+SBSSHADER="$SBSSHADERDIR/SuperDepth3D_VR.fx"
+
 	if [ "$ENABLE_VKBASALT" -eq 1 ] ; then
 		writelog "$(date) - INFO - ${FUNCNAME[0]} - vkBasalt enabled"
 		if [ ! -f "$VKBASALT_CONFIG_FILE" ]; then
 			writelog "$(date) - INFO - ${FUNCNAME[0]} - creating default VKBASALT_CONFIG_FILE $VKBASALT_CONFIG_FILE"
 			{
 			echo "effects = reshade"
-			echo "reshadeIncludePath = $STLCFGDIR/Depth3D/Shaders"
-			echo "reshade = $STLCFGDIR/Depth3D/Shaders/SuperDepth3D_VR.fx"
+			echo "reshadeIncludePath = $STLCFGDIR/$SBSSHADERDIR"
+			echo "reshade = $STLCFGDIR/$SBSSHADER"
 			} >> "$VKBASALT_CONFIG_FILE"
 		else
 			writelog "$(date) - SKIP - ${FUNCNAME[0]} - default VKBASALT_CONFIG_FILE $VKBASALT_CONFIG_FILE already exists"
 		fi
 		
-		if [ ! -f "$STLCFGDIR/Depth3D/Shaders/SuperDepth3D_VR.fx" ]; then
-			writelog "$(date) - 404 - ${FUNCNAME[0]} - Depth3D shader $STLCFGDIR/Depth3D/Shaders/SuperDepth3D_VR.fx not found"
+		if [ ! -f "$STLCFGDIR/$SBSSHADER" ]; then
+			writelog "$(date) - 404 - ${FUNCNAME[0]} - Depth3D shader $STLCFGDIR/$SBSSHADER not found"
 			if [ "$CLONE_DEPTH3D" -eq 1 ]; then
 				writelog "$(date) - INFO - ${FUNCNAME[0]} - CLONE_DEPTH3D is enabled so checking it out"
 				checkReShadeDepth3D
@@ -84,17 +104,16 @@ function usevkBasalt {
 				export ENABLE_VKBASALT=0
 			fi
 		else
-			writelog "$(date) - OK - ${FUNCNAME[0]} - looks like Depth3D shader is ready at $STLCFGDIR/Depth3D/Shaders/SuperDepth3D_VR.fx"
+			writelog "$(date) - OK - ${FUNCNAME[0]} - looks like Depth3D shader is ready at $STLCFGDIR/$SBSSHADER"
 		fi
 	fi
 }
 
 #### VKBASALT BLOCK END ####
 
-
 #### SBS VR BLOCK START ####
 
-SBSVRWINNAME=vr-video-player	
+SBSVRWINNAME="vr-video-player"
 STEAMVRARGS=(-applaunch 250820)
 
 # returns the windowid of the biggest window of the main proton exe (a/the exe with win drive Z:) 
@@ -102,12 +121,12 @@ function VRAUTOWINDOWID {
 	MAXSIZ=0
 	MAXWIN=0
 	while read -r WINS; do
-		WSIZ=$(($(xwininfo -id "$WINS" -stats | awk '$1=="-geometry" {print $2}' | awk -F '+'  '{print $1}' | sed "s:x:\*:")))
+		WSIZ=$(($("$XWININFO" -id "$WINS" -stats | awk '$1=="-geometry" {print $2}' | awk -F '+'  '{print $1}' | sed "s:x:\*:")))
 		if [ "$WSIZ" -gt "$MAXSIZ" ]; then
 			MAXSIZ=$WSIZ
 			MAXWIN=$WINS
 		fi
-	done <<< "$(xdotool search --pid "$(pgrep "" -a | grep -v grep | grep "Z:" | grep "\.exe" | cut -d ' ' -f1)")"
+	done <<< "$("$XDO" search --pid "$(pgrep "" -a | grep -v grep | grep "Z:" | grep "\.exe" | cut -d ' ' -f1)")"
 	printf 0x%x'\n' "$MAXWIN"
 }
 
@@ -117,12 +136,12 @@ function SBSstartSVR {
 	writelog "$(date) - INFO - ${FUNCNAME[0]} - -------- starting SBS-VR --------"
 
 	if [ "$(pgrep "" -a | grep -v grep | grep "/vrcompositor" -c)" -eq 0 ] ; then
-		writelog "$(date) - INFO - ${FUNCNAME[0]} - starting SteamVR"
-		if ! steam "${STEAMVRARGS[@]}" 2>/dev/null >/dev/null ; then
+		writelog "$(date) - INFO - ${FUNCNAME[0]} - vrcompositor not running, so starting SteamVR now:"
+		if ! "$STEAM" "${STEAMVRARGS[@]}" 2>/dev/null >/dev/null ; then
 			writelog "$(date) - SKIP - ${FUNCNAME[0]} - starting SteamVR FAILED - skipping SBS-VR"
 			export RUNSBSVR=0
 		else
-			writelog "$(date) - INFO - ${FUNCNAME[0]} - started SteamVR"
+			writelog "$(date) - OK - ${FUNCNAME[0]} - started SteamVR"
 			SVRJUSTSTARTED=1
 		fi
 	fi
@@ -134,7 +153,7 @@ function SBSstartSVR {
 		if [ "$SVRJUSTSTARTED" -eq 1 ]; then
 			writelog "$(date) - INFO - ${FUNCNAME[0]} - SteamVR initializing"
 			while true; do
-				writelog "$(date) - INFO - ${FUNCNAME[0]} - waiting for end of vrstartup TIMEOUT?"
+				writelog "$(date) - INFO - ${FUNCNAME[0]} - waiting for end of vrstartup"	# TIMEOUT doesn't seem to be required for now
 				if [ "$(pgrep "" -a | grep -v grep | grep "/vrstartup" -c)" -eq 0 ] ; then
 					break
 				fi
@@ -194,7 +213,6 @@ function SBSstartSVR {
 
 function SBSgetGamePID {
 	if [ "$RUNSBSVR" -ge 1 ]; then
-
 		if [ "$SAVESBSWINNAME" -gt 0 ]; then
 			if [ ! -f "$SBSTWEAKDIR/$AID.conf" ]; then
 				writelog "$(date) - INFO - ${FUNCNAME[0]} - SAVESBSWINNAME is $SAVESBSWINNAME so waiting for $SBSTWEAKDIR/$AID.conf to appear holding the window name"
@@ -220,7 +238,7 @@ function SBSgetGamePID {
 
 		while true; do
 			if [ -n "$VRGAMEWINDOW" ]; then
-				GPID="$(xwininfo -name "${VRGAMEWINDOW//\"/}" -wm | grep "Process id:"   | awk -F 'Process id: ' '{print $2}' | cut -d ' ' -f1)"
+				GPID="$("$XWININFO" -name "${VRGAMEWINDOW//\"/}" -wm | grep "Process id:"   | awk -F 'Process id: ' '{print $2}' | cut -d ' ' -f1)"
 				if [ -n "$GPID" ]; then
 					writelog "$(date) - INFO - ${FUNCNAME[0]} - game pid $GPID found for VRGAMEWINDOW $VRGAMEWINDOW"
 					export SBSVRKGPID="$GPID"
@@ -260,7 +278,6 @@ function SBSrunVRVideoPlayer {
 			writelog "$(date) - INFO - ${FUNCNAME[0]} - starting $VRVIDEOPLAYER with args ${RUNVRVIDEOPLAYERARGS[*]} for windowid $VRGAMEWINDOWID"
 
 			GWIDDEC="$(("$VRGAMEWINDOWID"))"
-#			export GWIDDEC="$(("$VRGAMEWINDOWID"))" # wtf TODO
 			echo "GWIDDEC=$GWIDDEC" > "$GWIDFILE"
 
 			if [ -z "$SBSZOOM" ]; then
@@ -273,7 +290,7 @@ function SBSrunVRVideoPlayer {
 
 	MAXWAIT=20
 	COUNTER=0
-			while ! xwininfo -name "$SBSVRWINNAME" -stats  >/dev/null 2>/dev/null; do
+			while ! "$XWININFO" -name "$SBSVRWINNAME" -stats  >/dev/null 2>/dev/null; do
 				if [[ "$COUNTER" -ge "MAXWAIT" ]]; then
 					writelog "$(date) - SKIP - ${FUNCNAME[0]} - ERROR - timeout waiting for $VRVIDEOPLAYER - exit"
 					pkill -9 "$VRVIDEOPLAYER"
@@ -293,14 +310,14 @@ function SBSrunVRVideoPlayer {
 			done
 
 # player windowid:
-#			SBSVRWID=$(printf 0x%x "$(xdotool search --name "$SBSVRWINNAME")")
-			SBSVRWID=$(xwininfo -name "$SBSVRWINNAME" -stats | grep "^xwininfo" | awk -F 'id: ' '{print $2}' | cut -d ' ' -f1)
+#			SBSVRWID=$(printf 0x%x "$("$XDO" search --name "$SBSVRWINNAME")")
+			SBSVRWID=$("$XWININFO" -name "$SBSVRWINNAME" -stats | grep "^$XWININFO" | awk -F 'id: ' '{print $2}' | cut -d ' ' -f1)
 			if [ -n "$SBSVRWID" ]; then
-			writelog "$(date) - INFO - ${FUNCNAME[0]} - pressing w in $VRVIDEOPLAYER window $SBSVRWINNAME to adjust view: xdotool windowactivate --sync $SBSVRWID key w"
-			xdotool windowactivate --sync "$SBSVRWID" key w
+			writelog "$(date) - INFO - ${FUNCNAME[0]} - pressing w in $VRVIDEOPLAYER window $SBSVRWINNAME to adjust view: $XDO windowactivate --sync $SBSVRWID key w"
+			"$XDO" windowactivate --sync "$SBSVRWID" key w
 
 			writelog "$(date) - INFO - ${FUNCNAME[0]} - activating gamewindow with id $VRGAMEWINDOWID for input"
-			xdotool windowactivate --sync "$VRGAMEWINDOWID" click 1
+			"$XDO" windowactivate --sync "$VRGAMEWINDOWID" click 1
 			else
 				writelog "$(date) - SKIP - ${FUNCNAME[0]} - WARN - SBSVRWID $SBSVRWID is empty!"
 			fi
@@ -337,7 +354,7 @@ function SBSinitVRVideoPlayer {
 					writelog "$(date) - SKIP - ${FUNCNAME[0]} - ERROR - VRAUTOWINDOWID $(VRAUTOWINDOWID) is empty"
 				fi
 			else
-				VRGAMEWINDOWID="$(xwininfo -name "${VRGAMEWINDOW//\"/}" -stats | grep "^xwininfo" | awk -F 'id: ' '{print $2}' | cut -d ' ' -f1)"
+				VRGAMEWINDOWID="$("$XWININFO" -name "${VRGAMEWINDOW//\"/}" -stats | grep "^$XWININFO" | awk -F 'id: ' '{print $2}' | cut -d ' ' -f1)"
 				if [ -z "$VRGAMEWINDOWID" ]; then
 					writelog "$(date) - SKIP - ${FUNCNAME[0]} - ERROR - could not find windowid $VRGAMEWINDOWID for the windowname $VRGAMEWINDOW"
 					RUNSBSVR=0
@@ -445,7 +462,7 @@ function checkSBSVRLaunch {
 
 #### RESHADE BLOCK START ####
 
-STLRSCFG="$STLCFGDIR/reshade.conf"															# reshade config
+STLRSCFG="$STLCFGDIR/reshade.conf"	# reshade config
 RS_D3D47_DEST="d3dcompiler_47.dll"
 RS_DX_DEST="dxgi.dll"
 RS_D9_DEST="d3d9.dll"
@@ -474,8 +491,8 @@ function prepareReshadeFiles {
 	exportCfgFile "$STLRSCFG"
 
 	if [ "$DOWNLOAD_RESHADE" -eq 1 ]; then
-# could be cleaner...
 		writelog "$(date) - INFO - ${FUNCNAME[0]} - DOWNLOAD_RESHADE enabled"
+
 		if [ -n "$RESHADESRCDIR" ]; then
 			if [ ! -f "$RESHADESRCDIR/$RS_D3D47_32" ]; then
 				writelog "$(date) - 404 - ${FUNCNAME[0]} - $RESHADESRCDIR/$RS_D3D47_32 missing - downloading"
@@ -488,22 +505,22 @@ function prepareReshadeFiles {
 				if [ -d "$RESHADESRCDIR" ]; then
 					writelog "$(date) - INFO - ${FUNCNAME[0]} - $RESHADESRCDIR exist - installing ReShade in here" 
 					DLDST="$RESHADESRCDIR/d3dcompiler_47.zip"
-					wget "$DL_D3D47_32" -O "$DLDST"
-					unzip "$DLDST" -d "$RESHADESRCDIR"
+					"$WGET" "$DL_D3D47_32" -O "$DLDST"
+					"$UNZIP" "$DLDST" -d "$RESHADESRCDIR"
 					mv "$RESHADESRCDIR/d3dcompiler_47.dll" "$RESHADESRCDIR/$RS_D3D47_32"
 				fi
 			fi
 
 			if [ ! -f "$RESHADESRCDIR/$RS_D3D47_64" ]; then
 				writelog "$(date) - 404 - ${FUNCNAME[0]} - $RESHADESRCDIR/$RS_D3D47_64 missing - downloading" 
-				wget "$DL_D3D47_64" -O "$RESHADESRCDIR/$RS_D3D47_64"
+				"$WGET" "$DL_D3D47_64" -O "$RESHADESRCDIR/$RS_D3D47_64"
 			fi
 
 			if [ ! -f "$RESHADESRCDIR/$RS_64" ] || [ ! -f "$RESHADESRCDIR/$RS_32" ] ; then
 				writelog "$(date) - 404 - ${FUNCNAME[0]} - $RESHADESRCDIR/$RS_64 and/or $RS_32 missing - downloading"
 				DLDST="$RESHADESRCDIR/ReShade_Setup.exe"
-				wget "$RSSETUP" -O "$DLDST"
-				unzip "$DLDST" -d "$RESHADESRCDIR"
+				"$WGET" "$RSSETUP" -O "$DLDST"
+				"$UNZIP" "$DLDST" -d "$RESHADESRCDIR"
 			fi
 		fi
 	fi
@@ -512,7 +529,7 @@ function prepareReshadeFiles {
 	if [ "$RESHADE_DEPTH3D" -eq 1 ]; then
 		writelog "$(date) - INFO - ${FUNCNAME[0]} - RESHADE_DEPTH3D enabled"
 # and then only pull/clone it when CLONE_DEPTH3D is allowed 
-		checkReShadeDepth3D # TODO
+		checkReShadeDepth3D
 	fi	
 }
 
@@ -520,29 +537,14 @@ function checkReShadeDepth3D {
 	if [ "$CLONE_DEPTH3D" -eq 1 ]; then
 		writelog "$(date) - INFO - ${FUNCNAME[0]} - CLONE_DEPTH3D enabled"
 		if [ -n "$DEPTH3DSRCDIR" ]; then
-			if [ -d "$DEPTH3DSRCDIR" ]; then
-				cd "$DEPTH3DSRCDIR" || exit		# TODO get rid of all cds
+			if [ -d "$DEPTH3DSRCDIR/.git" ]; then
 				writelog "$(date) - INFO - ${FUNCNAME[0]} - pulling $DEPTH3DURL update in $PWD"
-				LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" git pull
-				cd - || exit
+				LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" "$GIT" --work-tree="$DEPTH3DSRCDIR" --git-dir="$DEPTH3DSRCDIR/.git" pull
 			else
-				if [ -n "$STLCFGDIR" ]; then
-					if [ ! -d "$STLCFGDIR" ]; then
-						writelog "$(date) - 404 - ${FUNCNAME[0]} - WARN - directory $STLCFGDIR does not exist - trying to create it"
-						mkdir "$STLCFGDIR" >/dev/null 2>/dev/null
-					fi
-
-					if [ -d "$STLCFGDIR" ]; then
-					cd "$STLCFGDIR" || exit
-					writelog "$(date) - INFO - ${FUNCNAME[0]} - cloning $DEPTH3DURL in $PWD"
-					LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" git clone "$DEPTH3DURL"
-					cd - || exit
-					else
-						writelog "$(date) - SKIP - ${FUNCNAME[0]} - ERROR - directory $STLCFGDIR still does not exist - skipping Depth3D update"
-					fi
-				else
-					writelog "$(date) - SKIP - ${FUNCNAME[0]} - ERROR - variable STLCFGDIR is empty - skipping Depth3D update"
-				fi
+				writelog "$(date) - INFO - ${FUNCNAME[0]} - creating dir $DEPTH3DSRCDIR"
+				mkdir "$DEPTH3DSRCDIR" >/dev/null 2>/dev/null
+				writelog "$(date) - INFO - ${FUNCNAME[0]} - cloning $DEPTH3DURL in $DEPTH3DSRCDIR"
+				LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" "$GIT" clone "$DEPTH3DURL" "$DEPTH3DSRCDIR"
 			fi
 		else
 			writelog "$(date) - SKIP - ${FUNCNAME[0]} - ERROR - variable DEPTH3DSRCDIR is empty - skipping Depth3D update"
@@ -657,7 +659,6 @@ function installReshadeDepth3D {
 	fi	
 }
 
-
 function useReshade {
 	if [ "$USERESHADE" -eq 1 ]; then
 		if [ ! -f "$GFD/$RS_D3D47_DEST" ]; then
@@ -679,12 +680,6 @@ function exportCfgFile {
 	while read -r line; do
 		if  grep -q -v "^#" <<< "$line"; then
 			export "${line?}"
-#		else
-## unset all commented own variables - TODO: filter own variables, because global ones should not be unset
-#			if grep "=" <<< "$line"; then
-#			echo unset "$(awk -F '=' '{print $1}' <<< "$line" | sed "s:#::")" >> "/tmp/unet-$AID.txt"
-#			unset "$(awk -F '=' '{print $1}' <<< "$line" | sed "s:#::")"
-#			fi
 		fi
 	done < "$CFGFILE"
 }
@@ -695,8 +690,21 @@ function PROTONVERSION {
 	awk '{print $2}' < "$PROTONVERSION"
 }
 
+function getUsedVars {
+	while read -r line; do 
+		if  grep -q -v "^#" <<< "$line"; then
+			awk -F '=' '{print $1}' <<< "$line" 
+		fi
+	done <"$1"
+}
+
 function startEditor {
 
+# loading all variables defined before editing into an array, so they can be unset after editing.
+
+	readarray -t OLDSTLVARS <<<"$(getUsedVars "$STLGAMECFG")"
+
+# start the editor:
 	KILLBROWSER=0
 
 	writelog "$(date) - INFO - ${FUNCNAME[0]} - key pressed on launch - starting STLEDITOR $STLEDITOR with config STLGAMECFG $STLGAMECFG)"
@@ -715,6 +723,15 @@ function startEditor {
 		fi
 	fi
 	"$STLEDITOR" "$STLGAMECFG"
+
+# unsetting variables from old config:
+
+	for o in "${OLDSTLVARS[@]}"; do
+		writelog "$(date) - INFO - ${FUNCNAME[0]} - unsetting variable $o"
+		unset "$o"
+	done
+
+# kill browser if it was opened with the editor:
 	if [ "$KILLBROWSER" -eq 1 ]; then
 		pkill -9 "$BROWSER"
 	fi
@@ -838,7 +855,7 @@ function createDefaultGameCfg {
 		echo "#FORK_CUSTOMCMD=0"
 		echo "## additional game args, so you don't have to append them in steam after %command%:"
 		echo "#GAMEARGS=--some --args"
-		echo "## start game with gamemoderun:"
+		echo "## start game with $GAMEMODERUN:"
 		echo "USEGAMEMODERUN=1"
 		echo "## force 32bit pfx:"
 		echo "#FORCE32BITPFX=1"
@@ -968,10 +985,10 @@ function saveSBSWinName {
 		else
 		if [ "$SAVESBSWINNAME" -eq 1 ]; then
 			writelog "$(date) - INFO - ${FUNCNAME[0]} - SAVESBSWINNAME is 1 so picking the window"
-			NEWVRGAMEWINDOW=$(xdotool selectwindow getwindowname)
+			NEWVRGAMEWINDOW=$("$XDO" selectwindow getwindowname)
 		else
 			writelog "$(date) - WAIT - ${FUNCNAME[0]} - waiting $SAVESBSWINNAME seconds to get the windowname"
-			NEWVRGAMEWINDOW=$(sleep "$SAVESBSWINNAME"; xdotool getactivewindow getwindowname)	
+			NEWVRGAMEWINDOW=$(sleep "$SAVESBSWINNAME"; "$XDO" getactivewindow getwindowname)	
 		fi
 			if [ -n "$NEWVRGAMEWINDOW" ]; then
 				{
@@ -1031,7 +1048,7 @@ function createDefaultCfgs {
 
 # updates or creates option $1 with value $2 in configfile $3:
 function updateConfigEntry {
-	CFGOPTION="$1"	# VARIABLENAME=(${!VARIABLE@})
+	CFGOPTION="$1"
 	CFGVALUE="$2"
 	CFGFILE="$3"
 
@@ -1076,9 +1093,9 @@ function stracerun {
 		writelog "$(date) - WAIT - ${FUNCNAME[0]} - waiting for process $GE"
 	done
 	writelog "$(date) - INFO - ${FUNCNAME[0]} - process $GE found at $(pgrep "$GE")"
-	writelog "$(date) - INFO - ${FUNCNAME[0]} - strace -p $(pgrep "$GE") $STRACEOPTS -o $STRACEDIR/$AID.log"
+	writelog "$(date) - INFO - ${FUNCNAME[0]} - $STRACE -p $(pgrep "$GE") $STRACEOPTS -o $STRACEDIR/$AID.log"
 	IFS=" " read -r -a RUNSTRACEOPTS <<< "$STRACEOPTS"
-	strace -p "$(pgrep "$GE")" "${RUNSTRACEOPTS[@]}" -o "$STRACEDIR/$AID.log"
+	"$STRACE" -p "$(pgrep "$GE")" "${RUNSTRACEOPTS[@]}" -o "$STRACEDIR/$AID.log"
 }
 
 function checkStraceLaunch {
@@ -1121,6 +1138,7 @@ function launchCustomProg {
 				writelog "$(date) - SKIP - ${FUNCNAME[0]} - ERROR - custom command CUSTOMCMD $CUSTOMCMD not found - skipping launch"
 				if [ "$ONLY_CUSTOMCMD" -eq 1 ]; then
 					writelog "$(date) - SKIP - ${FUNCNAME[0]} - as ONLY_CUSTOMCMD is enabled we're bailing out here"
+					closeSTL
 					exit
 				fi
 			fi
@@ -1162,6 +1180,7 @@ function checkCustomLaunch {
 
 		if [ "$ONLY_CUSTOMCMD" -eq 1 ]; then
 			writelog "$(date) - INFO - ${FUNCNAME[0]} - ONLY_CUSTOMCMD is set to 1 means only custom program $CUSTOMCMD is supposed to start - exiting here"
+			closeSTL
 			writelog "$(date) - INFO - ######### STOP EARLY $PROGNAME $PROGVERS #########"
 			exit
 		fi
@@ -1174,7 +1193,6 @@ function checkCustomLaunch {
 
 function toggleWindows {
 	if [ "$TOGGLEWINDOWS" -eq 1 ]; then
-		WMCTRL="wmctrl"
 		if  [ -x "$(command -v "$WMCTRL" 2>/dev/null)" ]; then
 			writelog "$(date) - INFO - ${FUNCNAME[0]} - hiding windows is $1"
 			"$WMCTRL" -k "$1"
@@ -1191,7 +1209,7 @@ function toggleWindows {
 
 function createW32PFX {
 	WPFX="$1"
-	LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" WINEARCH=win32 WINEPREFIX="$WPFX" winecfg
+	LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" WINEARCH=win32 WINEPREFIX="$WPFX" "$WINECFG"
 }
 
 # force 32bit pfx if FORCE32BITPFX is set
@@ -1229,51 +1247,51 @@ function check32BitForce {
 function checkWinetricksLaunch {
 # gui:
 	if [ "$RUN_WINETRICKS" -eq 1 ]; then
-		if  [ -x "$(command -v "winetricks" 2>/dev/null)" ]; then
-			writelog "$(date) - INFO - ${FUNCNAME[0]} - launching winetricks before game start with following commandline:"
+		if  [ -x "$(command -v "$WINETRICKS" 2>/dev/null)" ]; then
+			writelog "$(date) - INFO - ${FUNCNAME[0]} - launching $WINETRICKS before game start with following commandline:"
 			# several variables coming from steam have to be cleaned in order to get wine to work here
 			if [ "$FORCE32BITPFX" -eq 1 ]; then
-				writelog "$(date) - INFO - ${FUNCNAME[0]} - LC_ALL=\"\" PATH=\"/usr/local/bin:/usr/bin\" LD_LIBRARY_PATH=\"\" LD_PRELOAD=\"\" WINEARCH=win32 WINEPREFIX=\"$STEAM_COMPAT_DATA_PATH/pfx\" winetricks --gui"
+				writelog "$(date) - INFO - ${FUNCNAME[0]} - LC_ALL=\"\" PATH=\"/usr/local/bin:/usr/bin\" LD_LIBRARY_PATH=\"\" LD_PRELOAD=\"\" WINEARCH=win32 WINEPREFIX=\"$STEAM_COMPAT_DATA_PATH/pfx\" $WINETRICKS --gui"
 				mv "$WPFX/drive_c/windows/syswow64" "$WPFX/drive_c/windows/syswow64-off"
-				LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" WINEARCH=win32 WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx" winetricks --gui
+				LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" WINEARCH=win32 WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx" "$WINETRICKS" --gui
 				mv "$WPFX/drive_c/windows/syswow64-off" "$WPFX/drive_c/windows/syswow64"
 			else
-				writelog "$(date) - INFO - ${FUNCNAME[0]} - LC_ALL=\"\" PATH=\"/usr/local/bin:/usr/bin\" LD_LIBRARY_PATH=\"\" LD_PRELOAD=\"\" WINEPREFIX=\"$STEAM_COMPAT_DATA_PATH/pfx\" winetricks --gui"
-				LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx" winetricks --gui
+				writelog "$(date) - INFO - ${FUNCNAME[0]} - LC_ALL=\"\" PATH=\"/usr/local/bin:/usr/bin\" LD_LIBRARY_PATH=\"\" LD_PRELOAD=\"\" WINEPREFIX=\"$STEAM_COMPAT_DATA_PATH/pfx\" $WINETRICKS --gui"
+				LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx" "$WINETRICKS" --gui
 			fi
 		else
-			writelog "$(date) - SKIP - ${FUNCNAME[0]} - winetricks not found - skipping"
+			writelog "$(date) - SKIP - ${FUNCNAME[0]} - $WINETRICKS not found - skipping"
 		fi
 	fi
 # silent
 	if [ -n "$WINETRICKSPAKS" ]; then
-		if  [ -x "$(command -v "winetricks" 2>/dev/null)" ]; then
-			writelog "$(date) - INFO - ${FUNCNAME[0]} - installing $WINETRICKSPAKS silently with winetricks"
+		if  [ -x "$(command -v "$WINETRICKS" 2>/dev/null)" ]; then
+			writelog "$(date) - INFO - ${FUNCNAME[0]} - installing $WINETRICKSPAKS silently with $WINETRICKS"
 			IFS=" " read -r -a INSTWINETRICKSPAKS <<< "$WINETRICKSPAKS"
-			LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx" winetricks "${INSTWINETRICKSPAKS[@]}" -q
+			LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx" "$WINETRICKS" "${INSTWINETRICKSPAKS[@]}" -q
 		else
-			writelog "$(date) - SKIP - ${FUNCNAME[0]} - winetricks not found - skipping"
+			writelog "$(date) - SKIP - ${FUNCNAME[0]} - $WINETRICKS not found - skipping"
 		fi
 	fi
 }
 
-# start winecfg before game launch:
+# start $WINECFG before game launch:
 function checkWineCfgLaunch {
 	if [ "$RUN_WINECFG" -eq 1 ]; then
-		if  [ -x "$(command -v "winecfg" 2>/dev/null)" ]; then
-			writelog "$(date) - INFO - ${FUNCNAME[0]} - starting winecfg before game start:"
+		if  [ -x "$(command -v "$WINECFG" 2>/dev/null)" ]; then
+			writelog "$(date) - INFO - ${FUNCNAME[0]} - starting $WINECFG before game start:"
 			# several variables coming from steam have to be cleaned in order to get wine to work here
 			if [ "$FORCE32BITPFX" -eq 1 ]; then
-				writelog "$(date) - INFO - ${FUNCNAME[0]} - LC_ALL=\"\" PATH=\"/usr/local/bin:/usr/bin\" LD_LIBRARY_PATH=\"\" LD_PRELOAD=\"\" WINEARCH=win32 WINEPREFIX=\"$STEAM_COMPAT_DATA_PATH/pfx\" winecfg"
+				writelog "$(date) - INFO - ${FUNCNAME[0]} - LC_ALL=\"\" PATH=\"/usr/local/bin:/usr/bin\" LD_LIBRARY_PATH=\"\" LD_PRELOAD=\"\" WINEARCH=win32 WINEPREFIX=\"$STEAM_COMPAT_DATA_PATH/pfx\" $WINECFG"
 				mv "$WPFX/drive_c/windows/syswow64" "$WPFX/drive_c/windows/syswow64-off"
-				LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" WINEARCH=win32 WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx" winecfg
+				LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" WINEARCH=win32 WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx" "$WINECFG"
 				mv "$WPFX/drive_c/windows/syswow64-off" "$WPFX/drive_c/windows/syswow64"
 			else
 				writelog "$(date) - INFO - ${FUNCNAME[0]} - LC_ALL=\"\" PATH=\"/usr/local/bin:/usr/bin\" LD_LIBRARY_PATH=\"\" LD_PRELOAD=\"\" WINEPREFIX=\"$STEAM_COMPAT_DATA_PATH/pfx\" winecfg"
-				LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx" winecfg
+				LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx" "$WINECFG"
 			fi
 		else
-			writelog "$(date) - SKIP - ${FUNCNAME[0]} - winecfg not found - skipping"
+			writelog "$(date) - SKIP - ${FUNCNAME[0]} - $WINECFG not found - skipping"
 		fi
 	fi
 }
@@ -1309,7 +1327,6 @@ function customRegs {
 
 function useNyrna {
 	if [ "$RUN_NYRNA" -eq 1 ]; then
-		NYRNA="nyrna"
 		if  [ -x "$(command -v "$NYRNA" 2>/dev/null)" ]; then
 			if pgrep "$NYRNA" ; then
 				writelog "$(date) - SKIP - ${FUNCNAME[0]} - $NYRNA already running - skipping"
@@ -1426,15 +1443,15 @@ function launchSteamProtonGame {
 
 ########################
 
-# the actual game launch - either with or without gamemoderun:
+# the actual game launch - either with or without $GAMEMODERUN:
 	IFS=" " read -r -a RUNGAMEARGS <<< "$GAMEARGS"
 	PROTONCMD=("${@}" "${RUNGAMEARGS[@]}")
 
 	writelog "$(date) - INFO - ${FUNCNAME[0]} - ${PROTONCMD[*]}"
 
 	if [ "$USEGAMEMODERUN" -eq 1 ]; then
-		writelog "$(date) - INFO - ${FUNCNAME[0]} - starting $GAMENAME ($AID) with Proton: $(PROTONVERSION "$@") with gamemoderun"
-		gamemoderun "${PROTONCMD[@]}"
+		writelog "$(date) - INFO - ${FUNCNAME[0]} - starting $GAMENAME ($AID) with Proton: $(PROTONVERSION "$@") with $GAMEMODERUN"
+		"$GAMEMODERUN" "${PROTONCMD[@]}"
 	else
 		writelog "$(date) - INFO - ${FUNCNAME[0]} - starting $GAMENAME ($AID) with Proton: $(PROTONVERSION "$@")"
 		"${PROTONCMD[@]}"
