@@ -71,6 +71,7 @@ Also enable everything you want in the freshly created
 * **tweaks**
 * **32bit wineprefix**
 * **nyrna per game**
+* **easy simple custom game launch**
 
 # Requirements:
 
@@ -103,6 +104,7 @@ Described are only the variables which come from **stl**, for all others please 
 - `WAITEDITOR`: wait `WAITEDITOR` seconds for a keypress to open the texteditor `STLEDITOR` with the game config; **can be overridden in the gameconfig**
 - `PROTONDB`: set `PROTONDB` to 1 to also directly open the protondb page](https://www.protondb.com/) for the game in your $BROWSER when starting the editor `STLEDITOR`
 - `BROWSER`: the browser used to open PROTONDB
+- `CUSTOMLAUNCHID`: SteamAppId where the custom game launcher is triggered
 - `RUN_NYRNA`: set to 1 to enable nyrna while game is running
 - `TOGGLEWINDOWS`: toggle visibility of all open windows on start/stop
 - `PDBURL`: protondb base url - for optional `PROTONDB`
@@ -164,6 +166,18 @@ When enabled you can start custom programs easily with the following per-game co
 
 #### minimize all open windows on game start and maximize them when game exited using wmctrl
 - `TOGGLEWINDOWS`: toggle visibility of all open windows on start/stop
+
+#### simple custom game launch
+meant for a simple custom game launch using proton/steamruntime
+and not as a fully fledged custom game launch option
+if `RUN_CUSTOMCMD` is set for the SteamAppId defined in the global `CUSTOMLAUNCHID`
+a requester will ask for a exe you want to start inside the `CUSTOMLAUNCHID`
+The selected exe will be started inplace of the regular game.
+if no exe is selected the game `CUSTOMLAUNCHID` will exit
+if `RUN_CUSTOMCMD` is disabled, the regular game is started normally
+if `CUSTOMCMD` is configured for the game `CUSTOMLAUNCHID` the requester will be skipped and `CUSTOMCMD` will be started directly
+defaults `CUSTOMLAUNCHID` is SteamAppId `15520` ("Aaaa...") because it is small and always on top of the library
+**stl** of course won't install dependencies for the selected exe, so you're on your own.
 
 #### radv [Mesa](https://www.mesa3d.org/)
 - `#RADV_PERFTEST=aco`: aco is default starting with mesa 20.2 

@@ -5,7 +5,7 @@
 ### project ###
 
 PROGNAME="SteamTinkerLaunch"
-PROGVERS="v0.99.3"
+PROGVERS="v0.99.4"
 PROGCMD="$(basename "$0")"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -806,6 +806,8 @@ function createDefaultGlobalCfg {
 		echo "PDBURL=https://www.protondb.com/app"
 		echo "## Browser used for PROTONDB:"
 		echo "BROWSER=firefox"
+		echo "## SteamAppId where the custom game launcher is triggered if RUN_CUSTOMCMD is set"
+		echo "#CUSTOMLAUNCHID=15520"																	
 		echo "## set to 1 to enable nyrna while game is running"
 		echo "#RUN_NYRNA=1"
 		echo "## toggle visibility of all open windows on start/stop"
@@ -1191,6 +1193,37 @@ function checkCustomLaunch {
 	fi
 }
 
+function check3rdParty {
+	if [ "$AID" -eq "$CUSTOMLAUNCHID" ]; then
+		writelog "$(date) - INFO - ${FUNCNAME[0]} - customlaunch AppID $CUSTOMLAUNCHID started"
+		if [ "$RUN_CUSTOMCMD" -eq 1 ] ; then
+			if [ -n "$CUSTOMCMD" ];then
+				writelog "$(date) - INFO - ${FUNCNAME[0]} - CUSTOMCMD is set to $CUSTOMCMD - will start this directly "
+			else
+				if [ -x "$(command -v "$STEAM_ZENITY" 2>/dev/null)" ]; then
+					writelog "$(date) - INFO - ${FUNCNAME[0]} - RUN_CUSTOMCMD is enabled and CUSTOMCMD is empty, starting exe file-selection"
+
+					ZCUST="$("$STEAM_ZENITY" --title="Select EXE file" --file-selection --file-filter='exe files (exe) | *[EeXxEe]')"
+
+					if [ -n "$ZCUST" ]; then
+						ONLY_CUSTOMCMD=1
+						CUSTOMCMD="$ZCUST"
+						writelog "$(date) - INFO - ${FUNCNAME[0]} - will start $ZCUST in the $AID pfx"
+					else
+						writelog "$(date) - SKIP - ${FUNCNAME[0]} - nothing selected, exiting"
+						ONLY_CUSTOMCMD=1
+						closeSTL
+					fi
+				else
+					writelog "$(date) - SKIP - ${FUNCNAME[0]} - $STEAM_ZENITY not found"
+				fi
+			fi
+		else
+			writelog "$(date) - INFO - ${FUNCNAME[0]} - RUN_CUSTOMCMD is disabled, starting the regular game"
+		fi
+	fi
+}
+
 function toggleWindows {
 	if [ "$TOGGLEWINDOWS" -eq 1 ]; then
 		if  [ -x "$(command -v "$WMCTRL" 2>/dev/null)" ]; then
@@ -1434,6 +1467,9 @@ function launchSteamProtonGame {
 
 # start game with side-by-side VR if RUNSBSVR is not 0 
 	checkSBSVRLaunch
+
+# start 3rdparty game in pfx of $CUSTOMLAUNCHID game
+	check3rdParty "$@"
 
 # start a custom program if RUN_CUSTOMCMD is 1
 	checkCustomLaunch "$@"
