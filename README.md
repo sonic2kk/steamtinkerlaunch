@@ -72,6 +72,7 @@ Also enable everything you want in the freshly created
 * **32bit wineprefix**
 * **nyrna per game**
 * **easy simple custom game launch**
+* **basic network monitoring**
 
 # Requirements:
 
@@ -89,6 +90,7 @@ For the optional features you need:
 - vkbasalt
 - nyrna
 - wmctrl to optionally minimize/maximize all open windows on game start/stop
+- netstat from net-tools for basic network monitoring
 
 ## Configuration:
 
@@ -120,7 +122,9 @@ Described are only the variables which come from **stl**, for all others please 
 - `GLOBALSBSTWEAKDIR`: directory with global sbs-tweaks
 - `GLOBALTWEAKDIR`: directory with global tweaks
 - `SAVESBSWINNAME`: seconds to wait to automatically save a new basic SBS tweak config of the running game with the gamewindow name after game launch - 0 to disable - 1 to pick a window"
-
+- `NOINET`: if set this command is used to block the internet for the selected game. game might fail to start!
+- `NETMON`: program to record game network-traffic with arguments `NETOPTS` - used when enabled
+		
 If you do not want to start the editor requester on game launch generally just set `WAITEDITOR=0` - it will be skipped then for all games
 
 ### Functions in detail:
@@ -192,6 +196,19 @@ else your user will get access denied when trying to attach a process.
 Either 
 `echo 0 > /proc/sys/kernel/yama/ptrace_scope`
 as root or enable it persistent in sysctl
+
+#### block internet
+- `NOINET`: if set this command is used to block the internet for the selected game. game might fail to start!
+
+To use this option you need to configure this little [howto](https://serverfault.com/questions/550276/how-to-block-internet-access-to-certain-programs-on-linux)
+Feel free to send pull requests.
+Depending on the game, it might reject to start without internet!
+
+#### basic network traffic monitor
+- `NETMON`: program to record game network-traffic with arguments `NETOPTS` - used when enabled
+
+If `NETMON` is set the basic network traffic of the selected game is monitored and written into `NETMONDIR`.
+duplicate lines are unique sorted at the end.
 
 #### [ReShade](https://reshade.me)
 - `INSTALL_RESHADE`: set to 1 to automatically install reshade into the selected game dir.

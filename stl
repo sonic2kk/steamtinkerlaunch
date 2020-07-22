@@ -5,7 +5,7 @@
 ### project ###
 
 PROGNAME="SteamTinkerLaunch"
-PROGVERS="v0.99.4"
+PROGVERS="v0.99.5"
 PROGCMD="$(basename "$0")"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -116,7 +116,7 @@ SBSSHADER="$SBSSHADERDIR/SuperDepth3D_VR.fx"
 SBSVRWINNAME="vr-video-player"
 STEAMVRARGS=(-applaunch 250820)
 
-# returns the windowid of the biggest window of the main proton exe (a/the exe with win drive Z:) 
+# returns the windowid of the biggest window of $GE:) 
 function VRAUTOWINDOWID {
 	MAXSIZ=0
 	MAXWIN=0
@@ -126,7 +126,7 @@ function VRAUTOWINDOWID {
 			MAXSIZ=$WSIZ
 			MAXWIN=$WINS
 		fi
-	done <<< "$("$XDO" search --pid "$(pgrep "" -a | grep -v grep | grep "Z:" | grep "\.exe" | cut -d ' ' -f1)")"
+	done <<< "$("$XDO" search --pid "$(GAMEPID)")"
 	printf 0x%x'\n' "$MAXWIN"
 }
 
@@ -245,7 +245,8 @@ function SBSgetGamePID {
 					break
 				fi
 			else
-				GPID="$(pgrep "" -a | grep "Z:" | grep "\.exe" | cut -d ' ' -f1)"
+				GPID="$(GAMEPID)"
+
 				if [ -n "$GPID" ]; then
 					writelog "$(date) - INFO - ${FUNCNAME[0]} - game pid $GPID found"
 					export SBSVRKGPID="$GPID"
@@ -808,6 +809,14 @@ function createDefaultGlobalCfg {
 		echo "BROWSER=firefox"
 		echo "## SteamAppId where the custom game launcher is triggered if RUN_CUSTOMCMD is set"
 		echo "#CUSTOMLAUNCHID=15520"																	
+		echo "## if set this command is used to block the internet for the selected game. game might fail to start!"
+		echo "#NOINET=sg no-internet"
+		echo "## program to record game network-traffic - used when enabled"
+		echo "#NETMON=netstat"
+		echo "## options for NETMON:"
+		echo "#NETOPTS=-taucp -W"
+		echo "## the base path for netmon logs"
+		echo "NETMONDIR=$STLCFGDIR/netmon"
 		echo "## set to 1 to enable nyrna while game is running"
 		echo "#RUN_NYRNA=1"
 		echo "## toggle visibility of all open windows on start/stop"
@@ -867,6 +876,8 @@ function createDefaultGameCfg {
 		echo "#ENABLE_VKBASALT=1"
 		echo "## set to 1 to enable nyrna while game is running - overrides global config"
 		echo "#RUN_NYRNA=1"
+		echo "## if set this command is used to block the internet for the selected game. game might fail to start - overrides global config"
+		echo "#NOINET=sg no-internet"
 		echo "## toggle visibility of all open windows on start/stop - overrides global config"
 		echo "#TOGGLEWINDOWS=1"
 		echo "## set radv mode:"
@@ -926,9 +937,13 @@ function createDefaultGameCfg {
 		echo "#DXVK_LOG_PATH=/some/directory Changes path where log files are stored."
 		echo "## wine vars:"
 		echo "#WINE_FULLSCREEN_INTEGER_SCALING=0"
-		echo "##strace settings:"
+		echo "## strace settings:"
 		echo "#STRACERUN=1"
 		echo "#STRACEOPTS=-f -t -e trace=file"
+		echo "## program to record game network-traffic - used when enabled - overrides global config"
+		echo "#NETMON=netstat"
+		echo "## options for NETMON - overrides global config:"
+		echo "#NETOPTS=-taucp -W"
 		} >> "$STLDEFGAMECFG"
 	fi
 }
@@ -978,6 +993,10 @@ function createGameCfg {
 			} >> "$TWEAKCFG"
 		fi
 	fi
+}
+
+function GAMEPID {
+	pgrep "" -a | grep -v grep | grep "Z:" | grep "$GE" | grep "\.exe" | grep -v "CrashHandler"  | cut -d ' ' -f1 | tail -n1
 }
 
 function saveSBSWinName {
@@ -1090,14 +1109,15 @@ function writelog {
 
 function stracerun {
 	writelog "$(date) - INFO - ${FUNCNAME[0]} - starting stracerun"
-
-	while ! pgrep "$GE" ; do
-		writelog "$(date) - WAIT - ${FUNCNAME[0]} - waiting for process $GE"
+	while [ -z "$(GAMEPID)" ]; do 
+		writelog "$(date) - WAIT - ${FUNCNAME[0]} - waiting for game process $(GAMEPID)"
+		sleep 1
 	done
-	writelog "$(date) - INFO - ${FUNCNAME[0]} - process $GE found at $(pgrep "$GE")"
-	writelog "$(date) - INFO - ${FUNCNAME[0]} - $STRACE -p $(pgrep "$GE") $STRACEOPTS -o $STRACEDIR/$AID.log"
+	writelog "$(date) - INFO - ${FUNCNAME[0]} - game process found at $(GAMEPID)"
+	writelog "$(date) - INFO - ${FUNCNAME[0]} - $STRACE -p $(GAMEPID) $STRACEOPTS -o $STRACEDIR/$AID.log"
 	IFS=" " read -r -a RUNSTRACEOPTS <<< "$STRACEOPTS"
-	"$STRACE" -p "$(pgrep "$GE")" "${RUNSTRACEOPTS[@]}" -o "$STRACEDIR/$AID.log"
+
+	"$STRACE" -p "$(GAMEPID)" "${RUNSTRACEOPTS[@]}" -o "$STRACEDIR/$AID.log"
 }
 
 function checkStraceLaunch {
@@ -1107,6 +1127,47 @@ function checkStraceLaunch {
 }
 
 ### STRACE END ###
+
+### MISC START ###
+
+function netrun {
+	writelog "$(date) - INFO - ${FUNCNAME[0]} - starting network traffic monitor"
+
+	while [ -z "$(GAMEPID)" ]; do 
+		writelog "$(date) - WAIT - ${FUNCNAME[0]} - waiting for game process $(GAMEPID)"
+		sleep 1
+	done
+	writelog "$(date) - INFO - ${FUNCNAME[0]} - game process $GE found at $(GAMEPID)"
+
+	if [ -n "$NETMONDIR" ]; then
+		if [ ! -d "$NETMONDIR" ]; then
+			writelog "$(date) - IFO - ${FUNCNAME[0]} - $NETMON dest directory $NETMONDIR does not exist - trying to create it"
+			mkdir "$NETMONDIR" 2>/dev/null
+		fi
+
+		if [ -d "$NETMONDIR" ]; then
+			writelog "$(date) - INFO - ${FUNCNAME[0]} - writing network traffic for $AID int dest directory $NETMONDIR"
+			if [ -f "$NETMONDIR/$AID-$NETMON.log" ]; then
+				writelog "$(date) - INFO - ${FUNCNAME[0]} - removing old $NETMONDIR/$AID-$NETMON.log"
+				rm "$NETMONDIR/$AID-$NETMON.log"
+			fi
+			IFS=" " read -r -a RUNNETOPTS <<< "$NETOPTS"
+			"$NETMON" "${RUNNETOPTS[@]}" | grep "wineserver" | grep -v "localhost\|0.0.0.0" >> "$NETMONDIR/$AID-$NETMON.log"
+		else
+			writelog "$(date) - SKIP - ${FUNCNAME[0]} - $NETMON dest directory $NETMONDIR still does not exist - skipping"
+		fi
+	else
+		writelog "$(date) - SKIP - ${FUNCNAME[0]} - $NETMON dest directory variable NETMONDIR is empty"
+	fi
+}
+
+function checkNetMonLaunch {
+	if [ -n "$NETMON" ]; then
+		netrun &
+	fi
+}
+
+### MISC END ###
 
 
 ### CUSTOM PROGRAM START ###
@@ -1477,6 +1538,9 @@ function launchSteamProtonGame {
 # start strace process in the background if STRACERUN is 1
 	checkStraceLaunch
 
+# start network monitor process in the background if NETMON is enabled
+	checkNetMonLaunch
+
 ########################
 
 # the actual game launch - either with or without $GAMEMODERUN:
@@ -1484,8 +1548,11 @@ function launchSteamProtonGame {
 	PROTONCMD=("${@}" "${RUNGAMEARGS[@]}")
 
 	writelog "$(date) - INFO - ${FUNCNAME[0]} - ${PROTONCMD[*]}"
-
-	if [ "$USEGAMEMODERUN" -eq 1 ]; then
+	if [ -n "$NOINET" ]; then
+		IFS=" " read -r -a RUNNOINET <<< "$NOINET"
+		writelog "$(date) - INFO - ${FUNCNAME[0]} - starting $GAMENAME ($AID) with Proton: $(PROTONVERSION "$@") with blocked internet - might fail!"
+		LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" "${RUNNOINET[0]}" "${PROTONCMD[@]}"
+	elif [ "$USEGAMEMODERUN" -eq 1 ]; then
 		writelog "$(date) - INFO - ${FUNCNAME[0]} - starting $GAMENAME ($AID) with Proton: $(PROTONVERSION "$@") with $GAMEMODERUN"
 		"$GAMEMODERUN" "${PROTONCMD[@]}"
 	else
@@ -1514,6 +1581,14 @@ function closeSTL {
 		NYRNA="nyrna"
 		if pgrep "$NYRNA" ; then
 			pkill -9 "$NYRNA" 
+		fi
+	fi
+
+	if [ -n "$NETMON" ]; then
+		if pgrep "$NETMON" ; then
+			pkill -9 "$NETMON"
+# remove duplicate lines to make reading easier
+			sort -u "$NETMONDIR/$AID-$NETMON.log" -o "$NETMONDIR/$AID-$NETMON.log"
 		fi
 	fi
 
