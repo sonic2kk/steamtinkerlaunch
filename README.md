@@ -16,7 +16,7 @@ Just add this program to your steam game command line like:
 
 The base gamedirectory `STLCFGDIR` will be either `XDG_CONFIG_HOME/stl` or `$HOME/.config/stl` if `XDG_CONFIG_HOME` not set.
 
-When starting a game with **stl** it will check if a config file exists in `$STLCFGDIR/gamecfgs/$SteamAppId.conf` for the game
+When starting a game with **stl** it will check if a config file exists in `$STLCFGDIR/gamecfgs/$SteamAppId.conf` (= `$STLGAMECFG`) for the game
 if it is not available it is created from the default config file (which is automatically created if not found).
 
 When starting the game a small requester will popup (default 2 seconds).
@@ -137,6 +137,14 @@ When enabled you can start custom programs easily with the following per-game co
 - `CUSTOMCMD_ARGS`: start `CUSTOMCMD` command with those args
 - `ONLY_CUSTOMCMD`: set to 1 to only start `CUSTOMCMD` and not the game command itself
 - `FORK_CUSTOMCMD`: set to 1 to fork the custom `CUSTOMCMD` into the background and continue with starting `%command%`
+
+**
+since v0.99.6:
+** 
+If only `RUN_CUSTOMCMD` is enabled, but `CUSTOMCMD` is empty, a requester will open where a executable file can be selected.
+This selected file is automatically written into the game configfile `$STLGAMECFG`.
+If string `CUSTOMCMD` can't be found as file in either `PATH`, in game dir or as absolute filepath the requester will open as well.
+
 
 #### additional game arguments:
 - `GAMEARGS`: additional command line args for the game itself

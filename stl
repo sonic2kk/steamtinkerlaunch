@@ -5,7 +5,7 @@
 ### project ###
 
 PROGNAME="SteamTinkerLaunch"
-PROGVERS="v0.99.5"
+PROGVERS="v0.99.6"
 PROGCMD="$(basename "$0")"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -708,7 +708,7 @@ function startEditor {
 # start the editor:
 	KILLBROWSER=0
 
-	writelog "$(date) - INFO - ${FUNCNAME[0]} - key pressed on launch - starting STLEDITOR $STLEDITOR with config STLGAMECFG $STLGAMECFG)"
+	writelog "$(date) - INFO - ${FUNCNAME[0]} - key pressed on launch - starting STLEDITOR $STLEDITOR with config STLGAMECFG $STLGAMECFG"
 	if [ "$PROTONDB" -eq 1 ]; then
 		writelog "$(date) - INFO - ${FUNCNAME[0]} - PROTONDB is set to 1 - also opening the protondb url in the browser"
 		if [ -x "$(command -v "$BROWSER" 2>/dev/null)" ]; then
@@ -880,6 +880,8 @@ function createDefaultGameCfg {
 		echo "#NOINET=sg no-internet"
 		echo "## toggle visibility of all open windows on start/stop - overrides global config"
 		echo "#TOGGLEWINDOWS=1"
+		echo "## seconds to wait to automatically save a new basic SBS tweak config of the running game with the gamewindow name after game launch - 0 to disable - 1 to pick a window - overrides global config"
+		echo "#SAVESBSWINNAME=1"
 		echo "## set radv mode:"
 		echo "#RADV_PERFTEST=aco"
 		echo "## comment in to use amdvlk"
@@ -996,7 +998,16 @@ function createGameCfg {
 }
 
 function GAMEPID {
-	pgrep "" -a | grep -v grep | grep "Z:" | grep "$GE" | grep "\.exe" | grep -v "CrashHandler"  | cut -d ' ' -f1 | tail -n1
+# TODO catch game exe if CUSTOMCMD is just a wrapper
+	if	[ "$RUN_CUSTOMCMD" -eq 1 ] && [ "$ONLY_CUSTOMCMD" -eq 1 ];then
+		if [ "$CUSTOMCMD" == "lutris" ]; then
+			pgrep "" -a | grep -v grep | grep "lutris-wrapper" | cut -d ' ' -f1 | tail -n1
+		else
+			pgrep "" -a | grep -v grep | grep "$CUSTOMCMD" | cut -d ' ' -f1 | tail -n1
+		fi
+	else
+		pgrep "" -a | grep -v grep | grep "Z:" | grep "$GE" | grep "\.exe" | grep -v "CrashHandler"  | cut -d ' ' -f1 | tail -n1
+	fi
 }
 
 function saveSBSWinName {
@@ -1077,15 +1088,15 @@ function updateConfigEntry {
 		writelog "$(date) - SKIP - ${FUNCNAME[0]} - configfile $CFGFILE does not exist - skipping config update"
 	else
 		if [ -n "$CFGVALUE" ]; then
-				if [ "$(grep -c "#$CFGOPTION" "$CFGFILE")" -eq 1 ]; then
+				if [ "$(grep -c "#${CFGOPTION}=" "$CFGFILE")" -eq 1 ]; then
 					writelog "$(date) - INFO - ${FUNCNAME[0]} - option $CFGOPTION commented out in config - activating it with the new value $CFGVALUE"
-					sed -i "/#$CFGOPTION/c$CFGOPTION=$CFGVALUE" "$CFGFILE"
-				elif [ "$(grep -c "$CFGOPTION" "$CFGFILE")" -eq 0 ]; then
+					sed -i "/^#${CFGOPTION}=/c$CFGOPTION=$CFGVALUE" "$CFGFILE"
+				elif [ "$(grep -c "${CFGOPTION}=" "$CFGFILE")" -eq 0 ]; then
 					writelog "$(date) - INFO - ${FUNCNAME[0]} - $CFGOPTION option missing in config - adding a new line"
 					echo "$CFGOPTION=$CFGVALUE" >> "$CFGFILE"
 				else
 					writelog "$(date) - INFO - ${FUNCNAME[0]} - option $CFGOPTION is updated with the new value $CFGVALUE"
-					sed -i "/$CFGOPTION/c$CFGOPTION=$CFGVALUE" "$CFGFILE"
+					sed -i "/^${CFGOPTION}=/c$CFGOPTION=$CFGVALUE" "$CFGFILE"
 				fi
 		else
 			writelog "$(date) - SKIP - ${FUNCNAME[0]} - value $CFGVALUE is empty - skipping config update"
@@ -1173,14 +1184,32 @@ function checkNetMonLaunch {
 ### CUSTOM PROGRAM START ###
 
 function launchCustomProg {
-	if [ -z "$CUSTOMCMD_ARGS" ]; then
-		writelog "$(date) - INFO - ${FUNCNAME[0]} - starting the custom program $CUSTOMCMD without args"
-	else
-		writelog "$(date) - INFO - ${FUNCNAME[0]} - starting the custom program $CUSTOMCMD with args: $CUSTOMCMD_ARGS"
+	if [ -z "$CUSTOMCMD" ]; then
+		writelog "$(date) - INFO - ${FUNCNAME[0]} - CUSTOMCMD variable is empty - opening file requester"
+		ZCUST="$("$STEAM_ZENITY" --title="Select executable file" --file-selection)"
+		if [ -n "$ZCUST" ]; then
+			writelog "$(date) - INFO - ${FUNCNAME[0]} - $ZCUST selected for CUSTOMCMD - updating configfile $STLGAMECFG"
+			updateConfigEntry "CUSTOMCMD" "$ZCUST" "$STLGAMECFG"
+			CUSTOMCMD="$ZCUST"
+		else
+			writelog "$(date) - SKIP - ${FUNCNAME[0]} - nothing selected for CUSTOMCMD - skipping"
+			if [ "$ONLY_CUSTOMCMD" -eq 1 ]; then
+				writelog "$(date) - SKIP - ${FUNCNAME[0]} - as ONLY_CUSTOMCMD is enabled we're bailing out here"
+				closeSTL
+				exit
+			else
+				writelog "$(date) - SKIP - ${FUNCNAME[0]} - continuing with the main game"
+				return
+			fi
+		fi
 	fi
 	
+	if [ -z "$CUSTOMCMD" ]; then
+		writelog "$(date) - ERROR - ${FUNCNAME[0]} - CUSTOMCMD variable is empty - but it shouldn't be empty here!"
+	fi	
+		
 	if  [ -x "$(command -v "$CUSTOMCMD" 2>/dev/null)" ]; then
-		writelog "$(date) - INFO - ${FUNCNAME[0]} - $CUSTOMCMD found in $PATH"
+		writelog "$(date) - INFO - ${FUNCNAME[0]} - $CUSTOMCMD found in PATH"
 		LACO="$CUSTOMCMD"
 		CUSTCOM="$(which "$CUSTOMCMD")"
 	else
@@ -1198,11 +1227,24 @@ function launchCustomProg {
 				LACO="$CUSTOMCMD"
 				CUSTCOM="$CUSTOMCMD"
 			else
-				writelog "$(date) - SKIP - ${FUNCNAME[0]} - ERROR - custom command CUSTOMCMD $CUSTOMCMD not found - skipping launch"
-				if [ "$ONLY_CUSTOMCMD" -eq 1 ]; then
-					writelog "$(date) - SKIP - ${FUNCNAME[0]} - as ONLY_CUSTOMCMD is enabled we're bailing out here"
-					closeSTL
-					exit
+				writelog "$(date) - INFO - ${FUNCNAME[0]} - CUSTOMCMD file $CUSTOMCMD not found - opening file requester"
+				ZCUST="$("$STEAM_ZENITY" --title="Select executable file" --file-selection)"
+				if [ -n "$ZCUST" ]; then
+					writelog "$(date) - INFO - ${FUNCNAME[0]} - $ZCUST selected for CUSTOMCMD - updating configfile $STLGAMECFG"
+					updateConfigEntry "CUSTOMCMD" "$ZCUST" "$STLGAMECFG"
+					LACO="$ZCUST"
+					CUSTCOM="$ZCUST"
+					CUSTOMCMD="$ZCUST"
+				else
+					writelog "$(date) - SKIP - ${FUNCNAME[0]} - nothing selected for CUSTOMCMD - skipping"
+					if [ "$ONLY_CUSTOMCMD" -eq 1 ]; then
+						writelog "$(date) - SKIP - ${FUNCNAME[0]} - as ONLY_CUSTOMCMD is enabled we're bailing out here"
+						closeSTL
+						exit
+					else
+						writelog "$(date) - SKIP - ${FUNCNAME[0]} - continuing with the main game"
+						return
+					fi
 				fi
 			fi
 		fi
@@ -1211,6 +1253,11 @@ function launchCustomProg {
 	if [ -z "$LACO" ]; then
 		writelog "$(date) - SKIP - ${FUNCNAME[0]} - ERROR - launch command $LACO empty- skipping launch"
 	else
+		if [ -z "$CUSTOMCMD_ARGS" ]; then
+			writelog "$(date) - INFO - ${FUNCNAME[0]} - starting the custom program $CUSTOMCMD without args"
+		else
+			writelog "$(date) - INFO - ${FUNCNAME[0]} - starting the custom program $CUSTOMCMD with args: $CUSTOMCMD_ARGS"
+		fi
 		IFS=" " read -r -a RUNCUSTOMCMD_ARGS <<< "$CUSTOMCMD_ARGS"
 		writelog "$(date) - INFO - ${FUNCNAME[0]} - launching custom command with $LACO $CUSTOMCMD_ARGS"
 # several variables coming from steam have to be cleaned in order to get wine to work here
@@ -1220,7 +1267,7 @@ function launchCustomProg {
 			LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" WINEDEBUG="-all" WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx" "$(dirname "$CUSTOM_PROTON")/dist/bin/wine" "$LACO" "${RUNCUSTOMCMD_ARGS[@]}"
 		else
 			writelog "$(date) - INFO - ${FUNCNAME[0]} - $CUSTCOM doesn't seem to be a MS Windows exe - regular start (without further analysing)"
-			$LACO "${RUNCUSTOMCMD_ARGS[@]}"
+			LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" $LACO "${RUNCUSTOMCMD_ARGS[@]}"
 		fi
 	fi
 
