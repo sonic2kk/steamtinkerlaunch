@@ -5,7 +5,7 @@
 ### project ###
 
 PROGNAME="SteamTinkerLaunch"
-PROGVERS="v0.99.6"
+PROGVERS="v0.99.9"
 PROGCMD="$(basename "$0")"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -23,6 +23,7 @@ WINETRICKS="winetricks"
 WMCTRL="wmctrl"
 XDO="xdotool"
 XWININFO="xwininfo"
+REPLAY="replay-sorcery"
 
 ### howto ###
 
@@ -74,37 +75,40 @@ GE="$(basename "$GP" | awk -F '.exe' '{print $1}')"											# just the windows
 GFD="$(dirname "$GP")"																		# the absolute directory where the game exe lives - unused for optional custom program
 GN="$(awk -F '/' '{print $1}' <<< "$(awk -F 'common/' '{print $2}' <<< "$PWD")")"			# this is hopefully the proper game name
 GWIDFILE="/tmp/stl-sbsgwid"																	# temp file holding the game window id - worksforme
+SETUPDXVK="setup_dxvk"																		# required for optional 32bit WINEPREFIX creation
+TWEAKWIN=""																					# variable only used by a handful games which require forced tweaks to start
 
 #### VKBASALT BLOCK START ####
 
 function usevkBasalt {
 SBSSHADERDIR="Depth3D/Shaders"
 SBSSHADER="$SBSSHADERDIR/SuperDepth3D_VR.fx"
-
-	if [ "$ENABLE_VKBASALT" -eq 1 ] ; then
-		writelog "$(date) - INFO - ${FUNCNAME[0]} - vkBasalt enabled"
-		if [ ! -f "$VKBASALT_CONFIG_FILE" ]; then
-			writelog "$(date) - INFO - ${FUNCNAME[0]} - creating default VKBASALT_CONFIG_FILE $VKBASALT_CONFIG_FILE"
-			{
-			echo "effects = reshade"
-			echo "reshadeIncludePath = $STLCFGDIR/$SBSSHADERDIR"
-			echo "reshade = $STLCFGDIR/$SBSSHADER"
-			} >> "$VKBASALT_CONFIG_FILE"
-		else
-			writelog "$(date) - SKIP - ${FUNCNAME[0]} - default VKBASALT_CONFIG_FILE $VKBASALT_CONFIG_FILE already exists"
-		fi
-		
-		if [ ! -f "$STLCFGDIR/$SBSSHADER" ]; then
-			writelog "$(date) - 404 - ${FUNCNAME[0]} - Depth3D shader $STLCFGDIR/$SBSSHADER not found"
-			if [ "$CLONE_DEPTH3D" -eq 1 ]; then
-				writelog "$(date) - INFO - ${FUNCNAME[0]} - CLONE_DEPTH3D is enabled so checking it out"
-				checkReShadeDepth3D
+	if [ -n "$ENABLE_VKBASALT" ] ; then
+		if [ "$ENABLE_VKBASALT" -eq 1 ] ; then
+			writelog "$(date) - INFO - ${FUNCNAME[0]} - vkBasalt enabled"
+			if [ ! -f "$VKBASALT_CONFIG_FILE" ]; then
+				writelog "$(date) - INFO - ${FUNCNAME[0]} - creating default VKBASALT_CONFIG_FILE $VKBASALT_CONFIG_FILE"
+				{
+				echo "effects = reshade"
+				echo "reshadeIncludePath = $STLCFGDIR/$SBSSHADERDIR"
+				echo "reshade = $STLCFGDIR/$SBSSHADER"
+				} >> "$VKBASALT_CONFIG_FILE"
 			else
-				writelog "$(date) - SKIP - ${FUNCNAME[0]} - CLONE_DEPTH3D skipping the installation"
-				export ENABLE_VKBASALT=0
+				writelog "$(date) - SKIP - ${FUNCNAME[0]} - default VKBASALT_CONFIG_FILE $VKBASALT_CONFIG_FILE already exists"
 			fi
-		else
-			writelog "$(date) - OK - ${FUNCNAME[0]} - looks like Depth3D shader is ready at $STLCFGDIR/$SBSSHADER"
+			
+			if [ ! -f "$STLCFGDIR/$SBSSHADER" ]; then
+				writelog "$(date) - 404 - ${FUNCNAME[0]} - Depth3D shader $STLCFGDIR/$SBSSHADER not found"
+				if [ "$CLONE_DEPTH3D" -eq 1 ]; then
+					writelog "$(date) - INFO - ${FUNCNAME[0]} - CLONE_DEPTH3D is enabled so checking it out"
+					checkReShadeDepth3D
+				else
+					writelog "$(date) - SKIP - ${FUNCNAME[0]} - CLONE_DEPTH3D skipping the installation"
+					export ENABLE_VKBASALT=0
+				fi
+			else
+				writelog "$(date) - OK - ${FUNCNAME[0]} - looks like Depth3D shader is ready at $STLCFGDIR/$SBSSHADER"
+			fi
 		fi
 	fi
 }
@@ -416,44 +420,46 @@ function runSBSVR {
 
 # start game in side-by-side VR:
 function checkSBSVRLaunch {
-	if [ "$RUNSBSVR" -ge 1 ]; then
-	# override game configs with a sbs-tweak config if available:
+	if [ -n "$RUNSBSVR" ]; then
+		if [ "$RUNSBSVR" -ge 1 ]; then
+		# override game configs with a sbs-tweak config if available:
 
-	# first look for a global tweak:
-		if [ -f "$GLOBALSBSTWEAKDIR/$AID.conf" ]; then
-			writelog "$(date) - INFO - ${FUNCNAME[0]} - VR using overrides found in $GLOBALSBSTWEAKDIR/$AID.conf"
-			exportCfgFile "$GLOBALSBSTWEAKDIR/$AID.conf"
-		fi
+		# first look for a global tweak:
+			if [ -f "$GLOBALSBSTWEAKDIR/$AID.conf" ]; then
+				writelog "$(date) - INFO - ${FUNCNAME[0]} - VR using overrides found in $GLOBALSBSTWEAKDIR/$AID.conf"
+				exportCfgFile "$GLOBALSBSTWEAKDIR/$AID.conf"
+			fi
 
-	# then for a user tweak - (overriding the global one):
-		if [ -f "$SBSTWEAKDIR/$AID.conf" ]; then
-			writelog "$(date) - INFO - ${FUNCNAME[0]} - VR using overrides found in $SBSTWEAKDIR/$AID.conf"
-			exportCfgFile "$SBSTWEAKDIR/$AID.conf"
-		fi
+		# then for a user tweak - (overriding the global one):
+			if [ -f "$SBSTWEAKDIR/$AID.conf" ]; then
+				writelog "$(date) - INFO - ${FUNCNAME[0]} - VR using overrides found in $SBSTWEAKDIR/$AID.conf"
+				exportCfgFile "$SBSTWEAKDIR/$AID.conf"
+			fi
 
-	# Crysis 2 enable SBS in gameconfig:
-	if [ "$AID" -eq "108800" ]; then
-		CRY2CFG="$STEAM_COMPAT_DATA_PATH/pfx/drive_c/users/steamuser/Saved Games/Crysis2/game.cfg"
-		if [ -f "$CRY2CFG" ]; then
-			writelog "$(date) - HACK - ${FUNCNAME[0]} - SteamID $AID Crysis 2 found - editing gameconfig $CRY2CFG to enable Stereo Support"
-			echo "r_StereoSupportAMD=1" >> "$CRY2CFG"
-			sort -u "$CRY2CFG" -o "$CRY2CFG"
-		else
-			writelog "$(date) - SKIP - ${FUNCNAME[0]} -HACK failed - SteamID $AID Crysis 2 found but gameconfig $CRY2CFG not found to insert Stereo Support - restarting the game should fix this"
-		fi
-	fi
+		# Crysis 2 enable SBS in gameconfig:
+			if [ "$AID" -eq "108800" ]; then
+				CRY2CFG="$STEAM_COMPAT_DATA_PATH/pfx/drive_c/users/steamuser/Saved Games/Crysis2/game.cfg"
+				if [ -f "$CRY2CFG" ]; then
+					writelog "$(date) - HACK - ${FUNCNAME[0]} - SteamID $AID Crysis 2 found - editing gameconfig $CRY2CFG to enable Stereo Support"
+					echo "r_StereoSupportAMD=1" >> "$CRY2CFG"
+					sort -u "$CRY2CFG" -o "$CRY2CFG"
+				else
+					writelog "$(date) - SKIP - ${FUNCNAME[0]} -HACK failed - SteamID $AID Crysis 2 found but gameconfig $CRY2CFG not found to insert Stereo Support - restarting the game should fix this"
+				fi
+			fi
 
-	# start the whole side-by-side process:
-		export VRGAMEWINDOW="$VRGAMEWINDOW"
-		writelog "$(date) - INFO - ${FUNCNAME[0]} - ${FUNCNAME[0]} - starting VRlaunch $VRGAMEWINDOW for $AID"
-		if [ "$RUNSBSVR" -eq 1 ]; then
-		runSBSVR &
-		elif [ "$RUNSBSVR" -gt 1 ]; then
-			writelog "$(date) - INFO - ${FUNCNAME[0]} - RUNSBSVR is greater than 1 - starting SteamVR and SBS delayed for RUNSBSVR $RUNSBSVR seconds"
-			( sleep "$RUNSBSVR"; runSBSVR) &
-		else
-			writelog "$(date) - SKIP - ${FUNCNAME[0]} - ${FUNCNAME[0]} ERROR - RUNSBSVR is $RUNSBSVR which is invalid - setting to 0"
-			RUNSBSVR=0
+		# start the whole side-by-side process:
+			export VRGAMEWINDOW="$VRGAMEWINDOW"
+			writelog "$(date) - INFO - ${FUNCNAME[0]} - ${FUNCNAME[0]} - starting VRlaunch $VRGAMEWINDOW for $AID"
+			if [ "$RUNSBSVR" -eq 1 ]; then
+			runSBSVR &
+			elif [ "$RUNSBSVR" -gt 1 ]; then
+				writelog "$(date) - INFO - ${FUNCNAME[0]} - RUNSBSVR is greater than 1 - starting SteamVR and SBS delayed for RUNSBSVR $RUNSBSVR seconds"
+				( sleep "$RUNSBSVR"; runSBSVR) &
+			else
+				writelog "$(date) - SKIP - ${FUNCNAME[0]} - ${FUNCNAME[0]} ERROR - RUNSBSVR is $RUNSBSVR which is invalid - setting to 0"
+				RUNSBSVR=0
+			fi
 		fi
 	fi
 }
@@ -477,7 +483,7 @@ function prepareReshadeFiles {
 		echo "## ReShade online ressources - see README:"
 		echo "DL_D3D47_64=https://lutris.net/files/tools/dll/d3dcompiler_47.dll"
 		echo "DL_D3D47_32=http://dege.freeweb.hu/dgVoodoo2/D3DCompiler_47.zip"
-		echo "RSSETUP=https://reshade.me/downloads/ReShade_Setup_4.1.1.exe"
+		echo "RSSETUP=https://reshade.me/downloads/ReShade_Setup_4.7.0.exe"
 		echo "## allow download of ReShade sourcefiles:"
 		echo "#DOWNLOAD_RESHADE=1"
 		echo "## ReShade sourcefiles:"
@@ -555,119 +561,125 @@ function checkReShadeDepth3D {
 
 # install reshade:
 function installReshade {
-	if [ "$INSTALL_RESHADE" -eq 1 ]; then
+	if [ -n "$INSTALL_RESHADE" ]; then
+		if [ "$INSTALL_RESHADE" -eq 1 ]; then
 
-		prepareReshadeFiles
+			prepareReshadeFiles
 
-		writelog "$(date) - INFO - ${FUNCNAME[0]} - INSTALL_RESHADE enabled"
-#32bit:
-		if [ "$(LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" file "$GP" | grep -c "PE32 ")" -eq 1 ]; then
-			writelog "$(date) - INFO - ${FUNCNAME[0]} - installing 32bit Reshade as $GE is 32bit" 
+			writelog "$(date) - INFO - ${FUNCNAME[0]} - INSTALL_RESHADE enabled"
+	#32bit:
+			if [ "$(LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" file "$GP" | grep -c "PE32 ")" -eq 1 ]; then
+				writelog "$(date) - INFO - ${FUNCNAME[0]} - installing 32bit Reshade as $GE is 32bit" 
 
-			if [ ! -f "$GFD/$RS_D3D47_DEST" ]; then
-				if [ ! -f "$RESHADESRCDIR/$RS_D3D47_32" ]; then
-					writelog "$(date) - SKIP - ${FUNCNAME[0]} - sourcefile $RESHADESRCDIR/$RS_D3D47_32 missing - skipping this file" 
+				if [ ! -f "$GFD/$RS_D3D47_DEST" ]; then
+					if [ ! -f "$RESHADESRCDIR/$RS_D3D47_32" ]; then
+						writelog "$(date) - SKIP - ${FUNCNAME[0]} - sourcefile $RESHADESRCDIR/$RS_D3D47_32 missing - skipping this file" 
+					else
+						cp "$RESHADESRCDIR/$RS_D3D47_32" "$GFD/$RS_D3D47_DEST" >/dev/null 2>/dev/null
+						writelog "$(date) - INFO - ${FUNCNAME[0]} - copied $RESHADESRCDIR/$RS_D3D47_32 to $GFD/$RS_D3D47_DEST" 
+					fi
 				else
-					cp "$RESHADESRCDIR/$RS_D3D47_32" "$GFD/$RS_D3D47_DEST" >/dev/null 2>/dev/null
-					writelog "$(date) - INFO - ${FUNCNAME[0]} - copied $RESHADESRCDIR/$RS_D3D47_32 to $GFD/$RS_D3D47_DEST" 
+					writelog "$(date) - SKIP - ${FUNCNAME[0]} - destfile $GFD/$RS_D3D47_DEST already exists - skipping this file" 
+				fi
+
+	#dxgi:
+				if [ ! -f "$GFD/$RS_DX_DEST" ]; then
+					if [ ! -f "$RESHADESRCDIR/$RS_32" ]; then
+						writelog "$(date) - SKIP - ${FUNCNAME[0]} - sourcefile $RESHADESRCDIR/$RS_32 missing - skipping this file" 
+					else
+						cp "$RESHADESRCDIR/$RS_32" "$GFD/$RS_DX_DEST" >/dev/null 2>/dev/null
+						writelog "$(date) - INFO - ${FUNCNAME[0]} - copied $RESHADESRCDIR/$RS_32 to $GFD/$RS_DX_DEST" 
+					fi
+				else
+					writelog "$(date) - SKIP - ${FUNCNAME[0]} - destfile $GFD/$RS_DX_DEST already exists - skipping this file" 
+				fi
+
+	#d3d9:
+				if [ ! -f "$GFD/$RS_D9_DEST" ]; then
+					if [ ! -f "$RESHADESRCDIR/$RS_32" ]; then
+						writelog "$(date) - SKIP - ${FUNCNAME[0]} - sourcefile $RESHADESRCDIR/$RS_32 missing - skipping this file" 
+					else
+						cp "$RESHADESRCDIR/$RS_32" "$GFD/$RS_D9_DEST" >/dev/null 2>/dev/null
+						writelog "$(date) - INFO - ${FUNCNAME[0]} - copied $RESHADESRCDIR/$RS_32 to $GFD/$RS_D9_DEST" 
+					fi
+				else
+					writelog "$(date) - SKIP - ${FUNCNAME[0]} - destfile $GFD/$RS_D9_DEST already exists - skipping this file" 
+				fi
+
+	# 64bit:
+			elif  [ "$(LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" file "$GP" | grep -c "PE32+ ")" -eq 1 ]; then
+				writelog "$(date) - INFO - ${FUNCNAME[0]} - installing 64bit Reshade as $GE is 64bit" 
+
+				if [ ! -f "$GFD/$RS_D3D47_DEST" ]; then
+					if [ ! -f "$RESHADESRCDIR/$RS_D3D47_64" ]; then
+						writelog "$(date) - SKIP - ${FUNCNAME[0]} - sourcefile $RESHADESRCDIR/$RS_D3D47_64 missing - skipping this file" 
+					else
+						cp "$RESHADESRCDIR/$RS_D3D47_64" "$GFD/$RS_D3D47_DEST" >/dev/null 2>/dev/null
+						writelog "$(date) - INFO - ${FUNCNAME[0]} - copied $RESHADESRCDIR/$RS_D3D47_64 to $GFD/$RS_D3D47_DEST" 
+					fi
+				else
+					writelog "$(date) - SKIP - ${FUNCNAME[0]} - destfile $GFD/$RS_D3D47_DEST already exists - skipping this file" 
+				fi
+
+	#dxgi:
+				if [ ! -f "$GFD/$RS_DX_DEST" ]; then
+					if [ ! -f "$RESHADESRCDIR/$RS_64" ]; then
+						writelog "$(date) - SKIP - ${FUNCNAME[0]} - sourcefile $RESHADESRCDIR/$RS_64 missing - skipping this file" 
+					else
+						cp "$RESHADESRCDIR/$RS_64" "$GFD/$RS_DX_DEST" >/dev/null 2>/dev/null
+						writelog "$(date) - INFO - ${FUNCNAME[0]} - copied $RESHADESRCDIR/$RS_64 to $GFD/$RS_DX_DEST" 
+					fi
+				else
+					writelog "$(date) - SKIP - ${FUNCNAME[0]} - destfile $GFD/$RS_DX_DEST already exists - skipping this file" 
+				fi
+	#d3d9:
+				if [ ! -f "$GFD/$RS_D9_DEST" ]; then
+					if [ ! -f "$RESHADESRCDIR/$RS_64" ]; then
+						writelog "$(date) - SKIP - ${FUNCNAME[0]} - sourcefile $RESHADESRCDIR/$RS_64 missing - skipping this file" 
+					else
+						cp "$RESHADESRCDIR/$RS_64" "$GFD/$RS_D9_DEST" >/dev/null 2>/dev/null
+						writelog "$(date) - INFO - ${FUNCNAME[0]} - copied $RESHADESRCDIR/$RS_64 to $GFD/$RS_D9_DEST" 
+					fi
+				else
+					writelog "$(date) - SKIP - ${FUNCNAME[0]} - destfile $GFD/$RS_D9_DEST already exists - skipping this file" 
 				fi
 			else
-				writelog "$(date) - SKIP - ${FUNCNAME[0]} - destfile $GFD/$RS_D3D47_DEST already exists - skipping this file" 
+					writelog "$(date) - SKIP - ${FUNCNAME[0]} - ERROR in ReShade installation - no file information detected from $GP - setting USERESHADE=0 for this session"
+					export USERESHADE=0
 			fi
-
-#dxgi:
-			if [ ! -f "$GFD/$RS_DX_DEST" ]; then
-				if [ ! -f "$RESHADESRCDIR/$RS_32" ]; then
-					writelog "$(date) - SKIP - ${FUNCNAME[0]} - sourcefile $RESHADESRCDIR/$RS_32 missing - skipping this file" 
-				else
-					cp "$RESHADESRCDIR/$RS_32" "$GFD/$RS_DX_DEST" >/dev/null 2>/dev/null
-					writelog "$(date) - INFO - ${FUNCNAME[0]} - copied $RESHADESRCDIR/$RS_32 to $GFD/$RS_DX_DEST" 
-				fi
-			else
-				writelog "$(date) - SKIP - ${FUNCNAME[0]} - destfile $GFD/$RS_DX_DEST already exists - skipping this file" 
-			fi
-
-#d3d9:
-			if [ ! -f "$GFD/$RS_D9_DEST" ]; then
-				if [ ! -f "$RESHADESRCDIR/$RS_32" ]; then
-					writelog "$(date) - SKIP - ${FUNCNAME[0]} - sourcefile $RESHADESRCDIR/$RS_32 missing - skipping this file" 
-				else
-					cp "$RESHADESRCDIR/$RS_32" "$GFD/$RS_D9_DEST" >/dev/null 2>/dev/null
-					writelog "$(date) - INFO - ${FUNCNAME[0]} - copied $RESHADESRCDIR/$RS_32 to $GFD/$RS_D9_DEST" 
-				fi
-			else
-				writelog "$(date) - SKIP - ${FUNCNAME[0]} - destfile $GFD/$RS_D9_DEST already exists - skipping this file" 
-			fi
-
-# 64bit:
-		elif  [ "$(LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" file "$GP" | grep -c "PE32+ ")" -eq 1 ]; then
-			writelog "$(date) - INFO - ${FUNCNAME[0]} - installing 64bit Reshade as $GE is 64bit" 
-
-			if [ ! -f "$GFD/$RS_D3D47_DEST" ]; then
-				if [ ! -f "$RESHADESRCDIR/$RS_D3D47_64" ]; then
-					writelog "$(date) - SKIP - ${FUNCNAME[0]} - sourcefile $RESHADESRCDIR/$RS_D3D47_64 missing - skipping this file" 
-				else
-					cp "$RESHADESRCDIR/$RS_D3D47_64" "$GFD/$RS_D3D47_DEST" >/dev/null 2>/dev/null
-					writelog "$(date) - INFO - ${FUNCNAME[0]} - copied $RESHADESRCDIR/$RS_D3D47_64 to $GFD/$RS_D3D47_DEST" 
-				fi
-			else
-				writelog "$(date) - SKIP - ${FUNCNAME[0]} - destfile $GFD/$RS_D3D47_DEST already exists - skipping this file" 
-			fi
-
-#dxgi:
-			if [ ! -f "$GFD/$RS_DX_DEST" ]; then
-				if [ ! -f "$RESHADESRCDIR/$RS_64" ]; then
-					writelog "$(date) - SKIP - ${FUNCNAME[0]} - sourcefile $RESHADESRCDIR/$RS_64 missing - skipping this file" 
-				else
-					cp "$RESHADESRCDIR/$RS_64" "$GFD/$RS_DX_DEST" >/dev/null 2>/dev/null
-					writelog "$(date) - INFO - ${FUNCNAME[0]} - copied $RESHADESRCDIR/$RS_64 to $GFD/$RS_DX_DEST" 
-				fi
-			else
-				writelog "$(date) - SKIP - ${FUNCNAME[0]} - destfile $GFD/$RS_DX_DEST already exists - skipping this file" 
-			fi
-#d3d9:
-			if [ ! -f "$GFD/$RS_D9_DEST" ]; then
-				if [ ! -f "$RESHADESRCDIR/$RS_64" ]; then
-					writelog "$(date) - SKIP - ${FUNCNAME[0]} - sourcefile $RESHADESRCDIR/$RS_64 missing - skipping this file" 
-				else
-					cp "$RESHADESRCDIR/$RS_64" "$GFD/$RS_D9_DEST" >/dev/null 2>/dev/null
-					writelog "$(date) - INFO - ${FUNCNAME[0]} - copied $RESHADESRCDIR/$RS_64 to $GFD/$RS_D9_DEST" 
-				fi
-			else
-				writelog "$(date) - SKIP - ${FUNCNAME[0]} - destfile $GFD/$RS_D9_DEST already exists - skipping this file" 
-			fi
-		else
-				writelog "$(date) - SKIP - ${FUNCNAME[0]} - ERROR in ReShade installation - no file information detected from $GP - setting USERESHADE=0 for this session"
-				export USERESHADE=0
 		fi
 	fi
 }
 
 function installReshadeDepth3D {
-	if [ "$RESHADE_DEPTH3D" -eq 1 ]; then
-		writelog "$(date) - INFO - ${FUNCNAME[0]} - copying shaders into gamedir"
-		find "$DEPTH3DSRCDIR/Shaders/" -maxdepth 1 -name "*.fx*" | while read -r file; do
-			writelog "$(date) - INFO - ${FUNCNAME[0]} - CHECKING $GFD/$(basename "$file")"
+	if [ -n "$RESHADE_DEPTH3D" ]; then
+		if [ "$RESHADE_DEPTH3D" -eq 1 ]; then
+			writelog "$(date) - INFO - ${FUNCNAME[0]} - copying shaders into gamedir"
+			find "$DEPTH3DSRCDIR/Shaders/" -maxdepth 1 -name "*.fx*" | while read -r file; do
+				writelog "$(date) - INFO - ${FUNCNAME[0]} - CHECKING $GFD/$(basename "$file")"
 
-			if [ -f "$GFD"/"$(basename "$file")" ]; then
-				writelog "$(date) - INFO - ${FUNCNAME[0]} - $GFD/$(basename "$file") already exists - updating"
-				cp "$file" "$GFD"
-			else
-				writelog "$(date) - INFO - ${FUNCNAME[0]} - copying new file $file to $GFD"
-				cp "$file" "$GFD"
-			fi
-		done
-	fi	
+				if [ -f "$GFD"/"$(basename "$file")" ]; then
+					writelog "$(date) - INFO - ${FUNCNAME[0]} - $GFD/$(basename "$file") already exists - updating"
+					cp "$file" "$GFD"
+				else
+					writelog "$(date) - INFO - ${FUNCNAME[0]} - copying new file $file to $GFD"
+					cp "$file" "$GFD"
+				fi
+			done
+		fi
+	fi
 }
 
 function useReshade {
-	if [ "$USERESHADE" -eq 1 ]; then
-		if [ ! -f "$GFD/$RS_D3D47_DEST" ]; then
-			writelog "$(date) - INFO - ${FUNCNAME[0]} - looks like Reshade is not yet installed in $GFD - installing because USERESHADE is enabled"
-			INSTALL_RESHADE=1 installReshade
+	if [ -n "$USERESHADE" ]; then
+		if [ "$USERESHADE" -eq 1 ]; then
+			if [ ! -f "$GFD/$RS_D3D47_DEST" ]; then
+				writelog "$(date) - INFO - ${FUNCNAME[0]} - looks like Reshade is not yet installed in $GFD - installing because USERESHADE is enabled"
+				INSTALL_RESHADE=1 installReshade
+			fi
+			writelog "$(date) - INFO - ${FUNCNAME[0]} - setting WINEDLLOVERRIDES for ReShade: dxgi=n,b;d3d9=n,b;d3dcompiler_47=n,b"
+			export WINEDLLOVERRIDES="dxgi=n,b;d3d9=n,b;d3dcompiler_47=n,b"
 		fi
-		writelog "$(date) - INFO - ${FUNCNAME[0]} - setting WINEDLLOVERRIDES for ReShade: dxgi=n,b;d3d9=n,b;d3dcompiler_47=n,b"
-		export WINEDLLOVERRIDES="dxgi=n,b;d3d9=n,b;d3dcompiler_47=n,b"
 	fi	
 }
 
@@ -742,6 +754,9 @@ function editGameConfig {
 # sourcing gameconfig, to optionally override global WAITEDITOR
 	exportCfgFile "$STLGAMECFG"
 
+# preload forced tweaks # setting WAITEDITOR so the editor doesn't conflict with forced tweaks
+	preloadForcedTweaks
+
 # open editor requester 
 	if [ "$WAITEDITOR" -gt 0 ]; then
 		if [ -x "$(command -v "$STEAM_ZENITY" 2>/dev/null)" ]; then
@@ -802,36 +817,38 @@ function createDefaultGlobalCfg {
 		echo "## wait WAITEDITOR seconds for a keypress to open the texteditor STLEDITOR with the game config"
 		echo "WAITEDITOR=2"
 		echo "## set PROTONDB to 1 to also open protondb.com for the game in your $BROWSER when starting the editor STLEDITOR:"
-		echo "#PROTONDB=1"
+		echo "PROTONDB=0"
 		echo "## protondb base url - for optional PROTONDB"
 		echo "PDBURL=https://www.protondb.com/app"
 		echo "## Browser used for PROTONDB:"
 		echo "BROWSER=firefox"
 		echo "## SteamAppId where the custom game launcher is triggered if RUN_CUSTOMCMD is set"
-		echo "#CUSTOMLAUNCHID=15520"																	
+		echo "CUSTOMLAUNCHID=15520"																	
 		echo "## if set this command is used to block the internet for the selected game. game might fail to start!"
 		echo "#NOINET=sg no-internet"
 		echo "## program to record game network-traffic - used when enabled"
 		echo "#NETMON=netstat"
 		echo "## options for NETMON:"
-		echo "#NETOPTS=-taucp -W"
+		echo "NETOPTS=-taucp -W"
 		echo "## the base path for netmon logs"
 		echo "NETMONDIR=$STLCFGDIR/netmon"
 		echo "## set to 1 to enable nyrna while game is running"
-		echo "#RUN_NYRNA=1"
+		echo "RUN_NYRNA=0"
+		echo "## set to 1 to enable replay-sorcery while game is running"
+		echo "RUN_REPLAY=0"
 		echo "## toggle visibility of all open windows on start/stop"
-		echo "#TOGGLEWINDOWS=1"
+		echo "TOGGLEWINDOWS=0"
 		echo "## vr-video-player"
 		echo "VRVIDEOPLAYER=vr-video-player"
 		echo "## vr-video-player args"
 		echo "VRVIDEOPLAYERARGS=--flat"
 		echo "## tweaks are only useful if some people contribute gamespecific tweaks, else this will vanish:"
 		echo "## set to 1 to override settings with tweaks when found "
-		echo "#USETWEAKS=1"
+		echo "USETWEAKS=1"
 		echo "## set to 1 create tweak config templates for the launched game if not found"
-		echo "#CREATETWEAKS=1"
+		echo "CREATETWEAKS=0"
 		echo "## seconds to wait to automatically save a new basic SBS tweak config of the running game with the gamewindow name after game launch - 0 to disable - 1 to pick a window"
-		echo "#SAVESBSWINNAME=1"
+		echo "SAVESBSWINNAME=0"
 		echo "## directory with global sbs-tweaks"
 		echo "GLOBALSBSTWEAKDIR=/usr/share/$PROGCMD/sbs"
 		echo "## directory with global tweaks"
@@ -840,7 +857,7 @@ function createDefaultGlobalCfg {
 		echo "## Depth3D git project:"
 		echo "DEPTH3DURL=https://github.com/BlueSkyDefender/Depth3D.git"
 		echo "## allow git clone of Depth3D shaderfiles :"
-		echo "#CLONE_DEPTH3D=1"
+		echo "CLONE_DEPTH3D=0"
 		echo "## Depth3D sourcefiles:"
 		echo "DEPTH3DSRCDIR=$STLCFGDIR/Depth3D"
 		} >> "$STLDEFGLOBALCFG"
@@ -855,33 +872,37 @@ function createDefaultGameCfg {
 		echo "## set to 1 to override settings with tweaks when found - overrides USETWEAKS in global config"
 		echo "#USETWEAKS=1"
 		echo "## set to 1 to enable the custom command CUSTOMCMD:"
-		echo "#RUN_CUSTOMCMD=1"
+		echo "RUN_CUSTOMCMD=0"
 		echo "## start this custom command:"
 		echo "#CUSTOMCMD=yourProgram"
 		echo "## start CUSTOMCMD command with following args:"
 		echo "#CUSTOMCMD_ARGS=--some --args"
 		echo "## set to 1 to only start above CUSTOMCMD and not the game command itself:"
-		echo "#ONLY_CUSTOMCMD=1"
+		echo "ONLY_CUSTOMCMD=0"
 		echo "## set to 1 to fork the custom CUSTOMCMD into the background and continue with starting %command%"
-		echo "#FORK_CUSTOMCMD=0"
+		echo "FORK_CUSTOMCMD=0"
 		echo "## additional game args, so you don't have to append them in steam after %command%:"
 		echo "#GAMEARGS=--some --args"
 		echo "## start game with $GAMEMODERUN:"
 		echo "USEGAMEMODERUN=1"
 		echo "## force 32bit pfx:"
-		echo "#FORCE32BITPFX=1"
+		echo "FORCE32BITPFX=0"
 		echo "## use mangohud:"
-		echo "#MANGOHUD=1"
+		echo "MANGOHUD=0"
 		echo "## set to 1 to start the game with vkbasalt:"
-		echo "#ENABLE_VKBASALT=1"
+		echo "ENABLE_VKBASALT=0"
 		echo "## set to 1 to enable nyrna while game is running - overrides global config"
-		echo "#RUN_NYRNA=1"
+		echo "RUN_NYRNA=0"
+		echo "## set to 1 to enable replay-sorcery while game is running - overrides global config"
+		echo "RUN_REPLAY=0"
+		echo "## useful for many games"
+		echo "PULSE_LATENCY_MSEC=60"
 		echo "## if set this command is used to block the internet for the selected game. game might fail to start - overrides global config"
 		echo "#NOINET=sg no-internet"
 		echo "## toggle visibility of all open windows on start/stop - overrides global config"
-		echo "#TOGGLEWINDOWS=1"
+		echo "TOGGLEWINDOWS=0"
 		echo "## seconds to wait to automatically save a new basic SBS tweak config of the running game with the gamewindow name after game launch - 0 to disable - 1 to pick a window - overrides global config"
-		echo "#SAVESBSWINNAME=1"
+		echo "SAVESBSWINNAME=0"
 		echo "## set radv mode:"
 		echo "#RADV_PERFTEST=aco"
 		echo "## comment in to use amdvlk"
@@ -889,29 +910,29 @@ function createDefaultGameCfg {
 		echo "## OR comment in to use vulkan-radeon"
 		echo "#VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/radeon_icd.i686.json:/usr/share/vulkan/icd.d/radeon_icd.x86_64.json"
 		echo "## start winetricks gui before game launch:"
-		echo "#RUN_WINETRICKS=1"
+		echo "RUN_WINETRICKS=0"
 		echo "## install all packages in WINETRICKSPAKS silently with winetricks:"
 		echo "#WINETRICKSPAKS=vcrun2015 xact"
 		echo "## start winecfg before game launch:"
-		echo "#RUN_WINECFG=1"
+		echo "RUN_WINECFG=0"
 		echo "## set to 1 to enable virtualdesktop for the game"
-		echo "#VIRTUALDESKTOP=1"
+		echo "VIRTUALDESKTOP=0"
 		echo "## set to 1 to install ReShade:"
-		echo "#INSTALL_RESHADE=1"
+		echo "INSTALL_RESHADE=0"
 		echo "## set to 1 to install ReShade Depth3D Shader into gamedir:"
-		echo "#RESHADE_DEPTH3D=1"
+		echo "RESHADE_DEPTH3D=0"
 		echo "## set to 1 to start game with ReShade enabled:"
-		echo "#USERESHADE=1"
+		echo "USERESHADE=0"
 		echo "## set to 1 to start the game with VRVIDEOPLAYER in VR at once or to a greater value to delay SteamVR and SBS for RUNSBSVR seconds"
-		echo "#RUNSBSVR=1"
+		echo "RUNSBSVR=0"
 		echo "## vr-video-player args - overriding global settings"
-		echo "#VRVIDEOPLAYERARGS=--flat"
+		echo "VRVIDEOPLAYERARGS=--flat"
 		echo "## vr-video-player zoom value"
-		echo "#SBSZOOM="
+		echo "#SBSZOOM=1.0"
 		echo "## shortcut to enable all required flags for SBSVR with vkbasalt"
-		echo "#SBSVRVK=1"
+		echo "SBSVRVK=0"
 		echo "## shortcut to enable all required flags for SBSVR with ReShade"
-		echo "#SBSVRRS=1"	
+		echo "SBSVRRS=0"	
 		echo "## optional name of the gamewindow for VRVIDEOPLAYER - works more stable and is faster:"
 		echo "#VRGAMEWINDOW="
 		echo "## overrides global WAITEDITOR config:"
@@ -940,8 +961,8 @@ function createDefaultGameCfg {
 		echo "## wine vars:"
 		echo "#WINE_FULLSCREEN_INTEGER_SCALING=0"
 		echo "## strace settings:"
-		echo "#STRACERUN=1"
-		echo "#STRACEOPTS=-f -t -e trace=file"
+		echo "STRACERUN=0"
+		echo "STRACEOPTS=-f -t -e trace=file"
 		echo "## program to record game network-traffic - used when enabled - overrides global config"
 		echo "#NETMON=netstat"
 		echo "## options for NETMON - overrides global config:"
@@ -980,19 +1001,21 @@ function createGameCfg {
 	fi
 
 # TWEAK CONFIG TEMPLATE:
-	if [ "$CREATETWEAKS" -eq 1 ]; then
+	if [ -n "$CREATETWEAKS" ]; then
+		if [ "$CREATETWEAKS" -eq 1 ]; then
 # write tweak header if tweakfile not found:			
-		createProjectDirs
+			createProjectDirs
 
-		if [ ! -f "$TWEAKCFG" ] ; then
-			{
-			echo "#########"
-			echo "#GAMENAME=$GN"
-			echo "#GAMEEXE=$GE"
-			echo "#GAMEID=$AID"
-			echo "#PROTONVERSION=$(PROTONVERSION "$@")"
-			echo "#########"
-			} >> "$TWEAKCFG"
+			if [ ! -f "$TWEAKCFG" ] ; then
+				{
+				echo "#########"
+				echo "#GAMENAME=$GN"
+				echo "#GAMEEXE=$GE"
+				echo "#GAMEID=$AID"
+				echo "#PROTONVERSION=$(PROTONVERSION "$@")"
+				echo "#########"
+				} >> "$TWEAKCFG"
+			fi
 		fi
 	fi
 }
@@ -1048,21 +1071,13 @@ function checkTweakLaunch {
 # first try global config
 		if [ -f "$GLOBALTWEAKDIR/$AID.conf" ]; then
 			writelog "$(date) - INFO - ${FUNCNAME[0]} - using overrides found in $GLOBALTWEAKDIR/$AID.conf"
-			while read -r line; do
-				if  echo "$line" | grep -v "^#"; then
-					export "${line?}"
-				fi
-			done < "$GLOBALTWEAKDIR/$AID.conf"
+			exportCfgFile "$GLOBALTWEAKDIR/$AID.conf"
 		fi
 
 # then user config - (overriding the global one)
 		if [ -f "$TWEAKDIR/$AID.conf" ]; then
 			writelog "$(date) - INFO - ${FUNCNAME[0]} - using overrides found in $TWEAKDIR/$AID.conf"
-			while read -r line; do
-				if  echo "$line" | grep -v "^#"; then
-					export "${line?}"
-				fi
-			done < "$TWEAKDIR/$AID.conf"
+			exportCfgFile "$TWEAKDIR/$AID.conf"
 		fi
 	fi
 }
@@ -1132,8 +1147,10 @@ function stracerun {
 }
 
 function checkStraceLaunch {
-	if [ "$STRACERUN" -eq 1 ]; then
-		stracerun &
+	if [ -n "$STRACERUN" ]; then
+		if [ "$STRACERUN" -eq 1 ]; then
+			stracerun &
+		fi
 	fi
 }
 
@@ -1178,6 +1195,21 @@ function checkNetMonLaunch {
 	fi
 }
 
+function preloadForcedTweaks {
+	if [ "$AID" -eq "246960" ]; then	# GSTD - Rise of the Owlverlord
+		writelog "$(date) - INFO - ${FUNCNAME[0]} - GSTD - Rise of the Owlverlord ($AID) needs hacks to get it to work"
+		export USETWEAKS=1
+		checkTweakLaunch
+	fi
+	
+# broken - see: https://github.com/ValveSoftware/Proton/issues/1658#issuecomment-663941844
+#	if [ "$AID" -eq "223220" ]; then	# Giana Sisters - Twisted Dreams
+#		writelog "$(date) - INFO - ${FUNCNAME[0]} - Giana Sisters - Twisted Dreams ($AID) needs hacks to get it to work"
+#		export USETWEAKS=1
+#		checkTweakLaunch
+#	fi
+}
+
 ### MISC END ###
 
 
@@ -1196,6 +1228,7 @@ function launchCustomProg {
 			if [ "$ONLY_CUSTOMCMD" -eq 1 ]; then
 				writelog "$(date) - SKIP - ${FUNCNAME[0]} - as ONLY_CUSTOMCMD is enabled we're bailing out here"
 				closeSTL
+				writelog "$(date) - INFO - ######### STOP EARLY $PROGNAME $PROGVERS #########"
 				exit
 			else
 				writelog "$(date) - SKIP - ${FUNCNAME[0]} - continuing with the main game"
@@ -1240,6 +1273,7 @@ function launchCustomProg {
 					if [ "$ONLY_CUSTOMCMD" -eq 1 ]; then
 						writelog "$(date) - SKIP - ${FUNCNAME[0]} - as ONLY_CUSTOMCMD is enabled we're bailing out here"
 						closeSTL
+						writelog "$(date) - INFO - ######### STOP EARLY $PROGNAME $PROGVERS #########"
 						exit
 					else
 						writelog "$(date) - SKIP - ${FUNCNAME[0]} - continuing with the main game"
@@ -1275,70 +1309,79 @@ function launchCustomProg {
 
 function checkCustomLaunch {
 	# start a custom program:
-	if [ "$RUN_CUSTOMCMD" -eq 1 ] ; then
-		writelog "$(date) - INFO - ${FUNCNAME[0]} - RUN_CUSTOMCMD is set to 1 - trying to start custom program CUSTOMCMD"
-	# fork in background and continue
-		if [ "$FORK_CUSTOMCMD" -eq 1 ]; then
-			writelog "$(date) - INFO - ${FUNCNAME[0]} - FORK_CUSTOMCMD is set to 1 -  forking the custom program in background and continue"
-			launchCustomProg "$@" &
-	# or wait
+	if [ -n "$RUN_CUSTOMCMD" ] ; then
+		if [ "$RUN_CUSTOMCMD" -eq 1 ] ; then
+			writelog "$(date) - INFO - ${FUNCNAME[0]} - RUN_CUSTOMCMD is set to 1 - trying to start custom program CUSTOMCMD"
+		# fork in background and continue
+			if [ "$FORK_CUSTOMCMD" -eq 1 ]; then
+				writelog "$(date) - INFO - ${FUNCNAME[0]} - FORK_CUSTOMCMD is set to 1 -  forking the custom program in background and continue"
+				launchCustomProg "$@" &
+		# or wait
+			else
+				writelog "$(date) - INFO - ${FUNCNAME[0]} - FORK_CUSTOMCMD is set to 0 - starting the custom program regularly"
+				launchCustomProg "$@"
+			fi
+
+
+			if [ "$ONLY_CUSTOMCMD" -eq 1 ]; then
+				writelog "$(date) - INFO - ${FUNCNAME[0]} - ONLY_CUSTOMCMD is set to 1 means only custom program $CUSTOMCMD is supposed to start - exiting here"
+				closeSTL
+				writelog "$(date) - INFO - ######### STOP EARLY $PROGNAME $PROGVERS #########"
+				exit
+			fi
 		else
-			writelog "$(date) - INFO - ${FUNCNAME[0]} - FORK_CUSTOMCMD is set to 0 - starting the custom program regularly"
-			launchCustomProg "$@"
-		fi
-
-
-		if [ "$ONLY_CUSTOMCMD" -eq 1 ]; then
-			writelog "$(date) - INFO - ${FUNCNAME[0]} - ONLY_CUSTOMCMD is set to 1 means only custom program $CUSTOMCMD is supposed to start - exiting here"
-			closeSTL
-			writelog "$(date) - INFO - ######### STOP EARLY $PROGNAME $PROGVERS #########"
-			exit
-		fi
-	else
-		if [ -n "$CUSTOMCMD" ]; then
-			writelog "$(date) - SKIP - ${FUNCNAME[0]} - RUN_CUSTOMCMD is set to 0 therefore skipping the custom program $CUSTOMCMD"
+			if [ -n "$CUSTOMCMD" ]; then
+				writelog "$(date) - SKIP - ${FUNCNAME[0]} - RUN_CUSTOMCMD is set to 0 therefore skipping the custom program $CUSTOMCMD"
+			fi
 		fi
 	fi
 }
 
 function check3rdParty {
-	if [ "$AID" -eq "$CUSTOMLAUNCHID" ]; then
-		writelog "$(date) - INFO - ${FUNCNAME[0]} - customlaunch AppID $CUSTOMLAUNCHID started"
-		if [ "$RUN_CUSTOMCMD" -eq 1 ] ; then
-			if [ -n "$CUSTOMCMD" ];then
-				writelog "$(date) - INFO - ${FUNCNAME[0]} - CUSTOMCMD is set to $CUSTOMCMD - will start this directly "
-			else
-				if [ -x "$(command -v "$STEAM_ZENITY" 2>/dev/null)" ]; then
-					writelog "$(date) - INFO - ${FUNCNAME[0]} - RUN_CUSTOMCMD is enabled and CUSTOMCMD is empty, starting exe file-selection"
+	if [ -n "$AID" ] && [ -n "$CUSTOMLAUNCHID" ]; then
 
-					ZCUST="$("$STEAM_ZENITY" --title="Select EXE file" --file-selection --file-filter='exe files (exe) | *[EeXxEe]')"
-
-					if [ -n "$ZCUST" ]; then
-						ONLY_CUSTOMCMD=1
-						CUSTOMCMD="$ZCUST"
-						writelog "$(date) - INFO - ${FUNCNAME[0]} - will start $ZCUST in the $AID pfx"
-					else
-						writelog "$(date) - SKIP - ${FUNCNAME[0]} - nothing selected, exiting"
-						ONLY_CUSTOMCMD=1
-						closeSTL
-					fi
+		if [ "$AID" -eq "$CUSTOMLAUNCHID" ]; then
+			writelog "$(date) - INFO - ${FUNCNAME[0]} - customlaunch AppID $CUSTOMLAUNCHID started"
+			if [ "$RUN_CUSTOMCMD" -eq 1 ] ; then
+				if [ -n "$CUSTOMCMD" ];then
+					writelog "$(date) - INFO - ${FUNCNAME[0]} - CUSTOMCMD is set to $CUSTOMCMD - will start this directly "
 				else
-					writelog "$(date) - SKIP - ${FUNCNAME[0]} - $STEAM_ZENITY not found"
+					if [ -x "$(command -v "$STEAM_ZENITY" 2>/dev/null)" ]; then
+						writelog "$(date) - INFO - ${FUNCNAME[0]} - RUN_CUSTOMCMD is enabled and CUSTOMCMD is empty, starting exe file-selection"
+
+						ZCUST="$("$STEAM_ZENITY" --title="Select EXE file" --file-selection --file-filter='exe files (exe) | *[EeXxEe]')"
+
+						if [ -n "$ZCUST" ]; then
+							ONLY_CUSTOMCMD=1
+							CUSTOMCMD="$ZCUST"
+							writelog "$(date) - INFO - ${FUNCNAME[0]} - will start $ZCUST in the $AID pfx"
+						else
+							writelog "$(date) - SKIP - ${FUNCNAME[0]} - nothing selected, exiting"
+							ONLY_CUSTOMCMD=1
+							closeSTL
+							writelog "$(date) - INFO - ######### STOP EARLY $PROGNAME $PROGVERS #########"
+							exit
+						fi
+					else
+						writelog "$(date) - SKIP - ${FUNCNAME[0]} - $STEAM_ZENITY not found"
+					fi
 				fi
+			else
+				writelog "$(date) - INFO - ${FUNCNAME[0]} - RUN_CUSTOMCMD is disabled, starting the regular game"
 			fi
-		else
-			writelog "$(date) - INFO - ${FUNCNAME[0]} - RUN_CUSTOMCMD is disabled, starting the regular game"
 		fi
 	fi
 }
 
 function toggleWindows {
-	if [ "$TOGGLEWINDOWS" -eq 1 ]; then
-		if  [ -x "$(command -v "$WMCTRL" 2>/dev/null)" ]; then
-			writelog "$(date) - INFO - ${FUNCNAME[0]} - hiding windows is $1"
-			"$WMCTRL" -k "$1"
-		else
-			writelog "$(date) - SKIP - ${FUNCNAME[0]} - $WMCTRL not found"
+	if [ -n "$TOGGLEWINDOWS" ]; then
+		if [ "$TOGGLEWINDOWS" -eq 1 ]; then
+			if  [ -x "$(command -v "$WMCTRL" 2>/dev/null)" ]; then
+				writelog "$(date) - INFO - ${FUNCNAME[0]} - hiding windows is $1"
+				"$WMCTRL" -k "$1"
+			else
+				writelog "$(date) - SKIP - ${FUNCNAME[0]} - $WMCTRL not found"
+			fi
 		fi
 	fi
 }
@@ -1350,26 +1393,61 @@ function toggleWindows {
 
 function createW32PFX {
 	WPFX="$1"
-	LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" WINEARCH=win32 WINEPREFIX="$WPFX" "$WINECFG"
+
+	if [ -n "$WINETRICKSPAKS" ]; then
+		if  [ -x "$(command -v "$WINETRICKS" 2>/dev/null)" ]; then
+			writelog "$(date) - INFO - ${FUNCNAME[0]} - creating fresh 32bit WINEPREFIX by directly installing $WINETRICKSPAKS silently with $WINETRICKS"
+			checkWinetricksInstPak
+		else
+			writelog "$(date) - SKIP - ${FUNCNAME[0]} - $WINETRICKS not found - skipping WINETRICKSPAKS installation and just creating the WINEPREFIX"
+			LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" WINEARCH=win32 WINEPREFIX="$WPFX" "$WINECFG"
+		fi
+	else
+		LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" WINEARCH=win32 WINEPREFIX="$WPFX" "$WINECFG"
+	fi
+
+	if [ -d "$WPFX/drive_c/windows/syswow64" ];then
+		mv "$WPFX/drive_c/windows/syswow64" "$WPFX/drive_c/windows/syswow64-$(cut -c1-4 <<< $RANDOM)"
+	fi
+
+	if  [ -x "$(command -v "$SETUPDXVK" 2>/dev/null)" ]; then
+			mkdir "$WPFX/drive_c/windows/syswow64"
+			writelog "$(date) - INFO - ${FUNCNAME[0]} - installing 32bit dxvk  into the 32bit WINEPREFIX using $SETUPDXVK"
+			LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" WINEARCH=win32 WINEPREFIX="$WPFX" "$SETUPDXVK" install
+	else
+			writelog "$(date) - SKIP - ${FUNCNAME[0]} - $SETUPDXVK not found, but is required to install 32bit version of dxvk into the 32bit WINEPREFIX!"
+	fi
+
+	writelog "$(date) - OK - ${FUNCNAME[0]} - WINEPREFIX should be ready"
+	if [ ! -d "$WPFX/drive_c/windows/system32-SAVE" ]; then
+		writelog "$(date) - OK - ${FUNCNAME[0]} - copying $WPFX/drive_c/windows/system32 to $WPFX/drive_c/windows/system32-SAVE"
+		cp -R "$WPFX/drive_c/windows/system32" "$WPFX/drive_c/windows/system32-SAVE"
+	fi
 }
 
 # force 32bit pfx if FORCE32BITPFX is set
 
 function check32BitForce {
 	if [ "$FORCE32BITPFX" -eq 1 ]; then
-		writelog "$(date) - INFO - ${FUNCNAME[0]} - forcing 32bit prefix"
+		writelog "$(date) - INFO - ${FUNCNAME[0]} - forcing 32bit WINEPREFIX"
 		WPFX="$STEAM_COMPAT_DATA_PATH/pfx"
 		if [ -d "$WPFX" ];then
-			writelog "$(date) - INFO - ${FUNCNAME[0]} - wineprefix $WPFX exists - checking architecture"
+			writelog "$(date) - INFO - ${FUNCNAME[0]} - WINEPREFIX $WPFX exists - checking architecture"
 			if [ -f "$WPFX/drive_c/windows/syswow64/avifile.dll" ];then	# the dir alone is not enough as proton installs dxvk dlls into this dir, so looking for a random file from a clean win64 pfx
 				PFXBACK64="$WPFX"-BACK64
-				writelog "$(date) - INFO - ${FUNCNAME[0]} - wineprefix $WPFX is 64bit - creating a 32bit prefix instead"
+				writelog "$(date) - INFO - ${FUNCNAME[0]} - WINEPREFIX $WPFX is 64bit - creating a 32bit WINEPREFIX instead"
 				if [ ! -d "$PFXBACK64" ];then
+
+#					if [ "$AID" -eq "223220" ] ; then
+#						writelog "$(date) - INFO - ${FUNCNAME[0]} - Steam wants to install dotnet35 for $AID but dotnet40 is required - installing now using $WINETRICKS"
+#						LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" WINEDEBUG="-all" WINEPREFIX="$WPFX" "$WINETRICKS" --unattended "dotnet40"
+#					fi
+
 					mv "$WPFX" "$PFXBACK64"
-					writelog "$(date) - INFO - ${FUNCNAME[0]} - backed the 64bit pfx $WPFX to $PFXBACK64 - creating a 32bit prefix now"
+					writelog "$(date) - INFO - ${FUNCNAME[0]} - backed the 64bit pfx $WPFX to $PFXBACK64 - creating a 32bit WINEPREFIX now"
 					createW32PFX "$WPFX"
 					mkdir "$WPFX"/drive_c/windows/syswow64
-					writelog "$(date) - INFO - ${FUNCNAME[0]} - 32bit wineprefix $WPFX created"
+					writelog "$(date) - INFO - ${FUNCNAME[0]} - 32bit WINEPREFIX $WPFX created"
 				else
 					writelog "$(date) - SKIP - ${FUNCNAME[0]} - 64bit backup $PFXBACK64 already exists - please remove it manually if n longer required! - skipping FORCE32BITPFX"
 					FORCE32BITPFX=0
@@ -1384,103 +1462,211 @@ function check32BitForce {
 	fi
 }
 
-# start winetricks before game launch:
-function checkWinetricksLaunch {
-# gui:
-	if [ "$RUN_WINETRICKS" -eq 1 ]; then
-		if  [ -x "$(command -v "$WINETRICKS" 2>/dev/null)" ]; then
-			writelog "$(date) - INFO - ${FUNCNAME[0]} - launching $WINETRICKS before game start with following commandline:"
-			# several variables coming from steam have to be cleaned in order to get wine to work here
-			if [ "$FORCE32BITPFX" -eq 1 ]; then
-				writelog "$(date) - INFO - ${FUNCNAME[0]} - LC_ALL=\"\" PATH=\"/usr/local/bin:/usr/bin\" LD_LIBRARY_PATH=\"\" LD_PRELOAD=\"\" WINEARCH=win32 WINEPREFIX=\"$STEAM_COMPAT_DATA_PATH/pfx\" $WINETRICKS --gui"
-				mv "$WPFX/drive_c/windows/syswow64" "$WPFX/drive_c/windows/syswow64-off"
-				LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" WINEARCH=win32 WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx" "$WINETRICKS" --gui
-				mv "$WPFX/drive_c/windows/syswow64-off" "$WPFX/drive_c/windows/syswow64"
+function hackWin32 {
+	if [ "$FORCE32BITPFX" -eq 1 ]; then
+	# both Giana Sisters
+		if [ "$AID" -eq "246960" ]; then #  || [ "$AID" -eq "223220" ] ; then
+			if [ -n "$TWEAKWIN" ]; then
+				while true; do
+					if "$XWININFO" -name "${TWEAKWIN//\"/}" >/dev/null 2>/dev/null; then
+						LAUNCHPID="$("$XWININFO" -name "${TWEAKWIN//\"/}" -wm | grep "Process id:" | awk -F 'Process id: ' '{print $2}' | cut -d ' ' -f1)"
+						if [ -n "$LAUNCHPID" ]; then
+							writelog "$(date) - INFO - ${FUNCNAME[0]} - pid $LAUNCHPID found for $TWEAKWIN - replacing running system32"
+							WPFX="$STEAM_COMPAT_DATA_PATH/pfx"
+							LIVE32="$WPFX/drive_c/windows/system32"
+							SAVE64="$WPFX/drive_c/windows/system64-SAVE"
+							SAVE32="$WPFX/drive_c/windows/system32-SAVE"
+							if [ -d "$SAVE32" ]; then
+								if [ -d "$SAVE64" ]; then
+									rm -rf "$SAVE64"
+								fi
+								mv "$LIVE32" "$SAVE64"
+								cp -R "$SAVE32" "$LIVE32"
+								writelog "$(date) - OK - ${FUNCNAME[0]} -replaced $LIVE32 with $SAVE32"
+							else
+								writelog "$(date) - ERROR - ${FUNCNAME[0]} -$SAVE32 does not exist!"
+							fi
+							break
+						else
+							writelog "$(date) - INFO - ${FUNCNAME[0]} - waiting for pid $LAUNCHPID for launcher window $TWEAKWIN"
+							sleep 1
+						fi
+					fi
+				done
 			else
-				writelog "$(date) - INFO - ${FUNCNAME[0]} - LC_ALL=\"\" PATH=\"/usr/local/bin:/usr/bin\" LD_LIBRARY_PATH=\"\" LD_PRELOAD=\"\" WINEPREFIX=\"$STEAM_COMPAT_DATA_PATH/pfx\" $WINETRICKS --gui"
-				LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx" "$WINETRICKS" --gui
+				writelog "$(date) - SKIP - ${FUNCNAME[0]} -TWEAKWIN variable missing - looks like tweak file for $AID was not automatically loaded"
 			fi
-		else
-			writelog "$(date) - SKIP - ${FUNCNAME[0]} - $WINETRICKS not found - skipping"
 		fi
-	fi
-# silent
+	fi	
+}
+
+function checkWinetricksInstPak {
 	if [ -n "$WINETRICKSPAKS" ]; then
 		if  [ -x "$(command -v "$WINETRICKS" 2>/dev/null)" ]; then
+
+			if [ "$FORCE32BITPFX" -eq 1 ]; then
+				WARCH=win32
+			else
+				WARCH=win64
+			fi
+
+			WPFX="$STEAM_COMPAT_DATA_PATH/pfx"
+
 			writelog "$(date) - INFO - ${FUNCNAME[0]} - installing $WINETRICKSPAKS silently with $WINETRICKS"
 			IFS=" " read -r -a INSTWINETRICKSPAKS <<< "$WINETRICKSPAKS"
-			LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx" "$WINETRICKS" "${INSTWINETRICKSPAKS[@]}" -q
+# if everything goes well all packages are installed at once:
+			LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" WINEDEBUG="-all" WINEARCH="$WARCH" WINEPREFIX="$WPFX" "$WINETRICKS" --unattended "${INSTWINETRICKSPAKS[@]}"
+
+			WTLOG="$STEAM_COMPAT_DATA_PATH/pfx/winetricks.log"
+			if [ -f "$WTLOG" ]; then
+				WTCNT="$(wc -l "$WTLOG" | awk '{print $1}')"
+# if not this function tries to install the remaining ones one after another - pretty much untested so far:
+				if [ "${#INSTWINETRICKSPAKS[@]}" -gt "$WTCNT" ]; then
+					writelog "$(date) - INFO - ${FUNCNAME[0]} - some packages in WINETRICKSPAKS have not been installed yet only $WTCNT of ${#INSTWINETRICKSPAKS[@]} installed so far - trying again"
+
+					IFS=" " read -r -a ISINSTALLED <<<"$(cat "$WTLOG")"
+					IFS=" " read -r -a NOTINSTALLED <<< "$(comm -23 <(echo "${INSTWINETRICKSPAKS[*]}") <(echo "${ISINSTALLED[*]}"))"
+
+					if [ -n "${NOTINSTALLED[0]}" ]; then
+						for u in "${NOTINSTALLED[@]}"; do
+							writelog "$(date) - OK - ${FUNCNAME[0]} - ${#NOTINSTALLED[@]} of ${#INSTWINETRICKSPAKS[@]} - installing $u"
+							if [ "$FORCE32BITPFX" -eq 1 ]; then
+								mv "$WPFX/drive_c/windows/syswow64" "$WPFX/drive_c/windows/syswow64-$(cut -c1-4 <<< $RANDOM)"
+							fi
+							LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" WINEDEBUG="-all" WINEARCH="$WARCH" WINEPREFIX="$WPFX" "$WINETRICKS" --unattended "$u" 2>"/tmp/inst-$u.log"
+							IFS=" " read -r -a ISINSTALLED <<<"$(cat "$WTLOG")"
+							IFS=" " read -r -a NOTINSTALLED <<< "$(comm -23 <(echo "${INSTWINETRICKSPAKS[*]}") <(echo "${ISINSTALLED[*]}"))"
+						done
+					fi
+				else								
+					writelog "$(date) - OK - ${FUNCNAME[0]} - looks like all ${#INSTWINETRICKSPAKS[@]} packages in WINETRICKSPAKS have been installed successfully"
+				fi
+			else
+				writelog "$(date) - ERROR - ${FUNCNAME[0]} - $WINETRICKS log $WTLOG not found - this should not happen"
+			fi
 		else
 			writelog "$(date) - SKIP - ${FUNCNAME[0]} - $WINETRICKS not found - skipping"
 		fi
 	fi
 }
 
+# start winetricks before game launch:
+function checkWinetricksLaunch {
+# gui:
+	if [ -n "$RUN_WINETRICKS" ]; then
+		if [ "$RUN_WINETRICKS" -eq 1 ]; then
+			if  [ -x "$(command -v "$WINETRICKS" 2>/dev/null)" ]; then
+				writelog "$(date) - INFO - ${FUNCNAME[0]} - launching $WINETRICKS before game start with following commandline:"
+				# several variables coming from steam have to be cleaned in order to get wine to work here
+				if [ "$FORCE32BITPFX" -eq 1 ]; then
+					writelog "$(date) - INFO - ${FUNCNAME[0]} - LC_ALL=\"\" PATH=\"/usr/local/bin:/usr/bin\" LD_LIBRARY_PATH=\"\" LD_PRELOAD=\"\" WINEARCH=win32 WINEPREFIX=\"$STEAM_COMPAT_DATA_PATH/pfx\" $WINETRICKS --gui"
+					mv "$WPFX/drive_c/windows/syswow64" "$WPFX/drive_c/windows/syswow64-off"
+					LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" WINEDEBUG="-all" WINEARCH=win32 WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx" "$WINETRICKS" --gui
+					mv "$WPFX/drive_c/windows/syswow64-off" "$WPFX/drive_c/windows/syswow64"
+				else
+					writelog "$(date) - INFO - ${FUNCNAME[0]} - LC_ALL=\"\" PATH=\"/usr/local/bin:/usr/bin\" LD_LIBRARY_PATH=\"\" LD_PRELOAD=\"\" WINEPREFIX=\"$STEAM_COMPAT_DATA_PATH/pfx\" $WINETRICKS --gui"
+					LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" WINEDEBUG="-all" WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx" "$WINETRICKS" --gui
+				fi
+			else
+				writelog "$(date) - SKIP - ${FUNCNAME[0]} - $WINETRICKS not found - skipping"
+			fi
+		fi
+	fi
+# silent
+	checkWinetricksInstPak
+}
+
 # start $WINECFG before game launch:
 function checkWineCfgLaunch {
-	if [ "$RUN_WINECFG" -eq 1 ]; then
-		if  [ -x "$(command -v "$WINECFG" 2>/dev/null)" ]; then
-			writelog "$(date) - INFO - ${FUNCNAME[0]} - starting $WINECFG before game start:"
-			# several variables coming from steam have to be cleaned in order to get wine to work here
-			if [ "$FORCE32BITPFX" -eq 1 ]; then
-				writelog "$(date) - INFO - ${FUNCNAME[0]} - LC_ALL=\"\" PATH=\"/usr/local/bin:/usr/bin\" LD_LIBRARY_PATH=\"\" LD_PRELOAD=\"\" WINEARCH=win32 WINEPREFIX=\"$STEAM_COMPAT_DATA_PATH/pfx\" $WINECFG"
-				mv "$WPFX/drive_c/windows/syswow64" "$WPFX/drive_c/windows/syswow64-off"
-				LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" WINEARCH=win32 WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx" "$WINECFG"
-				mv "$WPFX/drive_c/windows/syswow64-off" "$WPFX/drive_c/windows/syswow64"
+	if [ -n "$RUN_WINECFG" ]; then
+		if [ "$RUN_WINECFG" -eq 1 ]; then
+			if  [ -x "$(command -v "$WINECFG" 2>/dev/null)" ]; then
+				writelog "$(date) - INFO - ${FUNCNAME[0]} - starting $WINECFG before game start:"
+				# several variables coming from steam have to be cleaned in order to get wine to work here
+				if [ "$FORCE32BITPFX" -eq 1 ]; then
+					writelog "$(date) - INFO - ${FUNCNAME[0]} - LC_ALL=\"\" PATH=\"/usr/local/bin:/usr/bin\" LD_LIBRARY_PATH=\"\" LD_PRELOAD=\"\" WINEARCH=win32 WINEPREFIX=\"$STEAM_COMPAT_DATA_PATH/pfx\" $WINECFG"
+					mv "$WPFX/drive_c/windows/syswow64" "$WPFX/drive_c/windows/syswow64-off"
+					LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" WINEARCH=win32 WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx" "$WINECFG"
+					mv "$WPFX/drive_c/windows/syswow64-off" "$WPFX/drive_c/windows/syswow64"
+				else
+					writelog "$(date) - INFO - ${FUNCNAME[0]} - LC_ALL=\"\" PATH=\"/usr/local/bin:/usr/bin\" LD_LIBRARY_PATH=\"\" LD_PRELOAD=\"\" WINEPREFIX=\"$STEAM_COMPAT_DATA_PATH/pfx\" winecfg"
+					LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx" "$WINECFG"
+				fi
 			else
-				writelog "$(date) - INFO - ${FUNCNAME[0]} - LC_ALL=\"\" PATH=\"/usr/local/bin:/usr/bin\" LD_LIBRARY_PATH=\"\" LD_PRELOAD=\"\" WINEPREFIX=\"$STEAM_COMPAT_DATA_PATH/pfx\" winecfg"
-				LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx" "$WINECFG"
+				writelog "$(date) - SKIP - ${FUNCNAME[0]} - $WINECFG not found - skipping"
 			fi
-		else
-			writelog "$(date) - SKIP - ${FUNCNAME[0]} - $WINECFG not found - skipping"
 		fi
 	fi
 }
 
 function customRegs {
-	if [ "$VIRTUALDESKTOP" -eq 1 ]; then
-		TEMPREG="/tmp/temp.reg"
-		if [ -f "$TEMPREG" ]; then
-			rm "$TEMPREG"
-		fi
-
-		if touch "$TEMPREG"; then
-			writelog "$(date) - INFO - ${FUNCNAME[0]} - VIRTUALDESKTOP is set to 1 - enabling virtual desktop"
-			{
-			echo "Windows Registry Editor Version 5.00"
-			echo "[HKEY_CURRENT_USER\Software\Wine\Explorer]"
-			echo "\"Desktop\"=\"Default\""
-			echo "[HKEY_CURRENT_USER\Software\Wine\Explorer\Desktops]"
-			echo "\"Default\"=\"$(xrandr | grep "\*" | awk '{print $1}')\""
-			} >> "$TEMPREG"
-
-			LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx" regedit "$TEMPREG"
-
+	if [ -n  "$VIRTUALDESKTOP" ]; then
+		if [ "$VIRTUALDESKTOP" -eq 1 ]; then
+			TEMPREG="/tmp/temp.reg"
 			if [ -f "$TEMPREG" ]; then
 				rm "$TEMPREG"
 			fi
 
-		else
-			writelog "$(date) - SKIP - ${FUNCNAME[0]} - could not create $TEMPREG - skipping!"
+			if touch "$TEMPREG"; then
+				writelog "$(date) - INFO - ${FUNCNAME[0]} - VIRTUALDESKTOP is set to 1 - enabling virtual desktop"
+				{
+				echo "Windows Registry Editor Version 5.00"
+				echo "[HKEY_CURRENT_USER\Software\Wine\Explorer]"
+				echo "\"Desktop\"=\"Default\""
+				echo "[HKEY_CURRENT_USER\Software\Wine\Explorer\Desktops]"
+				echo "\"Default\"=\"$(xrandr | grep "\*" | awk '{print $1}')\""
+				} >> "$TEMPREG"
+
+				LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx" regedit "$TEMPREG"
+
+				if [ -f "$TEMPREG" ]; then
+					rm "$TEMPREG"
+				fi
+
+			else
+				writelog "$(date) - SKIP - ${FUNCNAME[0]} - could not create $TEMPREG - skipping!"
+			fi
 		fi
 	fi
 }
 
 function useNyrna {
-	if [ "$RUN_NYRNA" -eq 1 ]; then
-		if  [ -x "$(command -v "$NYRNA" 2>/dev/null)" ]; then
-			if pgrep "$NYRNA" ; then
-				writelog "$(date) - SKIP - ${FUNCNAME[0]} - $NYRNA already running - skipping"
-				RUN_NYRNA=0
+	if [ -n "$RUN_NYRNA" ]; then
+		if [ "$RUN_NYRNA" -eq 1 ]; then
+			if  [ -x "$(command -v "$NYRNA" 2>/dev/null)" ]; then
+				if pgrep "$NYRNA" ; then
+					writelog "$(date) - SKIP - ${FUNCNAME[0]} - $NYRNA already running - skipping"
+					RUN_NYRNA=0
+				else
+				writelog "$(date) - INFO - ${FUNCNAME[0]} - starting $NYRNA"
+				"$NYRNA" &
+				fi
 			else
-			writelog "$(date) - INFO - ${FUNCNAME[0]} - starting $NYRNA"
-			"$NYRNA" &
+				writelog "$(date) - SKIP - ${FUNCNAME[0]} - $NYRNA not found"
 			fi
-		else
-			writelog "$(date) - SKIP - ${FUNCNAME[0]} - $NYRNA not found"
 		fi
 	fi
 }
+
+
+function useReplay {
+	if [ -n "$RUN_REPLAY" ]; then
+		if [ "$RUN_REPLAY" -eq 1 ]; then
+			if  [ -x "$(command -v "$REPLAY" 2>/dev/null)" ]; then
+				if pgrep "$REPLAY" ; then
+					writelog "$(date) - SKIP - ${FUNCNAME[0]} - $REPLAY already running - skipping"
+					RUN_REPLAY=0
+				else
+				writelog "$(date) - INFO - ${FUNCNAME[0]} - starting $REPLAY"
+				"$REPLAY" &
+				fi
+			else
+				writelog "$(date) - SKIP - ${FUNCNAME[0]} - $REPLAY not found"
+			fi
+		fi
+	fi
+}
+
 
 ### WINE END ###
 
@@ -1511,24 +1697,28 @@ function launchSteamProtonGame {
 	fi
 
 # shortcut to enable all required flags for SBSVR with vkbasalt
-	if [ "$SBSVRVK" -eq 1 ]; then
-		writelog "$(date) - INFO - $PROGNAME - SBSVRVK enabled - starting game in SBS-VR using vkbasalt"
-		export RUNSBSVR=1
-#		export RESHADE_DEPTH3D=1
-		export ENABLE_VKBASALT=1
-		export SBSVRRS=0
-		export USERESHADE=0
+	if [ -n "$SBSVRVK" ]; then
+		if [ "$SBSVRVK" -eq 1 ]; then
+			writelog "$(date) - INFO - $PROGNAME - SBSVRVK enabled - starting game in SBS-VR using vkbasalt"
+			export RUNSBSVR=1
+	#		export RESHADE_DEPTH3D=1
+			export ENABLE_VKBASALT=1
+			export SBSVRRS=0
+			export USERESHADE=0
+		fi
 	fi
 	
 # shortcut to enable all required flags for SBSVR with ReShade
-	if [ "$SBSVRRS" -eq 1 ]; then
-		writelog "$(date) - INFO - $PROGNAME - SBSVRVK enabled - starting game in SBS-VR using ReShade"
-		export RUNSBSVR=1
-		export INSTALL_RESHADE=1
-		export RESHADE_DEPTH3D=1
-		export USERESHADE=1
-		export SBSVRVK=0
-		export ENABLE_VKBASALT=0
+	if [ -n "$SBSVRRS" ]; then
+		if [ "$SBSVRRS" -eq 1 ]; then
+			writelog "$(date) - INFO - $PROGNAME - SBSVRVK enabled - starting game in SBS-VR using ReShade"
+			export RUNSBSVR=1
+			export INSTALL_RESHADE=1
+			export RESHADE_DEPTH3D=1
+			export USERESHADE=1
+			export SBSVRVK=0
+			export ENABLE_VKBASALT=0
+		fi
 	fi
 
 # notifier:
@@ -1537,6 +1727,10 @@ function launchSteamProtonGame {
 	fi
 
 #################
+
+# preload forced tweaks
+	preloadForcedTweaks
+
 # force 32bit pfx if  if FORCE32BITPFX is 1
 	check32BitForce "$@"
 	
@@ -1564,8 +1758,11 @@ function launchSteamProtonGame {
 # start game wih usevkBasalt ENABLE_VKBASALT is 1
 	usevkBasalt
 
-# start nyrna if RUN_NYRNA is 1
+# start $NYRNA if RUN_NYRNA is 1
 	useNyrna
+
+# start $REPLAY if RUN_REPLAY is 1
+	useReplay
 	
 # override tweak settings if USETWEAKS is 1
 	checkTweakLaunch
@@ -1601,10 +1798,24 @@ function launchSteamProtonGame {
 		LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" "${RUNNOINET[0]}" "${PROTONCMD[@]}"
 	elif [ "$USEGAMEMODERUN" -eq 1 ]; then
 		writelog "$(date) - INFO - ${FUNCNAME[0]} - starting $GAMENAME ($AID) with Proton: $(PROTONVERSION "$@") with $GAMEMODERUN"
-		"$GAMEMODERUN" "${PROTONCMD[@]}"
+			if [ "$FORCE32BITPFX" -eq 1 ]; then
+				writelog "$(date) - INFO - ${FUNCNAME[0]} - starting game in 32bit mode"
+				hackWin32 &
+				LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" LD_PRELOAD=0 "$GAMEMODERUN" "${PROTONCMD[@]}"
+			else
+				"$GAMEMODERUN" "${PROTONCMD[@]}"
+			fi
 	else
 		writelog "$(date) - INFO - ${FUNCNAME[0]} - starting $GAMENAME ($AID) with Proton: $(PROTONVERSION "$@")"
-		"${PROTONCMD[@]}"
+
+		if [ "$FORCE32BITPFX" -eq 1 ]; then
+			writelog "$(date) - INFO - ${FUNCNAME[0]} - starting game in 32bit mode"
+			hackWin32 &
+			LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" LD_PRELOAD=0 "${PROTONCMD[@]}"
+		else
+			"${PROTONCMD[@]}"
+		fi
+
 	fi
 	writelog "$(date) - STOP - ######### STOP $PROGNAME $PROGVERS #########"
 }
@@ -1617,23 +1828,42 @@ function closeSTL {
 	writelog "$(date) - INFO - ${FUNCNAME[0]} - game $GAMENAME ($AID) exited - cleaning up custom processes if necessary"
 
 # kill $VRVIDEOPLAYER in case it wasn't closed before
-	if [ "$RUNSBSVR" -ge 1 ]; then
-		if pgrep "$VRVIDEOPLAYER" ; then
-			pkill -9 "$VRVIDEOPLAYER" 
+	if [ -n "$RUNSBSVR" ]; then
+		if [ "$RUNSBSVR" -ge 1 ]; then
+			if pgrep "$VRVIDEOPLAYER" ; then
+				pkill -9 "$VRVIDEOPLAYER" 
+				writelog "$(date) - INFO - ${FUNCNAME[0]} - $VRVIDEOPLAYER killed"
+			fi
+		fi
+	fi
+	
+# kill $NYRNA if running
+	if [ -n "$RUN_NYRNA" ]; then
+		if [ "$RUN_NYRNA" -eq 1 ]; then
+			if pgrep "$NYRNA" ; then
+				pkill -9 "$NYRNA"
+				# also remove systray created in /tmp/ ("systray_" with 6 random chars should be save enough)
+				find /tmp -maxdepth 1 -type f -regextype posix-extended -regex '^.*systray_[A-Z,a-z,0-9]{6}' -exec rm {} \;
+				writelog "$(date) - INFO - ${FUNCNAME[0]} - $NYRNA killed"
+			fi
 		fi
 	fi
 
-# kill nyrna if running
-	if [ "$RUN_NYRNA" -eq 1 ]; then
-		NYRNA="nyrna"
-		if pgrep "$NYRNA" ; then
-			pkill -9 "$NYRNA" 
+# kill $REPLAY if running
+	if [ -n "$RUN_REPLAY" ]; then
+		if [ "$RUN_REPLAY" -eq 1 ]; then
+			if pgrep "$REPLAY" ; then
+				pkill -9 "$REPLAY"
+				writelog "$(date) - INFO - ${FUNCNAME[0]} - $REPLAY killed"
+			fi
 		fi
 	fi
 
 	if [ -n "$NETMON" ]; then
 		if pgrep "$NETMON" ; then
 			pkill -9 "$NETMON"
+			writelog "$(date) - INFO - ${FUNCNAME[0]} - $NETMON killed"
+
 # remove duplicate lines to make reading easier
 			sort -u "$NETMONDIR/$AID-$NETMON.log" -o "$NETMONDIR/$AID-$NETMON.log"
 		fi
@@ -1641,10 +1871,11 @@ function closeSTL {
 
 	toggleWindows off
 
+	writelog "$(date) - #########  ${FUNCNAME[0]} STOP $PROGNAME $PROGVERS #########"
+
 # should not be necessary, but in case a game forks and partly hangs this could help to gracefully exit wine. if you have doubts feel free to open an issue:
 	WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx" wineserver -k
 	pkill -9 "$PROGCMD" # wip - if the game quit this script should as well, but in theory it could still wait for something with a user defined duration (f.e. SAVESBSWINNAME)
-	writelog "$(date) - OK - ${FUNCNAME[0]} - finished"
 }
 
 ### CLOSE STL END ###

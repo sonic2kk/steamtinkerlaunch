@@ -71,6 +71,7 @@ Also enable everything you want in the freshly created
 * **tweaks**
 * **32bit wineprefix**
 * **nyrna per game**
+* **replay-sorcery per game**
 * **easy simple custom game launch**
 * **basic network monitoring**
 
@@ -89,6 +90,7 @@ For the optional features you need:
 - your favourite editor for editor mode and optionally a internetbrowser of your choice (default "firefox") for opening the protondb url of started game
 - vkbasalt
 - nyrna
+- replay-sorcery
 - wmctrl to optionally minimize/maximize all open windows on game start/stop
 - netstat from net-tools for basic network monitoring
 
@@ -108,6 +110,7 @@ Described are only the variables which come from **stl**, for all others please 
 - `BROWSER`: the browser used to open PROTONDB
 - `CUSTOMLAUNCHID`: SteamAppId where the custom game launcher is triggered
 - `RUN_NYRNA`: set to 1 to enable nyrna while game is running
+- `RUN_REPLAY`: set to 1 to enable replay-sorcery while game is running
 - `TOGGLEWINDOWS`: toggle visibility of all open windows on start/stop
 - `PDBURL`: protondb base url - for optional `PROTONDB`
 - `VRVIDEOPLAYER`: vr-video-player - the program used to play regular games in **VR**
@@ -175,6 +178,9 @@ If string `CUSTOMCMD` can't be found as file in either `PATH`, in game dir or as
 
 #### [Nyrna](https://github.com/Merrit/nyrna)
 * - `RUN_NYRNA`: "set to 1 to enable nyrna while game is running - overrides global config
+
+#### [ReplaySorcery](https://github.com/matanui159/ReplaySorcery)
+* - `RUN_REPLAY`: "set to 1 to enable replay-sorcery while game is running - overrides global config
 
 #### minimize all open windows on game start and maximize them when game exited using wmctrl
 - `TOGGLEWINDOWS`: toggle visibility of all open windows on start/stop
