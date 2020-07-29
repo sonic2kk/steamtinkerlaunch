@@ -12,6 +12,8 @@ and everything else can be changed and controlled easily using **stl**
 Just add this program to your steam game command line like:
 'stl %command%'
 
+![stl starter](https://media.giphy.com/media/gghbOGB41ggEsrq3KM/giphy.gif)
+
 ### game specific use:
 
 The base gamedirectory `STLCFGDIR` will be either `XDG_CONFIG_HOME/stl` or `$HOME/.config/stl` if `XDG_CONFIG_HOME` not set.
