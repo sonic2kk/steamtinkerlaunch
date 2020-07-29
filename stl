@@ -40,11 +40,21 @@ function howto {
 	echo "-----------------------"
 	echo "  When starting a game with $PROGCMD it will check if a config file exists in $STLGAMEDIR/$SteamAppId.conf for the game"
 	echo "  if it is not available it is created from the default config file (which is automatically created if not found)."
+	echo "  $PROGCMD also has a global configfile $STLDEFGLOBALCFG, all settings configured in here are initialized at first and therefore are default for all games,"
+	echo "  and will only be overridden, if the game specific config $STLGAMEDIR/$SteamAppId.conf has an other value"
 	echo ""
 	echo "  When starting the game a small requester will popup (default 2 seconds)."
 	echo "  When you want to change settings for that game press space to open the game configuration and adjust it to your needs."
 	echo "  The game start will wait until you're done and your changes are used on the fly."
 	echo "  for more functions please check the configs and or the README - if something is not clear please file a bugreport on the projectpage $PROJECTPAGE"
+	echo ""
+	echo "  you can also change settings via commandline with"
+	echo "  'stl set ENTRY ($SteamAppId or 'all') VALUE'"
+	echo "  example:"
+	echo "  'stl set PROTON_DEBUG_DIR_FILE 1232570 /random/path/'"
+	echo "  will set PROTON_DEBUG_DIR for the game 1232570 to /random/path/ if the game has a config file in $STLGAMEDIR"
+	echo "  'stl set RUN_REPLAY all 1'"
+	echo "  will enable RUN_REPLAY in all game config files found in $STLGAMEDIR"
 }
 
 ### default vars ###
@@ -476,8 +486,13 @@ RS_D9_DEST="d3d9.dll"
 
 # prepare reshade files if not found:
 function prepareReshadeFiles {
-# create config if not found:
-	if [ ! -f "$STLRSCFG" ]; then
+	THISCFG="$STLRSCFG"
+
+	if [ -f "$THISCFG" ]; then
+		# add missing config entries in the default global config:
+		updateConfigFile "$THISCFG" "prepareReshadeFiles"
+	else
+		# create config if not found:
 		writelog "$(date) - INFO - ${FUNCNAME[0]} - creating $STLRSCFG"
 		{
 		echo "## ReShade online ressources - see README:"
@@ -492,8 +507,9 @@ function prepareReshadeFiles {
 		echo "RS_D3D47_32=d3dcompiler_47_32.dll"
 		echo "RS_64=ReShade64.dll"
 		echo "RS_32=ReShade32.dll"
-		} >> "$STLRSCFG"
+		} >> "$THISCFG"
 	fi
+#ENDprepareReshadeFiles
 
 	exportCfgFile "$STLRSCFG"
 
@@ -798,12 +814,39 @@ function createProjectDirs {
 	mkProjDir "$RESHADESRCDIR" "$INSTALL_RESHADE"
 }
 
+# add missing config entries to configfile $1 using seperator $2:
+function updateConfigFile {
+	CFGFILE="$1"
+	SEP="$2"
+	while read -r ENTRY; do
+		if ! grep "$ENTRY=" "$CFGFILE" >/dev/null ; then
+			writelog "$(date) UPDATE- ${FUNCNAME[0]} - entry $ENTRY is missing in $CFGFILE - adding it now!"
+			ELINE="$(sed -n "/^function $SEP/,/^#END$SEP/p;/^#END$SEP/q" "$0" | grep "$ENTRY=" | awk -F 'echo ' '{print $2}' | sed 's/\"//g')"
+			EDESC="$(grep -B1 "$ELINE" "$0" | head -n1 | awk -F 'echo ' '{print $2}' | sed 's/\"//g')"
+
+			if grep "##" <<< "$EDESC"; then
+				writelog "$(date) UPDATE- ${FUNCNAME[0]} - adding description previous line $EDESC"
+				echo "$EDESC" >> "$CFGFILE"
+			fi
+			
+			writelog "$(date) UPDATE- ${FUNCNAME[0]} - adding line $ELINE"
+			echo "$ELINE" >> "$CFGFILE"
+#		else
+#			writelog "$(date) - SKIP - ${FUNCNAME[0]} - entry $ENTRY already in $CFGFILE"
+		fi
+	done <<< "$(sed -n "/^function $SEP/,/^#END$SEP/p;/^#END$SEP/q" "$0" | grep "echo" | grep "=" | cut -d '"' -f2 | cut -d '=' -f1 | sed 's/^#//')"
+}
+
 # create the default global config if not found:
 function createDefaultGlobalCfg {
-
 	mkProjDir "$STLCFGDIR" 1
 
-	if [ ! -f "$STLDEFGLOBALCFG" ]; then
+	THISCFG="$STLDEFGLOBALCFG"
+
+	if [ -f "$THISCFG" ]; then
+		# add missing config entries in the default global config:
+		updateConfigFile "$THISCFG" "createDefaultGlobalCfg"
+	else
 		echo "default global config not found - creating it"
 		{
 		echo "## create an empty \$STLDXVKCFG_tmpl for easier editing when required"
@@ -868,13 +911,20 @@ function createDefaultGlobalCfg {
 		echo "CLONE_DEPTH3D=0"
 		echo "## Depth3D sourcefiles:"
 		echo "DEPTH3DSRCDIR=$STLCFGDIR/Depth3D"
-		} >> "$STLDEFGLOBALCFG"
+		} >> "$THISCFG"
 	fi
 }
+#ENDcreateDefaultGlobalCfg
+
 
 # create the default cfg "$STLDEFGAMECFG" if not found:
 function createDefaultGameCfg {
-	if [ ! -f "$STLDEFGAMECFG" ]; then
+	THISCFG="$STLDEFGAMECFG"
+
+	if [ -f "$THISCFG" ]; then
+		# add missing config entries in the default game config template STLDEFGAMECFG:
+		updateConfigFile "$THISCFG" "createDefaultGameCfg"
+	else
 		writelog "$(date) - 404 - ${FUNCNAME[0]} - default game template config $STLDEFGAMECFG not found - creating it"
 		{
 		echo "## set to 1 to override settings with tweaks when found - overrides USETWEAKS in global config"
@@ -975,15 +1025,21 @@ function createDefaultGameCfg {
 		echo "#NETMON=netstat"
 		echo "## options for NETMON - overrides global config:"
 		echo "#NETOPTS=-taucp -W"
-		} >> "$STLDEFGAMECFG"
+		} >> "$THISCFG"
 	fi
 }
+#ENDcreateDefaultGameCfg
 
 # create game configs:
 function createGameCfg {
 # MAIN GAME CONFIG STLDEFGAMECFG:
 
-	if [ ! -f "$STLGAMECFG" ] ; then
+	THISCFG="$STLGAMECFG"
+
+	if [ -f "$THISCFG" ]; then
+		# add missing config entries in the default global config:
+		updateConfigFile "$THISCFG" "createDefaultGameCfg"
+	else
 		{
 		echo "#########"
 		echo "#$PROGNAME $PROGVERS"
@@ -997,7 +1053,7 @@ function createGameCfg {
 		echo "## vkbasalt config file:"
 		echo "VKBASALT_CONFIG_FILE=$STLCFGDIR/vkBasalt.conf"
 		cat "$STLDEFGAMECFG"
-		} >> "$STLGAMECFG"
+		} >> "$THISCFG"
 	fi
 
 # DXVK CONFIG TEMPLATE:
@@ -1132,9 +1188,14 @@ function updateConfigEntry {
 ### LOG START ###
 
 function writelog {
+	if [ -z "$WRITELOG" ]; then
+		WRITELOG=1
+	fi
+	
 	if [ "$WRITELOG" -eq 1 ]; then
 		echo "$1" >> "$LOGDIR/$AID.log"
 	fi
+
 }
 
 ### LOG END ###
@@ -1900,9 +1961,51 @@ else
 		closeSTL
 		writelog "$(date) - ######### STOP $PROGNAME $PROGVERS #########"
 	else
-		echo "$@"
-		echo "doesn't contain waitforexitandrun - this doesn't look like a steam proton launch command"
-		createDefaultCfgs
-		howto
+#		echo "$* doesn't contain waitforexitandrun - this doesn't look like a steam proton launch command"
+		if [ "$1" == "set" ]; then
+			if [ -n "$2" ]; then
+					ENTLIST="$(sed -n "/^function createDefaultGameCfg/,/^#ENDcreateDefaultGameCfg/p;/^#ENDcreateDefaultGameCfg/q" "$0" | grep "echo"  | grep "=" | cut -d '"' -f2 | cut -d '=' -f1 | sed 's/^#//')"
+					if ! grep "$2" <<< "$ENTLIST" >/dev/null; then
+						echo "$2 is no valid entry - valid are:"
+						echo "-----------------------"
+						echo "$ENTLIST"
+						echo "-----------------------"
+						exit
+					fi
+				if [ -n "$3" ]; then
+					if [ -z "$4" ]; then
+						echo "argument 4 is missing - exit"
+						exit
+					else
+						if [ "$3" == "all" ]; then
+							echo "arg3 is all - updating all config files in $STLGAMEDIR:"
+							find "$STLGAMEDIR" -name "*.conf" | while read -r file; do
+								echo "updating entry $2 to value $4 in config $file"
+								updateConfigEntry "$2" "$4" "$file"
+							done
+						else
+							if [ -f "$STLGAMEDIR/$3.conf" ]; then
+								echo "updating entry $2 to value $4 in config $STLGAMEDIR/$3.conf"
+								updateConfigEntry "$2" "$4" "$STLGAMEDIR/$3.conf"
+								else
+								echo "config file $STLGAMEDIR/$3.conf does not exist - nothing to do - exit"
+								exit
+							fi
+						fi
+					fi
+				else
+					echo "arg3 is missing, you need to provide either the SteamAppId of the game or 'all' to batch update all gameconfig with the chosen entry!"
+					exit	
+				fi
+			else
+				echo "arg2 is missing, you need to provide a valid config entry which should be updated!"
+				exit
+			fi
+		else
+			echo "-----------------------"
+			echo "arg1 $1 is no valid command"
+			createDefaultCfgs
+			howto
+		fi
 	fi
 fi
