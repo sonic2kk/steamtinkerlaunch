@@ -51,7 +51,7 @@ files in `tweaks` to `/usr/share/stl/tweaks/`, they will be found there
 
 ## Quickstart:
 In the shipped default configs almost everything is disabled.
-* at least make sure that STLEDITOR is a valid text editor (per default set to "geany") in `$STLCFGDIR/global.conf`
+* at least make sure that `STLEDITOR` is a valid text editor (per default set to "geany") in `$STLCFGDIR/global.conf`
 Also enable everything you want in the freshly created
 `$STLCFGDIR/default_template.conf`
 
@@ -129,7 +129,9 @@ Described are only the variables which come from **stl**, for all others please 
 - `SAVESBSWINNAME`: seconds to wait to automatically save a new basic SBS tweak config of the running game with the gamewindow name after game launch - 0 to disable - 1 to pick a window"
 - `NOINET`: if set this command is used to block the internet for the selected game. game might fail to start!
 - `NETMON`: program to record game network-traffic with arguments `NETOPTS` - used when enabled
-		
+- `REGEDIT`: set to 1 to auto-apply registry files for AID when found or enter a registry filename which should be loaded from either `GLOBALREGDIR` or `STLREGDIR`
+- `GLOBALREGDIR`: directory with global registry files
+
 If you do not want to start the editor requester on game launch generally just set `WAITEDITOR=0` - it will be skipped then for all games
 
 ### Functions in detail:
@@ -339,3 +341,41 @@ For now just copy tweak configs into your `TWEAKDIR` directory if you want to us
 If you use/create tweaks make sure to retest your game with later proton versions without the tweak (`USETWEAKS=0`) and report upstream if the bug is fixed!
 The used proton Version is automatically written into the tweak file when created with `CREATETWEAKS`
 user tweak-files in `TWEAKDIR` override global ones in `GLOBALTWEAKDIR`
+
+
+#### automatic config loading based on steam game category
+
+On game launch **stl** reads the name of every steam category the game is in and loads a config file with the same name if it is available in `STLCATEGORYDIR`
+(`STLCFGDIR`/categories). Multiple configfiles are possible, they are loaded one after another, with the last one overriding settings also found in the previous files.
+All settings which are also configured in `$STLGAMECFG` are overridden (but not overwritten) by the category config files.
+It is up to you to define useful categories and configfiles.
+
+Example:
+If you add the game 'Alien Isolation (214490)' into the self-created steam category "ReShadeVR",
+**stl** will try to find the config file `STLCATEGORYDIR/ReShadeVR.conf` and load it if it is available.
+So if the file looks like this:
+
+```
+SBSVRRS=1
+TOGGLEWINDOWS=1
+```
+
+**stl** will
+- install ReShade into the gamedir
+- install Depth3D side-by-side shader into the gamedir
+- will start SteamVR
+- will start the game
+- will vr-video-player showing the game window if found
+- will minimize all windows but the game and the vr-video-player window
+
+So if everything works well using this example (ReShade has to be configured initially once and ideally the game window name is known (best automatically found with `SAVESBSWINNAME`))
+you just have to drop some game into the category "ReShadeVR" and the game will be started automatically in VR.
+
+#### auto-applying registry files:
+if `REGEDIT` is
+- set to 0 it will be skipped completely
+- set to 1 a registry file `$SteamAppId.reg` will be searched and used in `GLOBALREGDIR` and `STLREGDIR`
+- set to anything else the file `$REGEDIT` will be searched and used in `GLOBALREGDIR` and `STLREGDIR`
+
+when a registry file from above was applied `REGEDIT` will be set to "0" in the game config, to skip regedit on the following game starts
+
