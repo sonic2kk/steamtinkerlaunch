@@ -5,7 +5,7 @@
 ### project ###
 
 PROGNAME="SteamTinkerLaunch"
-PROGVERS="v1.0.2"
+PROGVERS="v1.0.3"
 PROGCMD="$(basename "$0")"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -824,7 +824,8 @@ function updateConfigFile {
 		if ! grep "$ENTRY=" "$CFGFILE" >/dev/null ; then
 			writelog "$(date) UPDATE- ${FUNCNAME[0]} - entry $ENTRY is missing in $CFGFILE - adding it now!"
 			ELINEG="$(sed -n "/^function $SEP/,/^#END$SEP/p;/^#END$SEP/q" "$0" | grep "$ENTRY=" | awk -F 'echo ' '{print $2}' | sed 's/\"//g')"
-			ELINE="${ELINEG//\$PROGCMD/$PROGCMD}"
+			ELINEP="${ELINEG//\$PROGCMD/$PROGCMD}"
+			ELINE="${ELINEP//\$HOME/$HOME}"
 			EDESC="$(grep -B1 "$ELINEG" "$0" | head -n1 | awk -F 'echo ' '{print $2}' | sed 's/\"//g')"
 
 			if grep "##" <<< "$EDESC"; then
@@ -918,6 +919,10 @@ function createDefaultGlobalCfg {
 		echo "BOXTRONCMD=/usr/share/boxtron/run-dosbox"
 		echo "## boxtron args:"
 		echo "BOXTRONARGS=--wait-before-run"
+		echo "## the roberta command:"
+		echo "ROBERTACMD=$HOME/.local/share/Steam/compatibilitytools.d/roberta/run-vm"
+		echo "## roberta args:"
+		echo "ROBERTAARGS=--wait-before-run"
 		echo "##### SideBySide #####"
 		echo "## Depth3D git project:"
 		echo "DEPTH3DURL=https://github.com/BlueSkyDefender/Depth3D.git"
@@ -989,8 +994,10 @@ function createDefaultGameCfg {
 		echo "RUN_WINECFG=0"
 		echo "## set to 1 to enable virtualdesktop for the game"
 		echo "VIRTUALDESKTOP=0"
-		echo "## set to 1 to start the game using boxtron"
+		echo "## set to 1 to start the game using boxtron/dosbox"
 		echo "USEBOXTRON=0"
+		echo "## set to 1 to start the game using roberta/scummvm"
+		echo "USEROBERTA=0"
 		echo "## set to 1 to auto-apply registry files for AID when found or enter a registry filename which should be loaded from either GLOBALREGDIR or STLREGDIR - overrides global config"
 		echo "#REGEDIT=1"
 		echo "## set to 1 to install ReShade:"
@@ -2003,7 +2010,20 @@ function launchSteamProtonGame {
 				unset PULSE_LATENCY_MSEC
 				"${RUNBOXTRONCMD[@]}"
 			else
-				writelog "$(date) - ERROR - ${FUNCNAME[0]} -  boxtron command $BOXTRONCMD $BOXTRONARGS not found - exit"
+				writelog "$(date) - ERROR - ${FUNCNAME[0]} -  boxtron command $BOXTRONCMD not found - exit"
+				exit
+			fi
+# start with roberta:
+	elif [ "$USEROBERTA" -eq 1 ]; then
+			VMEXE="$(echo "${PROTONCMD[*]}" | awk -F 'waitforexitandrun ' '{print $2}')"
+			if  [ -x "$(command -v "$ROBERTACMD" 2>/dev/null)" ]; then
+				writelog "$(date) - INFO - ${FUNCNAME[0]} - starting game $AID with roberta: $ROBERTACMD $ROBERTAARGS $VMEXE"
+				RUNROBERTACMD=("$ROBERTACMD" "$ROBERTAARGS" "$VMEXE")
+				# unset PULSE_LATENCY_MSEC else audio gets stuck
+				#unset PULSE_LATENCY_MSEC
+				LD_LIBRARY_PATH="" "${RUNROBERTACMD[@]}"
+			else
+				writelog "$(date) - ERROR - ${FUNCNAME[0]} -  roberta command $ROBERTACMD not found - exit"
 				exit
 			fi
 # start with gamemoderun:

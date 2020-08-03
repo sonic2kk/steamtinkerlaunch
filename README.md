@@ -96,6 +96,7 @@ For the optional features you need:
 - wmctrl to optionally minimize/maximize all open windows on game start/stop
 - netstat from net-tools for basic network monitoring
 - boxtron to optionally start dos games with linux native dosbox
+- scummvm to optionally start scummvm compatible games natively using [Roberta](https://github.com/dreamer/roberta)
 
 ## Configuration:
 
@@ -386,6 +387,7 @@ when a registry file from above was applied `REGEDIT` will be set to "0" in the 
 #### [Boxtron](https://github.com/dreamer/boxtron):
 
 The global configs `BOXTRONCMD` and `BOXTRONARGS` in `STLDEFGLOBALCFG` need to be set correcty initially.
+It should not be necessary to change the default `ROBERTAARGS`.
 Defaults are:
 **
 BOXTRONCMD=/usr/share/boxtron/run-dosbox
@@ -394,7 +396,21 @@ BOXTRONARGS=--wait-before-run
 which is at least valid if you are on Arch Linux and installed boxtron from AUR.
 
 To start a game with boxtron either set `USEBOXTRON` in the gameconfig `$STLGAMECFG` or put the game into the steam category "DOSBox"
-(the global `/usr/share/stl/categories/DOSBox.conf` will be autoused then)
+(the global `/usr/share/stl/categories/DOSBox.conf` will be autoused then).
+Alternatively duplicate the file to a different name which you want to use as category name, ideally into `STLCATEGORYDIR`.
 
+#### [Roberta](https://github.com/dreamer/roberta):
 
- 
+The global configs `ROBERTACMD` and `ROBERTAARGS` in `STLDEFGLOBALCFG` need to be set correcty initially.
+It should not be necessary to change the default `ROBERTAARGS`.
+Defaults are:
+**
+ROBERTACMD=$HOME/.local/share/Steam/compatibilitytools.d/roberta/run-vm
+ROBERTAARGS=--wait-before-run
+**
+which is at least valid if you installed roberta manually.
+
+To start a game with roberta either set `USEROBERTA` in the gameconfig `$STLGAMECFG` or put the game into the steam category "ScummVM"
+(the global `/usr/share/stl/categories/ScummVM.conf` will be autoused then).
+Alternatively duplicate the file to a different name which you want to use as category name, ideally into `STLCATEGORYDIR`.
+
