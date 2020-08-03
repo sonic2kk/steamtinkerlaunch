@@ -95,6 +95,7 @@ For the optional features you need:
 - replay-sorcery
 - wmctrl to optionally minimize/maximize all open windows on game start/stop
 - netstat from net-tools for basic network monitoring
+- boxtron to optionally start dos games with linux native dosbox
 
 ## Configuration:
 
@@ -131,7 +132,10 @@ Described are only the variables which come from **stl**, for all others please 
 - `NETMON`: program to record game network-traffic with arguments `NETOPTS` - used when enabled
 - `REGEDIT`: set to 1 to auto-apply registry files for AID when found or enter a registry filename which should be loaded from either `GLOBALREGDIR` or `STLREGDIR`
 - `GLOBALREGDIR`: directory with global registry files
-
+- `GLOBALCATEGORYDIR`: directory for global steam category configs
+- `BOXTRONCMD`: the boxtron command
+- `BOXTRONARGS`: boxtron args
+			
 If you do not want to start the editor requester on game launch generally just set `WAITEDITOR=0` - it will be skipped then for all games
 
 ### Functions in detail:
@@ -379,3 +383,18 @@ if `REGEDIT` is
 
 when a registry file from above was applied `REGEDIT` will be set to "0" in the game config, to skip regedit on the following game starts
 
+#### [Boxtron](https://github.com/dreamer/boxtron):
+
+The global configs `BOXTRONCMD` and `BOXTRONARGS` in `STLDEFGLOBALCFG` need to be set correcty initially.
+Defaults are:
+**
+BOXTRONCMD=/usr/share/boxtron/run-dosbox
+BOXTRONARGS=--wait-before-run
+**
+which is at least valid if you are on Arch Linux and installed boxtron from AUR.
+
+To start a game with boxtron either set `USEBOXTRON` in the gameconfig `$STLGAMECFG` or put the game into the steam category "DOSBox"
+(the global `/usr/share/stl/categories/DOSBox.conf` will be autoused then)
+
+
+ 

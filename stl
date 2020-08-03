@@ -5,7 +5,7 @@
 ### project ###
 
 PROGNAME="SteamTinkerLaunch"
-PROGVERS="v1.0.0"
+PROGVERS="v1.0.1"
 PROGCMD="$(basename "$0")"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -711,7 +711,7 @@ function useReshade {
 function exportCfgFile {
 	CFGFILE="$1"
 	while read -r line; do
-		if  grep -q -v "^#" <<< "$line"; then
+		if  grep -q -v "^#\|^$" <<< "$line"; then
 			export "${line?}"
 		fi
 	done < "$CFGFILE"
@@ -823,8 +823,9 @@ function updateConfigFile {
 	while read -r ENTRY; do
 		if ! grep "$ENTRY=" "$CFGFILE" >/dev/null ; then
 			writelog "$(date) UPDATE- ${FUNCNAME[0]} - entry $ENTRY is missing in $CFGFILE - adding it now!"
-			ELINE="$(sed -n "/^function $SEP/,/^#END$SEP/p;/^#END$SEP/q" "$0" | grep "$ENTRY=" | awk -F 'echo ' '{print $2}' | sed 's/\"//g')"
-			EDESC="$(grep -B1 "$ELINE" "$0" | head -n1 | awk -F 'echo ' '{print $2}' | sed 's/\"//g')"
+			ELINEG="$(sed -n "/^function $SEP/,/^#END$SEP/p;/^#END$SEP/q" "$0" | grep "$ENTRY=" | awk -F 'echo ' '{print $2}' | sed 's/\"//g')"
+			ELINE="${ELINEG//\$PROGCMD/$PROGCMD}"
+			EDESC="$(grep -B1 "$ELINEG" "$0" | head -n1 | awk -F 'echo ' '{print $2}' | sed 's/\"//g')"
 
 			if grep "##" <<< "$EDESC"; then
 				writelog "$(date) UPDATE- ${FUNCNAME[0]} - adding description previous line $EDESC"
@@ -910,6 +911,13 @@ function createDefaultGlobalCfg {
 		echo "GLOBALSBSTWEAKDIR=/usr/share/$PROGCMD/sbs"
 		echo "## directory with global tweaks"
 		echo "GLOBALTWEAKDIR=/usr/share/$PROGCMD/tweaks"
+		echo "## directory for global steam category configs:"
+		echo "GLOBALCATEGORYDIR=/usr/share/$PROGCMD/categories"
+		echo "## directory for global steam category configs:"
+		echo "## the boxtron command:"
+		echo "BOXTRONCMD=/usr/share/boxtron/run-dosbox"
+		echo "## boxtron args:"
+		echo "BOXTRONARGS=--wait-before-run"
 		echo "##### SideBySide #####"
 		echo "## Depth3D git project:"
 		echo "DEPTH3DURL=https://github.com/BlueSkyDefender/Depth3D.git"
@@ -981,6 +989,8 @@ function createDefaultGameCfg {
 		echo "RUN_WINECFG=0"
 		echo "## set to 1 to enable virtualdesktop for the game"
 		echo "VIRTUALDESKTOP=0"
+		echo "## set to 1 to start the game using boxtron"
+		echo "USEBOXTRON=0"
 		echo "## set to 1 to auto-apply registry files for AID when found or enter a registry filename which should be loaded from either GLOBALREGDIR or STLREGDIR - overrides global config"
 		echo "#REGEDIT=1"
 		echo "## set to 1 to install ReShade:"
@@ -1206,14 +1216,26 @@ function autoCategorySettings {
 			mkdir "$STLCATEGORYDIR"
 		fi
 	
-		if [ -d "$STLCATEGORYDIR" ]; then
+		if [ -d "$STLCATEGORYDIR" ] || [ -d "$GLOBALCATEGORYDIR" ] ; then
 			while read -r SCAT; do
-				SCATCONF="$STLCATEGORYDIR/$SCAT.conf"
-				if [ -f "$SCATCONF" ]; then
-					writelog "$(date) - OK - ${FUNCNAME[0]} - config $SCATCONF found - loading its settings"
-					exportCfgFile "$SCATCONF"
-				else
-					writelog "$(date) - SKIP - ${FUNCNAME[0]} - config $SCATCONF not found - skipping"
+				if [ -d "$GLOBALCATEGORYDIR" ] ; then
+					GLOBALSCATCONF="$GLOBALCATEGORYDIR/$SCAT.conf"
+					if [ -f "$GLOBALSCATCONF" ]; then
+						writelog "$(date) - OK - ${FUNCNAME[0]} - config $GLOBALSCATCONF found - loading its settings"
+						exportCfgFile "$GLOBALSCATCONF"
+					else
+						writelog "$(date) - SKIP - ${FUNCNAME[0]} - config $GLOBALSCATCONF not found - skipping"
+					fi
+				fi
+
+				if [ -d "$STLCATEGORYDIR" ] ; then
+					SCATCONF="$STLCATEGORYDIR/$SCAT.conf"
+					if [ -f "$SCATCONF" ]; then
+						writelog "$(date) - OK - ${FUNCNAME[0]} - config $SCATCONF found - loading its settings"
+						exportCfgFile "$SCATCONF"
+					else
+						writelog "$(date) - SKIP - ${FUNCNAME[0]} - config $SCATCONF not found - skipping"
+					fi
 				fi
 			done <<< "$(sed -n "/\"$AID\"/,/}/p;" "$SC" | sed -n "/\"tags\"/,/}/p" | sed -n "/{/,/}/p" | grep -v '{\|}' | awk '{print $2}' | sed "s:\"::g")"
 		else
@@ -1314,7 +1336,7 @@ function preloadForcedTweaks {
 		writelog "$(date) - INFO - ${FUNCNAME[0]} - Unravel Two requires quartz and registry entry"
 		export USETWEAKS=1
 	fi
-		
+			
 # broken - see: https://github.com/ValveSoftware/Proton/issues/1658#issuecomment-663941844
 #	if [ "$AID" -eq "223220" ]; then	# Giana Sisters - Twisted Dreams
 #		writelog "$(date) - INFO - ${FUNCNAME[0]} - Giana Sisters - Twisted Dreams ($AID) needs hacks to get it to work"
@@ -1823,16 +1845,21 @@ function launchSteamProtonGame {
 
 	writelog "$(date) - ######### START $PROGNAME $PROGVERS #########"
 	writelog "$(date) - INFO - ${FUNCNAME[0]} - $PROGNAME - game launch args $*"
-	
+
+	writelog "$(date) - INFO - ${FUNCNAME[0]} createGameCfg:"
 	createGameCfg "$@"
 
+	writelog "$(date) - INFO - ${FUNCNAME[0]} - editGameConfig:"
 	editGameConfig
 
+
 # we already created  ProjectDirs in createDefaultCfgs but in case a path was changed, we retry here
+	writelog "$(date) - INFO - ${FUNCNAME[0]} - createProjectDirs:"
 	createProjectDirs
 
 # export game specific variables, exports die with this script, so no worries:
 	writelog "$(date) - INFO - ${FUNCNAME[0]} - exporting game specific variables"
+	writelog "$(date) - INFO - ${FUNCNAME[0]} - exportCfgFile:"
 	exportCfgFile "$STLGAMECFG"
 
 # export DXVK_CONFIG_FILE if STLDXVKCFG was found:
@@ -1841,6 +1868,8 @@ function launchSteamProtonGame {
 	fi
 
 # autoapply configuration settings based on the steam categories the game is in:
+
+	writelog "$(date) - INFO - ${FUNCNAME[0]} - autoCategorySettings:"
 	autoCategorySettings
 
 # shortcut to enable all required flags for SBSVR with vkbasalt
@@ -1876,73 +1905,108 @@ function launchSteamProtonGame {
 #################
 
 # preload forced tweaks
+	writelog "$(date) - INFO - ${FUNCNAME[0]} - preloadForcedTweaks:"
 	preloadForcedTweaks
 
 # override tweak settings if USETWEAKS is 1
+	writelog "$(date) - INFO - ${FUNCNAME[0]} - checkTweakLaunch:"
 	checkTweakLaunch
 
 # force 32bit pfx if  if FORCE32BITPFX is 1
+	writelog "$(date) - INFO - ${FUNCNAME[0]} - check32BitForce:"
 	check32BitForce "$@"
-	
+
 # start winetricks gui if RUN_WINETRICKS is 1 or silently if WINETRICKSPAKS is not empty
+	writelog "$(date) - INFO - ${FUNCNAME[0]} - checkWinetricksLaunch:"
 	checkWinetricksLaunch
 
 # start winecfg if RUN_WINECFG is 1
+	writelog "$(date) - INFO - ${FUNCNAME[0]} - checkWineCfgLaunch:"
 	checkWineCfgLaunch
 
 # apply some regs if requested
+	writelog "$(date) - INFO - ${FUNCNAME[0]} - customRegs:"
 	customRegs
 
 # minimize all open windows if TOGGLEWINDOWS is 1
+	writelog "$(date) - INFO - ${FUNCNAME[0]} - toggleWindows:"
 	toggleWindows on
-	
+
 # install ReShade if INSTALL_RESHADE is 1
+	writelog "$(date) - INFO - ${FUNCNAME[0]} - installReshade:"
 	installReshade "$@"
 
 # install Depth3D Shader if RESHADE_DEPTH3D is 1
+	writelog "$(date) - INFO - ${FUNCNAME[0]} - installReshadeDepth3D:"
 	installReshadeDepth3D
 
 # start game wih Reshade if USERESHADE is 1
+	writelog "$(date) - INFO - ${FUNCNAME[0]} - useReshade:"
 	useReshade
 
 # start game wih usevkBasalt ENABLE_VKBASALT is 1
+	writelog "$(date) - INFO - ${FUNCNAME[0]} - usevkBasalt:"
 	usevkBasalt
 
 # start $NYRNA if RUN_NYRNA is 1
+	writelog "$(date) - INFO - ${FUNCNAME[0]} - useNyrnaz:"
 	useNyrna
 
 # start $REPLAY if RUN_REPLAY is 1
+	writelog "$(date) - INFO - ${FUNCNAME[0]} - useReplay:"
 	useReplay
-	
+
 # save game window name after SAVESBSWINNAME seconds
+	writelog "$(date) - INFO - ${FUNCNAME[0]} - saveSBSWinName:"
 	saveSBSWinName "$@" &
 
 # start game with side-by-side VR if RUNSBSVR is not 0 
+	writelog "$(date) - INFO - ${FUNCNAME[0]} - checkSBSVRLaunch:"
 	checkSBSVRLaunch
 
 # start 3rdparty game in pfx of $CUSTOMLAUNCHID game
+	writelog "$(date) - INFO - ${FUNCNAME[0]} - check3rdParty:"
 	check3rdParty "$@"
 
 # start a custom program if RUN_CUSTOMCMD is 1
+	writelog "$(date) - INFO - ${FUNCNAME[0]} - checkCustomLaunch:"
 	checkCustomLaunch "$@"
 
 # start strace process in the background if STRACERUN is 1
+	writelog "$(date) - INFO - ${FUNCNAME[0]} - checkStraceLaunch:"
 	checkStraceLaunch
 
 # start network monitor process in the background if NETMON is enabled
+	writelog "$(date) - INFO - ${FUNCNAME[0]} - checkNetMonLaunch:"
 	checkNetMonLaunch
 
 ########################
 
-# the actual game launch - either with or without $GAMEMODERUN:
+# the actual game launch:
 	IFS=" " read -r -a RUNGAMEARGS <<< "$GAMEARGS"
 	PROTONCMD=("${@}" "${RUNGAMEARGS[@]}")
 
-	writelog "$(date) - INFO - ${FUNCNAME[0]} - ${PROTONCMD[*]}"
-	if [ -n "$NOINET" ]; then
+	writelog "$(date) - INFO - ${FUNCNAME[0]} - default proton command: ${PROTONCMD[*]}"
+
+# start without internetaccess:
+	if [ "$NOINET" -eq 1 ]; then
 		IFS=" " read -r -a RUNNOINET <<< "$NOINET"
 		writelog "$(date) - INFO - ${FUNCNAME[0]} - starting $GAMENAME ($AID) with Proton: $(PROTONVERSION "$@") with blocked internet - might fail!"
 		LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" "${RUNNOINET[0]}" "${PROTONCMD[@]}"
+# start with boxtron:
+	elif [ "$USEBOXTRON" -eq 1 ]; then
+			DOSEXE="$(echo "${PROTONCMD[*]}" | awk -F 'waitforexitandrun ' '{print $2}')"
+			if  [ -x "$(command -v "$BOXTRONCMD" 2>/dev/null)" ]; then
+				writelog "$(date) - INFO - ${FUNCNAME[0]} - starting game $AID with boxtron: $BOXTRONCMD $BOXTRONARGS $DOSEXE"
+				RUNBOXTRONCMD=("$BOXTRONCMD" "$BOXTRONARGS" "$DOSEXE")
+				# unset PULSE_LATENCY_MSEC else audio gets stuck
+				unset PULSE_LATENCY_MSEC
+				"${RUNBOXTRONCMD[@]}"
+			else
+				writelog "$(date) - ERROR - ${FUNCNAME[0]} -  boxtron command $BOXTRONCMD $BOXTRONARGS not found - exit"
+				exit
+			fi
+# start with gamemoderun:
 	elif [ "$USEGAMEMODERUN" -eq 1 ]; then
 		writelog "$(date) - INFO - ${FUNCNAME[0]} - starting $GAMENAME ($AID) with Proton: $(PROTONVERSION "$@") with $GAMEMODERUN"
 			if [ "$FORCE32BITPFX" -eq 1 ]; then
@@ -1954,12 +2018,14 @@ function launchSteamProtonGame {
 			fi
 	else
 		writelog "$(date) - INFO - ${FUNCNAME[0]} - starting $GAMENAME ($AID) with Proton: $(PROTONVERSION "$@")"
-
+# start with forced 32bit WINEPREFIX:
 		if [ "$FORCE32BITPFX" -eq 1 ]; then
 			writelog "$(date) - INFO - ${FUNCNAME[0]} - starting game in 32bit mode"
 			hackWin32 &
 			LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" LD_PRELOAD=0 "${PROTONCMD[@]}"
 		else
+# start normally using proton:
+			writelog "$(date) - INFO - ${FUNCNAME[0]} - starting game normally using proton"
 			"${PROTONCMD[@]}"
 		fi
 
