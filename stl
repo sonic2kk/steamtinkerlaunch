@@ -5,7 +5,7 @@
 ### project ###
 
 PROGNAME="SteamTinkerLaunch"
-PROGVERS="v0.99.9"
+PROGVERS="v1.0.0"
 PROGCMD="$(basename "$0")"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -76,6 +76,8 @@ STLDEFGAMECFG="$STLCFGDIR/default_template.conf"											# the default config 
 LOGDIR="$STLCFGDIR/logs"																	# default logfile dir
 STLGAMEDIR="$STLCFGDIR/gamecfgs"															# default basedir for game the gamespecific configs
 STLGAMECFG="$STLGAMEDIR/$AID.conf"															# the game specific config file which is used by the launched game - created from $STLDEFGAMECFG if not found
+STLCATEGORYDIR="$STLCFGDIR/categories"														# the directory holding config files with preconfigured settings for games in specific steamcategories
+STLREGDIR="$STLCFGDIR/regs"																	# the directory holding registry files, either as $AID.reg or called with REGEDIT
 SBSTWEAKDIR="$STLCFGDIR/sbs"																# directory for optional config overrides for easier side-by-side VR gaming
 TWEAKDIR="$STLCFGDIR/tweaks"																# directory for optional config overrides for easier general VR gaming
 TWEAKCFG="$TWEAKDIR/$AID.conf"																# the game specific shareable config tweak overrides - header autocreated if global CREATETWEAKS is set to 1
@@ -900,6 +902,10 @@ function createDefaultGlobalCfg {
 		echo "CREATETWEAKS=0"
 		echo "## seconds to wait to automatically save a new basic SBS tweak config of the running game with the gamewindow name after game launch - 0 to disable - 1 to pick a window"
 		echo "SAVESBSWINNAME=0"
+		echo "## set to 1 to auto-apply registry files for AID when found or enter a registry filename which should be loaded from either GLOBALREGDIR or STLREGDIR"
+		echo "REGEDIT=0"
+		echo "## directory with global registry files"
+		echo "GLOBALREGDIR=/usr/share/$PROGCMD/regs"
 		echo "## directory with global sbs-tweaks"
 		echo "GLOBALSBSTWEAKDIR=/usr/share/$PROGCMD/sbs"
 		echo "## directory with global tweaks"
@@ -975,6 +981,8 @@ function createDefaultGameCfg {
 		echo "RUN_WINECFG=0"
 		echo "## set to 1 to enable virtualdesktop for the game"
 		echo "VIRTUALDESKTOP=0"
+		echo "## set to 1 to auto-apply registry files for AID when found or enter a registry filename which should be loaded from either GLOBALREGDIR or STLREGDIR - overrides global config"
+		echo "#REGEDIT=1"
 		echo "## set to 1 to install ReShade:"
 		echo "INSTALL_RESHADE=0"
 		echo "## set to 1 to install ReShade Depth3D Shader into gamedir:"
@@ -1183,6 +1191,38 @@ function updateConfigEntry {
 	fi
 }
 
+# autoapply configuration settings based on the steam categories the game is in:
+
+function autoCategorySettings {
+	STEAMUSERID=$(find "$HOME/.steam/steam/userdata/" -maxdepth 1 -type d -name "[1-9]*")
+	SC="$STEAMUSERID/7/remote/sharedconfig.vdf"
+
+	if [ ! -f "$SC" ]; then
+		writelog "$(date) - SKIP - ${FUNCNAME[0]} - file $(basename "$SC") not found in steam userid dir - skipping"
+	else
+		writelog "$(date) - INFO - ${FUNCNAME[0]} - file $(basename "$SC") found in steam userid dir - searching categories for game $AID"
+
+		if [ ! -d "$STLCATEGORYDIR" ]; then
+			mkdir "$STLCATEGORYDIR"
+		fi
+	
+		if [ -d "$STLCATEGORYDIR" ]; then
+			while read -r SCAT; do
+				SCATCONF="$STLCATEGORYDIR/$SCAT.conf"
+				if [ -f "$SCATCONF" ]; then
+					writelog "$(date) - OK - ${FUNCNAME[0]} - config $SCATCONF found - loading its settings"
+					exportCfgFile "$SCATCONF"
+				else
+					writelog "$(date) - SKIP - ${FUNCNAME[0]} - config $SCATCONF not found - skipping"
+				fi
+			done <<< "$(sed -n "/\"$AID\"/,/}/p;" "$SC" | sed -n "/\"tags\"/,/}/p" | sed -n "/{/,/}/p" | grep -v '{\|}' | awk '{print $2}' | sed "s:\"::g")"
+		else
+			writelog "$(date) - SKIP - ${FUNCNAME[0]} - directory $STLCATEGORYDIR could not be found or created - skipping"
+		fi
+	fi
+}
+	
+
 ##### CONFIG BLOCK END #####
 
 ### LOG START ###
@@ -1268,14 +1308,17 @@ function preloadForcedTweaks {
 	if [ "$AID" -eq "246960" ]; then	# GSTD - Rise of the Owlverlord
 		writelog "$(date) - INFO - ${FUNCNAME[0]} - GSTD - Rise of the Owlverlord ($AID) needs hacks to get it to work"
 		export USETWEAKS=1
-		checkTweakLaunch
 	fi
 	
+	if [ "$AID" -eq "1225570" ]; then	# Unravel Two
+		writelog "$(date) - INFO - ${FUNCNAME[0]} - Unravel Two requires quartz and registry entry"
+		export USETWEAKS=1
+	fi
+		
 # broken - see: https://github.com/ValveSoftware/Proton/issues/1658#issuecomment-663941844
 #	if [ "$AID" -eq "223220" ]; then	# Giana Sisters - Twisted Dreams
 #		writelog "$(date) - INFO - ${FUNCNAME[0]} - Giana Sisters - Twisted Dreams ($AID) needs hacks to get it to work"
 #		export USETWEAKS=1
-#		checkTweakLaunch
 #	fi
 }
 
@@ -1668,6 +1711,12 @@ function checkWineCfgLaunch {
 	fi
 }
 
+function regEdit {
+	writelog "$(date) - INFO - ${FUNCNAME[0]} - $1 found - applying"
+	LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx" regedit "$1"
+	updateConfigEntry "REGEDIT" "0" "$STLGAMECFG"
+}
+
 function customRegs {
 	if [ -n  "$VIRTUALDESKTOP" ]; then
 		if [ "$VIRTUALDESKTOP" -eq 1 ]; then
@@ -1686,7 +1735,7 @@ function customRegs {
 				echo "\"Default\"=\"$(xrandr | grep "\*" | awk '{print $1}')\""
 				} >> "$TEMPREG"
 
-				LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx" regedit "$TEMPREG"
+				regEdit "$TEMPREG"
 
 				if [ -f "$TEMPREG" ]; then
 					rm "$TEMPREG"
@@ -1694,6 +1743,32 @@ function customRegs {
 
 			else
 				writelog "$(date) - SKIP - ${FUNCNAME[0]} - could not create $TEMPREG - skipping!"
+			fi
+		fi
+	fi
+
+	if [ "$REGEDIT" -eq 1 ]; then
+		writelog "$(date) - INFO - ${FUNCNAME[0]} - REGEDIT set, looking for $AID registry files"
+
+		if [ -f "$GLOBALREGDIR/$AID.reg" ]; then
+			regEdit "$GLOBALREGDIR/$AID.reg"
+		fi
+		
+		if [ -f "$STLREGDIR/$AID.reg" ]; then
+			regEdit "$STLREGDIR/$AID.reg"
+		fi
+	else
+		if [ "$REGEDIT" -ne 0 ]; then
+			if [ -f "$GLOBALREGDIR/$REGEDIT" ]; then
+				regEdit "$GLOBALREGDIR/$REGEDIT"
+			fi
+
+			if [ -f "$STLREGDIR/$REGEDIT" ]; then
+				regEdit "$STLREGDIR/$REGEDIT"		
+			fi
+
+			if [ ! -f "$GLOBALREGDIR/$REGEDIT" ] && [ ! -f "$STLREGDIR/$REGEDIT" ]; then
+				writelog "$(date) - SKIP - ${FUNCNAME[0]} - neither $GLOBALREGDIR/$REGEDIT nor $STLREGDIR/$REGEDIT not found - skipping"
 			fi
 		fi
 	fi
@@ -1765,6 +1840,9 @@ function launchSteamProtonGame {
 		export DXVK_CONFIG_FILE="$STLDXVKCFG"
 	fi
 
+# autoapply configuration settings based on the steam categories the game is in:
+	autoCategorySettings
+
 # shortcut to enable all required flags for SBSVR with vkbasalt
 	if [ -n "$SBSVRVK" ]; then
 		if [ "$SBSVRVK" -eq 1 ]; then
@@ -1780,7 +1858,7 @@ function launchSteamProtonGame {
 # shortcut to enable all required flags for SBSVR with ReShade
 	if [ -n "$SBSVRRS" ]; then
 		if [ "$SBSVRRS" -eq 1 ]; then
-			writelog "$(date) - INFO - $PROGNAME - SBSVRVK enabled - starting game in SBS-VR using ReShade"
+			writelog "$(date) - INFO - $PROGNAME - SBSVRRS enabled - starting game in SBS-VR using ReShade"
 			export RUNSBSVR=1
 			export INSTALL_RESHADE=1
 			export RESHADE_DEPTH3D=1
@@ -1799,6 +1877,9 @@ function launchSteamProtonGame {
 
 # preload forced tweaks
 	preloadForcedTweaks
+
+# override tweak settings if USETWEAKS is 1
+	checkTweakLaunch
 
 # force 32bit pfx if  if FORCE32BITPFX is 1
 	check32BitForce "$@"
@@ -1833,9 +1914,6 @@ function launchSteamProtonGame {
 # start $REPLAY if RUN_REPLAY is 1
 	useReplay
 	
-# override tweak settings if USETWEAKS is 1
-	checkTweakLaunch
-
 # save game window name after SAVESBSWINNAME seconds
 	saveSBSWinName "$@" &
 
@@ -1890,6 +1968,58 @@ function launchSteamProtonGame {
 }
 
 ### CORE LAUNCH END ###
+
+### COMMANDLINE START ###
+
+function commandline {
+	if [ "$1" == "set" ]; then
+		if [ -n "$2" ]; then
+				ENTLIST="$(sed -n "/^function createDefaultGameCfg/,/^#ENDcreateDefaultGameCfg/p;/^#ENDcreateDefaultGameCfg/q" "$0" | grep "echo"  | grep "=" | cut -d '"' -f2 | cut -d '=' -f1 | sed 's/^#//')"
+				if ! grep "$2" <<< "$ENTLIST" >/dev/null; then
+					echo "$2 is no valid entry - valid are:"
+					echo "-----------------------"
+					echo "$ENTLIST"
+					echo "-----------------------"
+					exit
+				fi
+			if [ -n "$3" ]; then
+				if [ -z "$4" ]; then
+					echo "argument 4 is missing - exit"
+					exit
+				else
+					if [ "$3" == "all" ]; then
+						echo "arg3 is all - updating all config files in $STLGAMEDIR:"
+						find "$STLGAMEDIR" -name "*.conf" | while read -r file; do
+							echo "updating entry $2 to value $4 in config $file"
+							updateConfigEntry "$2" "$4" "$file"
+						done
+					else
+						if [ -f "$STLGAMEDIR/$3.conf" ]; then
+							echo "updating entry $2 to value $4 in config $STLGAMEDIR/$3.conf"
+							updateConfigEntry "$2" "$4" "$STLGAMEDIR/$3.conf"
+							else
+							echo "config file $STLGAMEDIR/$3.conf does not exist - nothing to do - exit"
+							exit
+						fi
+					fi
+				fi
+			else
+				echo "arg3 is missing, you need to provide either the SteamAppId of the game or 'all' to batch update all gameconfig with the chosen entry!"
+				exit	
+			fi
+		else
+			echo "arg2 is missing, you need to provide a valid config entry which should be updated!"
+			exit
+		fi
+	else
+		echo "-----------------------"
+		echo "arg1 $1 is no valid command"
+		createDefaultCfgs
+		howto
+	fi
+}
+	
+### COMMANDLINE END ###
 
 ### CLOSE STL START ###
 
@@ -1962,50 +2092,6 @@ else
 		writelog "$(date) - ######### STOP $PROGNAME $PROGVERS #########"
 	else
 #		echo "$* doesn't contain waitforexitandrun - this doesn't look like a steam proton launch command"
-		if [ "$1" == "set" ]; then
-			if [ -n "$2" ]; then
-					ENTLIST="$(sed -n "/^function createDefaultGameCfg/,/^#ENDcreateDefaultGameCfg/p;/^#ENDcreateDefaultGameCfg/q" "$0" | grep "echo"  | grep "=" | cut -d '"' -f2 | cut -d '=' -f1 | sed 's/^#//')"
-					if ! grep "$2" <<< "$ENTLIST" >/dev/null; then
-						echo "$2 is no valid entry - valid are:"
-						echo "-----------------------"
-						echo "$ENTLIST"
-						echo "-----------------------"
-						exit
-					fi
-				if [ -n "$3" ]; then
-					if [ -z "$4" ]; then
-						echo "argument 4 is missing - exit"
-						exit
-					else
-						if [ "$3" == "all" ]; then
-							echo "arg3 is all - updating all config files in $STLGAMEDIR:"
-							find "$STLGAMEDIR" -name "*.conf" | while read -r file; do
-								echo "updating entry $2 to value $4 in config $file"
-								updateConfigEntry "$2" "$4" "$file"
-							done
-						else
-							if [ -f "$STLGAMEDIR/$3.conf" ]; then
-								echo "updating entry $2 to value $4 in config $STLGAMEDIR/$3.conf"
-								updateConfigEntry "$2" "$4" "$STLGAMEDIR/$3.conf"
-								else
-								echo "config file $STLGAMEDIR/$3.conf does not exist - nothing to do - exit"
-								exit
-							fi
-						fi
-					fi
-				else
-					echo "arg3 is missing, you need to provide either the SteamAppId of the game or 'all' to batch update all gameconfig with the chosen entry!"
-					exit	
-				fi
-			else
-				echo "arg2 is missing, you need to provide a valid config entry which should be updated!"
-				exit
-			fi
-		else
-			echo "-----------------------"
-			echo "arg1 $1 is no valid command"
-			createDefaultCfgs
-			howto
-		fi
+		commandline "$@"
 	fi
 fi
