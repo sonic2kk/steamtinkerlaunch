@@ -76,6 +76,10 @@ Also enable everything you want in the freshly created
 * **replay-sorcery per game**
 * **easy simple custom game launch**
 * **basic network monitoring**
+* **boxtron support via steam DOSBox category**
+* **roberta support via steam ScummVM category**
+* **luxtorpeda support via steam Luxtorpeda category**
+
 
 # Requirements:
 
