@@ -67,8 +67,8 @@ Also enable everything you want in the freshly created
 * **editor hotkey** for editing the gameconfig
 * **open protondb** page for the launched game with the editor
 * **automatic ReShade installation and configuration** for launched game
-* **automatic Depth3D shader installation
-* **basic vkBasalt configuration using Depth3D 
+* **automatic Depth3D shader installation**
+* **basic vkBasalt configuration using Depth3D** 
 * **automatically play regular games in side-by-side mode in VR! (including "sbs tweaks"**
 * **tweaks**
 * **32bit wineprefix**
