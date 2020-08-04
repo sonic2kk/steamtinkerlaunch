@@ -5,7 +5,7 @@
 ### project ###
 
 PROGNAME="SteamTinkerLaunch"
-PROGVERS="v1.0.3"
+PROGVERS="v1.0.4"
 PROGCMD="$(basename "$0")"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -497,6 +497,8 @@ function prepareReshadeFiles {
 		# create config if not found:
 		writelog "$(date) - INFO - ${FUNCNAME[0]} - creating $STLRSCFG"
 		{
+		echo "## config Version: $PROGVERS"
+		echo "##########################"
 		echo "## ReShade online ressources - see README:"
 		echo "DL_D3D47_64=https://lutris.net/files/tools/dll/d3dcompiler_47.dll"
 		echo "DL_D3D47_32=http://dege.freeweb.hu/dgVoodoo2/D3DCompiler_47.zip"
@@ -709,12 +711,12 @@ function useReshade {
 #### CONFIG BLOCK START ####
 
 function exportCfgFile {
+	writelog "$(date) - INFO - ${FUNCNAME[0]} - $1 START"
 	CFGFILE="$1"
 	while read -r line; do
-		if  grep -q -v "^#\|^$" <<< "$line"; then
-			export "${line?}"
-		fi
-	done < "$CFGFILE"
+		export "${line?}"
+	done <<< "$(grep -v "^#\|^$" "$CFGFILE")"
+	writelog "$(date) - INFO - ${FUNCNAME[0]} - $1 STOP"
 }
 
 function PROTONVERSION {
@@ -820,25 +822,39 @@ function createProjectDirs {
 function updateConfigFile {
 	CFGFILE="$1"
 	SEP="$2"
-	while read -r ENTRY; do
-		if ! grep "$ENTRY=" "$CFGFILE" >/dev/null ; then
-			writelog "$(date) UPDATE- ${FUNCNAME[0]} - entry $ENTRY is missing in $CFGFILE - adding it now!"
-			ELINEG="$(sed -n "/^function $SEP/,/^#END$SEP/p;/^#END$SEP/q" "$0" | grep "$ENTRY=" | awk -F 'echo ' '{print $2}' | sed 's/\"//g')"
-			ELINEP="${ELINEG//\$PROGCMD/$PROGCMD}"
-			ELINE="${ELINEP//\$HOME/$HOME}"
-			EDESC="$(grep -B1 "$ELINEG" "$0" | head -n1 | awk -F 'echo ' '{print $2}' | sed 's/\"//g')"
-
-			if grep "##" <<< "$EDESC"; then
-				writelog "$(date) UPDATE- ${FUNCNAME[0]} - adding description previous line $EDESC"
-				echo "$EDESC" >> "$CFGFILE"
-			fi
-			
-			writelog "$(date) UPDATE- ${FUNCNAME[0]} - adding line $ELINE"
-			echo "$ELINE" >> "$CFGFILE"
-#		else
-#			writelog "$(date) - SKIP - ${FUNCNAME[0]} - entry $ENTRY already in $CFGFILE"
+	
+	if grep -q "config Version: $PROGVERS" "$1"; then
+		writelog "$(date) - SKIP - ${FUNCNAME[0]} - config file $CFGFILE already at version $PROGVERS"
+	else
+		OLDVERS="$(grep "config Version" "$CFGFILE" | awk -F ': ' '{print $2}')"
+		
+		if [ -n "$OLDVERS" ]; then
+			writelog "$(date) - OK - ${FUNCNAME[0]} - updating $CFGFILE from $OLDVERS to $PROGVERS"
+			sed "s/config Version: $OLDVERS/config Version: $PROGVERS/" -i "$CFGFILE"
+		else
+			writelog "$(date) - OK - ${FUNCNAME[0]} - updating $CFGFILE to $PROGVERS"
+			sed "1s/^/##########################\n/" -i "$CFGFILE"
+			sed "1s/^/## config Version: $PROGVERS\n/" -i "$CFGFILE"
 		fi
-	done <<< "$(sed -n "/^function $SEP/,/^#END$SEP/p;/^#END$SEP/q" "$0" | grep "echo" | grep "=" | cut -d '"' -f2 | cut -d '=' -f1 | sed 's/^#//')"
+
+		while read -r ENTRY; do
+			if ! grep "$ENTRY=" "$CFGFILE" >/dev/null ; then
+				writelog "$(date) - UPDATE- ${FUNCNAME[0]} - entry $ENTRY is missing in $CFGFILE - adding it now!"
+				ELINEG="$(sed -n "/^function $SEP/,/^#END$SEP/p;/^#END$SEP/q" "$0" | grep "$ENTRY=" | awk -F 'echo ' '{print $2}' | sed 's/\"//g')"
+				ELINEP="${ELINEG//\$PROGCMD/$PROGCMD}"
+				ELINE="${ELINEP//\$HOME/$HOME}"
+				EDESC="$(grep -B1 "$ELINEG" "$0" | head -n1 | awk -F 'echo ' '{print $2}' | sed 's/\"//g')"
+
+				if grep "##" <<< "$EDESC"; then
+					writelog "$(date) - UPDATE- ${FUNCNAME[0]} - adding description previous line $EDESC"
+					echo "$EDESC" >> "$CFGFILE"
+				fi
+				
+				writelog "$(date) - UPDATE- ${FUNCNAME[0]} - adding line $ELINE"
+				echo "$ELINE" >> "$CFGFILE"
+			fi
+		done <<< "$(sed -n "/^function $SEP/,/^#END$SEP/p;/^#END$SEP/q" "$0" | grep "echo" | grep "=" | cut -d '"' -f2 | cut -d '=' -f1 | sed 's/^#//')"
+	fi
 }
 
 # create the default global config if not found:
@@ -853,6 +869,8 @@ function createDefaultGlobalCfg {
 	else
 		echo "default global config not found - creating it"
 		{
+		echo "## config Version: $PROGVERS"
+		echo "##########################"
 		echo "## create an empty \$STLDXVKCFG_tmpl for easier editing when required"
 		echo "CREATESTLDXVKCFGTMPL=0"
 		echo "## the base strace path used to optionally dump strace logs"
@@ -923,6 +941,10 @@ function createDefaultGlobalCfg {
 		echo "ROBERTACMD=$HOME/.local/share/Steam/compatibilitytools.d/roberta/run-vm"
 		echo "## roberta args:"
 		echo "ROBERTAARGS=--wait-before-run"
+		echo "## the luxtorpeda command:"
+		echo "LUXTORPEDACMD=$HOME/.local/share/Steam/compatibilitytools.d/luxtorpeda/luxtorpeda"
+		echo "## luxtorpeda args:"
+		echo "LUXTORPEDAARGS=wait-before-run"
 		echo "##### SideBySide #####"
 		echo "## Depth3D git project:"
 		echo "DEPTH3DURL=https://github.com/BlueSkyDefender/Depth3D.git"
@@ -946,6 +968,8 @@ function createDefaultGameCfg {
 	else
 		writelog "$(date) - 404 - ${FUNCNAME[0]} - default game template config $STLDEFGAMECFG not found - creating it"
 		{
+		echo "## config Version: $PROGVERS"
+		echo "##########################"
 		echo "## set to 1 to override settings with tweaks when found - overrides USETWEAKS in global config"
 		echo "#USETWEAKS=1"
 		echo "## set to 1 to enable the custom command CUSTOMCMD:"
@@ -998,6 +1022,8 @@ function createDefaultGameCfg {
 		echo "USEBOXTRON=0"
 		echo "## set to 1 to start the game using roberta/scummvm"
 		echo "USEROBERTA=0"
+		echo "## set to 1 to start the game using luxtorpeda"
+		echo "USELUXTORPEDA=0"
 		echo "## set to 1 to auto-apply registry files for AID when found or enter a registry filename which should be loaded from either GLOBALREGDIR or STLREGDIR - overrides global config"
 		echo "#REGEDIT=1"
 		echo "## set to 1 to install ReShade:"
@@ -1066,18 +1092,19 @@ function createGameCfg {
 		updateConfigFile "$THISCFG" "createDefaultGameCfg"
 	else
 		{
+		echo "## config Version: $PROGVERS"
+		echo "##########################"
 		echo "#########"
 		echo "#$PROGNAME $PROGVERS"
 		echo "#########"
 		echo "#GAMENAME=$GN"
 		echo "#GAMEEXE=$GE"
 		echo "#GAMEID=$AID"
-		echo "#########"
 		echo "## set the default config file for DXVK_CONFIG_FILE which is used when found - defaults to config found in $STLDXVKDIR"
 		echo "#STLDXVKCFG=$STLDXVKDIR/$AID.conf"
 		echo "## vkbasalt config file:"
 		echo "VKBASALT_CONFIG_FILE=$STLCFGDIR/vkBasalt.conf"
-		cat "$STLDEFGAMECFG"
+		grep -v "config Version" "$STLDEFGAMECFG"
 		} >> "$THISCFG"
 	fi
 
@@ -1343,12 +1370,6 @@ function preloadForcedTweaks {
 		writelog "$(date) - INFO - ${FUNCNAME[0]} - Unravel Two requires quartz and registry entry"
 		export USETWEAKS=1
 	fi
-			
-# broken - see: https://github.com/ValveSoftware/Proton/issues/1658#issuecomment-663941844
-#	if [ "$AID" -eq "223220" ]; then	# Giana Sisters - Twisted Dreams
-#		writelog "$(date) - INFO - ${FUNCNAME[0]} - Giana Sisters - Twisted Dreams ($AID) needs hacks to get it to work"
-#		export USETWEAKS=1
-#	fi
 }
 
 ### MISC END ###
@@ -1578,12 +1599,6 @@ function check32BitForce {
 				PFXBACK64="$WPFX"-BACK64
 				writelog "$(date) - INFO - ${FUNCNAME[0]} - WINEPREFIX $WPFX is 64bit - creating a 32bit WINEPREFIX instead"
 				if [ ! -d "$PFXBACK64" ];then
-
-#					if [ "$AID" -eq "223220" ] ; then
-#						writelog "$(date) - INFO - ${FUNCNAME[0]} - Steam wants to install dotnet35 for $AID but dotnet40 is required - installing now using $WINETRICKS"
-#						LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" WINEDEBUG="-all" WINEPREFIX="$WPFX" "$WINETRICKS" --unattended "dotnet40"
-#					fi
-
 					mv "$WPFX" "$PFXBACK64"
 					writelog "$(date) - INFO - ${FUNCNAME[0]} - backed the 64bit pfx $WPFX to $PFXBACK64 - creating a 32bit WINEPREFIX now"
 					createW32PFX "$WPFX"
@@ -1605,8 +1620,8 @@ function check32BitForce {
 
 function hackWin32 {
 	if [ "$FORCE32BITPFX" -eq 1 ]; then
-	# both Giana Sisters
-		if [ "$AID" -eq "246960" ]; then #  || [ "$AID" -eq "223220" ] ; then
+		if [ "$AID" -eq "246960" ]; then	# Giana Sisters
+
 			if [ -n "$TWEAKWIN" ]; then
 				while true; do
 					if "$XWININFO" -name "${TWEAKWIN//\"/}" >/dev/null 2>/dev/null; then
@@ -1884,7 +1899,6 @@ function launchSteamProtonGame {
 		if [ "$SBSVRVK" -eq 1 ]; then
 			writelog "$(date) - INFO - $PROGNAME - SBSVRVK enabled - starting game in SBS-VR using vkbasalt"
 			export RUNSBSVR=1
-	#		export RESHADE_DEPTH3D=1
 			export ENABLE_VKBASALT=1
 			export SBSVRRS=0
 			export USERESHADE=0
@@ -2019,11 +2033,20 @@ function launchSteamProtonGame {
 			if  [ -x "$(command -v "$ROBERTACMD" 2>/dev/null)" ]; then
 				writelog "$(date) - INFO - ${FUNCNAME[0]} - starting game $AID with roberta: $ROBERTACMD $ROBERTAARGS $VMEXE"
 				RUNROBERTACMD=("$ROBERTACMD" "$ROBERTAARGS" "$VMEXE")
-				# unset PULSE_LATENCY_MSEC else audio gets stuck
-				#unset PULSE_LATENCY_MSEC
 				LD_LIBRARY_PATH="" "${RUNROBERTACMD[@]}"
 			else
 				writelog "$(date) - ERROR - ${FUNCNAME[0]} -  roberta command $ROBERTACMD not found - exit"
+				exit
+			fi
+# start with luxtorpeda:
+	elif [ "$USELUXTORPEDA" -eq 1 ]; then
+			LUXEXE="$(echo "${PROTONCMD[*]}" | awk -F 'waitforexitandrun ' '{print $2}')"
+			if  [ -x "$(command -v "$LUXTORPEDACMD" 2>/dev/null)" ]; then
+				writelog "$(date) - INFO - ${FUNCNAME[0]} - starting game $AID with luxtorpeda: $LUXTORPEDACMD $LUXTORPEDAARGS $LUXEXE"
+				RUNLUXTORPEDACMD=("$LUXTORPEDACMD" "$LUXTORPEDAARGS" "$LUXEXE")
+				LD_LIBRARY_PATH="" "${RUNLUXTORPEDACMD[@]}"
+			else
+				writelog "$(date) - ERROR - ${FUNCNAME[0]} -  luxtorpeda command $LUXTORPEDACMD not found - exit"
 				exit
 			fi
 # start with gamemoderun:
@@ -2172,12 +2195,11 @@ if [ -z "$1" ]; then
 	createDefaultCfgs
 	howto
 else
-	if echo "$@" | grep "waitforexitandrun"; then
+	if echo "$@" | grep "waitforexitandrun"; then	# TODO - accept also linux native games?
 		launchSteamProtonGame "$@"
 		closeSTL
 		writelog "$(date) - ######### STOP $PROGNAME $PROGVERS #########"
 	else
-#		echo "$* doesn't contain waitforexitandrun - this doesn't look like a steam proton launch command"
 		commandline "$@"
 	fi
 fi

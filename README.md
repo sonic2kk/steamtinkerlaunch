@@ -97,6 +97,7 @@ For the optional features you need:
 - netstat from net-tools for basic network monitoring
 - boxtron to optionally start dos games with linux native dosbox
 - scummvm to optionally start scummvm compatible games natively using [Roberta](https://github.com/dreamer/roberta)
+- [Luxtorpeda](https://github.com/dreamer/luxtorpeda) to optionally start supported games with a linux native binary
 
 ## Configuration:
 
@@ -413,4 +414,22 @@ which is at least valid if you installed roberta manually.
 To start a game with roberta either set `USEROBERTA` in the gameconfig `$STLGAMECFG` or put the game into the steam category "ScummVM"
 (the global `/usr/share/stl/categories/ScummVM.conf` will be autoused then).
 Alternatively duplicate the file to a different name which you want to use as category name, ideally into `STLCATEGORYDIR`.
+
+#### [Luxtorpeda](https://github.com/dreamer/luxtorpeda) or the dev fork [luxtorpeda-dev](https://github.com/luxtorpeda-dev/luxtorpeda):
+
+The global configs `LUXTORPEDACMD` and `LUXTORPEDAARGS` in `STLDEFGLOBALCFG` need to be set correcty initially.
+It should not be necessary to change the default `LUXTORPEDAARGS`.
+Defaults are:
+**
+LUXTORPEDACMD=$HOME/.local/share/Steam/compatibilitytools.d/luxtorpeda/luxtorpeda
+LUXTORPEDAARGS=wait-before-run
+**
+which is at least valid if you installed roberta manually.
+
+To start a game with luxtorpeda either set `USELUXTORPEDA` in the gameconfig `$STLGAMECFG` or put the game into the steam category "Luxtorpeda"
+(the global `/usr/share/stl/categories/Luxtorpeda.conf` will be autoused then).
+Alternatively duplicate the file to a different name which you want to use as category name, ideally into `STLCATEGORYDIR`.
+At least with luxtorpeda-dev some games install some dependencies on the first launch.
+No idea how to capture the first launch from **stl** yet, so you will have to install the dependencies outside of **stl** for now.
+If you have some hints, feel free to open an issue!
 
