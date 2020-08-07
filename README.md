@@ -57,7 +57,7 @@ Also enable everything you want in the freshly created
 
 ## Features:
 
-* **env variables** can be easily set for every single game (f.e `PROTON`* , `DXVK`* variables, `MANGOHUD`, `RADV_PERFTEST`, `WINE`...)
+* **env variables** can be easily set for every single game (f.e `PROTON`* , `DXVK`* , `MANGOHUD`, `RADV_PERFTEST`, `WINE`...)
 * **custom program** launch before or instead the game itself (also windows exes)
 * **winetricks (gui and silent install)**
 * **winecfg**
@@ -70,7 +70,7 @@ Also enable everything you want in the freshly created
 * **automatic Depth3D shader installation**
 * **basic vkBasalt configuration using Depth3D** 
 * **automatically play regular games in side-by-side mode in VR! (including "sbs tweaks"**
-* **tweaks**
+* **tweaks** small drop-in config files required to make some games working
 * **32bit wineprefix**
 * **nyrna per game**
 * **replay-sorcery per game**
@@ -101,7 +101,7 @@ For the optional features you need:
 - netstat from net-tools for basic network monitoring
 - boxtron to optionally start dos games with linux native dosbox
 - scummvm to optionally start scummvm compatible games natively using [Roberta](https://github.com/dreamer/roberta)
-- [Luxtorpeda](https://github.com/dreamer/luxtorpeda) to optionally start supported games with a linux native binary
+- [luxtorpeda-dev](https://github.com/luxtorpeda-dev/luxtorpeda) or [Luxtorpeda](https://github.com/dreamer/luxtorpeda) to optionally start supported games with a linux native binary
 
 ## Configuration:
 
@@ -419,7 +419,7 @@ To start a game with roberta either set `USEROBERTA` in the gameconfig `$STLGAME
 (the global `/usr/share/stl/categories/ScummVM.conf` will be autoused then).
 Alternatively duplicate the file to a different name which you want to use as category name, ideally into `STLCATEGORYDIR`.
 
-#### [Luxtorpeda](https://github.com/dreamer/luxtorpeda) or the dev fork [luxtorpeda-dev](https://github.com/luxtorpeda-dev/luxtorpeda):
+#### [Luxtorpeda] the "dev-fork" [luxtorpeda-dev](https://github.com/luxtorpeda-dev/luxtorpeda) or (untested) the main branch (https://github.com/dreamer/luxtorpeda)
 
 The global configs `LUXTORPEDACMD` and `LUXTORPEDAARGS` in `STLDEFGLOBALCFG` need to be set correcty initially.
 It should not be necessary to change the default `LUXTORPEDAARGS`.
@@ -433,7 +433,6 @@ which is at least valid if you installed roberta manually.
 To start a game with luxtorpeda either set `USELUXTORPEDA` in the gameconfig `$STLGAMECFG` or put the game into the steam category "Luxtorpeda"
 (the global `/usr/share/stl/categories/Luxtorpeda.conf` will be autoused then).
 Alternatively duplicate the file to a different name which you want to use as category name, ideally into `STLCATEGORYDIR`.
-At least with luxtorpeda-dev some games install some dependencies on the first launch.
-No idea how to capture the first launch from **stl** yet, so you will have to install the dependencies outside of **stl** for now.
-If you have some hints, feel free to open an issue!
+The luxtorpeda-dev dev was so kind to add a manual-download option in v20, so if native game files are missing they are downloaded before the actual game launch now.
+Therefore it is recommended to use the lastest luxtorpeda-dev version.
 
