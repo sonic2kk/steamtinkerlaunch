@@ -5,7 +5,7 @@
 ### project ###
 
 PROGNAME="SteamTinkerLaunch"
-PROGVERS="v1.3.5"
+PROGVERS="v1.3.6"
 PROGCMD="$(basename "$0")"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -1499,13 +1499,18 @@ function launchCustomProg {
 # several variables coming from steam have to be cleaned in order to get wine to work here
 		if [ "$(extRun file "$CUSTCOM" | grep -c "PE32")" -eq 1 ]; then
 			writelog "INFO" "${FUNCNAME[0]} - $CUSTCOM seems to be a MS Windows exe - starting through proton"
-			extRun WINEDEBUG="-all" WINEPREFIX="$GPFX" "$GWINE" "$LACO" "${RUNCUSTOMCMD_ARGS[@]}"
+			if [ "$(extRun file "$CUSTCOM" | grep -c "(console)")" -eq 1 ]; then
+				writelog "INFO" "${FUNCNAME[0]} - $CUSTCOM seems to be a MS console program - starting using wineconsole"
+				LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" WINEPREFIX="$GPFX" "$GWINE" wineconsole "$LACO" "${RUNCUSTOMCMD_ARGS[@]}"
+			else
+				writelog "INFO" "${FUNCNAME[0]} - $CUSTCOM seems to be a MS gui program - starting regularly"
+				LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" WINEPREFIX="$GPFX" "$GWINE" "$LACO" "${RUNCUSTOMCMD_ARGS[@]}"
+			fi
 		else
 			writelog "INFO" "${FUNCNAME[0]} - $CUSTCOM doesn't seem to be a MS Windows exe - regular start (without further analysing)"
 			extRun "$LACO" "${RUNCUSTOMCMD_ARGS[@]}"
 		fi
 	fi
-
 }
 
 function checkCustomLaunch {
@@ -2486,25 +2491,75 @@ function setVortexSELaunch {
 			if [ -f "$SEEXE" ];then
 				writelog "INFO" "${FUNCNAME[0]} - found special exe '$2' for '$GN ($AID)' in gamedir '$EFD'"
 
-# BUG170=170 
-				if [ -n "$BUG170" ]; then
-					writelog "BUG" "${FUNCNAME[0]} - renaming found special exe '$2' to '$2_OFF' for '$GN ($AID)' in gamedir '$EFD' because auf bug $BUG170"
-					mv "$SEEXE" "${SEEXE}_OFF"
+PROTOLAURL="https://github.com/Patola/wine/releases"
+PROTOLAREQ="20"
+PROTOLAVER="protola-5.0-9.1"
+PROTOLADLURL="$PROTOLAURL/download/$PROTOLAVER/$PROTOLAVER.tar.gz"
+PROTOLADLDIR="$STLDLDIR/protola"
+PROTOLADL="$PROTOLADLDIR/$PROTOLAVER.tar.gz"	
+COMPATOOLS="$HOME/.steam/steam/compatibilitytools.d/"
+
+				if ! grep -q "protola" <<< "$PROTONVERSION"; then
+
+					writelog "BUG" "${FUNCNAME[0]} - the current proton version is not compatible with $2"
+					writelog "BUG" "${FUNCNAME[0]} - you might want to use a custom proton version from $PROTOLAURL instead!"
+
+					if [ -x "$(command -v "$STEAM_ZENITY" 2>/dev/null)" ]; then
+						mkProjDir "$PROTOLADLDIR" 1
+			
+						if [ -d "$COMPATOOLS/$PROTOLAVER" ]; then
+								"$STEAM_ZENITY" --title="$PROGNAME ($PROGCMD) - $PROGVERS" --question --text="using $PROTONVERSION which is not compatible with $2! You already have the compatible proton version lying under $COMPATOOLS/$PROTOLAVER. Just select it in Steam as compatibility tool for $GN! Click Exit to exit now, click play to start game without Script Extender!" --ok-label=exit --cancel-label=play --timeout="$PROTOLAREQ" --width 350
+								case $? in
+									0)  exit
+									;; 
+									1) writelog "INFO" "${FUNCNAME[0]} - starting game"
+									;;
+								esac
+						else 
+							if [ -f "$PROTOLADL" ]; then
+								"$STEAM_ZENITY" --title="$PROGNAME ($PROGCMD) - $PROGVERS" --question --text="compatible proton $PROTOLAVER already downloaded to $PROTOLADL - you have to install it to $COMPATOOLS with steam closed to use it! Click Install to extract $PROTOLADL to $COMPATOOLS (at your own risk!), click play to start game without Script Extender!" --ok-label=install --cancel-label=play --timeout="$PROTOLAREQ" --width 350
+								case $? in
+									0)  tar xf "$PROTOLADL" -C "$COMPATOOLS"
+									    setVortexSELaunch "$1" "$2" "$3"
+									;; 
+									1) writelog "INFO" "${FUNCNAME[0]} - starting game"
+									;;
+								esac
+							else
+								"$STEAM_ZENITY" --title="$PROGNAME ($PROGCMD) - $PROGVERS" --question --text="$PROTONVERSION is not compatible with $2! Download compatible proton $PROTOLAVER to $PROTOLADL? You should stop steam then and install the package manually to $COMPATOOLS to make it available. Will re-check again when download is finished. Click play to start game without Script Extender without download!" --ok-label=download --cancel-label=play --timeout="$PROTOLAREQ" --width 350
+								case $? in
+									0) "$WGET" "$PROTOLADLURL" -O "$PROTOLADL"
+										setVortexSELaunch "$1" "$2" "$3"
+									;;
+									1) writelog "INFO" "${FUNCNAME[0]} - starting game"
+									;;
+								esac
+							fi
+						fi
+					else
+						writelog "SKIP" "${FUNCNAME[0]} - $STEAM_ZENITY not found"
+					fi
+
 				else
 					if [ "$3" -eq 1 ]; then
 						writelog "INFO" "${FUNCNAME[0]} - preparing start of special exe '$2'"
-	#					CUSTOMCMD="$SEEXE"
-	#					RUN_CUSTOMCMD=1
-	#					ONLY_CUSTOMCMD=1
+
+						if grep -q "protola" <<< "$PROTONVERSION"; then
+							CUSTOMCMD="$SEEXE"
+							RUN_CUSTOMCMD=1
+							ONLY_CUSTOMCMD=1
+						fi
 					fi
 
 					if [ "$3" -eq 2 ]; then
-						writelog "INFO" "${FUNCNAME[0]} - configuring default start of special exe '$2' by enabling SELAUNCH in '$STLGAMECFG'"
-						updateConfigEntry "SELAUNCH" "1" "$STLGAMECFG"
-						writelog "INFO" "${FUNCNAME[0]} - starting $SEEXE instead of the game exe directly after this Vortex instance"
-	#					CUSTOMCMD="$SEEXE"
-	#					RUN_CUSTOMCMD=1
-	#					ONLY_CUSTOMCMD=1
+						if grep -q "protola" <<< "$PROTONVERSION"; then
+							writelog "INFO" "${FUNCNAME[0]} - configuring default start of special exe '$2' by enabling SELAUNCH in '$STLGAMECFG'"
+							updateConfigEntry "SELAUNCH" "1" "$STLGAMECFG"
+							writelog "INFO" "${FUNCNAME[0]} - starting $SEEXE instead of the game exe directly after this Vortex instance"
+							CUSTOMCMD="$SEEXE"
+							RUN_CUSTOMCMD=1
+							ONLY_CUSTOMCMD=1
+						fi
 					fi
 				fi
 			else
@@ -2862,7 +2917,12 @@ function launchSteamProtonGame {
 	writelog "INFO" "${FUNCNAME[0]} - check3rdParty:"
 	check3rdParty "$@"
 
+# start Vortex if VORTEX is ge 1
+	writelog "INFO" "${FUNCNAME[0]} - checkVortex:"
+	checkVortex
+
 #  (mostly for Vortex) if SELAUNCH is 1 check start a preconfigured exe instead of the game if defined/found - f.e. script extender for skyrim, fallout etc
+	writelog "INFO" "${FUNCNAME[0]} - checkVortexSELaunch:"
 	checkVortexSELaunch "$SELAUNCH"
 
 # start a custom program if RUN_CUSTOMCMD is 1
@@ -2877,10 +2937,6 @@ function launchSteamProtonGame {
 	writelog "INFO" "${FUNCNAME[0]} - checkNetMonLaunch:"
 	checkNetMonLaunch
 
-
-# start Vortex if VORTEX is ge 1
-	writelog "INFO" "${FUNCNAME[0]} - checkVortex:"
-	checkVortex
 
 ########################
 

@@ -382,6 +382,25 @@ Seperate the paths with a "," and do not use quotes or spaces in between!
 **not working example:**
 `VORTEXSTAGES=/media/games1/Vortex, /media/games2/Vortex, "/home/blah/blubb/Vortex"`
 
+##### Mods using Script Extender
+Several games *(Skyrim, Fallout flavours)* have many mods which depends on a special "Script Extender" program ("SE").
+Unfortunately those "SE" programs don't [work with default proton since some time](https://github.com/ValveSoftware/Proton/issues/170).
+
+I added a *(currently very unpolished)* function which checks if the "SE" compatible custom proton version
+[Protola]("https://github.com/Patola/wine/releases") is being used when a "SE" exe is autodetected as start command.
+*(hard to explain, without looking ugly)*
+
+If it is already used the start will continue using "SE".
+If it is not used, **stl** will check if "Protola" can be found in the "compatibilitytools.d" directory.
+If it can be found a requester warns that it has to be used in order to start with "SE" (options: continue without "SE"; "exit")
+If it can't be found **stl** will check if it was already downloaded.
+If the download was found a requester asks if it should be automatically extracted into the "compatibilitytools.d" directory (options: continue without "SE"; "extract")
+If extracting was selected it will be extracted and the check function is restarted
+If the download was not found a requester asks if it should be downloaded automatically (options: continue without "SE"; "download")
+If the download was selected the archive will be downloaded and the check function is restarted
+Feel free to request improvements and open issues, it is really pretty rough at the moment.
+
+
 #####  Vortex Commandline
 **stl Vortex commandline options:**
 `stl vortex install`: starts a full Vortex installation with all dependencies
@@ -398,9 +417,6 @@ Seperate the paths with a "," and do not use quotes or spaces in between!
   but try to help fixing the issue instead then (no offense, but imho linux already had better times regarding this).
 - The `VORTEX` variable is mostly used as boolean. Vortex is not used when 0 or undefined, and Vortex starts regularly with set to 1 (the "Vortex" steam category does nothing else)
   You can also set it to 2+3 though (ideally in the gameconfig `$STLGAMECFG`), where 2 "quickstarts" Vortex leaving out some checks, and 3 doing the same, but doesn't start the game afterwards.
-- unfortunately Skyrim/Fallout (flavours) Script Extender doesn't [work with default proton since some time](https://github.com/ValveSoftware/Proton/issues/170).
-  As many mods depend on "SE" I added a function which renames the "SE" exe when found in the gamedir, to ensure that Vortex knows it is uninstalled and would complain if a mod depends on it.
-  To enable that function just set `BUG170=170` somewhere (f.e. [global.conf](#Global-Config)
 
 #### Registry
 
