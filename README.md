@@ -31,16 +31,16 @@ If you are on Arch Linux you can install **stl** from **AUR**
 
 ## Quickstart
 When **stl** is started for the first time it will create its default [configuration](#Configuration) structure.
-At least make sure that `STLEDITOR` points to an installed graphical text editor in [`$STLCFGDIR/global.conf`](#Global Config)
+At least make sure that `STLEDITOR` points to an installed graphical text editor in [the global config](#Global-Config)
 (set to "xdg-open" by default, which should just work in most cases)
-Also enable everything you want to use generally for your games in [`$STLCFGDIR/default_template.conf`](#Default Template Config)
+Also enable everything you want to use generally for your games in [the default template](#Default Template-Config)
 
 ## Features
 
 *(no special order)*
 
-* **[ENV Variables](#ENV Variables)** can be easily set for every single game (f.e `PROTON`* , `DXVK`* , `MANGOHUD`, `RADV_PERFTEST`, `WINE`...)
-* **[Custom Program](#Custom Program)** launch custom programs before or instead the game itself (also windows exes)
+* **[ENV Variables](#ENV-Variables)** can be easily set for every single game (f.e `PROTON`* , `DXVK`* , `MANGOHUD`, `RADV_PERFTEST`, `WINE`...)
+* **[Custom Program](#Custom-Program)** launch custom programs before or instead the game itself (also windows exes)
 * **[winetricks](#Winetricks)** start winetricks before game launch *(gui or silent)*
 * **[winecfg](#Winecfg)** start winecfg before game launch
 * **[GameMode](#GameMode)** start/stop gamemoderun per game
@@ -51,13 +51,13 @@ Also enable everything you want to use generally for your games in [`$STLCFGDIR/
 * **[ReShade](#ReShade)** automatic installation and configuration
 * **[Depth3D](#Depth3D)** automatic shader installation
 * **[vkBasalt](#vkBasalt)** basic vkBasalt configuration
-* **[SBS-VR](#Side-by-Side VR)** automatically play regular games in side-by-side mode in VR!
+* **[SBS-VR](#Side-by-Side-VR)** automatically play regular games in side-by-side mode in VR!
 * **[Tweaks](#Tweaks)** community mini configfiles to automatically start problematic games ootb
-* **[32bit wineprefix](#32bit Wineprefix)** force 32bit `WINEPREFIX`
+* **[32bit wineprefix](#32bit-Wineprefix)** force 32bit `WINEPREFIX`
 * **[Nyrna](#Nyrna)** start/stop ReplaySorcery per game
 * **[ReplaySorcery](#ReplaySorcery)** start/stop ReplaySorcery per game
-* **[Custom Game Launch](#Custom Game Launch)** easy simple custom game launch
-* **[NetMon](#Network Monitoring)** basic network monitoring
+* **[Custom Game Launch](#Custom-Game-Launch)** easy simple custom game launch
+* **[NetMon](#Network-Monitoring)** basic network monitoring
 * **[Boxtron](#Boxtron)** support via steam `DOSBox` category
 * **[Roberta](#Roberta)** support via steam `ScummVM` category
 * **[Luxtorpeda](#Luxtorpeda)** support via steam `Luxtorpeda` category
@@ -74,8 +74,8 @@ For the optional features you need:
 - [MangoHud](#MangoHud)
 - [winetricks](#Winetricks)
 - wget, unzip for optional [Reshade](#ReShade) download, git for pulling optional shaders ([Depth3D](#Depth3D))
-- xdotool, xwininfo, vr-video-player for playing regular games side-by-side in VR ([SBS-VR](#Side-by-Side VR))
-- a graphical text editor and optionally a internetbrowser see [global.conf](#Global Config)
+- xdotool, xwininfo, vr-video-player for playing regular games side-by-side in VR ([SBS-VR](#Side-by-Side-VR))
+- a graphical text editor and optionally a internetbrowser see [global.conf](#Global-Config)
 - [vkBasalt](#vkBasalt)
 - [Nyrna](#Nyrna)
 - [ReplaySorcery](#ReplaySorcery)
