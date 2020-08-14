@@ -31,9 +31,9 @@ If you are on Arch Linux you can install **stl** from **AUR**
 
 ## Quickstart
 When **stl** is started for the first time it will create its default [configuration](#Configuration) structure.
-At least make sure that `STLEDITOR` points to an installed graphical text editor in [`$STLCFGDIR/global.conf`](#global.conf)
+At least make sure that `STLEDITOR` points to an installed graphical text editor in [`$STLCFGDIR/global.conf`](#Global Config)
 (set to "xdg-open" by default, which should just work in most cases)
-Also enable everything you want to use generally for your games in [`$STLCFGDIR/default_template.conf`](#default_template.conf)
+Also enable everything you want to use generally for your games in [`$STLCFGDIR/default_template.conf`](#Default Template Config)
 
 ## Features
 
@@ -75,7 +75,7 @@ For the optional features you need:
 - [winetricks](#Winetricks)
 - wget, unzip for optional [Reshade](#ReShade) download, git for pulling optional shaders ([Depth3D](#Depth3D))
 - xdotool, xwininfo, vr-video-player for playing regular games side-by-side in VR ([SBS-VR](#Side-by-Side VR))
-- a graphical text editor and optionally a internetbrowser see [global.conf](#global.conf)
+- a graphical text editor and optionally a internetbrowser see [global.conf](#Global Config)
 - [vkBasalt](#vkBasalt)
 - [Nyrna](#Nyrna)
 - [ReplaySorcery](#ReplaySorcery)
@@ -101,17 +101,17 @@ The main user configuration directory `STLCFGDIR` can be found under
 When started for the first time **stl** will initially create this default configuration structure:
 
         `STLCFGDIR`/
-        ├── [categories](#Steam Categories)
-        ├── [default_template.conf](#default_template.conf)
-        ├── [downloads](#Downloads)
-        ├── [downloads](#Downloads)/[Depth3D](#Depth3D)
-        ├── [gamecfgs](#Game Configurations)
-        ├── [global.conf](#global.conf)
-        ├── [logs](#Logs)
-        ├── [logs](#Logs)/[stl.log](#Logs)
-        ├── [tweaks](#Tweaks)
-        ├── [vortex](#Vortex)      
-        └── [vortex](#Vortex)/[vortex.conf](#vortex.conf)
+        ├── categories
+        ├── default_template.conf
+        ├── downloads
+        ├── downloads/Depth3D
+        ├── gamecfgs
+        ├── global.conf
+        ├── logs
+        ├── logs/stl.log
+        ├── tweaks
+        ├── vortex     
+        └── vortex/vortex.conf
 
 #### Systemwide Configuration
 The systemwide configuration directory `SYSTEMSTLCFGDIR` can be found under `/usr/share/$PROGCMD` *(/usr/share/stl/)*
@@ -124,14 +124,13 @@ custom per-game [registry](#Registry) files, which are autodetected and applied 
 *community contributed* [sbs tweaks](#SBS Tweaks) which make sure specific games work ootb in [SBS-VR](#Side-by-Side VR) mode using the provided configuration options
 
 
-### default_template.conf
-
+### Default Template Config
 `STLDEFGAMECFG` *(`$STLCFGDIR/default_template.conf`)*
 
 Contains the default configurations options used as template for every new game specific configfile.
 Most options are disabled by default. To deploy appropriate global options early this file should be adjusted early.
 
-### global.conf
+### Global Config
 `STLDEFGLOBALCFG` *(`$STLCFGDIR/global.conf`)*
 
 Contains universal configuration options used all games, f.e.
@@ -147,7 +146,7 @@ or which default programs to use
 When starting a game using **stl** the game specific config file is searched in `STLGAMEDIR`
 and created if not available from the default config file *(which in turn is automatically created as well if not found)*.
 Additional individual configs can be loaded via [Tweaks](#Tweaks) and [SBS Tweaks](#SBS Tweaks)
-Any option configured in here and also in [global.conf](#global.conf) is overridden by this config.
+Any option configured in here and also in [global.conf](#Global Config) is overridden by this config.
 
 
 ### Steam Categories
@@ -232,9 +231,9 @@ As of writing those are
 [ReShade](#ReShade) ReShade itself and required d3dcompiler dlls
 
 ### Logs
-Logs are written into the `LOGDIR` defined in the [global.conf](#global.conf).
+Logs are written into the `LOGDIR` defined in the [global.conf](#Global Config).
 The verbosity of the logfile depends on `WRITELOG` *(write logfile if not 0, increase verbosity from 1-2 (1:less, 2:all))*
-also defined in the [global.conf](#global.conf).
+also defined in the [global.conf](#Global Config).
 There are several logfiles, those which are written mostly are the game specific ones *($SteamAppId.log)*
 
 ## Features in detail:
@@ -271,7 +270,7 @@ Silent winetricks installation:
 
 [Boxtron](https://github.com/dreamer/boxtron):
 
-The global configs `BOXTRONCMD` and `BOXTRONARGS` in the [global.conf](#global.conf) need to be set correcty initially.
+The global configs `BOXTRONCMD` and `BOXTRONARGS` in the [global.conf](#Global Config) need to be set correcty initially.
 It should not be necessary to change the default `ROBERTAARGS`.
 Defaults are:
 **
@@ -287,7 +286,7 @@ Alternatively duplicate the file to a different name which you want to use as ca
 
 [Roberta](https://github.com/dreamer/roberta):
 
-The global configs `ROBERTACMD` and `ROBERTAARGS` in the [global.conf](#global.conf) need to be set correcty initially.
+The global configs `ROBERTACMD` and `ROBERTAARGS` in the [global.conf](#Global Config) need to be set correcty initially.
 It should not be necessary to change the default `ROBERTAARGS`.
 Defaults are:
 **
@@ -302,7 +301,7 @@ Alternatively duplicate the file to a different name which you want to use as ca
 #### Luxtorpeda
 [Luxtorpeda-dev](https://github.com/luxtorpeda-dev/luxtorpeda) or (untested) the [main branch](https://github.com/dreamer/luxtorpeda)
 
-The global configs `LUXTORPEDACMD` and `LUXTORPEDAARGS` in the [global.conf](#global.conf) need to be set correctly initially.
+The global configs `LUXTORPEDACMD` and `LUXTORPEDAARGS` in the [global.conf](#Global Config) need to be set correctly initially.
 It should not be necessary to change the default `LUXTORPEDAARGS`.
 
 Defaults are:
@@ -352,7 +351,7 @@ Here are the main configuration options:
 ##### Vortex Stages
 **Explanation `VORTEXSTAGES`:**
 
-Vortex uses 2 main [Deployment_Methods]:(https://wiki.nexusmods.com/index.php/Deployment_Methods) to enable Mods for the managed games.
+Vortex uses 2 main [Deployment_Methods](https://wiki.nexusmods.com/index.php/Deployment_Methods) to enable Mods for the managed games.
 "Hardlink Deployment" and "Symlink Deployment". Symlink Deployment doesn't work under wine, so Hardlink is required (and automatically set for every game from **stl**, although it is default anyway)
 Those "Hardlinks" only work if the "Staging directory" is on the same partition as the game (yes the same physical partition, not the same "windows drive in wine).
 As Steam Library directories can be on multiple partitions a "Staging directory" is required for every one of them.
@@ -399,7 +398,7 @@ Seperate the paths with a "," and do not use quotes or spaces in between!
   You can also set it to 2+3 though (ideally in the gameconfig `$STLGAMECFG`), where 2 "quickstarts" Vortex leaving out some checks, and 3 doing the same, but doesn't start the game afterwards.
 - unfortunately Skyrim/Fallout (flavours) Script Extender doesn't [work with default proton since some time](https://github.com/ValveSoftware/Proton/issues/170).
   As many mods depend on "SE" I added a function which renames the "SE" exe when found in the gamedir, to ensure that Vortex knows it is uninstalled and would complain if a mod depends on it.
-  To enable that function just set `BUG170=170` somewhere (f.e. [global.conf](#global.conf)
+  To enable that function just set `BUG170=170` somewhere (f.e. [global.conf](#Global Config)
 
 #### Registry
 
@@ -437,7 +436,7 @@ Some games start own launchers before the actual game and autodetecting the corr
 *(searching for the biggest window from the game process, which may not be always the correct one)*
 That's why you can configure the exact window name to look for, which makes the whole process much more straighter.
 
-Setting the [global.conf](#global.conf) option `SAVESBSWINNAME` to 1 enabled saving the game window name into a freshly created [SBS Tweak](#SBS Tweaks) config (so this is only done once and used from now on automatically).
+Setting the [global.conf](#Global Config) option `SAVESBSWINNAME` to 1 enabled saving the game window name into a freshly created [SBS Tweak](#SBS Tweaks) config (so this is only done once and used from now on automatically).
 With the game window name available SBS-VR starting works much better and faster than without, so you should enable that option.
 
 Setting SAVESBSWINNAME to 1 allows you to pick the game window name, which is the fastest method to get the window name. It usually works very good, but when f.e. the game has a launcher which you have to click this won't work of course.
@@ -556,6 +555,6 @@ forediting the [Game specific configuration file](#User Configurations) with you
 set PROTONDB to 1 to additionally open the protondb.com url for the game `PDBURL` in your `BROWSER` when starting the editor
 
 #### ENV Variables
-Literally every env variable can be set in [gameconfig `$STLGAMECFG`](#Game Configurations) and [system-wide configuration](#global.conf),
+Literally every env variable can be set in [gameconfig `$STLGAMECFG`](#Game Configurations) and [system-wide configuration](#Global Config),
 making it pretty easy to tinker with important ones *(f.e `PROTON`* , `DXVK`* , `MANGOHUD`, `RADV_PERFTEST`, `WINE`...)*
 The Possibilities Are Endless...
