@@ -12,7 +12,7 @@ and everything else can be changed and controlled easily subsequently using **st
 Just add this program to your steam game command line like:
 'stl %command%'
 
-![stl starter](https://media.giphy.com/media/gghbOGB41ggEsrq3KM/giphy.gif)
+![stl starter](https://github.com/frostworx/repo-assets/blob/master/gifs/stl-command.gif)
 
 *A little script which automatically does this for every game in the Steam library can be found [here](https://gist.github.com/frostworx/36bd76e705a0c87af523fa57cfeebaf8)*
 
