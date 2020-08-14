@@ -156,7 +156,7 @@ under the same name (case-sensitive, but written uppercase in Steam **!**)
 
 If a configuration file is found it is initialized as additional config file.
 
-This makes it easy to create "Confifuration categories" by
+This makes it easy to create "Configuration categories" by
 - simply creating a Steam Category
 - creating a categories configfile under the same name and defining settings in it
 - adding a game to the category to use those settings automatically
@@ -216,7 +216,7 @@ VRGAMEWINDOW=Trine 2
 Means, when `RUNSBSVR` is not 0 in the main Trine2 config file it will autodetect above sbs tweak config and use the defined variables:
 Trine 2 won't start it's original launcher (`ONLY_CUSTOMCMD=1`), but only the custom command `trine2_32bit.exe` and will wait for a `Trine 2` window to open in **VR**
 
-So in general sbs configs are automatically loaded when found and override settings in the mainconfig
+So in general sbs configs are automatically loaded when found and override settings in the main config
 so you just have to enable `RUNSBSVR` in `STLCFGDIR/gamecfgs/35720.conf` and everything else is configured automatically.
 
 
@@ -355,7 +355,7 @@ Here are the main configuration options:
 Vortex uses 2 main [Deployment_Methods]:(https://wiki.nexusmods.com/index.php/Deployment_Methods) to enable Mods for the managed games.
 "Hardlink Deployment" and "Symlink Deployment". Symlink Deployment doesn't work under wine, so Hardlink is required (and automatically set for every game from **stl**, although it is default anyway)
 Those "Hardlinks" only work if the "Staging directory" is on the same partition as the game (yes the same physical partition, not the same "windows drive in wine).
-As Steam Library directories can be on multiple paritions a "Staging directory" is required for every one of them.
+As Steam Library directories can be on multiple partitions a "Staging directory" is required for every one of them.
 
 ###### Automated (zeroconf) `VORTEXSTAGES` configuration
 When you start a game **stl** will parse on which mount point it actually lies.
@@ -373,7 +373,7 @@ Other additional paths can be added easily, just make suggestions.
 If you don't want that automation just set `DISABLE_AUTOSTAGES` to 1 and set them manually instead:
 
 ###### Manual `VORTEXSTAGES` configuration
-This can be manually configured in the `VORTEXSTAGES` simply by adding one writeable directory per partition you want to use.
+This can be manually configured in the `VORTEXSTAGES` simply by adding one writable directory per partition you want to use.
 This `VORTEXSTAGES` is currently not very stable without any sanity checks so make sure to:
 Seperate the paths with a "," and do not use quotes or spaces in between!
 **working example:**
@@ -389,7 +389,7 @@ Seperate the paths with a "," and do not use quotes or spaces in between!
 
 #####  Some additional Notes
 
-- On the first start Vortex warns that it is started with admin priviledges. Very likely wine related, just click it away, it won't pop up again
+- On the first start Vortex warns that it is started with admin privileges. Very likely wine related, just click it away, it won't pop up again
 - I tested ~25 games and they worked ootb, feel free to open an issue for a not (automatically) working game if you think this is a **stl** bug. (Nehrim doesn't seem to work (yet))
 - It was pretty much work to get this into the current state, but although I tested a lot there still might be glitches and problems.
   Also Vortex can stop working under linux/wine anytime after an update (as it already did before).
@@ -446,7 +446,7 @@ So setting this f.e. to 60 seconds and playing the game for 2 minutes is enough.
 In rare cases a game doesn't have a valid window name, which makes detecting the correct window pretty complicated.
 
 The author [vr-video-player](https://git.dec05eba.com/vr-video-player) was so kind to accept a little patch, to work better with **stl**.
-It is possible to live zoom in and out and the zoom state is written into a temporar file, which **stl** picks up.
+It is possible to live zoom in and out and the zoom state is written into a temporary file, which **stl** picks up.
 The value is stored in the internal [SBS Tweak](#SBS Tweaks) config (also when changed) and read from there from now on.
 
 To make switching between game- and vr-video-player window easier (with hmd) there is also the option `TOGGLEWINDOWS`:
