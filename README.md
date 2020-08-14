@@ -327,6 +327,7 @@ Just create a "Vortex" [Steam Category](#Steam-Categories) and add your (Vortex 
 Vortex will start, with the selected game preconfigured and ready to mod
 and when you exit Vortex the selected game will start normally (with your mods).
 
+![stl Vortex in action](https://github.com/frostworx/repo-assets/blob/master/gifs/stl-vortex.gif)
 
 **Installation?**
 If Vortex is not yet installed, it will be installed on the first launch, so the first launch will need some time (mostly depends on dotnets mind of its own... maybe 5 minutes).
