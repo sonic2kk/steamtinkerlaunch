@@ -61,7 +61,7 @@ Also enable everything you want to use generally for your games in [the default 
 * **[Boxtron](#Boxtron)** support via steam `DOSBox` category
 * **[Roberta](#Roberta)** support via steam `ScummVM` category
 * **[Luxtorpeda](#Luxtorpeda)** support via steam `Luxtorpeda` category
-* **[Vortex Mod Manager](#Vortex)** via steam `Vortex` category
+* **[Vortex Mod Manager](#Vortex)** via steam `Vortex` category see [Video of usage](#stl-Vortex-gif)
 
 ## Requirements
 *(no special order)*
@@ -327,6 +327,7 @@ Just create a "Vortex" [Steam Category](#Steam-Categories) and add your (Vortex 
 Vortex will start, with the selected game preconfigured and ready to mod
 and when you exit Vortex the selected game will start normally (with your mods).
 
+##### stl Vortex gif
 ![stl Vortex in action](https://github.com/frostworx/repo-assets/blob/master/gifs/stl-vortex.gif)
 
 **Installation?**
