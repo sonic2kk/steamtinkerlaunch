@@ -33,7 +33,7 @@ If you are on Arch Linux you can install **stl** from **AUR**
 When **stl** is started for the first time it will create its default [configuration](#Configuration) structure.
 At least make sure that `STLEDITOR` points to an installed graphical text editor in [the global config](#Global-Config)
 (set to "xdg-open" by default, which should just work in most cases)
-Also enable everything you want to use generally for your games in [the default template](#Default Template-Config)
+Also enable everything you want to use generally for your games in [the default template](#Default-Template-Config)
 
 ## Features
 
@@ -118,10 +118,10 @@ The systemwide configuration directory `SYSTEMSTLCFGDIR` can be found under `/us
 
 All configs used here are read first, so user configs override them if required.
 System-wide configs help to keep configuration easy and get things to work ootb.
-f.e. there are preconfigured [Steam Category](#Steam Categories),
+f.e. there are preconfigured [Steam Category](#Steam-Categories),
 custom per-game [registry](#Registry) files, which are autodetected and applied *(when `REGEDIT` is 1)*,
 *community contributed* [tweaks](#Tweaks) which make sure specific games work ootb using the provided configuration options,
-*community contributed* [sbs tweaks](#SBS Tweaks) which make sure specific games work ootb in [SBS-VR](#Side-by-Side VR) mode using the provided configuration options
+*community contributed* [sbs tweaks](#SBS-Tweaks) which make sure specific games work ootb in [SBS-VR](#Side-by-Side-VR) mode using the provided configuration options
 
 
 ### Default Template Config
@@ -145,8 +145,8 @@ or which default programs to use
 
 When starting a game using **stl** the game specific config file is searched in `STLGAMEDIR`
 and created if not available from the default config file *(which in turn is automatically created as well if not found)*.
-Additional individual configs can be loaded via [Tweaks](#Tweaks) and [SBS Tweaks](#SBS Tweaks)
-Any option configured in here and also in [global.conf](#Global Config) is overridden by this config.
+Additional individual configs can be loaded via [Tweaks](#Tweaks) and [SBS Tweaks](#SBS-Tweaks)
+Any option configured in here and also in [global.conf](#Global-Config) is overridden by this config.
 
 
 ### Steam Categories
@@ -160,18 +160,18 @@ This makes it easy to create "Configuration categories" by
 - creating a categories configfile under the same name and defining settings in it
 - adding a game to the category to use those settings automatically
 
-Category Configuration Files are searched in the [User Configurations](#User Configuration) `STLCATEGORYDIR` *(`STLCFGDIR`/categories)*
-or in the [system-wide](#Systemwide Configuration) dir `GLOBALCATEGORYDIR` *(`SYSTEMSTLCFGDIR/categories)`*
+Category Configuration Files are searched in the [User Configurations](#User-Configuration) `STLCATEGORYDIR` *(`STLCFGDIR`/categories)*
+or in the [system-wide](#Systemwide-Configuration) dir `GLOBALCATEGORYDIR` *(`SYSTEMSTLCFGDIR/categories)`*
 where some category files are already preconfigured:
 
 a game in the corresponding category
 - **DOSBox.conf** is started automatically with linux native dosbox provided by [Boxtron](#Boxtron)
 - **Luxtorpeda.conf** is started automatically with linux native binary provided by [Luxtorpeda](#Luxtorpeda)
-- **ReShadeVR.conf** is started automatically in [SBS-VR](#Side-by-Side VR) mode using [ReShade](#ReShade)
-- **SBS-VR.conf** is started automatically in [SBS-VR](#Side-by-Side VR) mode without Shader (for games with builtin Stereoscopic3D support)
+- **ReShadeVR.conf** is started automatically in [SBS-VR](#Side-by-Side-VR) mode using [ReShade](#ReShade)
+- **SBS-VR.conf** is started automatically in [SBS-VR](#Side-by-Side-VR) mode without Shader (for games with builtin Stereoscopic3D support)
 - **ScummVM.conf** is started automatically with linux native scummvm provided by [Roberta](#Roberta)
 - **Vortex.conf** is started automatically with the [Vortex](#Vortex) Mod Manager
-- **vkVR.conf** is started automatically in [SBS-VR](#Side-by-Side VR) mode using [vkBasalt](#vkBasalt) and 
+- **vkVR.conf** is started automatically in [SBS-VR](#Side-by-Side-VR) mode using [vkBasalt](#vkBasalt) and 
 
 Multiple Category Configuration Files are possible, they are loaded one after another, with the last one overriding settings also found in the previous files.
 All settings which are also configured in `$STLGAMECFG` are overridden (but not overwritten).
@@ -179,8 +179,8 @@ All settings which are also configured in `$STLGAMECFG` are overridden (but not 
 ### Tweaks
 
 - `USETWEAKS`: set to 1 to override settings with tweaks when found
-When enabled *([User Configurations](#User Configuration) overrides [system-wide](#Systemwide Configuration)* an existing tweak config `TWEAKCFG` in `TWEAKDIR`
-overrides the settings in the [`$STLGAMECFG`](#Game Configurations).
+When enabled *([User Configurations](#User-Configuration) overrides [system-wide](#Systemwide-Configuration)* an existing tweak config `TWEAKCFG` in `TWEAKDIR`
+overrides the settings in the [`$STLGAMECFG`](#Game-Configurations).
 Using this it would be possible to contribute tweak configs required to get games to work hazzlefree out of the box to the community.
 With `CREATETWEAKS` a default template tweak file is autogenerated on game launch, to make creating one a bit easier.
 
@@ -196,8 +196,8 @@ user tweak-files in `TWEAKDIR` override global ones in `GLOBALTWEAKDIR`
 
 ### SBS Tweaks
 
-Game specific config files `SteamAppID.conf` both in and [system-wide](#Systemwide Configuration) *(`GLOBALSBSTWEAKDIR`)* and [User Configurations](#User Configuration) *(`SBSTWEAKDIR`)*
-with optimal settings for [SBS-VR](#Side-by-Side VR) (f.e. launcher skips using the game exe as custom command).
+Game specific config files `SteamAppID.conf` both in and [system-wide](#Systemwide-Configuration) *(`GLOBALSBSTWEAKDIR`)* and [User Configurations](#User-Configuration) *(`SBSTWEAKDIR`)*
+with optimal settings for [SBS-VR](#Side-by-Side-VR) (f.e. launcher skips using the game exe as custom command).
 
 Here's an example config for trine 2 `STLCFGDIR/sbs/35720.conf`
 
@@ -220,7 +220,7 @@ so you just have to enable `RUNSBSVR` in `STLCFGDIR/gamecfgs/35720.conf` and eve
 
 
 ### vortex.conf
-See [Vortex Configuration](#Vortex Configuration)
+See [Vortex Configuration](#Vortex-Configuration)
 
 
 ### Downloads
@@ -231,9 +231,9 @@ As of writing those are
 [ReShade](#ReShade) ReShade itself and required d3dcompiler dlls
 
 ### Logs
-Logs are written into the `LOGDIR` defined in the [global.conf](#Global Config).
+Logs are written into the `LOGDIR` defined in the [global.conf](#Global-Config).
 The verbosity of the logfile depends on `WRITELOG` *(write logfile if not 0, increase verbosity from 1-2 (1:less, 2:all))*
-also defined in the [global.conf](#Global Config).
+also defined in the [global.conf](#Global-Config).
 There are several logfiles, those which are written mostly are the game specific ones *($SteamAppId.log)*
 
 ## Features in detail:
@@ -249,7 +249,7 @@ When enabled you can start custom programs easily with the following per-game co
 - `FORK_CUSTOMCMD`: set to 1 to fork the custom `CUSTOMCMD` into the background and continue with starting `%command%`
 
 If only `RUN_CUSTOMCMD` is enabled, but `CUSTOMCMD` is empty, a requester will open where a executable file can be selected.
-This selected file is automatically written into the [in game configfile `$STLGAMECFG`](#Game Specific Configuration).
+This selected file is automatically written into the [in game configfile `$STLGAMECFG`](#Game-Specific-Configuration).
 
 If string `CUSTOMCMD` can't be found as file in either `PATH`, in game dir or as absolute filepath the requester will open as well.
 
@@ -270,7 +270,7 @@ Silent winetricks installation:
 
 [Boxtron](https://github.com/dreamer/boxtron):
 
-The global configs `BOXTRONCMD` and `BOXTRONARGS` in the [global.conf](#Global Config) need to be set correcty initially.
+The global configs `BOXTRONCMD` and `BOXTRONARGS` in the [global.conf](#Global-Config) need to be set correcty initially.
 It should not be necessary to change the default `ROBERTAARGS`.
 Defaults are:
 **
@@ -279,14 +279,14 @@ BOXTRONARGS=--wait-before-run
 **
 which is at least valid if you are on Arch Linux and installed boxtron from AUR.
 
-To start a game with boxtron either set `USEBOXTRON` in the [gameconfig `$STLGAMECFG`](#Game Configurations) or put the game into the [steam category](#Steam Categories) "DOSBox"
-Alternatively duplicate the file to a different name which you want to use as category name, ideally into [`STLCATEGORYDIR`.](#Steam Categories).
+To start a game with boxtron either set `USEBOXTRON` in the [gameconfig `$STLGAMECFG`](#Game-Configurations) or put the game into the [steam category](#Steam-Categories) "DOSBox"
+Alternatively duplicate the file to a different name which you want to use as category name, ideally into [`STLCATEGORYDIR`.](#Steam-Categories).
 
 #### Roberta
 
 [Roberta](https://github.com/dreamer/roberta):
 
-The global configs `ROBERTACMD` and `ROBERTAARGS` in the [global.conf](#Global Config) need to be set correcty initially.
+The global configs `ROBERTACMD` and `ROBERTAARGS` in the [global.conf](#Global-Config) need to be set correcty initially.
 It should not be necessary to change the default `ROBERTAARGS`.
 Defaults are:
 **
@@ -295,13 +295,13 @@ ROBERTAARGS=--wait-before-run
 **
 which is at least valid if you installed roberta manually.
 
-To start a game with roberta either set `USEROBERTA` in the [gameconfig `$STLGAMECFG`](#Game Configurations) or put the game into the [steam category](#Steam Categories) "ScummVM"
-Alternatively duplicate the file to a different name which you want to use as category name, ideally into [`STLCATEGORYDIR`.](#Steam Categories-dir).
+To start a game with roberta either set `USEROBERTA` in the [gameconfig `$STLGAMECFG`](#Game-Configurations) or put the game into the [steam category](#Steam-Categories) "ScummVM"
+Alternatively duplicate the file to a different name which you want to use as category name, ideally into [`STLCATEGORYDIR`.](#Steam-Categories-dir).
 
 #### Luxtorpeda
 [Luxtorpeda-dev](https://github.com/luxtorpeda-dev/luxtorpeda) or (untested) the [main branch](https://github.com/dreamer/luxtorpeda)
 
-The global configs `LUXTORPEDACMD` and `LUXTORPEDAARGS` in the [global.conf](#Global Config) need to be set correctly initially.
+The global configs `LUXTORPEDACMD` and `LUXTORPEDAARGS` in the [global.conf](#Global-Config) need to be set correctly initially.
 It should not be necessary to change the default `LUXTORPEDAARGS`.
 
 Defaults are:
@@ -311,8 +311,8 @@ LUXTORPEDAARGS=wait-before-run
 **
 which is at least valid if you installed roberta manually.
 
-To start a game with luxtorpeda either set `USELUXTORPEDA` in the [gameconfig `$STLGAMECFG`](#Game Configurations) or put the game into the [steam category](#Steam Categories) "Luxtorpeda"
-Alternatively duplicate the file to a different name which you want to use as category name, ideally into [`STLCATEGORYDIR`.](#Steam Categories-dir).
+To start a game with luxtorpeda either set `USELUXTORPEDA` in the [gameconfig `$STLGAMECFG`](#Game-Configurations) or put the game into the [steam category](#Steam-Categories) "Luxtorpeda"
+Alternatively duplicate the file to a different name which you want to use as category name, ideally into [`STLCATEGORYDIR`.](#Steam-Categories-dir).
 The luxtorpeda-dev dev was so kind to add a manual-download option in v20, so if native game files are missing they are downloaded before the actual game launch now.
 Therefore it is recommended to use the lastest luxtorpeda-dev version.
 
@@ -323,7 +323,7 @@ Therefore it is recommended to use the lastest luxtorpeda-dev version.
 **Usage**:
 
 Vortex can be used without any **stl** configuration and will work ootb without zero configuration.
-Just create a "Vortex" [Steam Category](#Steam Categories) and add your (Vortex compatible) game to it and start the game regularly.
+Just create a "Vortex" [Steam Category](#Steam-Categories) and add your (Vortex compatible) game to it and start the game regularly.
 Vortex will start, with the selected game preconfigured and ready to mod
 and when you exit Vortex the selected game will start normally (with your mods).
 
@@ -345,7 +345,7 @@ Here are the main configuration options:
 - `VORTEXPREFIX`:the `WINEPREFIX` path used for Vortex - **default is `STLVORTEXDIR/wineprefix`**
 - `VORTEXDOWNLOADPATH`: the path where all Vortex downloads should be stored - **default is `STLVORTEXDIR/downloads`**
 - `VORTEXINSTALL`: download and install Vortex automatically if set to 1 **default enabled**
-- [`VORTEXSTAGES`](#Vortex Stages): comma-seperated list of "Vortex Staging directories - one for each of your "Steam Library" partitions - **default commented out and empty**
+- [`VORTEXSTAGES`](#Vortex-Stages): comma-seperated list of "Vortex Staging directories - one for each of your "Steam Library" partitions - **default commented out and empty**
 - `DISABLE_AUTOSTAGES`: set to 1 if you don't want **stl** to try to auto set/create `VORTEXSTAGE` directories **default 0**
 
 ##### Vortex Stages
@@ -398,7 +398,7 @@ Seperate the paths with a "," and do not use quotes or spaces in between!
   You can also set it to 2+3 though (ideally in the gameconfig `$STLGAMECFG`), where 2 "quickstarts" Vortex leaving out some checks, and 3 doing the same, but doesn't start the game afterwards.
 - unfortunately Skyrim/Fallout (flavours) Script Extender doesn't [work with default proton since some time](https://github.com/ValveSoftware/Proton/issues/170).
   As many mods depend on "SE" I added a function which renames the "SE" exe when found in the gamedir, to ensure that Vortex knows it is uninstalled and would complain if a mod depends on it.
-  To enable that function just set `BUG170=170` somewhere (f.e. [global.conf](#Global Config)
+  To enable that function just set `BUG170=170` somewhere (f.e. [global.conf](#Global-Config)
 
 #### Registry
 
@@ -436,27 +436,27 @@ Some games start own launchers before the actual game and autodetecting the corr
 *(searching for the biggest window from the game process, which may not be always the correct one)*
 That's why you can configure the exact window name to look for, which makes the whole process much more straighter.
 
-Setting the [global.conf](#Global Config) option `SAVESBSWINNAME` to 1 enabled saving the game window name into a freshly created [SBS Tweak](#SBS Tweaks) config (so this is only done once and used from now on automatically).
+Setting the [global.conf](#Global-Config) option `SAVESBSWINNAME` to 1 enabled saving the game window name into a freshly created [SBS Tweak](#SBS-Tweaks) config (so this is only done once and used from now on automatically).
 With the game window name available SBS-VR starting works much better and faster than without, so you should enable that option.
 
 Setting SAVESBSWINNAME to 1 allows you to pick the game window name, which is the fastest method to get the window name. It usually works very good, but when f.e. the game has a launcher which you have to click this won't work of course.
-If `SAVESBSWINNAME` is greater than 1 the program will wait `SAVESBSWINNAME` seconds long to get the name of the currently active window and save that into the [SBS Tweak](#SBS Tweaks) config.
+If `SAVESBSWINNAME` is greater than 1 the program will wait `SAVESBSWINNAME` seconds long to get the name of the currently active window and save that into the [SBS Tweak](#SBS-Tweaks) config.
 So setting this f.e. to 60 seconds and playing the game for 2 minutes is enough.
 In rare cases a game doesn't have a valid window name, which makes detecting the correct window pretty complicated.
 
 The author [vr-video-player](https://git.dec05eba.com/vr-video-player) was so kind to accept a little patch, to work better with **stl**.
 It is possible to live zoom in and out and the zoom state is written into a temporary file, which **stl** picks up.
-The value is stored in the internal [SBS Tweak](#SBS Tweaks) config (also when changed) and read from there from now on.
+The value is stored in the internal [SBS Tweak](#SBS-Tweaks) config (also when changed) and read from there from now on.
 
 To make switching between game- and vr-video-player window easier (with hmd) there is also the option `TOGGLEWINDOWS`:
 When enabled, all visible windows will minimize on game start, and will maximize back when game finishes *(might glitch sometimes)*
 So switching between the windows is easily possible with *Alt+Tab*.
-`TOGGLEWINDOWS` is also enabled by default in the **VR** [Steam Categories](#Steam Categories) *(ReShadeVR,SBS-VR,vkVR.conf)*
+`TOGGLEWINDOWS` is also enabled by default in the **VR** [Steam Categories](#Steam-Categories) *(ReShadeVR,SBS-VR,vkVR.conf)*
 
 #### GameMode
 [gamemode](https://github.com/FeralInteractive/gamemode)
 - `USEGAMEMODERUN`: set to 1 to start game with gamemoderun
-*([User Configuration](#User Configuration) overrides [system-wide configuration](#Systemwide Configuration))*
+*([User Configuration](#User-Configuration) overrides [system-wide configuration](#Systemwide-Configuration))*
 
 #### Notifier
 Set `NOTY` to your notifier to draw some start/stop **stl** messages
@@ -472,12 +472,12 @@ Set `MANGOHUD` to 1 to enable mangohud *(does nothing in stl itself, but just ex
 #### Nyrna
 [Nyrna](https://github.com/Merrit/nyrna)
 Set `RUN_NYRNA` to 1 to enable nyrna while game is running 
-*([User Configuration](#User Configuration) overrides [system-wide configuration](#Systemwide Configuration))*
+*([User Configuration](#User-Configuration) overrides [system-wide configuration](#Systemwide-Configuration))*
 
 #### ReplaySorcery
 [ReplaySorcery](https://github.com/matanui159/ReplaySorcery)
 Set `RUN_REPLAY` to 1 to enable replay-sorcery while game is running 
-*([User Configuration](#User Configuration) overrides [system-wide configuration](#Systemwide Configuration))*
+*([User Configuration](#User-Configuration) overrides [system-wide configuration](#Systemwide-Configuration))*
 
 #### Toggle Open Windows
 minimize all open windows on game start and maximize them when game exited using wmctrl
@@ -542,7 +542,7 @@ The autogenerated `VKBASALT_CONFIG_FILE` points to the files from `RESHADE_DEPTH
 
 #### Depth3D
 [Depth3D](https://github.com/BlueSkyDefender/Depth3D)
-Mostly useful in combination with [SBS-VR](#Side-by-Side VR).
+Mostly useful in combination with [SBS-VR](#Side-by-Side-VR).
 Set `RESHADE_DEPTH3D` to 1 to install ReShade Depth3D Shader into gamedir
 If `CLONE_DEPTH3D` is set to 1 the git repository will be automatically cloned/pulled (only when `RESHADE_DEPTH3D=1`) to `DEPTH3DSRCDIR` in [Downloads](#Downloads)
 
@@ -551,10 +551,10 @@ When the game started just create a initial profile by selecting the autodetecte
 
 #### Editor
 When `WAITEDITOR` is greater 0 a zenity requester will pop up on game launch and wait `WAITEDITOR` seconds for a keypress
-forediting the [Game specific configuration file](#User Configurations) with your `STLEDITOR` if desired.
+forediting the [Game specific configuration file](#User-Configurations) with your `STLEDITOR` if desired.
 set PROTONDB to 1 to additionally open the protondb.com url for the game `PDBURL` in your `BROWSER` when starting the editor
 
 #### ENV Variables
-Literally every env variable can be set in [gameconfig `$STLGAMECFG`](#Game Configurations) and [system-wide configuration](#Global Config),
+Literally every env variable can be set in [gameconfig `$STLGAMECFG`](#Game-Configurations) and [system-wide configuration](#Global-Config),
 making it pretty easy to tinker with important ones *(f.e `PROTON`* , `DXVK`* , `MANGOHUD`, `RADV_PERFTEST`, `WINE`...)*
 The Possibilities Are Endless...
