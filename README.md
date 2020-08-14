@@ -61,7 +61,7 @@ Also enable everything you want to use generally for your games in [`$STLCFGDIR/
 * **[Boxtron](#Boxtron)** support via steam `DOSBox` category
 * **[Roberta](#Roberta)** support via steam `ScummVM` category
 * **[Luxtorpeda](#Luxtorpeda)** support via steam `Luxtorpeda` category
-* **[Vortex Mod Manager](#Vortex Mod Manager)** via steam `Vortex` category
+* **[Vortex Mod Manager](#Vortex)** via steam `Vortex` category
 
 ## Requirements
 *(no special order)*
@@ -84,7 +84,7 @@ For the optional features you need:
 - [Boxtron](#Boxtron) and dosbox to optionally start dos games with linux native dosbox
 - ScummVM to optionally start compatible games natively using [Roberta](https://github.com/dreamer/roberta)
 - [luxtorpeda-dev](https://github.com/luxtorpeda-dev/luxtorpeda) or [Luxtorpeda](https://github.com/dreamer/luxtorpeda) to optionally start supported games with a linux native binary
-- wine for optional [Vortex](#Vortex Mod Manager) support
+- wine for optional [Vortex](#Vortex) support
 
 
 ## Configuration
@@ -110,8 +110,8 @@ When started for the first time **stl** will initially create this default confi
         ├── [logs](#Logs)
         ├── [logs](#Logs)/[stl.log](#Logs)
         ├── [tweaks](#Tweaks)
-        ├── [vortex](#Vortex Mod Manager)      
-        └── [vortex](#Vortex Mod Manager)/[vortex.conf](#vortex.conf)
+        ├── [vortex](#Vortex)      
+        └── [vortex](#Vortex)/[vortex.conf](#vortex.conf)
 
 #### Systemwide Configuration
 The systemwide configuration directory `SYSTEMSTLCFGDIR` can be found under `/usr/share/$PROGCMD` *(/usr/share/stl/)*
@@ -171,7 +171,7 @@ a game in the corresponding category
 - **ReShadeVR.conf** is started automatically in [SBS-VR](#Side-by-Side VR) mode using [ReShade](#ReShade)
 - **SBS-VR.conf** is started automatically in [SBS-VR](#Side-by-Side VR) mode without Shader (for games with builtin Stereoscopic3D support)
 - **ScummVM.conf** is started automatically with linux native scummvm provided by [Roberta](#Roberta)
-- **Vortex.conf** is started automatically with the [Vortex](#Vortex Mod Manager) Mod Manager
+- **Vortex.conf** is started automatically with the [Vortex](#Vortex) Mod Manager
 - **vkVR.conf** is started automatically in [SBS-VR](#Side-by-Side VR) mode using [vkBasalt](#vkBasalt) and 
 
 Multiple Category Configuration Files are possible, they are loaded one after another, with the last one overriding settings also found in the previous files.
@@ -228,7 +228,7 @@ See [Vortex Configuration](#Vortex Configuration)
 The `STLDLDIR` directory stores all downloads started through **stl**
 As of writing those are
 [Depth3D](#Depth3D) shader files
-[Vortex](#Vortex Mod Manager) the installation setup exe
+[Vortex](#Vortex) the installation setup exe
 [ReShade](#ReShade) ReShade itself and required d3dcompiler dlls
 
 ### Logs
@@ -318,7 +318,7 @@ The luxtorpeda-dev dev was so kind to add a manual-download option in v20, so if
 Therefore it is recommended to use the lastest luxtorpeda-dev version.
 
 
-#### Vortex Mod Manager
+#### Vortex
 [Vortex Mod Manager](https://github.com/Nexus-Mods/Vortex)
 
 **Usage**:
