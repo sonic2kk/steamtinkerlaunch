@@ -333,6 +333,7 @@ and when you exit Vortex the selected game will start normally (with your mods).
 **Installation?**
 If Vortex is not yet installed, it will be installed on the first launch, so the first launch will need some time (mostly depends on dotnets mind of its own... maybe 5 minutes).
 Alternatively you can also install it via command line (see below).
+Sometimes the dotnet installation hangs forever. I'm afraid there's nothing I can do to fix this (probably a winetricks bug(?).
 
 **Functionality**:
 Some settings are preconfigured, to make this working without any user configuration, but of course all of the settings can be as well configured if you want.
