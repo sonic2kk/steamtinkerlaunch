@@ -5,7 +5,7 @@
 ### project ###
 
 PROGNAME="SteamTinkerLaunch"
-PROGVERS="v1.3.6"
+PROGVERS="v1.3.7"
 PROGCMD="$(basename "$0")"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -157,10 +157,10 @@ else
 	fi
 fi
 
-#function extRun {
-## some steamvariables need to be disabled to get start external programs correcty:
-#	LC_ALL="C" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" "$@"
-#}
+function extRun {
+# some steamvariables need to be disabled to get start external programs correcty:
+	LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" "$@"
+}
 
 #### VKBASALT BLOCK START ####
 
@@ -660,7 +660,7 @@ function installReshade {
 
 			writelog "INFO" "${FUNCNAME[0]} - INSTALL_RESHADE enabled"
 	#32bit:
-			if [ "$(LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" file "$GP" | grep -c "PE32 ")" -eq 1 ]; then
+			if [ "$(extRun file "$GP" | grep -c "PE32 ")" -eq 1 ]; then
 				writelog "INFO" "${FUNCNAME[0]} - installing 32bit Reshade as $GE is 32bit" 
 
 				if [ ! -f "$EFD/$RS_D3D47_DEST" ]; then
@@ -699,7 +699,7 @@ function installReshade {
 				fi
 
 	# 64bit:
-			elif  [ "$(LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" file "$GP" | grep -c "PE32+ ")" -eq 1 ]; then
+			elif  [ "$(extRun file "$GP" | grep -c "PE32+ ")" -eq 1 ]; then
 				writelog "INFO" "${FUNCNAME[0]} - installing 64bit Reshade as $GE is 64bit" 
 
 				if [ ! -f "$EFD/$RS_D3D47_DEST" ]; then
@@ -1497,9 +1497,11 @@ function launchCustomProg {
 		IFS=" " read -r -a RUNCUSTOMCMD_ARGS <<< "$CUSTOMCMD_ARGS"
 		writelog "INFO" "${FUNCNAME[0]} - launching custom command with $LACO $CUSTOMCMD_ARGS"
 # several variables coming from steam have to be cleaned in order to get wine to work here
-		if [ "$(LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" file "$CUSTCOM" | grep -c "PE32")" -eq 1 ]; then
+extRun file "$CUSTCOM" > /tmp/file
+
+		if [ "$(extRun file "$CUSTCOM" | grep -c "PE32")" -eq 1 ]; then
 			writelog "INFO" "${FUNCNAME[0]} - $CUSTCOM seems to be a MS Windows exe - starting through proton"
-			if [ "$(LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" file "$CUSTCOM" | grep -c "(console)")" -eq 1 ]; then
+			if [ "$(extRun file "$CUSTCOM" | grep -c "(console)")" -eq 1 ]; then
 				writelog "INFO" "${FUNCNAME[0]} - $CUSTCOM seems to be a MS console program - starting using wineconsole"
 				LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" WINEPREFIX="$GPFX" "$GWINE" wineconsole "$LACO" "${RUNCUSTOMCMD_ARGS[@]}"
 			else
