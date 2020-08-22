@@ -5,7 +5,7 @@
 ### project ###
 
 PROGNAME="SteamTinkerLaunch"
-PROGVERS="v1.3.7"
+PROGVERS="v1.3.8"
 PROGCMD="$(basename "$0")"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -157,9 +157,21 @@ else
 	fi
 fi
 
-function extRun {
 # some steamvariables need to be disabled to get start external programs correcty:
+
+function extRun {
+	writelog "INFO" "${FUNCNAME[0]} - started $*"
 	LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" "$@"
+}
+
+function extWine32Run {
+	writelog "INFO" "${FUNCNAME[0]} - started $* with: WINEDEBUG=\"-all\" WINE=\"$GWINE\" WINEARCH=win32 WINEPREFIX=\"$GPFX\""
+	WINEDEBUG="-all" WINE="$GWINE" WINEARCH=win32 WINEPREFIX="$GPFX" LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" "$@"
+}
+
+function extWine64Run {
+	writelog "INFO" "${FUNCNAME[0]} - started $* with: WINEDEBUG=\"-all\" WINE=\"$GWINE\" WINEARCH=win64 WINEPREFIX=\"$GPFX\""
+	WINEDEBUG="-all" WINE="$GWINE" WINEARCH=win64 WINEPREFIX="$GPFX" LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" "$@"
 }
 
 #### VKBASALT BLOCK START ####
@@ -638,12 +650,12 @@ function checkReShadeDepth3D {
 		if [ -n "$DEPTH3DSRCDIR" ]; then
 			if [ -d "$DEPTH3DSRCDIR/.git" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - pulling $DEPTH3DURL update in $DEPTH3DSRCDIR"
-				LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" "$GIT" --work-tree="$DEPTH3DSRCDIR" --git-dir="$DEPTH3DSRCDIR/.git" pull
+				extRun "$GIT" --work-tree="$DEPTH3DSRCDIR" --git-dir="$DEPTH3DSRCDIR/.git" pull
 			else
 				writelog "INFO" "${FUNCNAME[0]} - creating dir $DEPTH3DSRCDIR"
 				mkdir "$DEPTH3DSRCDIR" >/dev/null 2>/dev/null
 				writelog "INFO" "${FUNCNAME[0]} - cloning $DEPTH3DURL in $DEPTH3DSRCDIR"
-				LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" "$GIT" clone "$DEPTH3DURL" "$DEPTH3DSRCDIR"
+				extRun "$GIT" clone "$DEPTH3DURL" "$DEPTH3DSRCDIR"
 			fi
 		else
 			writelog "SKIP" "${FUNCNAME[0]} - ERROR - variable DEPTH3DSRCDIR is empty - skipping Depth3D update"
@@ -1400,6 +1412,65 @@ function checkNetMonLaunch {
 	fi
 }
 
+# remove directory $1 recursively if it exists
+function rmrecDir {
+	if [ -d "$1" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - removing directory $1 recursively"
+		rm -rf "$1"
+	fi
+}
+
+# generic function to check if file INSTFILE $1 is installed in gamedir $EFD or can be installed automatically from INSTSRCDIR $2 with optional infotext INSTINFO $4 - retry starts original function ORGFUNC $3
+function fileInstall {
+	INSTOK=1
+
+	INSTFILE="$1"
+	INSTSRCDIR="$2"
+	ORGFUNC="$3"
+	INSTINFO="$4"
+	REQWIDTH="$5"
+	writelog "INFO" "${FUNCNAME[0]} - game '$GN ($AID)' needs $INSTFILE - checking"
+	if [ -f "$EFD/$INSTFILE" ]; then
+		writelog "OK" "${FUNCNAME[0]} - found $INSTFILE in gamedir $EFD"
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - $INSTFILE not found in gamedir $EFD - checking if it can be installed automatically"
+		INSTOK=0
+	fi
+
+	if [ "$INSTOK" -eq 0 ]; then
+		if [ -f "$INSTSRCDIR/$INSTFILE" ]; then
+			writelog "OK" "${FUNCNAME[0]} - found $INSTFILE in $INSTSRCDIR - copying into gamedir $EFD"
+			extRun cp "$INSTSRCDIR/$INSTFILE" "$EFD"
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - $INSTFILE also not found in $INSTSRCDIR for automatic installation - game probably won't work!"
+			if [ -x "$(command -v "$STEAM_ZENITY" 2>/dev/null)" ]; then
+				"$STEAM_ZENITY" --title="$PROGNAME ($PROGCMD) - $PROGVERS" --question --text="$INSTFILE neither found in gamedir\n$EFD\nnor in dldir\n$INSTSRCDIR\nIf found in dldir it would be installed automatically into the gamedir\n$INSTINFO.\nClick Exit to exit now, click Retry to check again!" --ok-label=exit --cancel-label=retry --width "$REQWIDTH"
+				case $? in
+					0)  writelog "WARN" "${FUNCNAME[0]} - exiting without restarting $ORGFUNC"
+						exit
+					;; 
+					1)	writelog "WARN" "${FUNCNAME[0]} - checking again for $INSTFILE installation by restarting $ORGFUNC"
+						"$ORGFUNC"
+					;;
+				esac
+			fi
+		fi
+	fi
+}
+
+function checkXliveless {
+	XLIVEDLL="xlive.dll"
+	XLIVEINI="xlive.ini"
+
+	XLDL="$STLDLDIR/xlive/"
+	mkdir -p "$XLDL" 2>/dev/null
+
+	fileInstall "$XLIVEDLL" "$XLDL" "${FUNCNAME[0]}" "(read here for a dl url: $PDBURL/105400)" "1400"
+	fileInstall "$XLIVEINI" "$XLDL" "${FUNCNAME[0]}" "(read here for a dl url: $PDBURL/105400)" "1400"
+}
+
+# automatically applies game-specific tweaks
+
 function preloadForcedTweaks {
 	if [ "$AID" -eq "246960" ]; then	# GSTD - Rise of the Owlverlord
 		writelog "INFO" "${FUNCNAME[0]} - GSTD - Rise of the Owlverlord ($AID) needs hacks to get it to work"
@@ -1409,6 +1480,18 @@ function preloadForcedTweaks {
 	if [ "$AID" -eq "1225570" ]; then	# Unravel Two
 		writelog "INFO" "${FUNCNAME[0]} - Unravel Two requires quartz and registry entry"
 		export USETWEAKS=1
+	fi
+
+	if [ "$AID" -eq "105400" ]; then	# Fable 3
+		writelog "INFO" "${FUNCNAME[0]} - GFWL disturbes not only the game but also winetricks:"
+		rmrecDir "$GPFX/drive_c/Program Files (x86)/Microsoft Games for Windows - LIVE"
+		rmrecDir "$GPFX/drive_c/Program Files/Common Files/Microsoft Shared/Windows Live"
+		WLID="WLIDSvcM.exe"
+		if pgrep "$WLID"; then
+			writelog "INFO" "${FUNCNAME[0]} - GFWL starts $WLID directly after installation and it never exists - killing it now"
+			pkill -9 "$WLID"
+		fi
+		checkXliveless
 	fi
 }
 
@@ -1497,20 +1580,19 @@ function launchCustomProg {
 		IFS=" " read -r -a RUNCUSTOMCMD_ARGS <<< "$CUSTOMCMD_ARGS"
 		writelog "INFO" "${FUNCNAME[0]} - launching custom command with $LACO $CUSTOMCMD_ARGS"
 # several variables coming from steam have to be cleaned in order to get wine to work here
-extRun file "$CUSTCOM" > /tmp/file
 
 		if [ "$(extRun file "$CUSTCOM" | grep -c "PE32")" -eq 1 ]; then
 			writelog "INFO" "${FUNCNAME[0]} - $CUSTCOM seems to be a MS Windows exe - starting through proton"
 			if [ "$(extRun file "$CUSTCOM" | grep -c "(console)")" -eq 1 ]; then
 				writelog "INFO" "${FUNCNAME[0]} - $CUSTCOM seems to be a MS console program - starting using wineconsole"
-				LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" WINEPREFIX="$GPFX" "$GWINE" wineconsole "$LACO" "${RUNCUSTOMCMD_ARGS[@]}"
+				extWine64Run "$GWINE" wineconsole "$LACO" "${RUNCUSTOMCMD_ARGS[@]}"
 			else
 				writelog "INFO" "${FUNCNAME[0]} - $CUSTCOM seems to be a MS gui program - starting regularly"
-				LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" WINEPREFIX="$GPFX" "$GWINE" "$LACO" "${RUNCUSTOMCMD_ARGS[@]}"
+				extWine64Run "$GWINE" "$LACO" "${RUNCUSTOMCMD_ARGS[@]}"
 			fi
 		else
 			writelog "INFO" "${FUNCNAME[0]} - $CUSTCOM doesn't seem to be a MS Windows exe - regular start (without further analysing)"
-			LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" "$LACO" "${RUNCUSTOMCMD_ARGS[@]}"
+			extRun "$LACO" "${RUNCUSTOMCMD_ARGS[@]}"
 		fi
 	fi
 }
@@ -1603,11 +1685,19 @@ function createW32PFX {
 			writelog "INFO" "${FUNCNAME[0]} - creating fresh 32bit WINEPREFIX by directly installing $WINETRICKSPAKS silently with $WINETRICKS"
 			checkWinetricksInstPak
 		else
-			writelog "SKIP" "${FUNCNAME[0]} - $WINETRICKS not found - skipping WINETRICKSPAKS installation and just creating the WINEPREFIX"
-			LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" WINEARCH=win32 WINEPREFIX="$GPFX" "$WINECFG"
+			if  [ -x "$(command -v "$WINECFG" 2>/dev/null)" ]; then
+				writelog "SKIP" "${FUNCNAME[0]} - $WINETRICKS not found - skipping WINETRICKSPAKS installation and just creating the WINEPREFIX"
+				extWine32Run "$WINECFG"
+			else
+				writelog "SKIP" "${FUNCNAME[0]} - $WINECFG not found - can't create WINEPREFIX"
+			fi
 		fi
 	else
-		LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" WINEARCH=win32 WINEPREFIX="$GPFX" "$WINECFG"
+		if  [ -x "$(command -v "$WINECFG" 2>/dev/null)" ]; then
+			extWine32Run "$WINECFG"
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - $WINECFG not found - can't create WINEPREFIX"
+		fi
 	fi
 
 	if [ -d "$GPFX/drive_c/windows/syswow64" ];then
@@ -1617,7 +1707,7 @@ function createW32PFX {
 	if  [ -x "$(command -v "$SETUPDXVK" 2>/dev/null)" ]; then
 			mkdir "$GPFX/drive_c/windows/syswow64"
 			writelog "INFO" "${FUNCNAME[0]} - installing 32bit dxvk  into the 32bit WINEPREFIX using $SETUPDXVK"
-			LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" WINEARCH=win32 WINEPREFIX="$GPFX" "$SETUPDXVK" install
+			extWine32Run "$SETUPDXVK" install
 	else
 			writelog "SKIP" "${FUNCNAME[0]} - $SETUPDXVK not found, but is required to install 32bit version of dxvk into the 32bit WINEPREFIX!"
 	fi
@@ -1700,16 +1790,14 @@ function checkWinetricksInstPak {
 	if [ -n "$WINETRICKSPAKS" ]; then
 		if  [ -x "$(command -v "$WINETRICKS" 2>/dev/null)" ]; then
 
-			if [ "$FORCE32BITPFX" -eq 1 ]; then
-				WARCH=win32
-			else
-				WARCH=win64
-			fi
-
 			writelog "INFO" "${FUNCNAME[0]} - installing $WINETRICKSPAKS silently with $WINETRICKS"
 			IFS=" " read -r -a INSTWINETRICKSPAKS <<< "$WINETRICKSPAKS"
 # if everything goes well all packages are installed at once:
-			LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" WINE="$GWINE" WINEDEBUG="-all" WINEARCH="$WARCH" WINEPREFIX="$GPFX" "$WINETRICKS" --unattended "${INSTWINETRICKSPAKS[@]}"
+			if [ "$FORCE32BITPFX" -eq 1 ]; then
+				extWine32Run "$WINETRICKS" --unattended "${INSTWINETRICKSPAKS[@]}"
+			else
+				extWine64Run "$WINETRICKS" --unattended "${INSTWINETRICKSPAKS[@]}"
+			fi
 
 			WTLOG="$GPFX/winetricks.log"
 			if [ -f "$WTLOG" ]; then
@@ -1726,8 +1814,11 @@ function checkWinetricksInstPak {
 							writelog "OK" "${FUNCNAME[0]} - ${#NOTINSTALLED[@]} of ${#INSTWINETRICKSPAKS[@]} - installing $u"
 							if [ "$FORCE32BITPFX" -eq 1 ]; then
 								mv "$GPFX/drive_c/windows/syswow64" "$GPFX/drive_c/windows/syswow64-$(cut -c1-4 <<< $RANDOM)"
+								extWine32Run "$WINETRICKS" --unattended "$u"
+							else
+								extWine64Run "$WINETRICKS" --unattended "$u"
 							fi
-							LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" WINE="$GWINE" WINEDEBUG="-all" WINEARCH="$WARCH" WINEPREFIX="$GPFX" "$WINETRICKS" --unattended "$u" 2>"/tmp/inst-$u.log"
+							
 							IFS=" " read -r -a ISINSTALLED <<<"$(cat "$WTLOG")"
 							IFS=" " read -r -a NOTINSTALLED <<< "$(comm -23 <(echo "${INSTWINETRICKSPAKS[*]}") <(echo "${ISINSTALLED[*]}"))"
 						done
@@ -1754,12 +1845,11 @@ function checkWinetricksLaunch {
 				# several variables coming from steam have to be cleaned in order to get wine to work here
 				if [ "$FORCE32BITPFX" -eq 1 ]; then
 					mv "$GPFX/drive_c/windows/syswow64" "$GPFX/drive_c/windows/syswow64-off"
-					LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" WINEDEBUG="-all" WINE="$GWINE" WINEARCH=win32 WINEPREFIX="$GPFX" "$WINETRICKS" --gui
-
+					extWine32Run "$WINETRICKS" --gui
 					mv "$GPFX/drive_c/windows/syswow64-off" "$GPFX/drive_c/windows/syswow64"
 				else
 					writelog "INFO" "${FUNCNAME[0]} - $WINETRICKS --gui"
-					LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" WINEDEBUG="-all" WINE="$GWINE" WINEPREFIX="$GPFX" "$WINETRICKS" --gui
+					extWine64Run "$WINETRICKS" --gui
 				fi
 			else
 				writelog "SKIP" "${FUNCNAME[0]} - $WINETRICKS not found - skipping"
@@ -1779,23 +1869,33 @@ function checkWineCfgLaunch {
 				# several variables coming from steam have to be cleaned in order to get wine to work here
 				if [ "$FORCE32BITPFX" -eq 1 ]; then
 					mv "$GPFX/drive_c/windows/syswow64" "$GPFX/drive_c/windows/syswow64-off"
-					LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" WINEARCH=win32 WINEPREFIX="$GPFX" "$WINECFG"
+					extWine32Run "$WINECFG"
 					mv "$GPFX/drive_c/windows/syswow64-off" "$GPFX/drive_c/windows/syswow64"
 				else
-					writelog "INFO" "${FUNCNAME[0]} - LC_ALL=\"\" PATH=\"/usr/local/bin:/usr/bin\" LD_LIBRARY_PATH=\"\" LD_PRELOAD=\"\" WINEPREFIX=\"$GPFX\" winecfg"
-					LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" WINEPREFIX="$GPFX" "$WINECFG"
+					writelog "INFO" "${FUNCNAME[0]} - winecfg"
+					extWine64Run "$WINECFG"
 				fi
 			else
-				writelog "SKIP" "${FUNCNAME[0]} - $WINECFG not found - skipping"
+				writelog "SKIP" "${FUNCNAME[0]} - command '$WINECFG' not found - skipping"
 			fi
 		fi
 	fi
 }
 
 function regEdit {
-	writelog "INFO" "${FUNCNAME[0]} - $1 found - applying"
-	LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" WINEPREFIX="$GPFX" regedit "$1"
-	updateConfigEntry "REGEDIT" "0" "$STLGAMECFG"
+	REGEDIT="regedit"
+	if  [ -x "$(command -v "$REGEDIT" 2>/dev/null)" ]; then
+		if [ -z "$1" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - starting $REGEDIT without arguments"
+			extWine64Run regedit
+		else
+			writelog "INFO" "${FUNCNAME[0]} - starting $REGEDIT with argument $1"
+			extWine64Run regedit "$1"
+			updateConfigEntry "REGEDIT" "0" "$STLGAMECFG"
+		fi
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - command '$REGEDIT' not found - skipping"
+	fi
 }
 
 function customRegs {
@@ -1830,7 +1930,7 @@ function customRegs {
 
 	if [ "$REGEDIT" -eq 1 ]; then
 		writelog "INFO" "${FUNCNAME[0]} - REGEDIT set, looking for $AID registry files"
-
+regEdit
 		if [ -f "$GLOBALREGDIR/$AID.reg" ]; then
 			regEdit "$GLOBALREGDIR/$AID.reg"
 		fi
@@ -2484,7 +2584,7 @@ function checkVortexRegs {
 function setVortexSELaunch {
 
 
-# Script Extender is currently broken in proton, so using the exe is commented out
+# Script Extender is currently broken in proton, so checking if a patched proton is used
 # https://github.com/ValveSoftware/Proton/issues/170
 
 
@@ -2496,6 +2596,7 @@ function setVortexSELaunch {
 
 PROTOLAURL="https://github.com/Patola/wine/releases"
 PROTOLAREQ="20"
+PROTOLAW="1200"
 PROTOLAVER="protola-5.0-9.1"
 PROTOLADLURL="$PROTOLAURL/download/$PROTOLAVER/$PROTOLAVER.tar.gz"
 PROTOLADLDIR="$STLDLDIR/protola"
@@ -2511,7 +2612,7 @@ COMPATOOLS="$HOME/.steam/steam/compatibilitytools.d/"
 						mkProjDir "$PROTOLADLDIR" 1
 			
 						if [ -d "$COMPATOOLS/$PROTOLAVER" ]; then
-								"$STEAM_ZENITY" --title="$PROGNAME ($PROGCMD) - $PROGVERS" --question --text="using $PROTONVERSION which is not compatible with $2! You already have the compatible proton version lying under $COMPATOOLS/$PROTOLAVER. Just select it in Steam as compatibility tool for $GN! Click Exit to exit now, click play to start game without Script Extender!" --ok-label=exit --cancel-label=play --timeout="$PROTOLAREQ" --width 350
+								"$STEAM_ZENITY" --title="$PROGNAME ($PROGCMD) - $PROGVERS" --question --text="using $PROTONVERSION which is not compatible with $2!\nYou already have the compatible proton version lying under\n$COMPATOOLS/$PROTOLAVER\nJust select it in Steam as compatibility tool for $GN\nClick Exit to exit now, click play to start game without Script Extender!" --ok-label=exit --cancel-label=play --timeout="$PROTOLAREQ" --width "$PROTOLAW"
 								case $? in
 									0)  exit
 									;; 
@@ -2520,7 +2621,7 @@ COMPATOOLS="$HOME/.steam/steam/compatibilitytools.d/"
 								esac
 						else 
 							if [ -f "$PROTOLADL" ]; then
-								"$STEAM_ZENITY" --title="$PROGNAME ($PROGCMD) - $PROGVERS" --question --text="compatible proton $PROTOLAVER already downloaded to $PROTOLADL - you have to install it to $COMPATOOLS with steam closed to use it! Click Install to extract $PROTOLADL to $COMPATOOLS (at your own risk!), click play to start game without Script Extender!" --ok-label=install --cancel-label=play --timeout="$PROTOLAREQ" --width 350
+								"$STEAM_ZENITY" --title="$PROGNAME ($PROGCMD) - $PROGVERS" --question --text="compatible proton $PROTOLAVER already downloaded to $PROTOLADL\nYou have to install it to\n$COMPATOOLS\nwith steam closed to use it\nClick Install to extract $PROTOLADL to $COMPATOOLS (at your own risk!)\nclick play to start game without Script Extender!" --ok-label=install --cancel-label=play --timeout="$PROTOLAREQ" --width "$PROTOLAW"
 								case $? in
 									0)  tar xf "$PROTOLADL" -C "$COMPATOOLS"
 									    setVortexSELaunch "$1" "$2" "$3"
@@ -2529,7 +2630,7 @@ COMPATOOLS="$HOME/.steam/steam/compatibilitytools.d/"
 									;;
 								esac
 							else
-								"$STEAM_ZENITY" --title="$PROGNAME ($PROGCMD) - $PROGVERS" --question --text="$PROTONVERSION is not compatible with $2! Download compatible proton $PROTOLAVER to $PROTOLADL? You should stop steam then and install the package manually to $COMPATOOLS to make it available. Will re-check again when download is finished. Click play to start game without Script Extender without download!" --ok-label=download --cancel-label=play --timeout="$PROTOLAREQ" --width 350
+								"$STEAM_ZENITY" --title="$PROGNAME ($PROGCMD) - $PROGVERS" --question --text="$PROTONVERSION is not compatible with $2\nDownload compatible proton $PROTOLAVER to $PROTOLADL?\nYou should stop steam then and install the package manually to\n$COMPATOOLS\nto make it available.\nWill re-check again when download is finished.\nClick play to start game without Script Extender without download!" --ok-label=download --cancel-label=play --timeout="$PROTOLAREQ" --width "$PROTOLAW"
 								case $? in
 									0) "$WGET" "$PROTOLADLURL" -O "$PROTOLADL"
 										setVortexSELaunch "$1" "$2" "$3"
@@ -2957,7 +3058,7 @@ function launchSteamProtonGame {
 	if [ "$NOINET" -eq 1 ]; then
 		IFS=" " read -r -a RUNNOINET <<< "$NOINET"
 		writelog "INFO" "${FUNCNAME[0]} - starting '$GAMENAME ($AID)' with Proton: '$PROTONVERSION' with blocked internet - might fail!"
-		LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" "${RUNNOINET[0]}" "${PROTONCMD[@]}"
+		extRun "${RUNNOINET[0]}" "${PROTONCMD[@]}"
 # start with boxtron:
 	elif [ "$USEBOXTRON" -eq 1 ]; then
 			DOSEXE="$(echo "${PROTONCMD[*]}" | awk -F 'waitforexitandrun ' '{print $2}')"
@@ -2977,7 +3078,7 @@ function launchSteamProtonGame {
 			if  [ -x "$(command -v "$ROBERTACMD" 2>/dev/null)" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - starting game '$AID' with roberta: '$ROBERTACMD $ROBERTAARGS $VMEXE'"
 				RUNROBERTACMD=("$ROBERTACMD" "$ROBERTAARGS" "$VMEXE")
-				LD_LIBRARY_PATH="" "${RUNROBERTACMD[@]}"
+				extRun "${RUNROBERTACMD[@]}"
 			else
 				writelog "ERROR" "${FUNCNAME[0]} -  roberta command '$ROBERTACMD' not found - exit"
 				exit
@@ -2993,7 +3094,7 @@ function launchSteamProtonGame {
 				fi
 				writelog "INFO" "${FUNCNAME[0]} - starting game '$AID' with luxtorpeda: '$LUXTORPEDACMD $LUXTORPEDAARGS $LUXEXE'"
 				RUNLUXTORPEDACMD=("$LUXTORPEDACMD" "$LUXTORPEDAARGS" "$LUXEXE")
-				LD_LIBRARY_PATH="" "${RUNLUXTORPEDACMD[@]}"
+				extRun "${RUNLUXTORPEDACMD[@]}"
 			else
 				writelog "ERROR" "${FUNCNAME[0]} -  luxtorpeda command '$LUXTORPEDACMD' not found - exit"
 				exit
