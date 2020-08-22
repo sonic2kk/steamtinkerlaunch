@@ -5,7 +5,7 @@
 ### project ###
 
 PROGNAME="SteamTinkerLaunch"
-PROGVERS="v1.3.8"
+PROGVERS="v1.3.9"
 PROGCMD="$(basename "$0")"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -105,7 +105,6 @@ GN="$(grep -oE 'common/[^\/]+' <<< "$EFD" | awk -F 'common/' '{print $NF}')"				
 
 GWIDFILE="/tmp/stl-sbsgwid"																	# temp file holding the game window id - worksforme
 GPFX="$STEAM_COMPAT_DATA_PATH/pfx"															# currently used WINEPREFIX
-SETUPDXVK="setup_dxvk"																		# required for optional 32bit WINEPREFIX creation and Vortex WINEPREFIX
 TWEAKWIN=""																					# variable only used by a handful games which require forced tweaks to start
 LASTRUN="$LOGDIR/lastrun.txt"																# some variables from the last run, f.e. useful for the last protonversion used
 
@@ -165,13 +164,13 @@ function extRun {
 }
 
 function extWine32Run {
-	writelog "INFO" "${FUNCNAME[0]} - started $* with: WINEDEBUG=\"-all\" WINE=\"$GWINE\" WINEARCH=win32 WINEPREFIX=\"$GPFX\""
-	WINEDEBUG="-all" WINE="$GWINE" WINEARCH=win32 WINEPREFIX="$GPFX" LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" "$@"
+	writelog "INFO" "${FUNCNAME[0]} - started $* with: WINE=\"$GWINE\" WINEARCH=win32 WINEDEBUG=\"-all\" WINEPREFIX=\"$GPFX\""
+	LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" WINE="$GWINE" WINEARCH=win32 WINEDEBUG="-all" WINEPREFIX="$GPFX" "$@"
 }
 
 function extWine64Run {
-	writelog "INFO" "${FUNCNAME[0]} - started $* with: WINEDEBUG=\"-all\" WINE=\"$GWINE\" WINEARCH=win64 WINEPREFIX=\"$GPFX\""
-	WINEDEBUG="-all" WINE="$GWINE" WINEARCH=win64 WINEPREFIX="$GPFX" LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" "$@"
+	writelog "INFO" "${FUNCNAME[0]} - started $* with: WINE=\"$GWINE\" WINEARCH=win64 WINEDEBUG=\"-all\" WINEPREFIX=\"$GPFX\""
+	LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" WINE="$GWINE" WINEARCH=win64 WINEDEBUG="-all" WINEPREFIX="$GPFX" "$@"
 }
 
 #### VKBASALT BLOCK START ####
@@ -1493,6 +1492,10 @@ function preloadForcedTweaks {
 		fi
 		checkXliveless
 	fi
+
+	if [ "$AID" -eq "8080" ]; then # Kane and Lynch Dead Men
+		checkXliveless
+	fi
 }
 
 ### MISC END ###
@@ -1704,14 +1707,12 @@ function createW32PFX {
 		mv "$GPFX/drive_c/windows/syswow64" "$GPFX/drive_c/windows/syswow64-$(cut -c1-4 <<< $RANDOM)"
 	fi
 
-	if  [ -x "$(command -v "$SETUPDXVK" 2>/dev/null)" ]; then
-			mkdir "$GPFX/drive_c/windows/syswow64"
-			writelog "INFO" "${FUNCNAME[0]} - installing 32bit dxvk  into the 32bit WINEPREFIX using $SETUPDXVK"
-			extWine32Run "$SETUPDXVK" install
-	else
-			writelog "SKIP" "${FUNCNAME[0]} - $SETUPDXVK not found, but is required to install 32bit version of dxvk into the 32bit WINEPREFIX!"
+	if  [ -x "$(command -v "$WINETRICKS" 2>/dev/null)" ]; then
+		mkdir "$GPFX/drive_c/windows/syswow64"
+		writelog "INFO" "${FUNCNAME[0]} - installing 32bit dxvk  into the 32bit WINEPREFIX"
+		extWine32Run "$WINETRICKS" --unattended "dxvk"
 	fi
-
+		
 	writelog "OK" "${FUNCNAME[0]} - WINEPREFIX should be ready"
 	if [ ! -d "$GPFX/drive_c/windows/system32-SAVE" ]; then
 		writelog "OK" "${FUNCNAME[0]} - copying $GPFX/drive_c/windows/system32 to $GPFX/drive_c/windows/system32-SAVE"
@@ -2031,7 +2032,7 @@ function createVortexCfg {
 
 function wineVortexRun {
 # leave LC_ALL=C else your "My Documents" will not be found! 
-	LC_ALL="C" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" WINEDEBUG="-all" WINEARCH="win64" WINE="$VORTEXWINE" WINEPREFIX="${VORTEXPREFIX//\"/}" "$@"
+	LC_ALL="C" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD="" WINE="$VORTEXWINE"  WINEARCH="win64" WINEDEBUG="-all" WINEPREFIX="${VORTEXPREFIX//\"/}" "$@"
 }
 
 function installVortexDeps {
@@ -2040,7 +2041,7 @@ function installVortexDeps {
 		writelog "SKIP" "${FUNCNAME[0]} - winetricks.log found in ${VORTEXPREFIX//\"/} - assuming dependencies are already installed - skipping"
 	else
 	
-	VORTEXDEPS="win10 corefonts dotnet40"
+	VORTEXDEPS="win10 corefonts dotnet48 dxvk"
 	# install deps:
 		if  [ -x "$(command -v "$WINETRICKS" 2>/dev/null)" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - installing Vortex dependencies first"
@@ -2059,18 +2060,6 @@ function killVortexDotNet {
 	if pgrep "$MSCOR"; then
 		writelog "INFO" "${FUNCNAME[0]} - killing leftovers of $MSCOR"
 		pkill -9 "$MSCOR"
-	fi
-}
-
-function installVortexDotNet {
-	VDOTNET="dotnet48"
-	if  [ -x "$(command -v "$WINETRICKS" 2>/dev/null)" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - $VDOTNET installation hangs sometimes, so starting a separate install - this will take some minutes"
-		wineVortexRun "$WINETRICKS" --unattended "$VDOTNET"
-		writelog "INFO" "${FUNCNAME[0]} - $VDOTNET installation finished"
-		killVortexDotNet
-	else
-		writelog "SKIP" "${FUNCNAME[0]} - $WINETRICKS not found - skipping Vortex $VDOTNET installation"
 	fi
 }
 
@@ -2704,25 +2693,9 @@ function checkVortexSELaunch {
 	fi
 }
 
-function setupDxvkVortex {
-# setup dxvk as Vortex doesn't render with pure wine as of now
-	if  [ -x "$(command -v "$(which "$SETUPDXVK")" 2>/dev/null)" ]; then
-		if readlink "${VORTEXPREFIX//\"/}/drive_c/windows/system32/d3d11.dll" >/dev/null ; then
-			writelog "OK" "${FUNCNAME[0]} - dxvk already setup"
-		else
-			writelog "OK" "${FUNCNAME[0]} - setting up dxvk for Vortex using $SETUPDXVK"
-			wineVortexRun "$(which "$SETUPDXVK")" install --symlink
-			writelog "OK" "${FUNCNAME[0]} - setting up dxvk for Vortex finished"
-		fi
-	else
-		writelog "OK" "${FUNCNAME[0]} - '$SETUPDXVK' not found in path - can't setup dxvk - continuing anyway, but Vortex will probably render black window"
-	fi
-}
 
 function installVortexPack {
 	installVortexDeps
-	setupDxvkVortex
-	installVortexDotNet
 	installVortex
 	setVortexDLMime
 }
@@ -2738,10 +2711,16 @@ function initVortexStuff {
 			if [ -z "$VORTEXWINE" ] ; then
 				writelog "OK" "${FUNCNAME[0]} - no wine binary configured in variable VORTEXWINE using system wine if available"
 				if  [ -x "$(command -v "$(which wine)" 2>/dev/null)" ]; then
-					VORTEXWINE="$(which wine)"
+					if [ -n "$GWINE" ]; then
+						writelog "OK" "${FUNCNAME[0]} - using GWINE '$GWINE' as VORTEXWINE"
+						VORTEXWINE="${GWINE//\"/}"
+					else
+						writelog "OK" "${FUNCNAME[0]} - using '$(which wine)' as VORTEXWINE"
+						VORTEXWINE="$(which wine)"
+					fi
 				fi
 			fi
-			
+	
 			VORTEXINSTDIR="${VORTEXPREFIX//\"/}/drive_c/Program Files/Black Tree Gaming Ltd/Vortex"
 			VORTEXEXE="$VORTEXINSTDIR/Vortex.exe"
 		fi
@@ -2883,11 +2862,7 @@ function checkVortex {
 		elif [ "$VORTEX" -eq 3 ]; then
 				writelog "OK" "${FUNCNAME[0]} - editor only VORTEX mode '$VORTEX' is set"
 				startVortex
-		#		else
-#				writelog "SKIP" "${FUNCNAME[0]} - VORTEX is disabled: $VORTEX - skipping"
 		fi
-	else
-		writelog "SKIP" "${FUNCNAME[0]} - VORTEX not defined - skipping"
 	fi
 }
 
