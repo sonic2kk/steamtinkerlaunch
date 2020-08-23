@@ -879,7 +879,7 @@ function createProjectDirs {
 	mkProjDir "$STLCATEGORYDIR" 1
 	mkProjDir "$STLDXVKDIR" "$CREATESTLDXVKCFGTMPL"
 	mkProjDir "$TWEAKDIR" "$CREATETWEAKS"
-	mkProjDir "$TWEAKDIR" "$USETWEAKS"
+	mkProjDir "$TWEAKDIR" 1
 	mkProjDir "$SBSTWEAKDIR" "$RUNSBSVR"
 	mkProjDir "$STLDLDIR" 1
 	mkProjDir "$DEPTH3DSRCDIR" 1
@@ -986,9 +986,6 @@ function createDefaultGlobalCfg {
 		echo "VRVIDEOPLAYER=vr-video-player"
 		echo "## vr-video-player args"
 		echo "VRVIDEOPLAYERARGS=--flat"
-		echo "## tweaks are only useful if some people contribute gamespecific tweaks, else this will vanish:"
-		echo "## set to 1 to override settings with tweaks when found"
-		echo "USETWEAKS=1"
 		echo "## set to 1 create tweak config templates for the launched game if not found"
 		echo "CREATETWEAKS=0"
 		echo "## seconds to wait to automatically save a new basic SBS tweak config of the running game with the gamewindow name after game launch - 0 to disable - 1 to pick a window"
@@ -1041,8 +1038,6 @@ function createDefaultGameCfg {
 		{
 		echo "## config Version: $PROGVERS"
 		echo "##########################"
-		echo "## set to 1 to override settings with tweaks when found - overrides USETWEAKS in global config"
-		echo "#USETWEAKS=1"
 		echo "## set to 1 to enable the custom command CUSTOMCMD:"
 		echo "RUN_CUSTOMCMD=0"
 		echo "## start this custom command:"
@@ -1252,20 +1247,16 @@ function saveSBSWinName {
 
 # override game configs with a tweak config if available:
 function checkTweakLaunch {
-	if [ "$USETWEAKS" -eq 1 ]; then
-		writelog "INFO" "${FUNCNAME[0]} - tweaks enabled"
-
 # first try global config
-		if [ -f "$GLOBALTWEAKDIR/$AID.conf" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - using overrides found in $GLOBALTWEAKDIR/$AID.conf"
-			exportCfgFile "$GLOBALTWEAKDIR/$AID.conf"
-		fi
+	if [ -f "$GLOBALTWEAKDIR/$AID.conf" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - using overrides found in $GLOBALTWEAKDIR/$AID.conf"
+		exportCfgFile "$GLOBALTWEAKDIR/$AID.conf"
+	fi
 
 # then user config - (overriding the global one)
-		if [ -f "$TWEAKDIR/$AID.conf" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - using overrides found in $TWEAKDIR/$AID.conf"
-			exportCfgFile "$TWEAKDIR/$AID.conf"
-		fi
+	if [ -f "$TWEAKDIR/$AID.conf" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - using overrides found in $TWEAKDIR/$AID.conf"
+		exportCfgFile "$TWEAKDIR/$AID.conf"
 	fi
 }
 
@@ -1471,15 +1462,6 @@ function checkXliveless {
 # automatically applies game-specific tweaks
 
 function preloadForcedTweaks {
-	if [ "$AID" -eq "246960" ]; then	# GSTD - Rise of the Owlverlord
-		writelog "INFO" "${FUNCNAME[0]} - GSTD - Rise of the Owlverlord ($AID) needs hacks to get it to work"
-		export USETWEAKS=1
-	fi
-	
-	if [ "$AID" -eq "1225570" ]; then	# Unravel Two
-		writelog "INFO" "${FUNCNAME[0]} - Unravel Two requires quartz and registry entry"
-		export USETWEAKS=1
-	fi
 
 #105400	: Fable 3
 #21690	: Resident Evil 5
@@ -2959,7 +2941,7 @@ function launchSteamProtonGame {
 	writelog "INFO" "${FUNCNAME[0]} - preloadForcedTweaks:"
 	preloadForcedTweaks
 
-# override tweak settings if USETWEAKS is 1
+# override tweak settings
 	writelog "INFO" "${FUNCNAME[0]} - checkTweakLaunch:"
 	checkTweakLaunch
 
