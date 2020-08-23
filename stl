@@ -5,7 +5,7 @@
 ### project ###
 
 PROGNAME="SteamTinkerLaunch"
-PROGVERS="v1.4.0"
+PROGVERS="v1.4.1"
 PROGCMD="$(basename "$0")"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -842,7 +842,7 @@ function editGameConfig {
 	exportCfgFile "$STLGAMECFG"
 
 # preload forced tweaks # setting WAITEDITOR so the editor doesn't conflict with forced tweaks
-	preloadForcedTweaks
+#	preloadForcedTweaks
 
 # open editor requester 
 	if [ "$WAITEDITOR" -gt 0 ]; then
@@ -1410,15 +1410,17 @@ function rmrecDir {
 	fi
 }
 
-# generic function to check if file INSTFILE $1 is installed in gamedir $EFD or can be installed automatically from INSTSRCDIR $2 with optional infotext INSTINFO $4 - retry starts original function ORGFUNC $3
+# generic function to check if file INSTFILE $1 is installed in gamedir $EFD or can be installed automatically from INSTSRCDIR $2 with optional downloadurl DLURL $4 - retry starts original function ORGFUNC $3
 function fileInstall {
 	INSTOK=1
 
 	INSTFILE="$1"
 	INSTSRCDIR="$2"
 	ORGFUNC="$3"
-	INSTINFO="$4"
+	DLURL="$4"
 	REQWIDTH="$5"
+	DLFILE="$6"
+
 	writelog "INFO" "${FUNCNAME[0]} - game '$GN ($AID)' needs $INSTFILE - checking"
 	if [ -f "$EFD/$INSTFILE" ]; then
 		writelog "OK" "${FUNCNAME[0]} - found $INSTFILE in gamedir $EFD"
@@ -1432,15 +1434,25 @@ function fileInstall {
 			writelog "OK" "${FUNCNAME[0]} - found $INSTFILE in $INSTSRCDIR - copying into gamedir $EFD"
 			extRun cp "$INSTSRCDIR/$INSTFILE" "$EFD"
 		else
-			writelog "SKIP" "${FUNCNAME[0]} - $INSTFILE also not found in $INSTSRCDIR for automatic installation - game probably won't work!"
+			writelog "INFO" "${FUNCNAME[0]} - $INSTFILE also not found in $INSTSRCDIR for automatic installation - asking if DL is ok"
 			if [ -x "$(command -v "$STEAM_ZENITY" 2>/dev/null)" ]; then
-				"$STEAM_ZENITY" --title="$PROGNAME ($PROGCMD) - $PROGVERS" --question --text="$INSTFILE neither found in gamedir\n$EFD\nnor in dldir\n$INSTSRCDIR\nIf found in dldir it would be installed automatically into the gamedir\n$INSTINFO.\nClick Exit to exit now, click Retry to check again!" --ok-label=exit --cancel-label=retry --width "$REQWIDTH"
+				"$STEAM_ZENITY" --title="$PROGNAME ($PROGCMD) - $PROGVERS" --question --text="$INSTFILE neither found in gamedir\n$EFD\nnor in dldir\n$INSTSRCDIR\nIf found in dldir it would be installed automatically into the gamedir.\nClick Exit to exit now, click Download to download and install the file automatically!" --ok-label=Exit --cancel-label=Download --width "$REQWIDTH"
 				case $? in
 					0)  writelog "WARN" "${FUNCNAME[0]} - exiting without restarting $ORGFUNC"
 						exit
 					;; 
-					1)	writelog "WARN" "${FUNCNAME[0]} - checking again for $INSTFILE installation by restarting $ORGFUNC"
-						"$ORGFUNC"
+					1)	"$WGET" "$DLURL" -P "$INSTSRCDIR"
+						"$UNZIP" "$INSTSRCDIR/$(basename "$DLURL")" -d "$INSTSRCDIR"
+						if [ -f "$INSTSRCDIR/$DLFILE" ]; then
+							mv "$INSTSRCDIR/$DLFILE" "$INSTSRCDIR/$INSTFILE"
+						fi
+
+						if [ -f "$INSTSRCDIR/$INSTFILE" ]; then
+							writelog "INFO" "${FUNCNAME[0]} - downloaded $INSTFILE sucessfully - retrying installation into gamedir"
+							"$ORGFUNC"
+						else
+							writelog "SKIP" "${FUNCNAME[0]} - download or extraction of $INSTFILE failed - skipping"
+						fi
 					;;
 				esac
 			fi
@@ -1449,42 +1461,30 @@ function fileInstall {
 }
 
 function checkXliveless {
-	XLIVEDLL="xlive.dll"
-	XLIVEINI="xlive.ini"
+	if [ -n "$NOGFWL" ]; then
+		if [ "$NOGFWL" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - GFWL disturbes not only the game but also winetricks:"
+			rmrecDir "$GPFX/drive_c/Program Files (x86)/Microsoft Games for Windows - LIVE"
+			rmrecDir "$GPFX/drive_c/Program Files/Common Files/Microsoft Shared/Windows Live"
+			WLID="WLIDSvcM.exe"
+			if pgrep "$WLID"; then
+				writelog "INFO" "${FUNCNAME[0]} - GFWL starts $WLID directly after installation and it never exists - killing it now"
+				pkill -9 "$WLID"
+			fi
 
-	XLDL="$STLDLDIR/xlive/"
-	mkdir -p "$XLDL" 2>/dev/null
+			XLIVEDLL="xlive.dll"
 
-	fileInstall "$XLIVEDLL" "$XLDL" "${FUNCNAME[0]}" "(read here for a dl url: $PDBURL/105400)" "1400"
-	fileInstall "$XLIVEINI" "$XLDL" "${FUNCNAME[0]}" "(read here for a dl url: $PDBURL/105400)" "1400"
+			XLDL="$STLDLDIR/xlive/"
+			mkdir -p "$XLDL" 2>/dev/null
+
+			fileInstall "$XLIVEDLL" "$XLDL" "${FUNCNAME[0]}" "https://github.com/ThirteenAG/Ultimate-ASI-Loader/releases/download/v4.52/Ultimate-ASI-Loader.zip" "1400" "dinput8.dll"
+		fi
+	fi
 }
 
 # automatically applies game-specific tweaks
-
-function preloadForcedTweaks {
-
-#105400	: Fable 3
-#21690	: Resident Evil 5
-
-	if [ "$AID" -eq "105400" ] || [ "$AID" -eq "21690" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - GFWL disturbes not only the game but also winetricks:"
-		rmrecDir "$GPFX/drive_c/Program Files (x86)/Microsoft Games for Windows - LIVE"
-		rmrecDir "$GPFX/drive_c/Program Files/Common Files/Microsoft Shared/Windows Live"
-		WLID="WLIDSvcM.exe"
-		if pgrep "$WLID"; then
-			writelog "INFO" "${FUNCNAME[0]} - GFWL starts $WLID directly after installation and it never exists - killing it now"
-			pkill -9 "$WLID"
-		fi
-		checkXliveless
-	fi
-
-#8080	: Kane and Lynch Dead Men
-#12360	: Flatout: Ultimate Carnage
-
-	if [ "$AID" -eq "8080" ] || [ "$AID" -eq "12360" ]; then
-		checkXliveless
-	fi
-}
+#function preloadForcedTweaks {
+#}
 
 ### MISC END ###
 
@@ -2938,12 +2938,15 @@ function launchSteamProtonGame {
 #################
 
 # preload forced tweaks
-	writelog "INFO" "${FUNCNAME[0]} - preloadForcedTweaks:"
-	preloadForcedTweaks
+#	writelog "INFO" "${FUNCNAME[0]} - preloadForcedTweaks:"
+#	preloadForcedTweaks
 
 # override tweak settings
 	writelog "INFO" "${FUNCNAME[0]} - checkTweakLaunch:"
 	checkTweakLaunch
+
+# remove GFWL if NOGFWL is 1
+	checkXliveless
 
 # force 32bit pfx if  if FORCE32BITPFX is 1
 	writelog "INFO" "${FUNCNAME[0]} - check32BitForce:"
