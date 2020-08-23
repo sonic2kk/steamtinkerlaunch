@@ -193,6 +193,15 @@ If you use/create tweaks make sure to retest your game with later proton version
 The used proton Version is automatically written into the tweak file when created with `CREATETWEAKS`
 user tweak-files in `TWEAKDIR` override global ones in `GLOBALTWEAKDIR`
 
+#### Builtin Tweaks
+
+There are also some game specific fixes inside the **stl** code which are autoapplied on game launch.
+
+F.e. some games still depend on GFWL which is dead and doesn't work under wine.
+If the GFWL game is supported **stl** takes care that
+- GFWL directories are removed,
+- WLIDSvcM.exe is killed
+- xliveless is installed into the gamedir (warns if not, and optionally installs it if files are provided - no automatic download, but url is in the requester)
 
 ### SBS Tweaks
 
