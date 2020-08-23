@@ -333,7 +333,9 @@ and when you exit Vortex the selected game will start normally (with your mods).
 **Installation?**
 If Vortex is not yet installed, it will be installed on the first launch, so the first launch will need some time (mostly depends on dotnets mind of its own... maybe 5 minutes).
 Alternatively you can also install it via command line (see below).
-Sometimes the dotnet installation hangs forever. I'm afraid there's nothing I can do to fix this (probably a winetricks bug(?).
+If using proton-wine for `VORTEXWINE` (which is default if it is not configured) the `WINEPREFIX` user is "steamuser" (as always with proton wine).
+When you switch to a wine version which doesn't patch the username to "steamuser" your user-settings are emtpy of course.
+**stl** will not symlink in between those two users!
 
 **Functionality**:
 Some settings are preconfigured, to make this working without any user configuration, but of course all of the settings can be as well configured if you want.
@@ -344,7 +346,7 @@ Some settings are preconfigured, to make this working without any user configura
 This directory contains the Vortex configfile `STLVORTEXCFG` *(`STLCFGDIR`/vortex/vortex.conf`)*
 
 Here are the main configuration options:
-- `VORTEXWINE`: the wine binary used for Vortex - **default commented out, but internally searches for system-wide wine if not configured**
+- `VORTEXWINE`: the wine binary used for Vortex - **default commented out, if not configured it defaults to proton-wine if available and will fall back to system-wide wine**
 - `VORTEXPREFIX`:the `WINEPREFIX` path used for Vortex - **default is `STLVORTEXDIR/wineprefix`**
 - `VORTEXDOWNLOADPATH`: the path where all Vortex downloads should be stored - **default is `STLVORTEXDIR/downloads`**
 - `VORTEXINSTALL`: download and install Vortex automatically if set to 1 **default enabled**

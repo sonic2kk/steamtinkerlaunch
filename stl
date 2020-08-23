@@ -5,7 +5,7 @@
 ### project ###
 
 PROGNAME="SteamTinkerLaunch"
-PROGVERS="v1.3.9"
+PROGVERS="v1.4.0"
 PROGCMD="$(basename "$0")"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -1790,45 +1790,36 @@ function hackWin32 {
 function checkWinetricksInstPak {
 	if [ -n "$WINETRICKSPAKS" ]; then
 		if  [ -x "$(command -v "$WINETRICKS" 2>/dev/null)" ]; then
-
-			writelog "INFO" "${FUNCNAME[0]} - installing $WINETRICKSPAKS silently with $WINETRICKS"
 			IFS=" " read -r -a INSTWINETRICKSPAKS <<< "$WINETRICKSPAKS"
-# if everything goes well all packages are installed at once:
-			if [ "$FORCE32BITPFX" -eq 1 ]; then
-				extWine32Run "$WINETRICKS" --unattended "${INSTWINETRICKSPAKS[@]}"
-			else
-				extWine64Run "$WINETRICKS" --unattended "${INSTWINETRICKSPAKS[@]}"
-			fi
-
 			WTLOG="$GPFX/winetricks.log"
-			if [ -f "$WTLOG" ]; then
-				WTCNT="$(wc -l "$WTLOG" | awk '{print $1}')"
-# if not this function tries to install the remaining ones one after another - pretty much untested so far:
-				if [ "${#INSTWINETRICKSPAKS[@]}" -gt "$WTCNT" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - some packages in WINETRICKSPAKS have not been installed yet only $WTCNT of ${#INSTWINETRICKSPAKS[@]} installed so far - trying again"
-
-					IFS=" " read -r -a ISINSTALLED <<<"$(cat "$WTLOG")"
-					IFS=" " read -r -a NOTINSTALLED <<< "$(comm -23 <(echo "${INSTWINETRICKSPAKS[*]}") <(echo "${ISINSTALLED[*]}"))"
-
-					if [ -n "${NOTINSTALLED[0]}" ]; then
-						for u in "${NOTINSTALLED[@]}"; do
-							writelog "OK" "${FUNCNAME[0]} - ${#NOTINSTALLED[@]} of ${#INSTWINETRICKSPAKS[@]} - installing $u"
-							if [ "$FORCE32BITPFX" -eq 1 ]; then
-								mv "$GPFX/drive_c/windows/syswow64" "$GPFX/drive_c/windows/syswow64-$(cut -c1-4 <<< $RANDOM)"
-								extWine32Run "$WINETRICKS" --unattended "$u"
-							else
-								extWine64Run "$WINETRICKS" --unattended "$u"
-							fi
-							
-							IFS=" " read -r -a ISINSTALLED <<<"$(cat "$WTLOG")"
-							IFS=" " read -r -a NOTINSTALLED <<< "$(comm -23 <(echo "${INSTWINETRICKSPAKS[*]}") <(echo "${ISINSTALLED[*]}"))"
-						done
+			if [ ! -f "$WTLOG" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - installing $WINETRICKSPAKS silently with $WINETRICKS"
+				# if everything goes well all packages are installed at once:
+					if [ "$FORCE32BITPFX" -eq 1 ]; then
+						extWine32Run "$WINETRICKS" --unattended "${INSTWINETRICKSPAKS[@]}"
+					else
+						extWine64Run "$WINETRICKS" --unattended "${INSTWINETRICKSPAKS[@]}"
 					fi
-				else								
-					writelog "OK" "${FUNCNAME[0]} - looks like all ${#INSTWINETRICKSPAKS[@]} packages in WINETRICKSPAKS have been installed successfully"
-				fi
 			else
-				writelog "ERROR" "${FUNCNAME[0]} - $WINETRICKS log $WTLOG not found - this should not happen"
+				NOTINSTALLEDLIST="$(comm -23 <(echo "${INSTWINETRICKSPAKS[*]}" | tr ' ' '\n' | sort) <(sort < "$WTLOG"))"
+				NOTINSTALLED=()
+				while IFS= read -r wp; do
+					NOTINSTALLED+=("$wp")
+				done <<< "$NOTINSTALLEDLIST"
+
+				if [ -n "${NOTINSTALLED[0]}" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - installing following packages now: '${NOTINSTALLED[*]}'"
+					if [ "$FORCE32BITPFX" -eq 1 ]; then
+						mv "$GPFX/drive_c/windows/syswow64" "$GPFX/drive_c/windows/syswow64-$(cut -c1-4 <<< $RANDOM)"
+						extWine32Run "$WINETRICKS" --unattended "${NOTINSTALLED[@]}"
+					else
+						extWine64Run "$WINETRICKS" --unattended "${NOTINSTALLED[@]}"
+					fi
+					# re-check here?
+					# checkWinetricksInstPak
+				else
+					writelog "INFO" "${FUNCNAME[0]} - all packages of '$WINETRICKSPAKS' are already installed - nothing to do"
+				fi
 			fi
 		else
 			writelog "SKIP" "${FUNCNAME[0]} - $WINETRICKS not found - skipping"
@@ -2036,22 +2027,33 @@ function wineVortexRun {
 }
 
 function installVortexDeps {
+	if  [ -x "$(command -v "$WINETRICKS" 2>/dev/null)" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - installing Vortex dependencies"
 
-	if [ -f "${VORTEXPREFIX//\"/}/winetricks.log" ]; then
-		writelog "SKIP" "${FUNCNAME[0]} - winetricks.log found in ${VORTEXPREFIX//\"/} - assuming dependencies are already installed - skipping"
-	else
-	
-	VORTEXDEPS="win10 corefonts dotnet48 dxvk"
-	# install deps:
-		if  [ -x "$(command -v "$WINETRICKS" 2>/dev/null)" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - installing Vortex dependencies first"
-			IFS=" " read -r -a INSTVORTEXPAKS <<< "$VORTEXDEPS"
+		VORTEXDEPS="win10 corefonts dotnet48 dxvk"
+		IFS=" " read -r -a INSTVORTEXPAKS <<< "$VORTEXDEPS"
+		WTLOG="${VORTEXPREFIX//\"/}/winetricks.log"
 
+		if [ ! -f "$WTLOG" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - installing '$VORTEXDEPS' silently with $WINETRICKS"
 			wineVortexRun "$WINETRICKS" --unattended "${INSTVORTEXPAKS[@]}"
 			writelog "INFO" "${FUNCNAME[0]} - $VORTEXDEPS installed"
 		else
-			writelog "SKIP" "${FUNCNAME[0]} - $WINETRICKS not found - skipping Vortex dependency installation"
+			NOTINSTALLEDLIST="$(comm -23 <(echo "${INSTVORTEXPAKS[*]}" | tr ' ' '\n' | sort) <(sort < "$WTLOG"))"
+			NOTINSTALLED=()
+			while IFS= read -r wp; do
+				NOTINSTALLED+=("$wp")
+			done <<< "$NOTINSTALLEDLIST"
+
+			if [ -n "${NOTINSTALLED[0]}" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - installing following packages now: '${NOTINSTALLED[*]}'"
+					wineVortexRun "$WINETRICKS" --unattended "${NOTINSTALLED[@]}"
+			else
+				writelog "INFO" "${FUNCNAME[0]} - all packages of '$VORTEXDEPS' are already installed - nothing to do"
+			fi
 		fi
+	else
+			writelog "SKIP" "${FUNCNAME[0]} - $WINETRICKS not found - skipping Vortex dependency installation"
 	fi
 }
 
@@ -2777,9 +2779,17 @@ function checkVortex {
 						MyDocsMyGames="$MyDocs/My Games"
 						LocalSetAppData="Local Settings/Application Data"
 						
-						UserMyDocs="${VORTEXPREFIX//\"/}/drive_c/users/$USER/$MyDocs"
-						UserMyDocsMyGames="${VORTEXPREFIX//\"/}/drive_c/users/$USER/$MyDocsMyGames"
-						UserLocalSetAppData="${VORTEXPREFIX//\"/}/drive_c/users/$USER/$LocalSetAppData"
+						if [ -d "${VORTEXPREFIX//\"/}/drive_c/users/steamuser" ];then
+							writelog "OK" "${FUNCNAME[0]} - Vortex is running with Proton wine - configuring for user 'steamuser'"
+							VUSER="steamuser"
+						else
+							writelog "OK" "${FUNCNAME[0]} - Vortex is running with regular wine - configuring for user '$USER'"
+							VUSER="$USER"
+						fi
+						
+						UserMyDocs="${VORTEXPREFIX//\"/}/drive_c/users/$VUSER/$MyDocs"
+						UserMyDocsMyGames="${VORTEXPREFIX//\"/}/drive_c/users/$VUSER/$MyDocsMyGames"
+						UserLocalSetAppData="${VORTEXPREFIX//\"/}/drive_c/users/$VUSER/$LocalSetAppData"
 						
 						if readlink "$UserMyDocsMyGames" >/dev/null ; then
 							writelog "OK" "${FUNCNAME[0]} - removing symlink '$UserMyDocsMyGames' pointing to '$(readlink "$UserMyDocsMyGames")'"
