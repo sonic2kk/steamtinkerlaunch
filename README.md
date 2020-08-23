@@ -62,6 +62,7 @@ Also enable everything you want to use generally for your games in [the default 
 * **[Roberta](#Roberta)** support via steam `ScummVM` category
 * **[Luxtorpeda](#Luxtorpeda)** support via steam `Luxtorpeda` category
 * **[Vortex Mod Manager](#Vortex)** via steam `Vortex` category see [Video of usage](#stl-Vortex-gif)
+* **[GFWL/xlive](#GFWL)** automatic support for games using GFWL
 
 ## Requirements
 *(no special order)*
@@ -192,16 +193,6 @@ If you use/create tweaks make sure to retest your game with later proton version
 The used proton Version is automatically written into the tweak file when created with `CREATETWEAKS`
 user tweak-files in `TWEAKDIR` override global ones in `GLOBALTWEAKDIR`
 
-#### Builtin Tweaks
-
-There are also some game specific fixes inside the **stl** code which are autoapplied on game launch.
-
-F.e. some games still depend on GFWL which is dead and doesn't work under wine.
-If the GFWL game is supported **stl** takes care that
-- GFWL directories are removed,
-- WLIDSvcM.exe is killed
-- xliveless is installed into the gamedir (warns if not, and optionally installs it if files are provided - no automatic download, but url is in the requester)
-
 ### SBS Tweaks
 
 Game specific config files `SteamAppID.conf` both in and [system-wide](#Systemwide-Configuration) *(`GLOBALSBSTWEAKDIR`)* and [User Configurations](#User-Configuration) *(`SBSTWEAKDIR`)*
@@ -324,6 +315,14 @@ Alternatively duplicate the file to a different name which you want to use as ca
 The luxtorpeda-dev dev was so kind to add a manual-download option in v20, so if native game files are missing they are downloaded before the actual game launch now.
 Therefore it is recommended to use the lastest luxtorpeda-dev version.
 
+#### GFWL
+Some games still depend on GFWL which is discountinued and doesn't work under wine.
+With the variable `NOGFWL` set to 1 for a game **stl** takes care that
+everything is configured automatically to start the game ootb.
+If the dependant xlive.dll is missing a requester will pop up asking if it should be downloaded automatically
+( [from Ultimate-ASI-Loader]("https://github.com/ThirteenAG/Ultimate-ASI-Loader/releases/download/v4.52/Ultimate-ASI-Loader.zip") )
+into `$STLDLDIR/xlive/` and installed into the gamedir.
+**stl** ships already several tweak files, which enable `NOGFWL` for several games (f.e.: "Fable 3 (105400)", "Resident Evil 5 (21690)", "Kane and Lynch Dead Men (8080)", "FlatOut Ultimate Carnage (12360)"
 
 #### Vortex
 [Vortex Mod Manager](https://github.com/Nexus-Mods/Vortex)
