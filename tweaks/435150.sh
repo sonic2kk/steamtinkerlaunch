@@ -13,8 +13,10 @@ OPWD="$PWD"
 
 if [ ! -d "$GFD/bin.bak" ]; then
 	cd "$GFD" || die
-	mv bin bin.bak
-	ln -s DefEd/bin bin 
+	mv bin bin-bak
+	mv Data Data-bak
+	ln -s DefEd/bin bin
+	ln -s DefEd/Data Data
 	cd bin || die
 	mv SupportTool.exe SupportTool.exe.bak
 	ln -s EoCApp.exe SupportTool.exe
