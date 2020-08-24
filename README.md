@@ -26,10 +26,9 @@ This is one single bash script. Just copy it wherever you want (f.e. '/usr/local
 `chmod +x stl`
 The enclosed directories containing optional configuration files should be dropped into '/usr/share/stl/'
 
-<details><summary>Arch Linux</summary>
-If you are on Arch Linux you can install **stl** from [AUR](https://aur.archlinux.org/packages/steamtinkerlaunch) - f.e. using **yay**:
+If you are on Arch Linux you can install stl from [AUR](https://aur.archlinux.org/packages/steamtinkerlaunch) *(f.e. using yay)*:
+
 `yay -S steamtinkerlaunch`
-</details>
 
 [![Packaging status](https://repology.org/badge/vertical-allrepos/steamtinkerlaunch.svg)](https://repology.org/project/steamtinkerlaunch/versions)
 
