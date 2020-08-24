@@ -5,7 +5,7 @@
 ### project ###
 
 PROGNAME="SteamTinkerLaunch"
-PROGVERS="v1.4.1"
+PROGVERS="v1.4.2"
 PROGCMD="$(basename "$0")"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -100,7 +100,7 @@ STLDXVKDIR="$STLCFGDIR/dxvk"																# base dxvk config dir from where de
 GP="$(awk -F 'waitforexitandrun ' '{print $NF}' <<< "$@" | awk -F ' GID=' '{print $1}' | awk -F '.exe' '{print $1".exe"}')"	# the absolute game path of the windows game exe - dirty hack to remove command line parameters
 GE="$(basename "$GP" | awk -F '.exe' '{print $1}')"											# just the windows game exe name - will be used as game identifier, as we don't have the steamid here :(
 EFD="$(dirname "$GP")"																		# the absolute directory where the game exe lives - for optional custom program
-GFD="$(awk -F 'common' '{print $1}' <<< "$EFD")common/$(awk -F 'common' '{print $NF}' <<< "$EFD" | cut -d'/' -f2)" # used for vortex symlinks
+GFD="$(awk -F 'common' '{print $1}' <<< "$EFD")common/$(awk -F 'common' '{print $NF}' <<< "$EFD" | cut -d'/' -f2)" # f.e. used for vortex symlinks
 GN="$(grep -oE 'common/[^\/]+' <<< "$EFD" | awk -F 'common/' '{print $NF}')"				# THIS is hopefully the proper game name
 
 GWIDFILE="/tmp/stl-sbsgwid"																	# temp file holding the game window id - worksforme
@@ -1185,7 +1185,7 @@ function createGameCfg {
 # TWEAK CONFIG TEMPLATE:
 	if [ -n "$CREATETWEAKS" ]; then
 		if [ "$CREATETWEAKS" -eq 1 ]; then
-# write tweak header if tweakfile not found:			
+# write tweak header if tweak config not found:			
 			createProjectDirs
 
 			if [ ! -f "$TWEAKCFG" ] ; then
@@ -1247,6 +1247,7 @@ function saveSBSWinName {
 
 # override game configs with a tweak config if available:
 function checkTweakLaunch {
+	TWEAKCMD=""
 # first try global config
 	if [ -f "$GLOBALTWEAKDIR/$AID.conf" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - using overrides found in $GLOBALTWEAKDIR/$AID.conf"
@@ -1257,6 +1258,54 @@ function checkTweakLaunch {
 	if [ -f "$TWEAKDIR/$AID.conf" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - using overrides found in $TWEAKDIR/$AID.conf"
 		exportCfgFile "$TWEAKDIR/$AID.conf"
+	fi
+
+	if [ -n "$TWEAKCMD" ]; then
+		# tweak command defined
+		if [ -f "$TWEAKCMD" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - found $TWEAKCMD"
+			RUNTWEAK="$TWEAKCMD"
+		elif [ -f "$TWEAKDIR/$TWEAKCMD" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - found $TWEAKCMD in $TWEAKDIR"
+			RUNTWEAK="$TWEAKDIR/$TWEAKCMD"
+		elif [ -f "$GLOBALTWEAKDIR/$TWEAKCMD" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - found $TWEAKCMD in $GLOBALTWEAKDIR"
+			RUNTWEAK="$GLOBALTWEAKDIR/$TWEAKCMD"
+		elif [ -f "$GFD/$TWEAKCMD" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - found $TWEAKCMD in $GFD"
+			RUNTWEAK="$GFD/$TWEAKCMD"
+		fi
+		# tweak command found
+
+		if [ -n "$RUNTWEAK" ]; then
+
+# export variables which are required by the script!
+#			export GFD="$GFD"
+#			export GPFX="$GPFX"
+
+			if grep -q "^TWEAKFILE" "$RUNTWEAK"; then
+				# dependency for tweak command defined
+				writelog "INFO" "${FUNCNAME[0]} - TWEAKFILE configured in $RUNTWEAK as dependency - checking if the file exists in gamedir - relative to the gameexe"
+				TWEAKFILE="$(grep "^TWEAKFILE" "$RUNTWEAK" | awk -F 'TWEAKFILE=' '{print $2}')"
+				if [ -f "$EFD/$TWEAKFILE" ]; then
+					# dependency for tweak command found
+					writelog "INFO" "${FUNCNAME[0]} - found tweakcmd dependency in $EFD/$TWEAKFILE - starting the tweakcmd now"
+					# start tweak command
+					extRun "$RUNTWEAK"
+					writelog "INFO" "${FUNCNAME[0]} - $RUNTWEAK finished"
+				else
+					# dependency for tweak command not found
+					writelog "SKIP" "${FUNCNAME[0]} - configured TWEAKFILE $TWEAKFILE not found - skipping launch of the tweakcmd $TWEAKCMD"
+				fi
+			else
+				# start tweak command
+				writelog "INFO" "${FUNCNAME[0]} - no TWEAKFILE configured in $RUNTWEAK as dependency - starting the tweakcmd regularly now"
+				extRun "$RUNTWEAK"
+				writelog "INFO" "${FUNCNAME[0]} - $RUNTWEAK finished"
+			fi
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - configured TWEAKCMD $TWEAKCMD not found - can't start it"
+		fi
 	fi
 }
 
@@ -2045,12 +2094,16 @@ function installVortexDeps {
 	fi
 }
 
-function killVortexDotNet {
+function cleanVortex {
 	MSCOR="mscorsvw.exe"
 	if pgrep "$MSCOR"; then
 		writelog "INFO" "${FUNCNAME[0]} - killing leftovers of $MSCOR"
 		pkill -9 "$MSCOR"
 	fi
+
+#	VORTEXINSTDIR="${VORTEXPREFIX//\"/}/drive_c/Program Files/Black Tree Gaming Ltd/Vortex"
+#TODO? probably comes from proton-wine
+#	find "$VORTEXINSTDIR" -maxdepth 1 -type d -name '.winelink.*' -exec rm -rf {} \;
 }
 
 function setVortexDLMime {
@@ -2487,7 +2540,7 @@ function startVortex {
 			fi
 		fi
 
-		killVortexDotNet
+		cleanVortex
 		if [ "$AID" != "$PROGCMD" ]; then
 			checkVortexSELaunch 2
 		fi
@@ -2793,7 +2846,7 @@ function checkVortex {
 						mkdir -p "$UserLocalSetAppData" 2>/dev/null
 
 # game specific part:
-						writelog "OK" "${FUNCNAME[0]} - preparing required registry and path settings for $GFS' '$GFD' and '$GN ($AID)'"
+						writelog "OK" "${FUNCNAME[0]} - preparing required registry and path settings for '$GFD' and '$GN ($AID)'"
 
 						if [ -d "$GPFX" ] || [ -z "$(ls -A "$GPFX")" ]; then
 							writelog "OK" "${FUNCNAME[0]} - original game WINEPREFIX $GPFX is not empty, so assuming it is useable"
@@ -3036,7 +3089,7 @@ function launchSteamProtonGame {
 # start without internetaccess:
 	if [ "$NOINET" -eq 1 ]; then
 		IFS=" " read -r -a RUNNOINET <<< "$NOINET"
-		writelog "INFO" "${FUNCNAME[0]} - starting '$GAMENAME ($AID)' with Proton: '$PROTONVERSION' with blocked internet - might fail!"
+		writelog "INFO" "${FUNCNAME[0]} - starting '$GN ($AID)' with Proton: '$PROTONVERSION' with blocked internet - might fail!"
 		extRun "${RUNNOINET[0]}" "${PROTONCMD[@]}"
 # start with boxtron:
 	elif [ "$USEBOXTRON" -eq 1 ]; then
@@ -3080,7 +3133,7 @@ function launchSteamProtonGame {
 			fi
 # start with gamemoderun:
 	elif [ "$USEGAMEMODERUN" -eq 1 ]; then
-		writelog "INFO" "${FUNCNAME[0]} - starting '$GAMENAME ($AID)' with Proton: '$PROTONVERSION' with '$GAMEMODERUN'"
+		writelog "INFO" "${FUNCNAME[0]} - starting '$GN ($AID)' with Proton: '$PROTONVERSION' with '$GAMEMODERUN'"
 			if [ "$FORCE32BITPFX" -eq 1 ]; then
 				writelog "INFO" "${FUNCNAME[0]} - starting game in 32bit mode"
 				hackWin32 &
@@ -3089,7 +3142,7 @@ function launchSteamProtonGame {
 				"$GAMEMODERUN" "${PROTONCMD[@]}"
 			fi
 	else
-		writelog "INFO" "${FUNCNAME[0]} - starting '$GAMENAME ($AID)' with Proton: '$PROTONVERSION'"
+		writelog "INFO" "${FUNCNAME[0]} - starting '$GN ($AID)' with Proton: '$PROTONVERSION'"
 # start with forced 32bit WINEPREFIX:
 		if [ "$FORCE32BITPFX" -eq 1 ]; then
 			writelog "INFO" "${FUNCNAME[0]} - starting game in 32bit mode"
@@ -3186,7 +3239,7 @@ function writeLastRun {
 }
 
 function closeSTL {
-	writelog "INFO" "${FUNCNAME[0]} - game $GAMENAME ($AID) exited - cleaning up custom processes if necessary"
+	writelog "INFO" "${FUNCNAME[0]} - game $GN ($AID) exited - cleaning up custom processes if necessary"
 
 # kill $VRVIDEOPLAYER in case it wasn't closed before
 	if [ -n "$RUNSBSVR" ]; then
