@@ -323,7 +323,7 @@ Some games still depend on GFWL which is discountinued and doesn't work under wi
 With the variable `NOGFWL` set to 1 for a game **stl** takes care that
 everything is configured automatically to start the game ootb.
 If the dependant xlive.dll is missing a requester will pop up asking if it should be downloaded automatically
-( [from Ultimate-ASI-Loader](https://github.com/ThirteenAG/Ultimate-ASI-Loader/releases/download/v4.52/Ultimate-ASI-Loader.zip) )
+( [from Ultimate-ASI-Loader](https://github.com/ThirteenAG/Ultimate-ASI-Loader/releases) )
 into `$STLDLDIR/xlive/` and installed into the gamedir.
 **stl** ships already several tweak files, which enable `NOGFWL` for several games (f.e.: "Fable 3 (105400)", "Resident Evil 5 (21690)", "Kane and Lynch Dead Men (8080)", "FlatOut Ultimate Carnage (12360)"
 
