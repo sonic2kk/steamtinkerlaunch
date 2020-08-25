@@ -56,7 +56,6 @@ Also enable everything you want to use generally for your games in [the default 
 * **[vkBasalt](#vkBasalt)** basic vkBasalt configuration
 * **[SBS-VR](#Side-by-Side-VR)** automatically play regular games in side-by-side mode in VR!
 * **[Tweaks](#Tweaks)** community mini configfiles to automatically start problematic games ootb - can also start custom [Tweak Commands](#Tweak-Commands)
-* **[32bit wineprefix](#32bit-Wineprefix)** force 32bit `WINEPREFIX`
 * **[Nyrna](#Nyrna)** start/stop ReplaySorcery per game
 * **[ReplaySorcery](#ReplaySorcery)** start/stop ReplaySorcery per game
 * **[Custom Game Launch](#Custom-Game-Launch)** easy simple custom game launch
@@ -66,6 +65,7 @@ Also enable everything you want to use generally for your games in [the default 
 * **[Luxtorpeda](#Luxtorpeda)** support via steam `Luxtorpeda` category
 * **[Vortex Mod Manager](#Vortex)** via steam `Vortex` category see [Video of usage](#stl-Vortex-gif)
 * **[GFWL/xlive](#GFWL)** automatic support for games using GFWL
+* **[WMP10](#WMP10)** automatic support for WMP10 installation
 
 ## Requirements
 *(no special order)*
@@ -342,6 +342,15 @@ If the dependant xlive.dll is missing a requester will pop up asking if it shoul
 into `$STLDLDIR/xlive/` and installed into the gamedir.
 **stl** ships already several tweak files, which enable `NOGFWL` for several games (f.e.: "Fable 3 (105400)", "Resident Evil 5 (21690)", "Kane and Lynch Dead Men (8080)", "FlatOut Ultimate Carnage (12360)"
 
+#### WMP10
+Games which depend on WMP10 can played by setting the variable `HACKWMP10` to 1.
+[Tweak](#Tweaks) with automatic support already implemented for
+
+**
+Giana Sisters Twisted Dreams (223220)
+Giana Sisters - Rise of the Owlverlord (246960)	
+**
+
 #### Vortex
 [Vortex Mod Manager](https://github.com/Nexus-Mods/Vortex)
 
@@ -507,10 +516,6 @@ So switching between the windows is easily possible with *Alt+Tab*.
 #### Notifier
 Set `NOTY` to your notifier to draw some start/stop **stl** messages
 
-#### 32bit Wineprefix
-Set `FORCE32BITPFX` to 1 to force 32bit pfx *(experimental)*
-Used by the	246960 [Tweak](#Tweaks) *(Giana Sisters - Rise of the Owlverlord)*
-	
 #### MangoHud
 [MangoHud](https://github.com/flightlessmango/MangoHud)
 Set `MANGOHUD` to 1 to enable mangohud *(does nothing in stl itself, but just exports the upstream variable)*

@@ -5,7 +5,7 @@
 ### project ###
 
 PROGNAME="SteamTinkerLaunch"
-PROGVERS="v1.4.2"
+PROGVERS="v1.4.3"
 PROGCMD="$(basename "$0")"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -105,9 +105,7 @@ GN="$(grep -oE 'common/[^\/]+' <<< "$EFD" | awk -F 'common/' '{print $NF}')"				
 
 GWIDFILE="/tmp/stl-sbsgwid"																	# temp file holding the game window id - worksforme
 GPFX="$STEAM_COMPAT_DATA_PATH/pfx"															# currently used WINEPREFIX
-TWEAKWIN=""																					# variable only used by a handful games which require forced tweaks to start
 LASTRUN="$LOGDIR/lastrun.txt"																# some variables from the last run, f.e. useful for the last protonversion used
-
 
 function writelog {
 # WRITELOG=0: disable log
@@ -1060,8 +1058,6 @@ function createDefaultGameCfg {
 		echo "#RUN_NYRNA=0"
 		echo "## set to 1 to enable replay-sorcery while game is running - overrides global config"
 		echo "#RUN_REPLAY=0"
-		echo "## force 32bit pfx:"
-		echo "FORCE32BITPFX=0"
 		echo "## useful for many games"
 		echo "PULSE_LATENCY_MSEC=60"
 		echo "## if set this command is used to block the internet for the selected game. game might fail to start - overrides global config"
@@ -1637,31 +1633,78 @@ function launchCustomProg {
 	fi
 }
 
-function checkCustomLaunch {
-	# start a custom program:
-	if [ -n "$RUN_CUSTOMCMD" ] ; then
-		if [ "$RUN_CUSTOMCMD" -eq 1 ] ; then
-			writelog "INFO" "${FUNCNAME[0]} - RUN_CUSTOMCMD is set to 1 - trying to start custom program CUSTOMCMD"
-		# fork in background and continue
-			if [ "$FORK_CUSTOMCMD" -eq 1 ]; then
-				writelog "INFO" "${FUNCNAME[0]} - FORK_CUSTOMCMD is set to 1 -  forking the custom program in background and continue"
-				launchCustomProg "$@" &
-		# or wait
-			else
-				writelog "INFO" "${FUNCNAME[0]} - FORK_CUSTOMCMD is set to 0 - starting the custom program regularly"
-				launchCustomProg "$@"
-			fi
-
-
-			if [ "$ONLY_CUSTOMCMD" -eq 1 ]; then
-				writelog "INFO" "${FUNCNAME[0]} - ONLY_CUSTOMCMD is set to 1 means only custom program $CUSTOMCMD is supposed to start - exiting here"
-				closeSTL
-				writelog "INFO" " ######### STOP EARLY $PROGNAME $PROGVERS #########"
-				exit
-			fi
+function wmp10hack {
+	if [ -f "$GPFX/drive_c/windows/syswow64/wmpasf.dll" ]; then
+		writelog "SKIP" "${FUNCNAME[0]} - looks like wmp10 was already copied into $GPFX - nothing to do"
+	else
+		GPFX32="${GPFX}/32bit"
+		if [ -d "$GPFX32" ]; then
+			writelog "SKIP" "${FUNCNAME[0]} - looks like dummy 32bit WINEPREFIX $GPFX32 already exists - nothing to do"
 		else
-			if [ -n "$CUSTOMCMD" ]; then
-				writelog "SKIP" "${FUNCNAME[0]} - RUN_CUSTOMCMD is set to 0 therefore skipping the custom program $CUSTOMCMD"
+			writelog "INFO" "${FUNCNAME[0]} - creating dummy 32bit WINEPREFIX $GPFX32 and installing wmp10 into it"
+			LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" WINE="$GWINE" WINEARCH=win32 WINEDEBUG="-all" WINEPREFIX="$GPFX32" "$WINETRICKS" --unattended wmp10 dxvk
+			if [ -f "$GPFX32/drive_c/windows/system32/wmpasf.dll" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - looks like wmp10 installation into dummy 32bit WINEPREFIX $GPFX32 worked! - copying required dlls (and some more) now into regular WINEPREFIX $GPFX"
+				WMP10LIST="wmp10-list.txt"
+				if [ -f "$GLOBALTWEAKDIR"/"$WMP10LIST" ]; then
+					WMP10SRCLIST="$GLOBALTWEAKDIR"/"$WMP10LIST"
+				elif  [ -f "$TWEAKDIR"/"$WMP10LIST" ]; then
+					WMP10SRCLIST="$TWEAKDIR"/"$WMP10LIST"
+				fi
+				
+				if [ -z "$WMP10SRCLIST" ]; then
+					writelog "SKIP" "${FUNCNAME[0]} - could not find $WMP10LIST in $GLOBALTWEAKDIR or $TWEAKDIR - exiting"
+					exit
+				else
+					while read -r file; do
+						SRCFILE="$GPFX32/drive_c/windows/system32/$file"
+						if [ -f "$SRCFILE" ]; then
+							writelog "INFO" "${FUNCNAME[0]} - copying $SRCFILE to $GPFX/drive_c/windows/syswow64/"
+							cp "$SRCFILE" "$GPFX/drive_c/windows/syswow64/"
+						fi
+					done < "$WMP10SRCLIST"
+				fi
+			fi
+		fi
+	fi
+}
+
+function checkCustomLaunch {
+
+	if [ -n "$HACKWMP10" ] ; then
+		if [ "$HACKWMP10" -eq 1 ] ; then
+			# Giana Sisters Twisted Dreams (223220) & GSTD - Rise of the Owlverlord (246960)
+			if [ "$AID" -eq "223220" ] || [ "$AID" -eq "246960" ]; then
+				wmp10hack
+				cd "$EFD" || return
+			fi
+		fi
+	else
+		# start a custom program:
+		if [ -n "$RUN_CUSTOMCMD" ] ; then
+			if [ "$RUN_CUSTOMCMD" -eq 1 ] ; then
+				writelog "INFO" "${FUNCNAME[0]} - RUN_CUSTOMCMD is set to 1 - trying to start custom program CUSTOMCMD"
+			# fork in background and continue
+				if [ "$FORK_CUSTOMCMD" -eq 1 ]; then
+					writelog "INFO" "${FUNCNAME[0]} - FORK_CUSTOMCMD is set to 1 -  forking the custom program in background and continue"
+					launchCustomProg "$@" &
+			# or wait
+				else
+					writelog "INFO" "${FUNCNAME[0]} - FORK_CUSTOMCMD is set to 0 - starting the custom program regularly"
+					launchCustomProg "$@"
+				fi
+
+
+				if [ "$ONLY_CUSTOMCMD" -eq 1 ]; then
+					writelog "INFO" "${FUNCNAME[0]} - ONLY_CUSTOMCMD is set to 1 means only custom program $CUSTOMCMD is supposed to start - exiting here"
+					closeSTL
+					writelog "INFO" " ######### STOP EARLY $PROGNAME $PROGVERS #########"
+					exit
+				fi
+			else
+				if [ -n "$CUSTOMCMD" ]; then
+					writelog "SKIP" "${FUNCNAME[0]} - RUN_CUSTOMCMD is set to 0 therefore skipping the custom program $CUSTOMCMD"
+				fi
 			fi
 		fi
 	fi
@@ -1719,111 +1762,6 @@ function toggleWindows {
 
 ### WINE START ###
 
-function createW32PFX {
-	if [ -n "$WINETRICKSPAKS" ]; then
-		if  [ -x "$(command -v "$WINETRICKS" 2>/dev/null)" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - creating fresh 32bit WINEPREFIX by directly installing $WINETRICKSPAKS silently with $WINETRICKS"
-			checkWinetricksInstPak
-		else
-			if  [ -x "$(command -v "$WINECFG" 2>/dev/null)" ]; then
-				writelog "SKIP" "${FUNCNAME[0]} - $WINETRICKS not found - skipping WINETRICKSPAKS installation and just creating the WINEPREFIX"
-				extWine32Run "$WINECFG"
-			else
-				writelog "SKIP" "${FUNCNAME[0]} - $WINECFG not found - can't create WINEPREFIX"
-			fi
-		fi
-	else
-		if  [ -x "$(command -v "$WINECFG" 2>/dev/null)" ]; then
-			extWine32Run "$WINECFG"
-		else
-			writelog "SKIP" "${FUNCNAME[0]} - $WINECFG not found - can't create WINEPREFIX"
-		fi
-	fi
-
-	if [ -d "$GPFX/drive_c/windows/syswow64" ];then
-		mv "$GPFX/drive_c/windows/syswow64" "$GPFX/drive_c/windows/syswow64-$(cut -c1-4 <<< $RANDOM)"
-	fi
-
-	if  [ -x "$(command -v "$WINETRICKS" 2>/dev/null)" ]; then
-		mkdir "$GPFX/drive_c/windows/syswow64"
-		writelog "INFO" "${FUNCNAME[0]} - installing 32bit dxvk  into the 32bit WINEPREFIX"
-		extWine32Run "$WINETRICKS" --unattended "dxvk"
-	fi
-		
-	writelog "OK" "${FUNCNAME[0]} - WINEPREFIX should be ready"
-	if [ ! -d "$GPFX/drive_c/windows/system32-SAVE" ]; then
-		writelog "OK" "${FUNCNAME[0]} - copying $GPFX/drive_c/windows/system32 to $GPFX/drive_c/windows/system32-SAVE"
-		cp -R "$GPFX/drive_c/windows/system32" "$GPFX/drive_c/windows/system32-SAVE"
-	fi
-}
-
-# force 32bit pfx if FORCE32BITPFX is set
-
-function check32BitForce {
-	if [ "$FORCE32BITPFX" -eq 1 ]; then
-		writelog "INFO" "${FUNCNAME[0]} - forcing 32bit WINEPREFIX"
-		if [ -d "$GPFX" ];then
-			writelog "INFO" "${FUNCNAME[0]} - WINEPREFIX $GPFX exists - checking architecture"
-			if [ -f "$GPFX/drive_c/windows/syswow64/avifile.dll" ];then	# the dir alone is not enough as proton installs dxvk dlls into this dir, so looking for a random file from a clean win64 pfx
-				PFXBACK64="$GPFX"-BACK64
-				writelog "INFO" "${FUNCNAME[0]} - WINEPREFIX $GPFX is 64bit - creating a 32bit WINEPREFIX instead"
-				if [ ! -d "$PFXBACK64" ];then
-					mv "$GPFX" "$PFXBACK64"
-					writelog "INFO" "${FUNCNAME[0]} - backed the 64bit pfx $GPFX to $PFXBACK64 - creating a 32bit WINEPREFIX now"
-					createW32PFX
-					mkdir "$GPFX"/drive_c/windows/syswow64
-					writelog "INFO" "${FUNCNAME[0]} - 32bit WINEPREFIX $GPFX created"
-				else
-					writelog "SKIP" "${FUNCNAME[0]} - 64bit backup $PFXBACK64 already exists - please remove it manually if n longer required! - skipping FORCE32BITPFX"
-					FORCE32BITPFX=0
-				fi
-			else
-				writelog "SKIP" "${FUNCNAME[0]} - wineprefix $GPFX already is 32bit - nothing to do"
-			fi
-		else
-			writelog "INFO" "${FUNCNAME[0]} - wineprefix $GPFX does not exist - creating a fresh 32bit prefix"
-			createW32PFX
-		fi
-	fi
-}
-
-function hackWin32 {
-	if [ "$FORCE32BITPFX" -eq 1 ]; then
-		if [ "$AID" -eq "246960" ]; then	# Giana Sisters
-
-			if [ -n "$TWEAKWIN" ]; then
-				while true; do
-					if "$XWININFO" -name "${TWEAKWIN//\"/}" >/dev/null 2>/dev/null; then
-						LAUNCHPID="$("$XWININFO" -name "${TWEAKWIN//\"/}" -wm | grep "Process id:" | awk -F 'Process id: ' '{print $2}' | cut -d ' ' -f1)"
-						if [ -n "$LAUNCHPID" ]; then
-							writelog "INFO" "${FUNCNAME[0]} - pid $LAUNCHPID found for $TWEAKWIN - replacing running system32"
-							LIVE32="$GPFX/drive_c/windows/system32"
-							SAVE64="$GPFX/drive_c/windows/system64-SAVE"
-							SAVE32="$GPFX/drive_c/windows/system32-SAVE"
-							if [ -d "$SAVE32" ]; then
-								if [ -d "$SAVE64" ]; then
-									rm -rf "$SAVE64"
-								fi
-								mv "$LIVE32" "$SAVE64"
-								cp -R "$SAVE32" "$LIVE32"
-								writelog "OK" "${FUNCNAME[0]} -replaced $LIVE32 with $SAVE32"
-							else
-								writelog "ERROR" "${FUNCNAME[0]} -$SAVE32 does not exist!"
-							fi
-							break
-						else
-							writelog "INFO" "${FUNCNAME[0]} - waiting for pid $LAUNCHPID for launcher window $TWEAKWIN"
-							sleep 1
-						fi
-					fi
-				done
-			else
-				writelog "SKIP" "${FUNCNAME[0]} -TWEAKWIN variable missing - looks like tweak file for $AID was not automatically loaded"
-			fi
-		fi
-	fi	
-}
-
 function checkWinetricksInstPak {
 	if [ -n "$WINETRICKSPAKS" ]; then
 		if  [ -x "$(command -v "$WINETRICKS" 2>/dev/null)" ]; then
@@ -1832,11 +1770,7 @@ function checkWinetricksInstPak {
 			if [ ! -f "$WTLOG" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - installing $WINETRICKSPAKS silently with $WINETRICKS"
 				# if everything goes well all packages are installed at once:
-					if [ "$FORCE32BITPFX" -eq 1 ]; then
-						extWine32Run "$WINETRICKS" --unattended "${INSTWINETRICKSPAKS[@]}"
-					else
-						extWine64Run "$WINETRICKS" --unattended "${INSTWINETRICKSPAKS[@]}"
-					fi
+				extWine64Run "$WINETRICKS" --unattended "${INSTWINETRICKSPAKS[@]}"
 			else
 				NOTINSTALLEDLIST="$(comm -23 <(echo "${INSTWINETRICKSPAKS[*]}" | tr ' ' '\n' | sort) <(sort < "$WTLOG"))"
 				NOTINSTALLED=()
@@ -1846,12 +1780,7 @@ function checkWinetricksInstPak {
 
 				if [ -n "${NOTINSTALLED[0]}" ]; then
 					writelog "INFO" "${FUNCNAME[0]} - installing following packages now: '${NOTINSTALLED[*]}'"
-					if [ "$FORCE32BITPFX" -eq 1 ]; then
-						mv "$GPFX/drive_c/windows/syswow64" "$GPFX/drive_c/windows/syswow64-$(cut -c1-4 <<< $RANDOM)"
-						extWine32Run "$WINETRICKS" --unattended "${NOTINSTALLED[@]}"
-					else
-						extWine64Run "$WINETRICKS" --unattended "${NOTINSTALLED[@]}"
-					fi
+					extWine64Run "$WINETRICKS" --unattended "${NOTINSTALLED[@]}"
 					# re-check here?
 					# checkWinetricksInstPak
 				else
@@ -1872,14 +1801,8 @@ function checkWinetricksLaunch {
 			if  [ -x "$(command -v "$WINETRICKS" 2>/dev/null)" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - launching $WINETRICKS before game start with following commandline:"
 				# several variables coming from steam have to be cleaned in order to get wine to work here
-				if [ "$FORCE32BITPFX" -eq 1 ]; then
-					mv "$GPFX/drive_c/windows/syswow64" "$GPFX/drive_c/windows/syswow64-off"
-					extWine32Run "$WINETRICKS" --gui
-					mv "$GPFX/drive_c/windows/syswow64-off" "$GPFX/drive_c/windows/syswow64"
-				else
-					writelog "INFO" "${FUNCNAME[0]} - $WINETRICKS --gui"
-					extWine64Run "$WINETRICKS" --gui
-				fi
+				writelog "INFO" "${FUNCNAME[0]} - $WINETRICKS --gui"
+				extWine64Run "$WINETRICKS" --gui
 			else
 				writelog "SKIP" "${FUNCNAME[0]} - $WINETRICKS not found - skipping"
 			fi
@@ -1896,14 +1819,8 @@ function checkWineCfgLaunch {
 			if  [ -x "$(command -v "$WINECFG" 2>/dev/null)" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - starting $WINECFG before game start:"
 				# several variables coming from steam have to be cleaned in order to get wine to work here
-				if [ "$FORCE32BITPFX" -eq 1 ]; then
-					mv "$GPFX/drive_c/windows/syswow64" "$GPFX/drive_c/windows/syswow64-off"
-					extWine32Run "$WINECFG"
-					mv "$GPFX/drive_c/windows/syswow64-off" "$GPFX/drive_c/windows/syswow64"
-				else
-					writelog "INFO" "${FUNCNAME[0]} - winecfg"
-					extWine64Run "$WINECFG"
-				fi
+				writelog "INFO" "${FUNCNAME[0]} - winecfg"
+				extWine64Run "$WINECFG"
 			else
 				writelog "SKIP" "${FUNCNAME[0]} - command '$WINECFG' not found - skipping"
 			fi
@@ -2997,10 +2914,6 @@ function launchSteamProtonGame {
 # remove GFWL if NOGFWL is 1
 	checkXliveless
 
-# force 32bit pfx if  if FORCE32BITPFX is 1
-	writelog "INFO" "${FUNCNAME[0]} - check32BitForce:"
-	check32BitForce "$@"
-
 # start winetricks gui if RUN_WINETRICKS is 1 or silently if WINETRICKSPAKS is not empty
 	writelog "INFO" "${FUNCNAME[0]} - checkWinetricksLaunch:"
 	checkWinetricksLaunch
@@ -3130,26 +3043,10 @@ function launchSteamProtonGame {
 # start with gamemoderun:
 	elif [ "$USEGAMEMODERUN" -eq 1 ]; then
 		writelog "INFO" "${FUNCNAME[0]} - starting '$GN ($AID)' with Proton: '$PROTONVERSION' with '$GAMEMODERUN'"
-			if [ "$FORCE32BITPFX" -eq 1 ]; then
-				writelog "INFO" "${FUNCNAME[0]} - starting game in 32bit mode"
-				hackWin32 &
-				LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD=0 "$GAMEMODERUN" "${PROTONCMD[@]}"
-			else
-				"$GAMEMODERUN" "${PROTONCMD[@]}"
-			fi
+		"$GAMEMODERUN" "${PROTONCMD[@]}"
 	else
 		writelog "INFO" "${FUNCNAME[0]} - starting '$GN ($AID)' with Proton: '$PROTONVERSION'"
-# start with forced 32bit WINEPREFIX:
-		if [ "$FORCE32BITPFX" -eq 1 ]; then
-			writelog "INFO" "${FUNCNAME[0]} - starting game in 32bit mode"
-			hackWin32 &
-			LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" LD_PRELOAD=0 "${PROTONCMD[@]}"
-		else
-# start normally using proton:
-			writelog "INFO" "${FUNCNAME[0]} - starting game normally using proton"
-			"${PROTONCMD[@]}"
-		fi
-
+		"${PROTONCMD[@]}"
 	fi
 	writelog "STOP" "######### $PROGNAME $PROGVERS #########"
 }
