@@ -137,7 +137,10 @@ function exportCfgFile {
 	while read -r line; do
 		export "${line?}"
 	done <<< "$(grep -v "^#\|^$" "$CFGFILE")"
-	writelog "INFO" "${FUNCNAME[0]} - $1 STOP"
+	# disable logging here when the program just started (cosmetics)
+	if [ -z "$2" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - $1 STOP"
+	fi
 }
 
 if grep -q "waitforexitandrun" <<< "$@"; then
@@ -888,6 +891,12 @@ function createProjectDirs {
 function updateConfigFile {
 	CFGFILE="$1"
 	SEP="$2"
+
+	# disable logging temporarily when the program just started (cosmetics)
+	if [ -n "$3" ];then
+		ORGWRITELOG="$WRITELOG"
+		WRITELOG=0
+	fi
 	
 	if grep -q "config Version: $PROGVERS" "$1"; then
 		writelog "SKIP" "${FUNCNAME[0]} - config file $CFGFILE already at version $PROGVERS"
@@ -924,6 +933,11 @@ function updateConfigFile {
 # TODO replace new variables which were added as strings
 
 	fi
+
+	# re-enable logging
+	if [ -n "$3" ];then
+		WRITELOG="$ORGWRITELOG"
+	fi
 }
 
 # create the default global config if not found:
@@ -934,7 +948,11 @@ function createDefaultGlobalCfg {
 
 	if [ -f "$THISCFG" ]; then
 		# add missing config entries in the default global config:
-		updateConfigFile "$THISCFG" "createDefaultGlobalCfg"
+		if [ -z "$1" ]; then
+			updateConfigFile "$THISCFG" "createDefaultGlobalCfg"
+		else
+			updateConfigFile "$THISCFG" "createDefaultGlobalCfg" "$1"
+		fi
 	else
 		echo "default global config not found - creating it"
 		{
@@ -1306,13 +1324,16 @@ function checkTweakLaunch {
 }
 
 function createDefaultCfgs {
-	createDefaultGlobalCfg
-	mkProjDir "$LOGDIR" 1
+	# if given a parameter to this function globalconfig will be skipped - required to start the main log file where it should (just cosmetics)
+	if [ -z "$1" ]; then
+		createDefaultGlobalCfg
+		mkProjDir "$LOGDIR" 1
 
-	if [ -f "$STLDEFGLOBALCFG" ]; then
-		exportCfgFile "$STLDEFGLOBALCFG"
+		if [ -f "$STLDEFGLOBALCFG" ]; then
+			exportCfgFile "$STLDEFGLOBALCFG"
+		fi
 	fi
-
+	
 	createProjectDirs
 	createDefaultGameCfg
 	createVortexCfg
@@ -2837,16 +2858,27 @@ function checkVortex {
 
 ### CORE LAUNCH START ###
 
-## launchSteamProtonGame:
 function launchSteamProtonGame {
 
-	createDefaultCfgs
+	if [ -f "$LOGDIR/$AID.log" ]; then
+		rm "$LOGDIR/$AID.log"
+	fi
 
-	writelog "START" "######### $PROGNAME $PROGVERS #########"
-	writelog "INFO" "${FUNCNAME[0]} - $GN ($AID)"
+	createDefaultGlobalCfg X
+	mkProjDir "$LOGDIR" 1
+	if [ -f "$STLDEFGLOBALCFG" ]; then
+		exportCfgFile "$STLDEFGLOBALCFG" X
+	fi
+
+	writelog "START" "######### Game Launch: $GN ($AID) #########"
+
+	createDefaultCfgs X
+
 	writelog "INFO" "${FUNCNAME[0]} - game launch args '$*'"
-
-	writelog "INFO" "${FUNCNAME[0]} createGameCfg:"
+	writelog "INFO" "${FUNCNAME[0]} - gamedir '$GFD'"
+	writelog "INFO" "${FUNCNAME[0]} - wineprefix '$GPFX'"
+	writelog "INFO" "${FUNCNAME[0]} -------------------"
+	writelog "INFO" "${FUNCNAME[0]} - createGameCfg:"
 	createGameCfg "$@"
 
 	writelog "INFO" "${FUNCNAME[0]} - editGameConfig:"
