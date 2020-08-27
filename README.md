@@ -55,7 +55,7 @@ Also enable everything you want to use generally for your games in [the default 
 * **[Depth3D](#Depth3D)** automatic shader installation
 * **[vkBasalt](#vkBasalt)** basic vkBasalt configuration
 * **[SBS-VR](#Side-by-Side-VR)** automatically play regular games in side-by-side mode in VR!
-* **[Tweaks](#Tweaks)** community mini configfiles to automatically start problematic games ootb - can also start custom [Tweak Commands](#Tweak-Commands)
+* **[Tweaks](#Tweaks)** community mini configfiles (so-called [Tweakfiles](#Tweakfiles)) to automatically start problematic games ootb - can also start custom [Tweak Commands](#Tweak-Commands)
 * **[Nyrna](#Nyrna)** start/stop ReplaySorcery per game
 * **[ReplaySorcery](#ReplaySorcery)** start/stop ReplaySorcery per game
 * **[Custom Game Launch](#Custom-Game-Launch)** easy simple custom game launch
@@ -192,6 +192,35 @@ Some systemwide tweaks can already be used (see [Installation](#Installation)).
 If you use/create tweaks make sure to retest your game with later proton versions without the tweak and report upstream if the bug is fixed!
 The used proton Version is automatically written into the tweak file when created with `CREATETWEAKS`
 user tweak-files in `TWEAKDIR` override global ones in `GLOBALTWEAKDIR`
+
+#### Tweakfiles
+An example tweakfile looks like this:
+
+`stl/tweaks/8080.conf:`
+
+`
+#########
+#GAMENAME=Kane and Lynch Dead Men
+#GAMEEXE=Launcher
+#GAMEID=8080
+#PROTONVERSION=proton-5.0-10-rc4
+#########
+WINETRICKSPAKS=d3dx9_31 d3dx9_34
+PROTON_NO_ESYNC=1
+PROTON_NO_FSYNC=1
+NOGFWL=1
+`
+
+Explained in detail:
+When the game "Kane and Lynch Dead Men" is started **stl** will find its tweakfile *(8080.conf = SteamAppId.conf)*
+and apply following configurations:
+
+- d3dx9_31 d3dx9_34 will be installed via wintricks
+- PROTON_NO_ESYNC and PROTON_NO_ESYNC will both be set to 1
+- gfwl will be removed
+
+This works completely automatically and transparent without any user interaction.
+*(of course the first start will need some time when aditional packages are installed)*
 
 ### Tweak Commands
 
@@ -609,3 +638,14 @@ set PROTONDB to 1 to additionally open the protondb.com url for the game `PDBURL
 Literally every env variable can be set in [gameconfig `$STLGAMECFG`](#Game-Configurations) and [system-wide configuration](#Global-Config),
 making it pretty easy to tinker with important ones *(f.e `PROTON`* , `DXVK`* , `MANGOHUD`, `RADV_PERFTEST`, `WINE`...)*
 The Possibilities Are Endless...
+
+## Contribution
+
+**Any contribution is welcome and everybody can help!**
+
+- help improving the **README**
+- create [Tweakfiles](#Tweakfiles) and share them with the community, either open a pull request, or open an issue if you don't like git too much :)
+- add new functions & fix bugs (please open a pull request)
+- bugreports (please also post the relevant stl logfile)
+- spread the word *(**stl** is still pretty unknown - the more people know it the more can help to improve it)*
+
