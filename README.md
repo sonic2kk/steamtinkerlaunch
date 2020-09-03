@@ -56,7 +56,7 @@ Also enable everything you want to use generally for your games in [the default 
 * **[vkBasalt](#vkBasalt)** basic vkBasalt configuration
 * **[SBS-VR](#Side-by-Side-VR)** automatically play regular games in side-by-side mode in VR!
 * **[Tweaks](#Tweaks)** community mini configfiles (so-called [Tweakfiles](#Tweakfiles)) to automatically start problematic games ootb - can also start custom [Tweak Commands](#Tweak-Commands)
-* **[Auto Tweaks](#Auto-Tweaks)** support for automatic import of game configs from several other platforms **TBA**
+* **[Auto Tweaks](#Auto-Tweaks)** support for automatic import of game configs from several other platforms
 * **[Nyrna](#Nyrna)** start/stop ReplaySorcery per game
 * **[ReplaySorcery](#ReplaySorcery)** start/stop ReplaySorcery per game
 * **[Custom Game Launch](#Custom-Game-Launch)** easy simple custom game launch
