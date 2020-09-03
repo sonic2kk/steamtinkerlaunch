@@ -56,6 +56,7 @@ Also enable everything you want to use generally for your games in [the default 
 * **[vkBasalt](#vkBasalt)** basic vkBasalt configuration
 * **[SBS-VR](#Side-by-Side-VR)** automatically play regular games in side-by-side mode in VR!
 * **[Tweaks](#Tweaks)** community mini configfiles (so-called [Tweakfiles](#Tweakfiles)) to automatically start problematic games ootb - can also start custom [Tweak Commands](#Tweak-Commands)
+* **[Auto Tweaks](#Auto-Tweaks)** support for automatic import of game configs from several other platforms **TBA**
 * **[Nyrna](#Nyrna)** start/stop ReplaySorcery per game
 * **[ReplaySorcery](#ReplaySorcery)** start/stop ReplaySorcery per game
 * **[Custom Game Launch](#Custom-Game-Launch)** easy simple custom game launch
@@ -66,6 +67,9 @@ Also enable everything you want to use generally for your games in [the default 
 * **[Vortex Mod Manager](#Vortex)** via steam `Vortex` category see [Video of usage](#stl-Vortex-gif)
 * **[GFWL/xlive](#GFWL)** automatic support for games using GFWL
 * **[WMP10](#WMP10)** automatic support for WMP10 installation
+* **[mf-install](#mf-install)** automatic support for Media Foundation installation
+* **[self maintaining configs](#self-maintaining-configs)** optional automatic cloning of this repo as replacemement for missing system wide installation
+
 
 ## Requirements
 *(no special order)*
@@ -102,20 +106,8 @@ For a general overview what can be configured, just check the [Features](#Featur
 The main user configuration directory `STLCFGDIR` can be found under
 `$HOME/.config/stl` (or `XDG_CONFIG_HOME/stl` if `XDG_CONFIG_HOME` is set).
 
-When started for the first time **stl** will initially create this default configuration structure:
+When started for the first time **stl** will initially create a default configuration structure in its configdir `STLCFGDIR`
 
-        `STLCFGDIR`/
-        ├── categories
-        ├── default_template.conf
-        ├── downloads
-        ├── downloads/Depth3D
-        ├── gamecfgs
-        ├── global.conf
-        ├── logs
-        ├── logs/stl.log
-        ├── tweaks
-        ├── vortex     
-        └── vortex/vortex.conf
 
 #### Systemwide Configuration
 The systemwide configuration directory `SYSTEMSTLCFGDIR` can be found under `/usr/share/$PROGCMD` *(/usr/share/stl/)*
@@ -127,6 +119,15 @@ custom per-game [registry](#Registry) files, which are autodetected and applied 
 *community contributed* [tweaks](#Tweaks) which make sure specific games work ootb using the provided configuration options,
 *community contributed* [sbs tweaks](#SBS-Tweaks) which make sure specific games work ootb in [SBS-VR](#Side-by-Side-VR) mode using the provided configuration options
 
+##### self maintaining configs
+With the variable `DLGLOBAL` being set to 1 (it is by default) **stl**
+uses systemwide configurations from the directory `STLDLDIR/stl` and also git pulls this repo into there (max once per day).
+This **only** is used when the systemwide configuration directory `SYSTEMSTLCFGDIR` does not exist at all!
+As almost no distro provides a stl package, the idea is that the user only has to copy stl into `$PATH`
+and still can make use of the bundled config files without having to install them manually.
+No executable files will be used from here!
+
+Auto-generated [auto tweaks](#Auto Tweaks) imported from other platform will be loaded before global configs, so global configs override them by default.
 
 ### Default Template Config
 `STLDEFGAMECFG` *(`$STLCFGDIR/default_template.conf`)*
@@ -149,9 +150,8 @@ or which default programs to use
 
 When starting a game using **stl** the game specific config file is searched in `STLGAMEDIR`
 and created if not available from the default config file *(which in turn is automatically created as well if not found)*.
-Additional individual configs can be loaded via [Tweaks](#Tweaks) and [SBS Tweaks](#SBS-Tweaks)
+Additional individual configs can be loaded via multiple different [Tweaks](#Tweaks).
 Any option configured in here and also in [global.conf](#Global-Config) is overridden by this config.
-
 
 ### Steam Categories
 **stl** parses the Steam categories of the started game and examines if a associated **stl** configuration file exists
@@ -176,27 +176,30 @@ a game in the corresponding category
 - **ScummVM.conf** is started automatically with linux native scummvm provided by [Roberta](#Roberta)
 - **Vortex.conf** is started automatically with the [Vortex](#Vortex) Mod Manager
 - **vkVR.conf** is started automatically in [SBS-VR](#Side-by-Side-VR) mode using [vkBasalt](#vkBasalt) and 
+- **Installer.conf** won't be started at all, but a requester lets one choose an exe which is started instead.
 
 Multiple Category Configuration Files are possible, they are loaded one after another, with the last one overriding settings also found in the previous files.
 All settings which are also configured in `$STLGAMECFG` are overridden (but not overwritten).
 
 ### Tweaks
 
-If a tweak config `TWEAKCFG` ( `SteamAppID.conf` ) in `GLOBALTWEAKDIR` or `TWEAKDIR` (overrides global) is found its settings
+All different user writable tweakfiles live in their own subdirectory under `TWEAKDIR` *("$STLCFGDIR/tweaks")*
+
+If a tweak config `TWEAKCFG` ( `SteamAppID.conf` ) in `GLOBALTWEAKDIR` or `USERTWEAKDIR` (overrides global) is found its settings
 overrides the settings in the [`$STLGAMECFG`](#Game-Configurations).
-Using this it would be possible to contribute tweak configs required to get games to work hazzlefree out of the box to the community.
+By means of this function it is be possible to contribute tweak configs required to get games to work hazzlefree out of the box to the community.
 With `CREATETWEAKS` a default template tweak file is autogenerated on game launch, to make creating one a bit easier.
 
 Some systemwide tweaks can already be used (see [Installation](#Installation)).
 
 If you use/create tweaks make sure to retest your game with later proton versions without the tweak and report upstream if the bug is fixed!
-The used proton Version is automatically written into the tweak file when created with `CREATETWEAKS`
-user tweak-files in `TWEAKDIR` override global ones in `GLOBALTWEAKDIR`
+The used proton Version is automatically written into the tweak file when created with `CREATETWEAKS`.
+User tweak-files in `USERTWEAKDIR` override global tweaks in `GLOBALTWEAKDIR`, [Autotweaks](#Auto Tweaks)
 
 #### Tweakfiles
 An example tweakfile looks like this:
 
-`stl/tweaks/8080.conf:`
+`stl/tweaks/user/8080.conf:`
 
 `
 #########
@@ -264,6 +267,99 @@ Trine 2 won't start it's original launcher (`ONLY_CUSTOMCMD=1`), but only the cu
 So in general sbs configs are automatically loaded when found and override settings in the main config
 so you just have to enable `RUNSBSVR` in `STLCFGDIR/gamecfgs/35720.conf` and everything else is configured automatically.
 
+### Auto Tweaks
+
+**stl** allows to import required game config files from several other platforms.
+The path to those autogenerated tweaks is
+`AUTOTWEAKDIR` *("$TWEAKDIR/auto")* with "$platform" as subdirectory.
+
+All platforms from where configurations shall be imported need to be listed in the
+global `AUTOTWEAKS` variable.
+All enabled autotweak platform tweak files are loaded before all other configs, so it is always possible to override them later.
+This is necessary, as aparrently not all autogenerated configs can be tested.
+
+When `ATVALIDATE=0` the order in `AUTOTWEAKS` decides in which order they are loaded.
+The later a config is found the more important it is, as it discards the configs found from previous platforms.
+With `ATVALIDATE` being disabled there is apparently no control over what will be actually loaded.
+
+When the variable `ATVALIDATE` is >0 a requester will pop up
+asking the user if he wants to open the autocreated config with the editor
+*(also her in the same order as the platforms are listed in `AUTOTWEAKS`)*
+Afterwards another requester asks if the config should be loaded or skipped.
+When multiple Auto Tweak Configs are found the requesters are opened for all of them,
+but only the last accepted config is actually loaded!
+
+If `IGNOREAUTOTWEAKS=1` is set in the current gameconfig `$STLGAMECFG` all autotweaks are skipped automatically.
+
+
+#### Creating Auto Tweaks
+
+Auto Tweaks are either autocreated on game launch automatically (if the chosen `AUTOTWEAKS` support the game)
+or can be .
+
+
+**stl** will download an active repo on the first run and prepare the datafiles for better searching if required.
+To keep downloads as low as possible, on later runs the already downloaded data will be re-used where possible.
+
+When started directly from Steam **stl** searches for a gamefix for the current SteamAppID.
+If one is found the gamefix will be converted into a **stl** autotweakfile under `AUTOTWEAKDIR/protonfixes`.
+This config is then applied like described in [Auto Tweaks](#Auto Tweaks) above.
+
+Creating Auto Tweaks via **stl** command line:
+
+`stl autotweaks PLAFTORM (optional steamid)`
+
+Will autogenerate all tweak files for every parsible game of platform PLATFORM or just for the optional SteamAppID
+  
+Example:
+
+`stl autotweaks lutris`
+Creates for all supported Games Autotweak files in `AUTOTWEAKDIR/lutris`
+
+`stl autotweaks lutris 883710`
+
+Creates only for game 883710 an Autotweak file.
+
+**Depending on the platform stl filters several original configuration options.
+If you think something important is missing please open an issue!**
+
+#### ProtonFixes
+Some [protonfixes](https://github.com/simons-public/protonfixes) gamefixes are marked as deprecated inside protonfixes.
+Those and a handful more (mostly those copying/changing files) are skipped automatically.
+When run from terminal those skipped will be listed.
+To see how Auto Tweak files are created read general describtion from above [here](# Creating Auto Tweaks)
+
+Currently following options are imported into the Auto Tweak file:
+
+- winetricks packages
+- alternative executables
+- env variables
+- dll overrides
+- game command line arguments
+
+#### Lutris
+[Lutris](https://github.com/lutris/lutris) is pretty huge and supports many different platforms.
+**stl** uses multiple different filters to extract the steam-relevant games.
+If you think something important was filtered out please open an issue!
+Lines which were not filtered out, but were not used as well can be logged
+*(into "/tmp/LUTWEAKDEBUG-raw.txt" (all) and
+"/tmp/LUTWEAKDEBUG-raw.txt" (after another filter, which sorts out some more unused lines))*
+
+by setting the variable `LUATDEBUG=1` directly within **stl**
+
+Currently following options are imported into the Auto Tweak file:
+- winetricks packages
+- commandline arguments
+- env variables
+- dll overrides
+- pulseaudio latency
+- xlive
+- mfplat
+- basic script creation *(`TWEAKCMD`)*
+- downloads and their extraction will be added commented out in the autotweak file
+
+To see how Auto Tweak files are created read general describtion from above [here](# Creating Auto Tweaks)
+
 
 ### vortex.conf
 See [Vortex Configuration](#Vortex-Configuration)
@@ -275,6 +371,10 @@ As of writing those are
 [Depth3D](#Depth3D) shader files
 [Vortex](#Vortex) the installation setup exe
 [ReShade](#ReShade) ReShade itself and required d3dcompiler dlls
+[Auto Tweaks](#Auto-Tweaks) downloads for all enabled Auto Tweaks are stored in here
+[GFWL/xlive](#GFWL) xlive replacement
+[mf-install](#mf-install) will be pulled in here if used
+[self maintaining configs](#self-maintaining-configs) stl itself will be downloaded here when self-maintaining-configs are used
 
 ### Logs
 Logs are written into the `LOGDIR` defined in the [global.conf](#Global-Config).
@@ -288,17 +388,18 @@ There are several logfiles, those which are written mostly are the game specific
 
 When enabled you can start custom programs easily with the following per-game config options:
 
-- `RUN_CUSTOMCMD`: set to 1 to start the custom command `CUSTOMCMD`
+- `RUN_CUSTOMCMD`: set to 1 or 2 *(see below)* to start the custom command `CUSTOMCMD`
 - `CUSTOMCMD`: start this custom command
 - `CUSTOMCMD_ARGS`: start `CUSTOMCMD` command with those args
 - `ONLY_CUSTOMCMD`: set to 1 to only start `CUSTOMCMD` and not the game command itself
 - `FORK_CUSTOMCMD`: set to 1 to fork the custom `CUSTOMCMD` into the background and continue with starting `%command%`
 
 If only `RUN_CUSTOMCMD` is enabled, but `CUSTOMCMD` is empty, a requester will open where a executable file can be selected.
-This selected file is automatically written into the [in game configfile `$STLGAMECFG`](#Game-Specific-Configuration).
+When `RUN_CUSTOMCMD` is 1 this selected file is automatically written into the [in game configfile `$STLGAMECFG`](#Game-Specific-Configuration).
+When `RUN_CUSTOMCMD` is 2 this selected file is only started this time without saving the exe into the config.
+This is especially useful for installers *(see provided [Steam Category](#Steam-Categories) 'Installer')*
 
 If string `CUSTOMCMD` can't be found as file in either `PATH`, in game dir or as absolute filepath the requester will open as well.
-
 
 #### Winetricks
 [Winetricks](https://wiki.winehq.org/Winetricks)
@@ -379,6 +480,18 @@ Games which depend on WMP10 can played by setting the variable `HACKWMP10` to 1.
 Giana Sisters Twisted Dreams (223220)
 Giana Sisters - Rise of the Owlverlord (246960)	
 **
+
+#### mf-install
+**stl** supports optional automatic installation of MF using [mf installed](https://github.com/z0z0z/mf-install).
+The used dlls can't be distributed officially *(see [here](https://github.com/z0z0z/mf-install/issues/1))*,
+so the user has to decide for himself if he wants to use this project.
+When a game has `USEMF=1` set *(f.e. with Steam Category MF)* **stl** will go through following process when the game is started:
+
+- check if the game `WINEPREFIX` *(GPFX)* already has [mf installed](https://github.com/z0z0z/mf-install). If yes, return and start game.
+- check if mf-install is found in `STLDLDIR/mf-install`. If yes automatically install into the `GPFX` and start the game.
+- requester opens, giving the user the option to download mf-install into`STLDLDIR/mf-install` automatically, if yes, download for all future games, install into `GPFX` and start the game.
+- if user selects to not install it the game will start without MF.
+
 
 #### Vortex
 [Vortex Mod Manager](https://github.com/Nexus-Mods/Vortex)
