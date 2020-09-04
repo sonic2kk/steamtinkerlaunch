@@ -74,7 +74,9 @@ Also enable everything you want to use generally for your games in [the default 
 ## Requirements
 *(no special order)*
 
-The script itself doesn't have any special dependencies.
+The script itself doesn't have any special dependencies
+
+- bash *(only shell tested)*
 
 For the optional features you need:
 - [strace](#Strace)
