@@ -2284,41 +2284,61 @@ function preEditCfg {
 function guiLoadCfg {
 	GUICFG="$1"
 	REQWIDTH=1400
-	
-	writelog "INFO" "${FUNCNAME[0]} - requester asking if '$GUICFG' should be loaded"
+	REQHEIGHT=600
 
-	"$STEAM_ZENITY" --title="$PROGNAME ($PROGCMD) - $PROGVERS" --question --text="Load AutoTweak Config\n'$VALCFG'?" --ok-label=Load --cancel-label=Cancel --width "$REQWIDTH"
-	case $? in
-		0)  LOADAUTOCFG="$GUICFG"
-			writelog "INFO" "${FUNCNAME[0]} - marked '$LOADAUTOCFG' for loading"
-		;;
-		1)  writelog "SKIP" "${FUNCNAME[0]} - selected to skip '$GUICFG'"
-		;;
-	esac
+	writelog "INFO" "${FUNCNAME[0]} - requester asking if '$GUICFG' should be loaded"
+	ZENSEL="$("$STEAM_ZENITY" --list --title="PROGNAME (PROGCMD) - PROGVERS" --text="Load AutoTweak Config\n'VALCFG'?\n(Load/Skip/Ignore AutoTweaks for '$GN ($AID)')" --radiolist --column "Choose" --column "Option" FALSE "Load" FALSE "Skip" FALSE "Ignore" --width "$REQWIDTH" --height="$REQHEIGHT")"
+	if [ "$ZENSEL" == "Load" ]; then
+		LOADAUTOCFG="$GUICFG"
+		writelog "INFO" "${FUNCNAME[0]} - marked '$LOADAUTOCFG' for loading"
+	elif [ "$ZENSEL" == "Skip" ]; then
+		writelog "SKIP" "${FUNCNAME[0]} - selected to skip '$GUICFG'"
+	elif [ "$ZENSEL" == "Ignore" ]; then
+		if [ -f "$TWEAKCFG" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - adding 'IGNOREAUTOTWEAKS=1' to '$TWEAKCFG'"
+			echo "IGNOREAUTOTWEAKS=1" >> "$TWEAKCFG"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - adding 'IGNOREAUTOTWEAKS=1' to '$STLGAMECFG'"
+			echo "IGNOREAUTOTWEAKS=1" >> "$STLGAMECFG"
+		fi
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - Nothing selected - skipping '$GUICFG'"
+	fi
 }
 
 function validateATCfg {
 	VALCFG="$1"
-
+	REQWIDTH=1400
+	REQHEIGHT=600
+	
 	if [ -z "$ATVALIDATE" ]; then
 		ATVALIDATE="$WAITEDITOR"
 	fi
 
 	if [ "$ATVALIDATE" -ge 1 ]; then
 		if [ -x "$(command -v "$STEAM_ZENITY" 2>/dev/null)" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - gui asking if '$VALCFG' should be edited as ATVALIDATE is '$ATVALIDATE', autoloaded or skipped"
-			"$STEAM_ZENITY" --info --title="$PROGNAME ($PROGCMD) - $PROGVERS" --text="Edit AutoTweak Config\n'$VALCFG'?\nEdit/Load/Skip" --ok-label=Edit --extra-button=Load --extra-button=Skip --width "$REQWIDTH"
-			case $? in
-				0)  writelog "INFO" "${FUNCNAME[0]} - clicked Edit - opening '$VALCFG' with the editor now"
-					preEditCfg "$VALCFG"
-					guiLoadCfg "$VALCFG"
-				;;
-				1)  LOADAUTOCFG="$VALCFG"
-					writelog "INFO" "${FUNCNAME[0]} - clicked Load - marked '$VALCFG' for loading"
-				;;
-				2)  writelog "SKIP" "${FUNCNAME[0]} - clicked Skip - skipping '$VALCFG' completely"
-				;;
-			esac
+			writelog "INFO" "${FUNCNAME[0]} - gui asking if '$VALCFG' should be edited as ATVALIDATE is '$ATVALIDATE', autoloaded, skipped or ignored"
+			ZENSEL="$("$STEAM_ZENITY" --list --title="PROGNAME (PROGCMD) - PROGVERS" --text="Found AutoTweak Config\n'$VALCFG'?\n(Edit/Load/Skip/Ignore AutoTweaks for '$GN ($AID)')" --radiolist --column "Choose" --column "Option" FALSE "Edit" FALSE "Load" FALSE "Skip" FALSE "Ignore" --width "$REQWIDTH" --height="$REQHEIGHT")"
+			if [ "$ZENSEL" == "Edit" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - clicked Edit - opening '$VALCFG' with the editor now"
+				preEditCfg "$VALCFG"
+				guiLoadCfg "$VALCFG"
+			elif [ "$ZENSEL" == "Load" ]; then
+				LOADAUTOCFG="$GUICFG"
+				writelog "INFO" "${FUNCNAME[0]} - marked '$LOADAUTOCFG' for loading"
+			elif [ "$ZENSEL" == "Skip" ]; then
+				writelog "SKIP" "${FUNCNAME[0]} - selected to skip '$GUICFG'"
+			elif [ "$ZENSEL" == "Ignore" ]; then
+				if [ -f "$TWEAKCFG" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - adding 'IGNOREAUTOTWEAKS=1' to '$TWEAKCFG'"
+					echo "IGNOREAUTOTWEAKS=1" >> "$TWEAKCFG"
+				else
+					writelog "INFO" "${FUNCNAME[0]} - adding 'IGNOREAUTOTWEAKS=1' to '$STLGAMECFG'"
+					echo "IGNOREAUTOTWEAKS=1" >> "$STLGAMECFG"
+				fi
+			else
+				writelog "SKIP" "${FUNCNAME[0]} - Nothing selected - skipping '$GUICFG'"
+			fi
 		else
 			writelog "SKIP" "${FUNCNAME[0]} - $STEAM_ZENITY not found"
 		fi
