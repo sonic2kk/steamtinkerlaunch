@@ -69,7 +69,7 @@ Also enable everything you want to use generally for your games in [the default 
 * **[WMP10](#WMP10)** automatic support for WMP10 installation
 * **[mf-install](#mf-install)** automatic support for Media Foundation installation
 * **[self maintaining configs](#self-maintaining-configs)** optional automatic cloning of this repo as replacemement for missing system wide installation
-
+* **[GameConqueror](#GameConqueror)** automatically open gameconqueror (scanmem gui) with the game exe on game launch
 
 ## Requirements
 *(no special order)*
@@ -95,7 +95,7 @@ For the optional features you need:
 - ScummVM to optionally start compatible games natively using [Roberta](https://github.com/dreamer/roberta)
 - [luxtorpeda-dev](https://github.com/luxtorpeda-dev/luxtorpeda) or [Luxtorpeda](https://github.com/dreamer/luxtorpeda) to optionally start supported games with a linux native binary
 - wine for optional [Vortex](#Vortex) support
-
+- [GameConqueror/scanmem](#GameConqueror) to optionally cheat
 
 ## Configuration
 All configuration files are self-contained documented and always growing, so not every option is documented in here.
@@ -179,6 +179,7 @@ a game in the corresponding category
 - **Vortex.conf** is started automatically with the [Vortex](#Vortex) Mod Manager
 - **vkVR.conf** is started automatically in [SBS-VR](#Side-by-Side-VR) mode using [vkBasalt](#vkBasalt) and 
 - **Installer.conf** won't be started at all, but a requester lets one choose an exe which is started instead.
+- **Cheat.conf** [GameConqueror](#GameConqueror) is automatically started with the game.
 
 Multiple Category Configuration Files are possible, they are loaded one after another, with the last one overriding settings also found in the previous files.
 All settings which are also configured in `$STLGAMECFG` are overridden (but not overwritten).
@@ -292,6 +293,9 @@ When multiple Auto Tweak Configs are found the requesters are opened for all of 
 but only the last accepted config is actually loaded!
 
 If `IGNOREAUTOTWEAKS=1` is set in the current gameconfig `$STLGAMECFG` all autotweaks are skipped automatically.
+If `ATADOPT=1` is set in the current gameconfig a requester will pop up when th game exited
+asking if the used AutoTweak config should be converted into a regular tweakconfig.
+Autotweaks will be disabled in this new config then.
 
 
 #### Creating Auto Tweaks
@@ -674,6 +678,19 @@ Set `RUN_NYRNA` to 1 to enable nyrna while game is running
 Set `RUN_REPLAY` to 1 to enable replay-sorcery while game is running 
 *([User Configuration](#User-Configuration) overrides [system-wide configuration](#Systemwide-Configuration))*
 
+#### GameConqueror
+[GameConqueror](https://github.com/scanmem/scanmem)
+Set `RUN_GAMCON` to 1 to automatically start GameConqueror when the game starts.
+The game exe will be loaded into GC automatically,
+but also can be overridden with `GAMCONWAITEXE` *(f.e. for games starting a launcher)*.
+When the game exits GameConqueror will be closed automatically as well.
+
+As the gameconqueror startscript uses pkexec and asks for more permissions, the default
+executable is set to `GAMCON=/usr/share/gameconqueror/GameConqueror.py` in the global config.
+Enabling GameConqueror is also possible by simply adding the game to the "Cheat" [[Steam Category](#Steam-Categories).
+
+Some games *(afaik mostly multiplayer)* are not cheat-safe and could lead to a ban, so **be careful with cheating**!
+
 #### Toggle Open Windows
 minimize all open windows on game start and maximize them when game exited using wmctrl
 - `TOGGLEWINDOWS`: toggle visibility of all open windows on start/stop
@@ -746,8 +763,9 @@ When the game started just create a initial profile by selecting the autodetecte
 
 #### Editor
 When `WAITEDITOR` is greater 0 a zenity requester will pop up on game launch and wait `WAITEDITOR` seconds for a keypress
-forediting the [Game specific configuration file](#User-Configurations) with your `STLEDITOR` if desired.
-set PROTONDB to 1 to additionally open the protondb.com url for the game `PDBURL` in your `BROWSER` when starting the editor
+for editing the [Game specific configuration file](#User-Configurations) with your `STLEDITOR` if desired.
+set PROTONDB to 1 to additionally open the protondb.com url for the game `PDBURL` in your `BROWSER` when starting the editor.
+If a [Tweakfile](#Tweakfiles) was found for the game, the requester will show an additional notice.
 
 #### ENV Variables
 Literally every env variable can be set in [gameconfig `$STLGAMECFG`](#Game-Configurations) and [system-wide configuration](#Global-Config),

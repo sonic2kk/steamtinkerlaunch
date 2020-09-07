@@ -5,7 +5,7 @@
 ### project ###
 
 PROGNAME="SteamTinkerLaunch"
-PROGVERS="v1.6.1"
+PROGVERS="v1.6.2"
 PROGCMD="$(basename "$0")"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -142,16 +142,6 @@ GWIDFILE="/tmp/stl-sbsgwid"																	# temp file holding the game window 
 GPFX="$STEAM_COMPAT_DATA_PATH/pfx"															# currently used WINEPREFIX
 LASTRUN="$LOGDIR/lastrun.txt"																# some variables from the last run, f.e. useful for the last protonversion used
 
-
-# OLD START migrating tweak files into new subdirectories - will be removed later
-if [ -d "$STLCFGDIR/sbs" ]; then
-	mkdir -p "$SBSTWEAKDIR" 2>/dev/null
-	find "$STLCFGDIR/sbs/" -maxdepth 1 -type f -name "*.conf" -exec mv {} "$SBSTWEAKDIR/" \;
-	rmdir "$STLCFGDIR/sbs"
-fi
-	mkdir -p "$USERTWEAKDIR" 2>/dev/null
-	find "$TWEAKDIR" -maxdepth 1 -type f  -name "*.conf" -exec mv {} "$USERTWEAKDIR/" \;
-# OLD STOP migrate
 
 function writelog {
 # WRITELOG=0: disable log
@@ -887,15 +877,34 @@ function startEditor {
 }
 
 function editGameConfig {
-	REQWIDTH=1400
+	REQWIDTH=1200
 	# sourcing game config, to optionally override global WAITEDITOR
 	exportCfgFile "$STLGAMECFG"
 
 	# open editor requester 
 	if [ "$WAITEDITOR" -gt 0 ]; then
 		if [ -x "$(command -v "$STEAM_ZENITY" 2>/dev/null)" ]; then
+			FOUNDTWEAKCFG=""
 
-			"$STEAM_ZENITY" --title="$PROGNAME ($PROGCMD) - $PROGVERS" --question --text="edit game configfile\n'$STLGAMECFG'" --ok-label=edit --cancel-label=cancel --timeout="$WAITEDITOR" --width "$REQWIDTH"
+			if [ "$DLGLOBAL" -ge 1 ]; then
+				GLOBALTWEAKCFG="$GLDLUSERTWEAKDIR/$AID.conf"
+			else
+				GLOBALTWEAKCFG="$GLOBALUSERTWEAKDIR/$AID.conf"
+			fi
+			
+			if [ -f "$GLOBALTWEAKCFG" ]; then
+				FOUNDTWEAKCFG="$GLOBALTWEAKCFG"
+			fi
+
+			if [ -f "$TWEAKCFG" ]; then
+				FOUNDTWEAKCFG="$TWEAKCFG"
+			fi
+			
+			if [ -n "$FOUNDTWEAKCFG" ]; then
+				"$STEAM_ZENITY" --title="$PROGNAME ($PROGCMD) - $PROGVERS" --question --text="edit game configfile\n'$STLGAMECFG'?\n(tweakfile '$FOUNDTWEAKCFG' found,\nthe game should 'just work' using it!)" --ok-label=Edit --cancel-label=Cancel --timeout="$WAITEDITOR" --width "$REQWIDTH"
+			else
+				"$STEAM_ZENITY" --title="$PROGNAME ($PROGCMD) - $PROGVERS" --question --text="edit game configfile\n'$STLGAMECFG'?" --ok-label=Edit --cancel-label=Cancel --timeout="$WAITEDITOR" --width "$REQWIDTH"
+			fi
 			case $? in
 				0) startEditor
 				;;
@@ -1054,7 +1063,9 @@ function createDefaultGlobalCfg {
 		echo "## vr-video-player args"
 		echo "VRVIDEOPLAYERARGS=--flat"
 		echo "## set to 1 create tweak config templates in TWEAKTEMPLATEDIR for the launched game if not found"
-		echo "CREATETWEAKS=0"
+		echo "CREATETWEAKS=1"
+		echo "## the gameconqueror executable file - default is the direct python script as it doesn't use pkexec"
+		echo "GAMCON=/usr/share/gameconqueror/GameConqueror.py"
 		echo "## wait ATVALIDATE seconds for a keypress to open the texteditor STLEDITOR when a autotweak config is found before loading it - only used when AUTOTWEAKS is not empty"
 		echo "ATVALIDATE=2"
 		echo "## seconds to wait to automatically save a new basic SBS tweak config of the running game with the game window name after game launch - 0 to disable - 1 to pick a window"
@@ -1133,6 +1144,10 @@ function createDefaultGameCfg {
 		echo "#RUN_NYRNA=0"
 		echo "## set to 1 to enable replay-sorcery while game is running - overrides global config"
 		echo "#RUN_REPLAY=0"
+		echo "## start gameconqueror for the launched game"
+		echo "#RUN_GAMCON=1"
+		echo "## make gameconqueror wait for this exe instead of the regular one"
+		echo "#GAMCONWAITEXE=GameExeNotJustALauncher.exe"
 		echo "## useful for many games"
 		echo "PULSE_LATENCY_MSEC=60"
 		echo "## if set this command is used to block the internet for the selected game. game might fail to start - overrides global config"
@@ -1187,6 +1202,8 @@ function createDefaultGameCfg {
 		echo "#PROTONDB=1"
 		echo "## overrides global config:"
 		echo "#ATVALIDATE=0"
+		echo "## ask to adopt the used autotweak after game exit:"
+		echo "#ATADOPT=1"
 		echo "## ignore all auto tweaks for this game if commented in:"
 		echo "#IGNOREAUTOTWEAKS=1"
 		echo "## notifier command:"
@@ -2119,7 +2136,11 @@ function createAutoTweakLU {
 			# remove duplicate lines:
 			awk -i inplace '!visited[$0]++' "$LUTWEAKCFG"
 
-			LUGN="$(grep -m1 "$GAMEID" "$LULIST" | awk -F '"name":' '{print $2}' | cut -d ',' -f1 | sed "s:/::g")"
+			LUGN="$(grep -m1 "\"appid\":$GAMEID," "$LULIST" | awk -F '"name":' '{print $2}' | cut -d ',' -f1 | sed "s:/::g")"
+			if [ -z "$LUGN" ]; then
+				LUGN="$(grep -m1 "\"appid\":$GAMEID}" "$LULIST" | awk -F '"name":' '{print $2}' | cut -d ',' -f1 | sed "s:/::g")"
+			fi
+			
 			writelog "CREATE" "${FUNCNAME[0]} - '$LUGN ($GAMEID)' $LU-autotweak created: '$LUTWEAKCFG'"
 
 			sed  "1s/^/#########\n/" -i "$LUTWEAKCFG"
@@ -2131,7 +2152,11 @@ function createAutoTweakLU {
 		
 		if [ -f "$TWEAKLUCMD" ];then
 			awk -i inplace '!visited[$0]++' "$TWEAKLUCMD"
-			LUGN="$(grep -m1 "$GAMEID" "$LULIST" | awk -F '"name":' '{print $2}' | cut -d ',' -f1 | sed "s:/::g")"
+			LUGN="$(grep -m1 "\"appid\":$GAMEID," "$LULIST" | awk -F '"name":' '{print $2}' | cut -d ',' -f1 | sed "s:/::g")"
+			if [ -z "$LUGN" ]; then
+				LUGN="$(grep -m1 "\"appid\":$GAMEID}" "$LULIST" | awk -F '"name":' '{print $2}' | cut -d ',' -f1 | sed "s:/::g")"
+			fi
+
 			writelog "CREATE" "${FUNCNAME[0]} - '$LUGN ($GAMEID)' TWEAKCMD created: '$TWEAKLUCMD'"
 			
 			if ! grep -q "^#" <<< "$(head -n1 "$TWEAKLUCMD")"; then
@@ -2295,6 +2320,37 @@ function validateATCfg {
 	fi
 }
 
+function AdoptAutoTweak {
+	if [ -f "$TWEAKCFG" ]; then
+		mv "$TWEAKCFG" "${TWEAKCFG}_old"
+		writelog "INFO" "${FUNCNAME[0]} - moved exiting tweakfile '$TWEAKCFG' to'${TWEAKCFG}_old'"
+	fi
+	
+	cp "$LOADAUTOCFG" "$TWEAKCFG"
+	echo "IGNOREAUTOTWEAKS=1" >> "$TWEAKCFG"
+	sed "/^#GAMENAME.*/a #GAMEEXE=$GE" -i "$TWEAKCFG"
+	sed "/^#GAMEID.*/a #PROTONVERSION=$PROTONVERSION" -i "$TWEAKCFG"
+
+	writelog "INFO" "${FUNCNAME[0]} - changed the autotweakfile '$LOADAUTOCFG' to '$TWEAKCFG'"
+}
+
+function AskAdoptAutoTweak {
+	REQWIDTH=1400
+	if [ -x "$(command -v "$STEAM_ZENITY" 2>/dev/null)" ]; then
+
+		"$STEAM_ZENITY" --title="$PROGNAME ($PROGCMD) - $PROGVERS" --question --text="adopt the just used autoweakfile \n'$LOADAUTOCFG'\nand skip autotweaks for '$GN ($AID)' from now on?\n(exiting user tweakfile will be backuped)" --ok-label=Adopt --cancel-label=Cancel --width "$REQWIDTH"
+		case $? in
+			0) AdoptAutoTweak
+			;;
+			1) writelog "SKIP" "${FUNCNAME[0]} - not using '$LOADAUTOCFG' as regular tweakfile for '$GN ($AID)'"
+			;;
+		esac
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - $STEAM_ZENITY not found"
+	fi
+}
+
+
 # load autogenerated tweak config
 
 function getprotonfixesCfg {
@@ -2314,7 +2370,9 @@ function getlutrisCfg {
 
 	while read -r addfile; do
 		writelog "INFO" "${FUNCNAME[0]} - additional $LU imported autotweak config found at $addfile"
-		validateATCfg "$addfile"
+		if [ -f "$addfile" ]; then
+			validateATCfg "$addfile"
+		fi
 	done <<< "$(find "$LUTWEAKDIR" -mindepth 1 -maxdepth 1 -type f -name "${AID}_*.conf")"
 }
 
@@ -2766,6 +2824,62 @@ function useReplay {
 		fi
 	fi
 }
+
+
+# gameconqueror
+
+function runGamCon {
+	if [ -n "$RUN_GAMCON" ]; then
+		if [ "$RUN_GAMCON" -eq 1 ]; then
+			writelog "OK" "${FUNCNAME[0]} - starting '$GAMCON' process"
+
+			if [ -n "$GAMCONWAITEXE" ]; then
+				writelog "OK" "${FUNCNAME[0]} - waiting for alternative '$GAMCONWAITEXE' process"
+				while [ -z "$(pidof "$GAMCONWAITEXE" | cut -d ' ' -f1)" ]; do 
+					writelog "WAIT" "${FUNCNAME[0]} - waiting for '$GAMCONWAITEXE' PID"
+					sleep 1
+				done
+				GCGPID="$(pidof "$GAMCONWAITEXE" | cut -d ' ' -f1)"
+			else
+				while [ -z "$(GAMEPID)" ]; do 
+					writelog "WAIT" "${FUNCNAME[0]} - waiting for game PID"
+					sleep 1
+				done
+				GCGPID="$(GAMEPID)"
+			fi
+			
+			writelog "INFO" "${FUNCNAME[0]} - game process found at '$GCGPID'"
+			writelog "INFO" "${FUNCNAME[0]} - starting  '$GAMCON $GCGPID'"
+			"$GAMCON" "$GCGPID"
+		fi
+	fi
+}
+
+# start gameconqueror
+function checkGamConLaunch {
+	if [ -n "$RUN_GAMCON" ]; then
+		if [ "$RUN_GAMCON" -ge 1 ]; then
+			if  [ -x "$(command -v "$GAMCON" 2>/dev/null)" ]; then
+				# start the whole GamCon start/wait/stop/process
+				writelog "OK" "${FUNCNAME[0]} - starting '$GAMCON' process for '$AID'"
+				if [ "$RUN_GAMCON" -eq 1 ]; then
+					runGamCon &
+				elif [ "$RUN_GAMCON" -gt 1 ]; then
+					writelog "INFO" "${FUNCNAME[0]} - RUN_GAMCON is greater than 1 - starting '$GAMCON' delayed for RUN_GAMCON '$RUN_GAMCON' seconds"
+					( sleep "$RUN_GAMCON"; runGamCon) &
+				else
+					writelog "SKIP" "${FUNCNAME[0]} - ERROR - RUN_GAMCON is '$RUN_GAMCON' which is invalid - setting to 0"
+					RUN_GAMCON=0
+				fi
+			else
+				writelog "SKIP" "${FUNCNAME[0]} - $GAMCON not found"
+				RUN_GAMCON=0
+			fi
+		fi
+	fi
+}
+
+# gameconqueror end
 
 
 # Vortex:
@@ -3367,7 +3481,7 @@ COMPATOOLS="$HOME/.steam/steam/compatibilitytools.d/"
 						mkProjDir "$PROTOLADLDIR" 1
 			
 						if [ -d "$COMPATOOLS/$PROTOLAVER" ]; then
-								"$STEAM_ZENITY" --title="$PROGNAME ($PROGCMD) - $PROGVERS" --question --text="using $PROTONVERSION which is not compatible with $2!\nYou already have the compatible proton version lying under\n$COMPATOOLS/$PROTOLAVER\nJust select it in Steam as compatibility tool for $GN\nClick Exit to exit now, click play to start game without Script Extender!" --ok-label=exit --cancel-label=play --timeout="$PROTOLAREQ" --width "$PROTOLAW"
+								"$STEAM_ZENITY" --title="$PROGNAME ($PROGCMD) - $PROGVERS" --question --text="using $PROTONVERSION which is not compatible with $2!\nYou already have the compatible proton version lying under\n$COMPATOOLS/$PROTOLAVER\nJust select it in Steam as compatibility tool for $GN\nClick Exit to exit now, click play to start game without Script Extender!" --ok-label=Exit --cancel-label=Play --timeout="$PROTOLAREQ" --width "$PROTOLAW"
 								case $? in
 									0)  exit
 									;; 
@@ -3376,7 +3490,7 @@ COMPATOOLS="$HOME/.steam/steam/compatibilitytools.d/"
 								esac
 						else 
 							if [ -f "$PROTOLADL" ]; then
-								"$STEAM_ZENITY" --title="$PROGNAME ($PROGCMD) - $PROGVERS" --question --text="compatible proton $PROTOLAVER already downloaded to $PROTOLADL\nYou have to install it to\n$COMPATOOLS\nwith steam closed to use it\nClick Install to extract $PROTOLADL to $COMPATOOLS (at your own risk!)\nclick play to start game without Script Extender!" --ok-label=install --cancel-label=play --timeout="$PROTOLAREQ" --width "$PROTOLAW"
+								"$STEAM_ZENITY" --title="$PROGNAME ($PROGCMD) - $PROGVERS" --question --text="compatible proton $PROTOLAVER already downloaded to $PROTOLADL\nYou have to install it to\n$COMPATOOLS\nwith steam closed to use it\nClick Install to extract $PROTOLADL to $COMPATOOLS (at your own risk!)\nclick play to start game without Script Extender!" --ok-label=Install --cancel-label=Play --timeout="$PROTOLAREQ" --width "$PROTOLAW"
 								case $? in
 									0)  tar xf "$PROTOLADL" -C "$COMPATOOLS"
 									    setVortexSELaunch "$1" "$2" "$3"
@@ -3385,7 +3499,7 @@ COMPATOOLS="$HOME/.steam/steam/compatibilitytools.d/"
 									;;
 								esac
 							else
-								"$STEAM_ZENITY" --title="$PROGNAME ($PROGCMD) - $PROGVERS" --question --text="$PROTONVERSION is not compatible with $2\nDownload compatible proton $PROTOLAVER to $PROTOLADL?\nYou should stop steam then and install the package manually to\n$COMPATOOLS\nto make it available.\nWill re-check again when download is finished.\nClick play to start game without Script Extender without download!" --ok-label=download --cancel-label=play --timeout="$PROTOLAREQ" --width "$PROTOLAW"
+								"$STEAM_ZENITY" --title="$PROGNAME ($PROGCMD) - $PROGVERS" --question --text="$PROTONVERSION is not compatible with $2\nDownload compatible proton $PROTOLAVER to $PROTOLADL?\nYou should stop steam then and install the package manually to\n$COMPATOOLS\nto make it available.\nWill re-check again when download is finished.\nClick play to start game without Script Extender without download!" --ok-label=Download --cancel-label=Play --timeout="$PROTOLAREQ" --width "$PROTOLAW"
 								case $? in
 									0) "$WGET" "$PROTOLADLURL" -O "$PROTOLADL"
 										setVortexSELaunch "$1" "$2" "$3"
@@ -3822,6 +3936,8 @@ function launchSteamProtonGame {
 	writelog "INFO" "${FUNCNAME[0]} - checkNetMonLaunch:"
 	checkNetMonLaunch
 
+	# start gameconqueror when game starts if is RUN_GAMCON 1
+	checkGamConLaunch
 
 ########################
 
@@ -4026,6 +4142,26 @@ function closeSTL {
 		fi
 	fi
 
+	# kill $GAMCON if running
+	if [ "$RUN_GAMCON" -eq 1 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - game process finished - closing '$GAMCON'"
+		pkill -f "$GAMCON"
+		writelog "INFO" "${FUNCNAME[0]} - killed '$GAMCON' script"
+	fi
+	
+	# ask if used autotweak should be adopted as regular user tweak
+	if [ -n "$ATADOPT" ]; then
+		if [ "$ATADOPT" -eq 1 ]; then
+			if [ -n "$LOADAUTOCFG" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - ATADOPT is enabled, asking to adopt '$LOADAUTOCFG'"
+				AskAdoptAutoTweak
+			else
+				writelog "SKIP" "${FUNCNAME[0]} - ATADOPT is enabled, but no AutoTweak was used"
+			fi
+		fi
+	fi
+	
+	# stop network monitor if running
 	if [ -n "$NETMON" ]; then
 		if pgrep "$NETMON" ; then
 			pkill -9 "$NETMON"
