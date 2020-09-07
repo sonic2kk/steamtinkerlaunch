@@ -36,6 +36,20 @@ LOADAUTOCFG=""
 
 ### howto ###
 
+
+function USEDLGLOBAL {
+	if	[ "$DLGLOBAL" -eq 0 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - DLGLOBAL is disabled in the config"
+		echo "$DLGLOBAL"
+	elif [ "$DLGLOBAL" -eq 1 ] && [ -d "$SYSTEMSTLCFGDIR" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - DLGLOBAL is disabled because '$SYSTEMSTLCFGDIR' exists"
+		echo 0
+	else
+		writelog "INFO" "${FUNCNAME[0]} - DLGLOBAL is enabled - using '$GLDLSTLDIR' als global directory"
+		echo "$DLGLOBAL"
+	fi
+}
+
 function howto {
 	echo "========================="
 	echo "$PROGNAME $PROGVERS"
@@ -126,7 +140,7 @@ GLDLTWEAKDIR="$GLDLSTLDIR/tweaks"
 GLDLUSERTWEAKDIR="$GLDLTWEAKDIR/user"
 GLDLSBSTWEAKDIR="$GLDLTWEAKDIR/sbs"
 GLDLTWEAKCMDDIR="$GLDLTWEAKDIR/cmd"
-GLDLCATEGORYDIR="$GLDLTWEAKDIR/categories"
+GLDLCATEGORYDIR="$GLDLSTLDIR/categories"
 GLDLREGDIR="$GLDLSTLDIR/regs"
 
 STLVORTEXDIR="$STLCFGDIR/vortex"															# stl vortex dir
@@ -575,7 +589,7 @@ function checkSBSVRLaunch {
 		if [ "$RUNSBSVR" -ge 1 ]; then
 		# override game configs with a sbs-tweak config if available:
 
-		if [ "$DLGLOBAL" -ge 1 ]; then
+		if [ "$(USEDLGLOBAL)" -ge 1 ]; then
 			GLOBALSBSTWEAKCFG="$GLDLSBSTWEAKDIR/$AID.conf"
 		else
 			GLOBALSBSTWEAKCFG="$GLOBALSBSTWEAKDIR/$AID.conf"
@@ -886,7 +900,7 @@ function editGameConfig {
 		if [ -x "$(command -v "$STEAM_ZENITY" 2>/dev/null)" ]; then
 			FOUNDTWEAKCFG=""
 
-			if [ "$DLGLOBAL" -ge 1 ]; then
+			if [ "$(USEDLGLOBAL)" -ge 1 ]; then
 				GLOBALTWEAKCFG="$GLDLUSERTWEAKDIR/$AID.conf"
 			else
 				GLOBALTWEAKCFG="$GLOBALUSERTWEAKDIR/$AID.conf"
@@ -1337,7 +1351,7 @@ function checkTweakLaunch {
 	fi
 
 	# first try global config
-	if [ "$DLGLOBAL" -ge 1 ]; then
+	if [ "$(USEDLGLOBAL)" -ge 1 ]; then
 		GLOBALTWEAKCFG="$GLDLUSERTWEAKDIR/$AID.conf"
 	else
 		GLOBALTWEAKCFG="$GLOBALUSERTWEAKDIR/$AID.conf"
@@ -1365,7 +1379,7 @@ function checkTweakLaunch {
 		elif [ -f "$GLOBALTWEAKCMDDIR/$TWEAKCMD" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - found TWEAKCMD $TWEAKCMD in $GLOBALTWEAKCMDDIR"
 			RUNTWEAK="$GLOBALTWEAKCMDDIR/$TWEAKCMD"
-		elif [ "$DLGLOBAL" -ge 1 ] && [ -f "$GLDLTWEAKCMDDIR/$TWEAKCMD" ]; then
+		elif [ "$(USEDLGLOBAL)" -ge 1 ] && [ -f "$GLDLTWEAKCMDDIR/$TWEAKCMD" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - found TWEAKCMD $TWEAKCMD in $GLDLTWEAKCMDDIR"
 			RUNTWEAK="$GLDLTWEAKCMDDIR/$TWEAKCMD"
 		elif [ -f "$GFD/$TWEAKCMD" ]; then
@@ -1424,16 +1438,11 @@ function createDefaultCfgs {
 # The update will only run once a day
 
 function checkSTLDLGlobal {
-	if [ "$1" -ge 1 ]; then
-		if [ -d "$SYSTEMSTLCFGDIR" ]; then
-			writelog "SKIP" "${FUNCNAME[0]} - DLGLOBAL was set to $DLGLOBAL, but directory '$SYSTEMSTLCFGDIR' exists - disabling DLGLOBAL!"
-			DLGLOBAL=0
-		else
-			MAXAGE=1440
-			if [ ! -f "$GLDLSTLTXT" ] || [ ! -d "$SYSTEMSTLCFGDIR" ] || test "$(find "$GLDLSTLTXT" -mmin +"$MAXAGE")"; then
-				gitUpdate "$GLDLSTLDIR" "$PROJECTPAGE"
-				date > "$GLDLSTLTXT"
-			fi
+	if [ "$(USEDLGLOBAL)" -ge 1 ]; then
+		MAXAGE=1440
+		if [ ! -f "$GLDLSTLTXT" ] || [ ! -d "$SYSTEMSTLCFGDIR" ] || test "$(find "$GLDLSTLTXT" -mmin +"$MAXAGE")"; then
+			gitUpdate "$GLDLSTLDIR" "$PROJECTPAGE"
+			date > "$GLDLSTLTXT"
 		fi
 	fi
 }
@@ -1476,12 +1485,11 @@ function autoCategorySettings {
 		writelog "INFO" "${FUNCNAME[0]} - file '$(basename "$SC")' found in steam userid dir - searching categories for game '$AID'"
 
 		while read -r SCAT; do
-			
-			if [ "$DLGLOBAL" -ge 1 ]; then
+			if [ "$(USEDLGLOBAL)" -ge 1 ]; then
 				GLOBALSCATCONF="$GLDLCATEGORYDIR/$SCAT.conf"
 			else
 				GLOBALSCATCONF="$GLOBALCATEGORYDIR/$SCAT.conf"
-			fi	
+			fi
 
 			if [ -f "$GLOBALSCATCONF" ]; then
 				writelog "OK" "${FUNCNAME[0]} - config '$GLOBALSCATCONF' found - loading its settings"
@@ -2519,7 +2527,7 @@ function wmp10hack {
 				WMP10LIST="wmp10-list.txt"
 				if [ -f "$GLOBALTWEAKCMDDIR"/"$WMP10LIST" ]; then
 					WMP10SRCLIST="$GLOBALTWEAKCMDDIR"/"$WMP10LIST"
-				elif [ "$DLGLOBAL" -ge 1 ] && [ -f "$GLDLTWEAKCMDDIR/$WMP10LIST" ]; then
+				elif [ "$(USEDLGLOBAL)" -ge 1 ] && [ -f "$GLDLTWEAKCMDDIR/$WMP10LIST" ]; then
 					WMP10SRCLIST="$GLDLTWEAKCMDDIR"/"$WMP10LIST"
 				elif  [ -f "$TWEAKCMDDIR"/"$WMP10LIST" ]; then
 					WMP10SRCLIST="$TWEAKCMDDIR"/"$WMP10LIST"
@@ -2751,7 +2759,7 @@ function customRegs {
 	if [ "$REGEDIT" -eq 1 ]; then
 		writelog "INFO" "${FUNCNAME[0]} - REGEDIT set, looking for $AID registry files"
 
-		if [ "$DLGLOBAL" -ge 1 ];then
+		if [ "$(USEDLGLOBAL)" -ge 1 ];then
 			AIDREG="$GLDLREGDIR/$AID.reg"
 		else
 			AIDREG="$GLOBALREGDIR/$AID.reg"
@@ -2767,7 +2775,7 @@ function customRegs {
 	else
 		if [ "$REGEDIT" -ne 0 ]; then
 		
-			if [ "$DLGLOBAL" -ge 1 ];then
+			if [ "$(USEDLGLOBAL)" -ge 1 ];then
 				AIDREG="$GLDLREGDIR/$REGEDIT"
 			else
 				AIDREG="$GLOBALREGDIR/$REGEDIT"
@@ -3780,7 +3788,7 @@ function launchSteamProtonGame {
 
 	createDefaultCfgs X
 
-	checkSTLDLGlobal "$DLGLOBAL"
+	checkSTLDLGlobal
 	writelog "INFO" "${FUNCNAME[0]} - game launch args '$*'"
 	writelog "INFO" "${FUNCNAME[0]} - gamedir '$GFD'"
 	writelog "INFO" "${FUNCNAME[0]} - wineprefix '$GPFX'"
@@ -4080,7 +4088,8 @@ function commandline {
 	elif  [ "$1" == "dl" ]; then
 		if [ -n "$2" ]; then
 			if [ "$2" == "$GIT" ]; then
-				gitUpdate "$GLDLSTLDIR" "$PROJECTPAGE" 
+				gitUpdate "$GLDLSTLDIR" "$PROJECTPAGE"
+				date > "$GLDLSTLTXT"
 			else
 				howto
 			fi
