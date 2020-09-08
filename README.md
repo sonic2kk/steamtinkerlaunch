@@ -89,7 +89,7 @@ For the optional features you need:
 - [vkBasalt](#vkBasalt)
 - [Nyrna](#Nyrna)
 - [ReplaySorcery](#ReplaySorcery)
-- wmctrl to optionally minimize/maximize all open windows on game start/stop
+- wmctrl, xprop to optionally minimize/maximize all open windows on game start/stop
 - netstat from net-tools for basic network monitoring
 - [Boxtron](#Boxtron) and dosbox to optionally start dos games with linux native dosbox
 - ScummVM to optionally start compatible games natively using [Roberta](https://github.com/dreamer/roberta)
@@ -623,7 +623,7 @@ To play games with **built in** side-by-side you just have to set `RUNSBSVR` to 
 everything else is done (almost) automatically:
 
 - start SteamVR
-- start the game (game settings required to enable sbs are not automatically enabled! added an auto config setting for **Crysis 2** though )
+- start the game (game settings required to enable sbs are not automatically enabled! added a tweakcmd for **Crysis 2** though )
 - start [vr-video-player](https://git.dec05eba.com/vr-video-player)
 - when exiting the game, vr-video-player wil be closed as well.
 
@@ -635,24 +635,18 @@ by auto-enabling side-by-side with the shader [Depth3D](#Depth3D):
 
 Where Reshade has more features and vkBasalt is probably more stable, because it works natively.
 
-Some games start own launchers before the actual game and autodetecting the correct window is not easy
-*(searching for the biggest window from the game process, which may not be always the correct one)*
-That's why you can configure the exact window name to look for, which makes the whole process much more straighter.
+**stl** goes through several functions to automatically find the current window id
+*(and for later use also the game window name, to make starting SBS VR for the game faster)*
+This works mostly very good, but some games start own launchers before the actual game.
+Then autodetecting the correct window is almost impossible, and the window name has to be set manually as `VRGAMEWINDOW`.
+If there is demand for it a proper reimplementation of "picking a window" and/or "waiting x seconds for a window" to get the window name is possible.
 
-Setting the [global.conf](#Global-Config) option `SAVESBSWINNAME` to 1 enabled saving the game window name into a freshly created [SBS Tweak](#SBS-Tweaks) config (so this is only done once and used from now on automatically).
-With the game window name available SBS-VR starting works much better and faster than without, so you should enable that option.
-
-Setting SAVESBSWINNAME to 1 allows you to pick the game window name, which is the fastest method to get the window name. It usually works very good, but when f.e. the game has a launcher which you have to click this won't work of course.
-If `SAVESBSWINNAME` is greater than 1 the program will wait `SAVESBSWINNAME` seconds long to get the name of the currently active window and save that into the [SBS Tweak](#SBS-Tweaks) config.
-So setting this f.e. to 60 seconds and playing the game for 2 minutes is enough.
-In rare cases a game doesn't have a valid window name, which makes detecting the correct window pretty complicated.
-
-The author [vr-video-player](https://git.dec05eba.com/vr-video-player) was so kind to accept a little patch, to work better with **stl**.
+The vr-video-player author was so kind to accept a little patch, to work better with **stl**.
 It is possible to live zoom in and out and the zoom state is written into a temporary file, which **stl** picks up.
 The value is stored in the internal [SBS Tweak](#SBS-Tweaks) config (also when changed) and read from there from now on.
 
 To make switching between game- and vr-video-player window easier (with hmd) there is also the option `TOGGLEWINDOWS`:
-When enabled, all visible windows will minimize on game start, and will maximize back when game finishes *(might glitch sometimes)*
+When enabled, all visible windows will minimize on game start, and will maximize back when game finishes
 So switching between the windows is easily possible with *Alt+Tab*.
 `TOGGLEWINDOWS` is also enabled by default in the **VR** [Steam Categories](#Steam-Categories) *(ReShadeVR,SBS-VR,vkVR.conf)*
 
