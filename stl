@@ -5,7 +5,7 @@
 ### project ###
 
 PROGNAME="SteamTinkerLaunch"
-PROGVERS="v1.6.2"
+PROGVERS="v1.6.3"
 PROGCMD="$(basename "$0")"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -22,6 +22,7 @@ WINECFG="winecfg"
 WINETRICKS="winetricks"
 WMCTRL="wmctrl"
 XDO="xdotool"
+XPROP="xprop"
 XWININFO="xwininfo"
 REPLAY="replay-sorcery"
 
@@ -286,18 +287,60 @@ SBSSHADER="$SBSSHADERDIR/SuperDepth3D_VR.fx"
 SBSVRWINNAME="vr-video-player"
 STEAMVRARGS=(-applaunch 250820)
 
-# returns the windowid of the biggest window of $GE:) 
-function VRAUTOWINDOWID {
-	MAXSIZ=0
-	MAXWIN=0
+function waitForGameWindow {
+	FOUNDWIN=0
+	
+	while [ "$("$XDO" search --pid "$SBSVRKGPID" | wc -l)" -eq 0 ]; do 
+		writelog "WAIT" "${FUNCNAME[0]} - waiting for any window id to appear for PID '$SBSVRKGPID' - currently '$("$XDO" search --pid "$SBSVRKGPID" | wc -l)'"
+		sleep 1
+	done
+	writelog "INFO" "${FUNCNAME[0]} - found '$("$XDO" search --pid "$SBSVRKGPID" | wc -l)' window ids of PID '$SBSVRKGPID' to analyze"	
+
 	while read -r WINS; do
-		WSIZ=$(($("$XWININFO" -id "$WINS" -stats | awk '$1=="-geometry" {print $2}' | awk -F '+'  '{print $1}' | sed "s:x:\*:")))
-		if [ "$WSIZ" -gt "$MAXSIZ" ]; then
-			MAXSIZ=$WSIZ
-			MAXWIN=$WINS
+
+	if [ "$("$XPROP" -id "$(printf 0x%x'\n' "$WINS")" | grep "_NET_WM_STATE(ATOM)" -c)" -ge 1 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - found a usable windowid"	
+		FOUNDWIN=1
+		break
+	fi
+	done <<< "$("$XDO" search --pid "$SBSVRKGPID")"
+
+	if [ "$FOUNDWIN" -eq 0 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - no usable game window found - trying again"
+		waitForGameWindow
+	else
+		writelog "INFO" "${FUNCNAME[0]} - found a usable gamewindow'"
+	fi
+}
+
+# exports GAMEWINDOWID - the windowid of the biggest window of $GE
+function getBiggestGameWindowWID {
+	writelog "INFO" "${FUNCNAME[0]} trying to autofind game windowid for the biggest window of game exe '$GE' running with PID '$SBSVRKGPID'"
+
+	declare -i MAXSIZ=0
+	MAXWIN="0x0"
+	
+	waitForGameWindow
+		
+	while read -r WINS; do
+		writelog "DEBUG" "${FUNCNAME[0]} found window id '$WINS' for PID '$SBSVRKGPID' with geometry: $("$XWININFO" -id "$WINS" -stats | awk '$1=="-geometry" {print $2}')"
+		if [ "$("$XPROP" -id "$(printf 0x%x'\n' "$WINS")" | grep "_NET_WM_STATE(ATOM)" -c)" -ge 1 ]; then
+			WSIZ=$(($("$XWININFO" -id "$WINS" -stats | awk '$1=="-geometry" {print $2}' | awk -F '+'  '{print $1}' | sed "s:x:\*:")))
+			writelog "DEBUG" "${FUNCNAME[0]} found WINS '$WINS' window ID for PID '$SBSVRKGPID' with geometry: $("$XWININFO" -id "$WINS" -stats | awk '$1=="-geometry" {print $2}') so WSIZ is '$WSIZ' and MAXSIZ currently is '$MAXSIZ'"
+			if [ "$WSIZ" -gt "$MAXSIZ" ]; then
+				MAXSIZ=$WSIZ	
+				MAXWIN="$(printf 0x%x'\n' "$WINS")"
+				writelog "DEBUG" "${FUNCNAME[0]} MAXSIZ now is '$MAXSIZ' WINS is '$WINS' and MAXWIN is '$MAXWIN'"
+			fi
+		else
+			writelog "DEBUG" "${FUNCNAME[0]} skipping '$WINS' - doesn't look usable"
 		fi
-	done <<< "$("$XDO" search --pid "$(GAMEPID)")"
-	printf 0x%x'\n' "$MAXWIN"
+	#"$XPROP" -id "$(printf 0x%x'\n' "$MAXWIN")"  | grep "_NET_WM_STATE(ATOM)" > "/tmp/xprop-stateatom-MAXWIN-$MAXWIN.txt"
+
+	done <<< "$("$XDO" search --pid "$SBSVRKGPID")"
+	
+	writelog "INFO" "${FUNCNAME[0]} found windowid $(printf 0x%x'\n' "$MAXWIN") for '$GE' running with PID '$SBSVRKGPID'"
+	export GAMEWINDOWID="$MAXWIN"
 }
 
 function SBSstartSVR {
@@ -381,62 +424,126 @@ function SBSstartSVR {
 	fi
 }
 
-function SBSgetGamePID {
-	if [ "$RUNSBSVR" -ge 1 ]; then
-		if [ "$SAVESBSWINNAME" -gt 0 ]; then
-			if [ ! -f "$SBSTWEAKCFG" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - SAVESBSWINNAME is $SAVESBSWINNAME so waiting for '$SBSTWEAKCFG' to appear holding the window name"
-				while [ ! -f "$SBSTWEAKCFG" ]; do
-					writelog "WAIT" "${FUNCNAME[0]} - waiting for '$SBSTWEAKCFG' to appear"
-					sleep 1
-				done
-			fi
+function getGameWindowName {
+	if [ -n "$VRGAMEWINDOW" ]; then
+		writelog "SKIP" "${FUNCNAME[0]} - already have the gamewindow name: '$VRGAMEWINDOW' - skipping"
+	else
+		if [ -z "$GAMEWINDOWID" ]; then
+			GAMEWINDOWID="$1"
+		fi
 
-			if [ -f "$SBSTWEAKCFG" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - config '$SBSTWEAKCFG' is ready, getting the window name"
+		writelog "INFO" "${FUNCNAME[0]} - the windowid used for 'AUTOVRGAMEWINDOW' is '$GAMEWINDOWID'"
+
+		AUTOVRGAMEWINDOW="$("$XWININFO" -id "$GAMEWINDOWID" -stats | grep "$GAMEWINDOWID" | cut -d '"' -f2)"
+		if [ -n "$AUTOVRGAMEWINDOW" ]; then
+			if grep -q "has no name" <<< "$AUTOVRGAMEWINDOW"; then
+				writelog "INFO" "${FUNCNAME[0]} - no valid window name found - contains 'has no name'"
+			else
+				writelog "INFO" "${FUNCNAME[0]} - autodetected gamewindow name '$AUTOVRGAMEWINDOW' from windowid '$GAMEWINDOWID' - adding it into '$SBSTWEAKCFG' for future use"
+				updateConfigEntry "VRGAMEWINDOW" "\"$AUTOVRGAMEWINDOW\"" "$SBSTWEAKCFG"
+
+				writelog "INFO" "${FUNCNAME[0]} - loading '$SBSTWEAKCFG' to load '$AUTOVRGAMEWINDOW' into VRGAMEWINDOW variable"
 				exportCfgFile "$SBSTWEAKCFG"
 			fi
+		else
+			writelog "INFO" "${FUNCNAME[0]} - no gamewindow name '$AUTOVRGAMEWINDOW' autodetected from windowid '$GAMEWINDOWID'"
+		fi
+	fi
+}
+
+function getGameWindowData {
+	# GAMEPID is required for getBiggestGameWindow, so getting it:
+	SBSgetGamePID
+
+	getBiggestGameWindowWID
+
+	if [ "$GAMEWINDOWID" == "0x0" ]; then
+		writelog "SKIP" "${FUNCNAME[0]} - autodetecting the windowid failed - has to be selected manually"
+		GAMEWINDOWID="$(printf 0x%x'\n' "$("$XDO" selectwindow)")"
+	fi
+
+	if [ -n "$GAMEWINDOWID" ]; then
+		# GAMEWINDOWID is already enough to continue, but also saving the VRGAMEWINDOW into the config to speed up future starts
+		if [ "$GAMEWINDOWID" != "0x0" ]; then
+			getGameWindowName "$GAMEWINDOWID"
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - GAMEWINDOWID '$GAMEWINDOWID' is invalid - giving up!"
+		fi
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - could not determine the windowid of the game GAMEWINDOWID and therefore also not the VRGAMEWINDOW"
+	fi	
+}
+
+function SBScheckSBScfg  {
+	if [ "$RUNSBSVR" -ge 1 ]; then
+		if [ -f "$SBSTWEAKCFG" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - loading SBS configfile '$SBSTWEAKCFG' to get current values"
+			exportCfgFile "$SBSTWEAKCFG"
+		else
+			{
+				echo "#########"
+				echo "#GAMENAME=$GN"
+				echo "#GAMEEXE=$GE"
+				echo "#GAMEID=$AID"
+				echo "#PROTONVERSION=$PROTONVERSION"
+				echo "#########"
+			} >> "$SBSTWEAKCFG"
+			writelog "INFO" "${FUNCNAME[0]} - created base config $SBSTWEAKCFG"
 		fi
 
 		if [ -n "$VRGAMEWINDOW" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - windowname VRGAMEWINDOW '$VRGAMEWINDOW' provided, explicit search for the game window"
+			writelog "SKIP" "${FUNCNAME[0]} - VRGAMEWINDOW '$VRGAMEWINDOW' found in config - ready"
 		else
-			writelog "INFO" "${FUNCNAME[0]} - no windowname VRGAMEWINDOW provided, automatic generic search for the game window"
+			getGameWindowData
 		fi
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - skipping because RUNSBSVR was set to 0"
+	fi
+}
 
-		writelog "INFO" "${FUNCNAME[0]} - game window '$VRGAMEWINDOW' found, getting the game PID"
+function SBSgetGamePID {
+	if [ "$RUNSBSVR" -ge 1 ]; then
+		if [ -z "$SBSVRKGPID" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - getting the game PID"
 
-		while true; do
-			if [ -n "$VRGAMEWINDOW" ]; then
-				GPID="$("$XWININFO" -name "${VRGAMEWINDOW//\"/}" -wm | grep "Process id:"   | awk -F 'Process id: ' '{print $2}' | cut -d ' ' -f1)"
-				if [ -n "$GPID" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - game pid '$GPID' found for VRGAMEWINDOW '$VRGAMEWINDOW'"
-					export SBSVRKGPID="$GPID"
-					break
+			while true; do
+				if [ -n "$VRGAMEWINDOW" ]; then
+					GPID="$("$XWININFO" -name "${VRGAMEWINDOW//\"/}" -wm | grep "Process id:" | awk -F 'Process id: ' '{print $2}' | cut -d ' ' -f1)"
+					if [ -n "$GPID" ]; then
+						writelog "INFO" "${FUNCNAME[0]} - game pid '$GPID' found for VRGAMEWINDOW '$VRGAMEWINDOW'"
+						export SBSVRKGPID="$GPID"
+						break
+					fi
+				else
+					waitForGamePid
+					GPID="$(GAMEPID)"
+
+					if [ -n "$GPID" ]; then
+						writelog "INFO" "${FUNCNAME[0]} - game pid '$GPID' found"
+						export SBSVRKGPID="$GPID"
+						break
+					fi
 				fi
+			done
+			
+			if [ -z "$SBSVRKGPID" ]; then
+				writelog "ERROR" "${FUNCNAME[0]} - no game pid SBSVRKGPID found!"
 			else
-				GPID="$(GAMEPID)"
-
-				if [ -n "$GPID" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - game pid '$GPID' found"
-					export SBSVRKGPID="$GPID"
-					break
-				fi
+				writelog "OK" "${FUNCNAME[0]} - success - found PID '$SBSVRKGPID'"
 			fi
-		done
-
-		writelog "OK" "${FUNCNAME[0]} - success - found PID '$SBSVRKGPID' for game window '$VRGAMEWINDOW'"
+		else
+			writelog "OK" "${FUNCNAME[0]} - already have game PID '$SBSVRKGPID' - nothing to do here"
+		fi
 	else
 		writelog "SKIP" "${FUNCNAME[0]} - skipping because RUNSBSVR was set to 0"
 	fi
 }
 
 function SBSrunVRVideoPlayer {
-	VRGAMEWINDOWID="$1"
 
 	if [ "$RUNSBSVR" -ge 1 ]; then
-		if [ -z "$VRGAMEWINDOWID" ]; then
-			writelog "SKIP" "${FUNCNAME[0]} - ERROR - VRGAMEWINDOWID is empty - "
+		if [ -z "$GAMEWINDOWID" ]; then
+			writelog "SKIP" "${FUNCNAME[0]} - ERROR - GAMEWINDOWID is empty - "
 			writelog "SKIP" "${FUNCNAME[0]} - ERROR - forcefully killing game with pkill -9 '$SBSVRKGPID' - should exit this script as well"
 			pkill -9 "$SBSVRKGPID"
 		else
@@ -446,18 +553,18 @@ function SBSrunVRVideoPlayer {
 			fi
 
 			IFS=" " read -r -a RUNVRVIDEOPLAYERARGS <<< "$VRVIDEOPLAYERARGS"
-			writelog "INFO" "${FUNCNAME[0]} - starting '$VRVIDEOPLAYER' with args '${RUNVRVIDEOPLAYERARGS[*]}' for windowid '$VRGAMEWINDOWID'"
+			writelog "INFO" "${FUNCNAME[0]} - starting '$VRVIDEOPLAYER' with args '${RUNVRVIDEOPLAYERARGS[*]}' for windowid '$GAMEWINDOWID'"
 
-			GWIDDEC="$(("$VRGAMEWINDOWID"))"
+			GWIDDEC="$(("$GAMEWINDOWID"))"
 			echo "GWIDDEC=$GWIDDEC" > "$GWIDFILE"
 
 			if [ -z "$SBSZOOM" ]; then
-				"$VRVIDEOPLAYER" "${RUNVRVIDEOPLAYERARGS[@]}" "$VRGAMEWINDOWID"  2>/dev/null &
+				"$VRVIDEOPLAYER" "${RUNVRVIDEOPLAYERARGS[@]}" "$GAMEWINDOWID"  2>/dev/null &
 			else
-				"$VRVIDEOPLAYER" "${RUNVRVIDEOPLAYERARGS[@]}" --zoom "$SBSZOOM" "$VRGAMEWINDOWID"  2>/dev/null &
+				"$VRVIDEOPLAYER" "${RUNVRVIDEOPLAYERARGS[@]}" --zoom "$SBSZOOM" "$GAMEWINDOWID"  2>/dev/null &
 			fi
 
-			writelog "INFO" "${FUNCNAME[0]} - waiting for '$VRVIDEOPLAYER' window '$SBSVRWINNAME' for VRGAMEWINDOWID '$VRGAMEWINDOWID'"
+			writelog "INFO" "${FUNCNAME[0]} - waiting for '$VRVIDEOPLAYER' window '$SBSVRWINNAME' for GAMEWINDOWID '$GAMEWINDOWID'"
 
 			MAXWAIT=20
 			COUNTER=0
@@ -486,8 +593,8 @@ function SBSrunVRVideoPlayer {
 			writelog "INFO" "${FUNCNAME[0]} - pressing w in '$VRVIDEOPLAYER' window '$SBSVRWINNAME' to adjust view: '$XDO windowactivate --sync $SBSVRWID key w'"
 			"$XDO" windowactivate --sync "$SBSVRWID" key w
 
-			writelog "INFO" "${FUNCNAME[0]} - activating game window with id '$VRGAMEWINDOWID' for input"
-			"$XDO" windowactivate --sync "$VRGAMEWINDOWID" click 1
+			writelog "INFO" "${FUNCNAME[0]} - activating game window with id '$GAMEWINDOWID' for input"
+			"$XDO" windowactivate --sync "$GAMEWINDOWID" click 1
 			else
 				writelog "SKIP" "${FUNCNAME[0]} - WARN - SBSVRWID '$SBSVRWID' is empty!"
 			fi
@@ -501,36 +608,28 @@ function SBSinitVRVideoPlayer {
 	if [ "$RUNSBSVR" -ge 1 ]; then
 		if [ -x "$(command -v "$VRVIDEOPLAYER" 2>/dev/null)" ]; then
 
-			if [ "$SAVESBSWINNAME" -gt 0 ]; then
-				if [ ! -f "$SBSTWEAKCFG" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - SAVESBSWINNAME is '$SAVESBSWINNAME' so waiting for '$SBSTWEAKCFG' to appear holding the window name"
-					while [ ! -f "$SBSTWEAKCFG" ]; do
-						writelog "WAIT" "${FUNCNAME[0]} - waiting for '$SBSTWEAKCFG' to appear"
-						sleep 1
-					done
-				fi
-
-				if [ -f "$SBSTWEAKCFG" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - config '$SBSTWEAKCFG' is ready, getting the window name"
-					exportCfgFile "$SBSTWEAKCFG"
-				fi
-			fi
-
-			if [ -z "$VRGAMEWINDOW" ]; then
-				if [ -n "$(VRAUTOWINDOWID)" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - trying to start '$VRVIDEOPLAYER' with automatically detected windowID '$(VRAUTOWINDOWID)':"
-					SBSrunVRVideoPlayer	"$(VRAUTOWINDOWID)" 2>/dev/null &
-				else
-					writelog "SKIP" "${FUNCNAME[0]} - ERROR - VRAUTOWINDOWID '$(VRAUTOWINDOWID)' is empty"
-				fi
-			else
-				VRGAMEWINDOWID="$("$XWININFO" -name "${VRGAMEWINDOW//\"/}" -stats | grep "^$XWININFO" | awk -F 'id: ' '{print $2}' | cut -d ' ' -f1)"
-				if [ -z "$VRGAMEWINDOWID" ]; then
-					writelog "SKIP" "${FUNCNAME[0]} - ERROR - could not find windowid '$VRGAMEWINDOWID' for the windowname '$VRGAMEWINDOW'"
+			if [ -n "$GAMEWINDOWID" ]; then
+				if [ "$GAMEWINDOWID" == "0x0" ]; then
+					writelog "SKIP" "${FUNCNAME[0]} GAMEWINDOWID '$GAMEWINDOWID' is invalid - skipping VR"
 					RUNSBSVR=0
 				else
-					writelog "INFO" "${FUNCNAME[0]} - found windowid '$VRGAMEWINDOWID' for the windowname '$VRGAMEWINDOW'"
-					SBSrunVRVideoPlayer	"$VRGAMEWINDOWID" 2>/dev/null &
+					writelog "INFO" "${FUNCNAME[0]} already have the gamewindow id '$GAMEWINDOWID', so directly continuing!"
+					SBSrunVRVideoPlayer	"$GAMEWINDOWID" 2>/dev/null &
+					if [ -n "$VRGAMEWINDOW" ]; then
+						writelog "INFO" "${FUNCNAME[0]} '$VRVIDEOPLAYER' already starting, but trying to get the game window name for the config for later use"
+						getGameWindowName "$GAMEWINDOWID"
+					fi
+				fi
+			else
+				if [ -n "$VRGAMEWINDOW" ]; then
+					GAMEWINDOWID="$("$XWININFO" -name "${VRGAMEWINDOW//\"/}" -stats | grep "^$XWININFO" | awk -F 'id: ' '{print $2}' | cut -d ' ' -f1)"
+					if [ -z "$GAMEWINDOWID" ]; then
+						writelog "SKIP" "${FUNCNAME[0]} - ERROR - could not find windowid '$GAMEWINDOWID' for the windowname '$VRGAMEWINDOW'"
+						RUNSBSVR=0
+					else
+						writelog "INFO" "${FUNCNAME[0]} - found windowid '$GAMEWINDOWID' for the windowname '$VRGAMEWINDOW'"
+						SBSrunVRVideoPlayer	"$GAMEWINDOWID" 2>/dev/null &
+					fi
 				fi
 			fi
 		else
@@ -577,6 +676,7 @@ function SBSstopVRVideoPlayer {
 function runSBSVR {
 	if [ "$RUNSBSVR" -ge 1 ]; then
 		SBSstartSVR
+		SBScheckSBScfg
 		SBSgetGamePID
 		SBSinitVRVideoPlayer
 		SBSstopVRVideoPlayer
@@ -1082,8 +1182,6 @@ function createDefaultGlobalCfg {
 		echo "GAMCON=/usr/share/gameconqueror/GameConqueror.py"
 		echo "## wait ATVALIDATE seconds for a keypress to open the texteditor STLEDITOR when a autotweak config is found before loading it - only used when AUTOTWEAKS is not empty"
 		echo "ATVALIDATE=2"
-		echo "## seconds to wait to automatically save a new basic SBS tweak config of the running game with the game window name after game launch - 0 to disable - 1 to pick a window"
-		echo "SAVESBSWINNAME=0"
 		echo "## set to 1 to auto-apply registry files for AID when found or enter a registry filename which should be loaded from either GLOBALREGDIR (or GLDLREGDIR) or STLREGDIR"
 		echo "REGEDIT=0"
 		echo "## directory with global registry files"
@@ -1168,8 +1266,6 @@ function createDefaultGameCfg {
 		echo "#NOINET=sg no-internet"
 		echo "## toggle visibility of all open windows on start/stop - overrides global config"
 		echo "TOGGLEWINDOWS=0"
-		echo "## seconds to wait to automatically save a new basic SBS tweak config of the running game with the game window name after game launch - 0 to disable - 1 to pick a window - overrides global config"
-		echo "SAVESBSWINNAME=0"
 		echo "## set radv mode:"
 		echo "#RADV_PERFTEST=aco"
 		echo "## comment in to use amdvlk"
@@ -1310,38 +1406,17 @@ function GAMEPID {
 			pgrep "" -a | grep -v grep | grep "$CUSTOMCMD" | cut -d ' ' -f1 | tail -n1
 		fi
 	else
-		pgrep "" -a | grep -v grep | grep "Z:" | grep "$GE" | grep "\.exe" | grep -v "CrashHandler"  | cut -d ' ' -f1 | tail -n1
+		GAMPI="$(pgrep "" -a | grep -v grep | grep "Z:" | grep "$GE" | grep "\.exe" | grep -v "CrashHandler"  | cut -d ' ' -f1 | tail -n1)"
+		echo "$GAMPI"
 	fi
 }
 
-function saveSBSWinName {
-	if [ "$SAVESBSWINNAME" -gt 0 ]; then
-		if [ -f "$SBSTWEAKCFG" ]; then
-			writelog "SKIP" "${FUNCNAME[0]} - $SBSTWEAKCFG does already exist - skipping"
-		else
-		if [ "$SAVESBSWINNAME" -eq 1 ]; then
-			writelog "INFO" "${FUNCNAME[0]} - SAVESBSWINNAME is 1 so picking the window"
-			NEWVRGAMEWINDOW=$("$XDO" selectwindow getwindowname)
-		else
-			writelog "WAIT" "${FUNCNAME[0]} - waiting $SAVESBSWINNAME seconds to get the windowname"
-			NEWVRGAMEWINDOW=$(sleep "$SAVESBSWINNAME"; "$XDO" getactivewindow getwindowname)	
-		fi
-			if [ -n "$NEWVRGAMEWINDOW" ]; then
-				{
-					echo "#########"
-					echo "#GAMENAME=$GN"
-					echo "#GAMEEXE=$GE"
-					echo "#GAMEID=$AID"
-					echo "#PROTONVERSION=$PROTONVERSION"
-					echo "#########"
-					echo "VRGAMEWINDOW=\"$NEWVRGAMEWINDOW\""
-				} >> "$SBSTWEAKCFG"
-				writelog "INFO" "${FUNCNAME[0]} - created config $SBSTWEAKCFG with windowname $NEWVRGAMEWINDOW"
-			else
-				writelog "SKIP" "${FUNCNAME[0]} - found windowname $NEWVRGAMEWINDOW is invalid"
-			fi
-		fi
-	fi
+function waitForGamePid {
+	while [ -z "$(GAMEPID)" ]; do 
+		writelog "WAIT" "${FUNCNAME[0]} - waiting for game process $(GAMEPID)"
+		sleep 1
+	done
+	writelog "INFO" "${FUNCNAME[0]} - game process $GE found at $(GAMEPID)"
 }
 
 # override game configs with a tweak config if available:
@@ -1514,11 +1589,7 @@ function autoCategorySettings {
 
 function stracerun {
 	writelog "INFO" "${FUNCNAME[0]} - starting stracerun"
-	while [ -z "$(GAMEPID)" ]; do 
-		writelog "WAIT" "${FUNCNAME[0]} - waiting for game process $(GAMEPID)"
-		sleep 1
-	done
-	writelog "INFO" "${FUNCNAME[0]} - game process found at $(GAMEPID)"
+	waitForGamePid
 	writelog "INFO" "${FUNCNAME[0]} - $STRACE -p $(GAMEPID) $STRACEOPTS -o $STRACEDIR/$AID.log"
 	IFS=" " read -r -a RUNSTRACEOPTS <<< "$STRACEOPTS"
 
@@ -1540,11 +1611,7 @@ function checkStraceLaunch {
 function netrun {
 	writelog "INFO" "${FUNCNAME[0]} - starting network traffic monitor"
 
-	while [ -z "$(GAMEPID)" ]; do 
-		writelog "WAIT" "${FUNCNAME[0]} - waiting for game process $(GAMEPID)"
-		sleep 1
-	done
-	writelog "INFO" "${FUNCNAME[0]} - game process $GE found at $(GAMEPID)"
+	waitForGamePid
 
 	if [ -n "$NETMONDIR" ]; then
 		if [ ! -d "$NETMONDIR" ]; then
@@ -2650,11 +2717,18 @@ function check3rdParty {
 function toggleWindows {
 	if [ -n "$TOGGLEWINDOWS" ]; then
 		if [ "$TOGGLEWINDOWS" -eq 1 ]; then
-			if  [ -x "$(command -v "$WMCTRL" 2>/dev/null)" ]; then
+			if  [ -x "$(command -v "$WMCTRL" 2>/dev/null)" ] && [ -x "$(command -v "$XPROP" 2>/dev/null)" ] ; then
 				writelog "INFO" "${FUNCNAME[0]} - hiding windows is $1"
-				"$WMCTRL" -k "$1"
+				WSTATE="$1"
+
+				while read -r WINNAME; do
+					if "$XPROP" -id "$WINNAME" | grep "_NET_WM_ACTION_MINIMIZE" -q ;then
+						writelog "INFO" "${FUNCNAME[0]} - set '$WINNAME' '$WSTATE'"
+						"$XDO" "$WSTATE" "$WINNAME"
+					fi
+				done<<< "$("$WMCTRL" -l | cut -d ' ' -f1)"		
 			else
-				writelog "SKIP" "${FUNCNAME[0]} - $WMCTRL not found"
+				writelog "SKIP" "${FUNCNAME[0]} - '$WMCTRL' or '$XPROP' not found"
 			fi
 		fi
 	fi
@@ -2871,10 +2945,7 @@ function runGamCon {
 				done
 				GCGPID="$(pidof "$GAMCONWAITEXE" | cut -d ' ' -f1)"
 			else
-				while [ -z "$(GAMEPID)" ]; do 
-					writelog "WAIT" "${FUNCNAME[0]} - waiting for game PID"
-					sleep 1
-				done
+				waitForGamePid
 				GCGPID="$(GAMEPID)"
 			fi
 			
@@ -3908,7 +3979,7 @@ function launchSteamProtonGame {
 
 	# minimize all open windows if TOGGLEWINDOWS is 1
 	writelog "INFO" "${FUNCNAME[0]} - toggleWindows:"
-	toggleWindows on
+	toggleWindows windowminimize
 
 	# install ReShade if INSTALL_RESHADE is 1
 	writelog "INFO" "${FUNCNAME[0]} - installReshade:"
@@ -3933,10 +4004,6 @@ function launchSteamProtonGame {
 	# start $REPLAY if RUN_REPLAY is 1
 	writelog "INFO" "${FUNCNAME[0]} - useReplay:"
 	useReplay
-
-	# save game window name after SAVESBSWINNAME seconds
-	writelog "INFO" "${FUNCNAME[0]} - saveSBSWinName:"
-	saveSBSWinName "$@" &
 
 	# start game with side-by-side VR if RUNSBSVR is not 0 
 	writelog "INFO" "${FUNCNAME[0]} - checkSBSVRLaunch:"
@@ -4206,7 +4273,7 @@ function closeSTL {
 	writelog "INFO" "${FUNCNAME[0]} - recreating $LASTRUN"
 	writeLastRun
 
-	toggleWindows off
+	toggleWindows windowraise
 
 	# notifier:
 	if  [ -x "$(command -v "$NOTY" 2>/dev/null)" ]; then
@@ -4217,7 +4284,7 @@ function closeSTL {
 
 	# should not be necessary, but in case a game forks and partly hangs this could help to gracefully exit wine. if you have doubts feel free to open an issue:
 	WINEPREFIX="$GPFX" wineserver -k
-	pkill -9 "$PROGCMD" # wip - if the game quit this script should as well, but in theory it could still wait for something with a user defined duration (f.e. SAVESBSWINNAME)
+	pkill -9 "$PROGCMD" # wip - if the game quit this script should as well, but in theory it could still wait for something with a user defined duration
 }
 
 ### CLOSE STL END ###
