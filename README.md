@@ -16,6 +16,9 @@ Just add this program to your steam game command line like:
 
 *A little script which automatically does this for every game in the Steam library can be found [here](https://gist.github.com/frostworx/36bd76e705a0c87af523fa57cfeebaf8)*
 
+**stl (currently?) only works with games using proton!**
+
+
 ### Game specific use
 When starting a game a small requester will popup.
 If within a short waiting period (default 2 seconds) the spacebar is pressed it will open an editor with the games individual config file.
@@ -70,6 +73,8 @@ Also enable everything you want to use generally for your games in [the default 
 * **[mf-install](#mf-install)** automatic support for Media Foundation installation
 * **[self maintaining configs](#self-maintaining-configs)** optional automatic cloning of this repo as replacemement for missing system wide installation
 * **[GameConqueror](#GameConqueror)** automatically open gameconqueror (scanmem gui) with the game exe on game launch
+* **[Custom User Start/Stop scripts](#Start-Stop-Scripts)** optional start custom scripts when game starts/ends
+
 
 ## Requirements
 *(no special order)*
@@ -145,6 +150,16 @@ file paths, command line options for supported 3rd party programs, but also gene
 *(f.e. [Logs](#Logs) mode or timeout for the [Editor](#Editor))*
 or which default programs to use
 *(f.e. which `BROWSER` to use for opening [ProtonDB](#Editor) together with the `STLEDITOR` (default 'xdg-open') [Editor](#Editor))*
+
+#### Start Stop Scripts
+If commands are defined in `USERSTART` `USERSTOP` they will be executed when a game starts/ends.
+Of course the user is responsbile for what is executed here and needs take care that it both works and exits correctly!
+
+Both scripts make use of following commandline arguments:
+- SteamAppID as argument1
+- the absolute path to the game exe as argument2
+- and the WINEPREFIX of the game as argument 3
+
 
 ### Game Configurations
 
@@ -756,10 +771,17 @@ With `RESHADE_DEPTH3D` enabled `Overwatch.fxh`, `SuperDepth3D.fx`, `SuperDepth3D
 When the game started just create a initial profile by selecting the autodetected `SuperDepth3D_VR.fx`
 
 #### Editor
-When `WAITEDITOR` is greater 0 a zenity requester will pop up on game launch and wait `WAITEDITOR` seconds for a keypress
+When `WAITEDITOR` is greater 0 a requester will pop up on game launch and wait `WAITEDITOR` seconds for a keypress
 for editing the [Game specific configuration file](#User-Configurations) with your `STLEDITOR` if desired.
 set PROTONDB to 1 to additionally open the protondb.com url for the game `PDBURL` in your `BROWSER` when starting the editor.
 If a [Tweakfile](#Tweakfiles) was found for the game, the requester will show an additional notice.
+
+If `MAXASK` in the [global.conf](#Global-Config) is defined, the editor requester can be cancelled maximal `MAXASK` times
+before `WAITEDITOR` is automatically set to 0 for that game.
+Letting the requester timeout does not count as cancelled.
+The "Cancelled counter" is stored directly in the [Game specific configuration file](#User-Configurations) as `ASKCNT`
+and is resetted to 0 when `MAXASK` was reached and `WAITEDITOR` was set to 0.
+
 
 #### ENV Variables
 Literally every env variable can be set in [gameconfig `$STLGAMECFG`](#Game-Configurations) and [system-wide configuration](#Global-Config),

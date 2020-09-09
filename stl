@@ -5,7 +5,7 @@
 ### project ###
 
 PROGNAME="SteamTinkerLaunch"
-PROGVERS="v1.6.3"
+PROGVERS="v1.6.4"
 PROGCMD="$(basename "$0")"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -990,6 +990,50 @@ function startEditor {
 	fi
 }
 
+function editorSkipped {
+	if [ -z "$MAXASK" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - maximal editor requester count MAXASK not defined - skipping"
+	else
+		if ! grep -q "^ASKCNT" "$STLGAMECFG"; then
+			ASKCNT=1
+			updateConfigEntry "ASKCNT" "$ASKCNT" "$STLGAMECFG"
+		else
+			ASKCNT=$(($(grep "ASKCNT" "$STLGAMECFG" | cut -d '=' -f2) +1))
+			updateConfigEntry "ASKCNT" "$ASKCNT" "$STLGAMECFG"
+		fi
+		
+		if [ "$ASKCNT" -ge "$MAXASK" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - 'ASKCNT $ASKCNT' reached  'MAXASK $MAXASK' - disabling requester and resetting counter"
+			updateConfigEntry "WAITEDITOR" "0" "$STLGAMECFG"
+			updateConfigEntry "ASKCNT" "0" "$STLGAMECFG"
+		fi
+	fi
+}
+
+function customUserScriptStart {
+	if [ -n "$USERSTART" ]; then
+		if [ -x "$USERSTART" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - starting custom user startscript '$USERSTART'"
+			extRun "$USERSTART" "$AID" "$GP" "$GPFX" &
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - custom user stopscript '$USERSTART' not found or not executable"
+		fi
+	fi
+}
+
+function customUserScriptStop {
+	if [ -n "$USERSTOP" ]; then
+		if [ -x "$USERSTOP" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - starting custom user stopscript '$USERSTOP'"
+			extRun  "$USERSTOP" "$AID" "$GP" "$GPFX" &
+#			disown "$!"
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - custom user stopscript '$USERSTOP' not found or not executable"
+		fi
+	fi
+}
+
+
 function editGameConfig {
 	REQWIDTH=1200
 	# sourcing game config, to optionally override global WAITEDITOR
@@ -1015,14 +1059,15 @@ function editGameConfig {
 			fi
 			
 			if [ -n "$FOUNDTWEAKCFG" ]; then
-				"$STEAM_ZENITY" --title="$PROGNAME ($PROGCMD) - $PROGVERS" --question --text="edit game configfile\n'$STLGAMECFG'?\n(tweakfile '$FOUNDTWEAKCFG' found,\nthe game should 'just work' using it!)" --ok-label=Edit --cancel-label=Cancel --timeout="$WAITEDITOR" --width "$REQWIDTH"
+				"$STEAM_ZENITY" --title="$PROGNAME ($PROGCMD) - $PROGVERS" --question --text="edit game configfile?\n'$STLGAMECFG'\n(tweakfile '$FOUNDTWEAKCFG' found,\nthe game should 'just work' using it!)" --ok-label=Edit --cancel-label=Cancel --timeout="$WAITEDITOR" --width "$REQWIDTH"
 			else
-				"$STEAM_ZENITY" --title="$PROGNAME ($PROGCMD) - $PROGVERS" --question --text="edit game configfile\n'$STLGAMECFG'?" --ok-label=Edit --cancel-label=Cancel --timeout="$WAITEDITOR" --width "$REQWIDTH"
+				"$STEAM_ZENITY" --title="$PROGNAME ($PROGCMD) - $PROGVERS" --question --text="edit game configfile?\n'$STLGAMECFG'" --ok-label=Edit --cancel-label=Cancel --timeout="$WAITEDITOR" --width "$REQWIDTH"
 			fi
 			case $? in
 				0) startEditor
 				;;
-				1) writelog "INFO" "${FUNCNAME[0]} - key not pressed - starting game"
+				1)  writelog "INFO" "${FUNCNAME[0]} - key not pressed - starting game"
+					editorSkipped
 				;;
 			esac
 		else
@@ -1132,6 +1177,10 @@ function createDefaultGlobalCfg {
 		echo "##########################"
 		echo "## pull '$PROGCMD' from '$PROJECTPAGE' to '$GLOBALDLSTLDIR' and use its config files (only used if global configs not installed!)"
 		echo "DLGLOBAL=1"
+		echo "## custom user script executed when a game starts"
+		echo "#USERSTART=/usr/local/bin/STL-start"
+		echo "## custom user script executed when a game stops"
+		echo "#USERSTOP=/usr/local/bin/STL-stop"
 		echo "## all platforms listed here will be used to import autotweaks from - start stl from commandline or see README for supported platforms"
 		echo "#AUTOTWEAKS=$AUTOTWEAKPLATFORMS"
 		echo "## the base strace path used to optionally dump strace logs"
@@ -1144,6 +1193,8 @@ function createDefaultGlobalCfg {
 		echo "STLEDITOR=xdg-open"
 		echo "## wait WAITEDITOR seconds for a keypress to open the texteditor STLEDITOR with the game config"
 		echo "WAITEDITOR=2"
+		echo "## how often should the 'open editor requester' pup up until it gets automatically disabled for a game"
+		echo "MAXASK=3"
 		echo "## set PROTONDB to 1 to also open protondb.com for the game in your $BROWSER when starting the editor STLEDITOR:"
 		echo "PROTONDB=0"
 		echo "## protondb base url - for optional PROTONDB"
@@ -2714,21 +2765,45 @@ function check3rdParty {
 	fi
 }
 
+MINIMIZEDWINDOWS=""
+
 function toggleWindows {
 	if [ -n "$TOGGLEWINDOWS" ]; then
 		if [ "$TOGGLEWINDOWS" -eq 1 ]; then
 			if  [ -x "$(command -v "$WMCTRL" 2>/dev/null)" ] && [ -x "$(command -v "$XPROP" 2>/dev/null)" ] ; then
-				writelog "INFO" "${FUNCNAME[0]} - hiding windows is $1"
+				writelog "INFO" "${FUNCNAME[0]} - setting windows to $1"
 				WSTATE="$1"
 
 				while read -r WINNAME; do
 					if "$XPROP" -id "$WINNAME" | grep "_NET_WM_ACTION_MINIMIZE" -q ;then
-						writelog "INFO" "${FUNCNAME[0]} - set '$WINNAME' '$WSTATE'"
-						"$XDO" "$WSTATE" "$WINNAME"
+						if [ "$WSTATE" == "windowminimize" ]; then
+							if "$XPROP" -id "$WINNAME" | grep "_NET_WM_STATE_HIDDEN" -q ;then
+								MINIMIZEDWINDOWS="${MINIMIZEDWINDOWS} $WINNAME"
+							else
+								writelog "INFO" "${FUNCNAME[0]} - minimizing '$WINNAME'"
+								"$XDO" "$WSTATE" "$WINNAME"
+							fi
+						elif [ "$WSTATE" == "windowraise" ]; then
+							if grep -q "$WINNAME" <<< "$MINIMIZEDWINDOWS" ; then
+								writelog "INFO" "${FUNCNAME[0]} - '$WINNAME' was already minimized - not raising it"
+							else
+								writelog "INFO" "${FUNCNAME[0]} - raising '$WINNAME'"
+								"$XDO" "$WSTATE" "$WINNAME"
+								# apparently sometimes windows don't raise although the command was executed ($XDO bug or executed too fast?)
+								# so simply raising twice here
+								"$XDO" "$WSTATE" "$WINNAME"
+							fi
+						fi
 					fi
 				done<<< "$("$WMCTRL" -l | cut -d ' ' -f1)"		
 			else
 				writelog "SKIP" "${FUNCNAME[0]} - '$WMCTRL' or '$XPROP' not found"
+			fi
+			
+			if [ "$1" == "windowminimize" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - following windows won't be raised on exit, as they are minimized: '$MINIMIZEDWINDOWS'"
+			elif [ "$2" == "windowraise" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - following windows were not raised, as they were minimized: '$MINIMIZEDWINDOWS'"
 			fi
 		fi
 	fi
@@ -4036,6 +4111,9 @@ function launchSteamProtonGame {
 	# start gameconqueror when game starts if is RUN_GAMCON 1
 	checkGamConLaunch
 
+	# start custom user script
+	customUserScriptStart
+
 ########################
 
 	# the actual game launch:
@@ -4274,6 +4352,8 @@ function closeSTL {
 	writeLastRun
 
 	toggleWindows windowraise
+
+	customUserScriptStop
 
 	# notifier:
 	if  [ -x "$(command -v "$NOTY" 2>/dev/null)" ]; then
