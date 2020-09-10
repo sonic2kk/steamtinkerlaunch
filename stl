@@ -299,9 +299,17 @@ function waitForGameWindow {
 	while read -r WINS; do
 
 	if [ "$("$XPROP" -id "$(printf 0x%x'\n' "$WINS")" | grep "_NET_WM_STATE(ATOM)" -c)" -ge 1 ]; then
-		writelog "INFO" "${FUNCNAME[0]} - found a usable windowid"	
-		FOUNDWIN=1
-		break
+		writelog "INFO" "${FUNCNAME[0]} - found a controllable windowid"
+		WSIZ=$(($("$XWININFO" -id "$WINS" -stats | awk '$1=="-geometry" {print $2}' | awk -F '+'  '{print $1}' | sed "s:x:\*:")))
+		if [ "$WSIZ" -lt "307200" ]; then
+			writelog "SKIP" "${FUNCNAME[0]} - '$(printf 0x%x'\n' "$WINS")' is smaller than 640x480 - this is very likely not the game window - skipping"
+		else
+				writelog "INFO" "${FUNCNAME[0]} - found a big enough window with windowid '$(printf 0x%x'\n' "$WINS")'"
+				writelog "INFO" "${FUNCNAME[0]} - this is probably the game window, but making another check"
+				WSIZ=$(($("$XWININFO" -id "$WINS" -stats | awk '$1=="-geometry" {print $2}' | awk -F '+'  '{print $1}' | sed "s:x:\*:")))
+				FOUNDWIN=1
+			break
+		fi
 	fi
 	done <<< "$("$XDO" search --pid "$SBSVRKGPID")"
 
@@ -326,16 +334,19 @@ function getBiggestGameWindowWID {
 		writelog "DEBUG" "${FUNCNAME[0]} found window id '$WINS' for PID '$SBSVRKGPID' with geometry: $("$XWININFO" -id "$WINS" -stats | awk '$1=="-geometry" {print $2}')"
 		if [ "$("$XPROP" -id "$(printf 0x%x'\n' "$WINS")" | grep "_NET_WM_STATE(ATOM)" -c)" -ge 1 ]; then
 			WSIZ=$(($("$XWININFO" -id "$WINS" -stats | awk '$1=="-geometry" {print $2}' | awk -F '+'  '{print $1}' | sed "s:x:\*:")))
-			writelog "DEBUG" "${FUNCNAME[0]} found WINS '$WINS' window ID for PID '$SBSVRKGPID' with geometry: $("$XWININFO" -id "$WINS" -stats | awk '$1=="-geometry" {print $2}') so WSIZ is '$WSIZ' and MAXSIZ currently is '$MAXSIZ'"
-			if [ "$WSIZ" -gt "$MAXSIZ" ]; then
-				MAXSIZ=$WSIZ	
-				MAXWIN="$(printf 0x%x'\n' "$WINS")"
-				writelog "DEBUG" "${FUNCNAME[0]} MAXSIZ now is '$MAXSIZ' WINS is '$WINS' and MAXWIN is '$MAXWIN'"
+			if [ "$WSIZ" -lt "307200" ]; then
+				writelog "SKIP" "${FUNCNAME[0]} - '$(printf 0x%x'\n' "$WINS")' is smaller than 640x480 - this is very likely not the game window - skipping"
+			else
+				writelog "DEBUG" "${FUNCNAME[0]} found WINS '$WINS' window ID for PID '$SBSVRKGPID' with geometry: $("$XWININFO" -id "$WINS" -stats | awk '$1=="-geometry" {print $2}') so WSIZ is '$WSIZ' and MAXSIZ currently is '$MAXSIZ'"
+				if [ "$WSIZ" -gt "$MAXSIZ" ]; then
+					MAXSIZ=$WSIZ	
+					MAXWIN="$(printf 0x%x'\n' "$WINS")"
+					writelog "DEBUG" "${FUNCNAME[0]} MAXSIZ now is '$MAXSIZ' WINS is '$WINS' and MAXWIN is '$MAXWIN'"
+				fi
 			fi
 		else
 			writelog "DEBUG" "${FUNCNAME[0]} skipping '$WINS' - doesn't look usable"
 		fi
-	#"$XPROP" -id "$(printf 0x%x'\n' "$MAXWIN")"  | grep "_NET_WM_STATE(ATOM)" > "/tmp/xprop-stateatom-MAXWIN-$MAXWIN.txt"
 
 	done <<< "$("$XDO" search --pid "$SBSVRKGPID")"
 	
@@ -828,6 +839,29 @@ function installReshade {
 
 			writelog "INFO" "${FUNCNAME[0]} - INSTALL_RESHADE enabled"
 
+			# checking for previous dll conficts between $RS_D3D47_DEST and $RS_D9_DEST
+			if [ -f "$EFD/${RS_DX_DEST//.dll/.log}" ]; then
+				if grep -q "Another ReShade instance was already loaded" "$EFD/${RS_DX_DEST//.dll/.log}"; then
+					writelog "INFO" "${FUNCNAME[0]} - found $RS_DX_DEST conflict with $RS_D9_DEST"
+					if [ -f "$EFD/$RS_D9_DEST" ]; then
+						writelog "INFO" "${FUNCNAME[0]} - removing $RS_D9_DEST"
+						rm "$EFD/$RS_D9_DEST"
+					else
+						writelog "SKIP" "${FUNCNAME[0]} - $RS_D9_DEST not found"
+					fi
+					
+					if [ -z "$NOD3D9" ]; then
+						writelog "INFO" "${FUNCNAME[0]} - blocking re-installation of '$RS_D9_DEST' by setting NOD3D9=1 in '$STLGAMECFG'"
+						updateConfigEntry "NOD3D9" "1" "$STLGAMECFG"
+						export NOD3D9=1
+					fi
+				else
+					writelog "INFO" "${FUNCNAME[0]} - no conflict found in old logfile ${RS_DX_DEST//.dll/.log}"
+				fi				
+			else
+				writelog "INFO" "${FUNCNAME[0]} - no old logfile ${RS_DX_DEST//.dll/.log} found"
+			fi
+
 			#32bit:
 			if [ "$(extRun file "$GP" | grep -c "PE32 ")" -eq 1 ]; then
 				writelog "INFO" "${FUNCNAME[0]} - installing 32bit Reshade as '$GE' is 32bit" 
@@ -857,11 +891,15 @@ function installReshade {
 
 				#d3d9:
 				if [ ! -f "$EFD/$RS_D9_DEST" ]; then
-					if [ ! -f "$RESHADESRCDIR/$RS_32" ]; then
-						writelog "SKIP" "${FUNCNAME[0]} - sourcefile '$RESHADESRCDIR/$RS_32' missing - skipping this file" 
+					if [ -n "$NOD3D9" ] && [ "$NOD3D9" -eq 1 ]; then
+						writelog "SKIP" "${FUNCNAME[0]} - skipping installation of $RS_D9_DEST because 'NOD3D9' is enabled"
 					else
-						cp "$RESHADESRCDIR/$RS_32" "$EFD/$RS_D9_DEST" >/dev/null 2>/dev/null
-						writelog "INFO" "${FUNCNAME[0]} - copied '$RESHADESRCDIR/$RS_32' to '$EFD/$RS_D9_DEST'" 
+						if [ ! -f "$RESHADESRCDIR/$RS_32" ]; then
+							writelog "SKIP" "${FUNCNAME[0]} - sourcefile '$RESHADESRCDIR/$RS_32' missing - skipping this file" 
+						else
+							cp "$RESHADESRCDIR/$RS_32" "$EFD/$RS_D9_DEST" >/dev/null 2>/dev/null
+							writelog "INFO" "${FUNCNAME[0]} - copied '$RESHADESRCDIR/$RS_32' to '$EFD/$RS_D9_DEST'" 
+						fi
 					fi
 				else
 					writelog "SKIP" "${FUNCNAME[0]} - destfile '$EFD/$RS_D9_DEST' already exists - skipping this file" 
@@ -896,11 +934,15 @@ function installReshade {
 
 				#d3d9:
 				if [ ! -f "$EFD/$RS_D9_DEST" ]; then
-					if [ ! -f "$RESHADESRCDIR/$RS_64" ]; then
-						writelog "SKIP" "${FUNCNAME[0]} - sourcefile '$RESHADESRCDIR/$RS_64' missing - skipping this file" 
+					if [ -n "$NOD3D9" ] && [ "$NOD3D9" -eq 1 ]; then
+						writelog "SKIP" "${FUNCNAME[0]} - skipping installation of $RS_D9_DEST because 'NOD3D9' is enabled"
 					else
-						cp "$RESHADESRCDIR/$RS_64" "$EFD/$RS_D9_DEST" >/dev/null 2>/dev/null
-						writelog "INFO" "${FUNCNAME[0]} - copied '$RESHADESRCDIR/$RS_64' to '$EFD/$RS_D9_DEST'" 
+						if [ ! -f "$RESHADESRCDIR/$RS_64" ]; then
+							writelog "SKIP" "${FUNCNAME[0]} - sourcefile '$RESHADESRCDIR/$RS_64' missing - skipping this file" 
+						else
+							cp "$RESHADESRCDIR/$RS_64" "$EFD/$RS_D9_DEST" >/dev/null 2>/dev/null
+							writelog "INFO" "${FUNCNAME[0]} - copied '$RESHADESRCDIR/$RS_64' to '$EFD/$RS_D9_DEST'" 
+						fi
 					fi
 				else
 					writelog "SKIP" "${FUNCNAME[0]} - destfile '$EFD/$RS_D9_DEST' already exists - skipping this file" 
@@ -990,26 +1032,6 @@ function startEditor {
 	fi
 }
 
-function editorSkipped {
-	if [ -z "$MAXASK" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - maximal editor requester count MAXASK not defined - skipping"
-	else
-		if ! grep -q "^ASKCNT" "$STLGAMECFG"; then
-			ASKCNT=1
-			updateConfigEntry "ASKCNT" "$ASKCNT" "$STLGAMECFG"
-		else
-			ASKCNT=$(($(grep "ASKCNT" "$STLGAMECFG" | cut -d '=' -f2) +1))
-			updateConfigEntry "ASKCNT" "$ASKCNT" "$STLGAMECFG"
-		fi
-		
-		if [ "$ASKCNT" -ge "$MAXASK" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - 'ASKCNT $ASKCNT' reached  'MAXASK $MAXASK' - disabling requester and resetting counter"
-			updateConfigEntry "WAITEDITOR" "0" "$STLGAMECFG"
-			updateConfigEntry "ASKCNT" "0" "$STLGAMECFG"
-		fi
-	fi
-}
-
 function customUserScriptStart {
 	if [ -n "$USERSTART" ]; then
 		if [ -x "$USERSTART" ]; then
@@ -1033,6 +1055,34 @@ function customUserScriptStop {
 	fi
 }
 
+function editorSkipped {
+	if [ -z "$MAXASK" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - maximal editor requester count MAXASK not defined - skipping"
+	else
+		if ! grep -q "^ASKCNT" "$STLGAMECFG"; then
+			ASKCNT=1
+			updateConfigEntry "ASKCNT" "$ASKCNT" "$STLGAMECFG"
+		else
+			ASKCNT=$(($(grep "ASKCNT" "$STLGAMECFG" | cut -d '=' -f2) +1))
+			updateConfigEntry "ASKCNT" "$ASKCNT" "$STLGAMECFG"
+		fi
+
+		if  [ -x "$(command -v "$NOTY" 2>/dev/null)" ]; then
+			if [ "$ASKCNT" -ge "$MAXASK" ]; then
+				"$NOTY" "Canceled the Requester $MAXASK times for game '$AID'. It will be skipped from now on"
+			elif [ "$ASKCNT" -lt "$MAXASK" ]; then
+				"$NOTY" "Canceled the Requester $ASKCNT times for game '$AID'. It will be skipped after $((MAXASK - ASKCNT)) more times"
+			fi
+		fi
+
+		
+		if [ "$ASKCNT" -ge "$MAXASK" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - 'ASKCNT $ASKCNT' reached  'MAXASK $MAXASK' - disabling requester and resetting counter"
+			updateConfigEntry "WAITEDITOR" "0" "$STLGAMECFG"
+			updateConfigEntry "ASKCNT" "0" "$STLGAMECFG"
+		fi
+	fi
+}
 
 function editGameConfig {
 	REQWIDTH=1200
@@ -1201,6 +1251,8 @@ function createDefaultGlobalCfg {
 		echo "PDBURL=https://www.protondb.com/app"
 		echo "## Browser used for PROTONDB:"
 		echo "BROWSER=firefox"
+		echo "## notifier command:"
+		echo "#NOTY=notify-send"
 		echo "## SteamAppId where the custom game launcher is triggered if RUN_CUSTOMCMD is set"
 		echo "CUSTOMLAUNCHID=15520"																	
 		echo "## if set this command is used to block the internet for the selected game. game might fail to start!"
@@ -1367,8 +1419,6 @@ function createDefaultGameCfg {
 		echo "#ATADOPT=1"
 		echo "## ignore all auto tweaks for this game if commented in:"
 		echo "#IGNOREAUTOTWEAKS=1"
-		echo "## notifier command:"
-		echo "#NOTY=notify-send"
 		echo "## proton vars:"
 		echo "#PROTON_LOG=1"
 		echo "#PROTON_DUMP_DEBUG_COMMANDS=1"
