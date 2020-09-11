@@ -5,7 +5,7 @@
 ### project ###
 
 PROGNAME="SteamTinkerLaunch"
-PROGVERS="v1.6.4"
+PROGVERS="v1.6.5"
 PROGCMD="$(basename "$0")"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -1823,54 +1823,6 @@ function checkXliveless {
 	fi
 }
 
-function checkMF {
-
-	MF="Media Foundation"
-	MFI="mf-install"
-
-	MFDL="$STLDLDIR/$MFI"
-	MFINSTURL="https://github.com/z0z0z/$MFI.git"
-
-	MFISH="$MFDL/${MFI}.sh"
-	MFMINSIZE="100000"
-	MFPLATDLL="mfplat.dll"
-	GPFX64DIR="$GPFX/drive_c/windows/system32/"
-	REQWIDTH="1400"
-
-	if [ -n "$USEMF" ]; then
-		if [ "$USEMF" -eq 1 ]; then
-
-			if [ "$(wc -c < "$GPFX64DIR/$MFPLATDLL")" -gt "$MFMINSIZE" ]; then	# cheap check, but should be sufficient TODO?
-				writelog "SKIP" "${FUNCNAME[0]} - looks like $MF is already installed - nothing to do"
-			else
-				if [ ! -f "$MFDL/system32/$MFPLATDLL" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - '$MFI' not found  - opening requester"
-
-					if [ -x "$(command -v "$STEAM_ZENITY" 2>/dev/null)" ]; then
-						"$STEAM_ZENITY" --title="$PROGNAME ($PROGCMD) - $PROGVERS" --question --text="'$MFDL' not found'!\n\nIf available it can be installed automatically into the gamedir for every game which requires it..\nClick Skip to skip now, click Download to download and install the file automatically!" --ok-label=Skip --cancel-label=Download --width "$REQWIDTH"
-						case $? in
-							0)  writelog "SKIP" "${FUNCNAME[0]} - skipping download of '$MFDL' as requested"
-								return
-							;; 
-							1)	writelog "INFO" "${FUNCNAME[0]} - downloading '$MFDL' as requested"
-								gitUpdate "$MFDL" "$MFINSTURL"
-							;;
-						esac
-					else
-						writelog "SKIP" "${FUNCNAME[0]} - can't open requester"
-					fi
-				fi
-				
-				if [ -f "$MFISH" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - executing '$MFISH' to install $MF into WINEPREFIX '$GPFX' using proton '$(dirname "$GPROT")'"
-					PROTON="$(dirname "$GPROT")" WINEPREFIX="$GPFX" "$MFISH" -proton
-				else
-					writelog "SKIP" "${FUNCNAME[0]} - skipping installation as '$MFISH' was not found"
-				fi
-			fi
-		fi
-	fi
-}
 
 # automatically applies game-specific tweaks
 #function preloadForcedTweaks {
@@ -2222,13 +2174,6 @@ function createAutoTweakLU {
 				LINECONV=1
 			fi
 
-			# mf 
-			if grep -q "mfplat" <<< "$line"; then
-				writelog "INFO" "${FUNCNAME[0]} - found mfplat - setting USEMF"
-				echo "USEMF=1" >> "$LUTWEAKCFG"
-				LINECONV=1
-			fi
-
 			# write_config 
 			if grep -q "write_config" <<< "$line"; then
 				writelog "INFO" "${FUNCNAME[0]} - found write_config setting TWEAKCMD"
@@ -2284,7 +2229,7 @@ function createAutoTweakLU {
 		if [ -n "$LUATDEBUG" ]; then
 			if [ "$LUATDEBUG" -eq 1 ]; then
 				awk -i inplace '!visited[$0]++' "$LUTWEAK1DEBUG"
-				grep -v "write_config\|KB976932\|appid\|mf-install\|insert-disc\|\"winesteam\"\|''\|create_prefix\|winekill\|\"description\"\|N\/A\|\"files\"\|mfinstall" "$LUTWEAK1DEBUG" >> "$LUTWEAKDEBUG"
+				grep -v "write_config\|KB976932\|appid\|insert-disc\|\"winesteam\"\|''\|create_prefix\|winekill\|\"description\"\|N\/A\|\"files\"" "$LUTWEAK1DEBUG" >> "$LUTWEAKDEBUG"
 				awk -i inplace '!visited[$0]++' "$LUTWEAKDEBUG"
 			fi
 		fi
@@ -4086,9 +4031,6 @@ function launchSteamProtonGame {
 
 	# remove GFWL if NOGFWL is 1
 	checkXliveless
-
-	# add MF if USEMF is 1
-	checkMF
 
 	# start winetricks gui if RUN_WINETRICKS is 1 or silently if WINETRICKSPAKS is not empty
 	writelog "INFO" "${FUNCNAME[0]} - checkWinetricksLaunch:"

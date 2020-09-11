@@ -70,7 +70,6 @@ Also enable everything you want to use generally for your games in [the default 
 * **[Vortex Mod Manager](#Vortex)** via steam `Vortex` category see [Video of usage](#stl-Vortex-gif)
 * **[GFWL/xlive](#GFWL)** automatic support for games using GFWL
 * **[WMP10](#WMP10)** automatic support for WMP10 installation
-* **[mf-install](#mf-install)** automatic support for Media Foundation installation
 * **[self maintaining configs](#self-maintaining-configs)** optional automatic cloning of this repo as replacemement for missing system wide installation
 * **[GameConqueror](#GameConqueror)** automatically open gameconqueror (scanmem gui) with the game exe on game launch
 * **[Custom User Start/Stop scripts](#Start-Stop-Scripts)** optional start custom scripts when game starts/ends
@@ -82,6 +81,7 @@ Also enable everything you want to use generally for your games in [the default 
 The script itself doesn't have any special dependencies
 
 - bash *(only shell tested)*
+- [Yad](#Yad) for the GUI
 
 For the optional features you need:
 - [strace](#Strace)
@@ -394,7 +394,6 @@ As of writing those are
 [ReShade](#ReShade) ReShade itself and required d3dcompiler dlls
 [Auto Tweaks](#Auto-Tweaks) downloads for all enabled Auto Tweaks are stored in here
 [GFWL/xlive](#GFWL) xlive replacement
-[mf-install](#mf-install) will be pulled in here if used
 [self maintaining configs](#self-maintaining-configs) stl itself will be downloaded here when self-maintaining-configs are used
 
 ### Logs
@@ -501,18 +500,6 @@ Games which depend on WMP10 can played by setting the variable `HACKWMP10` to 1.
 Giana Sisters Twisted Dreams (223220)
 Giana Sisters - Rise of the Owlverlord (246960)	
 **
-
-#### mf-install
-**stl** supports optional automatic installation of MF using [mf installed](https://github.com/z0z0z/mf-install).
-The used dlls can't be distributed officially *(see [here](https://github.com/z0z0z/mf-install/issues/1))*,
-so the user has to decide for himself if he wants to use this project.
-When a game has `USEMF=1` set *(f.e. with Steam Category MF)* **stl** will go through following process when the game is started:
-
-- check if the game `WINEPREFIX` *(GPFX)* already has [mf installed](https://github.com/z0z0z/mf-install). If yes, return and start game.
-- check if mf-install is found in `STLDLDIR/mf-install`. If yes automatically install into the `GPFX` and start the game.
-- requester opens, giving the user the option to download mf-install into`STLDLDIR/mf-install` automatically, if yes, download for all future games, install into `GPFX` and start the game.
-- if user selects to not install it the game will start without MF.
-
 
 #### Vortex
 [Vortex Mod Manager](https://github.com/Nexus-Mods/Vortex)
