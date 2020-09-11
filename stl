@@ -5,7 +5,7 @@
 ### project ###
 
 PROGNAME="SteamTinkerLaunch"
-PROGVERS="v1.6.5"
+PROGVERS="v1.6.6"
 PROGCMD="$(basename "$0")"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -135,7 +135,7 @@ SBSTWEAKCFG="$SBSTWEAKDIR/$AID.conf"														# the game specific shareable 
 ATDLDIR="$STLDLDIR/autotweak"																# main autotweak download dir
 
 # optional global config replacement dirs, which can be pulled using DLGLOBAL:
-GLDLSTLDIR="$STLDLDIR/$PROGCMD"
+GLDLSTLDIR="$STLDLDIR/$PROGNAME"
 GLDLSTLTXT="${GLDLSTLDIR}.txt"
 GLDLTWEAKDIR="$GLDLSTLDIR/tweaks"
 GLDLUSERTWEAKDIR="$GLDLTWEAKDIR/user"
@@ -1613,6 +1613,14 @@ function createDefaultCfgs {
 # DLGLOBAL will be set to 0 if global SYSTEMSTLCFGDIR can be found!
 # The update will only run once a day
 
+function reinitSTLdl {
+	# changed the download path - at least a warning that the old checkout is no longer used
+	OLDGLDLSTLDIR="$STLDLDIR/$PROGCMD"
+	if [ -d "$OLDGLDLSTLDIR" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - reinitialized the git download to '$GLDLSTLDIR' - the old directory '$OLDGLDLSTLDIR is no longer used"
+	fi	
+}
+
 function checkSTLDLGlobal {
 	if [ "$(USEDLGLOBAL)" -ge 1 ]; then
 		MAXAGE=1440
@@ -1620,6 +1628,8 @@ function checkSTLDLGlobal {
 			gitUpdate "$GLDLSTLDIR" "$PROJECTPAGE"
 			date > "$GLDLSTLTXT"
 		fi
+		
+		reinitSTLdl
 	fi
 }
 
@@ -4249,6 +4259,7 @@ function commandline {
 			if [ "$2" == "$GIT" ]; then
 				gitUpdate "$GLDLSTLDIR" "$PROJECTPAGE"
 				date > "$GLDLSTLTXT"
+				reinitSTLdl
 			else
 				howto
 			fi
