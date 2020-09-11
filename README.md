@@ -219,7 +219,7 @@ An example tweakfile looks like this:
 
 `stl/tweaks/user/8080.conf:`
 
-`
+```
 #########
 #GAMENAME=Kane and Lynch Dead Men
 #GAMEEXE=Launcher
@@ -230,14 +230,14 @@ WINETRICKSPAKS=d3dx9_31 d3dx9_34
 PROTON_NO_ESYNC=1
 PROTON_NO_FSYNC=1
 NOGFWL=1
-`
+```
 
 Explained in detail:
 When the game "Kane and Lynch Dead Men" is started **stl** will find its tweakfile *(8080.conf = SteamAppId.conf)*
 and apply following configurations:
 
 - d3dx9_31 d3dx9_34 will be installed via wintricks
-- PROTON_NO_ESYNC and PROTON_NO_ESYNC will both be set to 1
+- PROTON_NO_ESYNC and PROTON_NO_FSYNC will both be set to 1
 - gfwl will be removed
 
 This works completely automatically and transparent without any user interaction.
