@@ -158,6 +158,9 @@ The Settings Menu can also be opened via commandline:
 `stl settings` opens the Menu with placeholder SteamAppID `31337` as default
 an optional commandline argument can be either a SteamAppID or `last` for opening the config of the last played game stored in `LASTRUN`
 
+For lower screen resolutions you might want to adjust both the Width and Height of the Menu
+and the amount of Colums for each of the Tabs in the Global Settings *(the Game Tabs Share one variable)*
+
 
 ### Configuration Locations
 
