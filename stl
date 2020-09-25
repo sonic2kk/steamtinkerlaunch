@@ -5,7 +5,7 @@
 ### project ###
 
 PROGNAME="SteamTinkerLaunch"
-PROGVERS="v2.0.0"
+PROGVERS="v2.0.2"
 PROGCMD="$(basename "$0")"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -132,7 +132,8 @@ function setDefaultCfgValues {
 
 	function setDefaultCfgValuesglobal {
 		if [ -z "$DLGLOBAL" ]			; then	DLGLOBAL="1"; fi
-		if [ -z "$USESTLCSS" ]			; then	USESTLCSS="1"; fi
+		if [ -z "$USESTLCSS" ]			; then	USESTLCSS="0"; fi
+		if [ -z "$CSSUPDATE" ]			; then	CSSUPDATE="1"; fi
 		if [ -z "$AUTOTWEAKS" ]			; then	AUTOTWEAKS="$AUTOTWEAKPLATFORMS"; fi
 		if [ -z "$STRACEDIR" ]			; then	STRACEDIR="$LOGDIR"; fi
 		if [ -z "$LOGDIR" ]				; then	LOGDIR="$LOGDIR"; fi
@@ -300,6 +301,8 @@ function saveCfg {
 			echo "DLGLOBAL=\"$DLGLOBAL\""
 			echo "## use $PROGCMD Steam GTK css"
 			echo "USESTLCSS=\"$USESTLCSS\""
+			echo "## update $PROGCMD Steam GTK css"
+			echo "CSSUPDATE=\"$CSSUPDATE\""
 			echo "## all platforms listed here will be used when AutoTweaks are enabled - start stl from commandline or see README for supported platforms"
 			echo "AUTOTWEAKS=\"$AUTOTWEAKS\""
 			echo "## the base strace path used to optionally dump strace logs"
@@ -873,6 +876,7 @@ function openSettings {
 	--text="<span font_weight='bold'>Global Settings</span>" \
 	--field="     Clone ${PROGNAME}!Pull '$PROGCMD' from '$PROJECTPAGE' in '$STLCFGDIR' and use its config files (only used if global configs are not installed)":CHK "${DLGLOBAL/#-/ -}" \
 	--field="     Enable $PROGCMD Steam theme!Use the $PROGNAME Steam GTK css '${PROGCMD}-steam'":CHK "${USESTLCSS/#-/ -}" \
+	--field="     Update $PROGCMD Steam theme!Updates the $PROGNAME Steam GTK css '${PROGCMD}-steam'":CHK "${CSSUPDATE/#-/ -}" \
 	--field="":LBL "" \
 	--field="     Boxtron command!The Boxtron executable":FL "${BOXTRONCMD/#-/ -}" \
 	--field="     Boxtron arguments!The command line arguments used for boxtron" "${BOXTRONARGS/#-/ -}" \
@@ -2038,10 +2042,10 @@ function askSettings {
 				--width=800 \
 				--title="Open Settings?" \
 				--text="<span font_weight='bold'>$GN ($AID) - Open Settings?</span>" \
-				--field="<span font=\"italic 15\">(found ${#CfgFiles[@]} editable Config Files)</span>":LBL \
+				--field="<span font=\"italic\">(found ${#CfgFiles[@]} editable Config Files)</span>":LBL \
 				--field="":LBL "" \
-				--field="<span font=\"17\">\nTweakfile $FOUNDTWEAKCFG found</span>":LBL \
-				--field="<span font=\"italic 15\">(the game should *just work* using it)</span>":LBL \
+				--field="Tweakfile $FOUNDTWEAKCFG found":LBL \
+				--field="<span font=\"italic\">(the game should *just work* using it)</span>":LBL \
 				--button="SETTINGS":0  \
 				--button="CANCEL":1  \
 				--timeout="$WAITEDITOR" \
@@ -2051,7 +2055,7 @@ function askSettings {
 				--width=800 \
 				--title="Open Settings?" \
 				--text="<span font_weight='bold'>$GN ($AID) - Open Settings?</span>" \
-				--field="<span font=\"italic 15\">(found ${#CfgFiles[@]} editable Config Files)</span>":LBL \
+				--field="<span font=\"italic\">(found ${#CfgFiles[@]} editable Config Files)</span>":LBL \
 				--field="":LBL "" \
 				--button="SETTINGS":0  \
 				--button="CANCEL":1  \
@@ -2313,7 +2317,7 @@ function checkSTLCSS {
 			mkdir -p "$CSSDIR" 2>/dev/null
 		fi
 		
-		if [ ! -f "$CSSDIR/gtk.css" ] ; then
+		if [ ! -f "$CSSDIR/gtk.css" ] || [ "$CSSUPDATE" -eq 1 ] ; then
 			if [ -z "$1" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - installing '$PROGNAME' Steam Theme to '$CSSDIR/gtk.css'"
 			fi
@@ -2326,6 +2330,7 @@ function checkSTLCSS {
 
 			if [ -f "$SRCCSS" ] ; then
 				cp "$SRCCSS" "$CSSDIR/gtk.css"
+				updateConfigEntry "CSSUPDATE" "0" "$STLDEFGLOBALCFG"
 			fi
 		fi
 
@@ -3092,8 +3097,8 @@ function guiLoadCfg {
 	writelog "INFO" "${FUNCNAME[0]} - requester asking if '$GUICFG' should be loaded"
 
 	"$YAD" --borders=30 --window-icon=gtk-yes --form --center --on-top --fixed --undecorated \
-	--field="<span font=\"20\">Load AutoTweak Config '$VALCFG'?\n</span>":LBL \
-	--field="<span font=\"18\">(Skip/Load/Ignore AutoTweaks for '$GN ($AID)')\n</span>":LBL \
+	--field="Load AutoTweak Config '$VALCFG'?":LBL \
+	--field="<span font=\"italic\">(Skip/Load/Ignore AutoTweaks for '$GN ($AID)')</span>":LBL \
 	--button="SKIP":0  \
 	--button="LOAD":1  \
 	--button="IGNORE":2  \
@@ -3122,8 +3127,8 @@ function validateATCfg {
 		writelog "INFO" "${FUNCNAME[0]} - gui asking if '$VALCFG' should be edited as ATVALIDATE is '$ATVALIDATE', autoloaded, skipped or ignored"
 
 		"$YAD" --borders=30 --window-icon=gtk-yes --form --center --on-top --fixed --undecorated \
-		--field="<span font=\"20\">Found AutoTweak Config '$VALCFG'?\n</span>":LBL \
-		--field="<span font=\"18\">(Edit/Skip/Load/Ignore AutoTweaks for '$GN ($AID)')\n</span>":LBL \
+		--field="Found AutoTweak Config '$VALCFG'?":LBL \
+		--field="<span font=\"italic\">(Edit/Skip/Load/Ignore AutoTweaks for '$GN ($AID)')</span>":LBL \
 		--button="EDIT":0  \
 		--button="SKIP":1  \
 		--button="LOAD":2  \
@@ -3172,8 +3177,8 @@ function AskAdoptAutoTweak {
 	--title="Convert used AutoTweak?" \
 	--text="<span font_weight='bold'>$GN ($AID) - Convert used AutoTweak?</span>" \
     --field="":LBL "" \
-	--field="<span font=\"20\">Adopt the just used AutoTweak '$LOADAUTOCFG'\n and skip autotweaks for '$GN ($AID)' from now on?</span>":LBL \
-	--field="<span font=\"italic 18\">(Existing user tweakfile will be backuped)\n</span>":LBL \
+	--field="Adopt the just used AutoTweak '$LOADAUTOCFG'\n and skip autotweaks for '$GN ($AID)' from now on?":LBL \
+	--field="<span font=\"italic\">(Existing user tweakfile will be backuped)</span>":LBL \
 	--field="":LBL "" \
 	--button="ADOPT":0  \
 	--button="CANCEL":1  \
@@ -3249,7 +3254,7 @@ function launchCustomProg {
 		--title="Select Custom executable" \
 		--text="<span font_weight='bold'>$GN ($AID) - Select Custom executable</span>" \
 		--field="":LBL "" \
-		--field="<span font=\"20\">   Select executable file</span>":FL)"
+		--field="Select executable file":FL)"
 		if [ -n "$ZCUST" ]; then
 			if [ "$RUN_CUSTOMCMD" -eq 2 ]; then
 				writelog "INFO" "${FUNCNAME[0]} - '${ZCUST//|/}' selected for CUSTOMCMD - not updating configfile '$STLGAMECFG' as RUN_CUSTOMCMD is '$RUN_CUSTOMCMD'"
@@ -3301,7 +3306,7 @@ function launchCustomProg {
 				--title="Select Custom executable" \
 				--text="<span font_weight='bold'>$GN ($AID) - Select Custom executable</span>" \
 				--field="":LBL "" \
-				--field="<span font=\"20\">   Select executable file</span>":FL)"
+				--field="Select executable file":FL)"
 				if [ -n "$ZCUST" ]; then
 					writelog "INFO" "${FUNCNAME[0]} - '${ZCUST//|/}' selected for CUSTOMCMD - updating configfile '$STLGAMECFG'"
 					updateConfigEntry "CUSTOMCMD" "${ZCUST//|/}" "$STLGAMECFG"
@@ -4290,10 +4295,9 @@ function setVortexSELaunch {
 						if [ -d "$STEAMCOMPATOOLS/$PROTOLAVER" ]; then	
 
 							"$YAD" --borders=30 --window-icon=gtk-yes --form --center --on-top --fixed -undecorated \
-							--width=800 \
 							--title="Proton Version not Script Extender compatible" \
-							--field="<span font=\"20\">Using '$PROTONVERSION' which is not compatible with '$2'\nYou already have the compatible proton version lying under '$STEAMCOMPATOOLS/$PROTOLAVER'\nJust select it in Steam as compatibility tool for '$GN'\n</span>":LBL \
-							--field="<span font=\"18\">Click Exit to exit now, click play to start game without Script Extender</span>":LBL \
+							--field="Using '$PROTONVERSION' which is not compatible with '$2'\nYou already have the compatible proton version lying under '$STEAMCOMPATOOLS/$PROTOLAVER'\nJust select it in Steam as compatibility tool for '$GN'":LBL \
+							--field="<span font=\"italic\">Click Exit to exit now, click play to start game without Script Extender</span>":LBL \
 							--field="":LBL "" \
 							--button="PLAY":0  \
 							--button="EXIT":1  \
@@ -4313,8 +4317,8 @@ function setVortexSELaunch {
 								"$YAD" --borders=30 --window-icon=gtk-yes --form --center --on-top --fixed --undecorated \
 								--width=800 \
 								--title="Proton Version not Script Extender compatible" \
-								--field="<span font=\"20\">Compatible proton '$PROTOLAVER' already downloaded to '$PROTOLADL'\nYou have to install it to '$STEAMCOMPATOOLS' with steam closed to use it\n</span>":LBL \
-								--field="<span font=\"18\">Click Install to extract '$PROTOLADL' to '$STEAMCOMPATOOLS' (at your own risk!)\nClick play to start game without Script Extender</span>":LBL \
+								--field="Compatible proton '$PROTOLAVER' already downloaded to '$PROTOLADL'\nYou have to install it to '$STEAMCOMPATOOLS' with steam closed to use it":LBL \
+								--field="<span font=\"italic\">Click Install to extract '$PROTOLADL' to '$STEAMCOMPATOOLS' (at your own risk!)\nClick play to start game without Script Extender</span>":LBL \
 								--button="PLAY":0  \
 								--button="INSTALL":1  \
 								--timeout="$PROTOLAREQ" \
@@ -4331,10 +4335,9 @@ function setVortexSELaunch {
 								esac
 							else
 								"$YAD" --borders=30 --window-icon=gtk-yes --form --center --on-top --fixed --undecorated \
-								--width=800 \
 								--title="Proton Version not Script Extender compatible" \
-								--field="<span font=\"20\">'$PROTONVERSION' is not compatible with '$2'\nDownload compatible proton '$PROTOLAVER' to '$PROTOLADL?\nYou should stop steam then and install the package manually to '$STEAMCOMPATOOLS' to make it available.\nWill re-check again when download is finished.\n</span>":LBL \
-								--field="<span font=\"18\">Click play to start game without download</span>":LBL \
+								--field="$PROTONVERSION' is not compatible with '$2'\nDownload compatible proton '$PROTOLAVER' to '$PROTOLADL?\nYou should stop steam then and install the package manually to '$STEAMCOMPATOOLS' to make it available.\nWill re-check again when download is finished.":LBL \
+								--field="<span font=\"italic\">Click play to start game without download</span>":LBL \
 								--button="PLAY":0  \
 								--button="INSTALL":1  \
 								--timeout="$PROTOLAREQ" \
