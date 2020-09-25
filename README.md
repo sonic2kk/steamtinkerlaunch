@@ -3,7 +3,7 @@ which allows to customize and start tools and options for games quickly on the f
 
 By using a versatile configuration structure it is both easy to setup and flexible.
 
-The steam command line has to be edited once and for all (imho the editor is not very usable)
+The steam command line has to be edited once and for all *(imho the single line textfield is very limited)*
 and everything else can be changed and controlled easily subsequently using **stl**
 
 ## How to use
@@ -16,18 +16,19 @@ Just add this program to your steam game command line like:
 
 *A little script which automatically does this for every game in the Steam library can be found [here](https://gist.github.com/frostworx/36bd76e705a0c87af523fa57cfeebaf8)*
 
-**stl (currently?) only works with games using proton!**
-
+**stl works with linux native games and with games using proton!**
+*(Some features (f.e. ReShade) are only available for games using proton.)*
 
 ### Game specific use
 When starting a game a small requester will popup.
-If within a short waiting period (default 2 seconds) the spacebar is pressed it will open an editor with the games individual config file.
+If within a short waiting period (default 2 seconds) the spacebar is pressed the [Settings Menu](#Settings-Menu) will open where everything can be configured comfortably.
 When done with configuring (or when the requester timeouts) the game will be started regularly with all tools and options configured.
 
 ## Installation
 This is one single bash script. Just copy it wherever you want (f.e. '/usr/local/bin/') and make it executable:
 `chmod +x stl`
-The enclosed directories containing optional configuration files should be dropped into '/usr/share/stl/'
+The enclosed directories containing optional configuration files can be either dropped into '/usr/share/stl/' (prefered location)
+or automatically pulled from git (default if '/usr/share/stl/' does not exist).
 
 If you are on Arch Linux you can install stl from [AUR](https://aur.archlinux.org/packages/steamtinkerlaunch) *(f.e. using yay)*:
 
@@ -37,9 +38,9 @@ If you are on Arch Linux you can install stl from [AUR](https://aur.archlinux.or
 
 ## Quickstart
 When **stl** is started for the first time it will create its default [configuration](#Configuration) structure.
-At least make sure that `STLEDITOR` points to an installed graphical text editor in [the global config](#Global-Config)
-(set to "xdg-open" by default, which should just work in most cases)
-Also enable everything you want to use generally for your games in [the default template](#Default-Template-Config)
+Almost everything can be configured with the built-in [Settings Menu](#Settings-Menu), but optionally also with a graphical text editor.
+It might be a good idea to start with configuring everything in the [Settings Menu](#Settings-Menu) to your needs
+*(for general configuration the most important tabs are the [Default Settings](#Default-Template-Config) and the [Global Settings](#Global-Config))*.
 
 ## Features
 
@@ -73,15 +74,16 @@ Also enable everything you want to use generally for your games in [the default 
 * **[self maintaining configs](#self-maintaining-configs)** optional automatic cloning of this repo as replacemement for missing system wide installation
 * **[GameConqueror](#GameConqueror)** automatically open gameconqueror (scanmem gui) with the game exe on game launch
 * **[Custom User Start/Stop scripts](#Start-Stop-Scripts)** optional start custom scripts when game starts/ends
+* **[GameScope](#GameScope)** start/stop gamescope per game
+* **[Settings Menu](#Settings-Menu)** easy configuration for almost all settings with the builtin Settings Menu
+* **[native Support](#Native-Games)** support native Linux games
 
 
 ## Requirements
 *(no special order)*
 
-The script itself doesn't have any special dependencies
-
 - bash *(only shell tested)*
-- [Yad](#Yad) for the GUI
+- [Yad](https://github.com/v1cont/yad) for the GUI
 
 For the optional features you need:
 - [strace](#Strace)
@@ -101,10 +103,61 @@ For the optional features you need:
 - [luxtorpeda-dev](https://github.com/luxtorpeda-dev/luxtorpeda) or [Luxtorpeda](https://github.com/dreamer/luxtorpeda) to optionally start supported games with a linux native binary
 - wine for optional [Vortex](#Vortex) support
 - [GameConqueror/scanmem](#GameConqueror) to optionally cheat
+- [GameScope](#GameScope)
 
 ## Configuration
 All configuration files are self-contained documented and always growing, so not every option is documented in here.
-For a general overview what can be configured, just check the [Features](#Features)
+For a general overview what can be configured, just check the [Features](#Features) or simply browse through the 
+[Settings Menu](#Settings-Menu), which covers almost everything available.
+
+### Settings Menu
+Almost all user configuration options can be changed with the built-in Settings Menu *(using [Yad](https://github.com/v1cont/yad))*
+Tooltips give a basic description for every entry.
+
+*(Currently)* the Menu has 5 Tabs:
+
+ - Tab 1 is the **GAME SETTINGS** Menu for the selected game (either started from steam or via commandline) *([`$STLGAMECFG`](#Game-Configurations))*
+ - Tab 2 is the **DEFAULT SETTINGS** Menu, which is the template for all newly created **GAME SETTINGS**  *([`$STLDEFGAMECFG`](#Default-Template-Config))*
+ - Tab 3 is the **GLOBAL SETTINGS** Menu, where all global applicable settings can be configured *([`$STLDEFGLOBALCFG`](#Global-Config))*
+ - Tab 4 is the **RESHADE SETTINGS** Menu, for Reshade Configuration *([`$STLRESHADECFG`](#ReShade))*
+ - Tab 5 is the **VORTEX SETTINGS** Menu, for Vortex Configuration *([`$STLVORTEXCFG`](#Vortex-Configuration))*
+
+The Options apply to **all** config files at once!:
+- **EXIT** - leave Settings Menu without doing anything
+- **EDITOR MENU** - Opens a little Editor Menu from where all found user-editable config files can be opened in the [Editor](#Editor)
+- **RELOAD** - discard all changes and reload all config files
+- **SAVE/RELOAD** - save all changes and reload them
+- **SAVE/EXIT** - save all changes and leave the Settings Menu
+
+
+#### Settings Menu Theme
+
+![stl Settings Menu](https://github.com/frostworx/repo-assets/blob/master/gifs/stl-2.0-settings.gif)
+
+By Default a special self-rolled stl-steam gtk-css theme is used and installed into `~/share/themes/stl-steam/gtk-3.0/gtk.css`
+which tries to mimic the steam theme to integrate as good as possible. It can be disabled in  [Settings Menu](#Settings-Menu).
+Every gtk program which is started from **stl** will use the theme as well (f.e. winetricks).
+The css is no complete theme and might look incomplete when used with other gtk programs.
+Feel free to improve and contribute it though!
+
+#### Opening the Settings Menu
+
+##### On Game Launch
+When a game is started a small requester will wait `WAITEDITOR` seconds for User input *(either Space or press `OK`)*
+If selected the Settings Menu will open directly with the settings for the launched game in Tab 1 (see [Settings Menu](#Settings-Menu))
+
+When `WAITEDITOR` is set to 0 **stl** will directly start the game.
+If `MAXASK` in the [global.conf](#Global-Config) is defined, the editor requester can be cancelled maximal `MAXASK` times
+before `WAITEDITOR` is automatically set to 0 for the selected game.
+Letting the requester timeout does not count as cancelled.
+The "Cancelled counter" is stored directly in the [Game specific configuration file](#User-Configurations) as `ASKCNT`
+and is resetted to 0 when `MAXASK` was reached and `WAITEDITOR` was set to 0.
+
+##### via Command Line
+The Settings Menu can also be opened via commandline:
+`stl settings` opens the Menu with placeholder SteamAppID `31337` as default
+an optional commandline argument can be either a SteamAppID or `last` for opening the config of the last played game stored in `LASTRUN`
+
 
 ### Configuration Locations
 
@@ -136,6 +189,7 @@ No executable files will be used from here!
 
 Auto-generated [auto tweaks](#Auto Tweaks) imported from other platform will be loaded before global configs, so global configs override them by default.
 
+
 ### Default Template Config
 `STLDEFGAMECFG` *(`$STLCFGDIR/default_template.conf`)*
 
@@ -147,18 +201,9 @@ Most options are disabled by default. To deploy appropriate global options early
 
 Contains universal configuration options used all games, f.e.
 file paths, command line options for supported 3rd party programs, but also general "behavior" settings
-*(f.e. [Logs](#Logs) mode or timeout for the [Editor](#Editor))*
+*(f.e. [Logs](#Logs) mode or timeout for the [Settings Menu](#Settings-Menu) and [Editor](#Editor)WAITEDITOR)*
 or which default programs to use
-*(f.e. which `BROWSER` to use for opening [ProtonDB](#Editor) together with the `STLEDITOR` (default 'xdg-open') [Editor](#Editor))*
-
-#### Start Stop Scripts
-If commands are defined in `USERSTART` `USERSTOP` they will be executed when a game starts/ends.
-Of course the user is responsbile for what is executed here and needs take care that it both works and exits correctly!
-
-Both scripts make use of following commandline arguments:
-- SteamAppID as argument1
-- the absolute path to the game exe as argument2
-- and the WINEPREFIX of the game as argument 3
+*(f.e. which `BROWSER` to use for opening [ProtonDB](#Editor) together with the `STLEDITOR` (default '$(which geany)') [Editor](#Editor))*
 
 
 ### Game Configurations
@@ -421,6 +466,15 @@ This is especially useful for installers *(see provided [Steam Category](#Steam-
 
 If string `CUSTOMCMD` can't be found as file in either `PATH`, in game dir or as absolute filepath the requester will open as well.
 
+#### Start Stop Scripts
+If commands are defined in `USERSTART` `USERSTOP` they will be executed when a game starts/ends.
+Of course the user is responsbile for what is executed here and needs take care that it both works and exits correctly!
+
+Both scripts make use of following commandline arguments:
+- SteamAppID as argument1
+- the absolute path to the game exe as argument2
+- and the WINEPREFIX of the game as argument 3
+
 #### Winetricks
 [Winetricks](https://wiki.winehq.org/Winetricks)
 GUI:
@@ -483,11 +537,19 @@ Alternatively duplicate the file to a different name which you want to use as ca
 The luxtorpeda-dev dev was so kind to add a manual-download option in v20, so if native game files are missing they are downloaded before the actual game launch now.
 Therefore it is recommended to use the lastest luxtorpeda-dev version.
 
+#### Native Games
+**stl** also works with native linux games.
+The implementation is pretty new, so please report back if there are false positives in the detection. Currently the first distinction is if "waitforexitandrun" appears in the game %command%.
+If yes, **stl** assumes we have a proton game. Now, when another check finds "steamapps/common" (without "waitforexitandrun") a linux game is assumed, and the *(now generic)* launchSteamGame function is started.
+Looks like only proton games have the Variable `STEAM_COMPAT_DATA_PATH`, so if it is missing several features are disabled in the setLinGameVals function,
+as they do not work with native linux games (f.e. ReShade) *(still visible in the Settings though)*. The Game and Exe Path Variables are differently extracted as well when `STEAM_COMPAT_DATA_PATH` is missing.
+
+
 #### GFWL
 Some games still depend on GFWL which is discountinued and doesn't work under wine.
 With the variable `NOGFWL` set to 1 for a game **stl** takes care that
 everything is configured automatically to start the game ootb.
-If the dependant xlive.dll is missing a requester will pop up asking if it should be downloaded automatically
+If the dependant xlive.dll is missing it will be downloaded automatically
 ( [from Ultimate-ASI-Loader](https://github.com/ThirteenAG/Ultimate-ASI-Loader/releases) )
 into `$STLDLDIR/xlive/` and installed into the gamedir.
 **stl** ships already several tweak files, which enable `NOGFWL` for several games (f.e.: "Fable 3 (105400)", "Resident Evil 5 (21690)", "Kane and Lynch Dead Men (8080)", "FlatOut Ultimate Carnage (12360)"
@@ -504,12 +566,28 @@ Giana Sisters - Rise of the Owlverlord (246960)
 #### Vortex
 [Vortex Mod Manager](https://github.com/Nexus-Mods/Vortex)
 
-**Usage**:
-
+##### Starting Vortex:
 Vortex can be used without any **stl** configuration and will work ootb without zero configuration.
+
+There are 3 different ways to start Vortex:
+
+###### Start Vortex using Steam Category
 Just create a "Vortex" [Steam Category](#Steam-Categories) and add your (Vortex compatible) game to it and start the game regularly.
 Vortex will start, with the selected game preconfigured and ready to mod
 and when you exit Vortex the selected game will start normally (with your mods).
+
+###### Start Vortex using commandline:
+**stl Vortex commandline options:**
+`stl vortex install`: starts a full Vortex installation with all dependencies
+`stl vortex start`: starts Vortex
+`stl vortex getset`: lists all configured Vortex settings
+
+###### Start Vortex by enabling it in the Settings Menu:
+The `VORTEXMODE` option in the Game Tab of the [Settings Menu](#Settings-Menu) has the following modes:
+- "disabled": Vortex won't be used
+- "normal": Vortex will be started regularly
+- "quickstart": Vortex will be started but some checks are skipped
+- "editormode": Vortex will be started in quickstart mode, but the selected game won't start after Vortex is closed
 
 ##### stl Vortex gif
 ![stl Vortex in action](https://github.com/frostworx/repo-assets/blob/master/gifs/stl-vortex.gif)
@@ -529,7 +607,7 @@ Some settings are preconfigured, to make this working without any user configura
 **stl** uses an extra vortex directory inside `STLCFGDIR` defined under `STLVORTEXDIR`
 This directory contains the Vortex configfile `STLVORTEXCFG` *(`STLCFGDIR`/vortex/vortex.conf`)*
 
-Here are the main configuration options:
+Here are the main configuration options, for a full list, simply look into the [Settings Menu](#Settings-Menu)
 - `VORTEXWINE`: the wine binary used for Vortex - **default commented out, if not configured it defaults to proton-wine if available and will fall back to system-wide wine**
 - `VORTEXPREFIX`:the `WINEPREFIX` path used for Vortex - **default is `STLVORTEXDIR/wineprefix`**
 - `VORTEXDOWNLOADPATH`: the path where all Vortex downloads should be stored - **default is `STLVORTEXDIR/downloads`**
@@ -572,27 +650,8 @@ Seperate the paths with a "," and do not use quotes or spaces in between!
 ##### Mods using Script Extender
 Several games *(Skyrim, Fallout flavours)* have many mods which depends on a special "Script Extender" program ("SE").
 Unfortunately those "SE" programs don't [work with default proton since some time](https://github.com/ValveSoftware/Proton/issues/170).
-
-I added a *(currently very unpolished)* function which checks if the "SE" compatible custom proton version
-[Protola]("https://github.com/Patola/wine/releases") is being used when a "SE" exe is autodetected as start command.
-*(hard to explain, without looking ugly)*
-
-If it is already used the start will continue using "SE".
-If it is not used, **stl** will check if "Protola" can be found in the "compatibilitytools.d" directory.
-If it can be found a requester warns that it has to be used in order to start with "SE" (options: continue without "SE"; "exit")
-If it can't be found **stl** will check if it was already downloaded.
-If the download was found a requester asks if it should be automatically extracted into the "compatibilitytools.d" directory (options: continue without "SE"; "extract")
-If extracting was selected it will be extracted and the check function is restarted
-If the download was not found a requester asks if it should be downloaded automatically (options: continue without "SE"; "download")
-If the download was selected the archive will be downloaded and the check function is restarted
-Feel free to request improvements and open issues, it is really pretty rough at the moment.
-
-
-#####  Vortex Commandline
-**stl Vortex commandline options:**
-`stl vortex install`: starts a full Vortex installation with all dependencies
-`stl vortex start`: starts Vortex
-`stl vortex getset`: lists all configured Vortex settings
+**stl** optionally checks if the "SE" compatible custom proton version [Protola]("https://github.com/Patola/wine/releases")
+is being used when a "SE" exe is autodetected as start command. All related configuration options can be found in the Vortex Tab of the [Settings Menu](#Settings-Menu).
 
 #####  Some additional Notes
 
@@ -602,8 +661,6 @@ Feel free to request improvements and open issues, it is really pretty rough at 
   Also Vortex can stop working under linux/wine anytime after an update (as it already did before).
   Don't complain and rant when it doesn't work as expected (anymore) (as it happened already before with other Vortex-linux solutions),
   but try to help fixing the issue instead then (no offense, but imho linux already had better times regarding this).
-- The `VORTEX` variable is mostly used as boolean. Vortex is not used when 0 or undefined, and Vortex starts regularly with set to 1 (the "Vortex" steam category does nothing else)
-  You can also set it to 2+3 though (ideally in the gameconfig `$STLGAMECFG`), where 2 "quickstarts" Vortex leaving out some checks, and 3 doing the same, but doesn't start the game afterwards.
 
 #### Registry
 
@@ -687,21 +744,14 @@ Enabling GameConqueror is also possible by simply adding the game to the "Cheat"
 
 Some games *(afaik mostly multiplayer)* are not cheat-safe and could lead to a ban, so **be careful with cheating**!
 
+#### GameScope
+[GameScope](https://github.com/Plagman/gamescope)
+Set `USEGAMESCOPE` to 1 to automatically start GameScope when the game starts, either per game or globally.
+The commandline arguments used *(`GAMESCOPE_ARGS`)* can be configured both per game and globally as well.
+
 #### Toggle Open Windows
 minimize all open windows on game start and maximize them when game exited using wmctrl
 - `TOGGLEWINDOWS`: toggle visibility of all open windows on start/stop
-
-#### Custom Game Launch
-Meant for a simple custom game launch using proton/steamruntime
-and not as a fully fledged custom game launch option!
-If `RUN_CUSTOMCMD` is set for the SteamAppId defined in the global `CUSTOMLAUNCHID`
-a requester will ask for a exe you want to start inside the `CUSTOMLAUNCHID`
-The selected exe will be started inplace of the regular game.
-If no exe is selected the game `CUSTOMLAUNCHID` will exit
-If `RUN_CUSTOMCMD` is disabled, the regular game is started normally
-If `CUSTOMCMD` is configured for the game `CUSTOMLAUNCHID` the requester will be skipped and `CUSTOMCMD` will be started directly
-defaults `CUSTOMLAUNCHID` is SteamAppId `15520` ("Aaaa...") because it is small and always on top of the library
-**stl** of course won't install dependencies for the selected exe, so you're on your own.
 
 #### Strace
 If `STRACERUN` is set to 1 **stl** will write a strace log of the launched game
@@ -713,11 +763,6 @@ else your user will get access denied when trying to attach a process.
 Either 
 `echo 0 > /proc/sys/kernel/yama/ptrace_scope`
 as root or enable it persistent in sysctl.
-
-#### Block Internet
-If `NOINET` is set to 1 this command is used to block the internet for the selected game. game might fail to start!
-To use this option you need to configure this little [howto](https://serverfault.com/questions/550276/how-to-block-internet-access-to-certain-programs-on-linux)
-Feel free to send pull requests. Depending on the game, it might reject to start at all without internet!
 
 #### Network Monitoring
 Basic Network Traffic Monitor
@@ -731,7 +776,7 @@ duplicate lines are unique sorted at the end.
 Set `INSTALL_RESHADE` to 1 to automatically install reshade into the selected game dir.
 Set `USERESHADE` to 1 to start game with ReShade enabled
 	
-The required `$STLCFGDIR/reshade.conf` is autogenerated on the first run with `INSTALL_RESHADE` enabled.
+The required `$STLRESHADECFG` is autogenerated on the first run with `INSTALL_RESHADE` enabled.
 If `DOWNLOAD_RESHADE` is set to 1 all required files for ReShade are [downloaded](#Downloads) once into `RESHADESRCDIR`
 of course you can install all files manually as well. make sure to rename all files correctly:
 
@@ -758,17 +803,12 @@ With `RESHADE_DEPTH3D` enabled `Overwatch.fxh`, `SuperDepth3D.fx`, `SuperDepth3D
 When the game started just create a initial profile by selecting the autodetected `SuperDepth3D_VR.fx`
 
 #### Editor
-When `WAITEDITOR` is greater 0 a requester will pop up on game launch and wait `WAITEDITOR` seconds for a keypress
-for editing the [Game specific configuration file](#User-Configurations) with your `STLEDITOR` if desired.
-set PROTONDB to 1 to additionally open the protondb.com url for the game `PDBURL` in your `BROWSER` when starting the editor.
-If a [Tweakfile](#Tweakfiles) was found for the game, the requester will show an additional notice.
+Config files can optionally be opened with the texteditor `STLEDITOR` if desired, either by accepting a requester (for editing Tweakfiles) or by opening
+Configfiles within the EditorDialog submenu of the [Settings Menu](#Settings-Menu).
+If xdg-open is configured as `STLEDITOR` or if the configured editor is not found, **stl** tries to autoconfigure an installed texteditor.
+*(first trying to find it through 'xdg-mime query', then check binary availability in this order: geany, gedit, leafpad, kwrite)*
 
-If `MAXASK` in the [global.conf](#Global-Config) is defined, the editor requester can be cancelled maximal `MAXASK` times
-before `WAITEDITOR` is automatically set to 0 for that game.
-Letting the requester timeout does not count as cancelled.
-The "Cancelled counter" is stored directly in the [Game specific configuration file](#User-Configurations) as `ASKCNT`
-and is resetted to 0 when `MAXASK` was reached and `WAITEDITOR` was set to 0.
-
+Set `PROTONDB` to 1 to additionally open the `PDBURL` url for the game in your `BROWSER` when starting the editor from the [Settings Menu](#Settings-Menu).
 
 #### ENV Variables
 Literally every env variable can be set in [gameconfig `$STLGAMECFG`](#Game-Configurations) and [system-wide configuration](#Global-Config),
