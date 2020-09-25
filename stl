@@ -661,7 +661,7 @@ function EditorDialog {
 			writelog "INFO" "${FUNCNAME[0]} - PROTONDB is set to 1 - also opening the protondb url in the browser"
 			if [ -x "$(command -v "$BROWSER" 2>/dev/null)" ]; then
 				# if we open a new BROWSER instance here, we're going to kill it when the game launches, else the game won't "exit" in steam 
-				if pgrep "$BROWSER" ; then
+				if pgrep -f "$BROWSER" ; then
 					KILLBROWSER=0
 				else
 					KILLBROWSER=1
@@ -676,7 +676,7 @@ function EditorDialog {
 		# kill browser if it was opened with the editor:
 		if [ -n "$KILLBROWSER" ];then
 			if [ "$KILLBROWSER" -eq 1 ]; then
-				pkill -9 "$BROWSER"
+				pkill -f "$BROWSER"
 			fi
 		fi
 		writelog "INFO" "${FUNCNAME[0]} - Editor closed - Going back to the Main Settings"
@@ -1360,7 +1360,7 @@ function SBSstartSVR {
 		while ! pgrep "" -a | grep -v grep | grep "/vrcompositor" -q; do
 			if [[ "$COUNTER" -ge "MAXWAIT" ]]; then
 				writelog "SKIP" "${FUNCNAME[0]} - ERROR - timeout waiting for SteamVR - exit"
-				pkill -9 "$VRVIDEOPLAYER"
+				pkill -f "$VRVIDEOPLAYER"
 				RUNSBSVR=0
 				exit 1
 			fi
@@ -1554,19 +1554,23 @@ function SBSrunVRVideoPlayer {
 			if [ ! -x "$(command -v "$XWININFO" 2>/dev/null)" ]; then
 				writelog "SKIP" "${FUNCNAME[0]} - '$XWININFO' not found, which is at least required for this function"
 			else
-			
+
 				while ! "$XWININFO" -name "$SBSVRWINNAME" -stats  >/dev/null 2>/dev/null; do
 					if [[ "$COUNTER" -ge "MAXWAIT" ]]; then
 						writelog "SKIP" "${FUNCNAME[0]} - ERROR - timeout waiting for '$VRVIDEOPLAYER' - exit"
-						pkill -9 "$VRVIDEOPLAYER"
+						pkill -f "$VRVIDEOPLAYER"
 						RUNSBSVR=0
 						exit 1
 					fi
 
-					if ! pgrep "$VRVIDEOPLAYER" ; then
-						writelog "SKIP" "${FUNCNAME[0]} - ERROR - '$VRVIDEOPLAYER' not running (crashed?) no need to wait for its window to appear - exit"
-						RUNSBSVR=0
-						exit 1
+					if ! pgrep -f "$VRVIDEOPLAYER" ; then
+						if [ "$COUNTER" -ge 3 ]; then
+							writelog "SKIP" "${FUNCNAME[0]} - ERROR - '$VRVIDEOPLAYER' not running (crashed?) no need to wait for its window to appear - exit"
+							RUNSBSVR=0
+							exit 1
+						else
+							writelog "WARN" "${FUNCNAME[0]} - '$VRVIDEOPLAYER' not running yet - waiting a bit longer"
+						fi
 					fi
 
 					writelog "WAIT" "${FUNCNAME[0]} - WAIT - '$COUNTER/$MAXWAIT' sec waiting for '$VRVIDEOPLAYER' window '$SBSVRWINNAME'"
@@ -1659,7 +1663,8 @@ function SBSstopVRVideoPlayer {
 			fi
 			rm "$GWIDFILE" >/dev/null 2>/dev/null
 		fi
-		pkill -9 "$VRVIDEOPLAYER"
+
+		pkill -f "$VRVIDEOPLAYER"
 
 		writelog "OK" "${FUNCNAME[0]} - -------- finished SBS-VR --------"
 	else
@@ -3628,7 +3633,7 @@ function useNyrna {
 	if [ -n "$RUN_NYRNA" ]; then
 		if [ "$RUN_NYRNA" -eq 1 ]; then
 			if  [ -x "$(command -v "$NYRNA" 2>/dev/null)" ]; then
-				if pgrep "$NYRNA" ; then
+				if pgrep -f "$NYRNA" ; then
 					writelog "SKIP" "${FUNCNAME[0]} - '$NYRNA' already running - skipping"
 					RUN_NYRNA=0
 				else
@@ -3646,7 +3651,7 @@ function useReplay {
 	if [ -n "$RUN_REPLAY" ]; then
 		if [ "$RUN_REPLAY" -eq 1 ]; then
 			if  [ -x "$(command -v "$REPLAY" 2>/dev/null)" ]; then
-				if pgrep "$REPLAY" ; then
+				if pgrep -f "$REPLAY" ; then
 					writelog "SKIP" "${FUNCNAME[0]} - '$REPLAY' already running - skipping"
 					RUN_REPLAY=0
 				else
@@ -5019,8 +5024,8 @@ function closeSTL {
 	# kill $VRVIDEOPLAYER in case it wasn't closed before
 	if [ -n "$RUNSBSVR" ]; then
 		if [ "$RUNSBSVR" -ge 1 ]; then
-			if pgrep "$VRVIDEOPLAYER" ; then
-				pkill -9 "$VRVIDEOPLAYER" 
+			if pgrep -f "$VRVIDEOPLAYER" ; then
+				pkill -f "$VRVIDEOPLAYER"
 				writelog "INFO" "${FUNCNAME[0]} - $VRVIDEOPLAYER killed"
 			fi
 		fi
@@ -5029,8 +5034,8 @@ function closeSTL {
 	# kill $NYRNA if running
 	if [ -n "$RUN_NYRNA" ]; then
 		if [ "$RUN_NYRNA" -eq 1 ]; then
-			if pgrep "$NYRNA" ; then
-				pkill -9 "$NYRNA"
+			if pgrep -f "$NYRNA" ; then
+				pkill -f "$NYRNA"
 				# also remove systray created in /tmp/ ("systray_" with 6 random chars should be save enough)
 				find /tmp -maxdepth 1 -type f -regextype posix-extended -regex '^.*systray_[A-Z,a-z,0-9]{6}' -exec rm {} \;
 				writelog "INFO" "${FUNCNAME[0]} - $NYRNA killed"
@@ -5041,8 +5046,8 @@ function closeSTL {
 	# kill $REPLAY if running
 	if [ -n "$RUN_REPLAY" ]; then
 		if [ "$RUN_REPLAY" -eq 1 ]; then
-			if pgrep "$REPLAY" ; then
-				pkill -9 "$REPLAY"
+			if pgrep -f "$REPLAY" ; then
+				pkill -f "$REPLAY"
 				writelog "INFO" "${FUNCNAME[0]} - $REPLAY killed"
 			fi
 		fi
@@ -5059,7 +5064,7 @@ function closeSTL {
 
 	if [ "$USENETMON" -eq 1 ]; then
 		if pgrep "$NETMON" ; then
-			pkill -9 "$NETMON"
+			pkill -f "$NETMON"
 			writelog "INFO" "${FUNCNAME[0]} - $NETMON killed"
 			# remove duplicate lines to make reading easier
 			awk -i inplace '!visited[$0]++' "$NETMONDIR/$AID-$NETMON.log"
