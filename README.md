@@ -83,7 +83,6 @@ It might be a good idea to start with configuring everything in the [Settings Me
 *(no special order)*
 
 - bash *(only shell tested)*
-- [Yad](https://github.com/v1cont/yad) for the GUI
 
 For the optional features you need:
 - [strace](#Strace)
@@ -104,6 +103,7 @@ For the optional features you need:
 - wine for optional [Vortex](#Vortex) support
 - [GameConqueror/scanmem](#GameConqueror) to optionally cheat
 - [GameScope](#GameScope)
+- [Yad](https://github.com/v1cont/yad) for the GUI (yad is only required for the optional [Settings Menu](#Settings-Menu). For the [Editor Dialog](#Editor-Dialog) *(Steam-builtin)* zenity is enough, so yad is optional)
 
 ## Configuration
 All configuration files are self-contained documented and always growing, so not every option is documented in here.
@@ -129,13 +129,18 @@ The Options apply to **all** config files at once!:
 - **SAVE/RELOAD** - save all changes and reload them
 - **SAVE/EXIT** - save all changes and leave the Settings Menu
 
+#### Disable Settings Menu
+If you prefer to use simply your favourite texteditor or have problems with 'yad' you can change `USEGUI` to "zenity" in the Global Config Tab or [global.conf](#Global-Config).
+**stl** won't use/depend on yad then and uses zenity (prefers Steam builtin zenity and falls back to system zenity) instead.
+Instead of the [Settings Menu](#Settings-Menu) zenity will open the [Editor Dialog](#Editor-Dialog), from where you can choose which configs to edit.
+This also applies to the c
 
 #### Settings Menu Theme
 
 ![stl Settings Menu](https://github.com/frostworx/repo-assets/blob/master/gifs/stl-2.0-settings.gif)
 
 By Default a special self-rolled stl-steam gtk-css theme is used and installed into `~/share/themes/stl-steam/gtk-3.0/gtk.css`
-which tries to mimic the steam theme to integrate as good as possible. It can be disabled in  [Settings Menu](#Settings-Menu).
+which tries to mimic the steam theme to integrate as good as possible. It can be disabled in [Settings Menu](#Settings-Menu).
 Every gtk program which is started from **stl** will use the theme as well (f.e. winetricks).
 The css is no complete theme and might look incomplete when used with other gtk programs.
 Feel free to improve and contribute it though!
@@ -147,20 +152,22 @@ When a game is started a small requester will wait `WAITEDITOR` seconds for User
 If selected the Settings Menu will open directly with the settings for the launched game in Tab 1 (see [Settings Menu](#Settings-Menu))
 
 When `WAITEDITOR` is set to 0 **stl** will directly start the game.
-If `MAXASK` in the [global.conf](#Global-Config) is defined, the editor requester can be cancelled maximal `MAXASK` times
+If `MAXASK` in the [global.conf](#Global-Config) is defined, the requester can be cancelled maximal `MAXASK` times
 before `WAITEDITOR` is automatically set to 0 for the selected game.
 Letting the requester timeout does not count as cancelled.
 The "Cancelled counter" is stored directly in the [Game specific configuration file](#User-Configurations) as `ASKCNT`
 and is resetted to 0 when `MAXASK` was reached and `WAITEDITOR` was set to 0.
 
+If `USEGUI` is set to "zenity" the [Editor Dialog](#Editor-Dialog) will open instead of the [Settings Menu](#Settings-Menu), but the parameters are the same.
+
 ##### via Command Line
 The Settings Menu can also be opened via commandline:
 `stl settings` opens the Menu with placeholder SteamAppID `31337` as default
 an optional commandline argument can be either a SteamAppID or `last` for opening the config of the last played game stored in `LASTRUN`
+If `USEGUI` is set to "zenity" the [Editor Dialog](#Editor-Dialog) will open instead of the [Settings Menu](#Settings-Menu), but the parameters are the same.
 
 For lower screen resolutions you might want to adjust both the Width and Height of the Menu
 and the amount of Colums for each of the Tabs in the Global Settings *(the Game Tabs Share one variable)*
-
 
 ### Configuration Locations
 
@@ -807,11 +814,19 @@ When the game started just create a initial profile by selecting the autodetecte
 
 #### Editor
 Config files can optionally be opened with the texteditor `STLEDITOR` if desired, either by accepting a requester (for editing Tweakfiles) or by opening
-Configfiles within the EditorDialog submenu of the [Settings Menu](#Settings-Menu).
+Configfiles within the [Editor Dialog](#Editor-Dialog) started directly or as submenu of the [Settings Menu](#Settings-Menu).
+
 If xdg-open is configured as `STLEDITOR` or if the configured editor is not found, **stl** tries to autoconfigure an installed texteditor.
 *(first trying to find it through 'xdg-mime query', then check binary availability in this order: geany, gedit, leafpad, kwrite)*
 
-Set `PROTONDB` to 1 to additionally open the `PDBURL` url for the game in your `BROWSER` when starting the editor from the [Settings Menu](#Settings-Menu).
+Set `PROTONDB` to 1 to additionally open the `PDBURL` url for the game in your `BROWSER` when starting the editor from the [Editor Dialog](#Editor-Dialog).
+
+#### Editor Dialog
+A little File selection requester allowing to choose which config files to open with the [Editor](#Editor).
+The requester works with both `USEGUI` set to 'yad' and 'zenity'.
+If `USEGUI` is set to "zenity" in the [global config](#Global-Config) the [Editor Dialog](#Editor-Dialog) will open directly instead of the [Settings Menu](#Settings-Menu)
+when selected [on Game Launch](#On-Game-Launch) and also [via Command Line](#via-Command-Line).
+
 
 #### ENV Variables
 Literally every env variable can be set in [gameconfig `$STLGAMECFG`](#Game-Configurations) and [system-wide configuration](#Global-Config),
