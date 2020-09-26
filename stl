@@ -5,7 +5,7 @@
 ### project ###
 
 PROGNAME="SteamTinkerLaunch"
-PROGVERS="v2.0.3"
+PROGVERS="v2.0.4"
 PROGCMD="$(basename "$0")"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -27,6 +27,8 @@ XPROP="xprop"
 XWININFO="xwininfo"
 REPLAY="replay-sorcery"
 YAD="yad"
+ZENITY="zenity"
+ZENBIN="$STEAM_ZENITY"
 
 # autotweak platforms
 LU="lutris"
@@ -116,6 +118,48 @@ RS_D3D47_DEST="d3dcompiler_47.dll"
 RS_DX_DEST="dxgi.dll"
 RS_D9_DEST="d3d9.dll"
 
+PLACEHOLDERAID="31337"
+YADKEY="$PLACEHOLDERAID"
+
+function checkZenity {
+	if [ "$USEGUI" == "$ZENITY" ]; then
+		if [ -x "$(command -v "$STEAM_ZENITY" 2>/dev/null)" ]; then
+			ZENBIN="$STEAM_ZENITY"
+		elif [ -x "$(command -v "$(which "$ZENITY" 2>/dev/null)" 2>/dev/null)" ]; then
+			ZENBIN="$(which "$ZENITY" 2>/dev/null)"
+		else
+			writelog "WARN" "${FUNCNAME[0]} - '$USEGUI' is set to '$ZENITY', but it is not available - falling back to '$YAD'"
+			ZENBIN="$YAD"
+		fi
+		
+		if [ -z "$ZENBIN" ]; then
+			writelog "WARN" "${FUNCNAME[0]} - no usable binary found for '$ZENITY' - this should not happen!"
+		fi
+	fi
+}
+
+function prepareGUI {
+	if [ -n "$USEGUI" ]; then
+		if [ "$USEGUI" == "$YAD" ]; then
+			if [ -x "$(command -v "$YAD" 2>/dev/null)" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - using '$YAD' for the GUI"
+			else
+				writelog "WARN" "${FUNCNAME[0]} - USEGUI is set to '$USEGUI' but '$YAD' was not found - retrying with using '$ZENITY' instead - you should update your config"
+				USEGUI="$ZENITY"
+				"${FUNCNAME[0]}"
+			fi
+		elif [ "$USEGUI" == "$ZENITY" ]; then
+			checkZenity
+			writelog "INFO" "${FUNCNAME[0]} - using '$ZENBIN' for '$ZENITY'"
+		else
+			writelog "WARN" "${FUNCNAME[0]} - USEGUI '$USEGUI' is neither '$YAD' nor '$ZENITY' - please make sure your config is correct"
+			USEGUI="$YAD"
+			"${FUNCNAME[0]}"
+		fi
+	fi
+}
+
+
 function setDefaultCfgValues {
 	
 	function setDefaultCfgValuesreshade {
@@ -170,10 +214,13 @@ function setDefaultCfgValues {
 		if [ -z "$DEPTH3DSRCDIR" ]		; then	DEPTH3DSRCDIR="$STLDLDIR/Depth3D"; fi
 		if [ -z "$STLSETWIDTH" ]		; then	STLSETWIDTH="1920"; fi
 		if [ -z "$STLSETHEIGHT" ]		; then	STLSETHEIGHT="1080"; fi
+		if [ -z "$STLREQWIDTH" ]		; then	STLREQWIDTH="800"; fi
+		if [ -z "$STLREQHEIGHT" ]		; then	STLREQHEIGHT="400"; fi
 		if [ -z "$GAMETABCOLS" ]		; then	GAMETABCOLS="3"; fi
 		if [ -z "$GLOBTABCOLS" ]		; then	GLOBTABCOLS="3"; fi
 		if [ -z "$RESHTABCOLS" ]		; then	RESHTABCOLS="3"; fi
 		if [ -z "$VORTTABCOLS" ]		; then	VORTTABCOLS="3"; fi
+		if [ -z "$USEGUI" ]				; then	USEGUI="$YAD"; fi
 	}
 
 	function setDefaultCfgValuesdefault_template {
@@ -380,6 +427,10 @@ function saveCfg {
 			echo "STLSETWIDTH=\"$STLSETWIDTH\""
 			echo "## Settings GUI Height:"
 			echo "STLSETHEIGHT=\"$STLSETHEIGHT\""
+			echo "## Requester GUI Width:"
+			echo "STLREQWIDTH=\"$STLREQWIDTH\""
+			echo "## Requester GUI Height:"
+			echo "STLREQHEIGHT=\"$STLREQHEIGHT\""
 			echo "## Columns count for Game Tabs:"
 			echo "GAMETABCOLS=\"$GAMETABCOLS\""
 			echo "## Columns count for Global Tab:"
@@ -388,6 +439,8 @@ function saveCfg {
 			echo "RESHTABCOLS=\"$RESHTABCOLS\""
 			echo "##  Columns count for Vortex Tabs:"
 			echo "VORTTABCOLS=\"$VORTTABCOLS\""
+			echo "## The GUI tool to use:"
+			echo "USEGUI=\"$USEGUI\""
 			} >> "$1"
 			#ENDsaveCfgglobal
 		fi
@@ -599,7 +652,7 @@ function saveYadCfg {
 				if [ -z "$WRITEYADVAL" ]; then
 					WRITEYADVAL="DUMMY"
 				fi
-
+echo updateConfigEntry "$YADCAT" "$WRITEYADVAL" "$YADCFG" | grep USEGUI
 				updateConfigEntry "$YADCAT" "$WRITEYADVAL" "$YADCFG"
 			fi
 
@@ -656,6 +709,33 @@ function updateEditor {
 
 function EditorDialog {
 
+	if [ -n "$1" ]; then
+		if [ "$1" == "last" ] && [ -f "$LASTRUN" ]; then
+			PREVAID="$(grep "^PREVAID" "$LASTRUN" | cut -d '=' -f2)"
+			if [ -n "$PREVAID" ]; then
+				AID="${PREVAID//\"}"
+				if [ -n "$PREVGAME" ]; then
+					GN="$PREVGAME"
+				fi
+			else
+				AID="$PLACEHOLDERAID"
+			fi
+		else
+			AID="$1"
+		fi
+
+		STLGAMECFG="$STLGAMEDIR/${AID}.conf"
+		TWEAKCFG="$USERTWEAKDIR/${AID}.conf"
+		SBSTWEAKCFG="$SBSTWEAKDIR/${AID}.conf"
+	fi
+
+	if [ -z "$AID" ] || [ "$AID" == "$PROGCMD" ]; then
+		AID="$PLACEHOLDERAID"
+		STLGAMECFG="$STLGAMEDIR/${AID}.conf"
+		TWEAKCFG="$USERTWEAKDIR/${AID}.conf"
+		SBSTWEAKCFG="$SBSTWEAKDIR/${AID}.conf"
+	fi
+	
 	# load gameconfig, as it might want PROTONDB here
 	loadCfg "$STLGAMECFG"
 
@@ -667,10 +747,18 @@ function EditorDialog {
 	done <<< "$(sed -n "/^#STARTEDITORCFGLIST/,/^#ENDEDITORCFGLIST/p;/^#ENDEDITORCFGLIST/q" "$0" | grep -v "^#" | cut -d '=' -f1)"
 	writelog "INFO" "${FUNCNAME[0]} - found ${#CfgFiles[@]} available Config Files - opening Checklist"
 
-	IFS=" " read -r -a EDFILES <<< "$(for f in $(printf '%s\n' "${CfgFiles[@]}"); do echo FALSE ; echo "$f" ; done | \
-	"$YAD" --window-icon=gtk-yes --borders=30 --center --undecorated --list --checklist --column=Edit --column=ConfigFile --separator=" " --print-column="2" \
-	--text="<span font_weight='bold'>Select Config Files for manual Editing</span>" \
-	--width=800 --height=400 | tr '\n' ' ')"
+	if [ "$USEGUI" == "$YAD" ]; then
+		IFS=" " read -r -a EDFILES <<< "$(for f in $(printf '%s\n' "${CfgFiles[@]}"); do echo FALSE ; echo "$f" ; done | \
+		"$YAD" --window-icon=gtk-yes --borders=30 --center --undecorated --list --checklist --column=Edit --column=ConfigFile --separator=" " --print-column="2" \
+		--text="<span font_weight='bold'>Select Config Files for manual Editing</span>" \
+		--width="$STLREQWIDTH" --height="$STLREQHEIGHT" | tr '\n' ' ')"
+	elif [ "$USEGUI" == "$ZENITY" ]; then
+		IFS=" " read -r -a EDFILES <<< "$(for f in $(printf '%s\n' "${CfgFiles[@]}"); do echo FALSE ; echo "$f" ; done | \
+		"$ZENBIN" --list --checklist --column=Edit --column=ConfigFile --separator=" " --print-column="2" \
+		--text="<span font_weight='bold'>Select Config Files for manual Editing</span>" \
+		--width="$STLREQWIDTH" --height="$STLREQHEIGHT" 2>/dev/null | tr '\n' ' ')"
+	fi
+
 	if [ -n "${EDFILES[0]}" ]; then
 		if [ "$PROTONDB" -eq 1 ]; then
 			writelog "INFO" "${FUNCNAME[0]} - PROTONDB is set to 1 - also opening the protondb url in the browser"
@@ -694,11 +782,20 @@ function EditorDialog {
 				pkill -f "$BROWSER"
 			fi
 		fi
-		writelog "INFO" "${FUNCNAME[0]} - Editor closed - Going back to the Main Settings"
-		openSettings
+
+		if [ "$USEGUI" == "$YAD" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Editor closed - Going back to the Main Settings"
+			openSettings
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Editor closed"
+		fi
 	else
-		writelog "INFO" "${FUNCNAME[0]} - no Config Files were selected - Going back to the Main Settings"
-		openSettings
+		if [ "$USEGUI" == "$YAD" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - no Config Files were selected - Going back to the Main Settings"
+			openSettings
+		else
+			writelog "INFO" "${FUNCNAME[0]} - no Config Files were selected"
+		fi
 	fi
 }
 
@@ -802,7 +899,6 @@ function openSettings {
 
 	writelog "INFO" "${FUNCNAME[0]} - opening Settings"
 
-	YADKEY="31337"
 	ipcrm -M "$YADKEY" 2>/dev/null
 
 	cfg1=$(mktemp --tmpdir cfg1.XXXXXXXX)
@@ -820,7 +916,7 @@ function openSettings {
 					GN="$PREVGAME"
 				fi
 			else
-				AID="$YADKEY"
+				AID="$PLACEHOLDERAID"
 			fi
 		else
 			AID="$1"
@@ -832,8 +928,8 @@ function openSettings {
 	fi
 
 	# create a dummy game config if AID is empty:
-	if [ "$AID" == "$PROGCMD" ]; then
-		AID="$YADKEY"
+	if [ -z "$AID" ] || [ "$AID" == "$PROGCMD" ]; then
+		AID="$PLACEHOLDERAID"
 		STLGAMECFG="$STLGAMEDIR/${AID}.conf"
 		TWEAKCFG="$USERTWEAKDIR/${AID}.conf"
 		SBSTWEAKCFG="$SBSTWEAKDIR/${AID}.conf"
@@ -888,6 +984,7 @@ function openSettings {
 	--height="$STLSETHEIGHT" \
 	--text="<span font_weight='bold'>Global Settings</span>" \
 	--field="     Clone ${PROGNAME}!Pull '$PROGCMD' from '$PROJECTPAGE' in '$STLCFGDIR' and use its config files (only used if global configs are not installed)":CHK "${DLGLOBAL/#-/ -}" \
+	--field="     Use GUI!Choose which GUI tool to use":CB "${USEGUI/#-/ -}!$YAD!$ZENITY" \
 	--field="     Enable $PROGCMD Steam theme!Use the $PROGNAME Steam GTK css '${PROGCMD}-steam'":CHK "${USESTLCSS/#-/ -}" \
 	--field="     Update $PROGCMD Steam theme!Updates the $PROGNAME Steam GTK css '${PROGCMD}-steam'":CHK "${CSSUPDATE/#-/ -}" \
 	--field="":LBL "" \
@@ -932,8 +1029,10 @@ function openSettings {
 	--field="     Browser command!The Web Browser used to optionally open Urls":FL "${BROWSER/#-/ -}" \
 	--field="     ProtonDB Url!The Url opened when PROTONDB is used" "${PDBURL/#-/ -}" \
 	--field="":LBL "" \
-	--field="     Global Settings Window width!The Width of the Settings window":NUM "${STLSETWIDTH/#-/ -}" \
-	--field="     Global Settings Window height!The Height of the Settings window":NUM "${STLSETHEIGHT/#-/ -}" \
+	--field="     Settings Window width!The Width of the Settings window":NUM "${STLSETWIDTH/#-/ -}" \
+	--field="     Settings Window height!The Height of the Settings window":NUM "${STLSETHEIGHT/#-/ -}" \
+	--field="     Requester Window width!The Width of a Requester window":NUM "${STLREQWIDTH/#-/ -}" \
+	--field="     Requester Window height!The Height of a Requester window":NUM "${STLREQHEIGHT/#-/ -}" \
 	--field="     Columns for the Game Tabs!Use n Columns for the two Game Tabs":CB "${GAMETABCOLS/#-/ -}!1!2!3!4!5" \
 	--field="     Columns for the Global Tab!Use n Columns for the Global Tab":CB "${GLOBTABCOLS/#-/ -}!1!2!3!4!5" \
 	--field="     Columns for the ReShade Tab!Use n Columns for the ReShade Tab":CB "${RESHTABCOLS/#-/ -}!1!2!3!4!5" \
@@ -1094,7 +1193,8 @@ function howto {
 	echo "  custom commands:"
 	echo "------------------------"
 	echo " 'stl settings (optional steamid or 'last')'"
-	echo "  will open the $PROGCMD settings gui optionally with game SteamAppID or 'last' for the last SteamAppID stored in '$LASTRUN'"
+	echo "  using $YAD this will open the $PROGCMD settings gui optionally with game SteamAppID or 'last' for the last SteamAppID stored in '$LASTRUN'"
+	echo "  using $ZENITY this will open the $PROGCMD Editor dialog optionally with game SteamAppID or 'last' for the last SteamAppID stored in '$LASTRUN'"
 	echo "------------------------"
 	echo " 'stl dl git'"
 	echo "  will update $PROGCMD git repo in '$GLDLSTLDIR'"
@@ -1112,7 +1212,6 @@ function howto {
 	echo "  will autogenerate all tweak files for every parsible game of platform PLATFORM or just for the optional SteamAppID"
 	echo "  where valid platforms are"
 	echo "  $AUTOTWEAKPLATFORMS"
-
 }
 
 function writelog {
@@ -2056,41 +2155,55 @@ function askSettings {
 				fi
 			done <<< "$(sed -n "/^#STARTEDITORCFGLIST/,/^#ENDEDITORCFGLIST/p;/^#ENDEDITORCFGLIST/q" "$0" | grep -v "^#" | cut -d '=' -f1)"
 
-			if [ -n "$FOUNDTWEAKCFG" ]; then
-				"$YAD" --borders=30 --window-icon=gtk-yes --form --center --on-top --fixed --undecorated \
-				--width=800 \
-				--title="Open Settings?" \
-				--text="<span font_weight='bold'>$GN ($AID) - Open Settings?</span>" \
-				--field="<span font=\"italic\">(found ${#CfgFiles[@]} editable Config Files)</span>":LBL \
-				--field="":LBL "" \
-				--field="Tweakfile $FOUNDTWEAKCFG found":LBL \
-				--field="<span font=\"italic\">(the game should *just work* using it)</span>":LBL \
-				--button="SETTINGS":0  \
-				--button="CANCEL":1  \
-				--timeout="$WAITEDITOR" \
-				--timeout-indicator=top
-			else
-				"$YAD" --borders=30 --window-icon=gtk-yes --form --center --on-top --fixed -undecorated \
-				--width=800 \
-				--title="Open Settings?" \
-				--text="<span font_weight='bold'>$GN ($AID) - Open Settings?</span>" \
-				--field="<span font=\"italic\">(found ${#CfgFiles[@]} editable Config Files)</span>":LBL \
-				--field="":LBL "" \
-				--button="SETTINGS":0  \
-				--button="CANCEL":1  \
-				--timeout="$WAITEDITOR" \
-				--timeout-indicator=top
+			if [ "$USEGUI" == "$YAD" ]; then
+				if [ -n "$FOUNDTWEAKCFG" ]; then
+					"$YAD" --borders=30 --window-icon=gtk-yes --form --center --on-top --fixed --undecorated \
+					--title="Open Settings?" \
+					--text="<span font_weight='bold'>$GN ($AID) - Open Settings?</span>" \
+					--field="<span font=\"italic\">(found ${#CfgFiles[@]} editable Config Files)</span>":LBL \
+					--field="":LBL "" \
+					--field="Tweakfile $FOUNDTWEAKCFG found":LBL \
+					--field="<span font=\"italic\">(the game should *just work* using it)</span>":LBL \
+					--button="SETTINGS":0  \
+					--button="CANCEL":1  \
+					--timeout="$WAITEDITOR" \
+					--timeout-indicator=top
+				else
+					"$YAD" --borders=30 --window-icon=gtk-yes --form --center --on-top --fixed -undecorated \
+					--width="$STLREQWIDTH" --height="$STLREQHEIGHT" \
+					--title="Open Settings?" \
+					--text="<span font_weight='bold'>$GN ($AID) - Open Settings?</span>" \
+					--field="<span font=\"italic\">(found ${#CfgFiles[@]} editable Config Files)</span>":LBL \
+					--field="":LBL "" \
+					--button="SETTINGS":0  \
+					--button="CANCEL":1  \
+					--timeout="$WAITEDITOR" \
+					--timeout-indicator=top
+				fi
+				case $? in
+					0)  writelog "INFO" "${FUNCNAME[0]} - Selected SETTINGS - Opening settings"
+						openSettings
+					;;
+					1)  writelog "INFO" "${FUNCNAME[0]} - Selected CANCEL - Starting game without settings"
+						editorSkipped
+					;;
+					70) writelog "INFO" "${FUNCNAME[0]} - TIMEOUT - Starting game without settings"
+					;;
+				esac
+			elif [ "$USEGUI" == "$ZENITY" ]; then
+				if [ -n "$FOUNDTWEAKCFG" ]; then
+					"$ZENBIN" --title="$PROGNAME ($PROGCMD) - $PROGVERS" --question --text="edit game configfile?\n'$STLGAMECFG'\n(tweakfile '$FOUNDTWEAKCFG' found,\nthe game should 'just work' using it)" --ok-label=Edit --cancel-label=Cancel --timeout="$WAITEDITOR" 2>/dev/null
+				else
+					"$ZENBIN" --title="$PROGNAME ($PROGCMD) - $PROGVERS" --question --text="edit game configfile?\n'$STLGAMECFG'" --ok-label=Edit --cancel-label=Cancel --timeout="$WAITEDITOR" 2>/dev/null
+				fi
+				case $? in
+					0)  EditorDialog
+					;;
+					1)  writelog "INFO" "${FUNCNAME[0]} - key not pressed - starting game"
+						editorSkipped
+					;;
+				esac
 			fi
-			case $? in
-				0)  writelog "INFO" "${FUNCNAME[0]} - Selected SETTINGS - Opening settings"
-					openSettings
-				;;
-				1)  writelog "INFO" "${FUNCNAME[0]} - Selected CANCEL - Starting game without settings"
-					editorSkipped
-				;;
-				70) writelog "INFO" "${FUNCNAME[0]} - TIMEOUT - Starting game without settings"
-				;;
-			esac
 		fi
 	fi
 }
@@ -2369,6 +2482,8 @@ function createDefaultCfgs {
 		saveCfg "$STLDEFGLOBALCFG" X
 		loadCfg "$STLDEFGLOBALCFG" X
 	fi
+
+	prepareGUI
 
 	checkSTLCSS X
 	createProjectDirs
@@ -3114,25 +3229,45 @@ function guiLoadCfg {
 	GUICFG="$1"
 
 	writelog "INFO" "${FUNCNAME[0]} - requester asking if '$GUICFG' should be loaded"
-
-	"$YAD" --borders=30 --window-icon=gtk-yes --form --center --on-top --fixed --undecorated \
-	--field="Load AutoTweak Config '$VALCFG'?":LBL \
-	--field="<span font=\"italic\">(Skip/Load/Ignore AutoTweaks for '$GN ($AID)')</span>":LBL \
-	--button="SKIP":0  \
-	--button="LOAD":1  \
-	--button="IGNORE":2  \
-	--timeout="$WAITEDITOR" \
-	--timeout-indicator=top
-	case $? in
-		0)  writelog "SKIP" "${FUNCNAME[0]} - selected to skip '$GUICFG'"
-		;; 
-		1)	LOADAUTOCFG="$GUICFG"
+	if [ "$USEGUI" == "$YAD" ]; then
+		"$YAD" --borders=30 --window-icon=gtk-yes --form --center --on-top --fixed --undecorated \
+		--width="$STLREQWIDTH" --height="$STLREQHEIGHT" \
+		--field="Load AutoTweak Config '$VALCFG'?":LBL \
+		--field="<span font=\"italic\">(Skip/Load/Ignore AutoTweaks for '$GN ($AID)')</span>":LBL \
+		--button="SKIP":0  \
+		--button="LOAD":1  \
+		--button="IGNORE":2  \
+		--timeout="$WAITEDITOR" \
+		--timeout-indicator=top
+		case $? in
+			0)  writelog "SKIP" "${FUNCNAME[0]} - selected to skip '$GUICFG'"
+			;; 
+			1)	LOADAUTOCFG="$GUICFG"
+				writelog "INFO" "${FUNCNAME[0]} - marked '$LOADAUTOCFG' for loading"
+			;;
+			2)	writelog "INFO" "${FUNCNAME[0]} - adding 'IGNOREAUTOTWEAKS=\"1\"' to '$TWEAKCFG'"
+				updateConfigEntry "IGNOREAUTOTWEAKS" "1" "$STLGAMECFG"
+			;;
+		esac
+	elif [ "$USEGUI" == "$ZENITY" ]; then
+		ZENSEL="$("$ZENBIN" --list --title="$PROGNAME ($PROGCMD) - $PROGVERS" --text="Load AutoTweak Config\n'VALCFG'?\n(Load/Skip/Ignore AutoTweaks for '$GN ($AID)')" --radiolist --column "Choose" --column "Option" FALSE "Load" FALSE "Skip" FALSE "Ignore" --timeout="$WAITEDITOR" --width="$STLREQWIDTH" --height="$STLREQHEIGHT" 2>/dev/null)"
+		if [ "$ZENSEL" == "Load" ]; then
+			LOADAUTOCFG="$GUICFG"
 			writelog "INFO" "${FUNCNAME[0]} - marked '$LOADAUTOCFG' for loading"
-		;;
-		2)	writelog "INFO" "${FUNCNAME[0]} - adding 'IGNOREAUTOTWEAKS=\"1\"' to '$TWEAKCFG'"
-			updateConfigEntry "IGNOREAUTOTWEAKS" "1" "$STLGAMECFG"
-		;;
-	esac
+		elif [ "$ZENSEL" == "Skip" ]; then
+			writelog "SKIP" "${FUNCNAME[0]} - selected to skip '$GUICFG'"
+		elif [ "$ZENSEL" == "Ignore" ]; then
+			if [ -f "$TWEAKCFG" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - adding 'IGNOREAUTOTWEAKS=\"1\"' to '$TWEAKCFG'"
+				updateConfigEntry "IGNOREAUTOTWEAKS" "1" "$TWEAKCFG"
+			else
+				writelog "INFO" "${FUNCNAME[0]} - adding 'IGNOREAUTOTWEAKS=\"1\"' to '$STLGAMECFG'"
+				updateConfigEntry "IGNOREAUTOTWEAKS" "1" "$STLGAMECFG"
+			fi
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - Nothing selected - skipping '$GUICFG'"
+		fi	
+	fi
 }
 
 function validateATCfg {
@@ -3144,32 +3279,55 @@ function validateATCfg {
 
 	if [ "$ATVALIDATE" -ge 1 ]; then
 		writelog "INFO" "${FUNCNAME[0]} - gui asking if '$VALCFG' should be edited as ATVALIDATE is '$ATVALIDATE', autoloaded, skipped or ignored"
-
-		"$YAD" --borders=30 --window-icon=gtk-yes --form --center --on-top --fixed --undecorated \
-		--field="Found AutoTweak Config '$VALCFG'?":LBL \
-		--field="<span font=\"italic\">(Edit/Skip/Load/Ignore AutoTweaks for '$GN ($AID)')</span>":LBL \
-		--button="EDIT":0  \
-		--button="SKIP":1  \
-		--button="LOAD":2  \
-		--button="IGNORE":3  \
-		--timeout="$ATVALIDATE" \
-		--timeout-indicator=top
-		case $? in
-			0)	writelog "INFO" "${FUNCNAME[0]} - selected EDIT - opening '$VALCFG' with the editor now"
-				"$STLEDITOR" "$VALCFG"
-				guiLoadCfg "$VALCFG"
-			;;
-			1)  writelog "SKIP" "${FUNCNAME[0]} - selected SKIP"
-			;; 
-			2)	LOADAUTOCFG="$GUICFG"
-				writelog "INFO" "${FUNCNAME[0]} - selected LOAD - marked '$LOADAUTOCFG' for loading"
-			;;
-			3)	writelog "INFO" "${FUNCNAME[0]} - selected IGNORE - adding 'IGNOREAUTOTWEAKS=\"1\"' to '$STLGAMECFG'"
-				updateConfigEntry "IGNOREAUTOTWEAKS" "1" "$STLGAMECFG"
-			;;
-			70) writelog "SKIP" "${FUNCNAME[0]} - TIMEOUT - skipping"
-			;;
-		esac
+		
+		if [ "$USEGUI" == "$YAD" ]; then
+			"$YAD" --borders=30 --window-icon=gtk-yes --form --center --on-top --fixed --undecorated \
+			--width="$STLREQWIDTH" --height="$STLREQHEIGHT" \
+			--field="Found AutoTweak Config '$VALCFG'":LBL \
+			--field="<span font=\"italic\">(Edit/Skip/Load/Ignore AutoTweaks for '$GN ($AID)')</span>":LBL \
+			--button="EDIT":0  \
+			--button="SKIP":1  \
+			--button="LOAD":2  \
+			--button="IGNORE":3  \
+			--timeout="$ATVALIDATE" \
+			--timeout-indicator=top
+			case $? in
+				0)	writelog "INFO" "${FUNCNAME[0]} - selected EDIT - opening '$VALCFG' with the editor now"
+					"$STLEDITOR" "$VALCFG"
+					guiLoadCfg "$VALCFG"
+				;;
+				1)  writelog "SKIP" "${FUNCNAME[0]} - selected SKIP"
+				;; 
+				2)	LOADAUTOCFG="$GUICFG"
+					writelog "INFO" "${FUNCNAME[0]} - selected LOAD - marked '$LOADAUTOCFG' for loading"
+				;;
+				3)	writelog "INFO" "${FUNCNAME[0]} - selected IGNORE - adding 'IGNOREAUTOTWEAKS=\"1\"' to '$STLGAMECFG'"
+					updateConfigEntry "IGNOREAUTOTWEAKS" "1" "$STLGAMECFG"
+				;;
+				70) writelog "SKIP" "${FUNCNAME[0]} - TIMEOUT - skipping"
+				;;
+			esac
+		elif [ "$USEGUI" == "$ZENITY" ]; then
+				ZENSEL="$("$ZENBIN" --list --title="$PROGNAME ($PROGCMD) - $PROGVERS" --text="Found AutoTweak Config '$VALCFG'.\n(Edit/Skip/Load/Ignore AutoTweaks for '$GN ($AID)')" --radiolist --column "Choose" --column "Option" FALSE "Edit" FALSE "Skip" FALSE "Load" FALSE "Ignore" --timeout="$ATVALIDATE" --width="$STLREQWIDTH" --height="$STLREQHEIGHT" 2>/dev/null)"
+				if [ "$ZENSEL" == "Edit" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - selected EDIT - opening '$VALCFG' with the editor now"
+					"$STLEDITOR" "$VALCFG"
+					guiLoadCfg "$VALCFG"
+				elif [ "$ZENSEL" == "Load" ]; then
+					LOADAUTOCFG="$GUICFG"
+					writelog "INFO" "${FUNCNAME[0]} - selected LOAD - marked '$LOADAUTOCFG' for loading"
+				elif [ "$ZENSEL" == "Skip" ]; then
+					writelog "SKIP" "${FUNCNAME[0]} - selected to skip '$GUICFG'"
+				elif [ "$ZENSEL" == "Ignore" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - selected IGNORE - adding 'IGNOREAUTOTWEAKS=\"1\"' to '$STLGAMECFG'"
+					updateConfigEntry "IGNOREAUTOTWEAKS" "1" "$STLGAMECFG"
+				else
+					writelog "SKIP" "${FUNCNAME[0]} - Nothing selected - skipping '$GUICFG'"
+				fi
+		else
+			LOADAUTOCFG="$VALCFG"
+			writelog "WARN" "${FUNCNAME[0]} - USEGUI '$USEGUI' invalid - marked '$VALCFG' for loading automatically"
+		fi
 	else
 		LOADAUTOCFG="$VALCFG"
 		writelog "INFO" "${FUNCNAME[0]} - ATVALIDATE is '$ATVALIDATE' - marked '$VALCFG' for loading automatically"
@@ -3191,27 +3349,39 @@ function AdoptAutoTweak {
 }
 
 function AskAdoptAutoTweak {
-	"$YAD" --borders=30 --window-icon=gtk-yes --form --center --on-top --fixed --undecorated \
-	--width=800 \
-	--title="Convert used AutoTweak?" \
-	--text="<span font_weight='bold'>$GN ($AID) - Convert used AutoTweak?</span>" \
-    --field="":LBL "" \
-	--field="Adopt the just used AutoTweak '$LOADAUTOCFG'\n and skip autotweaks for '$GN ($AID)' from now on?":LBL \
-	--field="<span font=\"italic\">(Existing user tweakfile will be backuped)</span>":LBL \
-	--field="":LBL "" \
-	--button="ADOPT":0  \
-	--button="CANCEL":1  \
-	--timeout="$WAITEDITOR" \
-	--timeout-indicator=top
-	case $? in
-		0) writelog "INFO" "${FUNCNAME[0]} - selected ADOPT - converting '$LOADAUTOCFG' to a regular tweakfile"
+	if [ "$USEGUI" == "$YAD" ]; then
+		"$YAD" --borders=30 --window-icon=gtk-yes --form --center --on-top --fixed --undecorated \
+		--width="$STLREQWIDTH" --height="$STLREQHEIGHT" \
+		--title="Convert used AutoTweak?" \
+		--text="<span font_weight='bold'>$GN ($AID) - Convert used AutoTweak?</span>" \
+		--field="":LBL "" \
+		--field="Adopt the just used AutoTweak '$LOADAUTOCFG'\n and skip autotweaks for '$GN ($AID)' from now on?":LBL \
+		--field="<span font=\"italic\">(Existing user tweakfile will be backuped)</span>":LBL \
+		--field="":LBL "" \
+		--button="ADOPT":0  \
+		--button="CANCEL":1  \
+		--timeout="$WAITEDITOR" \
+		--timeout-indicator=top
+		case $? in
+			0) writelog "INFO" "${FUNCNAME[0]} - selected ADOPT - converting '$LOADAUTOCFG' to a regular tweakfile"
+			   AdoptAutoTweak
+			;;
+			1) writelog "SKIP" "${FUNCNAME[0]} - selected CANCEL - not using '$LOADAUTOCFG' as regular tweakfile for '$GN ($AID)'"
+			;;
+			70) writelog "INFO" "${FUNCNAME[0]} - TIMEOUT - doing nothing"
+			;;
+		esac
+	elif [ "$USEGUI" == "$ZENITY" ]; then
+		ZENSEL="$("$ZENBIN" --list --title="$PROGNAME ($PROGCMD) - $PROGVERS" --text="Convert used AutoTweak?" --radiolist --column "Choose" --column "Option" FALSE "Adobt" FALSE "Cancel" --timeout="$WAITEDITOR" --width="$STLREQWIDTH" --height="$STLREQHEIGHT" 2>/dev/null)"
+		if [ "$ZENSEL" == "Adobt" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - selected ADOPT - converting '$LOADAUTOCFG' to a regular tweakfile"
 		   AdoptAutoTweak
-		;;
-		1) writelog "SKIP" "${FUNCNAME[0]} - selected CANCEL - not using '$LOADAUTOCFG' as regular tweakfile for '$GN ($AID)'"
-		;;
-		70) writelog "INFO" "${FUNCNAME[0]} - TIMEOUT - doing nothing"
-		;;
-	esac
+		elif [ "$ZENSEL" == "Cancel" ]; then
+			writelog "SKIP" "${FUNCNAME[0]} - selected CANCEL - not using '$LOADAUTOCFG' as regular tweakfile for '$GN ($AID)'"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - TIMEOUT - doing nothing"
+		fi
+	fi
 }
 
 
@@ -3268,12 +3438,19 @@ function autoGenTweak {
 function launchCustomProg {
 	if [ -z "$CUSTOMCMD" ] || [ "$CUSTOMCMD" == "$(which echo 2>/dev/null)" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - CUSTOMCMD variable is empty - opening file requester"
-		ZCUST="$("$YAD" --window-icon=gtk-yes --borders=30 --form --center --on-top --fixed --undecorated \
-		--width=800 \
-		--title="Select Custom executable" \
-		--text="<span font_weight='bold'>$GN ($AID) - Select Custom executable</span>" \
-		--field="":LBL "" \
-		--field="Select executable file":FL)"
+		
+		if [ "$USEGUI" == "$YAD" ]; then
+			ZCUST="$("$YAD" --window-icon=gtk-yes --borders=30 --form --center --on-top --fixed --undecorated \
+			--width="$STLREQWIDTH" --height="$STLREQHEIGHT" \
+			--title="Select Custom executable" \
+			--text="<span font_weight='bold'>$GN ($AID) - Select Custom executable</span>" \
+			--field="":LBL "" \
+			--field="Select executable file":FL)"
+
+		elif [ "$USEGUI" == "$ZENITY" ]; then
+			ZCUST="$("$ZENBIN" --file-selection --width="$STLREQWIDTH" --height="$STLREQHEIGHT" --title="Select Custom executable" 2>/dev/null)"
+		fi
+
 		if [ -n "$ZCUST" ]; then
 			if [ "$RUN_CUSTOMCMD" -eq 2 ]; then
 				writelog "INFO" "${FUNCNAME[0]} - '${ZCUST//|/}' selected for CUSTOMCMD - not updating configfile '$STLGAMECFG' as RUN_CUSTOMCMD is '$RUN_CUSTOMCMD'"
@@ -3320,12 +3497,18 @@ function launchCustomProg {
 				CUSTCOM="$CUSTOMCMD"
 			else
 				writelog "INFO" "${FUNCNAME[0]} - CUSTOMCMD file '$CUSTOMCMD' not found - opening file requester"
-				ZCUST="$("$YAD" --window-icon=gtk-yes --borders=30 --form --center --on-top --fixed --undecorated \
-				--width=800 \
-				--title="Select Custom executable" \
-				--text="<span font_weight='bold'>$GN ($AID) - Select Custom executable</span>" \
-				--field="":LBL "" \
-				--field="Select executable file":FL)"
+				
+				if [ "$USEGUI" == "$YAD" ]; then
+					ZCUST="$("$YAD" --window-icon=gtk-yes --borders=30 --form --center --on-top --fixed --undecorated \
+					--width="$STLREQWIDTH" --height="$STLREQHEIGHT" \
+					--title="Select Custom executable" \
+					--text="<span font_weight='bold'>$GN ($AID) - Select Custom executable</span>" \
+					--field="":LBL "" \
+					--field="Select executable file":FL)"		
+				elif [ "$USEGUI" == "$ZENITY" ]; then
+					ZCUST="$("$ZENBIN" --file-selection --width="$STLREQWIDTH" --height="$STLREQHEIGHT" --title="Select Custom executable" 2>/dev/null)"
+				fi
+				
 				if [ -n "$ZCUST" ]; then
 					writelog "INFO" "${FUNCNAME[0]} - '${ZCUST//|/}' selected for CUSTOMCMD - updating configfile '$STLGAMECFG'"
 					updateConfigEntry "CUSTOMCMD" "${ZCUST//|/}" "$STLGAMECFG"
@@ -4311,69 +4494,108 @@ function setVortexSELaunch {
 
 						mkProjDir "$PROTOLADLDIR" 1
 				
-						if [ -d "$STEAMCOMPATOOLS/$PROTOLAVER" ]; then	
-
-							"$YAD" --borders=30 --window-icon=gtk-yes --form --center --on-top --fixed -undecorated \
-							--title="Proton Version not Script Extender compatible" \
-							--field="Using '$PROTONVERSION' which is not compatible with '$2'\nYou already have the compatible proton version lying under '$STEAMCOMPATOOLS/$PROTOLAVER'\nJust select it in Steam as compatibility tool for '$GN'":LBL \
-							--field="<span font=\"italic\">Click Exit to exit now, click play to start game without Script Extender</span>":LBL \
-							--field="":LBL "" \
-							--button="PLAY":0  \
-							--button="EXIT":1  \
-							--timeout="$PROTOLAREQ" \
-							--timeout-indicator=top
-							case $? in
-								0) writelog "INFO" "${FUNCNAME[0]} - selected PLAY - starting game without Script Extender compatible '$PROTONVERSION'"
-								;;
-								1)  writelog "INFO" "${FUNCNAME[0]} - selected EXIT - exiting"
-									exit
-								;;
-								70) writelog "INFO" "${FUNCNAME[0]} - TIMEOUT - starting game"
-								;;
-							esac
-						else 
-							if [ -f "$PROTOLADL" ]; then
-								"$YAD" --borders=30 --window-icon=gtk-yes --form --center --on-top --fixed --undecorated \
-								--width=800 \
+						if [ "$USEGUI" == "$YAD" ]; then
+				
+							if [ -d "$STEAMCOMPATOOLS/$PROTOLAVER" ]; then	
+								"$YAD" --borders=30 --window-icon=gtk-yes --form --center --on-top --fixed -undecorated \
+								--width="$STLREQWIDTH" --height="$STLREQHEIGHT" \
 								--title="Proton Version not Script Extender compatible" \
-								--field="Compatible proton '$PROTOLAVER' already downloaded to '$PROTOLADL'\nYou have to install it to '$STEAMCOMPATOOLS' with steam closed to use it":LBL \
-								--field="<span font=\"italic\">Click Install to extract '$PROTOLADL' to '$STEAMCOMPATOOLS' (at your own risk!)\nClick play to start game without Script Extender</span>":LBL \
+								--field="Using '$PROTONVERSION' which is not compatible with '$2'\nYou already have the compatible proton version lying under '$STEAMCOMPATOOLS/$PROTOLAVER'\nJust select it in Steam as compatibility tool for '$GN'":LBL \
+								--field="<span font=\"italic\">Click Exit to exit now, click play to start game without Script Extender</span>":LBL \
+								--field="":LBL "" \
 								--button="PLAY":0  \
-								--button="INSTALL":1  \
+								--button="EXIT":1  \
 								--timeout="$PROTOLAREQ" \
 								--timeout-indicator=top
 								case $? in
-									0)  writelog "INFO" "${FUNCNAME[0]} - selected PLAY - starting game without Script Extender compatible '$PROTONVERSION'"
+									0) writelog "INFO" "${FUNCNAME[0]} - selected PLAY - starting game without Script Extender compatible '$PROTONVERSION'"
 									;;
-									1)  writelog "INFO" "${FUNCNAME[0]} - selected INSTALL - installing '$PROTOLADL'"
+									1)  writelog "INFO" "${FUNCNAME[0]} - selected EXIT - exiting"
+										exit
+									;;
+									70) writelog "INFO" "${FUNCNAME[0]} - TIMEOUT - starting game"
+									;;
+								esac
+							else 
+								if [ -f "$PROTOLADL" ]; then
+									"$YAD" --borders=30 --window-icon=gtk-yes --form --center --on-top --fixed --undecorated \
+									--width="$STLREQWIDTH" --height="$STLREQHEIGHT" \
+									--title="Proton Version not Script Extender compatible" \
+									--field="Compatible proton '$PROTOLAVER' already downloaded to '$PROTOLADL'\nYou have to install it to '$STEAMCOMPATOOLS' with steam closed to use it":LBL \
+									--field="<span font=\"italic\">Click Install to extract '$PROTOLADL' to '$STEAMCOMPATOOLS' (at your own risk!)\nClick play to start game without Script Extender</span>":LBL \
+									--button="PLAY":0  \
+									--button="INSTALL":1  \
+									--timeout="$PROTOLAREQ" \
+									--timeout-indicator=top
+									case $? in
+										0)  writelog "INFO" "${FUNCNAME[0]} - selected PLAY - starting game without Script Extender compatible '$PROTONVERSION'"
+										;;
+										1)  writelog "INFO" "${FUNCNAME[0]} - selected INSTALL - installing '$PROTOLADL'"
+											tar xf "$PROTOLADL" -C "$STEAMCOMPATOOLS"
+											setVortexSELaunch "$1" "$2" "$3"
+										;;
+										70) writelog "INFO" "${FUNCNAME[0]} - TIMEOUT - starting game"
+										;;
+									esac
+								else
+									"$YAD" --borders=30 --window-icon=gtk-yes --form --center --on-top --fixed --undecorated \
+									--width="$STLREQWIDTH" --height="$STLREQHEIGHT" \
+									--title="Proton Version not Script Extender compatible" \
+									--field="$PROTONVERSION' is not compatible with '$2'\nDownload compatible proton '$PROTOLAVER' to '$PROTOLADL'?\nYou should stop steam then and install the package manually to '$STEAMCOMPATOOLS' to make it available.\nWill re-check again when download is finished.":LBL \
+									--field="<span font=\"italic\">Click play to start game without download</span>":LBL \
+									--button="PLAY":0  \
+									--button="DOWNLOAD":1  \
+									--timeout="$PROTOLAREQ" \
+									--timeout-indicator=top
+									case $? in
+										0)  writelog "INFO" "${FUNCNAME[0]} - selected PLAY - starting game without Script Extender compatible '$PROTONVERSION'"
+										;;
+										1)  writelog "INFO" "${FUNCNAME[0]} - selected DOWNLOAD - Downloading '$PROTOLADL'"
+											"$WGET" "$PROTOLADLURL" -O "$PROTOLADL"
+											setVortexSELaunch "$1" "$2" "$3"
+										;;
+										70) writelog "INFO" "${FUNCNAME[0]} - TIMEOUT - starting game"
+										;;
+									esac
+								fi
+							fi
+						elif [ "$USEGUI" == "$ZENITY" ]; then
+							if [ -d "$STEAMCOMPATOOLS/$PROTOLAVER" ]; then
+								ZENSEL="$("$ZENBIN" --list --title="$PROGNAME ($PROGCMD) - $PROGVERS" --text="'$PROTONVERSION' not compatible with '$2'\nYou already have the compatible proton version lying under '$STEAMCOMPATOOLS/$PROTOLAVER'\nJust select it in Steam as compatibility tool for '$GN'\nClick Exit to exit now, click play to start game without Script Extender" --radiolist --column "Choose" --column "Option" FALSE "Play" FALSE "Exit" --timeout="$WAITEDITOR" --width="$STLREQWIDTH" --height="$STLREQHEIGHT" 2>/dev/null)"
+								if [ "$ZENSEL" == "Play" ]; then
+									writelog "INFO" "${FUNCNAME[0]} - selected PLAY - starting game without Script Extender compatible '$PROTONVERSION'"
+								elif [ "$ZENSEL" == "Exit" ]; then
+									writelog "INFO" "${FUNCNAME[0]} - selected EXIT - exiting"
+									exit
+								else
+									writelog "INFO" "${FUNCNAME[0]} - TIMEOUT - starting game"
+								fi
+							else 
+								if [ -f "$PROTOLADL" ]; then
+									ZENSEL="$("$ZENBIN" --list --title="$PROGNAME ($PROGCMD) - $PROGVERS" --text="'$PROTONVERSION' not compatible with '$2'\nCompatible proton '$PROTOLAVER' already downloaded to '$PROTOLADL'\nYou have to install it to '$STEAMCOMPATOOLS' with steam closed to use it\nClick Install to extract '$PROTOLADL' to '$STEAMCOMPATOOLS' (at your own risk!)\nClick play to start game without Script Extender" --radiolist --column "Choose" --column "Option" FALSE "Play" FALSE "Install" --timeout="$WAITEDITOR" --width="$STLREQWIDTH" --height="$STLREQHEIGHT" 2>/dev/null)"
+									if [ "$ZENSEL" == "Play" ]; then
+										writelog "INFO" "${FUNCNAME[0]} - selected PLAY - starting game without Script Extender compatible '$PROTONVERSION'"
+									elif [ "$ZENSEL" == "Install" ]; then
+										writelog "INFO" "${FUNCNAME[0]} - selected INSTALL - installing '$PROTOLADL'"
 										tar xf "$PROTOLADL" -C "$STEAMCOMPATOOLS"
 										setVortexSELaunch "$1" "$2" "$3"
-									;;
-									70) writelog "INFO" "${FUNCNAME[0]} - TIMEOUT - starting game"
-									;;
-								esac
-							else
-								"$YAD" --borders=30 --window-icon=gtk-yes --form --center --on-top --fixed --undecorated \
-								--title="Proton Version not Script Extender compatible" \
-								--field="$PROTONVERSION' is not compatible with '$2'\nDownload compatible proton '$PROTOLAVER' to '$PROTOLADL?\nYou should stop steam then and install the package manually to '$STEAMCOMPATOOLS' to make it available.\nWill re-check again when download is finished.":LBL \
-								--field="<span font=\"italic\">Click play to start game without download</span>":LBL \
-								--button="PLAY":0  \
-								--button="INSTALL":1  \
-								--timeout="$PROTOLAREQ" \
-								--timeout-indicator=top
-								case $? in
-									0)  writelog "INFO" "${FUNCNAME[0]} - selected PLAY - starting game without Script Extender compatible '$PROTONVERSION'"
-									;;
-									1)  writelog "INFO" "${FUNCNAME[0]} - selected INSTALL - Downloading '$PROTOLADL'"
+									else
+										writelog "INFO" "${FUNCNAME[0]} - TIMEOUT - starting game"
+									fi
+								else
+									ZENSEL="$("$ZENBIN" --list --title="$PROGNAME ($PROGCMD) - $PROGVERS" --text="'$PROTONVERSION' not compatible with '$2'\nDownload compatible proton '$PROTOLAVER' to '$PROTOLADL'?\nYou should stop steam then and install the package manually to '$STEAMCOMPATOOLS' to make it available.\nWill re-check again when download is finished.\nClick play to start game without download" --radiolist --column "Choose" --column "Option" FALSE "Play" FALSE "Download" --timeout="$WAITEDITOR" --width="$STLREQWIDTH" --height="$STLREQHEIGHT" 2>/dev/null)"
+									if [ "$ZENSEL" == "Play" ]; then
+										writelog "INFO" "${FUNCNAME[0]} - selected PLAY - starting game without Script Extender compatible '$PROTONVERSION'"
+									elif [ "$ZENSEL" == "Download" ]; then
+										writelog "INFO" "${FUNCNAME[0]} - selected DOWNLOAD - Downloading '$PROTOLADL'"
 										"$WGET" "$PROTOLADLURL" -O "$PROTOLADL"
 										setVortexSELaunch "$1" "$2" "$3"
-									;;
-									70) writelog "INFO" "${FUNCNAME[0]} - TIMEOUT - starting game"
-									;;
-								esac
+									else
+										writelog "INFO" "${FUNCNAME[0]} - TIMEOUT - starting game"
+									fi
+								fi
 							fi
 						fi
-
 					else
 						if [ "$3" -eq 1 ]; then
 							writelog "INFO" "${FUNCNAME[0]} - preparing start of special exe '$2'"
@@ -4642,10 +4864,6 @@ function checkDeps {
 	checkDep "RUN_REPLAY" "$REPLAY"
 	checkDep "TOGGLEWINDOWS" "$WMCTRL"
 	checkDep "TOGGLEWINDOWS" "$XPROP"
-
-	if [ ! -x "$(command -v "$YAD" 2>/dev/null)" ]; then
-		writelog "WARN" "${FUNCNAME[0]} - '$YAD' not found - it is almost a hard dependency, but not forcing an exit here"
-	fi
 }
 
 #####################################################
@@ -4677,7 +4895,7 @@ function launchSteamGame {
 
 	saveCfg "$STLDEFGLOBALCFG" X
 	loadCfg "$STLDEFGLOBALCFG" X
-
+	
 	writelog "START" "######### Game Launch: $GN ($AID) #########"
 
 	createDefaultCfgs X
@@ -5013,10 +5231,18 @@ function commandline {
 		fi
 	elif  [ "$1" == "settings" ]; then
 		createDefaultCfgs
-		if [ -n "$2" ]; then
-			openSettings "$2"
-		else
-			openSettings
+		if [ "$USEGUI" == "$YAD" ]; then
+			if [ -n "$2" ]; then
+				openSettings "$2"
+			else
+				openSettings
+			fi
+		elif [ "$USEGUI" == "$ZENITY" ]; then
+			if [ -n "$2" ]; then
+				EditorDialog "$2"
+			else
+				EditorDialog
+			fi
 		fi
 	else
 		echo "-----------------------"
@@ -5098,11 +5324,11 @@ function closeSTL {
 	customUserScriptStop
 
 	# delete some possible "$YAD" leftovers
-	find /tmp -maxdepth 1 -type f -regextype posix-extended -regex '^.*cfg[0-9].[A-Z,a-z,0-9]{8}' -exec rm {} \;
+	if [ "$USEGUI" == "$YAD" ]; then
+		find /tmp -maxdepth 1 -type f -regextype posix-extended -regex '^.*cfg[0-9].[A-Z,a-z,0-9]{8}' -exec rm {} \;
+		ipcrm -M "$YADKEY" 2>/dev/null
+	fi
 
-	YADKEY="31337"
-	ipcrm -M "$YADKEY" 2>/dev/null
-	
 	# notifier:
 	if [ "$USENOTIFIER" -eq 1 ]; then
 		if  [ -x "$(command -v "$NOTY" 2>/dev/null)" ]; then
