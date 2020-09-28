@@ -167,15 +167,31 @@ function prepareGUI {
 }
 
 function calculateDefaultResolutions {
-	if  [ -x "$(command -v "$XRANDR" 2>/dev/null)" ]; then
-		SCREENWIDTH="$("$XRANDR" --current | grep "\*" | uniq | awk '{print $1}' | cut -d 'x' -f1)"
-		SCREENHEIGHT="$("$XRANDR" --current | grep "\*" | uniq | awk '{print $1}' | cut -d 'x' -f2)"
-	else
+
+
+	function useFallBackResolution {
 		DUMMYSCREENWIDTH=1920
 		DUMMYSCREENHEIGHT=1080
-		writelog "WARN" "${FUNCNAME[0]} - '$XRANDR' is required for this function to work properly, but wasn't found - calculating with dummy screenresolution '${DUMMYSCREENWIDTH}x${DUMMYSCREENHEIGHT}' for default values"
+		writelog "WARN" "${FUNCNAME[0]} - calculating with fallback screenresolution '${DUMMYSCREENWIDTH}x${DUMMYSCREENHEIGHT}' for default values"
 		SCREENWIDTH="$DUMMYSCREENWIDTH"
-		SCREENHEIGHT="$DUMMYSCREENHEIGHT"
+		SCREENHEIGHT="$DUMMYSCREENHEIGHT"		
+	}
+
+	if  [ -x "$(command -v "$XRANDR" 2>/dev/null)" ]; then
+		SCREENRES="$("$XRANDR" --current | grep "\*" | awk '{print $1}')"
+		writelog "INFO" "${FUNCNAME[0]} - '$XRANDR' found screenresolution '$SCREENRES'"
+		SCREENWIDTH="${SCREENRES%x*}"
+		SCREENHEIGHT="${SCREENRES#*x}"
+
+		if [ -n "${SCREENWIDTH##*[!0-9]*}" ] && [ -n "${SCREENHEIGHT##*[!0-9]*}" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - found Screen Width '$SCREENWIDTH' and Screen Height '$SCREENHEIGHT'"
+		else
+			writelog "WARN" "${FUNCNAME[0]} - '$SCREENRES' is invalid - calculating with fallback screenresolution for default values"
+			useFallBackResolution
+		fi
+	else
+		writelog "WARN" "${FUNCNAME[0]} - '$XRANDR' is required for this function to work properly, but wasn't found - calculating with fallback screenresolution for default values"
+		useFallBackResolution
 	fi
 
 	# Scaling factors in percentage, used to calculate the initial gui sizes depending on the screen resolution:
