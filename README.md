@@ -103,7 +103,7 @@ For the optional features you need:
 - wine for optional [Vortex](#Vortex) support
 - [GameConqueror/scanmem](#GameConqueror) to optionally cheat
 - [GameScope](#GameScope)
-- [Yad](https://github.com/v1cont/yad) for the GUI (yad is only required for the optional [Settings Menu](#Settings-Menu). For the [Editor Dialog](#Editor-Dialog) *(Steam-builtin)* zenity is enough, so yad is optional)
+- [Yad](https://github.com/v1cont/yad) for the GUI (yad is only required for the optional [Settings Menu](#Settings-Menu). For the [Editor Dialog](#Editor-Dialog) zenity is enough, so yad is optional)
 
 ## Configuration
 All configuration files are self-contained documented and always growing, so not every option is documented in here.
@@ -130,10 +130,10 @@ The Options apply to **all** config files at once!:
 - **SAVE/EXIT** - save all changes and leave the Settings Menu
 
 #### Disable Settings Menu
-If you prefer to use simply your favourite texteditor or have problems with 'yad' you can change `USEGUI` to "zenity" in the Global Config Tab or [global.conf](#Global-Config).
+If you prefer to simply use your favourite texteditor or have problems with 'yad' you can change `USEGUI` to "zenity" in the Global Config Tab or [global.conf](#Global-Config).
 **stl** won't use/depend on yad then and uses zenity (prefers Steam builtin zenity and falls back to system zenity) instead.
 Instead of the [Settings Menu](#Settings-Menu) zenity will open the [Editor Dialog](#Editor-Dialog), from where you can choose which configs to edit.
-This also applies to the c
+This also applies to the [command line](#via Command Line).
 
 #### Settings Menu Theme
 
@@ -166,8 +166,10 @@ The Settings Menu can also be opened via commandline:
 an optional commandline argument can be either a SteamAppID or `last` for opening the config of the last played game stored in `LASTRUN`
 If `USEGUI` is set to "zenity" the [Editor Dialog](#Editor-Dialog) will open instead of the [Settings Menu](#Settings-Menu), but the parameters are the same.
 
-For lower screen resolutions you might want to adjust both the Width and Height of the Menu
-and the amount of Colums for each of the Tabs in the Global Settings *(the Game Tabs Share one variable)*
+### Gui Window Size
+When `SAVESETSIZE` is enabled in the Global Config Tab or [global.conf](#Global-Config) *(by default it is)* resoluton changes of every **stl** window (both yad and zenity) are automatically saved
+when the corresponding window is closed. This function requires xwininfo to work.
+All resolutions will be stored in the [gui config file](#Gui-Config).
 
 ### Configuration Locations
 
@@ -215,6 +217,11 @@ file paths, command line options for supported 3rd party programs, but also gene
 or which default programs to use
 *(f.e. which `BROWSER` to use for opening [ProtonDB](#Editor) together with the `STLEDITOR` (default '$(which geany)') [Editor](#Editor))*
 
+### Gui Config
+`STLGUICFG` *(`$STLCFGDIR/gui.conf`)*
+All [window sizes](#Gui-Window-Size) will be stored in this config when `SAVESETSIZE` is enabled *(by default it is)*.
+
+The initial resolution of all windows is calculated based on the screen-resolution.
 
 ### Game Configurations
 

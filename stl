@@ -5,7 +5,7 @@
 ### project ###
 
 PROGNAME="SteamTinkerLaunch"
-PROGVERS="v2.0.4"
+PROGVERS="v2.0.5"
 PROGCMD="$(basename "$0")"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -28,7 +28,7 @@ XWININFO="xwininfo"
 REPLAY="replay-sorcery"
 YAD="yad"
 ZENITY="zenity"
-ZENBIN="$STEAM_ZENITY"
+ZENBIN=""
 XRANDR="xrandr"
 
 # autotweak platforms
@@ -79,6 +79,8 @@ STLVORTEXCFG="$STLVORTEXDIR/vortex.conf"													# vortex config
 STLRESHADECFG="$STLCFGDIR/reshade.conf"														# reshade config
 #ENDEDITORCFGLIST
 
+STLGUICFG="$STLCFGDIR/gui.conf"																# gui config
+
 # optional global config replacement dirs, which can be pulled using DLGLOBAL:
 GLDLSTLDIR="$STLDLDIR/$PROGNAME"
 GLDLSTLTXT="${GLDLSTLDIR}.txt"
@@ -122,26 +124,23 @@ RS_D9_DEST="d3d9.dll"
 PLACEHOLDERAID="31337"
 YADKEY="$PLACEHOLDERAID"
 
-SCREENWIDTH="$("$XRANDR" --current | grep "\*" | uniq | awk '{print $1}' | cut -d 'x' -f1)"		# Screen width reported by xrandr
-SCREENHEIGHT="$("$XRANDR" --current | grep "\*" | uniq | awk '{print $1}' | cut -d 'x' -f2)"	# Screen height reported by xrandr
-YADUISCALE=80																					# Scaling factor in percentage for yad ui, this should be used to calculate yad window size
-
-YADUIWIDTH=$(( ( SCREENWIDTH * YADUISCALE ) / 100 ));										# Calculated width of yad ui
-YADUIHEIGHT=$(( ( SCREENHEIGHT * YADUISCALE ) / 100 ));									# Calculated height of yad ui
+# currently hardcoded borders used in yad:
+YADSETBORD=8
+YADBORDER=34
 
 function checkZenity {
 	if [ "$USEGUI" == "$ZENITY" ]; then
-		if [ -x "$(command -v "$STEAM_ZENITY" 2>/dev/null)" ]; then
-			ZENBIN="$STEAM_ZENITY"
-		elif [ -x "$(command -v "$(which "$ZENITY" 2>/dev/null)" 2>/dev/null)" ]; then
-			ZENBIN="$(which "$ZENITY" 2>/dev/null)"
-		else
-			writelog "WARN" "${FUNCNAME[0]} - '$USEGUI' is set to '$ZENITY', but it is not available - falling back to '$YAD'"
-			ZENBIN="$YAD"
+		if [ -x "$(command -v "$(which "$ZENITY" 2>/dev/null)" 2>/dev/null)" ]; then
+				ZENBIN="$(which "$ZENITY" 2>/dev/null)"
+			writelog "INFO" "${FUNCNAME[0]} - using '$ZENBIN' for the GUI"
+		elif [ -x "$(command -v "$(which "$YAD" 2>/dev/null)" 2>/dev/null)" ]; then
+				writelog "WARN" "${FUNCNAME[0]} - '$USEGUI' is set to '$ZENITY', but it is not available - falling back to '$YAD'"
+				ZENBIN="$(which "$YAD" 2>/dev/null)"
 		fi
-		
+
 		if [ -z "$ZENBIN" ]; then
-			writelog "WARN" "${FUNCNAME[0]} - no usable binary found for '$ZENITY' - this should not happen!"
+			writelog "ERROR" "${FUNCNAME[0]} - no usable binary found for '$ZENITY' - this should not happen! Either install '$ZENITY' or '$YAD'"
+			exit
 		fi
 	fi
 }
@@ -167,9 +166,70 @@ function prepareGUI {
 	fi
 }
 
+function calculateDefaultResolutions {
+	SCREENWIDTH="$("$XRANDR" --current | grep "\*" | uniq | awk '{print $1}' | cut -d 'x' -f1)"
+	SCREENHEIGHT="$("$XRANDR" --current | grep "\*" | uniq | awk '{print $1}' | cut -d 'x' -f2)"
+
+	# Scaling factors in percentage, used to calculate the initial gui sizes depending on the screen resolution:
+	SETSCALE=80
+	EDREQSCALE=20
+	ASKSETREQSCALE=15
+	AETREQSCALE=40
+	ALTREQSCALE=40
+	CATREQSCALE=30
+	CUSTPROGREQSCALE=30
+	SEREQSCALE=40
+
+	# Calculated initial gui sizes:
+	DEFSETWIDTH=$(( SCREENWIDTH * SETSCALE / 100 ));
+	DEFSETHEIGHT=$(( SCREENHEIGHT * SETSCALE / 100 ));
+
+	DEFEDREQWIDTH=$(( SCREENWIDTH * EDREQSCALE / 100 ));
+	DEFEDREQHEIGHT=$(( SCREENHEIGHT * EDREQSCALE / 100 ));
+
+	DEFASKSETREQWIDTH=$(( SCREENWIDTH * ASKSETREQSCALE / 100 ));
+	DEFASKSETREQHEIGHT=$(( SCREENHEIGHT * ASKSETREQSCALE / 100 ));
+		
+	DEFAETREQWIDTH=$(( SCREENWIDTH * AETREQSCALE / 100 ));
+	DEFAETREQHEIGHT=$(( SCREENHEIGHT * AETREQSCALE / 100 ));
+
+	DEFALTREQWIDTH=$(( SCREENWIDTH * ALTREQSCALE / 100 ));
+	DEFALTREQHEIGHT=$(( SCREENHEIGHT * ALTREQSCALE / 100 ));
+
+	DEFCATREQWIDTH=$(( SCREENWIDTH * CATREQSCALE / 100 ));
+	DEFCATREQHEIGHT=$(( SCREENHEIGHT * CATREQSCALE / 100 ));
+
+	DEFCUSTPROGREQWIDTH=$(( SCREENWIDTH * CUSTPROGREQSCALE / 100 ));
+	DEFCUSTPROGEQHEIGHT=$(( SCREENHEIGHT * CUSTPROGREQSCALE / 100 ));
+
+	DEFSEREQWIDTH=$(( SCREENWIDTH * SEREQSCALE / 100 ));
+	DEFSEREQHEIGHT=$(( SCREENHEIGHT * SEREQSCALE / 100 ));
+}
 
 function setDefaultCfgValues {
+
+	function setDefaultCfgValuesgui {
 	
+		calculateDefaultResolutions
+
+		if [ -z "$SETWIDTH" ]			; then	SETWIDTH="$DEFSETWIDTH"; fi
+		if [ -z "$SETHEIGHT" ]			; then	SETHEIGHT="$DEFSETHEIGHT"; fi
+		if [ -z "$EDREQWIDTH" ]			; then	EDREQWIDTH="$DEFEDREQWIDTH"; fi
+		if [ -z "$EDREQHEIGHT" ]		; then	EDREQHEIGHT="$DEFEDREQHEIGHT"; fi
+		if [ -z "$ASKSETREQWIDTH" ]		; then	ASKSETREQWIDTH="$DEFASKSETREQWIDTH"; fi
+		if [ -z "$ASKSETREQHEIGHT" ]	; then	ASKSETREQHEIGHT="$DEFASKSETREQHEIGHT"; fi	
+		if [ -z "$AETREQWIDTH" ]		; then	AETREQWIDTH="$DEFAETREQWIDTH"; fi	
+		if [ -z "$AETREQHEIGHT" ]		; then	AETREQHEIGHT="$DEFAETREQHEIGHT"; fi	
+		if [ -z "$ALTREQWIDTH" ]		; then	ALTREQWIDTH="$DEFALTREQWIDTH"; fi	
+		if [ -z "$ALTREQHEIGHT" ]		; then	ALTREQHEIGHT="$DEFALTREQHEIGHT"; fi	
+		if [ -z "$CATREQWIDTH" ]		; then	CATREQWIDTH="$DEFCATREQWIDTH"; fi	
+		if [ -z "$CATREQHEIGHT" ]		; then	CATREQHEIGHT="$DEFCATREQHEIGHT"; fi	
+		if [ -z "$CUSTPROGREQWIDTH" ]	; then	CUSTPROGREQWIDTH="$DEFCUSTPROGREQWIDTH"; fi	
+		if [ -z "$CUSTPROGEQHEIGHT" ]	; then	CUSTPROGEQHEIGHT="$DEFCUSTPROGEQHEIGHT"; fi	
+		if [ -z "$SEREQWIDTH" ]			; then	SEREQWIDTH="$DEFSEREQWIDTH"; fi	
+		if [ -z "$SEREQHEIGHT" ]		; then	SEREQHEIGHT="$DEFSEREQHEIGHT"; fi	
+	}
+
 	function setDefaultCfgValuesreshade {
 		if [ -z "$DL_D3D47_64" ]		; then	DL_D3D47_64="https://lutris.net/files/tools/dll/d3dcompiler_47.dll"; fi
 		if [ -z "$DL_D3D47_32" ]		; then	DL_D3D47_32="http://dege.freeweb.hu/dgVoodoo2/D3DCompiler_47.zip"; fi
@@ -220,14 +280,11 @@ function setDefaultCfgValues {
 		if [ -z "$DEPTH3DURL" ]			; then	DEPTH3DURL="https://github.com/BlueSkyDefender/Depth3D.git"; fi
 		if [ -z "$CLONE_DEPTH3D" ]		; then	CLONE_DEPTH3D="1"; fi
 		if [ -z "$DEPTH3DSRCDIR" ]		; then	DEPTH3DSRCDIR="$STLDLDIR/Depth3D"; fi
-		if [ -z "$STLSETWIDTH" ]		; then	STLSETWIDTH="$YADUIWIDTH"; fi
-		if [ -z "$STLSETHEIGHT" ]		; then	STLSETHEIGHT="$YADUIHEIGHT"; fi
-		if [ -z "$STLREQWIDTH" ]		; then	STLREQWIDTH="800"; fi
-		if [ -z "$STLREQHEIGHT" ]		; then	STLREQHEIGHT="400"; fi
+		if [ -z "$SAVESETSIZE" ]		; then	SAVESETSIZE="1"; fi
 		if [ -z "$GAMETABCOLS" ]		; then	GAMETABCOLS="3"; fi
 		if [ -z "$GLOBTABCOLS" ]		; then	GLOBTABCOLS="3"; fi
-		if [ -z "$RESHTABCOLS" ]		; then	RESHTABCOLS="3"; fi
-		if [ -z "$VORTTABCOLS" ]		; then	VORTTABCOLS="3"; fi
+		if [ -z "$RESHTABCOLS" ]		; then	RESHTABCOLS="1"; fi
+		if [ -z "$VORTTABCOLS" ]		; then	VORTTABCOLS="1"; fi
 		if [ -z "$USEGUI" ]				; then	USEGUI="$YAD"; fi
 	}
 
@@ -316,6 +373,46 @@ function setDefaultCfgValues {
 }
 
 function saveCfg {
+
+	function saveCfggui {
+
+		setDefaultCfgValues "$2"
+		
+		if [ -f "$1" ]; then
+			updateConfigFile "$1" "${FUNCNAME[0]}" "$3"
+		else
+			#STARTsaveCfggui
+			{
+			echo "## config Version: $PROGVERS"
+			echo "##########################"
+			echo "## Settings GUI:"
+			echo "SETWIDTH=\"$SETWIDTH\""
+			echo "SETHEIGHT=\"$SETHEIGHT\""
+			echo "## Editor Requester:"
+			echo "EDREQWIDTH=\"$EDREQWIDTH\""
+			echo "EDREQHEIGHT=\"$EDREQHEIGHT\""
+			echo "## Ask Open Settings Requester:"
+			echo "ASKSETREQWIDTH=\"$ASKSETREQWIDTH\""
+			echo "ASKSETREQHEIGHT=\"$ASKSETREQHEIGHT\""
+			echo "## Edit Tweak Requester:"
+			echo "AETREQWIDTH=\"$AETREQWIDTH\""
+			echo "EDREQHEIGHT=\"$EDREQHEIGHT\""
+			echo "## Load Tweak Requester:"
+			echo "ALTREQWIDTH=\"$ALTREQWIDTH\""
+			echo "ALTREQHEIGHT=\"$ALTREQHEIGHT\""
+			echo "## Convert Tweak Requester:"
+			echo "CATREQWIDTH=\"$CATREQWIDTH\""
+			echo "CATREQHEIGHT=\"$CATREQHEIGHT\""
+			echo "## Custom Program Requester:"
+			echo "CUSTPROGREQWIDTH=\"$CUSTPROGREQWIDTH\""
+			echo "CUSTPROGEQHEIGHT=\"$CUSTPROGEQHEIGHT\""
+			echo "## Script Extender Requester:"
+			echo "SEREQWIDTH=\"$SEREQWIDTH\""
+			echo "SEREQHEIGHT=\"$SEREQHEIGHT\""
+			} >> "$1"
+			#ENDsaveCfggui
+		fi
+	}
 
 	function saveCfgreshade {
 
@@ -431,14 +528,8 @@ function saveCfg {
 			echo "CLONE_DEPTH3D=\"$CLONE_DEPTH3D\""
 			echo "## Depth3D sourcefiles:"
 			echo "DEPTH3DSRCDIR=\"$DEPTH3DSRCDIR\""
-			echo "## Settings GUI Width:"
-			echo "STLSETWIDTH=\"$STLSETWIDTH\""
-			echo "## Settings GUI Height:"
-			echo "STLSETHEIGHT=\"$STLSETHEIGHT\""
-			echo "## Requester GUI Width:"
-			echo "STLREQWIDTH=\"$STLREQWIDTH\""
-			echo "## Requester GUI Height:"
-			echo "STLREQHEIGHT=\"$STLREQHEIGHT\""
+			echo "## Save Settings Size on Exit:"
+			echo "SAVESETSIZE=\"$SAVESETSIZE\""
 			echo "## Columns count for Game Tabs:"
 			echo "GAMETABCOLS=\"$GAMETABCOLS\""
 			echo "## Columns count for Global Tab:"
@@ -660,7 +751,6 @@ function saveYadCfg {
 				if [ -z "$WRITEYADVAL" ]; then
 					WRITEYADVAL="DUMMY"
 				fi
-echo updateConfigEntry "$YADCAT" "$WRITEYADVAL" "$YADCFG" | grep USEGUI
 				updateConfigEntry "$YADCAT" "$WRITEYADVAL" "$YADCFG"
 			fi
 
@@ -682,6 +772,84 @@ function saveAllYadConfigs {
 	saveYadCfg "GLOBAL" 	"$STLDEFGLOBALCFG" 	"$cfg3"
 	saveYadCfg "RESHADE" 	"$STLRESHADECFG" 	"$cfg4"
 	saveYadCfg "VORTEX" 	"$STLVORTEXCFG" 	"$cfg5"
+}
+
+function saveNewRes {
+	if [ "$SAVESETSIZE" -eq 1 ] ; then
+		SNEWW="$1"
+		SNEWH="$2"
+		CFG="$3"
+		ORGW="$4"
+		ORGH="$5"
+
+		updateConfigEntry "$ORGW" "$SNEWW" "$CFG"
+		updateConfigEntry "$ORGH" "$SNEWH" "$CFG"
+		writelog "INFO" "${FUNCNAME[0]} - reloading new '$CFG'"
+		loadCfg "$CFG" X
+	fi
+}
+
+function updateWinRes {
+	if [ "$SAVESETSIZE" -eq 1 ] ; then
+		if [ -x "$(command -v "$XWININFO" 2>/dev/null)" ]; then
+			WNAM="$1"
+			CFG="$2"
+			ORGW="$3"
+			ORGH="$4"
+			
+			NEWW="${!ORGW}"
+			NEWH="${!ORGH}"
+
+			MAXWAIT=3
+			COUNTER=0
+
+			while ! "$XWININFO" -name "$WNAM" -stats >/dev/null 2>/dev/null; do
+				if [[ "$COUNTER" -ge "MAXWAIT" ]]; then
+					writelog "SKIP" "${FUNCNAME[0]} - timeout waiting for Window '$WNAM'"
+					return 
+				fi
+				writelog "INFO" "${FUNCNAME[0]} - waiting for Window '$WNAM'"
+				COUNTER=$((COUNTER+1))
+				sleep 1
+			done
+
+			writelog "INFO" "${FUNCNAME[0]} - Window '$WNAM' is running - polling the resolution"
+
+			while true; do
+				SRES="$("$XWININFO" -name "$WNAM" -stats 2>/dev/null | awk '$1=="-geometry" {print $2}' | cut -d '+' -f1)"
+				if grep -q "x" <<< "$SRES"; then
+					PREVW="$NEWW"
+					PREVH="$NEWH"
+				
+					TNEWW="${SRES%x*}"
+					TNEWH="${SRES#*x}"
+
+					if [ "$TNEWW" -ne "${!ORGW}" ] || [ "$TNEWH" -ne "${!ORGH}" ]; then
+						if [ "$TNEWW" != "$PREVW" ] || [ "$TNEWH" != "$PREVH" ]; then
+							if [ -n "${TNEWW##*[!0-9]*}" ] && [ -n "${TNEWH##*[!0-9]*}" ]; then
+								NEWW="$TNEWW"
+								NEWH="$TNEWH"
+								writelog "INFO" "${FUNCNAME[0]} - found new Window Resolution '${NEWW}x${NEWH}'"
+							else
+								writelog "SKIP" "${FUNCNAME[0]} - skipping found false-positive size '${NEWW}x${NEWH}'"	
+							fi
+						fi
+					fi
+					sleep 1
+				else
+					if [ "$NEWW" -ne "${!ORGW}" ] || [ "$NEWH" -ne "${!ORGH}" ]; then
+						writelog "INFO" "${FUNCNAME[0]} - the Window '$WNAM' was closed - saving the last seen resolution '${NEWW}x${NEWH}'"
+						saveNewRes "$NEWW" "$NEWH" "$CFG" "$ORGW" "$ORGH"
+					else
+						writelog "INFO" "${FUNCNAME[0]} - the Window '$WNAM' was closed - the resolution didn't change - nothing to do"
+					fi
+					return
+				fi
+			done
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - SAVESETSIZE is enabled, but '$XWININFO' was not found which is required for this function"	
+		fi
+	fi	
 }
 
 function updateEditor {
@@ -745,7 +913,8 @@ function EditorDialog {
 	fi
 	
 	# load gameconfig, as it might want PROTONDB here
-	loadCfg "$STLGAMECFG"
+	loadCfg "$STLGAMECFG" X
+
 
 	unset CfgFiles
 	while read -r cfgfile; do
@@ -755,16 +924,21 @@ function EditorDialog {
 	done <<< "$(sed -n "/^#STARTEDITORCFGLIST/,/^#ENDEDITORCFGLIST/p;/^#ENDEDITORCFGLIST/q" "$0" | grep -v "^#" | cut -d '=' -f1)"
 	writelog "INFO" "${FUNCNAME[0]} - found ${#CfgFiles[@]} available Config Files - opening Checklist"
 
+	loadCfg "$STLGUICFG" X
+	TITLE="${PROGNAME}-Editor"
+	updateWinRes "$TITLE" "$STLGUICFG" "EDREQWIDTH" "EDREQHEIGHT" &
+
 	if [ "$USEGUI" == "$YAD" ]; then
 		IFS=" " read -r -a EDFILES <<< "$(for f in $(printf '%s\n' "${CfgFiles[@]}"); do echo FALSE ; echo "$f" ; done | \
-		"$YAD" --window-icon=gtk-yes --borders=30 --center --undecorated --list --checklist --column=Edit --column=ConfigFile --separator=" " --print-column="2" \
+		"$YAD" --window-icon=gtk-yes --borders="$YADBORDER" --center --undecorated --list --checklist --column=Edit --column=ConfigFile --separator=" " --print-column="2" \
 		--text="<span font_weight='bold'>Select Config Files for manual Editing</span>" \
-		--width="$STLREQWIDTH" --height="$STLREQHEIGHT" | tr '\n' ' ')"
+		--title="$TITLE" \
+		--geometry="$EDREQWIDTH"x"$EDREQHEIGHT"+0+0 | tr '\n' ' ')"
 	elif [ "$USEGUI" == "$ZENITY" ]; then
 		IFS=" " read -r -a EDFILES <<< "$(for f in $(printf '%s\n' "${CfgFiles[@]}"); do echo FALSE ; echo "$f" ; done | \
 		"$ZENBIN" --list --checklist --column=Edit --column=ConfigFile --separator=" " --print-column="2" \
 		--text="<span font_weight='bold'>Select Config Files for manual Editing</span>" \
-		--width="$STLREQWIDTH" --height="$STLREQHEIGHT" 2>/dev/null | tr '\n' ' ')"
+		--width="$EDREQWIDTH" --height="$EDREQHEIGHT" 2>/dev/null | tr '\n' ' ')"
 	fi
 
 	if [ -n "${EDFILES[0]}" ]; then
@@ -814,6 +988,14 @@ function cleanYadFiles {
 	unset "cfg1" "cfg2" "cfg3" "cfg4" "cfg5"
 }
 
+function cleanYadLeftOvers {
+	# delete some possible "$YAD" leftovers
+	if [ "$USEGUI" == "$YAD" ]; then
+		find /tmp -maxdepth 1 -type f -regextype posix-extended -regex '^.*cfg[0-9].[A-Z,a-z,0-9]{8}' -exec rm {} \;
+		ipcrm -M "$YADKEY" 2>/dev/null
+	fi
+}
+
 #STARTYADGAME
 #STARTYADTEMPLATE
 function openGameMenu {
@@ -821,14 +1003,12 @@ function openGameMenu {
 	TABNR="$2"
 	TEXT="$3"
 	cfgX="$4"
-	loadCfg "$CFG"
+	loadCfg "$CFG" X
 
-	"$YAD" --plug="$YADKEY" --tabnum="$TABNR" --borders=34 --window-icon=gtk-yes --form --scroll --center --undecorated \
+	"$YAD" --plug="$YADKEY" --tabnum="$TABNR" --borders="$YADBORDER" --form --scroll \
 	--separator="\n" \
 	--quoted-output \
 	--columns="$GAMETABCOLS" \
-	--width="$STLSETWIDTH" \
-	--height="$STLSETHEIGHT" \
 	--text="<span font_weight='bold'>$TEXT</span>" \
 	--field="     Game Conqueror!Enable GameConqueror for his game":CHK "${RUN_GAMCON/#-/ -}" \
 	--field="     Game Conqueror wait Exe !The Alternative executable GameConqueror should open instead of the regular game exe - the default 'echo' is just a placeholder and will be ignored":FL "${GAMCONWAITEXE/#-/ -}" \
@@ -963,8 +1143,9 @@ function openSettings {
 		GN="$(grep "^#GAMENAME" "$STLGAMECFG" | cut -d'=' -f2)"
 	fi
 
-	# load  global config for gui size and optional gtk css style:
-	loadCfg "$STLDEFGLOBALCFG"
+	# load  global config for optional gtk css style:
+	loadCfg "$STLDEFGLOBALCFG" X
+
 	checkSTLCSS X
 
 	# TrayIcon Menu # maybe later
@@ -979,17 +1160,15 @@ function openSettings {
 	YADPID2="$!"
 
 # adding space before every variable starting with "-" for yad.
-# The variables need to be refered one per line as else YADCATLIST in saveYadCfg would not work if with doubledash at the end
+# The variables need to be refered one per line as else YADCATLIST in saveYadCfg would not work if using doubledash at the end instead
 
 #STARTYADGLOBAL
-	loadCfg "$STLDEFGLOBALCFG"
+	loadCfg "$STLDEFGLOBALCFG" X
 
-	"$YAD" --plug="$YADKEY" --tabnum=3 --borders=34 --window-icon=gtk-yes --form --scroll --center --undecorated \
+	"$YAD" --plug="$YADKEY" --tabnum=3 --borders="$YADBORDER" --form --scroll \
 	--separator="\n" \
 	--quoted-output \
 	--columns="$GLOBTABCOLS" \
-	--width="$STLSETWIDTH" \
-	--height="$STLSETHEIGHT" \
 	--text="<span font_weight='bold'>Global Settings</span>" \
 	--field="     Clone ${PROGNAME}!Pull '$PROGCMD' from '$PROJECTPAGE' in '$STLCFGDIR' and use its config files (only used if global configs are not installed)":CHK "${DLGLOBAL/#-/ -}" \
 	--field="     Use GUI!Choose which GUI tool to use":CB "${USEGUI/#-/ -}!$YAD!$ZENITY" \
@@ -1037,10 +1216,7 @@ function openSettings {
 	--field="     Browser command!The Web Browser used to optionally open Urls":FL "${BROWSER/#-/ -}" \
 	--field="     ProtonDB Url!The Url opened when PROTONDB is used" "${PDBURL/#-/ -}" \
 	--field=" ":LBL " " \
-	--field="     Settings Window width!The Width of the Settings window":NUM "${STLSETWIDTH/#-/ -}" \
-	--field="     Settings Window height!The Height of the Settings window":NUM "${STLSETHEIGHT/#-/ -}" \
-	--field="     Requester Window width!The Width of a Requester window":NUM "${STLREQWIDTH/#-/ -}" \
-	--field="     Requester Window height!The Height of a Requester window":NUM "${STLREQHEIGHT/#-/ -}" \
+	--field="     Settings Size Autosave!Automatically save current Settings Menu resolution on exit":CHK "${SAVESETSIZE/#-/ -}" \
 	--field="     Columns for the Game Tabs!Use n Columns for the two Game Tabs":CB "${GAMETABCOLS/#-/ -}!1!2!3!4!5" \
 	--field="     Columns for the Global Tab!Use n Columns for the Global Tab":CB "${GLOBTABCOLS/#-/ -}!1!2!3!4!5" \
 	--field="     Columns for the ReShade Tab!Use n Columns for the ReShade Tab":CB "${RESHTABCOLS/#-/ -}!1!2!3!4!5" \
@@ -1051,14 +1227,12 @@ function openSettings {
 #ENDYADGLOBAL
 
 #STARTYADRESHADE
-	loadCfg "$STLRESHADECFG"
+	loadCfg "$STLRESHADECFG" X
 
-	"$YAD" --plug="$YADKEY" --tabnum=4 --borders=34 --window-icon=gtk-yes --form --scroll --center --undecorated \
+	"$YAD" --plug="$YADKEY" --tabnum=4 --borders="$YADBORDER" --form --scroll \
 	--separator="\n" \
 	--quoted-output \
 	--columns="$RESHTABCOLS" \
-	--width="$STLSETWIDTH" \
-	--height="$STLSETHEIGHT" \
 	--text="<span font_weight='bold'>ReShade Settings</span>" \
 	--field=" ":LBL " " \
 	--field="     ReShade Download!allow download of ReShade sourcefiles":CHK "${DOWNLOAD_RESHADE/#-/ -}" \
@@ -1075,14 +1249,12 @@ function openSettings {
 #ENDYADRESHADE
 
 #STARTYADVORTEX
-	loadCfg "$STLVORTEXCFG"
+	loadCfg "$STLVORTEXCFG" X
 
-	"$YAD" --plug="$YADKEY" --tabnum=5 --borders=34 --window-icon=gtk-yes --form --scroll --center --undecorated \
+	"$YAD" --plug="$YADKEY" --tabnum=5 --borders="$YADBORDER" --form --scroll \
 	--separator="\n" \
 	--quoted-output \
 	--columns="$VORTTABCOLS" \
-	--width="$STLSETWIDTH" \
-	--height="$STLSETHEIGHT" \
 	--text="<span font_weight='bold'>Vortex Settings</span>" \
 	--field=" ":LBL " " \
 	--field="     Allow Vortex Installation!Download and install Vortex automatically if required":CHK "${VORTEXINSTALL/#-/ -}" \
@@ -1108,11 +1280,16 @@ function openSettings {
 	YADPID5="$!"
 #ENDYADVORTEX
 
-	"$YAD" --notebook --key="$YADKEY" --borders=8 --window-icon=gtk-yes  --scroll --center --undecorated \
+	writelog "INFO" "${FUNCNAME[0]} - getting current Settings resolution"
+
+	loadCfg "$STLGUICFG" X
+	TITLE="${PROGNAME}-Settings"
+	updateWinRes "$TITLE" "$STLGUICFG" "SETWIDTH" "SETHEIGHT" &
+
+	"$YAD" --notebook --key="$YADKEY" --borders="$YADSETBORD" --window-icon=gtk-yes  --scroll --center --undecorated \
 	--tab="GAME SETTINGS" --tab="DEFAULT SETTINGS" --tab="GLOBAL SETTINGS" --tab="RESHADE SETTINGS" --tab="VORTEX SETTINGS" \
-    --title="Interface settings" \
-	--width="$STLSETWIDTH" \
-	--height="$STLSETHEIGHT" \
+    --title="$TITLE" \
+	--geometry="$SETWIDTH"x"$SETHEIGHT"+0+0 \
     --text="${PROGNAME} (${PROGCMD}) - ${PROGVERS} Settings" \
 	--button="EXIT":5 \
 	--button="EDITOR MENU":1 \
@@ -1130,6 +1307,7 @@ function openSettings {
 		2) echo "Reload Configs and restart Settings GUI"
 			writelog "INFO" "${FUNCNAME[0]} - Reload Configs and restart Settings GUI"
 			cleanYadFiles
+			sleep 1 # "required" for the forked updateWinRes process to write the new resolution
 			"${FUNCNAME[0]}"
 		;;
 		4) echo "Saving and Reloading Config"
@@ -1137,6 +1315,7 @@ function openSettings {
 			saveAllYadConfigs
 			writelog "INFO" "${FUNCNAME[0]} - stop saveAllYadConfigs"
 			cleanYadFiles
+			sleep 1 # "required" for the forked updateWinRes process to write the new resolution
 			"${FUNCNAME[0]}"
 		;;
 		0) echo "Saving Config"
@@ -1151,7 +1330,6 @@ function openSettings {
 	writelog "INFO" "${FUNCNAME[0]} - cleaning YadFiles"
 	cleanYadFiles
 	writelog "INFO" "${FUNCNAME[0]} - cleaned YadFiles"
-
 }
 
 ### YAD SETTINGS END ###
@@ -2163,10 +2341,15 @@ function askSettings {
 				fi
 			done <<< "$(sed -n "/^#STARTEDITORCFGLIST/,/^#ENDEDITORCFGLIST/p;/^#ENDEDITORCFGLIST/q" "$0" | grep -v "^#" | cut -d '=' -f1)"
 
+			loadCfg "$STLGUICFG" X
+			TITLE="${PROGNAME}-OpenSettings"
+			updateWinRes "$TITLE" "$STLGUICFG" "ASKSETREQWIDTH" "ASKSETREQHEIGHT" &
+
 			if [ "$USEGUI" == "$YAD" ]; then
 				if [ -n "$FOUNDTWEAKCFG" ]; then
-					"$YAD" --borders=30 --window-icon=gtk-yes --form --center --on-top --fixed --undecorated \
-					--title="Open Settings?" \
+					"$YAD" --borders="$YADBORDER" --window-icon=gtk-yes --form --center --on-top --undecorated \
+					--title="$TITLE" \
+					--geometry="$ASKSETREQWIDTH"x"$ASKSETREQHEIGHT"+0+0 \
 					--text="<span font_weight='bold'>$GN ($AID) - Open Settings?</span>" \
 					--field="<span font=\"italic\">(found ${#CfgFiles[@]} editable Config Files)</span>":LBL \
 					--field=" ":LBL " " \
@@ -2177,9 +2360,9 @@ function askSettings {
 					--timeout="$WAITEDITOR" \
 					--timeout-indicator=top
 				else
-					"$YAD" --borders=30 --window-icon=gtk-yes --form --center --on-top --fixed -undecorated \
-					--width="$STLREQWIDTH" --height="$STLREQHEIGHT" \
-					--title="Open Settings?" \
+					"$YAD" --borders="$YADBORDER" --window-icon=gtk-yes --form --center --on-top -undecorated \
+					--title="$TITLE" \
+					--geometry="$ASKSETREQWIDTH"x"$ASKSETREQHEIGHT"+0+0 \
 					--text="<span font_weight='bold'>$GN ($AID) - Open Settings?</span>" \
 					--field="<span font=\"italic\">(found ${#CfgFiles[@]} editable Config Files)</span>":LBL \
 					--field=" ":LBL " " \
@@ -2200,9 +2383,9 @@ function askSettings {
 				esac
 			elif [ "$USEGUI" == "$ZENITY" ]; then
 				if [ -n "$FOUNDTWEAKCFG" ]; then
-					"$ZENBIN" --title="$PROGNAME ($PROGCMD) - $PROGVERS" --question --text="edit game configfile?\n'$STLGAMECFG'\n(tweakfile '$FOUNDTWEAKCFG' found,\nthe game should 'just work' using it)" --ok-label=Edit --cancel-label=Cancel --timeout="$WAITEDITOR" 2>/dev/null
+					"$ZENBIN" --title="$PROGNAME ($PROGCMD) - $PROGVERS" --question --text="edit game configfile?\n'$STLGAMECFG'\n(tweakfile '$FOUNDTWEAKCFG' found,\nthe game should 'just work' using it)" --ok-label=Edit --cancel-label=Cancel --timeout="$WAITEDITOR" --width="$ASKSETREQWIDTH" --heigth="$ASKSETREQHEIGHT" 2>/dev/null
 				else
-					"$ZENBIN" --title="$PROGNAME ($PROGCMD) - $PROGVERS" --question --text="edit game configfile?\n'$STLGAMECFG'" --ok-label=Edit --cancel-label=Cancel --timeout="$WAITEDITOR" 2>/dev/null
+					"$ZENBIN" --title="$PROGNAME ($PROGCMD) - $PROGVERS" --question --text="edit game configfile?\n'$STLGAMECFG'" --ok-label=Edit --cancel-label=Cancel --timeout="$WAITEDITOR" --width="$ASKSETREQWIDTH" --heigth="$ASKSETREQHEIGHT" 2>/dev/null
 				fi
 				case $? in
 					0)  EditorDialog
@@ -2490,6 +2673,8 @@ function createDefaultCfgs {
 		saveCfg "$STLDEFGLOBALCFG" X
 		loadCfg "$STLDEFGLOBALCFG" X
 	fi
+
+	saveCfg "$STLGUICFG" X
 
 	prepareGUI
 
@@ -3236,10 +3421,15 @@ function createTweaklutris {
 function guiLoadCfg {
 	GUICFG="$1"
 
+	loadCfg "$STLGUICFG" X
+	TITLE="${PROGNAME}-AskLoadTweak"
+	updateWinRes "$TITLE" "$STLGUICFG" "ALTREQWIDTH" "ALTREQHEIGHT" &
+
 	writelog "INFO" "${FUNCNAME[0]} - requester asking if '$GUICFG' should be loaded"
 	if [ "$USEGUI" == "$YAD" ]; then
-		"$YAD" --borders=30 --window-icon=gtk-yes --form --center --on-top --fixed --undecorated \
-		--width="$STLREQWIDTH" --height="$STLREQHEIGHT" \
+		"$YAD" --borders="$YADBORDER" --window-icon=gtk-yes --form --center --on-top --undecorated \
+		--title="$TITLE" \
+		--geometry="$ALTREQWIDTH"x"$ALTREQHEIGHT"+0+0 \
 		--field="Load AutoTweak Config '$VALCFG'?":LBL \
 		--field="<span font=\"italic\">(Skip/Load/Ignore AutoTweaks for '$GN ($AID)')</span>":LBL \
 		--button="SKIP":0  \
@@ -3258,7 +3448,7 @@ function guiLoadCfg {
 			;;
 		esac
 	elif [ "$USEGUI" == "$ZENITY" ]; then
-		ZENSEL="$("$ZENBIN" --list --title="$PROGNAME ($PROGCMD) - $PROGVERS" --text="Load AutoTweak Config\n'VALCFG'?\n(Load/Skip/Ignore AutoTweaks for '$GN ($AID)')" --radiolist --column "Choose" --column "Option" FALSE "Load" FALSE "Skip" FALSE "Ignore" --timeout="$WAITEDITOR" --width="$STLREQWIDTH" --height="$STLREQHEIGHT" 2>/dev/null)"
+		ZENSEL="$("$ZENBIN" --list --title="$PROGNAME ($PROGCMD) - $PROGVERS" --text="Load AutoTweak Config\n'VALCFG'?\n(Load/Skip/Ignore AutoTweaks for '$GN ($AID)')" --radiolist --column "Choose" --column "Option" FALSE "Load" FALSE "Skip" FALSE "Ignore" --timeout="$WAITEDITOR" --width="$ALTREQWIDTH" --height="$ALTREQHEIGHT" 2>/dev/null)"
 		if [ "$ZENSEL" == "Load" ]; then
 			LOADAUTOCFG="$GUICFG"
 			writelog "INFO" "${FUNCNAME[0]} - marked '$LOADAUTOCFG' for loading"
@@ -3286,11 +3476,17 @@ function validateATCfg {
 	fi
 
 	if [ "$ATVALIDATE" -ge 1 ]; then
+
+		loadCfg "$STLGUICFG" X
+		TITLE="${PROGNAME}-AskEditTweak"
+		updateWinRes "$TITLE" "$STLGUICFG" "AETREQWIDTH" "AETREQHEIGHT" &
+
 		writelog "INFO" "${FUNCNAME[0]} - gui asking if '$VALCFG' should be edited as ATVALIDATE is '$ATVALIDATE', autoloaded, skipped or ignored"
 		
 		if [ "$USEGUI" == "$YAD" ]; then
-			"$YAD" --borders=30 --window-icon=gtk-yes --form --center --on-top --fixed --undecorated \
-			--width="$STLREQWIDTH" --height="$STLREQHEIGHT" \
+			"$YAD" --borders="$YADBORDER" --window-icon=gtk-yes --form --center --on-top --undecorated \
+			--title="$TITLE" \
+			--geometry="$AETREQWIDTH"x"$AETREQHEIGHT"+0+0 \
 			--field="Found AutoTweak Config '$VALCFG'":LBL \
 			--field="<span font=\"italic\">(Edit/Skip/Load/Ignore AutoTweaks for '$GN ($AID)')</span>":LBL \
 			--button="EDIT":0  \
@@ -3316,7 +3512,7 @@ function validateATCfg {
 				;;
 			esac
 		elif [ "$USEGUI" == "$ZENITY" ]; then
-				ZENSEL="$("$ZENBIN" --list --title="$PROGNAME ($PROGCMD) - $PROGVERS" --text="Found AutoTweak Config '$VALCFG'.\n(Edit/Skip/Load/Ignore AutoTweaks for '$GN ($AID)')" --radiolist --column "Choose" --column "Option" FALSE "Edit" FALSE "Skip" FALSE "Load" FALSE "Ignore" --timeout="$ATVALIDATE" --width="$STLREQWIDTH" --height="$STLREQHEIGHT" 2>/dev/null)"
+				ZENSEL="$("$ZENBIN" --list --title="$PROGNAME ($PROGCMD) - $PROGVERS" --text="Found AutoTweak Config '$VALCFG'.\n(Edit/Skip/Load/Ignore AutoTweaks for '$GN ($AID)')" --radiolist --column "Choose" --column "Option" FALSE "Edit" FALSE "Skip" FALSE "Load" FALSE "Ignore" --timeout="$ATVALIDATE" --width="$AETREQWIDTH" --height="$AETREQHEIGHT" 2>/dev/null)"
 				if [ "$ZENSEL" == "Edit" ]; then
 					writelog "INFO" "${FUNCNAME[0]} - selected EDIT - opening '$VALCFG' with the editor now"
 					"$STLEDITOR" "$VALCFG"
@@ -3358,9 +3554,14 @@ function AdoptAutoTweak {
 
 function AskAdoptAutoTweak {
 	if [ "$USEGUI" == "$YAD" ]; then
-		"$YAD" --borders=30 --window-icon=gtk-yes --form --center --on-top --fixed --undecorated \
-		--width="$STLREQWIDTH" --height="$STLREQHEIGHT" \
-		--title="Convert used AutoTweak?" \
+
+		loadCfg "$STLGUICFG" X
+		TITLE="${PROGNAME}-ConvertAutoTweak"
+		updateWinRes "$TITLE" "$STLGUICFG" "CATREQWIDTH" "CATREQHEIGHT" &
+	
+		"$YAD" --borders="$YADBORDER" --window-icon=gtk-yes --form --center --on-top --undecorated \
+		--title="$TITLE" \
+		--geometry="$CATREQWIDTH"x"$CATREQHEIGHT"+0+0 \
 		--text="<span font_weight='bold'>$GN ($AID) - Convert used AutoTweak?</span>" \
 		--field=" ":LBL " " \
 		--field="Adopt the just used AutoTweak '$LOADAUTOCFG'\n and skip autotweaks for '$GN ($AID)' from now on?":LBL \
@@ -3380,7 +3581,7 @@ function AskAdoptAutoTweak {
 			;;
 		esac
 	elif [ "$USEGUI" == "$ZENITY" ]; then
-		ZENSEL="$("$ZENBIN" --list --title="$PROGNAME ($PROGCMD) - $PROGVERS" --text="Convert used AutoTweak?" --radiolist --column "Choose" --column "Option" FALSE "Adobt" FALSE "Cancel" --timeout="$WAITEDITOR" --width="$STLREQWIDTH" --height="$STLREQHEIGHT" 2>/dev/null)"
+		ZENSEL="$("$ZENBIN" --list --title="$PROGNAME ($PROGCMD) - $PROGVERS" --text="Convert used AutoTweak?" --radiolist --column "Choose" --column "Option" FALSE "Adobt" FALSE "Cancel" --timeout="$WAITEDITOR" --width="$CATREQWIDTH" --height="$CATREQHEIGHT" 2>/dev/null)"
 		if [ "$ZENSEL" == "Adobt" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - selected ADOPT - converting '$LOADAUTOCFG' to a regular tweakfile"
 		   AdoptAutoTweak
@@ -3445,18 +3646,23 @@ function autoGenTweak {
 
 function launchCustomProg {
 	if [ -z "$CUSTOMCMD" ] || [ "$CUSTOMCMD" == "$(which echo 2>/dev/null)" ]; then
+
 		writelog "INFO" "${FUNCNAME[0]} - CUSTOMCMD variable is empty - opening file requester"
-		
+
+		loadCfg "$STLGUICFG" X
+		TITLE="${PROGNAME}-OpenCustomProgram"
+		updateWinRes "$TITLE" "$STLGUICFG" "CUSTPROGREQWIDTH" "CUSTPROGEQHEIGHT" &
+
 		if [ "$USEGUI" == "$YAD" ]; then
-			ZCUST="$("$YAD" --window-icon=gtk-yes --borders=30 --form --center --on-top --fixed --undecorated \
-			--width="$STLREQWIDTH" --height="$STLREQHEIGHT" \
-			--title="Select Custom executable" \
+			ZCUST="$("$YAD" --window-icon=gtk-yes --borders="$YADBORDER" --form --center --on-top --undecorated \
+			--title="$TITLE" \
+			--geometry="$CUSTPROGREQWIDTH"x"$CUSTPROGEQHEIGHT"+0+0 \
 			--text="<span font_weight='bold'>$GN ($AID) - Select Custom executable</span>" \
 			--field=" ":LBL " " \
 			--field="Select executable file":FL)"
 
 		elif [ "$USEGUI" == "$ZENITY" ]; then
-			ZCUST="$("$ZENBIN" --file-selection --width="$STLREQWIDTH" --height="$STLREQHEIGHT" --title="Select Custom executable" 2>/dev/null)"
+			ZCUST="$("$ZENBIN" --file-selection --width="$CUSTPROGREQWIDTH" --height="$CUSTPROGEQHEIGHT" --title="Select Custom executable" 2>/dev/null)"
 		fi
 
 		if [ -n "$ZCUST" ]; then
@@ -3506,15 +3712,19 @@ function launchCustomProg {
 			else
 				writelog "INFO" "${FUNCNAME[0]} - CUSTOMCMD file '$CUSTOMCMD' not found - opening file requester"
 				
+				loadCfg "$STLGUICFG" X
+				TITLE="${PROGNAME}-OpenCustomProgram"
+				updateWinRes "$TITLE" "$STLGUICFG" "CUSTPROGREQWIDTH" "CUSTPROGEQHEIGHT" &
+				
 				if [ "$USEGUI" == "$YAD" ]; then
-					ZCUST="$("$YAD" --window-icon=gtk-yes --borders=30 --form --center --on-top --fixed --undecorated \
-					--width="$STLREQWIDTH" --height="$STLREQHEIGHT" \
-					--title="Select Custom executable" \
+					ZCUST="$("$YAD" --window-icon=gtk-yes --borders="$YADBORDER" --form --center --on-top --undecorated \
+					--title="$TITLE" \
+					--geometry="$CUSTPROGREQWIDTH"x"$CUSTPROGEQHEIGHT"+0+0 \
 					--text="<span font_weight='bold'>$GN ($AID) - Select Custom executable</span>" \
 					--field=" ":LBL " " \
 					--field="Select executable file":FL)"		
 				elif [ "$USEGUI" == "$ZENITY" ]; then
-					ZCUST="$("$ZENBIN" --file-selection --width="$STLREQWIDTH" --height="$STLREQHEIGHT" --title="Select Custom executable" 2>/dev/null)"
+					ZCUST="$("$ZENBIN" --file-selection --width="$CUSTPROGREQWIDTH" --height="$CUSTPROGEQHEIGHT" --title="Select Custom executable" 2>/dev/null)"
 				fi
 				
 				if [ -n "$ZCUST" ]; then
@@ -4501,13 +4711,17 @@ function setVortexSELaunch {
 						writelog "BUG" "${FUNCNAME[0]} - you might want to use a custom proton version from $PROTOLAURL instead!"
 
 						mkProjDir "$PROTOLADLDIR" 1
-				
+
+						loadCfg "$STLGUICFG" X
+						TITLE="${PROGNAME}-ScriptExtender"
+						updateWinRes "$TITLE" "$STLGUICFG" "SEREQWIDTH" "SEREQHEIGHT" &
+
 						if [ "$USEGUI" == "$YAD" ]; then
 				
 							if [ -d "$STEAMCOMPATOOLS/$PROTOLAVER" ]; then	
-								"$YAD" --borders=30 --window-icon=gtk-yes --form --center --on-top --fixed -undecorated \
-								--width="$STLREQWIDTH" --height="$STLREQHEIGHT" \
-								--title="Proton Version not Script Extender compatible" \
+								"$YAD" --borders="$YADBORDER" --window-icon=gtk-yes --form --center --on-top -undecorated \
+								--title="$TITLE" \
+								--geometry="$SEREQWIDTH"x"$SEREQHEIGHT"+0+0 \
 								--field="Using '$PROTONVERSION' which is not compatible with '$2'\nYou already have the compatible proton version lying under '$STEAMCOMPATOOLS/$PROTOLAVER'\nJust select it in Steam as compatibility tool for '$GN'":LBL \
 								--field="<span font=\"italic\">Click Exit to exit now, click play to start game without Script Extender</span>":LBL \
 								--field=" ":LBL " " \
@@ -4526,9 +4740,9 @@ function setVortexSELaunch {
 								esac
 							else 
 								if [ -f "$PROTOLADL" ]; then
-									"$YAD" --borders=30 --window-icon=gtk-yes --form --center --on-top --fixed --undecorated \
-									--width="$STLREQWIDTH" --height="$STLREQHEIGHT" \
-									--title="Proton Version not Script Extender compatible" \
+									"$YAD" --borders="$YADBORDER" --window-icon=gtk-yes --form --center --on-top --undecorated \
+									--title="$TITLE" \
+									--geometry="$SEREQWIDTH"x"$SEREQHEIGHT"+0+0 \
 									--field="Compatible proton '$PROTOLAVER' already downloaded to '$PROTOLADL'\nYou have to install it to '$STEAMCOMPATOOLS' with steam closed to use it":LBL \
 									--field="<span font=\"italic\">Click Install to extract '$PROTOLADL' to '$STEAMCOMPATOOLS' (at your own risk!)\nClick play to start game without Script Extender</span>":LBL \
 									--button="PLAY":0  \
@@ -4546,9 +4760,9 @@ function setVortexSELaunch {
 										;;
 									esac
 								else
-									"$YAD" --borders=30 --window-icon=gtk-yes --form --center --on-top --fixed --undecorated \
-									--width="$STLREQWIDTH" --height="$STLREQHEIGHT" \
-									--title="Proton Version not Script Extender compatible" \
+									"$YAD" --borders="$YADBORDER" --window-icon=gtk-yes --form --center --on-top --undecorated \
+									--title="$TITLE" \
+									--geometry="$SEREQWIDTH"x"$SEREQHEIGHT"+0+0 \
 									--field="$PROTONVERSION' is not compatible with '$2'\nDownload compatible proton '$PROTOLAVER' to '$PROTOLADL'?\nYou should stop steam then and install the package manually to '$STEAMCOMPATOOLS' to make it available.\nWill re-check again when download is finished.":LBL \
 									--field="<span font=\"italic\">Click play to start game without download</span>":LBL \
 									--button="PLAY":0  \
@@ -4569,7 +4783,7 @@ function setVortexSELaunch {
 							fi
 						elif [ "$USEGUI" == "$ZENITY" ]; then
 							if [ -d "$STEAMCOMPATOOLS/$PROTOLAVER" ]; then
-								ZENSEL="$("$ZENBIN" --list --title="$PROGNAME ($PROGCMD) - $PROGVERS" --text="'$PROTONVERSION' not compatible with '$2'\nYou already have the compatible proton version lying under '$STEAMCOMPATOOLS/$PROTOLAVER'\nJust select it in Steam as compatibility tool for '$GN'\nClick Exit to exit now, click play to start game without Script Extender" --radiolist --column "Choose" --column "Option" FALSE "Play" FALSE "Exit" --timeout="$WAITEDITOR" --width="$STLREQWIDTH" --height="$STLREQHEIGHT" 2>/dev/null)"
+								ZENSEL="$("$ZENBIN" --list --title="$PROGNAME ($PROGCMD) - $PROGVERS" --text="'$PROTONVERSION' not compatible with '$2'\nYou already have the compatible proton version lying under '$STEAMCOMPATOOLS/$PROTOLAVER'\nJust select it in Steam as compatibility tool for '$GN'\nClick Exit to exit now, click play to start game without Script Extender" --radiolist --column "Choose" --column "Option" FALSE "Play" FALSE "Exit" --timeout="$WAITEDITOR" --width="$SEREQWIDTH" --height="$SEREQHEIGHT" 2>/dev/null)"
 								if [ "$ZENSEL" == "Play" ]; then
 									writelog "INFO" "${FUNCNAME[0]} - selected PLAY - starting game without Script Extender compatible '$PROTONVERSION'"
 								elif [ "$ZENSEL" == "Exit" ]; then
@@ -4580,7 +4794,7 @@ function setVortexSELaunch {
 								fi
 							else 
 								if [ -f "$PROTOLADL" ]; then
-									ZENSEL="$("$ZENBIN" --list --title="$PROGNAME ($PROGCMD) - $PROGVERS" --text="'$PROTONVERSION' not compatible with '$2'\nCompatible proton '$PROTOLAVER' already downloaded to '$PROTOLADL'\nYou have to install it to '$STEAMCOMPATOOLS' with steam closed to use it\nClick Install to extract '$PROTOLADL' to '$STEAMCOMPATOOLS' (at your own risk!)\nClick play to start game without Script Extender" --radiolist --column "Choose" --column "Option" FALSE "Play" FALSE "Install" --timeout="$WAITEDITOR" --width="$STLREQWIDTH" --height="$STLREQHEIGHT" 2>/dev/null)"
+									ZENSEL="$("$ZENBIN" --list --title="$PROGNAME ($PROGCMD) - $PROGVERS" --text="'$PROTONVERSION' not compatible with '$2'\nCompatible proton '$PROTOLAVER' already downloaded to '$PROTOLADL'\nYou have to install it to '$STEAMCOMPATOOLS' with steam closed to use it\nClick Install to extract '$PROTOLADL' to '$STEAMCOMPATOOLS' (at your own risk!)\nClick play to start game without Script Extender" --radiolist --column "Choose" --column "Option" FALSE "Play" FALSE "Install" --timeout="$WAITEDITOR" --width="$SEREQWIDTH" --height="$SEREQHEIGHT" 2>/dev/null)"
 									if [ "$ZENSEL" == "Play" ]; then
 										writelog "INFO" "${FUNCNAME[0]} - selected PLAY - starting game without Script Extender compatible '$PROTONVERSION'"
 									elif [ "$ZENSEL" == "Install" ]; then
@@ -4591,7 +4805,7 @@ function setVortexSELaunch {
 										writelog "INFO" "${FUNCNAME[0]} - TIMEOUT - starting game"
 									fi
 								else
-									ZENSEL="$("$ZENBIN" --list --title="$PROGNAME ($PROGCMD) - $PROGVERS" --text="'$PROTONVERSION' not compatible with '$2'\nDownload compatible proton '$PROTOLAVER' to '$PROTOLADL'?\nYou should stop steam then and install the package manually to '$STEAMCOMPATOOLS' to make it available.\nWill re-check again when download is finished.\nClick play to start game without download" --radiolist --column "Choose" --column "Option" FALSE "Play" FALSE "Download" --timeout="$WAITEDITOR" --width="$STLREQWIDTH" --height="$STLREQHEIGHT" 2>/dev/null)"
+									ZENSEL="$("$ZENBIN" --list --title="$PROGNAME ($PROGCMD) - $PROGVERS" --text="'$PROTONVERSION' not compatible with '$2'\nDownload compatible proton '$PROTOLAVER' to '$PROTOLADL'?\nYou should stop steam then and install the package manually to '$STEAMCOMPATOOLS' to make it available.\nWill re-check again when download is finished.\nClick play to start game without download" --radiolist --column "Choose" --column "Option" FALSE "Play" FALSE "Download" --timeout="$WAITEDITOR" --width="$SEREQWIDTH" --height="$SEREQHEIGHT" 2>/dev/null)"
 									if [ "$ZENSEL" == "Play" ]; then
 										writelog "INFO" "${FUNCNAME[0]} - selected PLAY - starting game without Script Extender compatible '$PROTONVERSION'"
 									elif [ "$ZENSEL" == "Download" ]; then
@@ -5242,8 +5456,10 @@ function commandline {
 		if [ "$USEGUI" == "$YAD" ]; then
 			if [ -n "$2" ]; then
 				openSettings "$2"
+				cleanYadLeftOvers
 			else
 				openSettings
+				cleanYadLeftOvers
 			fi
 		elif [ "$USEGUI" == "$ZENITY" ]; then
 			if [ -n "$2" ]; then
@@ -5331,11 +5547,7 @@ function closeSTL {
 
 	customUserScriptStop
 
-	# delete some possible "$YAD" leftovers
-	if [ "$USEGUI" == "$YAD" ]; then
-		find /tmp -maxdepth 1 -type f -regextype posix-extended -regex '^.*cfg[0-9].[A-Z,a-z,0-9]{8}' -exec rm {} \;
-		ipcrm -M "$YADKEY" 2>/dev/null
-	fi
+	cleanYadLeftOvers
 
 	# notifier:
 	if [ "$USENOTIFIER" -eq 1 ]; then
