@@ -91,6 +91,7 @@ For the optional features you need:
 - [winetricks](#Winetricks)
 - wget, unzip for optional [Reshade](#ReShade) download, git for pulling optional shaders ([Depth3D](#Depth3D))
 - xdotool, xwininfo, vr-video-player for playing regular games side-by-side in VR ([SBS-VR](#Side-by-Side-VR))
+- xrandr, xwininfo for calculating the initial default [window sizes](#Gui-Window-Size)
 - a graphical text editor and optionally a internetbrowser see [global.conf](#Global-Config)
 - [vkBasalt](#vkBasalt)
 - [Nyrna](#Nyrna)
