@@ -96,6 +96,8 @@ GLDLREGDIR="$GLDLSTLDIR/regs"
 STEAMCOMPATOOLS="$HOME/.steam/steam/compatibilitytools.d/"
 STLDXVKDIR="$STLCFGDIR/dxvk"																# base dxvk config dir from where default per game configs are automatically parsed
 
+ISGAME=0
+
 if [ -n "$STEAM_COMPAT_DATA_PATH" ]; then
 # win game
 	GPFX="$STEAM_COMPAT_DATA_PATH/pfx"														# currently used WINEPREFIX
@@ -1309,16 +1311,29 @@ function openSettings {
 	TITLE="${PROGNAME}-Settings"
 	updateWinRes "$TITLE" "$STLGUICFG" "SETWIDTH" "SETHEIGHT" &
 
+	if [ "$ISGAME" -eq 1 ]; then
+		BUT0="SAVE/PLAY"
+		BUT5="PLAY"
+	else
+		BUT0="SAVE/EXIT"
+		BUT5="EXIT"
+	fi
+
+	BUT1="EDITOR MENU"
+	BUT2="RELOAD"
+#	BUT3="BROKEN"
+	BUT4="SAVE/RELOAD"
+
 	"$YAD" --notebook --key="$YADKEY" --borders="$YADSETBORD" --window-icon=gtk-yes  --scroll --center --undecorated \
 	--tab="GAME SETTINGS" --tab="DEFAULT SETTINGS" --tab="GLOBAL SETTINGS" --tab="RESHADE SETTINGS" --tab="VORTEX SETTINGS" \
     --title="$TITLE" \
 	--geometry="$SETWIDTH"x"$SETHEIGHT"+0+0 \
     --text="${PROGNAME} (${PROGCMD}) - ${PROGVERS} Settings" \
-	--button="EXIT":5 \
-	--button="EDITOR MENU":1 \
-	--button="RELOAD":2 \
-	--button="SAVE/RELOAD":4 \
-	--button="SAVE/EXIT":0
+	--button="$BUT5":5 \
+	--button="$BUT1":1 \
+	--button="$BUT2":2 \
+	--button="$BUT4":4 \
+	--button="$BUT0":0
 	case $? in
 		5) echo "exiting GUI"
 			writelog "INFO" "${FUNCNAME[0]} - exiting GUI"
@@ -5605,21 +5620,26 @@ function closeSTL {
 
 # main:#################
 
+
+function launchGame {
+	launchSteamGame "$@"
+	closeSTL
+	writelog "STOP" "######### $PROGNAME $PROGVERS #########"
+}
+
+
 if [ -z "$1" ]; then
 	echo "no arguments provided - you probably didn't launch this via steam command line arguments"
 	createDefaultCfgs
 	howto
 else
-	if grep -q "waitforexitandrun" <<< "$@"; then
-		launchSteamGame "$@"
-		closeSTL
-		writelog "STOP" "######### $PROGNAME $PROGVERS #########"
-	elif grep -q "steamapps/common" <<< "$@"; then
-		if [ -f "$GE" ]; then
+	if grep -q "steamapps/common" <<< "$@"; then
+		ISGAME=1
+		if grep -q "waitforexitandrun" <<< "$@"; then
+			launchGame "$@"
+		elif [ -f "$GE" ]; then
 			echo please report if this is no linux native game: "$@"
-			launchSteamGame "$@"
-			closeSTL
-			writelog "STOP" "######### $PROGNAME $PROGVERS #########"
+			launchGame "$@"
 		else
 			echo unknown parameter "$@"
 		fi
