@@ -82,21 +82,28 @@ It might be a good idea to start with configuring everything in the [Settings Me
 ## Requirements
 *(no special order)*
 
+Programs required for a full internal functionality:
 - bash *(only shell tested)*
+- git
+- unzip
+- wget
+- wmctrl
+- xdotool
+- xprop
+- xrandr
+- xwininfo
+- zenity *(in fact yad optionally replaces this and has more features, but zenity is the wider spread package and one of both is required)*
 
-For the optional features you need:
+Programs needed for optional external features *(no special order)*:
 - [strace](#Strace)
 - [Gamemode](#GameMode)
 - [MangoHud](#MangoHud)
 - [winetricks](#Winetricks)
-- wget, unzip for optional [Reshade](#ReShade) download, git for pulling optional shaders ([Depth3D](#Depth3D))
-- xdotool, xwininfo, vr-video-player for playing regular games side-by-side in VR ([SBS-VR](#Side-by-Side-VR))
-- xrandr, xwininfo for calculating the initial default [window sizes](#Gui-Window-Size)
+- vr-video-player for playing regular games side-by-side in VR ([SBS-VR](#Side-by-Side-VR))
 - a graphical text editor and optionally a internetbrowser see [global.conf](#Global-Config)
 - [vkBasalt](#vkBasalt)
 - [Nyrna](#Nyrna)
 - [ReplaySorcery](#ReplaySorcery)
-- wmctrl, xprop to optionally minimize/maximize all open windows on game start/stop
 - netstat from net-tools for basic network monitoring
 - [Boxtron](#Boxtron) and dosbox to optionally start dos games with linux native dosbox
 - ScummVM to optionally start compatible games natively using [Roberta](https://github.com/dreamer/roberta)
