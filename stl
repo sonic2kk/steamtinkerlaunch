@@ -9,27 +9,31 @@ PROGVERS="v2.0.7"
 PROGCMD="$(basename "$0")"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
+### internal dependencies ###
+#STARTINTDEPS
+GIT="git"
+UNZIP="unzip"
+WGET="wget"
+WMCTRL="wmctrl"
+XDO="xdotool"
+XPROP="xprop"
+XRANDR="xrandr"
+XWININFO="xwininfo"
+ZENITY="zenity"
+#ENDINTDEPS
+
 ### (optionally) used programs ###
 
 GAMEMODERUN="gamemoderun"
 GAMESCOPE="gamescope"
-GIT="git"
 NYRNA="nyrna"
 STEAM="steam"
 STRACE="strace"
-UNZIP="unzip"
-WGET="wget"
 WINECFG="winecfg"
 WINETRICKS="winetricks"
-WMCTRL="wmctrl"
-XDO="xdotool"
-XPROP="xprop"
-XWININFO="xwininfo"
 REPLAY="replay-sorcery"
 YAD="yad"
-ZENITY="zenity"
 ZENBIN=""
-XRANDR="xrandr"
 
 # autotweak platforms
 LU="lutris"
@@ -39,6 +43,8 @@ LUATDEBUG=0
 
 # this variable is filled with the last Auto Tweak variable accepted and is the only Auto Tweak config which is finally loaded
 LOADAUTOCFG=""
+STLICON="/dev/shm/stl-steam-checked.png"
+#STLICON="gtk-yes"
 
 ### default vars ###
 
@@ -179,20 +185,15 @@ function calculateDefaultResolutions {
 		SCREENHEIGHT="$DUMMYSCREENHEIGHT"		
 	}
 
-	if  [ -x "$(command -v "$XRANDR" 2>/dev/null)" ]; then
-		SCREENRES="$("$XRANDR" --current | grep "\*" | awk '{print $1}' | sort -gur | head -n1)"
-		writelog "INFO" "${FUNCNAME[0]} - '$XRANDR' found screenresolution '$SCREENRES'"
-		SCREENWIDTH="${SCREENRES%x*}"
-		SCREENHEIGHT="${SCREENRES#*x}"
+	SCREENRES="$("$XRANDR" --current | grep "\*" | awk '{print $1}' | sort -gur | head -n1)"
+	writelog "INFO" "${FUNCNAME[0]} - '$XRANDR' found screenresolution '$SCREENRES'"
+	SCREENWIDTH="${SCREENRES%x*}"
+	SCREENHEIGHT="${SCREENRES#*x}"
 
-		if [ -n "${SCREENWIDTH##*[!0-9]*}" ] && [ -n "${SCREENHEIGHT##*[!0-9]*}" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - found Screen Width '$SCREENWIDTH' and Screen Height '$SCREENHEIGHT'"
-		else
-			writelog "WARN" "${FUNCNAME[0]} - '$SCREENRES' is invalid - calculating with fallback screenresolution for default values"
-			useFallBackResolution
-		fi
+	if [ -n "${SCREENWIDTH##*[!0-9]*}" ] && [ -n "${SCREENHEIGHT##*[!0-9]*}" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - found Screen Width '$SCREENWIDTH' and Screen Height '$SCREENHEIGHT'"
 	else
-		writelog "WARN" "${FUNCNAME[0]} - '$XRANDR' is required for this function to work properly, but wasn't found - calculating with fallback screenresolution for default values"
+		writelog "WARN" "${FUNCNAME[0]} - '$SCREENRES' is invalid - calculating with fallback screenresolution for default values"
 		useFallBackResolution
 	fi
 
@@ -761,8 +762,6 @@ function saveCfg {
 			echo "VORTEXINSTALL=\"$VORTEXINSTALL\""
 			echo "## the Vortex version to download - if VORTEXINSTALL=1"
 			echo "VORTEXVERSION=\"$VORTEXVERSION\""
-			echo "## the Vortex download url"
-			echo "VORTEXURL=\"$VORTEXURL\""
 			echo "## comma-seperated list of Vortex Stages directories, one per partition on which you have steam games"
 			echo "VORTEXSTAGES=\"$VORTEXSTAGES\""
 			echo "## set to 1 if you don't want stl to try to auto set/create VORTEXSTAGE directories in /mount/point/Vortex or mount/point/pathto/SteamLibrary/Vortex"
@@ -770,8 +769,6 @@ function saveCfg {
 			echo "## for broken Script Extender (see Proton issue #170):"
 			echo "## skip check for patched proton:"
 			echo "SKIPCHECKPATCHEDPROTON=\"$SKIPCHECKPATCHEDPROTON\""
-			echo "## URL of a SE-patched proton build:"
-			echo "PROTOLAURL=\"$PROTOLAURL\""
 			echo "## The version of the patched proton build:"
 			echo "PROTOLAVER=\"$PROTOLAVER\""
 			echo "## the path where the patched proton should be stored"
@@ -850,64 +847,60 @@ function saveNewRes {
 
 function updateWinRes {
 	if [ "$SAVESETSIZE" -eq 1 ] ; then
-		if [ -x "$(command -v "$XWININFO" 2>/dev/null)" ]; then
-			WNAM="$1"
-			CFG="$2"
-			ORGW="$3"
-			ORGH="$4"
+		WNAM="$1"
+		CFG="$2"
+		ORGW="$3"
+		ORGH="$4"
+		
+		NEWW="${!ORGW}"
+		NEWH="${!ORGH}"
+
+		MAXWAIT=3
+		COUNTER=0
+
+		while ! "$XWININFO" -name "$WNAM" -stats >/dev/null 2>/dev/null; do
+			if [[ "$COUNTER" -ge "MAXWAIT" ]]; then
+				writelog "SKIP" "${FUNCNAME[0]} - timeout waiting for Window '$WNAM'"
+				return 
+			fi
+			writelog "INFO" "${FUNCNAME[0]} - waiting for Window '$WNAM'"
+			COUNTER=$((COUNTER+1))
+			sleep 1
+		done
+
+		writelog "INFO" "${FUNCNAME[0]} - Window '$WNAM' is running - polling the resolution"
+
+		while true; do
+			SRES="$("$XWININFO" -name "$WNAM" -stats 2>/dev/null | awk '$1=="-geometry" {print $2}' | cut -d '+' -f1)"
+			if grep -q "x" <<< "$SRES"; then
+				PREVW="$NEWW"
+				PREVH="$NEWH"
 			
-			NEWW="${!ORGW}"
-			NEWH="${!ORGH}"
+				TNEWW="${SRES%x*}"
+				TNEWH="${SRES#*x}"
 
-			MAXWAIT=3
-			COUNTER=0
-
-			while ! "$XWININFO" -name "$WNAM" -stats >/dev/null 2>/dev/null; do
-				if [[ "$COUNTER" -ge "MAXWAIT" ]]; then
-					writelog "SKIP" "${FUNCNAME[0]} - timeout waiting for Window '$WNAM'"
-					return 
-				fi
-				writelog "INFO" "${FUNCNAME[0]} - waiting for Window '$WNAM'"
-				COUNTER=$((COUNTER+1))
-				sleep 1
-			done
-
-			writelog "INFO" "${FUNCNAME[0]} - Window '$WNAM' is running - polling the resolution"
-
-			while true; do
-				SRES="$("$XWININFO" -name "$WNAM" -stats 2>/dev/null | awk '$1=="-geometry" {print $2}' | cut -d '+' -f1)"
-				if grep -q "x" <<< "$SRES"; then
-					PREVW="$NEWW"
-					PREVH="$NEWH"
-				
-					TNEWW="${SRES%x*}"
-					TNEWH="${SRES#*x}"
-
-					if [ "$TNEWW" -ne "${!ORGW}" ] || [ "$TNEWH" -ne "${!ORGH}" ]; then
-						if [ "$TNEWW" != "$PREVW" ] || [ "$TNEWH" != "$PREVH" ]; then
-							if [ -n "${TNEWW##*[!0-9]*}" ] && [ -n "${TNEWH##*[!0-9]*}" ]; then
-								NEWW="$TNEWW"
-								NEWH="$TNEWH"
-								writelog "INFO" "${FUNCNAME[0]} - found new Window Resolution '${NEWW}x${NEWH}'"
-							else
-								writelog "SKIP" "${FUNCNAME[0]} - skipping found false-positive size '${NEWW}x${NEWH}'"	
-							fi
+				if [ "$TNEWW" -ne "${!ORGW}" ] || [ "$TNEWH" -ne "${!ORGH}" ]; then
+					if [ "$TNEWW" != "$PREVW" ] || [ "$TNEWH" != "$PREVH" ]; then
+						if [ -n "${TNEWW##*[!0-9]*}" ] && [ -n "${TNEWH##*[!0-9]*}" ]; then
+							NEWW="$TNEWW"
+							NEWH="$TNEWH"
+							writelog "INFO" "${FUNCNAME[0]} - found new Window Resolution '${NEWW}x${NEWH}'"
+						else
+							writelog "SKIP" "${FUNCNAME[0]} - skipping found false-positive size '${NEWW}x${NEWH}'"	
 						fi
 					fi
-					sleep 1
-				else
-					if [ "$NEWW" -ne "${!ORGW}" ] || [ "$NEWH" -ne "${!ORGH}" ]; then
-						writelog "INFO" "${FUNCNAME[0]} - the Window '$WNAM' was closed - saving the last seen resolution '${NEWW}x${NEWH}'"
-						saveNewRes "$NEWW" "$NEWH" "$CFG" "$ORGW" "$ORGH"
-					else
-						writelog "INFO" "${FUNCNAME[0]} - the Window '$WNAM' was closed - the resolution didn't change - nothing to do"
-					fi
-					return
 				fi
-			done
-		else
-			writelog "SKIP" "${FUNCNAME[0]} - SAVESETSIZE is enabled, but '$XWININFO' was not found which is required for this function"	
-		fi
+				sleep 1
+			else
+				if [ "$NEWW" -ne "${!ORGW}" ] || [ "$NEWH" -ne "${!ORGH}" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - the Window '$WNAM' was closed - saving the last seen resolution '${NEWW}x${NEWH}'"
+					saveNewRes "$NEWW" "$NEWH" "$CFG" "$ORGW" "$ORGH"
+				else
+					writelog "INFO" "${FUNCNAME[0]} - the Window '$WNAM' was closed - the resolution didn't change - nothing to do"
+				fi
+				return
+			fi
+		done
 	fi	
 }
 
@@ -989,7 +982,7 @@ function EditorDialog {
 
 	if [ "$USEGUI" == "$YAD" ]; then
 		IFS=" " read -r -a EDFILES <<< "$(for f in $(printf '%s\n' "${CfgFiles[@]}"); do echo FALSE ; echo "$f" ; done | \
-		"$YAD" --window-icon=gtk-yes --borders="$YADBORDER" --center --undecorated --list --checklist --column=Edit --column=ConfigFile --separator=" " --print-column="2" \
+		"$YAD" --window-icon="$STLICON" --borders="$YADBORDER" --center --undecorated --list --checklist --column=Edit --column=ConfigFile --separator=" " --print-column="2" \
 		--text="<span font_weight='bold'>Select Config Files for manual Editing</span>" \
 		--title="$TITLE" \
 		--geometry="$EDREQWIDTH"x"$EDREQHEIGHT"+0+0 | tr '\n' ' ')"
@@ -1041,7 +1034,6 @@ function EditorDialog {
 }
 
 function cleanYadFiles {
-	# kill "$YADTRAYPID" 2>/dev/null
 	kill "$YADPID1" "$YADPID2" "$YADPID3" "$YADPID4" 2>/dev/null
 	rm -f "$cfg1" "$cfg2" "$cfg3" "$cfg4"
 	unset "cfg1" "cfg2" "cfg3" "cfg4"
@@ -1049,6 +1041,7 @@ function cleanYadFiles {
 
 function cleanYadLeftOvers {
 	# delete some possible "$YAD" leftovers
+
 	if [ "$USEGUI" == "$YAD" ]; then
 		find /tmp -maxdepth 1 -type f -regextype posix-extended -regex '^.*cfg[0-9].[A-Z,a-z,0-9]{8}' -exec rm {} \;
 		ipcrm -M "$YADKEY" 2>/dev/null
@@ -1141,7 +1134,6 @@ function openGameMenu {
 #ENDYADTEMPLATE
 #ENDYADGAME
 
-
 function openSettings {
 
 	writelog "INFO" "${FUNCNAME[0]} - opening Settings"
@@ -1205,10 +1197,6 @@ function openSettings {
 	loadCfg "$STLDEFGLOBALCFG" X
 
 	checkSTLCSS X
-
-	# TrayIcon Menu # maybe later
-#	"$YAD" --image="/dev/shm/stl-steam-checked.png" --notification --item-separator="," --menu="Vortex,startVortex|damn,no internal functions |only external programs,thunar" --tooltip="stl menu" &
-#	YADTRAYPID="$!"
 
 	# The Tab for the current game is almost identical to the Default Game Template Tab, so using a generic function here to avoid redundant code:
 	openGameMenu "$STLGAMECFG" "1" "Settings for Game $GN ($AID)" "$cfg1"
@@ -1341,7 +1329,7 @@ function openSettings {
 #	BUT3="BROKEN"
 	BUT4="SAVE/RELOAD"
 
-	"$YAD" --notebook --key="$YADKEY" --borders="$YADSETBORD" --window-icon=gtk-yes  --scroll --center --undecorated \
+	"$YAD" --notebook --key="$YADKEY" --borders="$YADSETBORD" --window-icon="$STLICON"  --scroll --center --undecorated \
 	--tab="GAME SETTINGS" --tab="DEFAULT SETTINGS" --tab="GLOBAL SETTINGS" --tab="VORTEX SETTINGS" \
     --title="$TITLE" \
 	--geometry="$SETWIDTH"x"$SETHEIGHT"+0+0 \
@@ -1585,91 +1573,68 @@ function usevkBasalt {
 function waitForGameWindow {
 	FOUNDWIN=0
 
-	if  [ ! -x "$(command -v "$XDO" 2>/dev/null)" ] || [ ! -x "$(command -v "$XPROP" 2>/dev/null)" ] || [ ! -x "$(command -v "$XWININFO" 2>/dev/null)" ] ; then
-		writelog "SKIP" "${FUNCNAME[0]} - '$XDO' and/or '$XPROP' and/or '$XWININFO' not found"
+	while [ "$("$XDO" search --pid "$SBSVRKGPID" | wc -l)" -eq 0 ]; do 
+		writelog "WAIT" "${FUNCNAME[0]} - waiting for any window id to appear for PID '$SBSVRKGPID' - currently '$("$XDO" search --pid "$SBSVRKGPID" | wc -l)'"
+		sleep 1
+	done
+	writelog "INFO" "${FUNCNAME[0]} - found '$("$XDO" search --pid "$SBSVRKGPID" | wc -l)' window ids of PID '$SBSVRKGPID' to analyze"	
 
-		if [ ! -x "$(command -v "$XDO" 2>/dev/null)" ]; then
-			writelog "SKIP" "${FUNCNAME[0]} - '$XDO' not found, which is at least required for this function"
-		fi
+	while read -r WINS; do
 
-		if [ ! -x "$(command -v "$XPROP" 2>/dev/null)" ]; then
-			writelog "SKIP" "${FUNCNAME[0]} - '$XPROP' not found, which is at least required for this function"
-		fi
-
-		if [ ! -x "$(command -v "$XWININFO" 2>/dev/null)" ]; then
-			writelog "SKIP" "${FUNCNAME[0]} - '$XWININFO' not found, which is at least required for this function"
-		fi
-	else
-	
-		while [ "$("$XDO" search --pid "$SBSVRKGPID" | wc -l)" -eq 0 ]; do 
-			writelog "WAIT" "${FUNCNAME[0]} - waiting for any window id to appear for PID '$SBSVRKGPID' - currently '$("$XDO" search --pid "$SBSVRKGPID" | wc -l)'"
-			sleep 1
-		done
-		writelog "INFO" "${FUNCNAME[0]} - found '$("$XDO" search --pid "$SBSVRKGPID" | wc -l)' window ids of PID '$SBSVRKGPID' to analyze"	
-
-		while read -r WINS; do
-
-		if [ "$("$XPROP" -id "$(printf 0x%x'\n' "$WINS")" | grep "_NET_WM_STATE(ATOM)" -c)" -ge 1 ]; then
-			writelog "INFO" "${FUNCNAME[0]} - found a controllable windowid"
-			WSIZ=$(($("$XWININFO" -id "$WINS" -stats | awk '$1=="-geometry" {print $2}' | awk -F '+'  '{print $1}' | sed "s:x:\*:")))
-			if [ "$WSIZ" -lt "307200" ]; then
-				writelog "SKIP" "${FUNCNAME[0]} - '$(printf 0x%x'\n' "$WINS")' is smaller than 640x480 - this is very likely not the game window - skipping"
-			else
-					writelog "INFO" "${FUNCNAME[0]} - found a big enough window with windowid '$(printf 0x%x'\n' "$WINS")'"
-					writelog "INFO" "${FUNCNAME[0]} - this is probably the game window, but making another check"
-					WSIZ=$(($("$XWININFO" -id "$WINS" -stats | awk '$1=="-geometry" {print $2}' | awk -F '+'  '{print $1}' | sed "s:x:\*:")))
-					FOUNDWIN=1
-				break
-			fi
-		fi
-		done <<< "$("$XDO" search --pid "$SBSVRKGPID")"
-
-		if [ "$FOUNDWIN" -eq 0 ]; then
-			writelog "INFO" "${FUNCNAME[0]} - no usable game window found - trying again"
-			waitForGameWindow
+	if [ "$("$XPROP" -id "$(printf 0x%x'\n' "$WINS")" | grep "_NET_WM_STATE(ATOM)" -c)" -ge 1 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - found a controllable windowid"
+		WSIZ=$(($("$XWININFO" -id "$WINS" -stats | awk '$1=="-geometry" {print $2}' | awk -F '+'  '{print $1}' | sed "s:x:\*:")))
+		if [ "$WSIZ" -lt "307200" ]; then
+			writelog "SKIP" "${FUNCNAME[0]} - '$(printf 0x%x'\n' "$WINS")' is smaller than 640x480 - this is very likely not the game window - skipping"
 		else
-			writelog "INFO" "${FUNCNAME[0]} - found a usable gamewindow'"
+				writelog "INFO" "${FUNCNAME[0]} - found a big enough window with windowid '$(printf 0x%x'\n' "$WINS")'"
+				writelog "INFO" "${FUNCNAME[0]} - this is probably the game window, but making another check"
+				WSIZ=$(($("$XWININFO" -id "$WINS" -stats | awk '$1=="-geometry" {print $2}' | awk -F '+'  '{print $1}' | sed "s:x:\*:")))
+				FOUNDWIN=1
+			break
 		fi
+	fi
+	done <<< "$("$XDO" search --pid "$SBSVRKGPID")"
+
+	if [ "$FOUNDWIN" -eq 0 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - no usable game window found - trying again"
+		"${FUNCNAME[0]}"
+	else
+		writelog "INFO" "${FUNCNAME[0]} - found a usable gamewindow'"
 	fi
 }
 
 # exports GAMEWINDOWID - the windowid of the biggest window of $GE
 function getBiggestGameWindowWID {
-	if [ ! -x "$(command -v "$XDO" 2>/dev/null)" ]; then
-		writelog "SKIP" "${FUNCNAME[0]} - '$XDO' not found, which is at least required for this function"
-	elif [ ! -x "$(command -v "$XWININFO" 2>/dev/null)" ]; then
-		writelog "SKIP" "${FUNCNAME[0]} - '$XWININFO' not found, which is at least required for this function"
-	else
-		writelog "INFO" "${FUNCNAME[0]} trying to autofind game windowid for the biggest window of game exe '$GE' running with PID '$SBSVRKGPID'"
+	writelog "INFO" "${FUNCNAME[0]} trying to autofind game windowid for the biggest window of game exe '$GE' running with PID '$SBSVRKGPID'"
 
-		declare -i MAXSIZ=0
-		MAXWIN="0x0"
+	declare -i MAXSIZ=0
+	MAXWIN="0x0"
+	
+	waitForGameWindow
 		
-		waitForGameWindow
-			
-		while read -r WINS; do
-			writelog "DEBUG" "${FUNCNAME[0]} found window id '$WINS' for PID '$SBSVRKGPID' with geometry: $("$XWININFO" -id "$WINS" -stats | awk '$1=="-geometry" {print $2}')"
-			if [ "$("$XPROP" -id "$(printf 0x%x'\n' "$WINS")" | grep "_NET_WM_STATE(ATOM)" -c)" -ge 1 ]; then
-				WSIZ=$(($("$XWININFO" -id "$WINS" -stats | awk '$1=="-geometry" {print $2}' | awk -F '+'  '{print $1}' | sed "s:x:\*:")))
-				if [ "$WSIZ" -lt "307200" ]; then
-					writelog "SKIP" "${FUNCNAME[0]} - '$(printf 0x%x'\n' "$WINS")' is smaller than 640x480 - this is very likely not the game window - skipping"
-				else
-					writelog "DEBUG" "${FUNCNAME[0]} found WINS '$WINS' window ID for PID '$SBSVRKGPID' with geometry: $("$XWININFO" -id "$WINS" -stats | awk '$1=="-geometry" {print $2}') so WSIZ is '$WSIZ' and MAXSIZ currently is '$MAXSIZ'"
-					if [ "$WSIZ" -gt "$MAXSIZ" ]; then
-						MAXSIZ=$WSIZ	
-						MAXWIN="$(printf 0x%x'\n' "$WINS")"
-						writelog "DEBUG" "${FUNCNAME[0]} MAXSIZ now is '$MAXSIZ' WINS is '$WINS' and MAXWIN is '$MAXWIN'"
-					fi
-				fi
+	while read -r WINS; do
+		writelog "DEBUG" "${FUNCNAME[0]} found window id '$WINS' for PID '$SBSVRKGPID' with geometry: $("$XWININFO" -id "$WINS" -stats | awk '$1=="-geometry" {print $2}')"
+		if [ "$("$XPROP" -id "$(printf 0x%x'\n' "$WINS")" | grep "_NET_WM_STATE(ATOM)" -c)" -ge 1 ]; then
+			WSIZ=$(($("$XWININFO" -id "$WINS" -stats | awk '$1=="-geometry" {print $2}' | awk -F '+'  '{print $1}' | sed "s:x:\*:")))
+			if [ "$WSIZ" -lt "307200" ]; then
+				writelog "SKIP" "${FUNCNAME[0]} - '$(printf 0x%x'\n' "$WINS")' is smaller than 640x480 - this is very likely not the game window - skipping"
 			else
-				writelog "DEBUG" "${FUNCNAME[0]} skipping '$WINS' - doesn't look usable"
+				writelog "DEBUG" "${FUNCNAME[0]} found WINS '$WINS' window ID for PID '$SBSVRKGPID' with geometry: $("$XWININFO" -id "$WINS" -stats | awk '$1=="-geometry" {print $2}') so WSIZ is '$WSIZ' and MAXSIZ currently is '$MAXSIZ'"
+				if [ "$WSIZ" -gt "$MAXSIZ" ]; then
+					MAXSIZ=$WSIZ	
+					MAXWIN="$(printf 0x%x'\n' "$WINS")"
+					writelog "DEBUG" "${FUNCNAME[0]} MAXSIZ now is '$MAXSIZ' WINS is '$WINS' and MAXWIN is '$MAXWIN'"
+				fi
 			fi
+		else
+			writelog "DEBUG" "${FUNCNAME[0]} skipping '$WINS' - doesn't look usable"
+		fi
 
-		done <<< "$("$XDO" search --pid "$SBSVRKGPID")"
-		
-		writelog "INFO" "${FUNCNAME[0]} found windowid $(printf 0x%x'\n' "$MAXWIN") for '$GE' running with PID '$SBSVRKGPID'"
-		export GAMEWINDOWID="$MAXWIN"
-	fi
+	done <<< "$("$XDO" search --pid "$SBSVRKGPID")"
+	
+	writelog "INFO" "${FUNCNAME[0]} found windowid $(printf 0x%x'\n' "$MAXWIN") for '$GE' running with PID '$SBSVRKGPID'"
+	export GAMEWINDOWID="$MAXWIN"
 }
 
 function SBSstartSVR {
@@ -1755,60 +1720,52 @@ function SBSstartSVR {
 }
 
 function getGameWindowName {
-	if [ ! -x "$(command -v "$XWININFO" 2>/dev/null)" ]; then
-		writelog "SKIP" "${FUNCNAME[0]} - '$XWININFO' not found, which is at least required for this function"
+	if [ -n "$VRGAMEWINDOW" ] && [ "$VRGAMEWINDOW" != "empty" ] ; then
+		writelog "SKIP" "${FUNCNAME[0]} - already have the gamewindow name: '$VRGAMEWINDOW' - skipping"
 	else
-		if [ -n "$VRGAMEWINDOW" ] && [ "$VRGAMEWINDOW" != "empty" ] ; then
-			writelog "SKIP" "${FUNCNAME[0]} - already have the gamewindow name: '$VRGAMEWINDOW' - skipping"
-		else
-			if [ -z "$GAMEWINDOWID" ]; then
-				GAMEWINDOWID="$1"
-			fi
+		if [ -z "$GAMEWINDOWID" ]; then
+			GAMEWINDOWID="$1"
+		fi
 
-			writelog "INFO" "${FUNCNAME[0]} - the windowid used for 'AUTOVRGAMEWINDOW' is '$GAMEWINDOWID'"
+		writelog "INFO" "${FUNCNAME[0]} - the windowid used for 'AUTOVRGAMEWINDOW' is '$GAMEWINDOWID'"
 
-			AUTOVRGAMEWINDOW="$("$XWININFO" -id "$GAMEWINDOWID" -stats | grep "$GAMEWINDOWID" | cut -d '"' -f2)"
-			if [ -n "$AUTOVRGAMEWINDOW" ]; then
-				if grep -q "has no name" <<< "$AUTOVRGAMEWINDOW"; then
-					writelog "INFO" "${FUNCNAME[0]} - no valid window name found - contains 'has no name'"
-				else
-					writelog "INFO" "${FUNCNAME[0]} - autodetected gamewindow name '$AUTOVRGAMEWINDOW' from windowid '$GAMEWINDOWID' - adding it into '$SBSTWEAKCFG' for future use"
-					updateConfigEntry "VRGAMEWINDOW" "\"$AUTOVRGAMEWINDOW\"" "$SBSTWEAKCFG"
-
-					writelog "INFO" "${FUNCNAME[0]} - loading '$SBSTWEAKCFG' to load '$AUTOVRGAMEWINDOW' into VRGAMEWINDOW variable"
-					loadCfg "$SBSTWEAKCFG"
-				fi
+		AUTOVRGAMEWINDOW="$("$XWININFO" -id "$GAMEWINDOWID" -stats | grep "$GAMEWINDOWID" | cut -d '"' -f2)"
+		if [ -n "$AUTOVRGAMEWINDOW" ]; then
+			if grep -q "has no name" <<< "$AUTOVRGAMEWINDOW"; then
+				writelog "INFO" "${FUNCNAME[0]} - no valid window name found - contains 'has no name'"
 			else
-				writelog "INFO" "${FUNCNAME[0]} - no gamewindow name '$AUTOVRGAMEWINDOW' autodetected from windowid '$GAMEWINDOWID'"
+				writelog "INFO" "${FUNCNAME[0]} - autodetected gamewindow name '$AUTOVRGAMEWINDOW' from windowid '$GAMEWINDOWID' - adding it into '$SBSTWEAKCFG' for future use"
+				updateConfigEntry "VRGAMEWINDOW" "\"$AUTOVRGAMEWINDOW\"" "$SBSTWEAKCFG"
+
+				writelog "INFO" "${FUNCNAME[0]} - loading '$SBSTWEAKCFG' to load '$AUTOVRGAMEWINDOW' into VRGAMEWINDOW variable"
+				loadCfg "$SBSTWEAKCFG"
 			fi
+		else
+			writelog "INFO" "${FUNCNAME[0]} - no gamewindow name '$AUTOVRGAMEWINDOW' autodetected from windowid '$GAMEWINDOWID'"
 		fi
 	fi
 }
 
 function getGameWindowData {
-	if [ ! -x "$(command -v "$XDO" 2>/dev/null)" ]; then
-		writelog "SKIP" "${FUNCNAME[0]} - '$XDO' not found, which is at least required for this function"
-	else
-		# GAMEPID is required for getBiggestGameWindow, so getting it:
-		SBSgetGamePID
+	# GAMEPID is required for getBiggestGameWindow, so getting it:
+	SBSgetGamePID
 
-		getBiggestGameWindowWID
+	getBiggestGameWindowWID
 
-		if [ "$GAMEWINDOWID" == "0x0" ]; then
-			writelog "SKIP" "${FUNCNAME[0]} - autodetecting the windowid failed - has to be selected manually"
-			GAMEWINDOWID="$(printf 0x%x'\n' "$("$XDO" selectwindow)")"
-		fi
+	if [ "$GAMEWINDOWID" == "0x0" ]; then
+		writelog "SKIP" "${FUNCNAME[0]} - autodetecting the windowid failed - has to be selected manually"
+		GAMEWINDOWID="$(printf 0x%x'\n' "$("$XDO" selectwindow)")"
+	fi
 
-		if [ -n "$GAMEWINDOWID" ]; then
-			# GAMEWINDOWID is already enough to continue, but also saving the VRGAMEWINDOW into the config to speed up future starts
-			if [ "$GAMEWINDOWID" != "0x0" ]; then
-				getGameWindowName "$GAMEWINDOWID"
-			else
-				writelog "SKIP" "${FUNCNAME[0]} - GAMEWINDOWID '$GAMEWINDOWID' is invalid - giving up!"
-			fi
+	if [ -n "$GAMEWINDOWID" ]; then
+		# GAMEWINDOWID is already enough to continue, but also saving the VRGAMEWINDOW into the config to speed up future starts
+		if [ "$GAMEWINDOWID" != "0x0" ]; then
+			getGameWindowName "$GAMEWINDOWID"
 		else
-			writelog "SKIP" "${FUNCNAME[0]} - could not determine the windowid of the game GAMEWINDOWID and therefore also not the VRGAMEWINDOW"
+			writelog "SKIP" "${FUNCNAME[0]} - GAMEWINDOWID '$GAMEWINDOWID' is invalid - giving up!"
 		fi
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - could not determine the windowid of the game GAMEWINDOWID and therefore also not the VRGAMEWINDOW"
 	fi
 }
 
@@ -1845,29 +1802,25 @@ function SBSgetGamePID {
 	if [ "$RUNSBSVR" -ge 1 ]; then
 		if [ -z "$SBSVRKGPID" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - getting the game PID"
-			if [ ! -x "$(command -v "$XWININFO" 2>/dev/null)" ]; then
-				writelog "SKIP" "${FUNCNAME[0]} - '$XWININFO' not found, which is at least required for this function"
-			else
-				while true; do
-					if [ -n "$VRGAMEWINDOW" ] && [ "$VRGAMEWINDOW" != "empty" ] ; then
-						GPID="$("$XWININFO" -name "${VRGAMEWINDOW//\"/}" -wm | grep "Process id:" | awk -F 'Process id: ' '{print $2}' | cut -d ' ' -f1)"
-						if [ -n "$GPID" ]; then
-							writelog "INFO" "${FUNCNAME[0]} - game pid '$GPID' found for VRGAMEWINDOW '$VRGAMEWINDOW'"
-							export SBSVRKGPID="$GPID"
-							break
-						fi
-					else
-						waitForGamePid
-						GPID="$(GAMEPID)"
-
-						if [ -n "$GPID" ]; then
-							writelog "INFO" "${FUNCNAME[0]} - game pid '$GPID' found"
-							export SBSVRKGPID="$GPID"
-							break
-						fi
+			while true; do
+				if [ -n "$VRGAMEWINDOW" ] && [ "$VRGAMEWINDOW" != "empty" ] ; then
+					GPID="$("$XWININFO" -name "${VRGAMEWINDOW//\"/}" -wm | grep "Process id:" | awk -F 'Process id: ' '{print $2}' | cut -d ' ' -f1)"
+					if [ -n "$GPID" ]; then
+						writelog "INFO" "${FUNCNAME[0]} - game pid '$GPID' found for VRGAMEWINDOW '$VRGAMEWINDOW'"
+						export SBSVRKGPID="$GPID"
+						break
 					fi
-				done
-			fi
+				else
+					waitForGamePid
+					GPID="$(GAMEPID)"
+
+					if [ -n "$GPID" ]; then
+						writelog "INFO" "${FUNCNAME[0]} - game pid '$GPID' found"
+						export SBSVRKGPID="$GPID"
+						break
+					fi
+				fi
+			done
 			
 			if [ -z "$SBSVRKGPID" ]; then
 				writelog "ERROR" "${FUNCNAME[0]} - no game pid SBSVRKGPID found!"
@@ -1914,49 +1867,40 @@ function SBSrunVRVideoPlayer {
 			MAXWAIT=20
 			COUNTER=0
 			
-			if [ ! -x "$(command -v "$XWININFO" 2>/dev/null)" ]; then
-				writelog "SKIP" "${FUNCNAME[0]} - '$XWININFO' not found, which is at least required for this function"
-			else
+			while ! "$XWININFO" -name "$SBSVRWINNAME" -stats  >/dev/null 2>/dev/null; do
+				if [[ "$COUNTER" -ge "MAXWAIT" ]]; then
+					writelog "SKIP" "${FUNCNAME[0]} - ERROR - timeout waiting for '$VRVIDEOPLAYER' - exit"
+					pkill -f "$VRVIDEOPLAYER"
+					RUNSBSVR=0
+					exit 1
+				fi
 
-				while ! "$XWININFO" -name "$SBSVRWINNAME" -stats  >/dev/null 2>/dev/null; do
-					if [[ "$COUNTER" -ge "MAXWAIT" ]]; then
-						writelog "SKIP" "${FUNCNAME[0]} - ERROR - timeout waiting for '$VRVIDEOPLAYER' - exit"
-						pkill -f "$VRVIDEOPLAYER"
+				if ! pgrep -f "$VRVIDEOPLAYER" ; then
+					if [ "$COUNTER" -ge 3 ]; then
+						writelog "SKIP" "${FUNCNAME[0]} - ERROR - '$VRVIDEOPLAYER' not running (crashed?) no need to wait for its window to appear - exit"
 						RUNSBSVR=0
 						exit 1
-					fi
-
-					if ! pgrep -f "$VRVIDEOPLAYER" ; then
-						if [ "$COUNTER" -ge 3 ]; then
-							writelog "SKIP" "${FUNCNAME[0]} - ERROR - '$VRVIDEOPLAYER' not running (crashed?) no need to wait for its window to appear - exit"
-							RUNSBSVR=0
-							exit 1
-						else
-							writelog "WARN" "${FUNCNAME[0]} - '$VRVIDEOPLAYER' not running yet - waiting a bit longer"
-						fi
-					fi
-
-					writelog "WAIT" "${FUNCNAME[0]} - WAIT - '$COUNTER/$MAXWAIT' sec waiting for '$VRVIDEOPLAYER' window '$SBSVRWINNAME'"
-					COUNTER=$((COUNTER+1))
-					sleep 1
-				done
-
-				# player windowid:
-				SBSVRWID=$("$XWININFO" -name "$SBSVRWINNAME" -stats | grep "^$XWININFO" | awk -F 'id: ' '{print $2}' | cut -d ' ' -f1)
-					
-				if [ ! -x "$(command -v "$XDO" 2>/dev/null)" ]; then
-					writelog "SKIP" "${FUNCNAME[0]} - '$XDO' not found, which is at least required for this function"
-				else
-					if [ -n "$SBSVRWID" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - pressing w in '$VRVIDEOPLAYER' window '$SBSVRWINNAME' to adjust view: '$XDO windowactivate --sync $SBSVRWID key w'"
-					"$XDO" windowactivate --sync "$SBSVRWID" key w
-
-					writelog "INFO" "${FUNCNAME[0]} - activating game window with id '$GAMEWINDOWID' for input"
-					"$XDO" windowactivate --sync "$GAMEWINDOWID" click 1
 					else
-						writelog "SKIP" "${FUNCNAME[0]} - WARN - SBSVRWID '$SBSVRWID' is empty!"
+						writelog "WARN" "${FUNCNAME[0]} - '$VRVIDEOPLAYER' not running yet - waiting a bit longer"
 					fi
 				fi
+
+				writelog "WAIT" "${FUNCNAME[0]} - WAIT - '$COUNTER/$MAXWAIT' sec waiting for '$VRVIDEOPLAYER' window '$SBSVRWINNAME'"
+				COUNTER=$((COUNTER+1))
+				sleep 1
+			done
+
+			# player windowid:
+			SBSVRWID=$("$XWININFO" -name "$SBSVRWINNAME" -stats | grep "^$XWININFO" | awk -F 'id: ' '{print $2}' | cut -d ' ' -f1)
+				
+			if [ -n "$SBSVRWID" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - pressing w in '$VRVIDEOPLAYER' window '$SBSVRWINNAME' to adjust view: '$XDO windowactivate --sync $SBSVRWID key w'"
+			"$XDO" windowactivate --sync "$SBSVRWID" key w
+
+			writelog "INFO" "${FUNCNAME[0]} - activating game window with id '$GAMEWINDOWID' for input"
+			"$XDO" windowactivate --sync "$GAMEWINDOWID" click 1
+			else
+				writelog "SKIP" "${FUNCNAME[0]} - WARN - SBSVRWID '$SBSVRWID' is empty!"
 			fi
 		fi
 	else
@@ -1966,38 +1910,29 @@ function SBSrunVRVideoPlayer {
 
 function SBSinitVRVideoPlayer {
 	if [ "$RUNSBSVR" -ge 1 ]; then
-		if [ -x "$(command -v "$VRVIDEOPLAYER" 2>/dev/null)" ]; then
-
-			if [ -n "$GAMEWINDOWID" ]; then
-				if [ "$GAMEWINDOWID" == "0x0" ]; then
-					writelog "SKIP" "${FUNCNAME[0]} GAMEWINDOWID '$GAMEWINDOWID' is invalid - skipping VR"
-					RUNSBSVR=0
-				else
-					writelog "INFO" "${FUNCNAME[0]} already have the gamewindow id '$GAMEWINDOWID', so directly continuing!"
-					SBSrunVRVideoPlayer	"$GAMEWINDOWID" 2>/dev/null &
-					if [ -n "$VRGAMEWINDOW" ] && [ "$VRGAMEWINDOW" != "empty" ] ; then
-						writelog "INFO" "${FUNCNAME[0]} '$VRVIDEOPLAYER' already starting, but trying to get the game window name for the config for later use"
-						getGameWindowName "$GAMEWINDOWID"
-					fi
-				fi
+		if [ -n "$GAMEWINDOWID" ]; then
+			if [ "$GAMEWINDOWID" == "0x0" ]; then
+				writelog "SKIP" "${FUNCNAME[0]} GAMEWINDOWID '$GAMEWINDOWID' is invalid - skipping VR"
+				RUNSBSVR=0
 			else
+				writelog "INFO" "${FUNCNAME[0]} already have the gamewindow id '$GAMEWINDOWID', so directly continuing!"
+				SBSrunVRVideoPlayer	"$GAMEWINDOWID" 2>/dev/null &
 				if [ -n "$VRGAMEWINDOW" ] && [ "$VRGAMEWINDOW" != "empty" ] ; then
-					if [ ! -x "$(command -v "$XWININFO" 2>/dev/null)" ]; then
-						writelog "SKIP" "${FUNCNAME[0]} - '$XWININFO' not found, which is at least required for this function"
-					else
-						GAMEWINDOWID="$("$XWININFO" -name "${VRGAMEWINDOW//\"/}" -stats | grep "^$XWININFO" | awk -F 'id: ' '{print $2}' | cut -d ' ' -f1)"
-						if [ -z "$GAMEWINDOWID" ]; then
-							writelog "SKIP" "${FUNCNAME[0]} - ERROR - could not find windowid '$GAMEWINDOWID' for the windowname '$VRGAMEWINDOW'"
-							RUNSBSVR=0
-						else
-							writelog "INFO" "${FUNCNAME[0]} - found windowid '$GAMEWINDOWID' for the windowname '$VRGAMEWINDOW'"
-							SBSrunVRVideoPlayer	"$GAMEWINDOWID" 2>/dev/null &
-						fi
-					fi
+					writelog "INFO" "${FUNCNAME[0]} '$VRVIDEOPLAYER' already starting, but trying to get the game window name for the config for later use"
+					getGameWindowName "$GAMEWINDOWID"
 				fi
 			fi
 		else
-			writelog "SKIP" "${FUNCNAME[0]} - command '$VRVIDEOPLAYER' not found - skipping"
+			if [ -n "$VRGAMEWINDOW" ] && [ "$VRGAMEWINDOW" != "empty" ] ; then
+				GAMEWINDOWID="$("$XWININFO" -name "${VRGAMEWINDOW//\"/}" -stats | grep "^$XWININFO" | awk -F 'id: ' '{print $2}' | cut -d ' ' -f1)"
+				if [ -z "$GAMEWINDOWID" ]; then
+					writelog "SKIP" "${FUNCNAME[0]} - ERROR - could not find windowid '$GAMEWINDOWID' for the windowname '$VRGAMEWINDOW'"
+					RUNSBSVR=0
+				else
+					writelog "INFO" "${FUNCNAME[0]} - found windowid '$GAMEWINDOWID' for the windowname '$VRGAMEWINDOW'"
+					SBSrunVRVideoPlayer	"$GAMEWINDOWID" 2>/dev/null &
+				fi
+			fi
 		fi
 	else
 		writelog "SKIP" "${FUNCNAME[0]} - skipping because RUNSBSVR was set to 0"
@@ -2350,12 +2285,10 @@ function editorSkipped {
 		ASKCNT="$SETASKCNT"
 
 		if [ "$USENOTIFIER" -eq 1 ]; then
-			if  [ -x "$(command -v "$NOTY" 2>/dev/null)" ]; then
-				if [ "$ASKCNT" -ge "$MAXASK" ]; then
-					"$NOTY" "Canceled the Requester $MAXASK times for game '$AID'. It will be skipped from now on"
-				elif [ "$ASKCNT" -lt "$MAXASK" ]; then
-					"$NOTY" "Canceled the Requester $ASKCNT times for game '$AID'. It will be skipped after $((MAXASK - ASKCNT)) more times"
-				fi
+			if [ "$ASKCNT" -ge "$MAXASK" ]; then
+				"$NOTY" "Canceled the Requester $MAXASK times for game '$AID'. It will be skipped from now on"
+			elif [ "$ASKCNT" -lt "$MAXASK" ]; then
+				"$NOTY" "Canceled the Requester $ASKCNT times for game '$AID'. It will be skipped after $((MAXASK - ASKCNT)) more times"
 			fi
 		fi
 
@@ -2399,7 +2332,7 @@ function askSettings {
 
 			if [ "$USEGUI" == "$YAD" ]; then
 				if [ -n "$FOUNDTWEAKCFG" ]; then
-					"$YAD" --borders="$YADBORDER" --window-icon=gtk-yes --form --center --on-top --undecorated \
+					"$YAD" --borders="$YADBORDER" --window-icon="$STLICON" --form --center --on-top --undecorated \
 					--title="$TITLE" \
 					--geometry="$ASKSETREQWIDTH"x"$ASKSETREQHEIGHT"+0+0 \
 					--text="<span font_weight='bold'>$GN ($AID) - Open Settings?</span>" \
@@ -2412,7 +2345,7 @@ function askSettings {
 					--timeout="$WAITEDITOR" \
 					--timeout-indicator=top
 				else
-					"$YAD" --borders="$YADBORDER" --window-icon=gtk-yes --form --center --on-top -undecorated \
+					"$YAD" --borders="$YADBORDER" --window-icon="$STLICON" --form --center --on-top -undecorated \
 					--title="$TITLE" \
 					--geometry="$ASKSETREQWIDTH"x"$ASKSETREQHEIGHT"+0+0 \
 					--text="<span font_weight='bold'>$GN ($AID) - Open Settings?</span>" \
@@ -3473,7 +3406,7 @@ function guiLoadCfg {
 
 	writelog "INFO" "${FUNCNAME[0]} - requester asking if '$GUICFG' should be loaded"
 	if [ "$USEGUI" == "$YAD" ]; then
-		"$YAD" --borders="$YADBORDER" --window-icon=gtk-yes --form --center --on-top --undecorated \
+		"$YAD" --borders="$YADBORDER" --window-icon="$STLICON" --form --center --on-top --undecorated \
 		--title="$TITLE" \
 		--geometry="$ALTREQWIDTH"x"$ALTREQHEIGHT"+0+0 \
 		--field="Load AutoTweak Config '$VALCFG'?":LBL \
@@ -3530,7 +3463,7 @@ function validateATCfg {
 		writelog "INFO" "${FUNCNAME[0]} - gui asking if '$VALCFG' should be edited as ATVALIDATE is '$ATVALIDATE', autoloaded, skipped or ignored"
 		
 		if [ "$USEGUI" == "$YAD" ]; then
-			"$YAD" --borders="$YADBORDER" --window-icon=gtk-yes --form --center --on-top --undecorated \
+			"$YAD" --borders="$YADBORDER" --window-icon="$STLICON" --form --center --on-top --undecorated \
 			--title="$TITLE" \
 			--geometry="$AETREQWIDTH"x"$AETREQHEIGHT"+0+0 \
 			--field="Found AutoTweak Config '$VALCFG'":LBL \
@@ -3605,7 +3538,7 @@ function AskAdoptAutoTweak {
 		TITLE="${PROGNAME}-ConvertAutoTweak"
 		updateWinRes "$TITLE" "$STLGUICFG" "CATREQWIDTH" "CATREQHEIGHT" &
 	
-		"$YAD" --borders="$YADBORDER" --window-icon=gtk-yes --form --center --on-top --undecorated \
+		"$YAD" --borders="$YADBORDER" --window-icon="$STLICON" --form --center --on-top --undecorated \
 		--title="$TITLE" \
 		--geometry="$CATREQWIDTH"x"$CATREQHEIGHT"+0+0 \
 		--text="<span font_weight='bold'>$GN ($AID) - Convert used AutoTweak?</span>" \
@@ -3700,7 +3633,7 @@ function launchCustomProg {
 		updateWinRes "$TITLE" "$STLGUICFG" "CUSTPROGREQWIDTH" "CUSTPROGEQHEIGHT" &
 
 		if [ "$USEGUI" == "$YAD" ]; then
-			ZCUST="$("$YAD" --window-icon=gtk-yes --borders="$YADBORDER" --form --center --on-top --undecorated \
+			ZCUST="$("$YAD" --window-icon="$STLICON" --borders="$YADBORDER" --form --center --on-top --undecorated \
 			--title="$TITLE" \
 			--geometry="$CUSTPROGREQWIDTH"x"$CUSTPROGEQHEIGHT"+0+0 \
 			--text="<span font_weight='bold'>$GN ($AID) - Select Custom executable</span>" \
@@ -3763,7 +3696,7 @@ function launchCustomProg {
 				updateWinRes "$TITLE" "$STLGUICFG" "CUSTPROGREQWIDTH" "CUSTPROGEQHEIGHT" &
 				
 				if [ "$USEGUI" == "$YAD" ]; then
-					ZCUST="$("$YAD" --window-icon=gtk-yes --borders="$YADBORDER" --form --center --on-top --undecorated \
+					ZCUST="$("$YAD" --window-icon="$STLICON" --borders="$YADBORDER" --form --center --on-top --undecorated \
 					--title="$TITLE" \
 					--geometry="$CUSTPROGREQWIDTH"x"$CUSTPROGEQHEIGHT"+0+0 \
 					--text="<span font_weight='bold'>$GN ($AID) - Select Custom executable</span>" \
@@ -3908,35 +3841,31 @@ function toggleWindows {
 
 	if [ -n "$TOGGLEWINDOWS" ]; then
 		if [ "$TOGGLEWINDOWS" -eq 1 ]; then
-			if  [ -x "$(command -v "$WMCTRL" 2>/dev/null)" ] && [ -x "$(command -v "$XPROP" 2>/dev/null)" ] ; then
-				writelog "INFO" "${FUNCNAME[0]} - setting windows to $1"
-				WSTATE="$1"
+			writelog "INFO" "${FUNCNAME[0]} - setting windows to $1"
+			WSTATE="$1"
 
-				while read -r WINNAME; do
-					if "$XPROP" -id "$WINNAME" | grep "_NET_WM_ACTION_MINIMIZE" -q ;then
-						if [ "$WSTATE" == "windowminimize" ]; then
-							if "$XPROP" -id "$WINNAME" | grep "_NET_WM_STATE_HIDDEN" -q ;then
-								MINIMIZEDWINDOWS="${MINIMIZEDWINDOWS} $WINNAME"
-							else
-								writelog "INFO" "${FUNCNAME[0]} - minimizing '$WINNAME'"
-								"$XDO" "$WSTATE" "$WINNAME"
-							fi
-						elif [ "$WSTATE" == "windowraise" ]; then
-							if grep -q "$WINNAME" <<< "$MINIMIZEDWINDOWS" ; then
-								writelog "INFO" "${FUNCNAME[0]} - '$WINNAME' was already minimized - not raising it"
-							else
-								writelog "INFO" "${FUNCNAME[0]} - raising '$WINNAME'"
-								"$XDO" "$WSTATE" "$WINNAME"
-								# apparently sometimes windows don't raise although the command was executed ($XDO bug or executed too fast?)
-								# so simply raising twice here
-								"$XDO" "$WSTATE" "$WINNAME"
-							fi
+			while read -r WINNAME; do
+				if "$XPROP" -id "$WINNAME" | grep "_NET_WM_ACTION_MINIMIZE" -q ;then
+					if [ "$WSTATE" == "windowminimize" ]; then
+						if "$XPROP" -id "$WINNAME" | grep "_NET_WM_STATE_HIDDEN" -q ;then
+							MINIMIZEDWINDOWS="${MINIMIZEDWINDOWS} $WINNAME"
+						else
+							writelog "INFO" "${FUNCNAME[0]} - minimizing '$WINNAME'"
+							"$XDO" "$WSTATE" "$WINNAME"
+						fi
+					elif [ "$WSTATE" == "windowraise" ]; then
+						if grep -q "$WINNAME" <<< "$MINIMIZEDWINDOWS" ; then
+							writelog "INFO" "${FUNCNAME[0]} - '$WINNAME' was already minimized - not raising it"
+						else
+							writelog "INFO" "${FUNCNAME[0]} - raising '$WINNAME'"
+							"$XDO" "$WSTATE" "$WINNAME"
+							# apparently sometimes windows don't raise although the command was executed ($XDO bug or executed too fast?)
+							# so simply raising twice here
+							"$XDO" "$WSTATE" "$WINNAME"
 						fi
 					fi
-				done<<< "$("$WMCTRL" -l | cut -d ' ' -f1)"		
-			else
-				writelog "SKIP" "${FUNCNAME[0]} - '$WMCTRL' or '$XPROP' not found"
-			fi
+				fi
+			done<<< "$("$WMCTRL" -l | cut -d ' ' -f1)"
 			
 			if [ "$1" == "windowminimize" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - following windows won't be raised on exit, as they are minimized: '$MINIMIZEDWINDOWS'"
@@ -3948,32 +3877,28 @@ function toggleWindows {
 }
 
 function checkWinetricksInstPak {
-	if [ -n "$WINETRICKSPAKS" ] && [ "$WINETRICKSPAKS" != "none" ]; then
-		if  [ -x "$(command -v "$WINETRICKS" 2>/dev/null)" ]; then
-			IFS=" " read -r -a INSTWINETRICKSPAKS <<< "$WINETRICKSPAKS"
-			WTLOG="$GPFX/winetricks.log"
-			if [ ! -f "$WTLOG" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - installing '$WINETRICKSPAKS' silently with '$WINETRICKS'"
-				# if everything goes well all packages are installed at once:
-				extWine64Run "$WINETRICKS" --unattended "${INSTWINETRICKSPAKS[@]}"
-			else
-				NOTINSTALLEDLIST="$(comm -23 <(echo "${INSTWINETRICKSPAKS[*]}" | tr ' ' '\n' | sort) <(sort < "$WTLOG"))"
-				NOTINSTALLED=()
-				while IFS= read -r wp; do
-					NOTINSTALLED+=("$wp")
-				done <<< "$NOTINSTALLEDLIST"
-
-				if [ -n "${NOTINSTALLED[0]}" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - installing following packages now: '${NOTINSTALLED[*]}'"
-					extWine64Run "$WINETRICKS" --unattended "${NOTINSTALLED[@]}"
-					# re-check here?
-					# checkWinetricksInstPak
-				else
-					writelog "INFO" "${FUNCNAME[0]} - all packages of '$WINETRICKSPAKS' are already installed - nothing to do"
-				fi
-			fi
+	if [ -n "$WINETRICKSPAKS" ] && [ "$WINETRICKSPAKS" != "none" ] && [ "$WINETRICKSPAKS" != "0" ]; then
+		IFS=" " read -r -a INSTWINETRICKSPAKS <<< "$WINETRICKSPAKS"
+		WTLOG="$GPFX/winetricks.log"
+		if [ ! -f "$WTLOG" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - installing '$WINETRICKSPAKS' silently with '$WINETRICKS'"
+			# if everything goes well all packages are installed at once:
+			extWine64Run "$WINETRICKS" --unattended "${INSTWINETRICKSPAKS[@]}"
 		else
-			writelog "SKIP" "${FUNCNAME[0]} - '$WINETRICKS' not found - skipping"
+			NOTINSTALLEDLIST="$(comm -23 <(echo "${INSTWINETRICKSPAKS[*]}" | tr ' ' '\n' | sort) <(sort < "$WTLOG"))"
+			NOTINSTALLED=()
+			while IFS= read -r wp; do
+				NOTINSTALLED+=("$wp")
+			done <<< "$NOTINSTALLEDLIST"
+
+			if [ -n "${NOTINSTALLED[0]}" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - installing following packages now: '${NOTINSTALLED[*]}'"
+				extWine64Run "$WINETRICKS" --unattended "${NOTINSTALLED[@]}"
+				# re-check here?
+				# checkWinetricksInstPak
+			else
+				writelog "INFO" "${FUNCNAME[0]} - all packages of '$WINETRICKSPAKS' are already installed - nothing to do"
+			fi
 		fi
 	fi
 }
@@ -3983,14 +3908,10 @@ function checkWinetricksLaunch {
 	# gui:
 	if [ -n "$RUN_WINETRICKS" ]; then
 		if [ "$RUN_WINETRICKS" -eq 1 ]; then
-			if  [ -x "$(command -v "$WINETRICKS" 2>/dev/null)" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - launching '$WINETRICKS' before game start with following command line:"
-				# several variables coming from steam have to be cleaned in order to get wine to work here
-				writelog "INFO" "${FUNCNAME[0]} - '$WINETRICKS --gui'"
-				extWine64Run "$WINETRICKS" --gui
-			else
-				writelog "SKIP" "${FUNCNAME[0]} - '$WINETRICKS' not found - skipping"
-			fi
+			writelog "INFO" "${FUNCNAME[0]} - launching '$WINETRICKS' before game start with following command line:"
+			# several variables coming from steam have to be cleaned in order to get wine to work here
+			writelog "INFO" "${FUNCNAME[0]} - '$WINETRICKS --gui'"
+			extWine64Run "$WINETRICKS" --gui
 		fi
 	fi
 	# silent
@@ -4001,14 +3922,10 @@ function checkWinetricksLaunch {
 function checkWineCfgLaunch {
 	if [ -n "$RUN_WINECFG" ]; then
 		if [ "$RUN_WINECFG" -eq 1 ]; then
-			if  [ -x "$(command -v "$WINECFG" 2>/dev/null)" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - starting '$WINECFG' before game start:"
-				# several variables coming from steam have to be cleaned in order to get wine to work here
-				writelog "INFO" "${FUNCNAME[0]} - winecfg"
-				extWine64Run "$WINECFG"
-			else
-				writelog "SKIP" "${FUNCNAME[0]} - command '$WINECFG' not found - skipping"
-			fi
+			writelog "INFO" "${FUNCNAME[0]} - starting '$WINECFG' before game start:"
+			# several variables coming from steam have to be cleaned in order to get wine to work here
+			writelog "INFO" "${FUNCNAME[0]} - winecfg"
+			extWine64Run "$WINECFG"
 		fi
 	fi
 }
@@ -4103,16 +4020,12 @@ function customRegs {
 function useNyrna {
 	if [ -n "$RUN_NYRNA" ]; then
 		if [ "$RUN_NYRNA" -eq 1 ]; then
-			if  [ -x "$(command -v "$NYRNA" 2>/dev/null)" ]; then
-				if pgrep -f "$NYRNA" ; then
-					writelog "SKIP" "${FUNCNAME[0]} - '$NYRNA' already running - skipping"
-					RUN_NYRNA=0
-				else
-				writelog "INFO" "${FUNCNAME[0]} - starting '$NYRNA'"
-				"$NYRNA" &
-				fi
+			if pgrep -f "$NYRNA" ; then
+				writelog "SKIP" "${FUNCNAME[0]} - '$NYRNA' already running - skipping"
+				RUN_NYRNA=0
 			else
-				writelog "SKIP" "${FUNCNAME[0]} - '$NYRNA' not found"
+			writelog "INFO" "${FUNCNAME[0]} - starting '$NYRNA'"
+			"$NYRNA" &
 			fi
 		fi
 	fi
@@ -4121,16 +4034,12 @@ function useNyrna {
 function useReplay {
 	if [ -n "$RUN_REPLAY" ]; then
 		if [ "$RUN_REPLAY" -eq 1 ]; then
-			if  [ -x "$(command -v "$REPLAY" 2>/dev/null)" ]; then
-				if pgrep -f "$REPLAY" ; then
-					writelog "SKIP" "${FUNCNAME[0]} - '$REPLAY' already running - skipping"
-					RUN_REPLAY=0
-				else
-				writelog "INFO" "${FUNCNAME[0]} - starting '$REPLAY'"
-				"$REPLAY" &
-				fi
+			if pgrep -f "$REPLAY" ; then
+				writelog "SKIP" "${FUNCNAME[0]} - '$REPLAY' already running - skipping"
+				RUN_REPLAY=0
 			else
-				writelog "SKIP" "${FUNCNAME[0]} - '$REPLAY' not found"
+			writelog "INFO" "${FUNCNAME[0]} - starting '$REPLAY'"
+			"$REPLAY" &
 			fi
 		fi
 	fi
@@ -4171,20 +4080,15 @@ function runGamCon {
 function checkGamConLaunch {
 	if [ -n "$RUN_GAMCON" ]; then
 		if [ "$RUN_GAMCON" -ge 1 ]; then
-			if  [ -x "$(command -v "$GAMCON" 2>/dev/null)" ]; then
-				# start the whole GamCon start/wait/stop/process
-				writelog "OK" "${FUNCNAME[0]} - starting '$GAMCON' process for '$AID'"
-				if [ "$RUN_GAMCON" -eq 1 ]; then
-					runGamCon &
-				elif [ "$RUN_GAMCON" -gt 1 ]; then
-					writelog "INFO" "${FUNCNAME[0]} - RUN_GAMCON is greater than 1 - starting '$GAMCON' delayed for RUN_GAMCON '$RUN_GAMCON' seconds"
-					( sleep "$RUN_GAMCON"; runGamCon) &
-				else
-					writelog "SKIP" "${FUNCNAME[0]} - ERROR - RUN_GAMCON is '$RUN_GAMCON' which is invalid - setting to 0"
-					RUN_GAMCON=0
-				fi
+			# start the whole GamCon start/wait/stop/process
+			writelog "OK" "${FUNCNAME[0]} - starting '$GAMCON' process for '$AID'"
+			if [ "$RUN_GAMCON" -eq 1 ]; then
+				runGamCon &
+			elif [ "$RUN_GAMCON" -gt 1 ]; then
+				writelog "INFO" "${FUNCNAME[0]} - RUN_GAMCON is greater than 1 - starting '$GAMCON' delayed for RUN_GAMCON '$RUN_GAMCON' seconds"
+				( sleep "$RUN_GAMCON"; runGamCon) &
 			else
-				writelog "SKIP" "${FUNCNAME[0]} - '$GAMCON' not found"
+				writelog "SKIP" "${FUNCNAME[0]} - ERROR - RUN_GAMCON is '$RUN_GAMCON' which is invalid - setting to 0"
 				RUN_GAMCON=0
 			fi
 		fi
@@ -4205,33 +4109,29 @@ function wineVortexRun {
 }
 
 function installVortexDeps {
-	if  [ -x "$(command -v "$WINETRICKS" 2>/dev/null)" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - installing Vortex dependencies"
+	writelog "INFO" "${FUNCNAME[0]} - installing Vortex dependencies"
 
-		VORTEXDEPS="win10 corefonts dotnet48 dxvk"
-		IFS=" " read -r -a INSTVORTEXPAKS <<< "$VORTEXDEPS"
-		WTLOG="${VORTEXPREFIX//\"/}/winetricks.log"
+	VORTEXDEPS="win10 corefonts dotnet48 dxvk"
+	IFS=" " read -r -a INSTVORTEXPAKS <<< "$VORTEXDEPS"
+	WTLOG="${VORTEXPREFIX//\"/}/winetricks.log"
 
-		if [ ! -f "$WTLOG" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - installing '$VORTEXDEPS' silently with $WINETRICKS"
-			wineVortexRun "$WINETRICKS" --unattended "${INSTVORTEXPAKS[@]}"
-			writelog "INFO" "${FUNCNAME[0]} - $VORTEXDEPS installed"
-		else
-			NOTINSTALLEDLIST="$(comm -23 <(echo "${INSTVORTEXPAKS[*]}" | tr ' ' '\n' | sort) <(sort < "$WTLOG"))"
-			NOTINSTALLED=()
-			while IFS= read -r wp; do
-				NOTINSTALLED+=("$wp")
-			done <<< "$NOTINSTALLEDLIST"
-
-			if [ -n "${NOTINSTALLED[0]}" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - installing following packages now: '${NOTINSTALLED[*]}'"
-					wineVortexRun "$WINETRICKS" --unattended "${NOTINSTALLED[@]}"
-			else
-				writelog "INFO" "${FUNCNAME[0]} - all packages of '$VORTEXDEPS' are already installed - nothing to do"
-			fi
-		fi
+	if [ ! -f "$WTLOG" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - installing '$VORTEXDEPS' silently with $WINETRICKS"
+		wineVortexRun "$WINETRICKS" --unattended "${INSTVORTEXPAKS[@]}"
+		writelog "INFO" "${FUNCNAME[0]} - $VORTEXDEPS installed"
 	else
-			writelog "SKIP" "${FUNCNAME[0]} - $WINETRICKS not found - skipping Vortex dependency installation"
+		NOTINSTALLEDLIST="$(comm -23 <(echo "${INSTVORTEXPAKS[*]}" | tr ' ' '\n' | sort) <(sort < "$WTLOG"))"
+		NOTINSTALLED=()
+		while IFS= read -r wp; do
+			NOTINSTALLED+=("$wp")
+		done <<< "$NOTINSTALLEDLIST"
+
+		if [ -n "${NOTINSTALLED[0]}" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - installing following packages now: '${NOTINSTALLED[*]}'"
+				wineVortexRun "$WINETRICKS" --unattended "${NOTINSTALLED[@]}"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - all packages of '$VORTEXDEPS' are already installed - nothing to do"
+		fi
 	fi
 }
 
@@ -4764,7 +4664,7 @@ function setVortexSELaunch {
 						if [ "$USEGUI" == "$YAD" ]; then
 				
 							if [ -d "$STEAMCOMPATOOLS/$PROTOLAVER" ]; then	
-								"$YAD" --borders="$YADBORDER" --window-icon=gtk-yes --form --center --on-top -undecorated \
+								"$YAD" --borders="$YADBORDER" --window-icon="$STLICON" --form --center --on-top -undecorated \
 								--title="$TITLE" \
 								--geometry="$SEREQWIDTH"x"$SEREQHEIGHT"+0+0 \
 								--field="Using '$PROTONVERSION' which is not compatible with '$2'\nYou already have the compatible proton version lying under '$STEAMCOMPATOOLS/$PROTOLAVER'\nJust select it in Steam as compatibility tool for '$GN'":LBL \
@@ -4785,7 +4685,7 @@ function setVortexSELaunch {
 								esac
 							else 
 								if [ -f "$PROTOLADL" ]; then
-									"$YAD" --borders="$YADBORDER" --window-icon=gtk-yes --form --center --on-top --undecorated \
+									"$YAD" --borders="$YADBORDER" --window-icon="$STLICON" --form --center --on-top --undecorated \
 									--title="$TITLE" \
 									--geometry="$SEREQWIDTH"x"$SEREQHEIGHT"+0+0 \
 									--field="Compatible proton '$PROTOLAVER' already downloaded to '$PROTOLADL'\nYou have to install it to '$STEAMCOMPATOOLS' with steam closed to use it":LBL \
@@ -4805,7 +4705,7 @@ function setVortexSELaunch {
 										;;
 									esac
 								else
-									"$YAD" --borders="$YADBORDER" --window-icon=gtk-yes --form --center --on-top --undecorated \
+									"$YAD" --borders="$YADBORDER" --window-icon="$STLICON" --form --center --on-top --undecorated \
 									--title="$TITLE" \
 									--geometry="$SEREQWIDTH"x"$SEREQHEIGHT"+0+0 \
 									--field="$PROTONVERSION' is not compatible with '$2'\nDownload compatible proton '$PROTOLAVER' to '$PROTOLADL'?\nYou should stop steam then and install the package manually to '$STEAMCOMPATOOLS' to make it available.\nWill re-check again when download is finished.":LBL \
@@ -5109,6 +5009,7 @@ function checkVortex {
 	fi
 }
 
+
 function checkDep {
 	CATNAM="$1"
 	CHECKPROG="$2"
@@ -5121,16 +5022,45 @@ function checkDep {
 	fi
 }
 
-function checkDeps {
-
+function checkExtDeps {
 	checkDep "USEGAMEMODERUN" "$GAMEMODERUN"
 	checkDep "USEGAMESCOPE" "$GAMESCOPE"
 	checkDep "RUN_NYRNA" "$NYRNA"
 	checkDep "STRACERUN" "$STRACE"
 	checkDep "RUN_WINETRICKS" "$WINETRICKS"
+	checkDep "WINETRICKSPAKS" "$WINETRICKS"
 	checkDep "RUN_REPLAY" "$REPLAY"
-	checkDep "TOGGLEWINDOWS" "$WMCTRL"
-	checkDep "TOGGLEWINDOWS" "$XPROP"
+	checkDep "USELUXTORPEDA" "$LUXTORPEDACMD"
+	checkDep "USEROBERTA" "$ROBERTACMD"
+	checkDep "USEBOXTRON" "$BOXTRONCMD"
+	checkDep "RUNSBSVR" "$VRVIDEOPLAYER"
+	checkDep "RUN_GAMCON" "$GAMCON"
+	checkDep "USENETMON" "$NETMON"
+	checkDep "USENOTIFIER" "$NOTY"
+	checkDep "RUN_WINECFG" "$WINECFG"
+}
+
+function checkIntDeps {
+	DEPSMISSING=0
+
+	while read -r INTDEP; do
+		if  [ ! -x "$(command -v "$(which "${!INTDEP}" 2>/dev/null)" 2>/dev/null)" ]; then
+			echo "${!INTDEP} not found!"
+			DEPSMISSING=1
+		fi
+	done <<< "$(sed -n "/^#STARTINTDEPS/,/^#ENDINTDEPS/p;/^#ENDINTDEPS/q" "$0" | grep -v "^#" | cut -d '=' -f1)"
+
+	if  [ ! -x "$(command -v "$(which "$YAD" 2>/dev/null)" 2>/dev/null)" ] && [ ! -x "$(command -v "$(which "$ZENITY" 2>/dev/null)" 2>/dev/null)" ]; then
+		DEPSMISSING=1
+		echo "neither '$YAD' nor '$ZENITY' was found, but at least one of them is required!"
+	fi
+
+	if [ "$DEPSMISSING" -eq 1 ]; then
+		echo "Above programs need to be installed to use '$PROGCMD' - exiting now"
+		exit
+	else
+		echo "good, all internal required programs are installed"
+	fi
 }
 
 #####################################################
@@ -5174,7 +5104,7 @@ function launchSteamGame {
 	writelog "INFO" "${FUNCNAME[0]} -------------------"
 	writelog "INFO" "${FUNCNAME[0]} - createGameCfg:"
 	createGameCfg "$@"
-
+	
 	writelog "INFO" "${FUNCNAME[0]} - askSettings:"
 	askSettings
 
@@ -5251,7 +5181,7 @@ function launchSteamGame {
 	checkXliveless
 
 	# check dependencies - disable functions if dependency programs are missing and/or warn
-	checkDeps
+	checkExtDeps
 
 	# start winetricks gui if RUN_WINETRICKS is 1 or silently if WINETRICKSPAKS is not empty
 	writelog "INFO" "${FUNCNAME[0]} - checkWinetricksLaunch:"
@@ -5634,6 +5564,7 @@ function launchGame {
 	writelog "STOP" "######### $PROGNAME $PROGVERS #########"
 }
 
+checkIntDeps
 
 if [ -z "$1" ]; then
 	echo "no arguments provided - you probably didn't launch this via steam command line arguments"
