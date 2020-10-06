@@ -67,7 +67,7 @@ It might be a good idea to start with configuring everything in the [Settings Me
 * **[Notifier](#Notifier)** start/stop notify message per game
 * **[Strace](#Strace)** for easily debugging a game
 * **[Editor Hotkey](#Editor)** for editing the gameconfig
-* **[ProtonDB](#Editor)** automatically open page for the launched game with the editor
+* **[Editor URL](#Editor)** automatically open a defined URL for the launched game with the editor
 * **[ReShade](#ReShade)** automatic installation and configuration
 * **[Depth3D](#Depth3D)** automatic shader installation
 * **[vkBasalt](#vkBasalt)** basic vkBasalt configuration
@@ -248,8 +248,6 @@ Most options are disabled by default. To deploy appropriate global options early
 Contains universal configuration options used all games, f.e.
 file paths, command line options for supported 3rd party programs, but also general "behavior" settings
 *(f.e. [Logs](#Logs) mode or timeout for the [Settings Menu](#Settings-Menu) and [Editor](#Editor)WAITEDITOR)*
-or which default programs to use
-*(f.e. which `BROWSER` to use for opening [ProtonDB](#Editor) together with the `STLEDITOR` (default '$(which geany)') [Editor](#Editor))*
 
 ### Gui Config
 `STLGUICFG` *(`$STLCFGDIR/gui.conf`)*
@@ -926,7 +924,8 @@ Configfiles within the [Editor Dialog](#Editor-Dialog) started directly or as su
 If xdg-open is configured as `STLEDITOR` or if the configured editor is not found, **stl** tries to autoconfigure an installed texteditor.
 *(first trying to find it through 'xdg-mime query', then check binary availability in this order: geany, gedit, leafpad, kwrite)*
 
-Set `PROTONDB` to 1 to additionally open the `PDBURL` url for the game in your `BROWSER` when starting the editor from the [Editor Dialog](#Editor-Dialog).
+Set `OPENEDITORURL` to 1 to additionally open the `EDITORURL` url for the game in your `BROWSER` when starting the editor from the [Editor Dialog](#Editor-Dialog).
+*(by default the url `$OPENEDITORURL/$SteamAppID` is opened, if this doesn't work with the url you want to open just open an issue)*
 
 #### Editor Dialog
 A little File selection requester allowing to choose which config files to open with the [Editor](#Editor).
