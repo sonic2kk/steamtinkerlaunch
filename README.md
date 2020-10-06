@@ -535,7 +535,7 @@ is used as additional source for custom Proton Versions for inclusion into the a
 There are several methods to add new entries to the list
 *(besides editing it manually / via [Editor Dialog](#Editor-Dialog))*:
 
-####### Adding local Custom Proton
+###### Adding local Custom Proton
 a locally installed Custom Proton can be added either by
 
 - using the button `Add local Custom Proton` in the Game Settings Tab of the [Settings Menu](#Settings-Menu)
@@ -545,7 +545,7 @@ a locally installed Custom Proton can be added either by
 With either method a `proton` file can be selected via file-requester
 and an optional "proton version name" can be entered in a separate field.
 
-####### Download Custom Proton
+###### Download Custom Proton
 Custom Proton packages can also be downloaded and added by
 - using the button `Download Custom Proton` in the Game Settings Tab of the [Settings Menu](#Settings-Menu)
 - via command line: `stl addcustomproton dl` or just `stl acp dl` 
