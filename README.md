@@ -1,23 +1,36 @@
 **SteamTinkerLaunch** (short **stl**) is a Linux wrapper tool for use with the Steam client
-which allows to customize and start tools and options for games quickly on the fly.
+which allows to customize and start tools and options for games quickly on the fly *(see [Features](#Features))*
 
 By using a versatile configuration structure it is both easy to setup and flexible.
-
-The steam command line has to be edited once and for all *(imho the single line textfield is very limited)*
-and everything else can be changed and controlled easily subsequently using **stl**
 
 ## How to use
 
 ### General usage
-Just add this program to your steam game command line like:
+**stl works with linux native games and with games using proton!**
+*(Some features (f.e. [ReShade](#ReShade)) are only available for games using proton)*
+
+#### Steam Launch Option
+To use **stl** as Steam Launch Option just add it to your Steam Game Launch Option command line like:
 'stl %command%'
 
 ![stl starter](https://github.com/frostworx/repo-assets/blob/master/gifs/stl-command.gif)
 
 *A little script which automatically does this for every game in the Steam library can be found [here](https://gist.github.com/frostworx/36bd76e705a0c87af523fa57cfeebaf8)*
 
-**stl works with linux native games and with games using proton!**
-*(Some features (f.e. [ReShade](#ReShade)) are only available for games using proton.)*
+#### Steam Compatibility Tool
+**stl** can also be used as Steam Compatibility Tool, simply by using the **stl** builtin command line options:
+
+`stl compat add` *(adds stl under compatibilitytools.d/SteamTinkerLaunch)*
+`stl compat del` *(deletes compatibilitytools.d/SteamTinkerLaunch)*
+`stl compat (get)` *(checks the state of compatibilitytools.d/SteamTinkerLaunch)*
+
+If `add` is selected and stl is started from a different path than before, the symlink will be automatically updated.
+
+*(as usual, when a Steam Compatibility Tool was added, Steam needs to be restarted to make the added Tool available)*
+
+![stl steam compat](https://github.com/frostworx/repo-assets/blob/master/gifs/stl-steam-compat.gif)
+
+*(It doesn't make any sense, but a game also works, when stl is set both as Launch Option and as Steam Compatibility Tool)*
 
 ### Game specific use
 When starting a game a small requester will popup.
@@ -63,7 +76,6 @@ It might be a good idea to start with configuring everything in the [Settings Me
 * **[Auto Tweaks](#Auto-Tweaks)** support for automatic import of game configs from several other platforms
 * **[Nyrna](#Nyrna)** start/stop ReplaySorcery per game
 * **[ReplaySorcery](#ReplaySorcery)** start/stop ReplaySorcery per game
-* **[Custom Game Launch](#Custom-Game-Launch)** easy simple custom game launch
 * **[NetMon](#Network-Monitoring)** basic network monitoring
 * **[Boxtron](#Boxtron)** support via steam `DOSBox` category
 * **[Roberta](#Roberta)** support via steam `ScummVM` category
@@ -77,7 +89,8 @@ It might be a good idea to start with configuring everything in the [Settings Me
 * **[GameScope](#GameScope)** start/stop gamescope per game
 * **[Settings Menu](#Settings-Menu)** easy configuration for almost all settings with the builtin Settings Menu
 * **[native Support](#Native-Games)** support native Linux games
-
+* **[Steam Compatibility Tool](#Steam Compatibility Tool)** can be used as [Steam Launch Option](#Steam-Launch-Option) and as [Steam Compatibility Tool](#Steam-Compatibility-Tool)
+* **[Proton Selection](#Proton-Selection)** switch between Proton-Versions, automatically download custom Proton builds...
 
 ## Requirements
 *(no special order)*
@@ -92,8 +105,10 @@ Programs required for a full internal functionality:
 - xprop
 - xrandr
 - xwininfo
-- zenity *(in fact yad optionally replaces this and has more features, but zenity is the wider spread package and one of both is required)*
-
+- [Yad](https://github.com/v1cont/yad). The *(by default enabled)* [Settings Menu](#Settings-Menu) and [Tray Icon](#Tray-Icon) only work with yad.
+  The [Editor Dialog](#Editor-Dialog), which can be used as limited alternative to the [Settings Menu](#Settings-Menu) also works with zenity.
+  *(so this should be an `or dependency` in distribution packages)*
+  
 Programs needed for optional external features *(no special order)*:
 - [strace](#Strace)
 - [Gamemode](#GameMode)
@@ -111,7 +126,8 @@ Programs needed for optional external features *(no special order)*:
 - wine for optional [Vortex](#Vortex) support
 - [GameConqueror/scanmem](#GameConqueror) to optionally cheat
 - [GameScope](#GameScope)
-- [Yad](https://github.com/v1cont/yad) for the GUI (yad is only required for the optional [Settings Menu](#Settings-Menu). For the [Editor Dialog](#Editor-Dialog) zenity is enough, so yad is optional)
+- zenity *(see description for yad above)*
+
 
 ## Configuration
 All configuration files are self-contained documented and always growing, so not every option is documented in here.
@@ -173,10 +189,21 @@ The Settings Menu can also be opened via commandline:
 an optional commandline argument can be either a SteamAppID or `last` for opening the config of the last played game stored in `LASTRUN`
 If `USEGUI` is set to "zenity" the [Editor Dialog](#Editor-Dialog) will open instead of the [Settings Menu](#Settings-Menu), but the parameters are the same.
 
-### Gui Window Size
+#### Gui Window Size
 When `SAVESETSIZE` is enabled in the Global Config Tab or [global.conf](#Global-Config) *(by default it is)* resoluton changes of every **stl** window (both yad and zenity) are automatically saved
 when the corresponding window is closed. This function requires xwininfo to work.
 All resolutions will be stored in the [gui config file](#Gui-Config).
+
+### Tray Icon
+When yad is used **stl** also offers a Tray Icon, which automatically starts and is available until **stl** (or the started game) exits.
+Can be disabled *(by default enabled)* with disabling `USETRAYICON` in the [Settings Menu](#Settings-Menu) Global Config Tab or [global.conf](#Global-Config).
+Right Click opens The Menu.
+Middle Click Closes The Menu
+
+#### Tray Icon Buttons
+- "Pick Window Name" *(pick the window name and save it into the [Game Config](#Game-Configurations))*
+- "Get Active Window Name" *(waits 5 seconds and saves the window name of the active window into the [Game Config](#Game-Configurations))*
+- "Kill Proton Game" *(kills the currently running Proton game by killing its wineserver)*
 
 ### Configuration Locations
 
@@ -274,6 +301,8 @@ a game in the corresponding category
 Multiple Category Configuration Files are possible, they are loaded one after another, with the last one overriding settings also found in the previous files.
 All settings which are also configured in `$STLGAMECFG` are overridden (but not overwritten).
 
+The function can be diabled per game with the option `CHECKCATEGORIES` 
+
 ### Tweaks
 
 All different user writable tweakfiles live in their own subdirectory under `TWEAKDIR` *("$STLCFGDIR/tweaks")*
@@ -351,7 +380,7 @@ Here's an example config for trine 2 `STLCFGDIR/sbs/35720.conf`
 RUN_CUSTOMCMD=1
 CUSTOMCMD=trine2_32bit.exe
 ONLY_CUSTOMCMD=1
-VRGAMEWINDOW=Trine 2
+GAMEWINDOW=Trine 2
 ```
 
 Means, when `RUNSBSVR` is not 0 in the main Trine2 config file it will autodetect above sbs tweak config and use the defined variables:
@@ -470,6 +499,8 @@ As of writing those are
 [Auto Tweaks](#Auto-Tweaks) downloads for all enabled Auto Tweaks are stored in here
 [GFWL/xlive](#GFWL) xlive replacement
 [self maintaining configs](#self-maintaining-configs) stl itself will be downloaded here when self-maintaining-configs are used
+[Proton packages](#Proton) Proton packages
+
 
 ### Logs
 Logs are written into the `LOGDIR` defined in the [global.conf](#Global-Config).
@@ -478,6 +509,57 @@ also defined in the [global.conf](#Global-Config).
 There are several logfiles, those which are written mostly are the game specific ones *($SteamAppId.log)*
 
 ## Features in detail:
+
+#### Proton Selection
+**stl** provides the option to easily choose a specific Proton Version per game, by simply selecting one from an autogenerated dropdown Menu in
+the Game Settings Tab of the [Settings Menu](#Settings-Menu).
+
+The function can be en-/disabled in the [Settings Menu](#Settings-Menu) *(by default disabled!)*, but if **stl** is used as [Steam Compatibility Tool](#Steam-Compatibility-Tool) with a Proton game,
+a force override flag disables the set flag, as it obviously requires any Proton version to start. In this case the latest official Proton Version is set by default.
+
+The List of available Proton Versions is generated on the first **stl** launch *(in `/dev/shm`)* and recreated when a new Proton Version was added on the fly.
+
+**stl** searches in the following sources for Proton Versions to generate the list:
+- user installed compatibility tools *(~/.steam/steam/compatibilitytools.d/)*
+- system-wide compatibility tools *(/usr/share/steam/compatibilitytools.d)*
+- official proton versions installed via Steam in default SteamLibrary *(~/.steam/steam/steamapps/common/)*
+- official proton versions installed via Steam in additional SteamLibrary Paths *(the additional Paths are extraced from ~/.steam/steam/config/config.vdf)*
+- a [custom Proton List](#Custom-Proton-List)
+
+##### Custom Proton List
+The optional custom Proton List `CUSTOMPROTONLIST` in [`STLCFGDIR`](#User-Configuration)
+is used as additional source for custom Proton Versions for inclusion into the autogenerated Proton Version (dropdown) List.
+
+###### Adding Entries to the Custom Proton List
+
+There are several methods to add new entries to the list
+*(besides editing it manually / via [Editor Dialog](#Editor-Dialog))*:
+
+####### Adding local Custom Proton
+a locally installed Custom Proton can be added either by
+
+- using the button `Add local Custom Proton` in the Game Settings Tab of the [Settings Menu](#Settings-Menu)
+- via command line: `stl addcustomproton` or just `stl acp` 
+  *(accepting an absolute path to a proton executable as optional argument)*
+
+With either method a `proton` file can be selected via file-requester
+and an optional "proton version name" can be entered in a separate field.
+
+####### Download Custom Proton
+Custom Proton packages can also be downloaded and added by
+- using the button `Download Custom Proton` in the Game Settings Tab of the [Settings Menu](#Settings-Menu)
+- via command line: `stl addcustomproton dl` or just `stl acp dl` 
+  *(accepting direct download URL  as optional argument)*
+  
+With either method a download requester with a dropdown menu is opened.
+The menu is autogenerated, by parsing all `CP_*` *(Custom Proton)* URLs from the [Url Config](#Url-Config)
+for proton packages. Currently following Custom builds are parsed *(feel free to recommend one if you think something is missing)*
+
+- [GloriousEggroll](/https://github.com/GloriousEggroll/proton-ge-custom)
+- [Proton TKG](https://github.com/Frogging-Family/wine-tkg-git)
+- [Protola](https://github.com/Patola/wine)
+
+Packages *(`tar.*`, `zip`)* containing a `proton` file will be extracted and added to the List of available Proton Builds.
 
 #### Custom Program
 
@@ -611,6 +693,8 @@ and when you exit Vortex the selected game will start normally (with your mods).
 `stl vortex install`: starts a full Vortex installation with all dependencies
 `stl vortex start`: starts Vortex
 `stl vortex getset`: lists all configured Vortex settings
+`stl vortex stage`: will open a dialog where a vortex stage directory can be added
+                    *(accepts absolute path to the (to be created) directory as argument to skip the dialog)*
 
 ###### Start Vortex by enabling it in the Settings Menu:
 The `VORTEXMODE` option in the Game Tab of the [Settings Menu](#Settings-Menu) has the following modes:
@@ -638,50 +722,52 @@ Some settings are preconfigured, to make this working without any user configura
 This directory contains the Vortex configfile `STLVORTEXCFG` *(`STLCFGDIR`/vortex/vortex.conf`)*
 
 Here are the main configuration options, for a full list, simply look into the [Settings Menu](#Settings-Menu)
-- `VORTEXWINE`: the wine binary used for Vortex - **default commented out, if not configured it defaults to proton-wine if available and will fall back to system-wide wine**
+- `VORTEXWINE`: the wine binary used for Vortex - **defaults to wine from Newest Official Proton installed**
 - `VORTEXPREFIX`:the `WINEPREFIX` path used for Vortex - **default is `STLVORTEXDIR/wineprefix`**
 - `VORTEXDOWNLOADPATH`: the path where all Vortex downloads should be stored - **default is `STLVORTEXDIR/downloads`**
 - `VORTEXINSTALL`: download and install Vortex automatically if set to 1 **default enabled**
-- [`VORTEXSTAGES`](#Vortex-Stages): comma-seperated list of "Vortex Staging directories - one for each of your "Steam Library" partitions - **default commented out and empty**
-- `DISABLE_AUTOSTAGES`: set to 1 if you don't want **stl** to try to auto set/create `VORTEXSTAGE` directories **default 0**
+- `DISABLE_AUTOSTAGES`: set to 1 if you don't want **stl** to try to auto set/create [Vortex Stages](#Vortex-Stages) directories **default 0**
 
 ##### Vortex Stages
-**Explanation `VORTEXSTAGES`:**
 
 Vortex uses 2 main [Deployment_Methods](https://wiki.nexusmods.com/index.php/Deployment_Methods) to enable Mods for the managed games.
 "Hardlink Deployment" and "Symlink Deployment". Symlink Deployment doesn't work under wine, so Hardlink is required (and automatically set for every game from **stl**, although it is default anyway)
 Those "Hardlinks" only work if the "Staging directory" is on the same partition as the game (yes the same physical partition, not the same "windows drive in wine).
 As Steam Library directories can be on multiple partitions a "Staging directory" is required for every one of them.
 
-###### Automated (zeroconf) `VORTEXSTAGES` configuration
+###### Automated (zeroconf) `VORTEXSTAGELIST` configuration
 When you start a game **stl** will parse on which mount point it actually lies.
 Then it tests if it can create/write a "Vortex" directory in the root directory of the partition.
 If it fails to create a directory in the previous step, it tests next if it can create/write a "Vortex" directory
 directly in the "Steam Library" directory of the started game besides the "steamapps" directory.
 
-The first succeeding directory will be added automatically to the `VORTEXSTAGES` variable
+The first succeeding directory will be added automatically to the `VORTEXSTAGELIST` list
 and will be used from now on as "Staging directory" automatically for all games lying on the same partition.
-So after you have started one "Vortex" game from each of your "Steam Library" partitions the `VORTEXSTAGES` variable is ready for all of your games.
+So after you have started one "Vortex" game from each of your "Steam Library" partitions the `VORTEXSTAGELIST` variable is ready for all of your games.
 The only exception is the partition where your steam is installed ("/" or "/home" if you have an extra /home/partition).
 Here the default "Vortex Staging directory" is `STLVORTEXDIR/staging` instead.
 
 Other additional paths can be added easily, just make suggestions.
 If you don't want that automation just set `DISABLE_AUTOSTAGES` to 1 and set them manually instead:
 
-###### Manual `VORTEXSTAGES` configuration
-This can be manually configured in the `VORTEXSTAGES` simply by adding one writable directory per partition you want to use.
-This `VORTEXSTAGES` is currently not very stable without any sanity checks so make sure to:
-Seperate the paths with a "," and do not use quotes or spaces in between!
-**working example:**
-`VORTEXSTAGES=/media/games1/Vortex,/media/games2/Vortex,/home/blah/blubb/Vortex`
-**not working example:**
-`VORTEXSTAGES=/media/games1/Vortex, /media/games2/Vortex, "/home/blah/blubb/Vortex"`
+###### Manual `VORTEXSTAGELIST` configuration
+Simply add one writable directory per Steam Library partition you want to use to the `VORTEXSTAGELIST`.
+This can also be done directly by using the `add Vortex Stage button` in the Vortex Tab of the [Settings Menu](#Settings-Menu).
 
-##### Mods using Script Extender
+##### Script Extender
 Several games *(Skyrim, Fallout flavours)* have many mods which depends on a special "Script Extender" program ("SE").
 Unfortunately those "SE" programs don't [work with default proton since some time](https://github.com/ValveSoftware/Proton/issues/170).
-**stl** optionally checks if the "SE" compatible custom proton version [Protola]("https://github.com/Patola/wine/releases")
-is being used when a "SE" exe is autodetected as start command. All related configuration options can be found in the Vortex Tab of the [Settings Menu](#Settings-Menu).
+When **stl** detects one of those "SE exe" files in the game dir, a requester will pop up with following options:
+- start the regular game exe
+- start the regular game exe and save the decision (so don't ask again)
+- start the found "SE exe"
+- start the found "SE exe" and save the decision (so don't ask again)
+
+When choosing "SE exe" make sure the [selected Proton Version](#Proton-Selection) is can actually run the exe!
+
+*(The "don't ask again" option `SELAUNCH` can't be set in the [Settings Menu](#Settings-Menu)
+and must be removed manually from the [game config](#Game Configurations) -f.e. via [Editor Dialog](#Editor-Dialog)*
+
 
 #####  Some additional Notes
 
@@ -701,7 +787,6 @@ If `REGEDIT` is
 - set to anything else the file `$REGEDIT` will be searched and used in `GLOBALREGDIR` and `STLREGDIR`
 
 when a registry file from above was applied `REGEDIT` will be set to "0" in the game config, to skip regedit on the following game starts
-
 
 #### Side-by-Side VR
 
@@ -727,8 +812,8 @@ Where Reshade has more features and vkBasalt is probably more stable, because it
 **stl** goes through several functions to automatically find the current window id
 *(and for later use also the game window name, to make starting SBS VR for the game faster)*
 This works mostly very good, but some games start own launchers before the actual game.
-Then autodetecting the correct window is almost impossible, and the window name has to be set manually as `VRGAMEWINDOW`.
-If there is demand for it a proper reimplementation of "picking a window" and/or "waiting x seconds for a window" to get the window name is possible.
+Then autodetecting the correct window is almost impossible, and the window name has to be set manually as `GAMEWINDOW`.
+If autodetecting failed for whatever reason, it is still possible to pick the game window name again, by using the [Tray Icon](#Tray-Icon)
 
 The vr-video-player author was so kind to accept a little patch, to work better with **stl**.
 It is possible to live zoom in and out and the zoom state is written into a temporary file, which **stl** picks up.
@@ -851,6 +936,14 @@ when selected [on Game Launch](#On-Game-Launch) and also [via Command Line](#via
 Literally every env variable can be set in [gameconfig `$STLGAMECFG`](#Game-Configurations) and [system-wide configuration](#Global-Config),
 making it pretty easy to tinker with important ones *(f.e `PROTON`* , `DXVK`* , `MANGOHUD`, `RADV_PERFTEST`, `WINE`...)*
 The Possibilities Are Endless...
+
+## Game Launch Speed
+**stl** has pretty much to check, but when everything is configured, several option-checks can be disabled (per game)
+to speed up the actual game start process.
+Here are some examples which improve the start notably *(all settings can be configured in the [Settings Menu](#Settings-Menu))*
+- set `WAITEDITOR` to `0` [on Game Launch](#On-Game-Launch)
+- set `CHECKCATEGORIES` to `0` if the Game has no [Steam Category](#Steam-Categories) Tweak anyway
+- set `SAVESETSIZE` to `0` when all windows have their optimal [size](#Gui-Window-Size)
 
 ## Contribution
 
