@@ -136,6 +136,9 @@ LASTRUN="$LOGDIR/lastrun.txt"																# some variables from the last run 
 RS_D3D47_DEST="d3dcompiler_47.dll"
 RS_DX_DEST="dxgi.dll"
 RS_D9_DEST="d3d9.dll"
+RSENABLED="ReShade-${PROGCMD}-enabled.txt"
+RSDISABLED="ReShade-${PROGCMD}-disabled.txt"
+
 YADKEY="$PLACEHOLDERAID"
 # currently hardcoded borders used in yad:
 YADSETBORD=8
@@ -804,8 +807,6 @@ function saveCfg {
 			echo "## luxtorpeda args:"
 			echo "LUXTORPEDAARGS=\"$LUXTORPEDAARGS\""
 			echo "##### SideBySide #####"
-			echo "## Depth3D git project:"
-			echo "DEPTH3DURL=\"$DEPTH3DURL\""
 			echo "## allow git clone of Depth3D shaderfiles :"
 			echo "CLONE_DEPTH3D=\"$CLONE_DEPTH3D\""
 			echo "## Depth3D sourcefiles:"
@@ -1792,7 +1793,6 @@ function openSettings {
 	--field=" ":LBL " " \
 	--field="     Side-by-Side Stereo3D VR player command!The Side-by-Side Stereo3D VR player executable":FL "${VRVIDEOPLAYER/#-/ -}" \
 	--field="     Clone Depth3D git URL!Allow pulling a copy of Depth3D if required":CHK "${CLONE_DEPTH3D/#-/ -}" \
-	--field="     Depth3D git URL!The git repository of the Depth3D shader" "${DEPTH3DURL/#-/ -}" \
 	--field="     Depth3D Download dir!The download directory for the Depth3D shader":DIR "${DEPTH3DSRCDIR/#-/ -}" \
 	--field=" ":LBL " " \
 	--field="     NetMon command!The command used for network monitoring":FL "${NETMON/#-/ -}" \
@@ -1821,7 +1821,6 @@ function openSettings {
 	--field="     Requester wait!Wait n seconds until the Settings Requester disappears":NUM "${WAITEDITOR/#-/ -}" \
 	--field="     Max Ask!Give up asking if the Settings shall be opened per game after n rejected requesters":NUM "${MAXASK/#-/ -}" \
 	--field="     Browser command!The Web Browser used to optionally open Urls":FL "${BROWSER/#-/ -}" \
-	--field="     ProtonDB Url!The Url opened when PROTONDB is used" "${PDBURL/#-/ -}" \
 	--field=" ":LBL " " \
 	--field="     ReShade Download!allow download of ReShade sourcefiles":CHK "${DOWNLOAD_RESHADE/#-/ -}" \
 	--field="     ReShade Version!The Version of the ReShade Setup to download" "${RSVERS/#-/ -}" \
@@ -2690,8 +2689,6 @@ function installReshade {
 
 			prepareReshadeFiles
 
-			writelog "INFO" "${FUNCNAME[0]} - INSTALL_RESHADE enabled"
-
 			# checking for previous dll conficts between $RS_D3D47_DEST and $RS_D9_DEST
 			if [ -f "$EFD/${RS_DX_DEST//.dll/.log}" ]; then
 				if grep -q "Another ReShade instance was already loaded" "$EFD/${RS_DX_DEST//.dll/.log}"; then
@@ -2731,11 +2728,12 @@ function installReshade {
 				fi
 
 				#dxgi:
-				if [ ! -f "$EFD/$RS_DX_DEST" ]; then
+				if [ ! -f "$EFD/$RS_DX_DEST" ] || [ "$1" == "F" ]; then
 					if [ ! -f "$RESHADESRCDIR/$RS_32" ]; then
 						writelog "SKIP" "${FUNCNAME[0]} - sourcefile '$RESHADESRCDIR/$RS_32' missing - skipping this file" 
 					else
 						cp "$RESHADESRCDIR/$RS_32" "$EFD/$RS_DX_DEST" >/dev/null 2>/dev/null
+						echo "$RS_DX_DEST" > "$EFD/$RSENABLED"
 						writelog "INFO" "${FUNCNAME[0]} - copied '$RESHADESRCDIR/$RS_32' to '$EFD/$RS_DX_DEST'" 
 					fi
 				else
@@ -2743,7 +2741,7 @@ function installReshade {
 				fi
 
 				#d3d9:
-				if [ ! -f "$EFD/$RS_D9_DEST" ]; then
+				if [ ! -f "$EFD/$RS_D9_DEST" ] || [ "$1" == "F" ]; then
 					if [ -n "$NOD3D9" ] && [ "$NOD3D9" -eq 1 ]; then
 						writelog "SKIP" "${FUNCNAME[0]} - skipping installation of $RS_D9_DEST because 'NOD3D9' is enabled"
 					else
@@ -2751,6 +2749,7 @@ function installReshade {
 							writelog "SKIP" "${FUNCNAME[0]} - sourcefile '$RESHADESRCDIR/$RS_32' missing - skipping this file" 
 						else
 							cp "$RESHADESRCDIR/$RS_32" "$EFD/$RS_D9_DEST" >/dev/null 2>/dev/null
+							echo "$RS_D9_DEST" > "$EFD/$RSENABLED"
 							writelog "INFO" "${FUNCNAME[0]} - copied '$RESHADESRCDIR/$RS_32' to '$EFD/$RS_D9_DEST'" 
 						fi
 					fi
@@ -2774,19 +2773,20 @@ function installReshade {
 				fi
 
 				#dxgi:
-				if [ ! -f "$EFD/$RS_DX_DEST" ]; then
+				if [ ! -f "$EFD/$RS_DX_DEST" ] || [ "$1" == "F" ]; then
 					if [ ! -f "$RESHADESRCDIR/$RS_64" ]; then
 						writelog "SKIP" "${FUNCNAME[0]} - sourcefile '$RESHADESRCDIR/$RS_64' missing - skipping this file" 
 					else
 						cp "$RESHADESRCDIR/$RS_64" "$EFD/$RS_DX_DEST" >/dev/null 2>/dev/null
-						writelog "INFO" "${FUNCNAME[0]} - copied '$RESHADESRCDIR/$RS_64' to '$EFD/$RS_DX_DEST'" 
+						echo "$RS_DX_DEST" > "$EFD/$RSENABLED"
+						writelog "INFO" "${FUNCNAME[0]} - copied '$RESHADESRCDIR/$RS_64' to '$EFD/$RS_DX_DEST'"
 					fi
 				else
 					writelog "SKIP" "${FUNCNAME[0]} - destfile '$EFD/$RS_DX_DEST' already exists - skipping this file" 
 				fi
 
 				#d3d9:
-				if [ ! -f "$EFD/$RS_D9_DEST" ]; then
+				if [ ! -f "$EFD/$RS_D9_DEST" ] || [ "$1" == "F" ]; then
 					if [ -n "$NOD3D9" ] && [ "$NOD3D9" -eq 1 ]; then
 						writelog "SKIP" "${FUNCNAME[0]} - skipping installation of $RS_D9_DEST because 'NOD3D9' is enabled"
 					else
@@ -2794,6 +2794,7 @@ function installReshade {
 							writelog "SKIP" "${FUNCNAME[0]} - sourcefile '$RESHADESRCDIR/$RS_64' missing - skipping this file" 
 						else
 							cp "$RESHADESRCDIR/$RS_64" "$EFD/$RS_D9_DEST" >/dev/null 2>/dev/null
+							echo "$RS_D9_DEST" > "$EFD/$RSENABLED"
 							writelog "INFO" "${FUNCNAME[0]} - copied '$RESHADESRCDIR/$RS_64' to '$EFD/$RS_D9_DEST'" 
 						fi
 					fi
@@ -2829,15 +2830,43 @@ function installReshadeDepth3D {
 	fi
 }
 
+# XXXXXXXXXXXXXXXXXXXXXXX
 function useReshade {
 	if [ -n "$USERESHADE" ]; then
 		if [ "$USERESHADE" -eq 1 ]; then
+			if [ -f "$EFD/$RSDISABLED" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - ReShade has been disabled previously using '$PROGCMD' - enabling it now"
+				RSDLL="$(cat "$EFD/$RSDISABLED")" 
+				mv "$EFD/$RSDLL" "$EFD/${RSDLL//_disabled/}"
+				rm "$EFD/$RSDISABLED" 2>/dev/null
+				echo "${RSDLL//_disabled/}" > "$EFD/$RSENABLED"
+			fi
+
 			if [ ! -f "$EFD/$RS_D3D47_DEST" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - looks like Reshade is not yet installed in '$EFD' - installing because USERESHADE is enabled"
+				writelog "INFO" "${FUNCNAME[0]} - USERESHADE is '$USERESHADE' - looks like Reshade is not yet installed in '$EFD' - installing because USERESHADE is enabled"
 				INSTALL_RESHADE=1 installReshade
 			fi
+
+			if [ -f "$EFD/ReShade.ini" ] && [ ! -f "$EFD/$RSENABLED" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - looks like Reshade was installed previously using '$PROGCMD' without creating '$RSENABLED' - recreating it now"
+				INSTALL_RESHADE=1 installReshade F
+			fi
+
 			writelog "INFO" "${FUNCNAME[0]} - setting WINEDLLOVERRIDES for ReShade: dxgi=n,b;d3d9=n,b;d3dcompiler_47=n,b"
 			export WINEDLLOVERRIDES="dxgi=n,b;d3d9=n,b;d3dcompiler_47=n,b"
+		else
+			if [ -f "$EFD/ReShade.ini" ] && [ ! -f "$EFD/$RSENABLED" ] && [ ! -f "$EFD/$RSDISABLED" ] ; then
+				writelog "INFO" "${FUNCNAME[0]} - USERESHADE is '$USERESHADE' - looks like Reshade was installed previously using '$PROGCMD' without creating '$RSENABLED' - recreating it now"
+				INSTALL_RESHADE=1 installReshade F
+			fi
+
+			if [ -f "$EFD/$RSENABLED" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - ReShade has been installed previously with '$PROGCMD' - disabling it now"
+				RSDLL="$(cat "$EFD/$RSENABLED")" 
+				mv "$EFD/$RSDLL" "$EFD/${RSDLL}_disabled"
+				rm "$EFD/$RSENABLED" 2>/dev/null
+				echo "${RSDLL}_disabled" > "$EFD/$RSDISABLED"
+			fi
 		fi
 	fi	
 }

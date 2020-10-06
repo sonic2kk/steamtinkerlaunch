@@ -890,7 +890,7 @@ duplicate lines are unique sorted at the end.
 [ReShade](https://reshade.me)
 Set `INSTALL_RESHADE` to 1 to automatically install reshade into the selected game dir.
 Set `USERESHADE` to 1 to start game with ReShade enabled
-	
+
 If `DOWNLOAD_RESHADE` is set to 1 all required files for ReShade are [downloaded](#Downloads) once into `RESHADESRCDIR`
 of course you can install all files manually as well. make sure to rename all files correctly:
 
@@ -900,6 +900,9 @@ of course you can install all files manually as well. make sure to rename all fi
 
 The required architecture is autodetected from the game.exe and the matching files are copied from `RESHADESRCDIR` into the selected game dir
 both downloadfiles and basic configuration were taken from [r/linux_gaming](https://www.reddit.com/r/linux_gaming/comments/b2hi3g/reshade_working_in_wine_43) 
+
+If `USERESHADE` and the corresponding game is started, the previously installed ReShade dll will be renamed, so ReShade is really disabled when the game starts.
+When `USERESHADE` is re-enabled the renamed dll will be re-activated.
 
 #### vkBasalt
 [vkBasalt](https://github.com/DadSchoorse/vkBasalt)
