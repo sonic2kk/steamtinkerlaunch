@@ -91,6 +91,8 @@ It might be a good idea to start with configuring everything in the [Settings Me
 * **[native Support](#Native-Games)** support native Linux games
 * **[Steam Compatibility Tool](#Steam Compatibility Tool)** can be used as [Steam Launch Option](#Steam-Launch-Option) and as [Steam Compatibility Tool](#Steam-Compatibility-Tool)
 * **[Proton Selection](#Proton-Selection)** switch between Proton-Versions, automatically download custom Proton builds...
+* **[Multi Language](#Multi-Language-Support)** Multi-Language Support
+
 
 ## Requirements
 *(no special order)*
@@ -105,10 +107,11 @@ Programs required for a full internal functionality:
 - xprop
 - xrandr
 - xwininfo
-- [Yad](https://github.com/v1cont/yad). The *(by default enabled)* [Settings Menu](#Settings-Menu) and [Tray Icon](#Tray-Icon) only work with yad.
+- [Yad](https://github.com/v1cont/yad). The *(by default enabled)* [Settings Menu](#Settings-Menu) and the [Tray Icon](#Tray-Icon) only work with yad.
   The [Editor Dialog](#Editor-Dialog), which can be used as limited alternative to the [Settings Menu](#Settings-Menu) also works with zenity.
   *(so this should be an `or dependency` in distribution packages)*
-  
+  Only tested yad 7.2 on Arch linux *(at least Debian (derivatives) seem to use a very old yad version by default, which will not work - see #98)*
+   
 Programs needed for optional external features *(no special order)*:
 - [strace](#Strace)
 - [Gamemode](#GameMode)
@@ -127,6 +130,8 @@ Programs needed for optional external features *(no special order)*:
 - [GameConqueror/scanmem](#GameConqueror) to optionally cheat
 - [GameScope](#GameScope)
 - zenity *(see description for yad above)*
+- cabextract *(currently only to extract the [WMP10](#WMP10) setup exe)*
+- lsusb *(for an optional [SBS-VR](#Side-by-Side-VR) check if a VR HMD was found)*
 
 
 ## Configuration
@@ -204,6 +209,7 @@ Middle Click Closes The Menu
 - "Pick Window Name" *(pick the window name and save it into the [Game Config](#Game-Configurations))*
 - "Get Active Window Name" *(waits 5 seconds and saves the window name of the active window into the [Game Config](#Game-Configurations))*
 - "Kill Proton Game" *(kills the currently running Proton game by killing its wineserver)*
+- "Pause/Unpause active window" *(waits 5 seconds and un-/pauses the process of the window which is currently active)*
 
 ### Configuration Locations
 
@@ -559,6 +565,30 @@ for proton packages. Currently following Custom builds are parsed *(feel free to
 
 Packages *(`tar.*`, `zip`)* containing a `proton` file will be extracted and added to the List of available Proton Builds.
 
+###### Automatic Proton version
+Using the variable `WANTPROTON` in configs and tweaks it is possible to automatically request a specific proton version to be used with the corresponding game.
+If `AUTOPULLPROTON` is enabled *(it is by default)* **stl** will automatically download the specific proton version and install it.
+
+
+#### Multi-Language Support
+**stl** Multi-Language Support *(currently with [these languages](https://github.com/frostworx/steamtinkerlaunch/tree/master/lang))*.
+
+At least the default language file (english) needs to be found, else **stl** will exit with an error.
+**stl** searches both in the [Systemwide Configuration](#Systemwide-Configuration) and in the [User Configuration](#User-Configuration) for language files,
+where those in the latter have a higher priority *(so copying a systemwide file to improve it is possible)*
+
+Every language found can be selected from the Language Dropdown Menu in the Global Settings Tab of the [Settings Menu](#Settings-Menu).
+*(a change requires a restart to take effect)*.
+
+To give also the option to get a translated description in freshly created **stl** configfiles
+it is also possible to define an available language or an absolute path to a valid language file with the `lang=` command line option.
+
+When no language file was found as a last resort **stl** will download its own projectpage and use the language file from there.
+
+*(every language file simply consists of multiple variables defining a text, so to contribute a translation,
+simply duplicate one of the existing ones and translate all variables inside)
+
+
 #### Custom Program
 
 When enabled you can start custom programs easily with the following per-game config options:
@@ -665,7 +695,7 @@ into `$STLDLDIR/xlive/` and installed into the gamedir.
 **stl** ships already several tweak files, which enable `NOGFWL` for several games (f.e.: "Fable 3 (105400)", "Resident Evil 5 (21690)", "Kane and Lynch Dead Men (8080)", "FlatOut Ultimate Carnage (12360)"
 
 #### WMP10
-Games which depend on WMP10 can played by setting the variable `HACKWMP10` to 1.
+Games which depend on WMP10 can be played by setting the variable `HACKWMP10` to 1.
 [Tweak](#Tweaks) with automatic support already implemented for
 
 **
@@ -807,6 +837,10 @@ by auto-enabling side-by-side with the shader [Depth3D](#Depth3D):
 
 Where Reshade has more features and vkBasalt is probably more stable, because it works natively.
 
+Before Starting SteamVR **stl** checks if a HMD is present *(using lsusb)*.
+If none was found the SBS VR mode is cancelled and if `SBSVRRS` was supposed to start ReShade is disabled as well.
+The game starts regularly in pancake mode subsequently.
+
 **stl** goes through several functions to automatically find the current window id
 *(and for later use also the game window name, to make starting SBS VR for the game faster)*
 This works mostly very good, but some games start own launchers before the actual game.
@@ -899,7 +933,7 @@ of course you can install all files manually as well. make sure to rename all fi
 The required architecture is autodetected from the game.exe and the matching files are copied from `RESHADESRCDIR` into the selected game dir
 both downloadfiles and basic configuration were taken from [r/linux_gaming](https://www.reddit.com/r/linux_gaming/comments/b2hi3g/reshade_working_in_wine_43) 
 
-If `USERESHADE` and the corresponding game is started, the previously installed ReShade dll will be renamed, so ReShade is really disabled when the game starts.
+If `USERESHADE` is disabled and the corresponding game is started, the previously installed ReShade dll will be renamed, so ReShade is disabled when the game starts.
 When `USERESHADE` is re-enabled the renamed dll will be re-activated.
 
 #### vkBasalt
