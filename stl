@@ -4,7 +4,7 @@
 ### project ###
 
 PROGNAME="SteamTinkerLaunch"
-PROGVERS="v2.2.4"
+PROGVERS="v2.3.0"
 PROGCMD="$(basename "$0")"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -20,6 +20,7 @@ XRANDR="xrandr"
 XWININFO="xwininfo"
 ZENITY="zenity"
 TAR="tar"
+YAD="yad"
 #ENDINTDEPS
 
 ### (optionally) used programs ###
@@ -31,9 +32,11 @@ STRACE="strace"
 WINECFG="winecfg"
 WINETRICKS="winetricks"
 REPLAY="replay-sorcery"
-YAD="yad"
+CABEXTRACT="cabextract"
+LSUSB="lsusb"
+
 ZENBIN=""
-NOZEN="zenity support is not implemented in this function"
+CHECKHMD=1 # will be set to 0 if $LSUSB is not found. Then the hmd presence check is skipped
 
 # autotweak platforms
 LU="lutris"
@@ -118,7 +121,10 @@ GLDLTWEAKCMDDIR="$GLDLTWEAKDIR/cmd"
 GLDLCATEGORYDIR="$GLDLSTLDIR/categories"
 GLDLMISCDIR="$GLDLSTLDIR/misc"
 GLDLREGDIR="$GLDLSTLDIR/regs"
+GLDLSTLLANGDIR="$GLDLSTLDIR/lang"
 
+STLLANGDIR="$STLCFGDIR/lang"
+STLDEFLANG="english"
 HSS="$HOME/.steam/steam"
 HSSCC="$HSS/config/config.vdf"
 USS="/usr/share/steam"
@@ -181,7 +187,6 @@ function resetAID {
 	if [ "$AID" == "$PLACEHOLDERAID" ]; then
 		GN="$PLACEHOLDERGN"
 	fi
-
 	setAIDCfgs
 }
 
@@ -251,6 +256,105 @@ function prepareGUI {
 			USEGUI="$YAD"
 			"${FUNCNAME[0]}"
 		fi
+	fi
+}
+
+function createLanguageList {
+	if [ "$(USEDLGLOBAL)" -ge 1 ]; then
+		GLOBLANG="$GLDLSTLLANGDIR"
+	else
+		GLOBLANG="$GLOBALSTLLANGDIR"
+	fi
+
+	while read -r LANGPATH; do
+		LANGFILE="$(basename "$LANGPATH")"
+		mapfile -t -O "${#LangList[@]}" LangList <<< "$LANGFILE"
+	done < <(find "$STLLANGDIR" -name "*.txt")
+
+	if [ -d "$GLOBLANG" ]; then
+	 	while read -r LANGPATH; do
+			LANGFILE="$(basename "$LANGPATH")"
+			mapfile -t -O "${#LangList[@]}" LangList <<< "$LANGFILE"
+		done <  <(find "$GLOBLANG" -name "*.txt")
+	fi
+	
+	LANGYADLIST="$(printf "!%s\n" "${LangList[@]//.txt/}" | sort -u | tr -d '\n' ;printf "\n")"
+}
+
+function loadLangFile {
+	if [ -n "$1" ]; then
+		LANGFILENAME="$1"
+		if [ "$(USEDLGLOBAL)" -ge 1 ]; then
+			GLOBLANG="$GLDLSTLLANGDIR"
+		else
+			if [ -z "$GLOBALSTLLANGDIR" ]; then
+				GLOBLANG="$SYSTEMSTLCFGDIR/lang/"
+			else
+				GLOBLANG="$GLOBALSTLLANGDIR"
+			fi
+		fi
+
+		if [ -f "$LANGFILENAME" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - loading commandline langfile"
+			source "$LANGFILENAME"
+			STLLANG="$(basename "$LANGFILENAME" | cut -d '.' -f1)"
+			LAFI="$STLLANGDIR/${STLLANG}.txt"
+			if [ ! -f "$LAFI" ]; then
+				mkProjDir "$STLLANGDIR" 1
+				cp "$LANGFILENAME" "$LAFI"
+			fi
+		else
+			LAFI="$STLLANGDIR/${LANGFILENAME}.txt"
+
+			if [ -f "$LAFI" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - loading user-installed $LAFI"
+				source "$LAFI"
+			else
+				LAFI="$GLOBLANG/${LANGFILENAME}.txt"
+
+				if [ -f "$LAFI" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - loading system wide $LAFI"
+					source "$LAFI"
+				else
+					writelog "ERROR" "${FUNCNAME[0]} - language file '$LAFI' missing"
+					echo "ERROR" "${FUNCNAME[0]} - language file '$LAFI' missing - downloading ' $PROJECTPAGE' and trying again"
+					gitUpdate "$GLDLSTLDIR" "$PROJECTPAGE"	
+					${FUNCNAME[0]}
+				fi
+			fi
+		fi
+	fi
+}
+
+function loadLanguage {
+	writelog "INFO" "${FUNCNAME[0]} - first load the default language to make sure all variables are filled"
+	loadLangFile "$STLDEFLANG"
+
+	if [ -f "$STLDEFGLOBALCFG" ]; then
+		STLLRAW="$(grep "^STLLANG" "$STLDEFGLOBALCFG" | cut -d '=' -f2)"
+		STLLANG="${STLLRAW//\"/}"
+	else
+		ARGSLANG="$(awk -F 'lang=' '{print $2}' <<< "$@" | cut -d ' ' -f1)"
+		if [ -n "$ARGSLANG" ]; then
+			STLLANG="$ARGSLANG"
+		fi
+	fi
+	if [ -n "$STLLANG" ]; then 
+		if [ "$STLDEFLANG" != "$STLLANG" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - now load the language defined by the user"
+			loadLangFile "$STLLANG"
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - user defined language is the same as the default language - no need to load it again"
+		fi
+	fi
+	
+	if [ -z "$DESC_STLLANG" ]; then 
+		echo "###############################"
+		echo "ERROR - no language file could be loaded! For the initial setup at least one file (default english) is required"
+		echo "ERROR - You can ether copy a valid file to '$STLLANGDIR' or '$SYSTEMSTLCFGDIR/lang' or provide an absolute path via command line using the lang= option" 
+		echo "###############################"
+
+		exit
 	fi
 }
 
@@ -457,11 +561,12 @@ function setDefaultCfgValues {
 		if [ -z "$DEPTH3DURL" ]			; then	DEPTH3DURL="https://github.com/BlueSkyDefender/Depth3D.git"; fi
 		if [ -z "$VORTEXURL" ]			; then	VORTEXURL="https://github.com/Nexus-Mods/Vortex/releases/download/v"; fi
 		if [ -z "$DXVKURL" ]			; then	DXVKURL="https://github.com/doitsujin/dxvk"; fi
-		if [ -z "$XLIVEURL" ]			; then	XLIVEURL="https://github.com/ThirteenAG/Ultimate-ASI-Loader/releases/download/v4.52/Ultimate-ASI-Loader.zip"; fi			
+		if [ -z "$XLIVEURL" ]			; then	XLIVEURL="https://github.com/ThirteenAG/Ultimate-ASI-Loader/releases/download/v4.52/Ultimate-ASI-Loader.zip"; fi
 		if [ -z "$PFDURL" ]				; then	PFDURL="https://github.com/simons-public/$PF.git"; fi
 		if [ -z "$LUDURL" ]				; then	LUDURL="https://lutris.net/api/installers"; fi
 		if [ -z "$PROTONISSUES" ]		; then	PROTONISSUES="https://github.com/ValveSoftware/Proton/issues"; fi
 		if [ -z "$PIAPI" ]				; then	PIAPI="https://api.github.com/repos/ValveSoftware/Proton/issues"; fi
+		if [ -z "$WMP10URL" ]			; then	WMP10URL="https://web.archive.org/web/20050303001123/http://download.microsoft.com/download/1/2/A/12A31F29-2FA9-4F50-B95D-E45EF7013F87"; fi
 	}
 
 	function setDefaultCfgValuesgui {
@@ -494,6 +599,7 @@ function setDefaultCfgValues {
 
 	function setDefaultCfgValuesglobal {
 		if [ -z "$DLGLOBAL" ]			; then	DLGLOBAL="1"; fi
+		if [ -z "$STLLANG" ]			; then	STLLANG="$STLDEFLANG"; fi
 		if [ -z "$USESTLCSS" ]			; then	USESTLCSS="0"; fi
 		if [ -z "$CSSUPDATE" ]			; then	CSSUPDATE="1"; fi
 		if [ -z "$AUTOTWEAKS" ]			; then	AUTOTWEAKS="$AUTOTWEAKPLATFORMS"; fi
@@ -520,6 +626,7 @@ function setDefaultCfgValues {
 		if [ -z "$GLOBALTWEAKCMDDIR" ]	; then	GLOBALTWEAKCMDDIR="$SYSTEMSTLCFGDIR/tweaks/cmd"; fi
 		if [ -z "$GLOBALCATEGORYDIR" ]	; then	GLOBALCATEGORYDIR="$SYSTEMSTLCFGDIR/categories"; fi
 		if [ -z "$GLOBALMISCDIR" ]		; then	GLOBALMISCDIR="$SYSTEMSTLCFGDIR/misc"; fi
+		if [ -z "$GLOBALSTLLANGDIR" ]	; then	GLOBALSTLLANGDIR="$SYSTEMSTLCFGDIR/lang"; fi
 		if [ -z "$BOXTRONCMD" ]			; then	BOXTRONCMD="/usr/share/boxtron/run-dosbox"; fi
 		if [ -z "$BOXTRONARGS" ]		; then	BOXTRONARGS="--wait-before-run"; fi
 		if [ -z "$ROBERTACMD" ]			; then	ROBERTACMD="$STEAMCOMPATOOLS/roberta/run-vm"; fi
@@ -543,6 +650,7 @@ function setDefaultCfgValues {
 		if [ -z "$USEGUI" ]				; then	USEGUI="$YAD"; fi
 		if [ -z "$USETRAYICON" ]		; then	USETRAYICON="1"; fi
 		if [ -z "$AUTOLASTPROTON" ]		; then	AUTOLASTPROTON="1"; fi
+		if [ -z "$AUTOPULLPROTON" ]		; then	AUTOPULLPROTON="1"; fi
 		if [ -z "$CUSTPROTDLDIR" ]		; then	CUSTPROTDLDIR="$STLDLDIR/$PROCU"; fi
 		if [ -z "$CUSTPROTEXTDIR" ]		; then	CUSTPROTEXTDIR="$STLCFGDIR/$PROCU"; fi
 	}
@@ -673,6 +781,8 @@ function saveCfg {
 			echo "VORTEXURL=\"$VORTEXURL\""
 			echo "## Xlive DL URL"
 			echo "XLIVEURL=\"$XLIVEURL\""
+			echo "## WMP10 DL URL"
+			echo "WMP10URL=\"$WMP10URL\""		
 			} >> "$1"
 			#ENDsaveCfgurl
 		fi
@@ -734,106 +844,113 @@ function saveCfg {
 			{
 			echo "## config Version: $PROGVERS"
 			echo "##########################"
-			echo "## pull '$PROGCMD' from '$PROJECTPAGE' and use its config files (only used if global configs not installed!)"
+			echo "## $DESC_DLGLOBAL"
 			echo "DLGLOBAL=\"$DLGLOBAL\""
-			echo "## use $PROGCMD Steam GTK css"
+			echo "## $DESC_STLLANG"
+			echo "STLLANG=\"$STLLANG\""
+			echo "## $DESC_USESTLCSS"
 			echo "USESTLCSS=\"$USESTLCSS\""
-			echo "## update $PROGCMD Steam GTK css"
+			echo "## $DESC_CSSUPDATE"
 			echo "CSSUPDATE=\"$CSSUPDATE\""
-			echo "## all platforms listed here will be used when AutoTweaks are enabled - start stl from commandline or see README for supported platforms"
+			echo "## $DESC_AUTOTWEAKS"
 			echo "AUTOTWEAKS=\"$AUTOTWEAKS\""
-			echo "## The download directory for Custom Proton archives:"
+			echo "## $DESC_CUSTPROTDLDIR"
 			echo "CUSTPROTDLDIR=\"$CUSTPROTDLDIR\""
-			echo "## The extract directory for downloaded Custom Proton archives:"
+			echo "## $DESC_CUSTPROTEXTDIR"
 			echo "CUSTPROTEXTDIR=\"$CUSTPROTEXTDIR\""
-			echo "## Automatically use last used Proton version when configured one is not found:"
+			echo "## $DESC_AUTOPULLPROTON"
+			echo "AUTOPULLPROTON=\"$AUTOPULLPROTON\""
+			echo "## $DESC_AUTOLASTPROTON"
 			echo "AUTOLASTPROTON=\"$AUTOLASTPROTON\""
-			echo "## the base strace path used to optionally dump strace logs"
+			echo "## $DESC_STRACEDIR"
 			echo "STRACEDIR=\"$STRACEDIR\""
-			echo "## default logfile dir"
+			echo "## $DESC_LOGDIR"
 			echo "LOGDIR=\"$LOGDIR\""
-			echo "## write logfile if not 0, increase verbosity from 1-2 (1:less, 2:all)"
+			echo "## $DESC_LOGLEVEL"
 			echo "LOGLEVEL=\"$LOGLEVEL\""
-			echo "## texteditor to use for opening the game config - f.e. with WAITEDITOR"
+			echo "## $DESC_STLEDITOR"
 			echo "STLEDITOR=\"$STLEDITOR\""
-			echo "## wait WAITEDITOR seconds for a keypress to open the texteditor STLEDITOR with the game config"
+			echo "## $DESC_WAITEDITOR"
 			echo "WAITEDITOR=\"$WAITEDITOR\""
-			echo "## how often should the 'open editor requester' pup up until it gets automatically disabled for a game"
+			echo "## $DESC_MAXASK"
 			echo "MAXASK=\"$MAXASK\""
-			echo "## Browser used for EDITORURL:"
+			echo "## $DESC_BROWSER"
 			echo "BROWSER=\"$BROWSER\""
-			echo "## enable notifier:"
+			echo "## $DESC_USENOTIFIER"
 			echo "USENOTIFIER=\"$USENOTIFIER\""
-			echo "## notifier command - used when the command is found:"
+			echo "## $DESC_NOTY"
 			echo "NOTY=\"$NOTY\""
-			echo "## program to record game network-traffic"
+			echo "## $DESC_NETMON"
 			echo "NETMON=\"$NETMON\""
-			echo "## options for NETMON:"
+			echo "## $DESC_NETOPTS"
 			echo "NETOPTS=\"$NETOPTS\""
-			echo "## the base path for netmon logs"
+			echo "## $DESC_NETMONDIR"
 			echo "NETMONDIR=\"$NETMONDIR\""
-			echo "## vr-video-player"
+			echo "## $DESC_VRVIDEOPLAYER"
 			echo "VRVIDEOPLAYER=\"$VRVIDEOPLAYER\""
-			echo "## set to 1 create tweak config templates in TWEAKTEMPLATEDIR for the launched game if not found"
+			echo "## $DESC_CREATETWEAKS"
 			echo "CREATETWEAKS=\"$CREATETWEAKS\""
-			echo "## the gameconqueror executable file - default is the direct python script as it doesn't use pkexec"
+			echo "## $DESC_GAMCON"
 			echo "GAMCON=\"$GAMCON\""
-			echo "## wait ATVALIDATE seconds for a keypress to open the texteditor STLEDITOR when a autotweak config is found before loading it - only used when AUTOTWEAKS are used"
+			echo "## $DESC_ATVALIDATE"
 			echo "ATVALIDATE=\"$ATVALIDATE\""
-			echo "## directory with global registry files"
+			echo "## $DESC_GLOBALREGDIR"
 			echo "GLOBALREGDIR=\"$GLOBALREGDIR\""
-			echo "## parent directory for all global tweaks"
+			echo "## $DESC_GLOBALTWEAKDIR"
 			echo "GLOBALTWEAKDIR=\"$GLOBALTWEAKDIR\""
-			echo "## directory with global sbs-tweaks"
+			echo "## $DESC_GLOBALSBSTWEAKDIR"
 			echo "GLOBALSBSTWEAKDIR=\"$GLOBALSBSTWEAKDIR\""
-			echo "## directory with global tweaks"
+			echo "## $DESC_GLOBALUSERTWEAKDIR"
 			echo "GLOBALUSERTWEAKDIR=\"$GLOBALUSERTWEAKDIR\""
-			echo "## directory with global tweak commands"
+			echo "## $DESC_GLOBALTWEAKCMDDIR"
 			echo "GLOBALTWEAKCMDDIR=\"$GLOBALTWEAKCMDDIR\""
-			echo "## directory for global steam category configs:"
+			echo "## $DESC_GLOBALCATEGORYDIR"
 			echo "GLOBALCATEGORYDIR=\"$GLOBALCATEGORYDIR\""
-			echo "## directory for global misc configs:"
+			echo "## $DESC_GLOBALMISCDIR"
 			echo "GLOBALMISCDIR=\"$GLOBALMISCDIR\""
-			echo "## the boxtron command:"
+			echo "## $DESC_GLOBALSTLLANGDIR"
+			echo "GLOBALSTLLANGDIR=\"$GLOBALSTLLANGDIR\""
+			echo "## $DESC_BOXTRONCMD"
 			echo "BOXTRONCMD=\"$BOXTRONCMD\""
-			echo "## boxtron args:"
+			echo "## $DESC_BOXTRONARGS"
 			echo "BOXTRONARGS=\"$BOXTRONARGS\""
-			echo "## the roberta command:"
+			echo "## $DESC_ROBERTACMD"
 			echo "ROBERTACMD=\"$ROBERTACMD\""
-			echo "## roberta args:"
+			echo "## $DESC_ROBERTAARGS"
 			echo "ROBERTAARGS=\"$ROBERTAARGS\""
-			echo "## the luxtorpeda command:"
+			echo "## $DESC_LUXTORPEDACMD"
 			echo "LUXTORPEDACMD=\"$LUXTORPEDACMD\""
-			echo "## luxtorpeda args:"
+			echo "## $DESC_LUXTORPEDAARGS"
 			echo "LUXTORPEDAARGS=\"$LUXTORPEDAARGS\""
-			echo "##### SideBySide #####"
-			echo "## allow git clone of Depth3D shaderfiles :"
+			echo "## $DESC_CLONE_DEPTH3D"
 			echo "CLONE_DEPTH3D=\"$CLONE_DEPTH3D\""
-			echo "## Depth3D sourcefiles:"
+			echo "## $DESC_DEPTH3DSRCDIR"
 			echo "DEPTH3DSRCDIR=\"$DEPTH3DSRCDIR\""
-			echo "## allow download of ReShade sourcefiles:"
+			echo "## $DESC_DOWNLOAD_RESHADE"
 			echo "DOWNLOAD_RESHADE=\"$DOWNLOAD_RESHADE\""
-			echo "## ReShade Version:"
+			echo "## $DESC_RSVERS"
 			echo "RSVERS=\"$RSVERS\""
-			echo "## ReShade sourcefiles:"
+			echo "## $DESC_RESHADESRCDIR"
 			echo "RESHADESRCDIR=\"$RESHADESRCDIR\""
+			echo "## $DESC_RS_D3D47_64"
 			echo "RS_D3D47_64=\"$RS_D3D47_64\""
+			echo "## $DESC_RS_D3D47_32"
 			echo "RS_D3D47_32=\"$RS_D3D47_32\""
+			echo "## $DESC_RS_64"
 			echo "RS_64=\"$RS_64\""
+			echo "## $DESC_RS_32"
 			echo "RS_32=\"$RS_32\""
-			echo "## Save Settings Size on Exit:"
+			echo "## $DESC_SAVESETSIZE"
 			echo "SAVESETSIZE=\"$SAVESETSIZE\""
-			echo "## Columns count for Game Tabs:"
+			echo "## $DESC_GAMETABCOLS"
 			echo "GAMETABCOLS=\"$GAMETABCOLS\""
-			echo "## Columns count for Global Tab:"
+			echo "## $DESC_GLOBTABCOLS"
 			echo "GLOBTABCOLS=\"$GLOBTABCOLS\""
-			echo "## Columns count for ReShade Tab:"
-			echo "RESHTABCOLS=\"$RESHTABCOLS\""
-			echo "##  Columns count for Vortex Tabs:"
+			echo "## $DESC_VORTTABCOLS"
 			echo "VORTTABCOLS=\"$VORTTABCOLS\""
-			echo "## The GUI tool to use:"
+			echo "## $DESC_USEGUI"
 			echo "USEGUI=\"$USEGUI\""
-			echo "## Use Tray Icon:"
+			echo "## $DESC_USETRAYICON"
 			echo "USETRAYICON=\"$USETRAYICON\""
 			} >> "$1"
 			#ENDsaveCfgglobal
@@ -852,121 +969,127 @@ function saveCfg {
 			{
 			echo "## config Version: $PROGVERS"
 			echo "##########################"
-			echo "## Allow overriding the used Proton version:"
+			echo "## $DESC_OVERRIDEPROTON"
 			echo "OVERRIDEPROTON=\"$OVERRIDEPROTON\""
-			echo "## start the game with this Proton version:"
+			echo "## $DESC_USEPROTON"
 			echo "USEPROTON=\"$USEPROTON\""
-			echo "## set to 1 to enable the custom command CUSTOMCMD. If CUSTOMCMD is not set a file requester opens to choose from. if RUN_CUSTOMCMD is 2 the chosen exe won't be saved into the config automatically:"
+			echo "## $DESC_RUN_CUSTOMCMD"
 			echo "RUN_CUSTOMCMD=\"$RUN_CUSTOMCMD\""
-			echo "## start this custom command:"
+			echo "## $DESC_CUSTOMCMD"
 			echo "CUSTOMCMD=\"$CUSTOMCMD\""
-			echo "## start CUSTOMCMD command with following args:"
+			echo "## $DESC_CUSTOMCMD_ARGS"
 			echo "CUSTOMCMD_ARGS=\"$CUSTOMCMD_ARGS\""
-			echo "## set to 1 to only start above CUSTOMCMD and not the game command itself:"
+			echo "## $DESC_ONLY_CUSTOMCMD"
 			echo "ONLY_CUSTOMCMD=\"$ONLY_CUSTOMCMD\""
-			echo "## set to 1 to fork the custom CUSTOMCMD into the background and continue with starting %command%"
+			echo "## $DESC_FORK_CUSTOMCMD"
 			echo "FORK_CUSTOMCMD=\"$FORK_CUSTOMCMD\""
-			echo "## additional game args, so you don't have to append them in steam after %command%:"
+			echo "## $DESC_GAMEARGS"
 			echo "GAMEARGS=\"$GAMEARGS\""
-			echo "## start game with $GAMEMODERUN:"
+			echo "## $DESC_USEGAMEMODERUN"
 			echo "USEGAMEMODERUN=\"$USEGAMEMODERUN\""
-			echo "## start game with $GAMESCOPE:"
+			echo "## $DESC_USEGAMESCOPE"
 			echo "USEGAMESCOPE=\"$USEGAMESCOPE\""
-			echo "## start gamescope command with following args:"
+			echo "## $DESC_GAMESCOPE_ARGS"
 			echo "GAMESCOPE_ARGS=\"$GAMESCOPE_ARGS\""
-			echo "## set to 1 to enable mangohud for the launched game:"
+			echo "## $DESC_MANGOHUD"
 			echo "MANGOHUD=\"$MANGOHUD\""
-			echo "## set to 1 to start the game with vkbasalt:"
+			echo "## $DESC_ENABLE_VKBASALT"
 			echo "ENABLE_VKBASALT=\"$ENABLE_VKBASALT\""
-			echo "## set to 1 to enable nyrna while game is running"
+			echo "## $DESC_RUN_NYRNA"
 			echo "RUN_NYRNA=\"$RUN_NYRNA\""
-			echo "## set to 1 to enable replay-sorcery while game is running"
+			echo "## $DESC_RUN_REPLAY"
 			echo "RUN_REPLAY=\"$RUN_REPLAY\""
-			echo "## start gameconqueror for the launched game"
+			echo "## $DESC_RUN_GAMCON"
 			echo "RUN_GAMCON=\"$RUN_GAMCON\""
-			echo "## make gameconqueror wait for this exe instead of the regular one - used when file exists"
+			echo "## $DESC_GAMCONWAITEXE"
 			echo "GAMCONWAITEXE=\"$GAMCONWAITEXE\""
-			echo "## The Vortex Mode - default disabled"
+			echo "## $DESC_VORTEXMODE"
 			echo "VORTEXMODE=\"$VORTEXMODE\""
-			echo "## Enable Changing the Pulse latency"
+			echo "## $DESC_CHANGE_PULSE_LATENCY"
 			echo "CHANGE_PULSE_LATENCY=\"$CHANGE_PULSE_LATENCY\""
-			echo "## Change Pulse latency"
+			echo "## $DESC_STL_PULSE_LATENCY_MSEC"
 			echo "STL_PULSE_LATENCY_MSEC=\"$STL_PULSE_LATENCY_MSEC\""
-			echo "## toggle visibility of all open windows on start/stop"
+			echo "## $DESC_TOGGLEWINDOWS"
 			echo "TOGGLEWINDOWS=\"$TOGGLEWINDOWS\""
-			echo "## comment in to use amdvlk"
-			echo "#VK_ICD_FILENAMES=\"/usr/share/vulkan/icd.d/amd_icd32.json:/usr/share/vulkan/icd.d/amd_icd64.json\""
-			echo "## OR comment in to use vulkan-radeon"
-			echo "#VK_ICD_FILENAMES=\"/usr/share/vulkan/icd.d/radeon_icd.i686.json:/usr/share/vulkan/icd.d/radeon_icd.x86_64.json\""
-			echo "## start winetricks gui before game launch:"
+			echo "## $DESC_RUN_WINETRICKS"
 			echo "RUN_WINETRICKS=\"$RUN_WINETRICKS\""
-			echo "## install all packages in WINETRICKSPAKS silently with winetricks:"
+			echo "## $DESC_WINETRICKSPAKS"
 			echo "WINETRICKSPAKS=\"$WINETRICKSPAKS\""
-			echo "## start winecfg before game launch:"
+			echo "## $DESC_RUN_WINECFG"
 			echo "RUN_WINECFG=\"$RUN_WINECFG\""
-			echo "## set to 1 to enable virtualdesktop for the game"
+			echo "## $DESC_VIRTUALDESKTOP"
 			echo "VIRTUALDESKTOP=\"$VIRTUALDESKTOP\""
-			echo "## set to 1 to start the game using boxtron/dosbox"
+			echo "## $DESC_USEBOXTRON"
 			echo "USEBOXTRON=\"$USEBOXTRON\""
-			echo "## set to 1 to start the game using roberta/scummvm"
+			echo "## $DESC_USEROBERTA"
 			echo "USEROBERTA=\"$USEROBERTA\""
-			echo "## set to 1 to start the game using luxtorpeda"
+			echo "## $DESC_USELUXTORPEDA"
 			echo "USELUXTORPEDA=\"0\""
-			echo "## set to 1 to auto-apply registry files for AID when found or enter a registry filename which should be loaded from either GLOBALREGDIR (or GLDLREGDIR) or STLREGDIR"
+			echo "## $DESC_REGEDIT"
 			echo "REGEDIT=\"$REGEDIT\""
-			echo "## set to 1 to install ReShade:"
+			echo "## $DESC_INSTALL_RESHADE"
 			echo "INSTALL_RESHADE=\"$INSTALL_RESHADE\""
-			echo "## set to 1 to install ReShade Depth3D Shader into gamedir:"
+			echo "## $DESC_RESHADE_DEPTH3D"
 			echo "RESHADE_DEPTH3D=\"$RESHADE_DEPTH3D\""
-			echo "## set to 1 to start game with ReShade enabled:"
+			echo "## $DESC_USERESHADE"
 			echo "USERESHADE=\"$USERESHADE\""
-			echo "## set to 1 to start the game with VRVIDEOPLAYER in VR at once or to a greater value to delay SteamVR and SBS for RUNSBSVR seconds"
+			echo "## $DESC_RUNSBSVR"
 			echo "RUNSBSVR=\"$RUNSBSVR\""
-			echo "## vr-video-player args"
+			echo "## $DESC_VRVIDEOPLAYERARGS"
 			echo "VRVIDEOPLAYERARGS=\"$VRVIDEOPLAYERARGS\""
-			echo "## vr-video-player zoom value"
+			echo "## $DESC_SBSZOOM"
 			echo "SBSZOOM=\"$SBSZOOM\""
-			echo "## shortcut to enable all required flags for SBSVR with vkbasalt"
+			echo "## $DESC_SBSVRVK"
 			echo "SBSVRVK=\"$SBSVRVK\""
-			echo "## shortcut to enable all required flags for SBSVR with ReShade"
+			echo "## $DESC_SBSVRRS"
 			echo "SBSVRRS=\"$SBSVRRS\""	
-			echo "## optional name of the game window for VRVIDEOPLAYER - works more stable and is faster:"
+			echo "## $DESC_GAMEWINDOW"
 			echo "GAMEWINDOW=\"$GAMEWINDOW\""
-			echo "## overrides global config:"
+			echo "## $DESC_WAITEDITOR"
 			echo "WAITEDITOR=\"$WAITEDITOR\""
-			echo "## set OPENEDITORURL to 1 to also open the url $EDITORURL in your $BROWSER when starting the editor $STLEDITOR:"
+			echo "## $DESC_OPENEDITORURL"
 			echo "OPENEDITORURL=\"$OPENEDITORURL\""
-			echo "## overrides global config:"
+			echo "## $DESC_ATVALIDATE"
 			echo "ATVALIDATE=\"$ATVALIDATE\""
-			echo "## ask to adopt the used autotweak after game exit:"
+			echo "## $DESC_ATADOPT"
 			echo "ATADOPT=\"$ATADOPT\""
-			echo "## Ignore all auto tweaks for this game if enabled:"
+			echo "## $DESC_IGNOREAUTOTWEAKS"
 			echo "IGNOREAUTOTWEAKS=\"$IGNOREAUTOTWEAKS\""
-			echo "## Check if Steam Categories the Game belongs to have a corresponding Tweakfile:"
+			echo "## $DESC_CHECKCATEGORIES"
 			echo "CHECKCATEGORIES=\"$CHECKCATEGORIES\""
-			echo "## dxvk vars - see '$DXVKURL'"
+			echo "## $DESC_DXVKVARS"
 			echo "DXVK_HUD=\"$DXVK_HUD\""
+			echo "## $DESC_DXVK_LOG_LEVEL"
 			echo "DXVK_LOG_LEVEL=\"$DXVK_LOG_LEVEL\""
-			echo "## strace settings:"
+			echo "## $DESC_STRACERUN"
 			echo "STRACERUN=\"$STRACERUN\""
+			echo "## $DESC_STRACEOPTS"
 			echo "STRACEOPTS=\"$STRACEOPTS\""
-			echo "## enable network-monitor"
+			echo "## $DESC_USENETMON"
 			echo "USENETMON=\"$USENETMON\""
-			echo "## proton vars:"
+			echo "## $DESC_PROTON_LOG"
 			echo "PROTON_LOG=\"$PROTON_LOG\""
+			echo "## $DESC_PROTON_DUMP_DEBUG_COMMANDS"
 			echo "PROTON_DUMP_DEBUG_COMMANDS=\"$PROTON_DUMP_DEBUG_COMMANDS\""
+			echo "## $DESC_PROTON_DEBUG_DIR"
 			echo "PROTON_DEBUG_DIR=\"$PROTON_DEBUG_DIR\""
+			echo "## $DESC_PROTON_USE_WINED3D"
 			echo "PROTON_USE_WINED3D=\"$PROTON_USE_WINED3D\""
+			echo "## $DESC_PROTON_NO_D3D11"
 			echo "PROTON_NO_D3D11=\"$PROTON_NO_D3D11\""
+			echo "## $DESC_PROTON_NO_D3D10"
 			echo "PROTON_NO_D3D10=\"$PROTON_NO_D3D10\""
+			echo "## $DESC_PROTON_NO_ESYNC"
 			echo "PROTON_NO_ESYNC=\"$PROTON_NO_ESYNC\""
+			echo "## $DESC_PROTON_NO_FSYNC"
 			echo "PROTON_NO_FSYNC=\"$PROTON_NO_FSYNC\""
+			echo "## $DESC_PROTONFLAA"
 			echo "PROTON_FORCE_LARGE_ADDRESS_AWARE=\"$PROTON_FORCE_LARGE_ADDRESS_AWARE\""
-			echo "## wine vars:"
+			echo "## $DESC_WINEFSIS"
 			echo "WINE_FULLSCREEN_INTEGER_SCALING=\"$WINE_FULLSCREEN_INTEGER_SCALING\""
-			echo "## custom user script executed when a game starts"
+			echo "## $DESC_USERSTART"
 			echo "USERSTART=\"$USERSTART\""
-			echo "## custom user script executed when a game stops"
+			echo "## $DESC_USERSTOP"
 			echo "USERSTOP=\"$USERSTOP\""
 			} >> "$1"
 			#ENDsaveCfgdefault_template
@@ -984,23 +1107,23 @@ function saveCfg {
 			{
 			echo "## config Version: $PROGVERS"
 			echo "##########################"
-			echo "## the wine binary used for Vortex - if commented out or not found this defaults to current proton wine and system wine as fallback"
+			echo "## $DESC_VORTEXWINE"
 			echo "VORTEXWINE=\"$VORTEXWINE\""
-			echo "## the WINEPREFIX path used for Vortex"
+			echo "## $DESC_VORTEXPREFIX"
 			echo "VORTEXPREFIX=\"$VORTEXPREFIX\""
-			echo "## WINEDEBUG options for Vortex"
+			echo "## $DESC_VORTEXWINEDEBUG"
 			echo "VORTEXWINEDEBUG=\"$VORTEXWINEDEBUG\""
-			echo "##  dxvk log level for Vortex"
+			echo "## $DESC_VORTEX_DXVK_LOG_LEVEL"
 			echo "VORTEX_DXVK_LOG_LEVEL=\"$VORTEX_DXVK_LOG_LEVEL\""
-			echo "##  dxvk log path for Vortex"
+			echo "## $DESC_VORTEX_DXVK_LOG_PATH"
 			echo "VORTEX_DXVK_LOG_PATH=\"$VORTEX_DXVK_LOG_PATH\""
-			echo "## the path where Vortex should be stored"
+			echo "## $DESC_VORTEXDOWNLOADPATH"
 			echo "VORTEXDOWNLOADPATH=\"$VORTEXDOWNLOADPATH\""
-			echo "## download and install Vortex automatically if set to 1"
+			echo "## $DESC_VORTEXINSTALL"
 			echo "VORTEXINSTALL=\"$VORTEXINSTALL\""
-			echo "## the Vortex version to download - if VORTEXINSTALL=1"
+			echo "## $DESC_VORTEXVERSION"
 			echo "VORTEXVERSION=\"$VORTEXVERSION\""
-			echo "## set to 1 if you don't want stl to try to auto set/create VORTEXSTAGE directories in /mount/point/Vortex or mount/point/pathto/SteamLibrary/Vortex"
+			echo "## $DESC_DISABLE_AUTOSTAGES"
 			echo "DISABLE_AUTOSTAGES=\"$DISABLE_AUTOSTAGES\""
 			} >> "$1"
 			#ENDsaveCfgvortex
@@ -1009,6 +1132,22 @@ function saveCfg {
 
 	SCFG="$(basename "${1//.conf/}")"
 	"${FUNCNAME[0]}$SCFG" "$1" "$SCFG" "$2"
+}
+
+function notiShow {
+	SHOWNOTERAW="$1"
+
+	if [ -z "$2" ]; then
+		SHOWNOTE="$SHOWNOTERAW"
+	else
+		SHOWNOTE2="${SHOWNOTERAW//XXX/$2}"
+		SHOWNOTE3="${SHOWNOTE2//YYY/$3}"
+		SHOWNOTE="${SHOWNOTE3//ZZZ/$4}"
+	fi
+
+	if [ "$USENOTIFIER" -eq 1 ]; then
+		"$NOTY" "$SHOWNOTE"
+	fi	
 }
 
 function PROTPATH {
@@ -1034,23 +1173,10 @@ function setNewProtVars {
 		USEPROTON="$PROTONVERSION"
 	else
 		writelog "SKIP" "${FUNCNAME[0]} - using 'Steam Proton $FIRSTUSEPROTON' instead of '$PROGCMD Proton $USEPROTON' because OVERRIDEPROTON is disabled"
-		if [ "$USENOTIFIER" -eq 1 ]; then
-			"$NOTY" "Using $FIRSTUSEPROTON because Proton override is not enabled"
-		fi
+		notiShow "$NOTY_SETNEWPROTVARS" "$FIRSTUSEPROTON"
 	fi
 }
 
-# TODO? for WANTPROTON tweak
-function switchProton {
-	writelog "INFO" "${FUNCNAME[0]} - Switching used Proton and its Variables to version '$1'"
-
-	if [ -f "$(PROTPATH "$1")" ]; then
-		USEPROTON="$1"
-		setNewProtVars "$(PROTPATH "$USEPROTON")"
-	else
-		writelog "SKIP" "${FUNCNAME[0]} - Tried to switch to Proton '$1', but it is not available"
-	fi
-}
 
 # in case you wonder NOP='Newest Official Proton'
 function getNOP {
@@ -1086,13 +1212,13 @@ function needNewProton {
 		writelog "INFO" "${FUNCNAME[0]} - no Proton Version was found - opening a requester to choose from one"
 		if [ "$USEGUI" == "$YAD" ]; then
 			PROTYADLIST="$(printf "!%s\n" "${ProtonCSV[@]//\"/}" | sort -u | cut -d ';' -f1 | tr -d '\n' ;printf "\n")"
-			PICKPROTON="$("$YAD" --window-icon="$STLICON" --borders="$YADBORDER" --center --undecorated --form --scroll --separator="\n" --quoted-output \
-			--text="<span font_weight='bold'>No initial Proton Version was found, please choose one</span>" \
-			--field="ChooseProton Version!":CB "${USEPROTON/#-/ -}!$PROTYADLIST" \
+			PICKPROTON="$(LC_ALL="" "$YAD" --window-icon="$STLICON" --borders="$YADBORDER" --center --undecorated --form --scroll --separator="\n" --quoted-output \
+			--text="<span font_weight='bold'>$GUI_NEEDNEWPROTON</span>" \
+			--field="$GUI_NEEDNEWPROTON2":CB "${USEPROTON/#-/ -}!$PROTYADLIST" \
 			--title="$TITLE" \
 			--geometry="$ASKSETREQWIDTH"x"$ASKSETREQHEIGHT"+0+0)"
 		elif [ "$USEGUI" == "$ZENITY" ]; then
-			PICKPROTON="$(zenity --list --width="$ASKSETREQWIDTH" --height="$ASKSETREQHEIGHT" --title="$TITLE" --text="No initial Proton Version was found, please choose one" 2>/dev/null)"
+			PICKPROTON="$(zenity --list --width="$ASKSETREQWIDTH" --height="$ASKSETREQHEIGHT" --title="$TITLE" --text="$GUI_NEEDNEWPROTON" 2>/dev/null)"
 		fi
 
 		if [ -n "$PICKPROTON" ]; then
@@ -1112,13 +1238,9 @@ function dlCustomProton {
 	DSTDL="$CUSTPROTDLDIR/$CPURLFILE"
 	if [ ! -f "$DSTDL" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - downloading '$CPURL' to '$CUSTPROTDLDIR'"
-		if [ "$USENOTIFIER" -eq 1 ]; then
-			"$NOTY" "downloading '$CPURL'"
-		fi
+		notiShow "$NOTY_DLCUSTOMPROTON" "$CPURL"
 		"$WGET" "$CPURL" -O "$DSTDL"
-		if [ "$USENOTIFIER" -eq 1 ]; then
-			"$NOTY" "download finished '$CPURL'"
-		fi
+		notiShow "$NOTY_DLCUSTOMPROTON2" "$CPURL"
 	else
 		writelog "INFO" "${FUNCNAME[0]} - file '$DSTDL' already exists - nothing to download"
 	fi
@@ -1131,9 +1253,7 @@ function dlCustomProton {
 			if [ -f "$PROTFULLPATH" ]; then
 				writelog "SKIP" "${FUNCNAME[0]} - the destination path '$PROTFULLPATH' already exists - looks like '$DSTDL' was already extracted before"
 			else
-				if [ "$USENOTIFIER" -eq 1 ]; then
-					"$NOTY" "extracting '$CPURL'"
-				fi
+				notiShow "$NOTY_DLCUSTOMPROTON3" "$CPURL"
 				"$TAR" xf "$DSTDL" -C "$CUSTPROTEXTDIR" 2>/dev/null
 			fi
 		else
@@ -1148,9 +1268,7 @@ function dlCustomProton {
 			if [ -f "$PROTFULLPATH" ]; then
 				writelog "SKIP" "${FUNCNAME[0]} - the destination path '$PROTFULLPATH' already exists - looks like '$DSTDL' was already extracted before"
 			else
-				if [ "$USENOTIFIER" -eq 1 ]; then
-					"$NOTY" "extracting '$CPURL'"
-				fi
+				notiShow "$NOTY_DLCUSTOMPROTON3" "$CPURL"
 				"$UNZIP" "$DSTDL" -d "$CUSTPROTEXTDIR/$SUBDIR" 2>/dev/null
 			fi
 		else
@@ -1169,12 +1287,7 @@ function dlCustomProton {
 	fi
 }
 
-function dlCustomProtonGUI {
-	if [ "$USEGUI" == "$ZENITY" ]; then
-		"$ZENITY" --width="$CUSTPROTREQWIDTH" --height="$CUSTPROTREQHEIGHT" --info --text="$NOZEN"
-		return
-	fi
-
+function createDLProtList {
 	writelog "INFO" "${FUNCNAME[0]} - generating list of online available custom Proton builds"
 
 	unset ProtonDLList
@@ -1190,6 +1303,15 @@ function dlCustomProtonGUI {
 	fi
 	done <<< "$(grep "^CP_" "$STLURLCFG" | cut -d '=' -f1)"
 	)"
+}
+
+function dlCustomProtonGUI {
+	if [ "$USEGUI" == "$ZENITY" ]; then
+		"$ZENITY" --width="$CUSTPROTREQWIDTH" --height="$CUSTPROTREQHEIGHT" --info --text="$NOTY_NOZEN"
+		return
+	fi
+
+	createDLProtList
 
 	writelog "INFO" "${FUNCNAME[0]} - opening dialog to choose a download"
 
@@ -1201,13 +1323,12 @@ function dlCustomProtonGUI {
 	updateWinRes "$TITLE" "$STLGUICFG" "CUSTPROTREQWIDTH" "CUSTPROTREQHEIGHT" &
 
 	if [ "$USEGUI" == "$YAD" ]; then
-		DLTEXT="Select or enter Custom Proton Archive to download and install"
-		DLDISPCUSTPROT="$("$YAD" --window-icon="$STLICON" --borders="$YADBORDER" --form --center --on-top --undecorated \
+		DLDISPCUSTPROT="$(LC_ALL="" "$YAD" --window-icon="$STLICON" --borders="$YADBORDER" --form --center --on-top --undecorated \
 		--title="$TITLE" \
 		--geometry="$CUSTPROTREQWIDTH"x"$CUSTPROTREQHEIGHT"+0+0 \
-		--text="<span font_weight='bold'>$DLTEXT</span>" \
+		--text="<span font_weight='bold'>$GUI_DLCUSTPROTTEXT</span>" \
 		--field=" ":LBL " " \
-		--field="Download Custom Proton!$DLTEXT":CBE "${DLPROTON/#-/ -}!$DLPROTLIST" \
+		--field="$GUI_DLCUSTPROTTEXT2!$GUI_DLCUSTPROTTEXT":CBE "${DLPROTON/#-/ -}!$DLPROTLIST" \
 		)"
 	fi
 	
@@ -1298,15 +1419,15 @@ function addCustomProton {
 		updateWinRes "$TITLE" "$STLGUICFG" "CUSTPROTREQWIDTH" "CUSTPROTREQHEIGHT" &
 
 		if [ "$USEGUI" == "$YAD" ]; then
-			NEWCUSTPROT="$("$YAD" --window-icon="$STLICON" --borders="$YADBORDER" --form --center --on-top --undecorated \
+			NEWCUSTPROT="$(LC_ALL="" "$YAD" --window-icon="$STLICON" --borders="$YADBORDER" --form --center --on-top --undecorated \
 			--title="$TITLE" \
 			--geometry="$CUSTPROTREQWIDTH"x"$CUSTPROTREQHEIGHT"+0+0 \
-			--text="<span font_weight='bold'>Select Custom Proton binary to add:</span>" \
+			--text="<span font_weight='bold'>$GUI_ADDCUSTOMBINARY</span>" \
 			--field=" ":LBL " " \
-			--field="Proton Version Name!Optional Proton Version Name used as Identifier for the selected Proton Path" "Proton-" \
-			--field="Custom Proton binary":FL "proton" --file-filter="Proton Executables Files (proton)| proton")"
+			--field="$GUI_PROTONVERSIONNAME!$DESC_PROTONVERSIONNAME" "Proton-" \
+			--field="$GUI_CUSTOMPROTONBINARY":FL "proton" --file-filter="$GUI_PROTONFILES (proton)| proton")"
 		elif [ "$USEGUI" == "$ZENITY" ]; then
-			NEWCUSTPROT="$("$ZENITY" --file-selection --file-filter="Proton Executables Files (proton)| proton" --width="$CUSTPROTREQWIDTH" --height="$CUSTPROTREQHEIGHT" --title="Select Custom Proton binary to add" 2>/dev/null)"
+			NEWCUSTPROT="$("$ZENITY" --file-selection --file-filter="$GUI_PROTONFILES (proton)| proton" --width="$CUSTPROTREQWIDTH" --height="$CUSTPROTREQHEIGHT" --title="$GUI_ADDCUSTOMBINARY" 2>/dev/null)"
 		fi
 		addCustomProtonToList "$NEWCUSTPROT"
 	else
@@ -1506,14 +1627,14 @@ function EditorDialog {
 
 	if [ "$USEGUI" == "$YAD" ]; then
 		IFS=" " read -r -a EDFILES <<< "$(for f in $(printf '%s\n' "${CfgFiles[@]}"); do echo FALSE ; echo "$f" ; done | \
-		"$YAD" --window-icon="$STLICON" --borders="$YADBORDER" --center --undecorated --list --checklist --column=Edit --column=ConfigFile --separator=" " --print-column="2" \
-		--text="<span font_weight='bold'>Select Config Files for manual Editing</span>" \
+		LC_ALL="" "$YAD" --window-icon="$STLICON" --borders="$YADBORDER" --center --undecorated --list --checklist --column=Edit --column=ConfigFile --separator=" " --print-column="2" \
+		--text="<span font_weight='bold'>$GUI_EDITORDIALOG</span>" \
 		--title="$TITLE" \
 		--geometry="$EDREQWIDTH"x"$EDREQHEIGHT"+0+0 | tr '\n' ' ')"
 	elif [ "$USEGUI" == "$ZENITY" ]; then
 		IFS=" " read -r -a EDFILES <<< "$(for f in $(printf '%s\n' "${CfgFiles[@]}"); do echo FALSE ; echo "$f" ; done | \
 		"$ZENBIN" --list --checklist --column=Edit --column=ConfigFile --separator=" " --print-column="2" \
-		--text="<span font_weight='bold'>Select Config Files for manual Editing</span>" \
+		--text="<span font_weight='bold'>$GUI_EDITORDIALOG</span>" \
 		--width="$EDREQWIDTH" --height="$EDREQHEIGHT" 2>/dev/null | tr '\n' ' ')"
 	fi
 
@@ -1591,6 +1712,7 @@ function TrayIconExports {
 	export -f pickWindowName
 	export -f getActiveWindowName
 	export -f killProtonGame
+	export -f PauseGame
 }
 
 function trayIcon {
@@ -1621,15 +1743,29 @@ function trayIcon {
 			function killProtonGame {
 				WINEPREFIX="$GPFX" "$RUNWINESERVER" -k
 			}
+
+			function PauseGame {
+				GAMEPID="$(sleep 5 && "$XDO" getactivewindow getwindowpid)"
+				# idea taken with friendly permission from https://github.com/Ilazki:
+				GAMESTATE="$(ps -q "$GAMEPID" -o state --no-headers)"
+				GAMESIG="-STOP"
+
+				if [ "x$GAMESTATE" = "xT" ] ; then
+					GAMESIG="-CONT"
+				fi
+
+				kill "$GAMESIG" "$GAMEPID"
+			}
 			
 			TrayIconExports
 			
 			# actually open the actual trayIcon	
-			"$YAD" --image="$STLICON" --notification --item-separator=","\
-			--menu="Pick Window Name,bash -c pickWindowName
-			|Get Active Window Name in 5 Seconds,bash -c getActiveWindowName \
-			|Kill Proton Game,bash -c killProtonGame" \
-			--text="RMB=Menu, LBM/MMB=Exit" >/dev/null 2>/dev/null &
+			LC_ALL="" "$YAD" --image="$STLICON" --notification --item-separator=","\
+			--menu="$TRAY_PICKWINDOW,bash -c pickWindowName
+			|$TRAY_GETACTIVEWINDOW,bash -c getActiveWindowName \
+			|$TRAY_KILLSWITCH,bash -c killProtonGame \
+			|$TRAY_PAUSE,bash -c PauseGame" \
+			--text="TRAY_TOOLTIP" >/dev/null 2>/dev/null &
 			YADTRAYPID="$!"
 		fi
 	fi
@@ -1649,81 +1785,81 @@ function openGameMenu {
 	cfgX="$4"
 	loadCfg "$CFG" X
 
-	"$YAD" --plug="$YADKEY" --tabnum="$TABNR" --borders="$YADBORDER" --form --scroll \
+	LC_ALL="" "$YAD" --plug="$YADKEY" --tabnum="$TABNR" --borders="$YADBORDER" --form --scroll \
 	--separator="\n" \
 	--quoted-output \
 	--columns="$GAMETABCOLS" \
 	--text="<span font_weight='bold'>$TEXT</span>" \
-	--field="     Game Conqueror!Enable GameConqueror for his game":CHK "${RUN_GAMCON/#-/ -}" \
-	--field="     Game Conqueror wait Exe !The Alternative executable GameConqueror should open instead of the regular game exe - the default 'echo' is just a placeholder and will be ignored":FL "${GAMCONWAITEXE/#-/ -}" \
-	--field="     GameMode!Enable GameMode for this game":CHK "${USEGAMEMODERUN/#-/ -}" \
-	--field="     GameScope!Enable GameScope for his game":CHK "${USEGAMESCOPE/#-/ -}" \
-	--field="     GameScope arguments!The command line arguments for GameScope for this game" "${GAMESCOPE_ARGS/#-/ -}" \
-	--field="     Nyrna!Enable Nyrna for this game":CHK "${RUN_NYRNA/#-/ -}" \
-	--field="     MangoHud!Enable MangoHud for this game":CHK "${MANGOHUD/#-/ -}" \
-	--field="     ReplaySorcery!Enable ReplaySorcery for this game":CHK "${RUN_REPLAY/#-/ -}" \
-	--field="     Vortex!If and how Vortex should be used - disabled,normal,quickstart (no checks),editormode (no checks, don't start the game afterwards)":CB "${VORTEXMODE/#-/ -}!disabled!normal!quickstart!editormode" \
+	--field="     $GUI_USE_GAMCON!$DESC_RUN_GAMCON":CHK "${RUN_GAMCON/#-/ -}" \
+	--field="     $GUI_GAMCONWAITEXE!$DESC_GAMCONWAITEXE $GUI_ECHOPLAC":FL "${GAMCONWAITEXE/#-/ -}" \
+	--field="     $GUI_USEGAMEMODERUN!$DESC_USEGAMEMODERUN":CHK "${USEGAMEMODERUN/#-/ -}" \
+	--field="     $GUI_GAMESCOPE!$DESC_USEGAMESCOPE":CHK "${USEGAMESCOPE/#-/ -}" \
+	--field="     $GUI_GAMESCOPEARGS!$DESC_GAMESCOPE_ARGS" "${GAMESCOPE_ARGS/#-/ -}" \
+	--field="     $GUI_USE_NYRNA!$DESC_RUN_NYRNA":CHK "${RUN_NYRNA/#-/ -}" \
+	--field="     $GUI_MANGOHUD!$DESC_MANGOHUD":CHK "${MANGOHUD/#-/ -}" \
+	--field="     $GUI_REPLAYSORCERY!$DESC_RUN_REPLAY":CHK "${RUN_REPLAY/#-/ -}" \
+	--field="     $GUI_VORTEXMODE!$DESC_VORTEXMODE":CB "${VORTEXMODE/#-/ -}!disabled!normal!quickstart!editormode" \
 	--field=" ":LBL " " \
-	--field="     Boxtron!Start the game using Boxtron":CHK "${USEBOXTRON/#-/ -}" \
-	--field="     Roberta!Start the game using Roberta":CHK "${USEROBERTA/#-/ -}" \
-	--field="     Luxtorpeda!Start the game using Luxtorpeda":CHK "${USELUXTORPEDA/#-/ -}" \
+	--field="     $GUI_USE_BOXTRON!$DESC_USEBOXTRON":CHK "${USEBOXTRON/#-/ -}" \
+	--field="     $GUI_USE_ROBERTA!$DESC_USEROBERTA":CHK "${USEROBERTA/#-/ -}" \
+	--field="     $GUI_USE_LUXTORPEDA!$DESC_USELUXTORPEDA":CHK "${USELUXTORPEDA/#-/ -}" \
 	--field=" ":LBL " " \
-	--field="     Winetricks!Start winetricks gui before the game starts":CHK "${RUN_WINETRICKS/#-/ -}" \
-	--field="     Winetricks packages!List of packages to install silently using winetricks" "${WINETRICKSPAKS/#-/ -}" \
-	--field="     Winecfg!Start winecfg before the game starts":CHK "${RUN_WINECFG/#-/ -}" \
-	--field="     Regedit!Allow Registry changes for this game":CHK "${REGEDIT/#-/ -}" \
-	--field="     Virtual Desktop!Start the game in Virtual Desktop mode":CHK "${VIRTUALDESKTOP/#-/ -}" \
+	--field="     $GUI_USE_WINETRICKS!$DESC_RUN_WINETRICKS":CHK "${RUN_WINETRICKS/#-/ -}" \
+	--field="     $GUI_USE_WINETRICKSPAKS!$DESC_WINETRICKSPAKS" "${WINETRICKSPAKS/#-/ -}" \
+	--field="     $GUI_USE_WINECFG!$DESC_RUN_WINECFG":CHK "${RUN_WINECFG/#-/ -}" \
+	--field="     $GUI_REGEDIT!$DESC_REGEDIT":CHK "${REGEDIT/#-/ -}" \
+	--field="     $GUI_VIRTUALDESKTOP!$DESC_VIRTUALDESKTOP":CHK "${VIRTUALDESKTOP/#-/ -}" \
 	--field=" ":LBL " " \
-	--field="     Run custom command!Start Custom command. If set to 1 and CUSTOMCMD is empty the chosen exe will be saved, if set to 2 and CUSTOMCMD is empty the chosen exe won't be saved":CB "${RUN_CUSTOMCMD/#-/ -}!0!1!2" \
-	--field="     Custom command!The custom command to start - the default 'echo' is just a placeholder and will be ignored":FL "${CUSTOMCMD/#-/ -}" \
-	--field="     Custom command arguments!The command line arguments used for the custom command" "${CUSTOMCMD_ARGS/#-/ -}" \
-	--field="     Only Custom command!Only start the custom command and skip the regular game executable":CHK "${ONLY_CUSTOMCMD/#-/ -}" \
-	--field="     Fork Custom command!Fork the custom command into the background and continue starting with the regular game executable":CHK "${FORK_CUSTOMCMD/#-/ -}" \
+	--field="     $GUI_RUN_CUSTOMCMD!$DESC_RUN_CUSTOMCMD":CB "${RUN_CUSTOMCMD/#-/ -}!0!1!2" \
+	--field="     $GUI_THISCUSTOMCMD!$DESC_CUSTOMCMD $GUI_ECHOPLAC":FL "${CUSTOMCMD/#-/ -}" \
+	--field="     $GUI_CUSTOMCMD_ARGS!$DESC_CUSTOMCMD_ARGS" "${CUSTOMCMD_ARGS/#-/ -}" \
+	--field="     $GUI_ONLY_CUSTOMCMD!$DESC_ONLY_CUSTOMCMD":CHK "${ONLY_CUSTOMCMD/#-/ -}" \
+	--field="     $GUI_FORK_CUSTOMCMD!$DESC_FORK_CUSTOMCMD":CHK "${FORK_CUSTOMCMD/#-/ -}" \
 	--field=" ":LBL " " \
-	--field="     ReShade Install!Install ReShade":CHK "${INSTALL_RESHADE/#-/ -}" \
-	--field="     Depth3D ReShade!Use the Depth3D Shader with ReShade":CHK "${RESHADE_DEPTH3D/#-/ -}" \
-	--field="     ReShade enable!use ReShade for this game":CHK "${USERESHADE/#-/ -}" \
-	--field="     vkBasalt!Enable vkBasalt for this game":CHK "${ENABLE_VKBASALT/#-/ -}" \
-	--field="     Stereo3D VR!Start this game in VR in Side-by-Side Stereo3D mode":CHK "${RUNSBSVR/#-/ -}" \
-	--field="     Stereo3D VR ReShade!Start this game in VR in Side-by-Side Stereo3D mode using Depth3D with ReShade":CHK "${SBSVRRS/#-/ -}" \
-	--field="     Stereo3D VR vkBasalt!Start this game in VR in Side-by-Side Stereo3D mode using Depth3D with vkBasalt":CHK "${SBSVRVK/#-/ -}" \
-	--field="     VR player arguments!The command line arguments for the Side-by-Side Stereo3D VR player for this game" "${VRVIDEOPLAYERARGS/#-/ -}" \
-	--field="     VR player Zoom Level!The zoom level for the VR player for this game" "${SBSZOOM/#-/ -}" \
-	--field="     Game Window!The window name for this game" "${GAMEWINDOW/#-/ -}" \
+	--field="     $GUI_INSTALL_RESHADE!$DESC_INSTALL_RESHADE":CHK "${INSTALL_RESHADE/#-/ -}" \
+	--field="     $GUI_RESHADE_DEPTH3D!$DESC_RESHADE_DEPTH3D":CHK "${RESHADE_DEPTH3D/#-/ -}" \
+	--field="     $GUI_USERESHADE!$DESC_USERESHADE":CHK "${USERESHADE/#-/ -}" \
+	--field="     $GUI_ENABLE_VKBASALT!$DESC_ENABLE_VKBASALT":CHK "${ENABLE_VKBASALT/#-/ -}" \
+	--field="     $GUI_RUNSBSVR!$DESC_RUNSBSVR":CHK "${RUNSBSVR/#-/ -}" \
+	--field="     $GUI_SBSVRRS!$DESC_SBSVRRS":CHK "${SBSVRRS/#-/ -}" \
+	--field="     $GUI_SBSVRVK!$DESC_SBSVRVK":CHK "${SBSVRVK/#-/ -}" \
+	--field="     $GUI_VRVIDEOPLAYERARGS!$DESC_VRVIDEOPLAYERARGS" "${VRVIDEOPLAYERARGS/#-/ -}" \
+	--field="     $GUI_SBSZOOM!$DESC_SBSZOOM" "${SBSZOOM/#-/ -}" \
+	--field="     $GUI_GAMEWINDOW!$DESC_GAMEWINDOW" "${GAMEWINDOW/#-/ -}" \
 	--field=" ":LBL " " \
-	--field="     Change Pulseaudio latency!Allow changing the Pulseaudio latency":CHK "${CHANGE_PULSE_LATENCY/#-/ -}" \
-	--field="     Pulseaudio latency!The Pulseaudio latency in milliseconds":NUM "${STL_PULSE_LATENCY_MSEC/#-/ -}" \
-	--field="     DXVK HUD!Accepts comma-separated options like devinfo,fps,frametimes,submissions,drawcalls,pipelines,memory,gpuload,version,api,compiler,samplers,full,1" "${DXVK_HUD/#-/ -}" \
-	--field="     DXVK Log Level! Controls dxvk message logging":CB "${DXVK_LOG_LEVEL/#-/ -}!none!error!warn!info!debug" \
-	--field="     Wine Integer Scaling!Enable wine fullscreen integer scaling for this game":CHK "${WINE_FULLSCREEN_INTEGER_SCALING/#-/ -}" \
-	--field="     Proton Log!Convenience method for dumping a useful debug log to $HOME/steam-$APPID.log":CHK "${PROTON_LOG/#-/ -}" \
-	--field="     Proton Use Wine3D!Use OpenGL-based wined3d instead of Vulkan-based DXVK for d3d11, d3d10, and d3d9":CHK "${PROTON_USE_WINED3D/#-/ -}" \
-	--field="     Proton No d3d11!Disable d3d11.dll, for d3d11 games which can fall back to and run better with d3d9":CHK "${PROTON_NO_D3D11/#-/ -}" \
-	--field="     Proton No d3d10!Disable d3d10.dll and dxgi.dll, for d3d10 games which can fall back to and run better with d3d9":CHK "${PROTON_NO_D3D10/#-/ -}" \
-	--field="     Proton No ESYNC!Do not use eventfd-based in-process synchronization primitives":CHK "${PROTON_NO_ESYNC/#-/ -}" \
-	--field="     Proton No FSYNC!Do not use futex-based in-process synchronization primitives":CHK "${PROTON_NO_FSYNC/#-/ -}" \
-	--field="     Proton Force Large Adress Aware!Force Wine to enable the LARGE_ADDRESS_AWARE flag for all executables":CHK "${PROTON_FORCE_LARGE_ADDRESS_AWARE/#-/ -}" \
-	--field="     Proton Dump Debug Commands!Write some useful debug scripts for the game into $PROTON_DEBUG_DIR/proton_$USER/":CHK "${PROTON_DUMP_DEBUG_COMMANDS/#-/ -}" \
-	--field="     Proton Debug Dir!Root directory for the Proton debug scripts":DIR "${PROTON_DEBUG_DIR/#-/ -}" \
-	--field="     Proton Override!Allow overriding the used Proton version (automatically enabled for Proton games when '$PROGCMD' was started as compatibility tool)":CHK "${OVERRIDEPROTON/#-/ -}" \
-	--field="     Proton Version!start the game with this Proton version":CB "${USEPROTON/#-/ -}!$PROTYADLIST" \
+	--field="     $GUI_CPL!$DESC_CHANGE_PULSE_LATENCY":CHK "${CHANGE_PULSE_LATENCY/#-/ -}" \
+	--field="     $GUI_PULSEMSEC!$DESC_STL_PULSE_LATENCY_MSEC":NUM "${STL_PULSE_LATENCY_MSEC/#-/ -}" \
+	--field="     $GUI_DXVK_HUD!$DESC_DXVK_HUD devinfo,fps,frametimes,submissions,drawcalls,pipelines,memory,gpuload,version,api,compiler,samplers,full,1" "${DXVK_HUD/#-/ -}" \
+	--field="     $GUI_DXVK_LOG_LEVEL!$DESC_DXVK_LOG_LEVEL":CB "${DXVK_LOG_LEVEL/#-/ -}!none!error!warn!info!debug" \
+	--field="     $GUI_WINEFSIS!$DESC_WINEFSIS":CHK "${WINE_FULLSCREEN_INTEGER_SCALING/#-/ -}" \
+	--field="     $GUI_PROTON_LOG!$DESC_PROTON_LOG $HOME/steam-$AID.log":CHK "${PROTON_LOG/#-/ -}" \
+	--field="     $GUI_PROTON_USE_WINED3D!$DESC_PROTON_USE_WINED3D":CHK "${PROTON_USE_WINED3D/#-/ -}" \
+	--field="     $GUI_PROTON_NO_D3D11!$DESC_PROTON_NO_D3D11":CHK "${PROTON_NO_D3D11/#-/ -}" \
+	--field="     $GUI_PROTON_NO_D3D10!$DESC_PROTON_NO_D3D10":CHK "${PROTON_NO_D3D10/#-/ -}" \
+	--field="     $GUI_PROTON_NO_ESYNC!$DESC_PROTON_NO_ESYNC":CHK "${PROTON_NO_ESYNC/#-/ -}" \
+	--field="     $GUI_PROTON_NO_FSYNC!$DESC_PROTON_NO_FSYNC":CHK "${PROTON_NO_FSYNC/#-/ -}" \
+	--field="     $GUI_PROTONFLAA!$DESC_PROTONFLAA":CHK "${PROTON_FORCE_LARGE_ADDRESS_AWARE/#-/ -}" \
+	--field="     $GUI_PROTON_DUMP_DEBUG_COMMANDS!$DESC_PROTON_DUMP_DEBUG_COMMANDS":CHK "${PROTON_DUMP_DEBUG_COMMANDS/#-/ -}" \
+	--field="     $GUI_PROTON_DEBUG_DIR!$DESC_PROTON_DEBUG_DIR":DIR "${PROTON_DEBUG_DIR/#-/ -}" \
+	--field="     $GUI_OVERRIDEPROTON!$DESC_OVERRIDEPROTON":CHK "${OVERRIDEPROTON/#-/ -}" \
+	--field="     $GUI_USEPROTON!$DESC_USEPROTON":CB "${USEPROTON/#-/ -}!$PROTYADLIST" \
 	--field=" ":LBL " " \
-	--field="     AutoTweak Editor Timeout!The AutoTweak Editor will open after X Seconds automatically. If set to 0 the AutoTweak is loaded automatically":NUM "${ATVALIDATE/#-/ -}" \
-	--field="     Ignore AutoTweaks!Ignore AutoTweaks for this game":CHK "${IGNOREAUTOTWEAKS/#-/ -}" \
-	--field="     Adopt AutoTweak Config!Ask to adopt the used autotweak after game exit as regular tweak file":CHK "${ATADOPT/#-/ -}" \
-	--field="     Steam Category Tweaks!Check if Steam Categories the Game belongs to have a corresponding Tweakfile":CHK "${CHECKCATEGORIES/#-/ -}" \
+	--field="     $GUI_ATVALIDATE!$DESC_ATVALIDATE":NUM "${ATVALIDATE/#-/ -}" \
+	--field="     $GUI_IGNOREAUTOTWEAKS!$DESC_IGNOREAUTOTWEAKS":CHK "${IGNOREAUTOTWEAKS/#-/ -}" \
+	--field="     $GUI_ATADOPT!$DESC_ATADOPT":CHK "${ATADOPT/#-/ -}" \
+	--field="     $GUI_CHECKCATEGORIES!$DESC_CHECKCATEGORIES":CHK "${CHECKCATEGORIES/#-/ -}" \
 	--field=" ":LBL " " \
-	--field="     Toggle Windows!Minimize all visible windows on game start and restore them when game ends":CHK "${TOGGLEWINDOWS/#-/ -}" \
-	--field="     Game command arguments!The command line arguments used for the Game" "${GAMEARGS/#-/ -}" \
+	--field="     $GUI_TOGGLEWINDOWS!$DESC_TOGGLEWINDOWS":CHK "${TOGGLEWINDOWS/#-/ -}" \
+	--field="     $GUI_GAMEARGS!$DESC_GAMEARGS" "${GAMEARGS/#-/ -}" \
 	--field=" ":LBL " " \
-	--field="     Strace!Enable strace for this game":CHK "${STRACERUN/#-/ -}" \
-	--field="     Strace arguments!The command line arguments for strace for this game" "${STRACEOPTS/#-/ -}" \
-	--field="     NetMon!Enable network monitoring for this game":CHK "${USENETMON/#-/ -}" \
+	--field="     $GUI_STRACERUN!$DESC_STRACERUN":CHK "${STRACERUN/#-/ -}" \
+	--field="     $GUI_STRACEOPTS!$DESC_STRACEOPTS" "${STRACEOPTS/#-/ -}" \
+	--field="     $GUI_USENETMON!$DESC_USENETMON":CHK "${USENETMON/#-/ -}" \
 	--field=" ":LBL " " \
-	--field="     User Start command!Custom User script which is started when game starts - the default 'echo' is just a placeholder and will be ignored":FL "${USERSTART/#-/ -}" \
-	--field="     User Stop command!Custom User script which is started when game ends - the default 'echo' is just a placeholder and will be ignored":FL "${USERSTOP/#-/ -}" \
-	--field="     Requester wait!Wait n seconds until the Settings Requester disappears":NUM "${WAITEDITOR/#-/ -}" \
-	--field="     Open Editor URL!When opening the editor open the defined URL 'EDITORURL' for the game as well":CHK "${OPENEDITORURL/#-/ -}" \
+	--field="     $GUI_USERSTART!$DESC_USERSTART $GUI_ECHOPLAC":FL "${USERSTART/#-/ -}" \
+	--field="     $GUI_USERSTOP!$DESC_USERSTOP $GUI_ECHOPLAC":FL "${USERSTOP/#-/ -}" \
+	--field="     $GUI_WAITEDITOR!$DESC_WAITEDITOR":NUM "${WAITEDITOR/#-/ -}" \
+	--field="     $GUI_OPENEDITOR!$DESC_OPENEDITORURL":CHK "${OPENEDITORURL/#-/ -}" \
 	> "$cfgX" &
 }
 #ENDYADTEMPLATE
@@ -1758,12 +1894,13 @@ function openSettings {
 	checkSTLCSS X
 
 	setProtYadList
+	createLanguageList
 
 	# The Tab for the current game is almost identical to the Default Game Template Tab, so using a generic function here to avoid redundant code:
-	openGameMenu "$STLGAMECFG" "1" "Settings for Game $GN ($AID)" "$cfg1"
+	openGameMenu "$STLGAMECFG" "1" "$GUI_SETHEAD1" "$cfg1"
 	YADPID1="$!"
 
-	openGameMenu "$STLDEFGAMECFG" "2" "Default Game Settings Template" "$cfg2"
+	openGameMenu "$STLDEFGAMECFG" "2" "$GUI_SETHEAD2" "$cfg2"
 	YADPID2="$!"
 
 # adding space before every variable starting with "-" for yad.
@@ -1772,74 +1909,76 @@ function openSettings {
 #STARTYADGLOBAL
 	loadCfg "$STLDEFGLOBALCFG" X
 
-	"$YAD" --plug="$YADKEY" --tabnum=3 --borders="$YADBORDER" --form --scroll \
+	LC_ALL="" "$YAD" --plug="$YADKEY" --tabnum=3 --borders="$YADBORDER" --form --scroll \
 	--separator="\n" \
 	--quoted-output \
 	--columns="$GLOBTABCOLS" \
-	--text="<span font_weight='bold'>Global Settings</span>" \
-	--field="     Clone ${PROGNAME}!Pull '$PROGCMD' from '$PROJECTPAGE' in '$STLCFGDIR' and use its config files (only used if global configs are not installed)":CHK "${DLGLOBAL/#-/ -}" \
-	--field="     Use GUI!Choose which GUI tool to use":CB "${USEGUI/#-/ -}!$YAD!$ZENITY" \
-	--field="     Use Tray Icon!Use the Tray Icon (only available when yad is used)":CHK "${USETRAYICON/#-/ -}" \
-	--field="     Enable $PROGCMD Steam theme!Use the $PROGNAME Steam GTK css '${PROGCMD}-steam'":CHK "${USESTLCSS/#-/ -}" \
-	--field="     Update $PROGCMD Steam theme!Updates the $PROGNAME Steam GTK css '${PROGCMD}-steam'":CHK "${CSSUPDATE/#-/ -}" \
+	--text="<span font_weight='bold'>$GUI_SETHEAD3</span>" \
+	--field="     $GUI_DLGLOBAL $PROGCMD!$DESC_DLGLOBAL":CHK "${DLGLOBAL/#-/ -}" \
+	--field="     $GUI_STLLANG!$DESC_STLLANG":CB "${STLLANG/#-/ -}!$LANGYADLIST" \
+	--field="     $GUI_USEGUI!$DESC_USEGUI":CB "${USEGUI/#-/ -}!$YAD!$ZENITY" \
+	--field="     $GUI_USETRAYICON!$DESC_USETRAYICON":CHK "${USETRAYICON/#-/ -}" \
+	--field="     $GUI_USESTLCSS!$DESC_USESTLCSS '${PROGCMD}-steam'":CHK "${USESTLCSS/#-/ -}" \
+	--field="     $GUI_CSSUPDATE!$DESC_CSSUPDATE '${PROGCMD}-steam'":CHK "${CSSUPDATE/#-/ -}" \
 	--field=" ":LBL " " \
-	--field="     Boxtron command!The Boxtron executable":FL "${BOXTRONCMD/#-/ -}" \
-	--field="     Boxtron arguments!The command line arguments used for boxtron" "${BOXTRONARGS/#-/ -}" \
-	--field="     Roberta command!The Roberta executable":FL "${ROBERTACMD/#-/ -}" \
-	--field="     Roberta arguments!The command line arguments used for roberta" "${ROBERTAARGS/#-/ -}" \
-	--field="     Luxtorpeda command!The Luxtorpeda executable":FL "${LUXTORPEDACMD/#-/ -}" \
-	--field="     Luxtorpeda arguments!The command line arguments used for luxtorpeda" "${LUXTORPEDAARGS/#-/ -}" \
-	--field="     GameConqueror command!The GameConqueror executable":FL "${GAMCON/#-/ -}" \
+	--field="     $GUI_BOXTRONCMD!$DESC_BOXTRONCMD":FL "${BOXTRONCMD/#-/ -}" \
+	--field="     $GUI_BOXTRONARGS!$DESC_BOXTRONARGS" "${BOXTRONARGS/#-/ -}" \
+	--field="     $GUI_ROBERTACMD!$DESC_ROBERTACMD":FL "${ROBERTACMD/#-/ -}" \
+	--field="     $GUI_ROBERTAARGS!$DESC_ROBERTAARGS" "${ROBERTAARGS/#-/ -}" \
+	--field="     $GUI_LUXTORPEDACMD!$DESC_LUXTORPEDACMD":FL "${LUXTORPEDACMD/#-/ -}" \
+	--field="     $GUI_LUXTORPEDAARGS!$DESC_LUXTORPEDAARGS" "${LUXTORPEDAARGS/#-/ -}" \
+	--field="     $GUI_GAMCONBIN!$DESC_GAMCON":FL "${GAMCON/#-/ -}" \
 	--field=" ":LBL " " \
-	--field="     Side-by-Side Stereo3D VR player command!The Side-by-Side Stereo3D VR player executable":FL "${VRVIDEOPLAYER/#-/ -}" \
-	--field="     Clone Depth3D git URL!Allow pulling a copy of Depth3D if required":CHK "${CLONE_DEPTH3D/#-/ -}" \
-	--field="     Depth3D Download dir!The download directory for the Depth3D shader":DIR "${DEPTH3DSRCDIR/#-/ -}" \
+	--field="     $GUI_VRVIDEOPLAYER!$DESC_VRVIDEOPLAYER":FL "${VRVIDEOPLAYER/#-/ -}" \
+	--field="     $GUI_CLONE_DEPTH3D!$DESC_CLONE_DEPTH3D":CHK "${CLONE_DEPTH3D/#-/ -}" \
+	--field="     $GUI_DEPTH3DSRCDIR!$DESC_DEPTH3DSRCDIR":DIR "${DEPTH3DSRCDIR/#-/ -}" \
 	--field=" ":LBL " " \
-	--field="     NetMon command!The command used for network monitoring":FL "${NETMON/#-/ -}" \
-	--field="     NetMon log path!The path where netmon logs are stored":DIR "${NETMONDIR/#-/ -}" \
-	--field="     NetMon arguments!The command line arguments used for netmon" "${NETOPTS/#-/ -}" \
+	--field="     $GUI_NETMON!$DESC_NETMON":FL "${NETMON/#-/ -}" \
+	--field="     $GUI_NETMONDIR!$DESC_NETMONDIR":DIR "${NETMONDIR/#-/ -}" \
+	--field="     $GUI_NETOPTS!$DESC_NETOPTS" "${NETOPTS/#-/ -}" \
 	--field=" ":LBL " " \
-	--field="     Global registry file path!Path where global registry files are stored":DIR "${GLOBALREGDIR/#-/ -}" \
-	--field="     Global tweak file path!Path where global tweak files are stored generally":DIR "${GLOBALTWEAKDIR/#-/ -}" \
-	--field="     Global SBS tweak file path!Path where global Side-by-Side tweak files are stored":DIR "${GLOBALSBSTWEAKDIR/#-/ -}" \
-	--field="     Global user tweak file path!Path where global user tweak files are stored":DIR "${GLOBALUSERTWEAKDIR/#-/ -}" \
-	--field="     Global tweak command path!Path where global user tweak commands are stored":DIR "${GLOBALTWEAKCMDDIR/#-/ -}" \
-	--field="     Global Steam Category path!Path where global Steam Category files are stored":DIR "${GLOBALCATEGORYDIR/#-/ -}" \
-	--field="     Global Misc path!Path where global Misc files are stored":DIR "${GLOBALMISCDIR/#-/ -}" \
-	--field="     Strace log path!The path where strace logs are stored":DIR "${STRACEDIR/#-/ -}" \
-	--field="     $PROGNAME logfile path!The path where the $PROGNAME logs are stored":DIR "${LOGDIR/#-/ -}" \
-	--field="     Log Level!The Log Level of the logfiles (0 none, 1:less, 2:all)":CB "${LOGLEVEL/#-/ -}!0!1!2" \
+	--field="     $GUI_GLOBALREGDIR!$DESC_GLOBALREGDIR":DIR "${GLOBALREGDIR/#-/ -}" \
+	--field="     $GUI_GLOBALTWEAKDIR!$DESC_GLOBALTWEAKDIR":DIR "${GLOBALTWEAKDIR/#-/ -}" \
+	--field="     $GUI_GLOBALSBSTWEAKDIR!$DESC_GLOBALSBSTWEAKDIR":DIR "${GLOBALSBSTWEAKDIR/#-/ -}" \
+	--field="     $GUI_GLOBALUSERTWEAKDIR!$DESC_GLOBALUSERTWEAKDIR":DIR "${GLOBALUSERTWEAKDIR/#-/ -}" \
+	--field="     $GUI_GLOBALTWEAKCMDDIR!$DESC_GLOBALTWEAKCMDDIR":DIR "${GLOBALTWEAKCMDDIR/#-/ -}" \
+	--field="     $GUI_GLOBALCATEGORYDIR!$DESC_GLOBALCATEGORYDIR":DIR "${GLOBALCATEGORYDIR/#-/ -}" \
+	--field="     $GUI_GLOBALMISCDIR!$DESC_GLOBALMISCDIR":DIR "${GLOBALMISCDIR/#-/ -}" \
+	--field="     $GUI_GLOBALSTLLANGDIR!$DESC_GLOBALSTLLANGDIR":DIR "${GLOBALSTLLANGDIR/#-/ -}" \
+	--field="     $GUI_STRACEDIR!$DESC_STRACEDIR":DIR "${STRACEDIR/#-/ -}" \
+	--field="     $PROGNAME $GUI_LOGDIR!$DESC_LOGDIR":DIR "${LOGDIR/#-/ -}" \
+	--field="     $GUI_LOGLEVEL!$DESC_LOGLEVEL":CB "${LOGLEVEL/#-/ -}!0!1!2" \
 	--field=" ":LBL " " \
-	--field="     Create Tweaks!Create Tweak Templates with the Game Header to make creating Tweaks a bit easier":CHK "${CREATETWEAKS/#-/ -}" \
-	--field="     AutoTweak Editor Timeout!When a AutoTweak is found the AutoTweak Editor will open after X Seconds automatically. If set to 0 the AutoTweak is loaded automatically":NUM "${ATVALIDATE/#-/ -}" \
-	--field="     AutoTweaks!All platforms listed here will be used to import autotweaks from" "${AUTOTWEAKS/#-/ -}" \
+	--field="     $GUI_CREATETWEAKS!$DESC_CREATETWEAKS":CHK "${CREATETWEAKS/#-/ -}" \
+	--field="     $GUI_ATVALIDATE!$DESC_ATVALIDATE":NUM "${ATVALIDATE/#-/ -}" \
+	--field="     $GUI_AUTOTWEAKS!$DESC_AUTOTWEAKS" "${AUTOTWEAKS/#-/ -}" \
 	--field=" ":LBL " " \
-	--field="     Enable Notifier!Used notifier when found":CHK "${USENOTIFIER/#-/ -}" \
-	--field="     Notifier command!The command used for the notifier":FL "${NOTY/#-/ -}" \
+	--field="     $GUI_USENOTIFIER!$DESC_USENOTIFIER":CHK "${USENOTIFIER/#-/ -}" \
+	--field="     $GUI_NOTY!$DESC_NOTY":FL "${NOTY/#-/ -}" \
 	--field=" ":LBL " " \
-	--field="     Editor command!The Text Editor used for editing config files manually":FL "${STLEDITOR/#-/ -}" \
-	--field="     Requester wait!Wait n seconds until the Settings Requester disappears":NUM "${WAITEDITOR/#-/ -}" \
-	--field="     Max Ask!Give up asking if the Settings shall be opened per game after n rejected requesters":NUM "${MAXASK/#-/ -}" \
-	--field="     Browser command!The Web Browser used to optionally open Urls":FL "${BROWSER/#-/ -}" \
+	--field="     $GUI_STLEDITOR!$DESC_STLEDITOR":FL "${STLEDITOR/#-/ -}" \
+	--field="     $GUI_WAITEDITOR!$DESC_WAITEDITOR":NUM "${WAITEDITOR/#-/ -}" \
+	--field="     $GUI_MAXASK!$DESC_MAXASK":NUM "${MAXASK/#-/ -}" \
+	--field="     $GUI_BROWSER!$DESC_BROWSER":FL "${BROWSER/#-/ -}" \
 	--field=" ":LBL " " \
-	--field="     ReShade Download!allow download of ReShade sourcefiles":CHK "${DOWNLOAD_RESHADE/#-/ -}" \
-	--field="     ReShade Version!The Version of the ReShade Setup to download" "${RSVERS/#-/ -}" \
-	--field="     ReShade directory!The directory where ReShade components are stored and loaded":DIR "${RESHADESRCDIR/#-/ -}" \
-	--field="     64bit ReShade dll!The filename of the 64bit ReShade dll" "${RS_64/#-/ -}" \
-	--field="     32bit ReShade dll!The filename of the 32bit ReShade dll" "${RS_32/#-/ -}" \
-	--field="     64bit d3dcompiler_47 name!The filename of the 64bit d3dcompiler_47.dll" "${RS_D3D47_64/#-/ -}" \
-	--field="     32bit d3dcompiler_47 name!The filename of the 32bit d3dcompiler_47.dll" "${RS_D3D47_32/#-/ -}" \
+	--field="     $GUI_DOWNLOAD_RESHADE!$DESC_DOWNLOAD_RESHADE":CHK "${DOWNLOAD_RESHADE/#-/ -}" \
+	--field="     $GUI_RSVERS!$DESC_RSVERS" "${RSVERS/#-/ -}" \
+	--field="     $GUI_RESHADESRCDIR!$DESC_RESHADESRCDIR":DIR "${RESHADESRCDIR/#-/ -}" \
+	--field="     $GUI_RS_64!$DESC_RS_64" "${RS_64/#-/ -}" \
+	--field="     $GUI_RS_32!$DESC_RS_32" "${RS_32/#-/ -}" \
+	--field="     $GUI_RS_D3D47_64!$DESC_RS_D3D47_64" "${RS_D3D47_64/#-/ -}" \
+	--field="     $GUI_RS_D3D47_32!$DESC_RS_D3D47_32" "${RS_D3D47_32/#-/ -}" \
 	--field=" ":LBL " " \
-	--field="     Settings Size Autosave!Automatically save current Settings Menu resolution on exit":CHK "${SAVESETSIZE/#-/ -}" \
-	--field="     Auto Last Proton!Automatically use last used Proton version when configured one is not found":CHK "${AUTOLASTPROTON/#-/ -}" \
-	--field="     Custom Proton Download dir!The download directory for Custom Proton archives":DIR "${CUSTPROTDLDIR/#-/ -}" \
-	--field="     Custom Proton Extract dir!The extract directory for downloaded Custom Proton archives":DIR "${CUSTPROTEXTDIR/#-/ -}" \
-	--field="     Add local Custom Proton!Add a locally stored custom Proton executable to the auto-generated Selection":BTN "\"$0\" acp" \
-	--field="     Download Custom Proton!Download a custom Proton package to the auto-generated Selection":BTN "\"$0\" acp dl" \
-	--field="     Columns for the Game Tabs!Use n Columns for the two Game Tabs":CB "${GAMETABCOLS/#-/ -}!1!2!3!4!5" \
-	--field="     Columns for the Global Tab!Use n Columns for the Global Tab":CB "${GLOBTABCOLS/#-/ -}!1!2!3!4!5" \
-	--field="     Columns for the ReShade Tab!Use n Columns for the ReShade Tab":CB "${RESHTABCOLS/#-/ -}!1!2!3!4!5" \
-	--field="     Columns for the Vortex Tab!Use n Columns for the Vortex Tab":CB "${VORTTABCOLS/#-/ -}!1!2!3!4!5" \
+	--field="     $GUI_SAVESETSIZE!$DESC_SAVESETSIZE":CHK "${SAVESETSIZE/#-/ -}" \
+	--field="     $GUI_AUTOPULLPROTON!$DESC_AUTOPULLPROTON":CHK "${AUTOPULLPROTON/#-/ -}" \
+	--field="     $GUI_AUTOLASTPROTON!$DESC_AUTOLASTPROTON":CHK "${AUTOLASTPROTON/#-/ -}" \
+	--field="     $GUI_CUSTPROTDLDIR!$DESC_CUSTPROTDLDIR":DIR "${CUSTPROTDLDIR/#-/ -}" \
+	--field="     $GUI_CUSTPROTEXTDIR!$DESC_CUSTPROTEXTDIR":DIR "${CUSTPROTEXTDIR/#-/ -}" \
+	--field="     $GUI_ADDCUSTPROT!$BUT_ADDCUSTPROT":BTN "\"$0\" acp" \
+	--field="     $GUI_DLCUSTPROT!$BUT_DLCUSTPROT":BTN "\"$0\" acp dl" \
+	--field="     $GUI_GAMETABCOLS!$DESC_GAMETABCOLS":CB "${GAMETABCOLS/#-/ -}!1!2!3!4!5" \
+	--field="     $GUI_GLOBTABCOLS!$DESC_GLOBTABCOLS":CB "${GLOBTABCOLS/#-/ -}!1!2!3!4!5" \
+	--field="     $GUI_VORTTABCOLS!$DESC_VORTTABCOLS":CB "${VORTTABCOLS/#-/ -}!1!2!3!4!5" \
 	> "$cfg3" &
 	YADPID3="$!"
 
@@ -1848,22 +1987,22 @@ function openSettings {
 #STARTYADVORTEX
 	loadCfg "$STLVORTEXCFG" X
 
-	"$YAD" --plug="$YADKEY" --tabnum=4 --borders="$YADBORDER" --form --scroll \
+	LC_ALL="" "$YAD" --plug="$YADKEY" --tabnum=4 --borders="$YADBORDER" --form --scroll \
 	--separator="\n" \
 	--quoted-output \
 	--columns="$VORTTABCOLS" \
-	--text="<span font_weight='bold'>Vortex Settings</span>" \
+	--text="<span font_weight='bold'>$GUI_SETHEAD4</span>" \
 	--field=" ":LBL " " \
-	--field="     Allow Vortex Installation!Download and install Vortex automatically if required":CHK "${VORTEXINSTALL/#-/ -}" \
-	--field="     Vortex wine!The wine binary uses for Vortex":FL "${VORTEXWINE/#-/ -}" \
-	--field="     Vortex WINEPREFIX!The WINEPREFIX for the Vortex installation":DIR "${VORTEXPREFIX/#-/ -}" \
-	--field="     Vortex WINEDEBUG!The WINEDEBUG settings for Vortex" "${VORTEXWINEDEBUG/#-/ -}" \
-	--field="     Vortex dxvk Log Level!The dxvk Log Level for Vortex":CB "${VORTEX_DXVK_LOG_LEVEL/#-/ -}!none!error!warn!info!debug" \
-	--field="     Vortex dxvk Log Path!The dxvk Log Path for Vortex - 'none' for stdout" "${VORTEX_DXVK_LOG_PATH/#-/ -}" \
-	--field="     Vortex setup download directory!The directory where the Vortex Installer is downloaded":DIR "${VORTEXDOWNLOADPATH/#-/ -}" \
-	--field="     Vortex Version!The Version of the Vortex Installer to be used/downloaded" "${VORTEXVERSION/#-/ -}" \
-	--field="     Add Vortex Stage!Add a Vortex Stage directory *(one per Steam Library partition)*":BTN "stl vortex stage" \
-	--field="     Disable Autostages!When checked, $PROGNAME won't autocreate Vortex 'stage' directories and they have to be added manually to VORTEXSTAGELIST":CHK "${DISABLE_AUTOSTAGES/#-/ -}" \
+	--field="     $GUI_VORTEXINSTALL!$DESC_VORTEXINSTALL":CHK "${VORTEXINSTALL/#-/ -}" \
+	--field="     $GUI_VORTEXWINE!$DESC_VORTEXWINE":FL "${VORTEXWINE/#-/ -}" \
+	--field="     $GUI_VORTEXPREFIX!$DESC_VORTEXPREFIX":DIR "${VORTEXPREFIX/#-/ -}" \
+	--field="     $GUI_VORTEXWINEDEBUG!$DESC_VORTEXWINEDEBUG" "${VORTEXWINEDEBUG/#-/ -}" \
+	--field="     $GUI_VORTEX_DXVK_LOG_LEVEL!$DESC_VORTEX_DXVK_LOG_LEVEL":CB "${VORTEX_DXVK_LOG_LEVEL/#-/ -}!none!error!warn!info!debug" \
+	--field="     $GUI_VORTEX_DXVK_LOG_PATH!$DESC_VORTEX_DXVK_LOG_PATH" "${VORTEX_DXVK_LOG_PATH/#-/ -}" \
+	--field="     $GUI_VORTEXDOWNLOADPATH!$DESC_VORTEXDOWNLOADPATH":DIR "${VORTEXDOWNLOADPATH/#-/ -}" \
+	--field="     $GUI_VORTEXVERSION!$DESC_VORTEXVERSION" "${VORTEXVERSION/#-/ -}" \
+	--field="     $GUI_ADDVORTSTAGE!$BUT_ADDVORTSTAGE":BTN "stl vortex stage" \
+	--field="     $GUI_DISAS!$DESC_DISABLE_AUTOSTAGES":CHK "${DISABLE_AUTOSTAGES/#-/ -}" \
 	--field=" ":LBL " " \
 	--field=" ":LBL " " > "$cfg4" &
 	YADPID4="$!"
@@ -1877,22 +2016,22 @@ function openSettings {
 	updateWinRes "$TITLE" "$STLGUICFG" "SETWIDTH" "SETHEIGHT" &
 
 	if [ "$ISGAME" -ge 1 ]; then
-		BUT0="SAVE/PLAY"
-		BUT5="PLAY"
+		BUT0="$BUT_SAVEPLAY"
+		BUT5="$BUT_PLAY"
 	else
-		BUT0="SAVE/EXIT"
-		BUT5="EXIT"
+		BUT0="$BUT_SAVEEXIT"
+		BUT5="$BUT_EXIT"
 	fi
 
-	BUT1="EDITOR MENU"
-	BUT2="RELOAD"
+	BUT1="$BUT_EDITORMENU"
+	BUT2="$BUT_RELOAD"
 #	BUT3="BROKEN"
-	BUT4="SAVE/RELOAD"
+	BUT4="$BUT_RELOAD"
 
-	SETHEAD="${PROGNAME} (${PROGCMD}) - ${PROGVERS} Settings"
+	SETHEAD="${PROGNAME} (${PROGCMD}) - ${PROGVERS} $GUI_SET"
 	
-	"$YAD" --notebook --key="$YADKEY" --borders="$YADSETBORD" --window-icon="$STLICON"  --scroll --center --undecorated \
-	--tab="GAME SETTINGS" --tab="DEFAULT SETTINGS" --tab="GLOBAL SETTINGS" --tab="VORTEX SETTINGS" \
+	LC_ALL="" "$YAD" --notebook --key="$YADKEY" --borders="$YADSETBORD" --window-icon="$STLICON"  --scroll --center --undecorated \
+	--tab="$GUI_TAB1" --tab="$GUI_TAB2" --tab="$GUI_TAB3" --tab="$GUI_TAB4" \
     --title="$TITLE" \
 	--geometry="$SETWIDTH"x"$SETHEIGHT"+0+0 \
     --text="$SETHEAD" \
@@ -1950,6 +2089,14 @@ function openSettings {
 ### YAD SETTINGS END ###
 
 function USEDLGLOBAL {
+	if [ -z "$DLGLOBAL" ]; then
+		if [ -d "$SYSTEMSTLCFGDIR" ]; then
+			DLGLOBAL=0
+		else
+			DLGLOBAL=1
+		fi
+	fi
+
 	if	[ "$DLGLOBAL" -eq 0 ]; then
 		writelog "INFO" "${FUNCNAME[0]} - DLGLOBAL is disabled in the config"
 		echo "$DLGLOBAL"
@@ -2028,6 +2175,13 @@ function howto {
 	echo "  will autogenerate all tweak files for every parsible game of platform PLATFORM or just for the optional SteamAppID"
 	echo "  where valid platforms are"
 	echo "  $AUTOTWEAKPLATFORMS"
+	echo "------------------------"
+	echo "  'lang=' option"
+	echo "  You can either append a valid language file name without suffix or an absolute path to a valid language file"
+	echo "  example:"
+	echo "  'stl lang=german'"
+	echo "  'stl lang=/some/path/to/german.txt'"
+	echo "------------------------"
 }
 
 function writelog {
@@ -2163,10 +2317,10 @@ function waitForGameWindow {
 		if [ "$WSIZ" -lt "307200" ]; then
 			writelog "SKIP" "${FUNCNAME[0]} - '$(printf 0x%x'\n' "$WINS")' is smaller than 640x480 - this is very likely not the game window - skipping"
 		else
-				writelog "INFO" "${FUNCNAME[0]} - found a big enough window with windowid '$(printf 0x%x'\n' "$WINS")'"
-				writelog "INFO" "${FUNCNAME[0]} - this is probably the game window, but making another check"
-				WSIZ=$(($("$XWININFO" -id "$WINS" -stats | awk '$1=="-geometry" {print $2}' | awk -F '+'  '{print $1}' | sed "s:x:\*:")))
-				FOUNDWIN=1
+			writelog "INFO" "${FUNCNAME[0]} - found a big enough window with windowid '$(printf 0x%x'\n' "$WINS")'"
+			writelog "INFO" "${FUNCNAME[0]} - this is probably the game window, but making another check"
+			WSIZ=$(($("$XWININFO" -id "$WINS" -stats | awk '$1=="-geometry" {print $2}' | awk -F '+'  '{print $1}' | sed "s:x:\*:")))
+			FOUNDWIN=1
 			break
 		fi
 	fi
@@ -2553,7 +2707,7 @@ function SBSstopVRVideoPlayer {
 
 function startSBSVR {
 	if [ "$RUNSBSVR" -ge 1 ]; then
-#		checkHMDPresent
+		checkHMDPresent
 		SBSstartSVR
 		SBScheckSBScfg
 		SBSgetGamePID
@@ -2562,29 +2716,53 @@ function startSBSVR {
 	fi
 }
 
-
-# TODO https://github.com/ValveSoftware/SteamVR-for-Linux/issues/393
 function checkHMDPresent {
-	SBLV="SteamVR/bin/linux64/vrcmd"
 	if pgrep "" -a | grep -v grep | grep "/vrcompositor" -q ; then
-		VRCMD="echo 0 >/dev/null 2>/dev/null"
-	elif [ -f "$HSS/$SAC/$SBLV" ] ; then
-		VRCMD="$HSS/$SAC/$SBLV"
+		writelog "INFO" "${FUNCNAME[0]} - looks like SteamVR is already running - skipping this function"
 	else
-		while read -r SLP; do
-			if [ -f "${SLP//\"/}/$SAC/$SBLV" ]; then
-				VRCMD="${SLP//\"/}/$SAC/$SBLV"
-				break
+		if [ "$CHECKHMD" -eq 1 ]; then
+			UUDEV="/lib/udev/rules.d"
+			EUDEV="/etc/udev/rules.d"
+			SVR="steam-vr"
+			NOVRP="1142"
+			FOUNDHMD=0
+
+			SVRRULE="$(find "$UUDEV" -name "*$SVR*")"
+			if [ -z "$SVRRULE" ]; then
+				SVRRULE="$(find "$EUDEV" -name "*$SVR*")"
 			fi
-		done <<< "$(grep "BaseInstallFolder" "$HSSCC" | awk '{print $2}')"
-	fi
-	
-	writelog "INFO" "${FUNCNAME[0]} -checking return of '$VRCMD'"
-	if "$VRCMD" 2>/dev/null; then
-		writelog "INFO" "${FUNCNAME[0]} - HMD is present continuing starting VR"
-	else
-		writelog "SKIP" "${FUNCNAME[0]} - HMD is not present - skipping VR"
-		RUNSBSVR=0
+
+			if [ -n "$SVRRULE" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - found $SVR udev rule - trying to find one of the VR devices before starting SteamVR"
+
+				while read -r line; do
+					IDV="$(cut -d ',' -f3 <<< "$line" | grep -oP '"\K[^"]+')"
+					IDP="$(cut -d ',' -f4 <<< "$line" | grep -v "$NOVRP" | grep -oP '"\K[^"]+')"
+					if [ -n "$IDV" ] && [ -n "$IDP" ]; then
+						IDVP="$IDV:$IDP"
+						if "$LSUSB" | grep -q "$IDVP"; then
+							FOUNDHMD=1
+						fi
+					fi
+				done < "$SVRRULE"
+			else
+				echo "no $SVR udev rule found"
+				writelog "WARN" "${FUNCNAME[0]} - no $SVR udev rule found. As it might be stored under a different name, this is just a warning"
+			fi
+
+			if [ "$FOUNDHMD" -eq 1 ]; then
+				writelog "INFO" "${FUNCNAME[0]} - found $SVR hardware using '$LSUSB' - continuing"
+			else
+				writelog "SKIP" "${FUNCNAME[0]} - no $SVR hardware found using '$LSUSB' - cancelling the SteamVR start"
+				RUNSBSVR=0
+				if [ "$USERESHADE" -eq 1 ]; then
+					USERESHADE=0
+					useReshade
+				fi
+			fi
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - skipping, as '$LSUSB' was not found"
+		fi
 	fi
 }
 
@@ -2830,7 +3008,6 @@ function installReshadeDepth3D {
 	fi
 }
 
-# XXXXXXXXXXXXXXXXXXXXXXX
 function useReshade {
 	if [ -n "$USERESHADE" ]; then
 		if [ "$USERESHADE" -eq 1 ]; then
@@ -2916,18 +3093,13 @@ function editorSkipped {
 
 		ASKCNT="$SETASKCNT"
 
-		if [ "$USENOTIFIER" -eq 1 ]; then
-			if [ "$ASKCNT" -ge "$MAXASK" ]; then
-				"$NOTY" "Canceled the Requester $MAXASK times for game '$AID'. It will be skipped from now on"
-			elif [ "$ASKCNT" -lt "$MAXASK" ]; then
-				"$NOTY" "Canceled the Requester $ASKCNT times for game '$AID'. It will be skipped after $((MAXASK - ASKCNT)) more times"
-			fi
-		fi
-
 		if [ "$ASKCNT" -ge "$MAXASK" ]; then
+			notiShow "$NOTY_CANCELREQ1" "$MAXASK"
 			writelog "INFO" "${FUNCNAME[0]} - 'ASKCNT $ASKCNT' reached  'MAXASK $MAXASK' - disabling requester and resetting counter"
 			updateConfigEntry "WAITEDITOR" "0" "$STLGAMECFG"
 			updateConfigEntry "ASKCNT" "0" "$STLGAMECFG"
+		elif [ "$ASKCNT" -lt "$MAXASK" ]; then
+			notiShow "$NOTY_CANCELREQ2" "$ASKCNT" $((MAXASK - ASKCNT))
 		fi
 	fi
 }
@@ -2938,7 +3110,6 @@ function askSettings {
 		if [ "$WAITEDITOR" -gt 0 ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Opening Requester with timeout '$WAITEDITOR'"
 			FOUNDTWEAKCFG=""
-			
 			if [ -f "$GLOBALTWEAKCFG" ]; then
 				FOUNDTWEAKCFG="$GLOBALTWEAKCFG"
 			fi
@@ -2946,7 +3117,6 @@ function askSettings {
 			if [ -f "$TWEAKCFG" ]; then
 				FOUNDTWEAKCFG="$TWEAKCFG"
 			fi
-
 			getAvailableCfgs
 
 			TITLE="${PROGNAME}-OpenSettings"
@@ -2955,28 +3125,29 @@ function askSettings {
 			updateWinRes "$TITLE" "$STLGUICFG" "ASKSETREQWIDTH" "ASKSETREQHEIGHT" &
 
 			if [ "$USEGUI" == "$YAD" ]; then
+
 				if [ -n "$FOUNDTWEAKCFG" ]; then
-					"$YAD" --borders="$YADBORDER" --window-icon="$STLICON" --form --center --on-top --undecorated \
+					LC_ALL="" "$YAD" --borders="$YADBORDER" --window-icon="$STLICON" --form --center --on-top --undecorated \
 					--title="$TITLE" \
 					--geometry="$ASKSETREQWIDTH"x"$ASKSETREQHEIGHT"+0+0 \
-					--text="<span font_weight='bold'>$GN ($AID) - Open Settings?</span>" \
-					--field="<span font=\"italic\">(found ${#CfgFiles[@]} editable Config Files)</span>":LBL \
+					--text="<span font_weight='bold'>$GN ($AID) - $GUI_ASKOPENSET</span>" \
+					--field="<span font=\"italic\">${#CfgFiles[@]} $GUI_EDITABLECFGS</span>":LBL \
 					--field=" ":LBL " " \
-					--field="Tweakfile $FOUNDTWEAKCFG found":LBL \
-					--field="<span font=\"italic\">(the game should *just work* using it)</span>":LBL \
-					--button="SETTINGS":0  \
-					--button="CANCEL":1  \
+					--field="$GUI_TWEAKFOUND $FOUNDTWEAKCFG":LBL \
+					--field="<span font=\"italic\">($GUI_SHOULDWORK)</span>":LBL \
+					--button="$BUT_SET":0  \
+					--button="$BUT_CAN":1  \
 					--timeout="$WAITEDITOR" \
 					--timeout-indicator=top
 				else
-					"$YAD" --borders="$YADBORDER" --window-icon="$STLICON" --form --center --on-top -undecorated \
+					LC_ALL="" "$YAD" --borders="$YADBORDER" --window-icon="$STLICON" --form --center --on-top -undecorated \
 					--title="$TITLE" \
 					--geometry="$ASKSETREQWIDTH"x"$ASKSETREQHEIGHT"+0+0 \
-					--text="<span font_weight='bold'>$GN ($AID) - Open Settings?</span>" \
-					--field="<span font=\"italic\">(found ${#CfgFiles[@]} editable Config Files)</span>":LBL \
+					--text="<span font_weight='bold'>$GN ($AID) - $GUI_ASKOPENSET</span>" \
+					--field="<span font=\"italic\">(${#CfgFiles[@]} $GUI_EDITABLECFGS)</span>":LBL \
 					--field=" ":LBL " " \
-					--button="SETTINGS":0  \
-					--button="CANCEL":1  \
+					--button="$BUT_SET":0  \
+					--button="$BUT_CAN":1  \
 					--timeout="$WAITEDITOR" \
 					--timeout-indicator=top
 				fi
@@ -2990,6 +3161,7 @@ function askSettings {
 					70) writelog "INFO" "${FUNCNAME[0]} - TIMEOUT - Starting game without settings"
 					;;
 				esac
+
 			elif [ "$USEGUI" == "$ZENITY" ]; then
 				if [ -n "$FOUNDTWEAKCFG" ]; then
 					"$ZENBIN" --title="$PROGNAME ($PROGCMD) - $PROGVERS" --question --text="edit game configfile?\n'$STLGAMECFG'\n(tweakfile '$FOUNDTWEAKCFG' found,\nthe game should 'just work' using it)" --ok-label=Edit --cancel-label=Cancel --timeout="$WAITEDITOR" --width="$ASKSETREQWIDTH" --heigth="$ASKSETREQHEIGHT" 2>/dev/null
@@ -3022,6 +3194,7 @@ function mkProjDir {
 # create project dirs
 function createProjectDirs {
 	mkProjDir "$STLCFGDIR" 1
+	mkProjDir "$STLLANGDIR" 1
 	mkProjDir "$LOGDIR" 1
 	mkProjDir "$STLGAMEDIR" 1
 	mkProjDir "$STLCATEGORYDIR" 1
@@ -3272,6 +3445,9 @@ function checkSTLCSS {
 
 function createDefaultCfgs {
 	createProjectDirs
+
+	loadLanguage "$@"
+
 	saveCfg "$STLDEFGLOBALCFG" X
 	loadCfg "$STLDEFGLOBALCFG" X
 
@@ -3292,7 +3468,6 @@ function createDefaultCfgs {
 	createProjectDirs
 
 	setGlobalAIDCfgs
-
 }
 
 function checkSTLDLGlobal {
@@ -4021,14 +4196,14 @@ function guiLoadCfg {
 
 	writelog "INFO" "${FUNCNAME[0]} - requester asking if '$GUICFG' should be loaded"
 	if [ "$USEGUI" == "$YAD" ]; then
-		"$YAD" --borders="$YADBORDER" --window-icon="$STLICON" --form --center --on-top --undecorated \
+		LC_ALL="" "$YAD" --borders="$YADBORDER" --window-icon="$STLICON" --form --center --on-top --undecorated \
 		--title="$TITLE" \
 		--geometry="$ALTREQWIDTH"x"$ALTREQHEIGHT"+0+0 \
-		--field="Load AutoTweak Config '$VALCFG'?":LBL \
-		--field="<span font=\"italic\">(Skip/Load/Ignore AutoTweaks for '$GN ($AID)')</span>":LBL \
-		--button="SKIP":0  \
-		--button="LOAD":1  \
-		--button="IGNORE":2  \
+		--field="$GUI_LOADATCFG '$VALCFG'?":LBL \
+		--field="<span font=\"italic\">($GUI_SKIPLOADATFOR '$GN ($AID)')</span>":LBL \
+		--button="$BUT_SKIP":0  \
+		--button="$BUT_LOAD":1  \
+		--button="$BUT_IGNORE":2  \
 		--timeout="$WAITEDITOR" \
 		--timeout-indicator=top
 		case $? in
@@ -4042,7 +4217,7 @@ function guiLoadCfg {
 			;;
 		esac
 	elif [ "$USEGUI" == "$ZENITY" ]; then
-		ZENSEL="$("$ZENBIN" --list --title="$PROGNAME ($PROGCMD) - $PROGVERS" --text="Load AutoTweak Config\n'VALCFG'?\n(Load/Skip/Ignore AutoTweaks for '$GN ($AID)')" --radiolist --column "Choose" --column "Option" FALSE "Load" FALSE "Skip" FALSE "Ignore" --timeout="$WAITEDITOR" --width="$ALTREQWIDTH" --height="$ALTREQHEIGHT" 2>/dev/null)"
+		ZENSEL="$("$ZENBIN" --list --title="$PROGNAME ($PROGCMD) - $PROGVERS" --text="$GUI_LOADATCFG\n'VALCFG'?\n($GUI_SKIPLOADATFOR '$GN ($AID)')" --radiolist --column "Choose" --column "Option" FALSE "Load" FALSE "Skip" FALSE "Ignore" --timeout="$WAITEDITOR" --width="$ALTREQWIDTH" --height="$ALTREQHEIGHT" 2>/dev/null)"
 		if [ "$ZENSEL" == "Load" ]; then
 			LOADAUTOCFG="$GUICFG"
 			writelog "INFO" "${FUNCNAME[0]} - marked '$LOADAUTOCFG' for loading"
@@ -4078,15 +4253,15 @@ function validateATCfg {
 		writelog "INFO" "${FUNCNAME[0]} - gui asking if '$VALCFG' should be edited as ATVALIDATE is '$ATVALIDATE', autoloaded, skipped or ignored"
 		
 		if [ "$USEGUI" == "$YAD" ]; then
-			"$YAD" --borders="$YADBORDER" --window-icon="$STLICON" --form --center --on-top --undecorated \
+			LC_ALL="" "$YAD" --borders="$YADBORDER" --window-icon="$STLICON" --form --center --on-top --undecorated \
 			--title="$TITLE" \
 			--geometry="$AETREQWIDTH"x"$AETREQHEIGHT"+0+0 \
-			--field="Found AutoTweak Config '$VALCFG'":LBL \
-			--field="<span font=\"italic\">(Edit/Skip/Load/Ignore AutoTweaks for '$GN ($AID)')</span>":LBL \
-			--button="EDIT":0  \
-			--button="SKIP":1  \
-			--button="LOAD":2  \
-			--button="IGNORE":3  \
+			--field="$GUI_FOUNDATCFG '$VALCFG'":LBL \
+			--field="<span font=\"italic\">($GUI_EDIT/$GUI_SKIPLOADATFOR '$GN ($AID)')</span>":LBL \
+			--button="$BUT_EDIT":0  \
+			--button="$BUT_SKIP":1  \
+			--button="$BUT_LOAD":2  \
+			--button="$BUT_IGNORE":3  \
 			--timeout="$ATVALIDATE" \
 			--timeout-indicator=top
 			case $? in
@@ -4106,7 +4281,7 @@ function validateATCfg {
 				;;
 			esac
 		elif [ "$USEGUI" == "$ZENITY" ]; then
-				ZENSEL="$("$ZENBIN" --list --title="$PROGNAME ($PROGCMD) - $PROGVERS" --text="Found AutoTweak Config '$VALCFG'.\n(Edit/Skip/Load/Ignore AutoTweaks for '$GN ($AID)')" --radiolist --column "Choose" --column "Option" FALSE "Edit" FALSE "Skip" FALSE "Load" FALSE "Ignore" --timeout="$ATVALIDATE" --width="$AETREQWIDTH" --height="$AETREQHEIGHT" 2>/dev/null)"
+				ZENSEL="$("$ZENBIN" --list --title="$PROGNAME ($PROGCMD) - $PROGVERS" --text="$GUI_FOUNDATCFG '$VALCFG'.\n($GUI_EDIT/$GUI_SKIPLOADATFOR '$GN ($AID)')" --radiolist --column "Choose" --column "Option" FALSE "Edit" FALSE "Skip" FALSE "Load" FALSE "Ignore" --timeout="$ATVALIDATE" --width="$AETREQWIDTH" --height="$AETREQHEIGHT" 2>/dev/null)"
 				if [ "$ZENSEL" == "Edit" ]; then
 					writelog "INFO" "${FUNCNAME[0]} - selected EDIT - opening '$VALCFG' with the editor now"
 					"$STLEDITOR" "$VALCFG"
@@ -4154,16 +4329,16 @@ function AskAdoptAutoTweak {
 		loadCfg "$STLGUICFG" X
 		updateWinRes "$TITLE" "$STLGUICFG" "CATREQWIDTH" "CATREQHEIGHT" &
 	
-		"$YAD" --borders="$YADBORDER" --window-icon="$STLICON" --form --center --on-top --undecorated \
+		LC_ALL="" "$YAD" --borders="$YADBORDER" --window-icon="$STLICON" --form --center --on-top --undecorated \
 		--title="$TITLE" \
 		--geometry="$CATREQWIDTH"x"$CATREQHEIGHT"+0+0 \
-		--text="<span font_weight='bold'>$GN ($AID) - Convert used AutoTweak?</span>" \
+		--text="<span font_weight='bold'>$GN ($AID) - $GUI_ASKCOBERTAT</span>" \
 		--field=" ":LBL " " \
-		--field="Adopt the just used AutoTweak '$LOADAUTOCFG'\n and skip autotweaks for '$GN ($AID)' from now on?":LBL \
-		--field="<span font=\"italic\">(Existing user tweakfile will be backuped)</span>":LBL \
+		--field="$GUI_ADOPTANDSKIP":LBL \
+		--field="<span font=\"italic\">($GUI_WILLBEBACKED)</span>":LBL \
 		--field=" ":LBL " " \
-		--button="ADOPT":0  \
-		--button="CANCEL":1  \
+		--button="$BUT_ADOPT":0  \
+		--button="$BUT_CANCEL":1  \
 		--timeout="$WAITEDITOR" \
 		--timeout-indicator=top
 		case $? in
@@ -4176,7 +4351,7 @@ function AskAdoptAutoTweak {
 			;;
 		esac
 	elif [ "$USEGUI" == "$ZENITY" ]; then
-		ZENSEL="$("$ZENBIN" --list --title="$PROGNAME ($PROGCMD) - $PROGVERS" --text="Convert used AutoTweak?" --radiolist --column "Choose" --column "Option" FALSE "Adobt" FALSE "Cancel" --timeout="$WAITEDITOR" --width="$CATREQWIDTH" --height="$CATREQHEIGHT" 2>/dev/null)"
+		ZENSEL="$("$ZENBIN" --list --title="$PROGNAME ($PROGCMD) - $PROGVERS" --text="$GUI_ASKCOBERTAT" --radiolist --column "Choose" --column "Option" FALSE "Adobt" FALSE "Cancel" --timeout="$WAITEDITOR" --width="$CATREQWIDTH" --height="$CATREQHEIGHT" 2>/dev/null)"
 		if [ "$ZENSEL" == "Adobt" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - selected ADOPT - converting '$LOADAUTOCFG' to a regular tweakfile"
 		   AdoptAutoTweak
@@ -4248,15 +4423,15 @@ function launchCustomProg {
 		updateWinRes "$TITLE" "$STLGUICFG" "CUSTPROGREQWIDTH" "CUSTPROGREQHEIGHT" &
 
 		if [ "$USEGUI" == "$YAD" ]; then
-			ZCUST="$("$YAD" --window-icon="$STLICON" --borders="$YADBORDER" --form --center --on-top --undecorated \
+			ZCUST="$(LC_ALL="" "$YAD" --window-icon="$STLICON" --borders="$YADBORDER" --form --center --on-top --undecorated \
 			--title="$TITLE" \
 			--geometry="$CUSTPROGREQWIDTH"x"$CUSTPROGREQHEIGHT"+0+0 \
-			--text="<span font_weight='bold'>$GN ($AID) - Select Custom executable</span>" \
+			--text="<span font_weight='bold'>$GN ($AID) - $GUI_SELECTCUSTOMEXE</span>" \
 			--field=" ":LBL " " \
-			--field="Select executable file":FL)"
+			--field="$GUI_SELECTEXE":FL)"
 
 		elif [ "$USEGUI" == "$ZENITY" ]; then
-			ZCUST="$("$ZENBIN" --file-selection --width="$CUSTPROGREQWIDTH" --height="$CUSTPROGREQHEIGHT" --title="Select Custom executable" 2>/dev/null)"
+			ZCUST="$("$ZENBIN" --file-selection --width="$CUSTPROGREQWIDTH" --height="$CUSTPROGREQHEIGHT" --title="$GUI_SELECTCUSTOMEXE" 2>/dev/null)"
 		fi
 
 		if [ -n "$ZCUST" ]; then
@@ -4312,14 +4487,14 @@ function launchCustomProg {
 				updateWinRes "$TITLE" "$STLGUICFG" "CUSTPROGREQWIDTH" "CUSTPROGREQHEIGHT" &
 				
 				if [ "$USEGUI" == "$YAD" ]; then
-					ZCUST="$("$YAD" --window-icon="$STLICON" --borders="$YADBORDER" --form --center --on-top --undecorated \
+					ZCUST="$(LC_ALL="" "$YAD" --window-icon="$STLICON" --borders="$YADBORDER" --form --center --on-top --undecorated \
 					--title="$TITLE" \
 					--geometry="$CUSTPROGREQWIDTH"x"$CUSTPROGREQHEIGHT"+0+0 \
-					--text="<span font_weight='bold'>$GN ($AID) - Select Custom executable</span>" \
+					--text="<span font_weight='bold'>$GN ($AID) - $GUI_SELECTCUSTOMEXE</span>" \
 					--field=" ":LBL " " \
-					--field="Select executable file":FL)"		
+					--field="$GUI_SELECTEXE":FL)"		
 				elif [ "$USEGUI" == "$ZENITY" ]; then
-					ZCUST="$("$ZENBIN" --file-selection --width="$CUSTPROGREQWIDTH" --height="$CUSTPROGREQHEIGHT" --title="Select Custom executable" 2>/dev/null)"
+					ZCUST="$("$ZENBIN" --file-selection --width="$CUSTPROGREQWIDTH" --height="$CUSTPROGREQHEIGHT" --title="$GUI_SELECTCUSTOMEXE" 2>/dev/null)"
 				fi
 				
 				if [ -n "$ZCUST" ]; then
@@ -4373,51 +4548,41 @@ function launchCustomProg {
 	fi
 }
 
+function wmp10toPFX {
+		while [ ! -d "$SWOW" ]; do 
+			writelog "WAIT" "${FUNCNAME[0]} - waiting for directory '$SWOW' to appear"
+			# timeout?
+			sleep 1
+		done
+
+		if [ -f "$STLDLDIR/$MP10S" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - extracting '$STLDLDIR/$MP10S' to '$SWOW'"
+			notiShow "$NOTY_WMP2" "$MP10S" "$SWOW"
+			"$CABEXTRACT" -d "$SWOW" "$STLDLDIR/$MP10S" 2>/dev/null
+			writelog "INFO" "${FUNCNAME[0]} - removing two wine dlls which come uppercase with '$MP10S'"
+			rm "${SWOW}/wmasf.dll" 2>/dev/null
+			rm "${SWOW}/wmvcore.dll" 2>/dev/null
+			writelog "INFO" "${FUNCNAME[0]} - '$MP10S' dlls have been successfully installed into '$SWOW'"
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - couldn't extract '$STLDLDIR/$MP10S' to '$SWOW'"
+		fi
+}
+
 function wmp10hack {
-	if [ -f "$GPFX/drive_c/windows/syswow64/wmpasf.dll" ]; then
+	SWOW="$GPFX/drive_c/windows/syswow64"
+	if [ -f "$SWOW/wmpasf.dll" ]; then
 		writelog "SKIP" "${FUNCNAME[0]} - looks like wmp10 was already copied into '$GPFX' - nothing to do"
 	else
-		GPFX32="${GPFX}/32bit"
-		if [ -d "$GPFX32" ]; then
-			writelog "SKIP" "${FUNCNAME[0]} - looks like dummy 32bit WINEPREFIX '$GPFX32' already exists - nothing to do"
+		MP10S="MP10Setup.exe"
+		if [ ! -f "$STLDLDIR/$MP10S" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - downloading '$MP10S' from '$WMP10URL'"
+			notiShow "$NOTY_WMP1" "$MP10S" "$WMP10URL"
+			"$WGET" "$WMP10URL/$MP10S" -O "$STLDLDIR/$MP10S"
 		else
-			writelog "INFO" "${FUNCNAME[0]} - Creating dummy 32bit WINEPREFIX '$GPFX32' and installing wmp10 into it"
-			if [ "$USENOTIFIER" -eq 1 ]; then
-				"$NOTY" "Creating dummy 32bit WINEPREFIX '$GPFX32' and installing wmp10 into it"
-			fi
-			LC_ALL="" PATH="/usr/local/bin:/usr/bin" LD_LIBRARY_PATH="" WINE="$RUNWINE" WINEARCH=win32 WINEDEBUG="-all" WINEPREFIX="$GPFX32" "$WINETRICKS" --unattended wmp10 dxvk
-			if [ -f "$GPFX32/drive_c/windows/system32/wmpasf.dll" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - looks like wmp10 installation into dummy 32bit WINEPREFIX '$GPFX32' worked! - copying required dlls (and some more) now into regular WINEPREFIX '$GPFX'"
-				WMP10LIST="wmp10-list.txt"
-				if [ -f "$GLOBALTWEAKCMDDIR"/"$WMP10LIST" ]; then
-					WMP10SRCLIST="$GLOBALTWEAKCMDDIR"/"$WMP10LIST"
-				elif [ "$(USEDLGLOBAL)" -ge 1 ] && [ -f "$GLDLTWEAKCMDDIR/$WMP10LIST" ]; then
-					WMP10SRCLIST="$GLDLTWEAKCMDDIR"/"$WMP10LIST"
-				elif  [ -f "$TWEAKCMDDIR"/"$WMP10LIST" ]; then
-					WMP10SRCLIST="$TWEAKCMDDIR"/"$WMP10LIST"
-				fi
-				
-				if [ -z "$WMP10SRCLIST" ]; then
-					writelog "SKIP" "${FUNCNAME[0]} - could not find '$WMP10LIST' in '$GLOBALTWEAKCMDDIR' (or '$GLDLTWEAKCMDDIR') or '$TWEAKDIR' - exiting"
-					if [ "$USENOTIFIER" -eq 1 ]; then
-						"$NOTY" "File '$WMP10LIST' is missing - can't copy required wmp10 dlls into the game WINEPREFIX"
-					fi
-					exit
-				else
-					if [ "$USENOTIFIER" -eq 1 ]; then
-						"$NOTY" "Copying wmp10 dlls from the 32bit WINEPREFIX into the game WINEPREFIX"
-					fi
-
-					while read -r file; do
-						SRCFILE="$GPFX32/drive_c/windows/system32/$file"
-						if [ -f "$SRCFILE" ]; then
-							writelog "INFO" "${FUNCNAME[0]} - copying '$SRCFILE' to '$GPFX/drive_c/windows/syswow64/'"
-							cp "$SRCFILE" "$GPFX/drive_c/windows/syswow64/"
-						fi
-					done < "$WMP10SRCLIST"
-				fi
-			fi
+			writelog "SKIP" "${FUNCNAME[0]} - found '$MP10S' in '$STLDLDIR' - nothing to download"
 		fi
+
+		wmp10toPFX &
 	fi
 }
 
@@ -4741,13 +4906,13 @@ function addVortexStage {
 		updateWinRes "$TITLE" "$STLGUICFG" "AVSREQWIDTH" "AVSREQHEIGHT" &
 
 		if [ "$USEGUI" == "$YAD" ]; then
-			NEWVS="$("$YAD" --window-icon="$STLICON" --borders="$YADBORDER" --form --center --on-top --undecorated \
+			NEWVS="$(LC_ALL="" "$YAD" --window-icon="$STLICON" --borders="$YADBORDER" --form --center --on-top --undecorated \
 			--file --directory \
 			--title="$TITLE" \
 			--geometry="$AVSREQWIDTH"x"$AVSREQHEIGHT"+0+0 \
-			--text="<span font_weight='bold'>Select a directory to use as Vortex Stage directory:</span>" )"
+			--text="<span font_weight='bold'>$GUI_SELECTVORTEXDIR</span>" )"
 		elif [ "$USEGUI" == "$ZENITY" ]; then
-			NEWVS="$("$ZENITY" --file-selection --directory --width="$AVSREQWIDTH" --height="$AVSREQHEIGHT" --title="Select a directory to use as Vortex Stage directory" 2>/dev/null)"
+			NEWVS="$("$ZENITY" --file-selection --directory --width="$AVSREQWIDTH" --height="$AVSREQHEIGHT" --title="$GUI_SELECTVORTEXDIR" 2>/dev/null)"
 		fi
 	else
 		if [ -d "$1" ]; then
@@ -5301,19 +5466,13 @@ function setVortexSELaunch {
 			if [ "$USEGUI" == "$ZENITY" ]; then
 				writelog "SKIP" "${FUNCNAME[0]} - skipping zenity here - the whole '${FUNCNAME[0]}' is too bloated anyway for its benefit"
 			else
-			
-				BUT0="${GE^^}"
-				BUT1="SAVE+RUN ${GE^^}"
-				BUT2="${2^^}"
-				BUT3="SAVE+RUN ${2^^}"
-
-				"$YAD" --notebook --borders="$YADSETBORD" --window-icon="$STLICON"  --center --undecorated \
+				LC_ALL="" "$YAD" --notebook --borders="$YADSETBORD" --window-icon="$STLICON"  --center --undecorated \
 				--title="$TITLE" \
-				--text="Script Extender binary '$2' found in '$EFD'" \
-				--button="$BUT0":0 \
-				--button="$BUT1":1 \
-				--button="$BUT2":2 \
-				--button="$BUT3":3 
+				--text="$GUI_SEBINFOUND '$EFD/$2'" \
+				--button="${GE^^}":0 \
+				--button="$BUT_SAVERUN ${GE^^}":1 \
+				--button="${2^^}":2 \
+				--button="$BUT_SAVERUN ${2^^}":3 
 				case $? in
 					0)  {
 						writelog "INFO" "${FUNCNAME[0]} - Starting with the regular Game Exe '$GE'"
@@ -5600,6 +5759,9 @@ function checkExtDeps {
 	checkDep "USENETMON" "$NETMON"
 	checkDep "USENOTIFIER" "$NOTY"
 	checkDep "RUN_WINECFG" "$WINECFG"
+	checkDep "HACKWMP10" "$CABEXTRACT"
+	checkDep "CHECKHMD" "$LSUSB"
+	
 }
 
 function checkIntDeps {
@@ -5616,6 +5778,15 @@ function checkIntDeps {
 		DEPSMISSING=1
 		echo "neither '$YAD' nor '$ZENITY' was found, but at least one of them is required!"
 	fi
+
+	MINYAD="7.0"
+	YADVER="$("$YAD" --version | cut -d ' ' -f1)"
+	
+	if [ "$(printf '%s\n' "$MINYAD" "$YADVER" | sort -V | head -n1)" != "$MINYAD" ]; then 
+		echo "ERROR yad version '$("$YAD" --version | cut -d ' ' -f1)' is too old. You need to update to at least '$MINYAD'"
+		exit
+	fi	
+
 
 	if [ "$DEPSMISSING" -eq 1 ]; then
 		echo "Above programs need to be installed to use '$PROGCMD' - exiting now"
@@ -5825,6 +5996,45 @@ function prepareLaunch {
 	launchSteamGame "$@"
 }
 
+function switchProton {
+	writelog "INFO" "${FUNCNAME[0]} - Switching used Proton and its Variables to version '$1'"
+
+	if [ ! -f "$(PROTPATH "$1")" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Tried to switch to Proton '$1', but it is not available"
+		if [ "$AUTOPULLPROTON" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - AUTOPULLPROTON is enabled, so trying to download and enable '$1'"
+			createDLProtList
+			DLURL="$(printf "%s\n" "${ProtonDLList[@]}" | grep -m1 "$1")"
+			if [ -n "$DLURL" ];then
+				writelog "INFO" "${FUNCNAME[0]} - download for requested '$1' found: '$DLURL'"
+				dlCustomProton "${DLURL//|/\"}"
+			else
+				writelog "SKIP" "${FUNCNAME[0]} - no download URL found for requested '$1' - skipping"
+			fi
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - AUTOPULLPROTON is disabled, so giving up switching to proton version '$1'"
+		fi
+	else
+		writelog "INFO" "${FUNCNAME[0]} - requested Proton version '$1' found under '$(PROTPATH "$1")'"
+	fi
+
+	if [ -f "$(PROTPATH "$1")" ]; then
+		USEPROTON="$1"
+		setNewProtVars "$(PROTPATH "$USEPROTON")"
+	fi
+}
+
+function wantProton {
+	if [ -n "$WANTPROTON" ]; then
+		if [ "$WANTPROTON" != "$USEPROTON" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Proton version '$WANTPROTON' required, but '$USEPROTON' is set"
+			notiShow "$NOTY_WANTPROTON" "$WANTPROTON" "$USEPROTON"
+			OVERRIDEPROTON=1
+			switchProton "$WANTPROTON"	
+		fi
+	fi	
+}
+
 function launchSteamGame {
 
 ########################
@@ -5850,9 +6060,7 @@ function launchSteamGame {
 			DOSEXE="$GP"
 			if  [ -x "$(command -v "$BOXTRONCMD" 2>/dev/null)" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - starting game '$GN ($AID)' with boxtron: '$BOXTRONCMD $BOXTRONARGS $DOSEXE'"
-				if [ "$USENOTIFIER" -eq 1 ]; then
-					"$NOTY" "Starting '$GN ($AID)' with Boxtron"
-				fi
+				notiShow "$NOTY_BOXTRON"
 				RUNBOXTRONCMD=("$BOXTRONCMD" "$BOXTRONARGS" "$DOSEXE")
 				# disable CHANGE_PULSE_LATENCY else audio gets stuck
 				CHANGE_PULSE_LATENCY="0"
@@ -5867,9 +6075,7 @@ function launchSteamGame {
 			VMEXE="$GP"
 			if  [ -x "$(command -v "$ROBERTACMD" 2>/dev/null)" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - starting game '$AID' with roberta: '$ROBERTACMD $ROBERTAARGS $VMEXE'"
-				if [ "$USENOTIFIER" -eq 1 ]; then
-					"$NOTY" "Starting '$GN ($AID)' with Roberta"
-				fi
+				notiShow "$NOTY_ROBERTA"
 				RUNROBERTACMD=("$ROBERTACMD" "$ROBERTAARGS" "$VMEXE")
 				extRun "${RUNROBERTACMD[@]}"
 			else
@@ -5884,14 +6090,10 @@ function launchSteamGame {
 				# skip download if engine_choice.txt exists already:
 				if [ ! -f "$HOME"/.config/luxtorpeda/"$AID"/engine_choice.txt ]; then
 					writelog "INFO" "${FUNCNAME[0]} - downloading native game data for '$AID' with luxtorpeda: '$LUXTORPEDACMD' manual-download $AID"
-					if [ "$USENOTIFIER" -eq 1 ]; then
-						"$NOTY" "Luxtorpeda is downloading Native Game Data for '$GN ($AID)'"
-					fi
+					notiShow "$NOTY_LUXTORPEDA1"
 					"$LUXTORPEDACMD" manual-download "$AID"
 				fi
-				if [ "$USENOTIFIER" -eq 1 ]; then
-					"$NOTY" "Starting '$GN ($AID)' with Luxtorpeda"
-				fi
+				notiShow "$NOTY_LUXTORPEDA2"
 				writelog "INFO" "${FUNCNAME[0]} - starting game '$AID' with luxtorpeda: '$LUXTORPEDACMD $LUXTORPEDAARGS $LUXEXE'"
 				RUNLUXTORPEDACMD=("$LUXTORPEDACMD" "$LUXTORPEDAARGS" "$LUXEXE")
 				extRun "${RUNLUXTORPEDACMD[@]}"
@@ -5904,24 +6106,18 @@ function launchSteamGame {
 			# start with gamemoderun:
 			if [ "$USEGAMEMODERUN" -eq 1 ]; then
 				writelog "INFO" "${FUNCNAME[0]} - starting native game '$GN ($AID)' with '$GAMEMODERUN' - ${GAMESTARTCMD[*]}"
-				if [ "$USENOTIFIER" -eq 1 ]; then
-					"$NOTY" "Starting native game '$GN ($AID)' with GameMode"
-				fi
+				notiShow "$NOTY_STARTNATGAMO"
 				"$GAMEMODERUN" "${GAMESTARTCMD[@]}"
 			# start with gamescope:
 			elif [ "$USEGAMESCOPE" -eq 1 ]; then
 				writelog "INFO" "${FUNCNAME[0]} - starting native game '$GN ($AID)' with $GAMESCOPE arguments '$GAMESCOPE_ARGS'"
-				if [ "$USENOTIFIER" -eq 1 ]; then
-					"$NOTY" "Starting native game '$GN ($AID)' with GameScope"
-				fi
+				notiShow "$NOTY_STARTNATGAMSCO"
 				IFS=" " read -r -a RUNGAMESCOPE_ARGS <<< "$GAMESCOPE_ARGS"
 				"$GAMESCOPE" "${RUNGAMESCOPE_ARGS[@]}" "${GAMESTARTCMD[@]}"
 			# regular start:
 			else
 				writelog "INFO" "${FUNCNAME[0]} - starting native game '$GN ($AID)'"
-				if [ "$USENOTIFIER" -eq 1 ]; then
-					"$NOTY" "Starting native game '$GN ($AID)'"
-				fi
+				notiShow "$NOTY_STARTNAT"
 				"${GAMESTARTCMD[@]}"
 			fi
 		fi
@@ -5931,8 +6127,8 @@ function launchSteamGame {
 
 		# proton variants start here:
 
-# TODO? WANTPROTON tweak ->  switchProton
-
+		wantProton
+		
 		if [ "$(OVPROT)" -eq 0 ]; then
 			
 			writelog "INFO" "${FUNCNAME[0]} - using ORIGINAL game start command: ${GAMESTARTCMD[*]}"
@@ -6000,6 +6196,7 @@ function launchSteamGame {
 			fi
 		fi
 ############
+
 		# set the definitive used versions, which are also stored into writeLastRun
 		PROTONVERSION="$(setProtonPathVersion "$RUNPROTON")"
 
@@ -6011,17 +6208,13 @@ function launchSteamGame {
 			writelog "INFO" "${FUNCNAME[0]} - starting '$GN ($AID)' with Proton: '$PROTONVERSION' with '$GAMEMODERUN'"
 			writelog "INFO" "${FUNCNAME[0]} - full start command is '$GAMEMODERUN ${GAMESTARTCMD[*]}'"
 
-			if [ "$USENOTIFIER" -eq 1 ]; then
-				"$NOTY" "Starting game '$GN ($AID)' with GameMode using '$PROTONVERSION'"
-			fi
+			notiShow "$NOTY_STARTPROTGAMO" "$PROTONVERSION"
 			"$GAMEMODERUN" "${GAMESTARTCMD[@]}"			
 		# start with gamescope:
 		elif [ "$USEGAMESCOPE" -eq 1 ]; then
 			writelog "INFO" "${FUNCNAME[0]} - starting '$GN ($AID)' with Proton: '$PROTONVERSION' with $GAMESCOPE arguments '$GAMESCOPE_ARGS'"
 			writelog "INFO" "${FUNCNAME[0]} - full start command is '$GAMESCOPE ${RUNGAMESCOPE_ARGS[*]} ${GAMESTARTCMD[*]}'"
-			if [ "$USENOTIFIER" -eq 1 ]; then
-				"$NOTY" "Starting game '$GN ($AID)' with GameScope using '$PROTONVERSION'"
-			fi
+			notiShow "$NOTY_STARTPROTGAMSCO" "$PROTONVERSION"
 			IFS=" " read -r -a RUNGAMESCOPE_ARGS <<< "$GAMESCOPE_ARGS"
 			"$GAMESCOPE" "${RUNGAMESCOPE_ARGS[@]}" "${GAMESTARTCMD[@]}"
 
@@ -6029,9 +6222,7 @@ function launchSteamGame {
 		else
 			writelog "INFO" "${FUNCNAME[0]} - starting '$GN ($AID)' with Proton: '$PROTONVERSION'"
 			writelog "INFO" "${FUNCNAME[0]} - full start command is '${GAMESTARTCMD[*]}'"
-			if [ "$USENOTIFIER" -eq 1 ]; then
-				"$NOTY" "Starting game '$GN ($AID)' using '$PROTONVERSION'"
-			fi
+			notiShow "$NOTY_STARTPROT" "$PROTONVERSION"
 
 			"${GAMESTARTCMD[@]}"
 		fi
@@ -6284,10 +6475,13 @@ function commandline {
 			fi
 		fi
 	else
-		echo "-----------------------"
-		echo "arg1 $1 is no valid command"
+		if ! grep -q "lang=\|run" <<< "$@" ; then
+			echo "-----------------------"
+			echo "arg1 $1 is no valid command"
+			createDefaultCfgs
+			howto
+		fi
 		createDefaultCfgs
-		howto
 	fi
 }
 
@@ -6365,9 +6559,7 @@ function closeSTL {
 
 	cleanYadLeftOvers
 
-	if [ "$USENOTIFIER" -eq 1 ]; then
-		"$NOTY" "'$GN ($AID)' Stopped. Exiting $PROGNAME"
-	fi
+	notiShow "$NOTY_STLSTOP"
 	writelog "STOP" "#########  ${FUNCNAME[0]} $PROGNAME $PROGVERS #########"
 
 # only useful for win games:
@@ -6422,4 +6614,3 @@ else
 		commandline "$@"
 	fi
 fi
-
