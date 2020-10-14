@@ -89,7 +89,7 @@
 * **[Custom User Start/Stop scripts](#Start-Stop-Scripts)** ваши собственные скрипты, работающие при запуске и завершении приложения.
 * **[GameScope](#GameScope)** Вкл/выкл gamescope для игры
 * **[Settings Menu](#Settings-Menu)** Легкая конфигурация всех настроек с помощью специального меню
-* **[native Support](#Native-Games)** поддержка нативних игр для Linux
+* **[native Support](#Native-Games)** поддержка нативных игр для Linux
 * **[Steam Compatibility Tool](#Steam Compatibility Tool)** можно использовать как [Параметры Запуска Приложений](#Steam-Launch-Option) так и [Инструменты Совместимости Steam](#Steam-Compatibility-Tool)
 * **[Proton Selection](#Proton-Selection)** переключение между выранными вами версиями Proton, а также автоматическая загрузка альтернативных сборок...
 * **[Multi Language](#Multi-Language-Support)** Поддержка нескольких языков
