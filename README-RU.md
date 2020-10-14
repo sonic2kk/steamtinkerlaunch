@@ -1,6 +1,6 @@
-***Перевод README.md (в процессе)***
+***Перевод README.md (В процессе. Буду рад помощи редактора/переводчиков получше, которые могут превратить мой вольный перевод в нечто более читабельное)***
 
-**SteamTinkerLaunch** (сокращенно **stl**) это утилита для Linux, используемая в дополнение к клиенту Steam, позволяющая на лету конфигурировать настройки для запуска игр и приложений *(Смотри [Возможности](#Возможности))*
+**SteamTinkerLaunch** (сокращенно **stl**) это утилита для Linux, используемая в дополнение к клиенту Steam, позволяющая на лету конфигурировать настройки для запуска игр и приложений *(См. [Возможности](#Возможности))*
 
 Позволяет легко и гибко настроить предстартовую конфигурацию для запуска игр с помощью универсальной структуры конфигурационных файлов.
 
@@ -11,12 +11,12 @@
 *(Некоторые фишки ([ReShade](#ReShade)) доступны только для игр, работающих через proton)*
 
 #### Параметры Запуска в Steam
-Для импользования **stl** в качестве предварительных параметров запуска, просто добавьте эту строку в параметры запуска приложений:
+Для использования **stl** в качестве предварительных параметров запуска, просто добавьте эту строку в параметры запуска приложений:
 'stl %command%'
 
 ![stl starter](https://github.com/frostworx/repo-assets/blob/master/gifs/stl-command.gif)
 
-*Маленький скрипт, который автоматически сделает данную настройку для всех игр в вашей библиотеке, можно взять [здесь](https://gist.github.com/frostworx/36bd76e705a0c87af523fa57cfeebaf8)*
+*Небольшой скрипт, который автоматически сделает данную настройку для всех игр в вашей библиотеке, можно взять [здесь](https://gist.github.com/frostworx/36bd76e705a0c87af523fa57cfeebaf8)*
 
 #### Инструменты совместимости Steam
 **stl** также можно использовать в качестве инструмента совместимости, просто введя в командной строке несколько команд для **stl**:
@@ -134,44 +134,44 @@
 - lsusb *(for an optional [SBS-VR](#Side-by-Side-VR) check if a VR HMD was found)*
 
 
-## Configuration
-All configuration files are self-contained documented and always growing, so not every option is documented in here.
-For a general overview what can be configured, just check the [Features](#Features) or simply browse through the 
-[Settings Menu](#Settings-Menu), which covers almost everything available.
+## Настройка
+Все конфигурационные файлы являются независимыми, документируемыми и непрерывно развивающимися, так что тут могут быть описаны не все из возможности.
+Чтобы увидеть все возможности настройки, просто посмотрите раздел [Возможности](#Возможности) или вкладку 
+[Меню настроек](#Меню настроек), в которых видно большинство доступных вам изменений.
 
-### Settings Menu
-Almost all user configuration options can be changed with the built-in Settings Menu *(using [Yad](https://github.com/v1cont/yad))*
-Tooltips give a basic description for every entry.
+### Меню настроек
+Большинство настроек, доступных пользователю, может быть отредактировано во встроенном Меню настроек *(использует [Yad](https://github.com/v1cont/yad))*
+Во всплывающих подсказках доступно базовое описание всех доступных пользователю функций.
 
-*(Currently)* the Menu has following Tabs:
+*(На данный момент)* Меню имеет несколько вкладок:
 
- - Tab 1 is the **GAME SETTINGS** Menu for the selected game (either started from steam or via commandline) *([`$STLGAMECFG`](#Game-Configurations))*
- - Tab 2 is the **DEFAULT SETTINGS** Menu, which is the template for all newly created **GAME SETTINGS**  *([`$STLDEFGAMECFG`](#Default-Template-Config))*
- - Tab 3 is the **GLOBAL SETTINGS** Menu, where all global applicable settings can be configured *([`$STLDEFGLOBALCFG`](#Global-Config))*
- - Tab 4 is the **VORTEX SETTINGS** Menu, for Vortex Configuration *([`$STLVORTEXCFG`](#Vortex-Configuration))*
+ - 1 вкладка **Настройки игры** В данном меню находятся индивидуальные настройки для выбраной вами игры *([`$STLGAMECFG`](#Game-Configurations))*
+ - 2 вкладка **Настройки по-умолчанию** В данном меню находится базовый шаблон настроек, применяемый к каждой выбраной вами игре - на его основе создаются   индивидуальные настройки, и вы в любое время можете изменить шаблон на наиболее подходящий вам  *([`$STLDEFGAMECFG`](#Default-Template-Config))*
+ - 3 вкладка **Глобальные настройки** Меню, в котором хранятся настройки для работы **stl** *([`$STLDEFGLOBALCFG`](#Global-Config))*
+ - 4вкладка **Настройки VORTEX** Меню для настройки Vortex *([`$STLVORTEXCFG`](#Vortex-Configuration))*
 
-The Options apply to **all** config files at once!:
-- **EXIT** - leave Settings Menu without doing anything
-- **EDITOR MENU** - Opens a little Editor Menu from where all found user-editable config files can be opened in the [Editor](#Editor)
-- **RELOAD** - discard all changes and reload all config files
-- **SAVE/RELOAD** - save all changes and reload them
-- **SAVE/EXIT** - save all changes and leave the Settings Menu
+Опции, применяющиеся одновременно для **всех** файлов конфигураций!:
+- **ВЫХОД** - Покинуть меню настроек без внесения изменений
+- **МЕНЮ РЕДАКТОРА** - Открывает небольшое меню, в котором пользователь может отредактировать все доступные настройки, используя выбранный им [Редактор](#Редактор)
+- **ПЕРЕЗАГРУЗКА** - Отменяет все внесенные изменения п и перезагружает конфигурационные файлы
+- **СОХРАНЕНИЕ/ПЕРЕЗАПУСК** - сохраняет все внесенные изменения и обновляет их
+- **СОХРАНЕНИЕ/ВЫХОД** - сохранить внесенные изменения и покинуть Меню Настроек
 
-#### Disable Settings Menu
-If you prefer to simply use your favourite texteditor or have problems with 'yad' you can change `USEGUI` to "zenity" in the Global Config Tab or [global.conf](#Global-Config).
-**stl** won't use/depend on yad then and uses zenity (prefers Steam builtin zenity and falls back to system zenity) instead.
-Instead of the [Settings Menu](#Settings-Menu) zenity will open the [Editor Dialog](#Editor-Dialog), from where you can choose which configs to edit.
-This also applies to the [command line](#via Command Line).
+#### Отключение Меню Настроек
+Если вы предпочитаете использовать текстовый редактор для правки конфигураций, или же у вас имеются какие либо проблемы с 'yad' вы можете изменить `USEGUI` на "zenity" во вкладке **Глобальные Настройки** или в файле [global.conf](#Global-Config).
+**stl** прекратит использовать yad и переключится на zenity (сперва на интегрированый в Steam и затем вернется к использованию системного).
+В отличии от [Меню Настроек](#Меню настроек) zenity откроет [Editor Dialog](#Editor-Dialog), в котором вы сможете выбрать настройки для редактирования.
+Также это можно сделать с помощью [коммандной строки](#via Command Line).
 
-#### Settings Menu Theme
+#### Тема для Меню Настроек
 
 ![stl Settings Menu](https://github.com/frostworx/repo-assets/blob/master/gifs/stl-2.0-settings.gif)
 
-By Default a special self-rolled stl-steam gtk-css theme is used and installed into `~/share/themes/stl-steam/gtk-3.0/gtk.css`
-which tries to mimic the steam theme to integrate as good as possible. It can be disabled in [Settings Menu](#Settings-Menu).
-Every gtk program which is started from **stl** will use the theme as well (f.e. winetricks).
-The css is no complete theme and might look incomplete when used with other gtk programs.
-Feel free to improve and contribute it though!
+По умолчанию используется тема stl-steam gtk-css которая доступна по пути `~/share/themes/stl-steam/gtk-3.0/gtk.css`
+Это попытка повторить стиль внешнего вида Steam насколько это вохможно. Ее можно отключить в [Меню настроек](#Меню настроек) во вкладке **Глобальные настройки**.
+Каждое gtk-приложение, запущеное через **stl** также будет использовать данную тему (в т.ч. и winetricks).
+Настройки css не завершена и может выглядеть плохо в сравнении с другими gtk-приложениями.
+Вы можете внести свой вклад в ее улучшение!
 
 #### Opening the Settings Menu
 
@@ -550,35 +550,35 @@ With either method a `proton` file can be selected via file-requester
 and an optional "proton version name" can be entered in a separate field.
 
 ###### Download Custom Proton
-Custom Proton packages can also be downloaded and added by
-- using the button `Download Custom Proton` in the Game Settings Tab of the [Settings Menu](#Settings-Menu)
-- via command line: `stl addcustomproton dl` or just `stl acp dl` 
-  *(accepting direct download URL  as optional argument)*
+Альтернативные сборки Proton могут быть загружены и добавлены с помощью:
+- использования кнопки `Загрузить альтернативную сборку Proton` во вкладке **Настройки игры** в [Меню настроек](#Меню настроек)
+- через командную строку: `stl addcustomproton dl` или просто `stl acp dl` 
+  *(добавьте прямую ссылку на сборку в качестве опционального аргумента)*
   
-With either method a download requester with a dropdown menu is opened.
-The menu is autogenerated, by parsing all `CP_*` *(Custom Proton)* URLs from the [Url Config](#Url-Config)
-for proton packages. Currently following Custom builds are parsed *(feel free to recommend one if you think something is missing)*
+При использовании любого метода открывается выпадающее меню с доступными вариантами.
+Меню генерируется автоматически путем парсинга `CP_*` *(Альтернативные сборки Proton)* ссылок из [Url Config](#Url-Config)
+На данный момент доступны сборки из следующих источников:
 
 - [GloriousEggroll](/https://github.com/GloriousEggroll/proton-ge-custom)
 - [Proton TKG](https://github.com/Frogging-Family/wine-tkg-git)
 - [Protola](https://github.com/Patola/wine)
 
-Packages *(`tar.*`, `zip`)* containing a `proton` file will be extracted and added to the List of available Proton Builds.
+Архивы *(`tar.*`, `zip`)* содержат файл `proton` который будет разархивирован и добавлен в лист выпадающего меню доступных сборок Proton.
 
 ###### Automatic Proton version
 Using the variable `WANTPROTON` in configs and tweaks it is possible to automatically request a specific proton version to be used with the corresponding game.
 If `AUTOPULLPROTON` is enabled *(it is by default)* **stl** will automatically download the specific proton version and install it.
 
 
-#### Multi-Language Support
-**stl** Multi-Language Support *(currently with [these languages](https://github.com/frostworx/steamtinkerlaunch/tree/master/lang))*.
+#### Мульти-язычная поддержка
+**stl** поддерживает несколько языков *(на данный момент доступны [эти языки](https://github.com/frostworx/steamtinkerlaunch/tree/master/lang))*.
 
-At least the default language file (english) needs to be found, else **stl** will exit with an error.
-**stl** searches both in the [Systemwide Configuration](#Systemwide-Configuration) and in the [User Configuration](#User-Configuration) for language files,
-where those in the latter have a higher priority *(so copying a systemwide file to improve it is possible)*
+Необходимо, чтобы был обнаружен язык, используемый по умолчанию (english), в противном случае **stl** будет завершен с ошибкой.
+**stl** проверяет оба пути: [Systemwide Configuration](#Systemwide-Configuration) и [User Configuration](#User-Configuration),
+последний имеет более высокий приоритет *(так что копирование системного файла для его доработки вполне осуществимо)*
 
-Every language found can be selected from the Language Dropdown Menu in the Global Settings Tab of the [Settings Menu](#Settings-Menu).
-*(a change requires a restart to take effect)*.
+Каждый обнаруженый язык будет доступен в выпадающем меню, во вкладке **Глобальные настройки** в [Меню настроек](#Меню настроек).
+*(для применения изменений требуется перезапуск)*.
 
 To give also the option to get a translated description in freshly created **stl** configfiles
 it is also possible to define an available language or an absolute path to a valid language file with the `lang=` command line option.
@@ -880,10 +880,10 @@ Set `RUN_REPLAY` to 1 to enable replay-sorcery while game is running
 
 #### GameConqueror
 [GameConqueror](https://github.com/scanmem/scanmem)
-Set `RUN_GAMCON` to 1 to automatically start GameConqueror when the game starts.
-The game exe will be loaded into GC automatically,
-but also can be overridden with `GAMCONWAITEXE` *(f.e. for games starting a launcher)*.
-When the game exits GameConqueror will be closed automatically as well.
+Установите значение `RUN_GAMCON` = 1 для автоматического запуска GameConqueror со стартом игры.
+Исполняемый файл игры будет автоматически подгружен в GC,
+Также исполняемый файл может быть задан вручную через `GAMCONWAITEXE` *(полезно для игр, запускаемых через собстенный лаунчер)*.
+По завершению игровой сессии, GameConqueror также будет закрыт автоматически.
 
 As the gameconqueror startscript uses pkexec and asks for more permissions, the default
 executable is set to `GAMCON=/usr/share/gameconqueror/GameConqueror.py` in the global config.
@@ -912,11 +912,11 @@ Either
 as root or enable it persistent in sysctl.
 
 #### Network Monitoring
-Basic Network Traffic Monitor
-- `NETMON`: program to record game network-traffic with arguments `NETOPTS` - used when enabled
+ПРостой мониторинг сетевого трафика
+- `NETMON`: программа ведет учет сетевой активности игры с аргументом `NETOPTS` - используется когда включен
 
-If `NETMON` is set the basic network traffic of the selected game is monitored and written into `NETMONDIR`.
-duplicate lines are unique sorted at the end.
+Если `NETMON` активен, запись сетевой аткивности ведется в `NETMONDIR`.
+повторяющиеся строки уникальны и в итоге будут отсортированы.
 
 #### ReShade
 [ReShade](https://reshade.me)
@@ -938,18 +938,18 @@ When `USERESHADE` is re-enabled the renamed dll will be re-activated.
 
 #### vkBasalt
 [vkBasalt](https://github.com/DadSchoorse/vkBasalt)
-- `ENABLE_VKBASALT`: set `ENABLE_VKBASALT` to 1 to start the game with vkbasalt *(does nothing in stl itself, but just exports the upstream variable)*
-- `VKBASALT_CONFIG_FILE`: the vkbasalt source config file - it points per default to `STLCFGDIR/vkBasalt.conf` and is autogenerated if not found
-The autogenerated `VKBASALT_CONFIG_FILE` points to the files from `RESHADE_DEPTH3D` so it should have been at least checked out once with `CLONE_DEPTH3D`
+- `ENABLE_VKBASALT`: установите значение `ENABLE_VKBASALT` равное 1 для запуска игры с утилитой vkbasalt *( stl никак не взаимодействует с ним внутри, только подгружает значения заданные в самой утилите)*
+- `VKBASALT_CONFIG_FILE`: файл настроек vkbasalt - по умолчанию расположен в `STLCFGDIR/vkBasalt.conf` и генерируется автоматически в случае если не будет найден
+Сгенерированный `VKBASALT_CONFIG_FILE` ссылается на содержимое `RESHADE_DEPTH3D` поэтому его необходимо проверить хотябы раз с помощью `CLONE_DEPTH3D`
 
 #### Depth3D
 [Depth3D](https://github.com/BlueSkyDefender/Depth3D)
-Mostly useful in combination with [SBS-VR](#Side-by-Side-VR).
-Set `RESHADE_DEPTH3D` to 1 to install ReShade Depth3D Shader into gamedir
-If `CLONE_DEPTH3D` is set to 1 the git repository will be automatically cloned/pulled (only when `RESHADE_DEPTH3D=1`) to `DEPTH3DSRCDIR` in [Downloads](#Downloads)
+Наиболее полезен в комбинации с [SBS-VR](#Side-by-Side-VR).
+Установите значение `RESHADE_DEPTH3D` = 1 для установки ReShade Depth3D Shader в папку с игрой
+Если значение `CLONE_DEPTH3D` равно 1, репозиторий git будет автоматически клонирован (только в случае `RESHADE_DEPTH3D=1`) по пути `DEPTH3DSRCDIR` в секции [Downloads](#Downloads)
 
-With `RESHADE_DEPTH3D` enabled `Overwatch.fxh`, `SuperDepth3D.fx`, `SuperDepth3D_VR.fx` from Depth3D are copied to the gamedir.
-When the game started just create a initial profile by selecting the autodetected `SuperDepth3D_VR.fx`
+С включенным `RESHADE_DEPTH3D` файлы `Overwatch.fxh`, `SuperDepth3D.fx`, `SuperDepth3D_VR.fx` из Depth3D будут скопированы в папку игры.
+Когда игра запущена, просто задайте инициализацию профиля с помощью обнаруженного автоматически `SuperDepth3D_VR.fx`
 
 #### Editor
 Config files can optionally be opened with the texteditor `STLEDITOR` if desired, either by accepting a requester (for editing Tweakfiles) or by opening
