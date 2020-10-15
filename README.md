@@ -195,7 +195,7 @@ an optional commandline argument can be either a SteamAppID or `last` for openin
 If `USEGUI` is set to "zenity" the [Editor Dialog](#Editor-Dialog) will open instead of the [Settings Menu](#Settings-Menu), but the parameters are the same.
 
 #### Gui Window Size
-When `SAVESETSIZE` is enabled in the Global Config Tab or [global.conf](#Global-Config) *(by default it is)* resoluton changes of every **stl** window (both yad and zenity) are automatically saved
+When `SAVESETSIZE` is enabled in the Global Config Tab or [global.conf](#Global-Config) *(by default it is)* resolution changes of every **stl** window (both yad and zenity) are automatically saved
 when the corresponding window is closed. This function requires xwininfo to work.
 All resolutions will be stored in the [gui config file](#Gui-Config).
 
