@@ -191,15 +191,15 @@ und wird auf 0 resettet sobald `MAXASK`erreicht und `WAITEDITOR` auf 0 gesetzt w
 Verwendet man als `USEGUI` "zenity" öffnet sich der [Editor Dialog](#Editor-Dialog) statt dem [Settings Menü](#Settings-Menu), aber die Parameter sind dieselben.
 
 ##### via Command Line
-The Settings Menu can also be opened via commandline:
-`stl settings` opens the Menu with placeholder SteamAppID `31337` as default
-an optional commandline argument can be either a SteamAppID or `last` for opening the config of the last played game stored in `LASTRUN`
-If `USEGUI` is set to "zenity" the [Editor Dialog](#Editor-Dialog) will open instead of the [Settings Menu](#Settings-Menu), but the parameters are the same.
+Das Settings Menü kann auch direkt per Kommandozeile geöffnet werden:
+`stl settings` öffnet das Menü mit dem Platzhalter SteamAppID `31337` als Standard.
+Ein weiterer optionaler Kommandozeilen parameter kann entweder eine SteamAppID sein, oder `last` um das zuletzt gespielte Spiel, welches in `LASTRUN` gespeichert wurde zu öffnen.
+Verwendet man als `USEGUI` "zenity" öffnet sich der [Editor Dialog](#Editor-Dialog) statt dem [Settings Menü](#Settings-Menu), aber die Parameter sind dieselben.
 
 #### Gui Window Size
-When `SAVESETSIZE` is enabled in the Global Config Tab or [global.conf](#Global-Config) *(by default it is)* resoluton changes of every **stl** window (both yad and zenity) are automatically saved
-when the corresponding window is closed. This function requires xwininfo to work.
-All resolutions will be stored in the [gui config file](#Gui-Config).
+Ist `SAVESETSIZE` im **GLOBALE EINSTELLUNGEN** Tab oder in der [global.conf](#Global-Config) aktiviert *(standardmäßig aktiviert)*,
+werden sämtliche Änderungen an **stl** Fenstergrößen beim Schließen des entsprechenden Fensters gespeichert.
+Diese Funktion benötigt xwininfo. Alle Auflösungen werden in die [gui config file](#Gui-Config) geschrieben.
 
 ### Tray Icon
 When yad is used **stl** also offers a Tray Icon, which automatically starts and is available until **stl** (or the started game) exits.
