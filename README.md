@@ -167,8 +167,8 @@ This also applies to the [command line](#via Command Line).
 
 ![stl Settings Menu](https://github.com/frostworx/repo-assets/blob/master/gifs/stl-2.0-settings.gif)
 
-By Default a special self-rolled stl-steam gtk-css theme is used and installed into `~/share/themes/stl-steam/gtk-3.0/gtk.css`
-which tries to mimic the steam theme to integrate as good as possible. It can be disabled in [Settings Menu](#Settings-Menu).
+When enabled an optional self-rolled stl-steam gtk-css theme is installed into `~/share/themes/stl-steam/gtk-3.0/gtk.css`
+which tries to mimic the steam theme to integrate as good as possible. It can be en-/disabled in [Settings Menu](#Settings-Menu).
 Every gtk program which is started from **stl** will use the theme as well (f.e. winetricks).
 The css is no complete theme and might look incomplete when used with other gtk programs.
 Feel free to improve and contribute it though!
