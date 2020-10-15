@@ -177,17 +177,18 @@ Verbesserungen können gerne beigetragen werden.
 #### Opening the Settings Menu
 
 ##### On Game Launch
-When a game is started a small requester will wait `WAITEDITOR` seconds for User input *(either Space or press `OK`)*
-If selected the Settings Menu will open directly with the settings for the launched game in Tab 1 (see [Settings Menu](#Settings-Menu))
+Wenn ein Spiel gestartet wird, öffnet sich ein kleines Fenster und wartet `WAITEDITOR` Sekunden auf eine Benutzereingabe *(entweder Leertaste drücken oder `OK` klicken)*.
+Reagiert man entsprechend, öffnet sich das Settings Menü direkt mit den Einstellungen für das gestartete Spiel im Tab 1 (siehe [Settings Menü](#Settings-Menu))
+Setzt man `WAITEDITOR` auf 0, start **stl** das ausgewählte Spiel sofort ohne Fenster.
 
-When `WAITEDITOR` is set to 0 **stl** will directly start the game.
-If `MAXASK` in the [global.conf](#Global-Config) is defined, the requester can be cancelled maximal `MAXASK` times
-before `WAITEDITOR` is automatically set to 0 for the selected game.
-Letting the requester timeout does not count as cancelled.
-The "Cancelled counter" is stored directly in the [Game specific configuration file](#User-Configurations) as `ASKCNT`
-and is resetted to 0 when `MAXASK` was reached and `WAITEDITOR` was set to 0.
+Ist der Wert `MAXASK` definiert ([global.conf](#Global-Config)), kann man den Requester `MAXASK` Mal wegklicken
+bevor `WAITEDITOR` für das Spiel automatisch auf 0 gesetzt wird.
+Lässt man den Requester timeouten, zählt das nicht als wegklicken.
 
-If `USEGUI` is set to "zenity" the [Editor Dialog](#Editor-Dialog) will open instead of the [Settings Menu](#Settings-Menu), but the parameters are the same.
+Der "Wegklick Zähler" wird direkt im [Game specific configuration file](#User-Configurations) als `ASKCNT` gespeichert
+und wird auf 0 resettet sobald `MAXASK`erreicht und `WAITEDITOR` auf 0 gesetzt wurde.
+
+Verwendet man als `USEGUI` "zenity" öffnet sich der [Editor Dialog](#Editor-Dialog) statt dem [Settings Menü](#Settings-Menu), aber die Parameter sind dieselben.
 
 ##### via Command Line
 The Settings Menu can also be opened via commandline:
