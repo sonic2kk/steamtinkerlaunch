@@ -202,10 +202,10 @@ werden sämtliche Änderungen an **stl** Fenstergrößen beim Schließen des ent
 Diese Funktion benötigt xwininfo. Alle Auflösungen werden in die [gui config file](#Gui-Config) geschrieben.
 
 ### Tray Icon
-When yad is used **stl** also offers a Tray Icon, which automatically starts and is available until **stl** (or the started game) exits.
-Can be disabled *(by default enabled)* with disabling `USETRAYICON` in the [Settings Menu](#Settings-Menu) Global Config Tab or [global.conf](#Global-Config).
-Right Click opens The Menu.
-Middle Click Closes The Menu
+Verwendet man yad hat **stl** auch über ein Tray Icon, welches automatisch startet und so lange verfügbar ist wie **stl** (oder das gestartete Spiel) läuft.
+Das Tray Icon kann im **GLOBALE EINSTELLUNGEN** Tab oder in der [global.conf](#Global-Config) deaktivert werden *(standardmäßig aktiviert)*.
+Rechts Klick öffnet das Menü
+Mittlerer Mausklick beendet das Tray Icon.
 
 #### Tray Icon Buttons
 - "Pick Window Name" *(pick the window name and save it into the [Game Config](#Game-Configurations))*
