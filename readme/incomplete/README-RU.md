@@ -25,9 +25,9 @@
 #### Инструменты совместимости Steam
 **stl** возможно использовать в качестве инструмента для совместимости приложений, просто введя в командной строке несколько команд:
 
-`stl compat add` *(добавляет stl в субдиректорию Steam compatibilitytools.d/SteamTinkerLaunch)*
-`stl compat del` *(удаляет compatibilitytools.d/SteamTinkerLaunch)*
-`stl compat (get)` *(проверяет текущее состояние compatibilitytools.d/SteamTinkerLaunch)*
+- `stl compat add` *(добавляет stl в субдиректорию Steam compatibilitytools.d/SteamTinkerLaunch)*
+- `stl compat del` *(удаляет compatibilitytools.d/SteamTinkerLaunch)*
+- `stl compat (get)` *(проверяет текущее состояние compatibilitytools.d/SteamTinkerLaunch)*
 
 Если вы изменили расположение утилиты stl - выберите опцию 'add', и все созданные символические ссылки будут автоматически обновлены.
 
