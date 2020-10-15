@@ -991,4 +991,3 @@ Here are some examples which improve the start notably *(all settings can be con
 - add new functions & fix bugs (please open a pull request)
 - bugreports (please also post the relevant stl logfile)
 - spread the word *(**stl** is still pretty unknown - the more people know it the more can help to improve it)*
-
