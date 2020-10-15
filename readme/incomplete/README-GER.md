@@ -160,18 +160,19 @@ Die Menü Optionen werden für **alle Tabs** gleichzeitig angewandt!:
 #### Disable Settings Menu
 Wenn man es vorzieht einen Texteditor zu benutzen, oder wenn man Probleme mit 'yad' hat, kann man im **GLOBALE EINSTELLUNGEN** Tab oder in der [global.conf](#Global-Config) `USEGUI` auf "zenity" setzen.
 **stl** verwendet dann zenity statt yad.
-Instead of the [Settings Menu](#Settings-Menu) zenity will open the [Editor Dialog](#Editor-Dialog), from where you can choose which configs to edit.
-This also applies to the [command line](#via Command Line).
+Statt dem [Settings Menü](#Settings-Menu) öffnet zenity den [Editor Dialog](#Editor-Dialog), in welchem man wählen kann, welche Konfigurations Dateien man bearbeiten möchte.
+Dies trifft ebenfalls auf die [command line](#via Command Line) zu.
 
 #### Settings Menu Theme
 
 ![stl Settings Menu](https://github.com/frostworx/repo-assets/blob/master/gifs/stl-2.0-settings.gif)
 
-By Default a special self-rolled stl-steam gtk-css theme is used and installed into `~/share/themes/stl-steam/gtk-3.0/gtk.css`
-which tries to mimic the steam theme to integrate as good as possible. It can be disabled in [Settings Menu](#Settings-Menu).
-Every gtk program which is started from **stl** will use the theme as well (f.e. winetricks).
-The css is no complete theme and might look incomplete when used with other gtk programs.
-Feel free to improve and contribute it though!
+Wenn man das beiliegende selbstgestrickte stl-steam gtk-css theme aktiviert, wird es nach `~/share/themes/stl-steam/gtk-3.0/gtk.css` installiert.
+Um sich so gut wie möglich optisch einzugliedern, versuchtes das Steam Theme nachzuahmen.
+De- aktiveren kann man es im [Settings Menü](#Settings-Menu).
+Jedes gtk Programm welches von **stl** aus aufgerufen wird, verwendet das Theme ebenfalls (z.B. winetricks).
+Das css ist kein vollständiges Theme und sieht in anderen gtk Programmen wahrscheinlich unfertig aus.
+Verbesserungen können gerne beigetragen werden.
 
 #### Opening the Settings Menu
 
