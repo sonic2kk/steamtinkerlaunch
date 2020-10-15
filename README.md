@@ -159,7 +159,7 @@ The Options apply to **all** config files at once!:
 
 #### Disable Settings Menu
 If you prefer to simply use your favourite texteditor or have problems with 'yad' you can change `USEGUI` to "zenity" in the Global Config Tab or [global.conf](#Global-Config).
-**stl** won't use/depend on yad then and uses zenity (prefers Steam builtin zenity and falls back to system zenity) instead.
+**stl** won't use/depend on yad then and uses zenity instead.
 Instead of the [Settings Menu](#Settings-Menu) zenity will open the [Editor Dialog](#Editor-Dialog), from where you can choose which configs to edit.
 This also applies to the [command line](#via Command Line).
 

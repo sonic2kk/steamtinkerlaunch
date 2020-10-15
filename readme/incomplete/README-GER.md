@@ -158,8 +158,8 @@ Die Menü Optionen werden für **alle Tabs** gleichzeitig angewandt!:
 - **SPEICHERN UND BEENDEN** - speichert alle Änderungen und beendet das Settings Menü
 
 #### Disable Settings Menu
-If you prefer to simply use your favourite texteditor or have problems with 'yad' you can change `USEGUI` to "zenity" in the Global Config Tab or [global.conf](#Global-Config).
-**stl** won't use/depend on yad then and uses zenity (prefers Steam builtin zenity and falls back to system zenity) instead.
+Wenn man es vorzieht einen Texteditor zu benutzen, oder wenn man Probleme mit 'yad' hat, kann man im **GLOBALE EINSTELLUNGEN** Tab oder in der [global.conf](#Global-Config) `USEGUI` auf "zenity" setzen.
+**stl** verwendet dann zenity statt yad.
 Instead of the [Settings Menu](#Settings-Menu) zenity will open the [Editor Dialog](#Editor-Dialog), from where you can choose which configs to edit.
 This also applies to the [command line](#via Command Line).
 
