@@ -92,7 +92,7 @@ Es ist ratsam mit dem individuellen Einrichten im [Settings Menü](#Settings-Men
 * **[Steam Compatibility Tool](#Steam Compatibility Tool)** kann als [Steam Kompatibilitätswerkzeug](#Steam-Launch-Option) and as [Steam Compatibility Tool](#Steam-Compatibility-Tool) verwendet werden
 * **[Proton Selection](#Proton-Selection)** zwischen verschiedenen Proton-Versionen wechseln, automatisch benutzerdefinierte Proton Versionen runterladen...
 * **[Multi Language](#Multi-Language-Support)** Multi-Language Unterstützung
-
+* **[Steam Linux Runtime](#Steam-Linux-Runtime)** die Steam Linux Runtime kann optional ausgeschaltet werden
 
 ## Requirements
 *(keine spezielle Reihenfolge)*
@@ -588,8 +588,18 @@ it is also possible to define an available language or an absolute path to a val
 When no language file was found as a last resort **stl** will download its own projectpage and use the language file from there.
 
 *(every language file simply consists of multiple variables defining a text, so to contribute a translation,
-simply duplicate one of the existing ones and translate all variables inside)
+simply duplicate one of the existing ones and translate all variables inside)*
 
+#### Steam Linux Runtime
+Ab proton 5.13-1 wird die Steam Linux Runtime autogestartet und ist Bestandteil der Spiele Kommandozeilenparameter.
+
+Das bringt *(momentan)* Kompatibilitätsprobleme mit einigen Programmen mit sich, wie:
+[MangoHud](#MangoHud), [vkBasalt](#vkBasalt), [Gamemode](#GameMode), [GameScope](#GameScope), [Boxtron](#Boxtron), [Roberta](#Roberta), [Luxtorpeda](#Luxtorpeda)
+*(nicht ganz sicher ob alle gelisteten betroffen sind, oder ob andere fehlen, gerne testen und issue melden)*
+Mit **stl** kann man die Steam Linux Runtime pro Spiel im Tab **SPIEL EINSTELLUNGEN** vom [Settings Menü](#Settings-Menu) oder [in der Spiele Konfigurationsdatei `$STLGAMECFG`](#Game-Specific-Configuration) deaktivieren.
+Wenn eines *(oder mehrere)* von den obigen Tools aktiviert ist, schaltet **stl** die Steam Linux Runtime automatisch aus.
+Selbstverständlich wird die auto-ausschalt Funktion entfernt sobald der Konflikt behoben wurde.
+Die Funktion könnte noch einige Glitches haben, da nicht jede mögliche Konstellation getestet wurde. Gerne ein Issue aufmachen.
 
 #### Custom Program
 
