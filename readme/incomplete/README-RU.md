@@ -56,8 +56,8 @@
 
 ## Начало работы
 Когда вы впервые запустите **stl** будет создана стандартная [конфигурация](#Configuration).
-Все параметры могу быть настрены в [Меню настроек](#Settings-Menu) утилиты, а также можете использовать любой текстовый редактор для изменения конфигурации.
-Неплохим шагом будет настройка шаблона приложений, использующих **stl** [Меню настроек](#Settings-Menu) 
+Все параметры могу быть настрены в [Меню настроек](#Меню-настроек) утилиты, а также можете использовать любой текстовый редактор для изменения конфигурации.
+Неплохим шагом будет настройка шаблона приложений, использующих **stl** [Меню настроек](#Меню-Настроек)
 *(вкладки с самыми важными настройками это [Настройки по-умолчанию](#Default-Template-Config) и [Глобальные настройки](#Global-Config))*.
 
 ## Возможности
@@ -80,12 +80,12 @@
 * **[Nyrna](#Nyrna)** Вкл/выкл ReplaySorcery для игры
 * **[ReplaySorcery](#ReplaySorcery)** Вкл/выкл ReplaySorcery для игры
 * **[NetMon](#Network-Monitoring)** монитор сетевой активности
-* **[Boxtron](#Boxtron)** эмуляция DOS через `DOSBox` 
-* **[Roberta](#Roberta)** эмулятор`ScummVM` 
-* **[Luxtorpeda](#Luxtorpeda)** эмулятор `Luxtorpeda` 
+* **[Boxtron](#Boxtron)** эмуляция DOS через `DOSBox`
+* **[Roberta](#Roberta)** эмулятор`ScummVM`
+* **[Luxtorpeda](#Luxtorpeda)** эмулятор `Luxtorpeda`
 * **[Vortex Mod Manager](#Vortex)** мод-менеджер от Nexusmods - `Vortex` смотрите [Видео-инструкцию по использованию](#stl-Vortex-gif)
 * **[GFWL/xlive](#GFWL)** поддержка для игр, требующих GFWL
-* **[WMP10](#WMP10)** поддержка автоматической установки WMP10 
+* **[WMP10](#WMP10)** поддержка автоматической установки WMP10
 * **[self maintaining configs](#self-maintaining-configs)** опциональное автоматическое клонирование из этого репозитория для замены недостающих для работы файлов
 * **[GameConqueror](#GameConqueror)** автоматическое открытие gameconqueror (scanmem gui) вместе с запуском игры
 * **[Custom User Start/Stop scripts](#Start-Stop-Scripts)** ваши собственные скрипты, работающие во время запуска и завершении приложения.
@@ -95,7 +95,7 @@
 * **[Steam Compatibility Tool](#Steam Compatibility Tool)** можно использовать как [Параметры Запуска Приложений](#Steam-Launch-Option) так и [Инструменты Совместимости Steam](#Steam-Compatibility-Tool)
 * **[Proton Selection](#Proton-Selection)** переключение между разными версиями Proton, а также автоматическая загрузка альтернативных сборок
 * **[Multi Language](#Multi-Language-Support)** Поддержка нескольких языков
-* **[Steam Linux Runtime](#Steam-Linux-Runtime)** the Steam Linux Runtime can be disabled optionally
+* **[Steam Linux Runtime](#Steam-Linux-Runtime)** Steam Linux Runtime, можно отключить при желании.
 
 ## Зависимости утилиты
 
@@ -109,11 +109,11 @@
 - xprop
 - xrandr
 - xwininfo
-- [Yad](https://github.com/v1cont/yad). *(используется по умолчанию)* - [Меню Настроек](#Settings-Menu) и [иконки в трее](#Tray-Icon) работают только при использовании yad.
-  [Диалог редактирования](#Editor-Dialog),может использоваться как ограниченная в функционале альтернатива для [Меню Настроек](#Settings-Menu) работающей с zenity.
+- [Yad](https://github.com/v1cont/yad). *(используется по умолчанию)* - [Меню Настроек](#меню-настроек) и [иконки в трее](#Иконка-в-трее) работают только при использовании yad.
+  [Диалог редактирования](#Editor-Dialog),может использоваться как ограниченная в функционале альтернатива для [Меню Настроек](#меню-настроек) работающей с zenity.
   *(может предоставляться в качестве `дополнительной зависимости` среди пакетов вашего дистрибутива)*
   Утилита была протестирована только с yad 7.2 на Arch linux *(различные Debian-производные дистрибутивы могут предоставлять устаревшие версии yad, которые могут не работать - смотрите #98)*
-   
+
 Опциональные приложения для работы дополнительных фишек:
 - [strace](#Strace)
 - [Gamemode](#GameMode)
@@ -125,7 +125,7 @@
 - [Nyrna](#Nyrna)
 - [ReplaySorcery](#ReplaySorcery)
 - netstat для мониторинга сетевой активности приложений
-- [Boxtron](#Boxtron) 
+- [Boxtron](#Boxtron)
 - ScummVM [Roberta](https://github.com/dreamer/roberta)
 - [luxtorpeda-dev](https://github.com/luxtorpeda-dev/luxtorpeda) или [Luxtorpeda](https://github.com/dreamer/luxtorpeda)
 - wine для опциональной поддержки [Vortex](#Vortex)
@@ -138,7 +138,7 @@
 
 ## Настройка
 Все параметры конфигурации являются независимыми, документируемыми и непрерывно развивающимися, так что тут могут быть описаны не все доступные возможности.
-Чтобы увидеть все доступные настройки, посмотрите раздел [Возможности](#Возможности) или вкладку [Меню настроек](#Меню настроек) утилиты.
+Чтобы увидеть все доступные настройки, посмотрите раздел [Возможности](#Возможности) или вкладку [Меню настроек](#Меню-настроек) утилиты.
 
 ### Меню настроек
 Большинство настроек, доступных пользователю, может быть отредактировано во встроенном Меню настроек *(использует [Yad](https://github.com/v1cont/yad))*
@@ -162,7 +162,7 @@
 Если вы предпочитаете использовать текстовый редактор для правки конфигураций, или же у вас имеются проблемы с 'yad', вы можете изменить `USEGUI` на "zenity" во вкладке **Глобальные Настройки** или в файле [global.conf](#Global-Config).
 **stl** прекратит использовать yad и переключится на zenity (сперва на интегрированый в Steam и затем вернется к использованию системного).
 В отличии от [Меню Настроек](#Меню настроек) zenity откроет [Editor Dialog](#Editor-Dialog), в котором вы сможете выбрать настройки для редактирования.
-Также это можно сделать с помощью [коммандной строки](#via Command Line).
+Также это можно сделать с помощью [коммандной строки](#Командная-строка).
 
 #### Тема для Меню Настроек
 
@@ -174,52 +174,52 @@
 Настройки css не завершена и может выглядеть плохо в сравнении с другими gtk-приложениями.
 Вы можете внести свой вклад в ее улучшение!
 
-#### Opening the Settings Menu
+#### Работа с меню настроек
 
-##### On Game Launch
-When a game is started a small requester will wait `WAITEDITOR` seconds for User input *(either Space or press `OK`)*
-If selected the Settings Menu will open directly with the settings for the launched game in Tab 1 (see [Settings Menu](#Settings-Menu))
+##### Запуск игры
+Когда вы запустите игру, небольшой обработчик запросов подождет `WAITEDITOR` секунд, ожидая команды от пользователя *(нажмите Пробел или `OK`)*
+Если вы выберете пункт Настройки, то отроектся Меню настроек на Вкладке 1 - Настройки игры (см. [Меню настроек](#меню-настроек))
 
-When `WAITEDITOR` is set to 0 **stl** will directly start the game.
-If `MAXASK` in the [global.conf](#Global-Config) is defined, the requester can be cancelled maximal `MAXASK` times
-before `WAITEDITOR` is automatically set to 0 for the selected game.
-Letting the requester timeout does not count as cancelled.
-The "Cancelled counter" is stored directly in the [Game specific configuration file](#User-Configurations) as `ASKCNT`
-and is resetted to 0 when `MAXASK` was reached and `WAITEDITOR` was set to 0.
+Если значение `WAITEDITOR` = 0 **stl** немедленно запустит игру.
+Если `MAXASK` в параметрах [global.conf](#Global-Config) было задано (по умолчанию 3), диалоговое окно с предложением открыть настройки будет открываться перед каждым запуском игры, прежде чем счетчик `MAXASK` не достигнет 0.Счетчик уменьшается с выбором варианта ***Отмена***
+После этого, значение `WAITEDITOR` для выбраной вами игры автоматически установит значение 0.
+***Завершенный по таймауту*** запрос не уменьшает счетчик максимального вызова запроса.
+Параметр "Обнуленного счетчика" запросов можно найти и изменить в [Конфигурационном файле игры](#User-Configurations), он обозначен как `ASKCNT`
+Он будет сброшен в значение 0, когда `MAXASK` вызовов будет обработано и `WAITEDITOR` станет равным 0.
 
-If `USEGUI` is set to "zenity" the [Editor Dialog](#Editor-Dialog) will open instead of the [Settings Menu](#Settings-Menu), but the parameters are the same.
+Если в качестве параметра `USEGUI` вы выбрали "zenity", [Диалог редактирования](#Editor-Dialog) будет вызван без запуска [Меню настроек](#меню-настроек), а установленные параметры будут теми же.
 
-##### via Command Line
-The Settings Menu can also be opened via commandline:
-`stl settings` opens the Menu with placeholder SteamAppID `31337` as default
-an optional commandline argument can be either a SteamAppID or `last` for opening the config of the last played game stored in `LASTRUN`
-If `USEGUI` is set to "zenity" the [Editor Dialog](#Editor-Dialog) will open instead of the [Settings Menu](#Settings-Menu), but the parameters are the same.
+##### Командная строка
+Меню настроек можно вызвать также и с помощью Командной строки:
+`stl settings` отроет Меню с выставленым по умолчанию SteamAppID `31337`
+В качестве опциональных аргументов коммандной строки могут выступать SteamAppID, или же `last` который откроет конфигурацию последней запущеной вами игры `LASTRUN`
+Если `USEGUI` имеет значение "zenity", [Диалог редактирования](#Editor-Dialog) будет открыт, минуя [Меню настроек](#меню-настроек)
 
-#### Gui Window Size
-When `SAVESETSIZE` is enabled in the Global Config Tab or [global.conf](#Global-Config) *(by default it is)* resoluton changes of every **stl** window (both yad and zenity) are automatically saved
-when the corresponding window is closed. This function requires xwininfo to work.
-All resolutions will be stored in the [gui config file](#Gui-Config).
+#### Размер окна GUI
+Когда параметр `SAVESETSIZE` активирован во вкладке Глобальные настройки, или [global.conf](#Global-Config) *(включен по-умолчанию)* разрешение будет изменено для всех окон **stl** (как yad, так и zenity) и автоматически
+сохранено, когда окно будет закрыто. Требуется пакет xwininfo для корректной работы функции.
+Все разрешения хранятся в [конфигурационном файле GUI](#Gui-Config).
 
-### Tray Icon
-When yad is used **stl** also offers a Tray Icon, which automatically starts and is available until **stl** (or the started game) exits.
-Can be disabled *(by default enabled)* with disabling `USETRAYICON` in the [Settings Menu](#Settings-Menu) Global Config Tab or [global.conf](#Global-Config).
-Right Click opens The Menu.
-Middle Click Closes The Menu
+### Иконка в трее
+Когда утилита **stl** использует yad, у нее появляется возможность отображать иконку приложения в трее(системном лотке), которая появится автоматически при запуске **stl** (или игры).
+Может быть отключена *(включена по умолчанию)* переключением параметра `USETRAYICON` в [Меню настроек](#Меню-Настроек) во вкладке Глобальные настройки, или [global.conf](#Global-Config).
+Правый клик для открытия меню.
+Клик СКМ для закрытия.
 
-#### Tray Icon Buttons
-- "Pick Window Name" *(pick the window name and save it into the [Game Config](#Game-Configurations))*
-- "Get Active Window Name" *(waits 5 seconds and saves the window name of the active window into the [Game Config](#Game-Configurations))*
-- "Kill Proton Game" *(kills the currently running Proton game by killing its wineserver)*
-- "Pause/Unpause active window" *(waits 5 seconds and un-/pauses the process of the window which is currently active)*
+#### Кнопки доступные в Иконке в трее
+- "Получить Имя Окна" *(получает имя окна и сохраняет его в [Настройках игры](#Game-Configurations))*
+- "Получить Имя Активного Окна" *(ожидает 5 секунд, после чего получает имя ***активного*** окна и сохраняет его в [Настройках игры](#Game-Configurations))*
+- "Убить игру, запущенную через Proton" *(убивает процесс текущей игры, запущеной через протон, путем закрытия относящегося к ней процесса wineserver)*
+- "Остановка/возобновление Активного окна" *(ожидает 5 секунд, после чего приостанавливает/возобновляет процесс текущего активного окна)*
 
-### Configuration Locations
+### Директории конфигурационных файлов
 
-#### User Configuration
+#### Конфигурации пользователя
 
-The main user configuration directory `STLCFGDIR` can be found under
-`$HOME/.config/stl` (or `XDG_CONFIG_HOME/stl` if `XDG_CONFIG_HOME` is set).
+Главная директория хранения конфигураций пользователя `STLCFGDIR` находится по пути
+`$HOME/.config/stl` (или `XDG_CONFIG_HOME/stl` если установлена `XDG_CONFIG_HOME`).
 
-When started for the first time **stl** will initially create a default configuration structure in its configdir `STLCFGDIR`
+Когда вы запускаете утилиту впервые, **stl** создаст все необходимые ей каталоги из шаблона по умолчанию `STLCFGDIR`
 
 
 #### Systemwide Configuration
@@ -299,14 +299,14 @@ a game in the corresponding category
 - **SBS-VR.conf** is started automatically in [SBS-VR](#Side-by-Side-VR) mode without Shader (for games with builtin Stereoscopic3D support)
 - **ScummVM.conf** is started automatically with linux native scummvm provided by [Roberta](#Roberta)
 - **Vortex.conf** is started automatically with the [Vortex](#Vortex) Mod Manager
-- **vkVR.conf** is started automatically in [SBS-VR](#Side-by-Side-VR) mode using [vkBasalt](#vkBasalt) and 
+- **vkVR.conf** is started automatically in [SBS-VR](#Side-by-Side-VR) mode using [vkBasalt](#vkBasalt) and
 - **Installer.conf** won't be started at all, but a requester lets one choose an exe which is started instead.
 - **Cheat.conf** [GameConqueror](#GameConqueror) is automatically started with the game.
 
 Multiple Category Configuration Files are possible, they are loaded one after another, with the last one overriding settings also found in the previous files.
 All settings which are also configured in `$STLGAMECFG` are overridden (but not overwritten).
 
-The function can be diabled per game with the option `CHECKCATEGORIES` 
+The function can be diabled per game with the option `CHECKCATEGORIES`
 
 ### Tweaks
 
@@ -440,7 +440,7 @@ Creating Auto Tweaks via **stl** command line:
 `stl autotweaks PLAFTORM (optional steamid)`
 
 Will autogenerate all tweak files for every parsible game of platform PLATFORM or just for the optional SteamAppID
-  
+
 Example:
 
 `stl autotweaks lutris`
@@ -544,7 +544,7 @@ There are several methods to add new entries to the list
 a locally installed Custom Proton can be added either by
 
 - using the button `Add local Custom Proton` in the Game Settings Tab of the [Settings Menu](#Settings-Menu)
-- via command line: `stl addcustomproton` or just `stl acp` 
+- via command line: `stl addcustomproton` or just `stl acp`
   *(accepting an absolute path to a proton executable as optional argument)*
 
 With either method a `proton` file can be selected via file-requester
@@ -553,9 +553,9 @@ and an optional "proton version name" can be entered in a separate field.
 ###### Download Custom Proton
 Альтернативные сборки Proton могут быть загружены и добавлены с помощью:
 - использования кнопки `Загрузить альтернативную сборку Proton` во вкладке **Настройки игры** в [Меню настроек](#Меню настроек)
-- через командную строку: `stl addcustomproton dl` или просто `stl acp dl` 
+- через командную строку: `stl addcustomproton dl` или просто `stl acp dl`
   *(добавьте прямую ссылку на сборку в качестве опционального аргумента)*
-  
+
 При использовании любого метода открывается выпадающее меню с доступными вариантами.
 Меню генерируется автоматически путем парсинга `CP_*` *(Альтернативные сборки Proton)* ссылок из [Url Config](#Url-Config)
 На данный момент доступны сборки из следующих источников:
@@ -711,7 +711,7 @@ Games which depend on WMP10 can be played by setting the variable `HACKWMP10` to
 
 **
 Giana Sisters Twisted Dreams (223220)
-Giana Sisters - Rise of the Owlverlord (246960)	
+Giana Sisters - Rise of the Owlverlord (246960)
 **
 
 #### Vortex
@@ -856,7 +856,7 @@ The game starts regularly in pancake mode subsequently.
 *(and for later use also the game window name, to make starting SBS VR for the game faster)*
 This works mostly very good, but some games start own launchers before the actual game.
 Then autodetecting the correct window is almost impossible, and the window name has to be set manually as `GAMEWINDOW`.
-If autodetecting failed for whatever reason, it is still possible to pick the game window name again, by using the [Tray Icon](#Tray-Icon)
+If autodetecting failed for whatever reason, it is still possible to pick the game window name again, by using the [Tray Icon](#Иконка-в-трее)
 
 The vr-video-player author was so kind to accept a little patch, to work better with **stl**.
 It is possible to live zoom in and out and the zoom state is written into a temporary file, which **stl** picks up.
@@ -881,12 +881,12 @@ Set `MANGOHUD` to 1 to enable mangohud *(does nothing in stl itself, but just ex
 
 #### Nyrna
 [Nyrna](https://github.com/Merrit/nyrna)
-Set `RUN_NYRNA` to 1 to enable nyrna while game is running 
+Set `RUN_NYRNA` to 1 to enable nyrna while game is running
 *([User Configuration](#User-Configuration) overrides [system-wide configuration](#Systemwide-Configuration))*
 
 #### ReplaySorcery
 [ReplaySorcery](https://github.com/matanui159/ReplaySorcery)
-Set `RUN_REPLAY` to 1 to enable replay-sorcery while game is running 
+Set `RUN_REPLAY` to 1 to enable replay-sorcery while game is running
 *([User Configuration](#User-Configuration) overrides [system-wide configuration](#Systemwide-Configuration))*
 
 #### GameConqueror
@@ -918,7 +918,7 @@ strace is launched with the commandline arguments found in `STRACEOPTS`.
 When `STRACERUN` is enabled make sure
 `/proc/sys/kernel/yama/ptrace_scope` is set to 0.
 else your user will get access denied when trying to attach a process.
-Either 
+Either
 `echo 0 > /proc/sys/kernel/yama/ptrace_scope`
 as root or enable it persistent in sysctl.
 
@@ -942,7 +942,7 @@ of course you can install all files manually as well. make sure to rename all fi
 `ReShade64.dll`, `ReShade32.dll`: renaming not required as they will be placed in the gamedir under the required name
 
 The required architecture is autodetected from the game.exe and the matching files are copied from `RESHADESRCDIR` into the selected game dir
-both downloadfiles and basic configuration were taken from [r/linux_gaming](https://www.reddit.com/r/linux_gaming/comments/b2hi3g/reshade_working_in_wine_43) 
+both downloadfiles and basic configuration were taken from [r/linux_gaming](https://www.reddit.com/r/linux_gaming/comments/b2hi3g/reshade_working_in_wine_43)
 
 If `USERESHADE` is disabled and the corresponding game is started, the previously installed ReShade dll will be renamed, so ReShade is disabled when the game starts.
 When `USERESHADE` is re-enabled the renamed dll will be re-activated.
