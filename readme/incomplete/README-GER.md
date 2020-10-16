@@ -177,34 +177,35 @@ Verbesserungen können gerne beigetragen werden.
 #### Opening the Settings Menu
 
 ##### On Game Launch
-When a game is started a small requester will wait `WAITEDITOR` seconds for User input *(either Space or press `OK`)*
-If selected the Settings Menu will open directly with the settings for the launched game in Tab 1 (see [Settings Menu](#Settings-Menu))
+Wenn ein Spiel gestartet wird, öffnet sich ein kleines Fenster und wartet `WAITEDITOR` Sekunden auf eine Benutzereingabe *(entweder Leertaste drücken oder `OK` klicken)*.
+Reagiert man entsprechend, öffnet sich das Settings Menü direkt mit den Einstellungen für das gestartete Spiel im Tab 1 (siehe [Settings Menü](#Settings-Menu))
+Setzt man `WAITEDITOR` auf 0, start **stl** das ausgewählte Spiel sofort ohne Fenster.
 
-When `WAITEDITOR` is set to 0 **stl** will directly start the game.
-If `MAXASK` in the [global.conf](#Global-Config) is defined, the requester can be cancelled maximal `MAXASK` times
-before `WAITEDITOR` is automatically set to 0 for the selected game.
-Letting the requester timeout does not count as cancelled.
-The "Cancelled counter" is stored directly in the [Game specific configuration file](#User-Configurations) as `ASKCNT`
-and is resetted to 0 when `MAXASK` was reached and `WAITEDITOR` was set to 0.
+Ist der Wert `MAXASK` definiert ([global.conf](#Global-Config)), kann man den Requester `MAXASK` Mal wegklicken
+bevor `WAITEDITOR` für das Spiel automatisch auf 0 gesetzt wird.
+Lässt man den Requester timeouten, zählt das nicht als wegklicken.
 
-If `USEGUI` is set to "zenity" the [Editor Dialog](#Editor-Dialog) will open instead of the [Settings Menu](#Settings-Menu), but the parameters are the same.
+Der "Wegklick Zähler" wird direkt im [Game specific configuration file](#User-Configurations) als `ASKCNT` gespeichert
+und wird auf 0 resettet sobald `MAXASK`erreicht und `WAITEDITOR` auf 0 gesetzt wurde.
+
+Verwendet man als `USEGUI` "zenity" öffnet sich der [Editor Dialog](#Editor-Dialog) statt dem [Settings Menü](#Settings-Menu), aber die Parameter sind dieselben.
 
 ##### via Command Line
-The Settings Menu can also be opened via commandline:
-`stl settings` opens the Menu with placeholder SteamAppID `31337` as default
-an optional commandline argument can be either a SteamAppID or `last` for opening the config of the last played game stored in `LASTRUN`
-If `USEGUI` is set to "zenity" the [Editor Dialog](#Editor-Dialog) will open instead of the [Settings Menu](#Settings-Menu), but the parameters are the same.
+Das Settings Menü kann auch direkt per Kommandozeile geöffnet werden:
+`stl settings` öffnet das Menü mit dem Platzhalter SteamAppID `31337` als Standard.
+Ein weiterer optionaler Kommandozeilen parameter kann entweder eine SteamAppID sein, oder `last` um das zuletzt gespielte Spiel, welches in `LASTRUN` gespeichert wurde zu öffnen.
+Verwendet man als `USEGUI` "zenity" öffnet sich der [Editor Dialog](#Editor-Dialog) statt dem [Settings Menü](#Settings-Menu), aber die Parameter sind dieselben.
 
 #### Gui Window Size
-When `SAVESETSIZE` is enabled in the Global Config Tab or [global.conf](#Global-Config) *(by default it is)* resoluton changes of every **stl** window (both yad and zenity) are automatically saved
-when the corresponding window is closed. This function requires xwininfo to work.
-All resolutions will be stored in the [gui config file](#Gui-Config).
+Ist `SAVESETSIZE` im **GLOBALE EINSTELLUNGEN** Tab oder in der [global.conf](#Global-Config) aktiviert *(standardmäßig aktiviert)*,
+werden sämtliche Änderungen an **stl** Fenstergrößen beim Schließen des entsprechenden Fensters gespeichert.
+Diese Funktion benötigt xwininfo. Alle Auflösungen werden in die [gui config file](#Gui-Config) geschrieben.
 
 ### Tray Icon
-When yad is used **stl** also offers a Tray Icon, which automatically starts and is available until **stl** (or the started game) exits.
-Can be disabled *(by default enabled)* with disabling `USETRAYICON` in the [Settings Menu](#Settings-Menu) Global Config Tab or [global.conf](#Global-Config).
-Right Click opens The Menu.
-Middle Click Closes The Menu
+Verwendet man yad hat **stl** auch über ein Tray Icon, welches automatisch startet und so lange verfügbar ist wie **stl** (oder das gestartete Spiel) läuft.
+Das Tray Icon kann im **GLOBALE EINSTELLUNGEN** Tab oder in der [global.conf](#Global-Config) deaktivert werden *(standardmäßig aktiviert)*.
+Rechts Klick öffnet das Menü
+Mittlerer Mausklick beendet das Tray Icon.
 
 #### Tray Icon Buttons
 - "Pick Window Name" *(pick the window name and save it into the [Game Config](#Game-Configurations))*
@@ -991,4 +992,3 @@ Here are some examples which improve the start notably *(all settings can be con
 - add new functions & fix bugs (please open a pull request)
 - bugreports (please also post the relevant stl logfile)
 - spread the word *(**stl** is still pretty unknown - the more people know it the more can help to improve it)*
-
