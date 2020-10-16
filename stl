@@ -4,7 +4,7 @@
 ### project ###
 
 PROGNAME="SteamTinkerLaunch"
-PROGVERS="v2.3.0"
+PROGVERS="v2.4.0"
 PROGCMD="$(basename "$0")"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -134,6 +134,7 @@ STLDXVKDIR="$STLCFGDIR/dxvk"																# base dxvk config dir from where de
 ISGAME=0																					# 1=game was launched, 2=windows game, 3=linux game
 WFEAR="waitforexitandrun"
 SAC="steamapps/common"
+SLR="SteamLinuxRuntime"
 DBW="dist/bin/wine"
 PROCU="proton/custom"
 CTVDF="compatibilitytool.vdf"
@@ -206,7 +207,7 @@ function setGameVars {
 	if [ -n "$STEAM_COMPAT_DATA_PATH" ]; then
 	# win game
 		GPFX="$STEAM_COMPAT_DATA_PATH/pfx"														# currently used WINEPREFIX
-		GP="$(printf "%s\n" "$@" | grep -v "proton" | grep -m1 "$SAC")"							# the absolute game path of the windows game exe
+		GP="$(printf "%s\n" "$@" | grep -v "proton\|$SLR" | grep -m1 "$SAC")"					# the absolute game path of the windows game exe
 		GE="$(basename "$GP" | awk -F '.exe' '{print $1}')"										# just the windows game exe name
 		EFD="$(dirname "$GP")"																	# the absolute directory where the game exe lives - for optional custom program
 	else
@@ -219,6 +220,26 @@ function setGameVars {
 	# common
 	GFD="$(awk -F 'common' '{print $1}' <<< "$EFD")common/$(awk -F 'common' '{print $NF}' <<< "$EFD" | cut -d'/' -f2)" # f.e. used for vortex symlinks
 	GN="$(grep -oE 'common/[^\/]+' <<< "$EFD" | awk -F 'common/' '{print $NF}')"				# THIS is hopefully the proper game name
+
+	# SLR
+	
+	if grep -q "$SLR" <<< "$@"; then
+		FOUNDSLR=0
+		while read -r ORGARG; do
+			if [ "$FOUNDSLR" -eq 0 ]; then
+				mapfile -t -O "${#RUNSLR[@]}" RUNSLR <<< "$ORGARG"
+				if [ "$ORGARG" == "--" ]; then
+					FOUNDSLR=1
+				fi
+			else
+				mapfile -t -O "${#ORGGCMD[@]}" ORGGCMD <<< "$ORGARG"
+			fi
+		done <<< "$(printf "%s\n" "$@")"
+	else
+		while read -r ORGARG; do
+			mapfile -t -O "${#ORGGCMD[@]}" ORGGCMD <<< "$ORGARG"
+		done <<< "$(printf "%s\n" "$@")"	
+	fi
 }
 
 function checkZenity {
@@ -656,6 +677,7 @@ function setDefaultCfgValues {
 	}
 
 	function setDefaultCfgValuesdefault_template {
+		if [ -z "$USESLR" ]				; then	USESLR="1"; fi
 		if [ -z "$USEPROTON" ]			; then	USEPROTON="$(getDefaultProton)"; fi
 		if [ -z "$OVERRIDEPROTON" ]		; then	OVERRIDEPROTON="0"; fi
 		if [ -z "$RUN_CUSTOMCMD" ]		; then	RUN_CUSTOMCMD="0"; fi
@@ -727,7 +749,7 @@ function setDefaultCfgValues {
 		if [ -z "$VORTEX_DXVK_LOG_PATH" ]	; then	VORTEX_DXVK_LOG_PATH="none"; fi
 		if [ -z "$VORTEXDOWNLOADPATH" ]	; then	VORTEXDOWNLOADPATH="$STLVORTEXDIR/downloads"; fi
 		if [ -z "$VORTEXINSTALL" ]		; then	VORTEXINSTALL="1"; fi
-		if [ -z "$VORTEXVERSION" ]		; then	VORTEXVERSION="1.3.11"; fi
+		if [ -z "$VORTEXVERSION" ]		; then	VORTEXVERSION="1.3.13"; fi
 		if [ -z "$DISABLE_AUTOSTAGES" ]	; then	DISABLE_AUTOSTAGES="0"; fi
 	}
 	
@@ -969,6 +991,8 @@ function saveCfg {
 			{
 			echo "## config Version: $PROGVERS"
 			echo "##########################"
+			echo "## $DESC_SLR"
+			echo "USESLR=\"$USESLR\""
 			echo "## $DESC_OVERRIDEPROTON"
 			echo "OVERRIDEPROTON=\"$OVERRIDEPROTON\""
 			echo "## $DESC_USEPROTON"
@@ -1843,6 +1867,7 @@ function openGameMenu {
 	--field="     $GUI_PROTON_DEBUG_DIR!$DESC_PROTON_DEBUG_DIR":DIR "${PROTON_DEBUG_DIR/#-/ -}" \
 	--field="     $GUI_OVERRIDEPROTON!$DESC_OVERRIDEPROTON":CHK "${OVERRIDEPROTON/#-/ -}" \
 	--field="     $GUI_USEPROTON!$DESC_USEPROTON":CB "${USEPROTON/#-/ -}!$PROTYADLIST" \
+	--field="     $GUI_USESLR!$DESC_USESLR":CHK "${USESLR/#-/ -}" \
 	--field=" ":LBL " " \
 	--field="     $GUI_ATVALIDATE!$DESC_ATVALIDATE":NUM "${ATVALIDATE/#-/ -}" \
 	--field="     $GUI_IGNOREAUTOTWEAKS!$DESC_IGNOREAUTOTWEAKS":CHK "${IGNOREAUTOTWEAKS/#-/ -}" \
@@ -3462,7 +3487,7 @@ function createDefaultCfgs {
 	
 	getAvailableProtonVersions "n"
 
-	checkStartMode "$@"
+	checkStartMode
 	saveCfg "$STLDEFGAMECFG" X
 	saveCfg "$STLVORTEXCFG"  X
 	createProjectDirs
@@ -4570,6 +4595,14 @@ function wmp10toPFX {
 
 function wmp10hack {
 	SWOW="$GPFX/drive_c/windows/syswow64"
+	if [ -f "${SWOW}/WMASF.DLL" ] && [ -f "${SWOW}/wmasf.dll" ]; then
+		rm "${SWOW}/wmasf.dll" 2>/dev/null
+	fi
+
+	if [ -f "${SWOW}/WMVCORE.DLL" ] && [ -f "${SWOW}/wmvcore.dll" ]; then
+		rm "${SWOW}/wmvcore.dll" 2>/dev/null
+	fi
+
 	if [ -f "$SWOW/wmpasf.dll" ]; then
 		writelog "SKIP" "${FUNCNAME[0]} - looks like wmp10 was already copied into '$GPFX' - nothing to do"
 	else
@@ -4601,11 +4634,11 @@ function checkCustomLaunch {
 			# fork in background and continue
 				if [ "$FORK_CUSTOMCMD" -eq 1 ]; then
 					writelog "INFO" "${FUNCNAME[0]} - FORK_CUSTOMCMD is set to 1 -  forking the custom program in background and continue"
-					launchCustomProg "$@" &
+					launchCustomProg &
 			# or wait
 				else
 					writelog "INFO" "${FUNCNAME[0]} - FORK_CUSTOMCMD is set to 0 - starting the custom program regularly"
-					launchCustomProg "$@"
+					launchCustomProg
 				fi
 
 
@@ -5825,10 +5858,10 @@ function prepareLaunch {
 	
 	writelog "START" "######### Game Launch: $GN ($AID) #########"
 
-	createDefaultCfgs "$@"
+	createDefaultCfgs "${ORGGCMD[@]}"
 
 	checkSTLDLGlobal
-	writelog "INFO" "${FUNCNAME[0]} - game launch args '$*'"
+	writelog "INFO" "${FUNCNAME[0]} - game launch args '${ORGGCMD[*]}'"
 	writelog "INFO" "${FUNCNAME[0]} - gamedir '$GFD'"
 	writelog "INFO" "${FUNCNAME[0]} - wineprefix '$GPFX'"
 	writelog "INFO" "${FUNCNAME[0]} -------------------"
@@ -5938,7 +5971,7 @@ function prepareLaunch {
 
 	# install ReShade if INSTALL_RESHADE is 1
 	writelog "INFO" "${FUNCNAME[0]} - installReshade:"
-	installReshade "$@"
+	installReshade
 
 	# install Depth3D Shader if RESHADE_DEPTH3D is 1
 	writelog "INFO" "${FUNCNAME[0]} - installReshadeDepth3D:"
@@ -5974,7 +6007,7 @@ function prepareLaunch {
 
 	# start a custom program if RUN_CUSTOMCMD is ge 1
 	writelog "INFO" "${FUNCNAME[0]} - checkCustomLaunch:"
-	checkCustomLaunch "$@"
+	checkCustomLaunch
 
 	# start strace process in the background if STRACERUN is 1
 	writelog "INFO" "${FUNCNAME[0]} - checkStraceLaunch:"
@@ -5993,7 +6026,7 @@ function prepareLaunch {
 	# set pulse latency if CHANGE_PULSE_LATENCY is 1
 	checkPulse
 
-	launchSteamGame "$@"
+	launchSteamGame
 }
 
 function switchProton {
@@ -6049,9 +6082,55 @@ function launchSteamGame {
 		if [ "$GAMEARGS" != "none" ]; then
 			IFS=" " read -r -a RUNGAMEARGS <<< "$GAMEARGS"
 		fi
-		GAMESTARTCMD=("${@}" "${RUNGAMEARGS[@]}")	
+
+		GAMESTARTCMD=("${ORGGCMD[@]}" "${RUNGAMEARGS[@]}")
+
+		writelog "INFO" "${FUNCNAME[0]} - GAMESTARTCMD is '${GAMESTARTCMD[*]}'"
 	fi
 
+	if [ "$USESLR" -eq 1 ] && [ -n "${RUNSLR[0]}" ]; then
+		if [ "$USEBOXTRON" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - disabling '$SLR' because BOXTRON is enabled"
+			USESLR=0
+		fi
+		if [ "$USEROBERTA" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - disabling '$SLR' because ROBERTA is enabled"
+			USESLR=0
+		fi
+		if [ "$USELUXTORPEDA" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - disabling '$SLR' because LUXTORPEDA is enabled"
+			USESLR=0
+		fi
+		if [ "$MANGOHUD" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - disabling '$SLR' because MANGOHUD is enabled"
+			USESLR=0
+		fi
+		if [ "$ENABLE_VKBASALT" -eq 1 ] ; then
+			writelog "INFO" "${FUNCNAME[0]} - disabling '$SLR' because VKBASALT is enabled"
+			USESLR=0
+		fi
+		if [ "$USEGAMEMODERUN" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - disabling '$SLR' because GAMEMODERUN is enabled"
+			USESLR=0
+		fi
+		if [ "$USEGAMESCOPE" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - disabling '$SLR' because GAMESCOPE is enabled"
+			USESLR=0
+		fi
+	fi
+
+	if [ "$USESLR" -eq 1 ]; then
+		if [ -n "${RUNSLR[0]}" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - USESLR is enabled, so adding RUNSLR '${RUNSLR[*]}' to the actual start command"
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - USESLR is enabled, but RUNSLR is empty - skipping"
+			USESLR=0
+		fi
+	else
+		if [ -n "${RUNSLR[0]}" ]; then
+			writelog "SKIP" "${FUNCNAME[0]} - USESLR is disabled, so skipping '$SLR' found in the commandline: '${RUNSLR[*]}'"
+		fi
+	fi
 
 	# first start with non-proton games here:
 	if [ "$ISGAME" -eq 3 ]; then
@@ -6059,12 +6138,12 @@ function launchSteamGame {
 		if [ "$USEBOXTRON" -eq 1 ]; then
 			DOSEXE="$GP"
 			if  [ -x "$(command -v "$BOXTRONCMD" 2>/dev/null)" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - starting game '$GN ($AID)' with boxtron: '$BOXTRONCMD $BOXTRONARGS $DOSEXE'"
 				notiShow "$NOTY_BOXTRON"
-				RUNBOXTRONCMD=("$BOXTRONCMD" "$BOXTRONARGS" "$DOSEXE")
 				# disable CHANGE_PULSE_LATENCY else audio gets stuck
 				CHANGE_PULSE_LATENCY="0"
-				"${RUNBOXTRONCMD[@]}"
+
+				writelog "INFO" "${FUNCNAME[0]} - starting game '$GN ($AID)' with boxtron. Full start command is: '$BOXTRONCMD $BOXTRONARGS $DOSEXE'"
+				"$BOXTRONCMD" "$BOXTRONARGS" "$DOSEXE"
 			else
 				writelog "ERROR" "${FUNCNAME[0]} -  boxtron command '$BOXTRONCMD' not found - exit"
 				exit
@@ -6107,18 +6186,28 @@ function launchSteamGame {
 			if [ "$USEGAMEMODERUN" -eq 1 ]; then
 				writelog "INFO" "${FUNCNAME[0]} - starting native game '$GN ($AID)' with '$GAMEMODERUN' - ${GAMESTARTCMD[*]}"
 				notiShow "$NOTY_STARTNATGAMO"
-				"$GAMEMODERUN" "${GAMESTARTCMD[@]}"
+				writelog "INFO" "${FUNCNAME[0]} - full start command is '$GAMEMODERUN ${GAMESTARTCMD[*]}'"
+				"$GAMEMODERUN" "${GAMESTARTCMD[@]}"		
+
 			# start with gamescope:
 			elif [ "$USEGAMESCOPE" -eq 1 ]; then
 				writelog "INFO" "${FUNCNAME[0]} - starting native game '$GN ($AID)' with $GAMESCOPE arguments '$GAMESCOPE_ARGS'"
 				notiShow "$NOTY_STARTNATGAMSCO"
 				IFS=" " read -r -a RUNGAMESCOPE_ARGS <<< "$GAMESCOPE_ARGS"
+				writelog "INFO" "${FUNCNAME[0]} - full start command is '$GAMESCOPE ${RUNGAMESCOPE_ARGS[*]} ${GAMESTARTCMD[*]}'"
 				"$GAMESCOPE" "${RUNGAMESCOPE_ARGS[@]}" "${GAMESTARTCMD[@]}"
+
 			# regular start:
 			else
 				writelog "INFO" "${FUNCNAME[0]} - starting native game '$GN ($AID)'"
 				notiShow "$NOTY_STARTNAT"
-				"${GAMESTARTCMD[@]}"
+				if [ "$USESLR" -eq 1 ]; then
+					writelog "INFO" "${FUNCNAME[0]} - full start command is '${RUNSLR[*]} ${GAMESTARTCMD[*]}'"
+					"${RUNSLR[@]}" "${GAMESTARTCMD[@]}"
+				else
+					writelog "INFO" "${FUNCNAME[0]} - full start command is '${GAMESTARTCMD[*]}'"
+					"${GAMESTARTCMD[@]}"
+				fi
 			fi
 		fi
 	# now games using proton:
@@ -6206,25 +6295,31 @@ function launchSteamGame {
 				writelog "SKIP" "${FUNCNAME[0]} - skipping '$GAMESCOPE' as '$GAMEMODERUN' is enabled as well"
 			fi
 			writelog "INFO" "${FUNCNAME[0]} - starting '$GN ($AID)' with Proton: '$PROTONVERSION' with '$GAMEMODERUN'"
-			writelog "INFO" "${FUNCNAME[0]} - full start command is '$GAMEMODERUN ${GAMESTARTCMD[*]}'"
 
 			notiShow "$NOTY_STARTPROTGAMO" "$PROTONVERSION"
-			"$GAMEMODERUN" "${GAMESTARTCMD[@]}"			
+			writelog "INFO" "${FUNCNAME[0]} - full start command is '$GAMEMODERUN ${GAMESTARTCMD[*]}'"
+			"$GAMEMODERUN" "${GAMESTARTCMD[@]}"		
+	
 		# start with gamescope:
 		elif [ "$USEGAMESCOPE" -eq 1 ]; then
 			writelog "INFO" "${FUNCNAME[0]} - starting '$GN ($AID)' with Proton: '$PROTONVERSION' with $GAMESCOPE arguments '$GAMESCOPE_ARGS'"
-			writelog "INFO" "${FUNCNAME[0]} - full start command is '$GAMESCOPE ${RUNGAMESCOPE_ARGS[*]} ${GAMESTARTCMD[*]}'"
 			notiShow "$NOTY_STARTPROTGAMSCO" "$PROTONVERSION"
 			IFS=" " read -r -a RUNGAMESCOPE_ARGS <<< "$GAMESCOPE_ARGS"
-			"$GAMESCOPE" "${RUNGAMESCOPE_ARGS[@]}" "${GAMESTARTCMD[@]}"
 
+			writelog "INFO" "${FUNCNAME[0]} - full start command is '$GAMESCOPE ${RUNGAMESCOPE_ARGS[*]} ${GAMESTARTCMD[*]}'"
+			"$GAMESCOPE" "${RUNGAMESCOPE_ARGS[@]}" "${GAMESTARTCMD[@]}"		
 		# regular start:
 		else
 			writelog "INFO" "${FUNCNAME[0]} - starting '$GN ($AID)' with Proton: '$PROTONVERSION'"
-			writelog "INFO" "${FUNCNAME[0]} - full start command is '${GAMESTARTCMD[*]}'"
 			notiShow "$NOTY_STARTPROT" "$PROTONVERSION"
 
-			"${GAMESTARTCMD[@]}"
+			if [ "$USESLR" -eq 1 ]; then
+				writelog "INFO" "${FUNCNAME[0]} - full start command is '${RUNSLR[*]} ${GAMESTARTCMD[*]}'"
+				"${RUNSLR[@]}" "${GAMESTARTCMD[@]}"
+			else
+				writelog "INFO" "${FUNCNAME[0]} - full start command is '${GAMESTARTCMD[*]}'"
+				"${GAMESTARTCMD[@]}"
+			fi
 		fi
 	else
 		writelog "SKIP" "${FUNCNAME[0]} - with ISGAME='$ISGAME' the game failed to start"
@@ -6318,23 +6413,23 @@ function CompatTool {
 }
 
 function checkStartMode {
-	if [ -n "$1" ]; then
+	if [ -n "${ORGGCMD[0]}" ]; then
 		if [ "$ISGAME" -eq 2 ]; then
-			if [ "$2" == "$WFEAR" ]; then
+			if [ "${ORGGCMD[1]}" == "$WFEAR" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Game was started via Steam Launch Options ('$PROGCMD %command%')"
-				if grep -q "$PROGNAME/$PROGCMD" <<< "$1"; then
+				if grep -q "$PROGNAME/$PROGCMD" <<< "${ORGGCMD[0]}"; then
 					writelog "INFO" "${FUNCNAME[0]} - AND also as Steam Compatibility Tool - using the latter"
 					SCTPROT="$(getNOP "p")"
 					STARTMODE=3
 					RUNPROTON="$SCTPROT"
 					FORCEOVERRIDEPROTON=1
 				else
-					SLOPROT="$1"
+					SLOPROT="${ORGGCMD[0]}"
 					SLOPROTV="$(setProtonPathVersion "$SLOPROT")"
 					STARTMODE=1
 					RUNPROTON="$SLOPROT"
 				fi
-			elif [ "$1" == "$WFEAR" ]; then
+			elif [ "${ORGGCMD[0]}" == "$WFEAR" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Game was started as Steam Compatibility Tool - automatically enabling override Proton, as proton doesn't appear in the command line here"
 				SCTPROT="$(getNOP "p")"
 				STARTMODE=2
@@ -6583,7 +6678,7 @@ function closeSTL {
 ### CLOSE STL END ###
 
 function initLaunch {
-	prepareLaunch "$@"
+	prepareLaunch
 	closeSTL
 	writelog "STOP" "######### $PROGNAME $PROGVERS #########"
 }
@@ -6598,16 +6693,15 @@ if [ -z "$1" ]; then
 else
 	if grep -q "$SAC" <<< "$@"; then
 		setGameVars "$@"
-
-		if grep -q "$WFEAR" <<< "$@"; then
+		if grep -q "$WFEAR" <<< "${ORGGCMD[@]}"; then
 			ISGAME=2
-			initLaunch "$@"
+			initLaunch
 		elif [ -f "$GP" ]; then
 			ISGAME=3
-			writelog "INFO" "${FUNCNAME[0]} - please report if this is no linux native game: '$*'" "E"
-			initLaunch "$@"
+			writelog "INFO" "${FUNCNAME[0]} - please report if this is no linux native game: '${ORGGCMD[*]}'" "E"
+			initLaunch
 		else
-			writelog "INFO" "${FUNCNAME[0]} - unknown parameter '$*'" "E"
+			writelog "INFO" "${FUNCNAME[0]} - unknown parameter '${ORGGCMD[*]}'" "E"
 		fi
 	else
 		createDefaultCfgs "$@"
