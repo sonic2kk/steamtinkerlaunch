@@ -92,7 +92,7 @@ It might be a good idea to start with configuring everything in the [Settings Me
 * **[Steam Compatibility Tool](#Steam Compatibility Tool)** can be used as [Steam Launch Option](#Steam-Launch-Option) and as [Steam Compatibility Tool](#Steam-Compatibility-Tool)
 * **[Proton Selection](#Proton-Selection)** switch between Proton-Versions, automatically download custom Proton builds...
 * **[Multi Language](#Multi-Language-Support)** Multi-Language Support
-
+* **[Steam Linux Runtime](#Steam-Linux-Runtime)** the Steam Linux Runtime can be disabled optionally
 
 ## Requirements
 *(no special order)*
@@ -586,8 +586,18 @@ it is also possible to define an available language or an absolute path to a val
 When no language file was found as a last resort **stl** will download its own projectpage and use the language file from there.
 
 *(every language file simply consists of multiple variables defining a text, so to contribute a translation,
-simply duplicate one of the existing ones and translate all variables inside)
+simply duplicate one of the existing ones and translate all variables inside)*
 
+#### Steam Linux Runtime
+With proton 5.13-1 the Steam Linux Runtime is autostarted and part of the game command line parameters.
+
+This *(currently)* breaks compatibility with several tools like
+[MangoHud](#MangoHud), [vkBasalt](#vkBasalt), [Gamemode](#GameMode), [GameScope](#GameScope), [Boxtron](#Boxtron), [Roberta](#Roberta), [Luxtorpeda](#Luxtorpeda)
+*(not sure of all of them are affected or others are missing, feel free to test and report bugs)*
+With **stl** the Steam Linux Runtime can be disabled per game in the **GAME SETTINGS** of the [Settings Menu](#Settings-Menu) or [in game configfile `$STLGAMECFG`](#Game-Specific-Configuration).
+If one (or more) of above confliciting tools are enabled **stl** automatically disables the Steam Linux Runtime.
+Of course the autodisable function will be removed when the conflict is fixed.
+The function might have some glitches as not every possible combination has been testet yet. Feel free to open an issue.
 
 #### Custom Program
 
