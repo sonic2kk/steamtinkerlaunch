@@ -200,6 +200,8 @@ Verwendet man als `USEGUI` "zenity" öffnet sich der [Editor Dialog](#Editor-Dia
 Ist `SAVESETSIZE` im **GLOBALE EINSTELLUNGEN** Tab oder in der [global.conf](#Global-Config) aktiviert *(standardmäßig aktiviert)*,
 werden sämtliche Änderungen an **stl** Fenstergrößen beim Schließen des entsprechenden Fensters gespeichert.
 Diese Funktion benötigt xwininfo. Alle Auflösungen werden in die [gui config file](#Gui-Config) geschrieben.
+Bevorzugt man Fensterrahmen zum Ziehen von Fenstern, können diese im **GLOBALE EINSTELLUNGEN** Tab oder in der [global.conf](#Global-Config) aktiviert werden
+*(ansonsten Left-Alt halten, während man mit durch halten der rechten Maustaste die Fenstergrösse ändert)*.
 
 ### Tray Icon
 Verwendet man yad hat **stl** auch über ein Tray Icon, welches automatisch startet und so lange verfügbar ist wie **stl** (oder das gestartete Spiel) läuft.
