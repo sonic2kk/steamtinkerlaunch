@@ -198,6 +198,8 @@ If `USEGUI` is set to "zenity" the [Editor Dialog](#Editor-Dialog) will open ins
 When `SAVESETSIZE` is enabled in the Global Config Tab or [global.conf](#Global-Config) *(by default it is)* resolution changes of every **stl** window (both yad and zenity) are automatically saved
 when the corresponding window is closed. This function requires xwininfo to work.
 All resolutions will be stored in the [gui config file](#Gui-Config).
+If you prefer window decoration to resize windows, you can enable it in the Global Config Tab or [global.conf](#Global-Config)
+*(else hold Left-Alt while resizing the window while holding the right mouse button)*.
 
 ### Tray Icon
 When yad is used **stl** also offers a Tray Icon, which automatically starts and is available until **stl** (or the started game) exits.
