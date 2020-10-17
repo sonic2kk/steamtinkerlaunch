@@ -596,9 +596,7 @@ This *(currently)* breaks compatibility with several tools like
 [MangoHud](#MangoHud), [vkBasalt](#vkBasalt), [Gamemode](#GameMode), [GameScope](#GameScope), [Boxtron](#Boxtron), [Roberta](#Roberta), [Luxtorpeda](#Luxtorpeda)
 *(not sure of all of them are affected or others are missing, feel free to test and report bugs)*
 With **stl** the Steam Linux Runtime can be disabled per game in the **GAME SETTINGS** of the [Settings Menu](#Settings-Menu) or [in game configfile `$STLGAMECFG`](#Game-Specific-Configuration).
-If one (or more) of above confliciting tools are enabled **stl** automatically disables the Steam Linux Runtime.
-Of course the autodisable function will be removed when the conflict is fixed.
-The function might have some glitches as not every possible combination has been testet yet. Feel free to open an issue.
+If one (or more) of above confliciting tools are enabled **stl** warns that it is incompatible with the Steam Linux Runtime.
 
 #### Custom Program
 

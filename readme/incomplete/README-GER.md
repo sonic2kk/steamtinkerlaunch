@@ -597,9 +597,7 @@ Das bringt *(momentan)* Kompatibilitätsprobleme mit einigen Programmen mit sich
 [MangoHud](#MangoHud), [vkBasalt](#vkBasalt), [Gamemode](#GameMode), [GameScope](#GameScope), [Boxtron](#Boxtron), [Roberta](#Roberta), [Luxtorpeda](#Luxtorpeda)
 *(nicht ganz sicher ob alle gelisteten betroffen sind, oder ob andere fehlen, gerne testen und issue melden)*
 Mit **stl** kann man die Steam Linux Runtime pro Spiel im Tab **SPIEL EINSTELLUNGEN** vom [Settings Menü](#Settings-Menu) oder [in der Spiele Konfigurationsdatei `$STLGAMECFG`](#Game-Specific-Configuration) deaktivieren.
-Wenn eines *(oder mehrere)* von den obigen Tools aktiviert ist, schaltet **stl** die Steam Linux Runtime automatisch aus.
-Selbstverständlich wird die auto-ausschalt Funktion entfernt sobald der Konflikt behoben wurde.
-Die Funktion könnte noch einige Glitches haben, da nicht jede mögliche Konstellation getestet wurde. Gerne ein Issue aufmachen.
+Wenn eines *(oder mehrere)* von den obigen Tools aktiviert ist, warnt **stl** dass das Tool inkompatibel mit der Steam Linux Runtime ist.
 
 #### Custom Program
 
