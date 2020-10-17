@@ -199,6 +199,8 @@
 Когда параметр `SAVESETSIZE` активирован во вкладке Глобальные настройки, или [global.conf](#Global-Config) *(включен по-умолчанию)* разрешение будет изменено для всех окон **stl** (как yad, так и zenity) и автоматически
 сохранено, когда окно будет закрыто. Требуется пакет xwininfo для корректной работы функции.
 Все разрешения хранятся в [конфигурационном файле GUI](#Gui-Config).
+If you prefer window decoration to resize windows, you can enable it in the Global Config Tab or [global.conf](#Global-Config)
+*(else hold Left-Alt while resizing the window while holding the right mouse button)*.
 
 ### Иконка в трее
 Когда утилита **stl** использует yad, у нее появляется возможность отображать иконку приложения в трее(системном лотке), которая появится автоматически при запуске **stl** (или игры).
