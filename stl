@@ -4,7 +4,7 @@
 ### project ###
 
 PROGNAME="SteamTinkerLaunch"
-PROGVERS="v2.4.1"
+PROGVERS="v2.4.2"
 PROGCMD="$(basename "$0")"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -276,6 +276,16 @@ function prepareGUI {
 			writelog "WARN" "${FUNCNAME[0]} - USEGUI '$USEGUI' is neither '$YAD' nor '$ZENITY' - please make sure your config is correct"
 			USEGUI="$YAD"
 			"${FUNCNAME[0]}"
+		fi
+	fi
+
+	WINDECO="--undecorated"
+
+	if [ -n "$USEWINDECO" ]; then
+		if [ "$USEWINDECO" -eq 1 ]; then
+			WINDECO=""
+		else
+			WINDECO="--undecorated"
 		fi
 	fi
 }
@@ -669,6 +679,7 @@ function setDefaultCfgValues {
 		if [ -z "$RESHTABCOLS" ]		; then	RESHTABCOLS="1"; fi
 		if [ -z "$VORTTABCOLS" ]		; then	VORTTABCOLS="1"; fi
 		if [ -z "$USEGUI" ]				; then	USEGUI="$YAD"; fi
+		if [ -z "$USEWINDECO" ]			; then	USEWINDECO="0"; fi
 		if [ -z "$USETRAYICON" ]		; then	USETRAYICON="1"; fi
 		if [ -z "$AUTOLASTPROTON" ]		; then	AUTOLASTPROTON="1"; fi
 		if [ -z "$AUTOPULLPROTON" ]		; then	AUTOPULLPROTON="1"; fi
@@ -972,6 +983,8 @@ function saveCfg {
 			echo "VORTTABCOLS=\"$VORTTABCOLS\""
 			echo "## $DESC_USEGUI"
 			echo "USEGUI=\"$USEGUI\""
+			echo "## $DESC_USEWINDECO"
+			echo "USEWINDECO=\"$USEWINDECO\""
 			echo "## $DESC_USETRAYICON"
 			echo "USETRAYICON=\"$USETRAYICON\""
 			} >> "$1"
@@ -1236,7 +1249,7 @@ function needNewProton {
 		writelog "INFO" "${FUNCNAME[0]} - no Proton Version was found - opening a requester to choose from one"
 		if [ "$USEGUI" == "$YAD" ]; then
 			PROTYADLIST="$(printf "!%s\n" "${ProtonCSV[@]//\"/}" | sort -u | cut -d ';' -f1 | tr -d '\n' ;printf "\n")"
-			PICKPROTON="$(LC_ALL="" "$YAD" --window-icon="$STLICON" --borders="$YADBORDER" --center --undecorated --form --scroll --separator="\n" --quoted-output \
+			PICKPROTON="$(LC_ALL="" "$YAD" --window-icon="$STLICON" --borders="$YADBORDER" --center "$WINDECO" --form --scroll --separator="\n" --quoted-output \
 			--text="<span font_weight='bold'>$GUI_NEEDNEWPROTON</span>" \
 			--field="$GUI_NEEDNEWPROTON2":CB "${USEPROTON/#-/ -}!$PROTYADLIST" \
 			--title="$TITLE" \
@@ -1347,7 +1360,7 @@ function dlCustomProtonGUI {
 	updateWinRes "$TITLE" "$STLGUICFG" "CUSTPROTREQWIDTH" "CUSTPROTREQHEIGHT" &
 
 	if [ "$USEGUI" == "$YAD" ]; then
-		DLDISPCUSTPROT="$(LC_ALL="" "$YAD" --window-icon="$STLICON" --borders="$YADBORDER" --form --center --on-top --undecorated \
+		DLDISPCUSTPROT="$(LC_ALL="" "$YAD" --window-icon="$STLICON" --borders="$YADBORDER" --form --center --on-top "$WINDECO" \
 		--title="$TITLE" \
 		--geometry="$CUSTPROTREQWIDTH"x"$CUSTPROTREQHEIGHT"+0+0 \
 		--text="<span font_weight='bold'>$GUI_DLCUSTPROTTEXT</span>" \
@@ -1443,7 +1456,7 @@ function addCustomProton {
 		updateWinRes "$TITLE" "$STLGUICFG" "CUSTPROTREQWIDTH" "CUSTPROTREQHEIGHT" &
 
 		if [ "$USEGUI" == "$YAD" ]; then
-			NEWCUSTPROT="$(LC_ALL="" "$YAD" --window-icon="$STLICON" --borders="$YADBORDER" --form --center --on-top --undecorated \
+			NEWCUSTPROT="$(LC_ALL="" "$YAD" --window-icon="$STLICON" --borders="$YADBORDER" --form --center --on-top "$WINDECO" \
 			--title="$TITLE" \
 			--geometry="$CUSTPROTREQWIDTH"x"$CUSTPROTREQHEIGHT"+0+0 \
 			--text="<span font_weight='bold'>$GUI_ADDCUSTOMBINARY</span>" \
@@ -1651,7 +1664,7 @@ function EditorDialog {
 
 	if [ "$USEGUI" == "$YAD" ]; then
 		IFS=" " read -r -a EDFILES <<< "$(for f in $(printf '%s\n' "${CfgFiles[@]}"); do echo FALSE ; echo "$f" ; done | \
-		LC_ALL="" "$YAD" --window-icon="$STLICON" --borders="$YADBORDER" --center --undecorated --list --checklist --column=Edit --column=ConfigFile --separator=" " --print-column="2" \
+		LC_ALL="" "$YAD" --window-icon="$STLICON" --borders="$YADBORDER" --center "$WINDECO" --list --checklist --column=Edit --column=ConfigFile --separator=" " --print-column="2" \
 		--text="<span font_weight='bold'>$GUI_EDITORDIALOG</span>" \
 		--title="$TITLE" \
 		--geometry="$EDREQWIDTH"x"$EDREQHEIGHT"+0+0 | tr '\n' ' ')"
@@ -1942,6 +1955,7 @@ function openSettings {
 	--field="     $GUI_DLGLOBAL $PROGCMD!$DESC_DLGLOBAL":CHK "${DLGLOBAL/#-/ -}" \
 	--field="     $GUI_STLLANG!$DESC_STLLANG":CB "${STLLANG/#-/ -}!$LANGYADLIST" \
 	--field="     $GUI_USEGUI!$DESC_USEGUI":CB "${USEGUI/#-/ -}!$YAD!$ZENITY" \
+	--field="     $GUI_USEWINDECO!$DESC_USEWINDECO":CHK "${USEWINDECO/#-/ -}" \
 	--field="     $GUI_USETRAYICON!$DESC_USETRAYICON":CHK "${USETRAYICON/#-/ -}" \
 	--field="     $GUI_USESTLCSS!$DESC_USESTLCSS '${PROGCMD}-steam'":CHK "${USESTLCSS/#-/ -}" \
 	--field="     $GUI_CSSUPDATE!$DESC_CSSUPDATE '${PROGCMD}-steam'":CHK "${CSSUPDATE/#-/ -}" \
@@ -2055,7 +2069,7 @@ function openSettings {
 
 	SETHEAD="${PROGNAME} (${PROGCMD}) - ${PROGVERS} $GUI_SET"
 	
-	LC_ALL="" "$YAD" --notebook --key="$YADKEY" --borders="$YADSETBORD" --window-icon="$STLICON"  --scroll --center --undecorated \
+	LC_ALL="" "$YAD" --notebook --key="$YADKEY" --borders="$YADSETBORD" --window-icon="$STLICON"  --scroll --center "$WINDECO" \
 	--tab="$GUI_TAB1" --tab="$GUI_TAB2" --tab="$GUI_TAB3" --tab="$GUI_TAB4" \
     --title="$TITLE" \
 	--geometry="$SETWIDTH"x"$SETHEIGHT"+0+0 \
@@ -3152,7 +3166,7 @@ function askSettings {
 			if [ "$USEGUI" == "$YAD" ]; then
 
 				if [ -n "$FOUNDTWEAKCFG" ]; then
-					LC_ALL="" "$YAD" --borders="$YADBORDER" --window-icon="$STLICON" --form --center --on-top --undecorated \
+					LC_ALL="" "$YAD" --borders="$YADBORDER" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
 					--title="$TITLE" \
 					--geometry="$ASKSETREQWIDTH"x"$ASKSETREQHEIGHT"+0+0 \
 					--text="<span font_weight='bold'>$GN ($AID) - $GUI_ASKOPENSET</span>" \
@@ -4221,7 +4235,7 @@ function guiLoadCfg {
 
 	writelog "INFO" "${FUNCNAME[0]} - requester asking if '$GUICFG' should be loaded"
 	if [ "$USEGUI" == "$YAD" ]; then
-		LC_ALL="" "$YAD" --borders="$YADBORDER" --window-icon="$STLICON" --form --center --on-top --undecorated \
+		LC_ALL="" "$YAD" --borders="$YADBORDER" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
 		--title="$TITLE" \
 		--geometry="$ALTREQWIDTH"x"$ALTREQHEIGHT"+0+0 \
 		--field="$GUI_LOADATCFG '$VALCFG'?":LBL \
@@ -4278,7 +4292,7 @@ function validateATCfg {
 		writelog "INFO" "${FUNCNAME[0]} - gui asking if '$VALCFG' should be edited as ATVALIDATE is '$ATVALIDATE', autoloaded, skipped or ignored"
 		
 		if [ "$USEGUI" == "$YAD" ]; then
-			LC_ALL="" "$YAD" --borders="$YADBORDER" --window-icon="$STLICON" --form --center --on-top --undecorated \
+			LC_ALL="" "$YAD" --borders="$YADBORDER" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
 			--title="$TITLE" \
 			--geometry="$AETREQWIDTH"x"$AETREQHEIGHT"+0+0 \
 			--field="$GUI_FOUNDATCFG '$VALCFG'":LBL \
@@ -4354,7 +4368,7 @@ function AskAdoptAutoTweak {
 		loadCfg "$STLGUICFG" X
 		updateWinRes "$TITLE" "$STLGUICFG" "CATREQWIDTH" "CATREQHEIGHT" &
 	
-		LC_ALL="" "$YAD" --borders="$YADBORDER" --window-icon="$STLICON" --form --center --on-top --undecorated \
+		LC_ALL="" "$YAD" --borders="$YADBORDER" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
 		--title="$TITLE" \
 		--geometry="$CATREQWIDTH"x"$CATREQHEIGHT"+0+0 \
 		--text="<span font_weight='bold'>$GN ($AID) - $GUI_ASKCOBERTAT</span>" \
@@ -4448,7 +4462,7 @@ function launchCustomProg {
 		updateWinRes "$TITLE" "$STLGUICFG" "CUSTPROGREQWIDTH" "CUSTPROGREQHEIGHT" &
 
 		if [ "$USEGUI" == "$YAD" ]; then
-			ZCUST="$(LC_ALL="" "$YAD" --window-icon="$STLICON" --borders="$YADBORDER" --form --center --on-top --undecorated \
+			ZCUST="$(LC_ALL="" "$YAD" --window-icon="$STLICON" --borders="$YADBORDER" --form --center --on-top "$WINDECO" \
 			--title="$TITLE" \
 			--geometry="$CUSTPROGREQWIDTH"x"$CUSTPROGREQHEIGHT"+0+0 \
 			--text="<span font_weight='bold'>$GN ($AID) - $GUI_SELECTCUSTOMEXE</span>" \
@@ -4512,7 +4526,7 @@ function launchCustomProg {
 				updateWinRes "$TITLE" "$STLGUICFG" "CUSTPROGREQWIDTH" "CUSTPROGREQHEIGHT" &
 				
 				if [ "$USEGUI" == "$YAD" ]; then
-					ZCUST="$(LC_ALL="" "$YAD" --window-icon="$STLICON" --borders="$YADBORDER" --form --center --on-top --undecorated \
+					ZCUST="$(LC_ALL="" "$YAD" --window-icon="$STLICON" --borders="$YADBORDER" --form --center --on-top "$WINDECO" \
 					--title="$TITLE" \
 					--geometry="$CUSTPROGREQWIDTH"x"$CUSTPROGREQHEIGHT"+0+0 \
 					--text="<span font_weight='bold'>$GN ($AID) - $GUI_SELECTCUSTOMEXE</span>" \
@@ -4939,7 +4953,7 @@ function addVortexStage {
 		updateWinRes "$TITLE" "$STLGUICFG" "AVSREQWIDTH" "AVSREQHEIGHT" &
 
 		if [ "$USEGUI" == "$YAD" ]; then
-			NEWVS="$(LC_ALL="" "$YAD" --window-icon="$STLICON" --borders="$YADBORDER" --form --center --on-top --undecorated \
+			NEWVS="$(LC_ALL="" "$YAD" --window-icon="$STLICON" --borders="$YADBORDER" --form --center --on-top "$WINDECO" \
 			--file --directory \
 			--title="$TITLE" \
 			--geometry="$AVSREQWIDTH"x"$AVSREQHEIGHT"+0+0 \
@@ -5499,7 +5513,7 @@ function setVortexSELaunch {
 			if [ "$USEGUI" == "$ZENITY" ]; then
 				writelog "SKIP" "${FUNCNAME[0]} - skipping zenity here - the whole '${FUNCNAME[0]}' is too bloated anyway for its benefit"
 			else
-				LC_ALL="" "$YAD" --notebook --borders="$YADSETBORD" --window-icon="$STLICON"  --center --undecorated \
+				LC_ALL="" "$YAD" --notebook --borders="$YADSETBORD" --window-icon="$STLICON"  --center "$WINDECO" \
 				--title="$TITLE" \
 				--text="$GUI_SEBINFOUND '$EFD/$2'" \
 				--button="${GE^^}":0 \
