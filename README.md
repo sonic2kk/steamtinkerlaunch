@@ -970,6 +970,7 @@ If xdg-open is configured as `STLEDITOR` or if the configured editor is not foun
 
 Set `OPENEDITORURL` to 1 to additionally open the `EDITORURL` url for the game in your `BROWSER` when starting the editor from the [Editor Dialog](#Editor-Dialog).
 *(by default the url `$OPENEDITORURL/$SteamAppID` is opened, if this doesn't work with the url you want to open just open an issue)*
+If `EDITORURL` contains "AID" it will be replaced by the current SteamAppID.
 
 #### Editor Dialog
 A little File selection requester allowing to choose which config files to open with the [Editor](#Editor).
