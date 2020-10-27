@@ -93,8 +93,8 @@ It might be a good idea to start with configuring everything in the [Settings Me
 * **[Proton Selection](#Proton-Selection)** switch between Proton-Versions, automatically download custom Proton builds...
 * **[Multi Language](#Multi-Language-Support)** Multi-Language Support
 * **[Steam Linux Runtime](#Steam-Linux-Runtime)** the Steam Linux Runtime can be disabled optionally
-* **[Game Launcher](#Game Launcher)** built in game launcher mode
-* **[Game Pictures](#Game Pictures)** uses Game Pictures
+* **[Game Launcher](#Game-Launcher)** built in game launcher mode
+* **[Game Pictures](#Game-Pictures)** uses Game Pictures
 * **[Desktop Files](#Desktop-Files)** automatic creation of *(stl-internal)* desktop files
 
 ## Requirements
