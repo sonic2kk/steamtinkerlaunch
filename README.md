@@ -1050,13 +1050,3 @@ Here are some examples which improve the start notably *(all settings can be con
 - set `CHECKCATEGORIES` to `0` if the Game has no [Steam Category](#Steam-Categories) Tweak anyway
 - set `SAVESETSIZE` to `0` when all windows have their optimal [size](#Gui-Window-Size)
 
-## Contribution
-
-**Any contribution is welcome and everybody can help!**
-
-- help improving the **README**
-- create [Tweakfiles](#Tweakfiles) and share them with the community, either open a pull request, or open an issue if you don't like git too much :)
-- add new functions & fix bugs (please open a pull request)
-- bugreports (please also post the relevant stl logfile)
-- spread the word *(**stl** is still pretty unknown - the more people know it the more can help to improve it)*
-
