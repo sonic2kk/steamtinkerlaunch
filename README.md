@@ -450,10 +450,9 @@ This config is then applied like described in [Auto Tweaks](#Auto Tweaks) above.
 
 Creating Auto Tweaks via **stl** command line:
 
-`stl autotweaks|at PLAFTORM (optional steamid)`
+`stl autotweaks|at ('dl') PLAFTORM (optional steamid)`
 
 Will autogenerate all tweak files for every parsible game of platform PLATFORM or just for the optional SteamAppID
-  
 Example:
 
 `stl autotweaks|at lutris`
@@ -462,6 +461,10 @@ Creates for all supported Games Autotweak files in `AUTOTWEAKDIR/lutris`
 `stl autotweaks|at lutris 883710`
 
 Creates only for game 883710 an Autotweak file.
+
+Using the option 'dl' the corresponding platform source is updated before the actual process starts - f.e:
+`stl at dl lutris`
+
 
 **Depending on the platform stl filters several original configuration options.
 If you think something important is missing please open an issue!**
