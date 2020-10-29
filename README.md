@@ -450,16 +450,16 @@ This config is then applied like described in [Auto Tweaks](#Auto Tweaks) above.
 
 Creating Auto Tweaks via **stl** command line:
 
-`stl autotweaks PLAFTORM (optional steamid)`
+`stl autotweaks|at PLAFTORM (optional steamid)`
 
 Will autogenerate all tweak files for every parsible game of platform PLATFORM or just for the optional SteamAppID
   
 Example:
 
-`stl autotweaks lutris`
+`stl autotweaks|at lutris`
 Creates for all supported Games Autotweak files in `AUTOTWEAKDIR/lutris`
 
-`stl autotweaks lutris 883710`
+`stl autotweaks|at lutris 883710`
 
 Creates only for game 883710 an Autotweak file.
 
@@ -482,15 +482,8 @@ Currently following options are imported into the Auto Tweak file:
 
 #### Lutris
 [Lutris](https://github.com/lutris/lutris) is pretty huge and supports many different platforms.
-**stl** uses multiple different filters to extract the steam-relevant games.
-If you think something important was filtered out please open an issue!
-Lines which were not filtered out, but were not used as well can be logged
-*(into "/tmp/LUTWEAKDEBUG-raw.txt" (all) and
-"/tmp/LUTWEAKDEBUG-raw.txt" (after another filter, which sorts out some more unused lines))*
+**stl** uses multiple filters to extract the following options into the Auto Tweak file:
 
-by setting the variable `LUATDEBUG=1` directly within **stl**
-
-Currently following options are imported into the Auto Tweak file:
 - winetricks packages
 - commandline arguments
 - env variables
