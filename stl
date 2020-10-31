@@ -1025,6 +1025,8 @@ function setDefaultCfgValues {
 		if [ -z "$AUTOPULLPROTON" ]		; then	AUTOPULLPROTON="1"; fi
 		if [ -z "$CUSTPROTDLDIR" ]		; then	CUSTPROTDLDIR="$STLDLDIR/$PROCU"; fi
 		if [ -z "$CUSTPROTEXTDIR" ]		; then	CUSTPROTEXTDIR="$STLCFGDIR/$PROCU"; fi
+		if [ -z "$MANGOHUD_LIB" ]		  ; then	MANGOHUD_LIB="/usr/lib/mangohud/lib/"; fi
+		if [ -z "$MANGOHUD_LIB32" ]		; then	MANGOHUD_LIB32="/usr/lib/mangohud/lib32/"; fi
 	}
 
 	function setDefaultCfgValuesdefault_template {
@@ -1168,6 +1170,10 @@ function saveCfg {
 			echo "SHADER_FUBAXDEV=\"$SHADER_FUBAXDEV\""
 			echo "## Crosire Shader URL"
 			echo "SHADER_CROSIRE=\"$SHADER_CROSIRE\""
+                        echo "## MangoHud library directory for x86-64 games"
+                        echo "MANGOHUD_LIB=\"$MANGOHUD_LIB\""
+                        echo "## MangoHud library directory for x86 games"
+                        echo "MANGOHUD_LIB32=\"$MANGOHUD_LIB32\""
 			} >> "$1"
 			#ENDsaveCfgurl
 		fi
@@ -6781,6 +6787,26 @@ function wantProton {
 function launchSteamGame {
 
 ########################
+
+  # load mangohud libs
+  if [ "$MANGOHUD" -eq 1 ]; then
+    MANGOHUD_LIB_NAME="libMangoHud.so"
+
+    if [ "$MANGOHUD_DLSYM" = "1" ]; then
+      MANGOHUD_LIB_NAME="libMangoHud_dlsym.so:${MANGOHUD_LIB_NAME}"
+    fi
+
+    LD_PRELOAD="${LD_PRELOAD}:${MANGOHUD_LIB_NAME}"
+
+    # Define which lib to load with MANGOHUDARCH
+    if [[ "$MANGOHUDARCH" =  'x86-64' ]] ; then
+      writelog "INFO" "${FUNCNAME[0]} - loading MangoHud libraries for x86-64"
+      LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:${MANGOHUD_LIB}"
+    else
+      writelog "INFO" "${FUNCNAME[0]} - loading MangoHud libraries for x86"
+      LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:${MANGOHUD_LIB32}"
+    fi
+  fi
 
 	if [ "$USEBOXTRON" -eq 1 ] || [ "$USEROBERTA" -eq 1 ] || [ "$USELUXTORPEDA" -eq 1 ]; then
 		ISGAME=3
