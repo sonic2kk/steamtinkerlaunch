@@ -931,7 +931,8 @@ Set `NOTY` to your notifier to draw some start/stop **stl** messages
 
 #### MangoHud
 [MangoHud](https://github.com/flightlessmango/MangoHud)
-Set `MANGOHUD` to 1 to enable mangohud *(does nothing in stl itself, but just exports the upstream variable)*
+Set `MANGOHUD` to 1 to enable mangohud and define the architecture of the game in `MANGOHUDARCH`
+If your MangoHud libraries are not in the default location you can change them in global.conf at `MANGOHUD_LIB` and `MANGOHUD_LIB32`
 
 #### Nyrna
 [Nyrna](https://github.com/Merrit/nyrna)
