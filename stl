@@ -4,23 +4,27 @@
 ### project ###
 
 PROGNAME="SteamTinkerLaunch"
-PROGVERS="v2.4.2"
+PROGVERS="v2.6.0"
 PROGCMD="$(basename "$0")"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
 ### internal dependencies ###
 #STARTINTDEPS
 GIT="git"
+PGREP="pgrep"
+PIDOF="pidof"
+PKILL="pkill"
+TAR="tar"
 UNZIP="unzip"
 WGET="wget"
+WHICH="which"
 WMCTRL="wmctrl"
 XDO="xdotool"
 XPROP="xprop"
 XRANDR="xrandr"
 XWININFO="xwininfo"
-ZENITY="zenity"
-TAR="tar"
 YAD="yad"
+ZENITY="zenity"
 #ENDINTDEPS
 
 ### (optionally) used programs ###
@@ -34,6 +38,7 @@ WINETRICKS="winetricks"
 REPLAY="replay-sorcery"
 CABEXTRACT="cabextract"
 LSUSB="lsusb"
+JQ="jq"
 
 ZENBIN=""
 CHECKHMD=1 # will be set to 0 if $LSUSB is not found. Then the hmd presence check is skipped
@@ -47,8 +52,14 @@ FORCEOVERRIDEPROTON=0
 
 # this variable is filled with the last Auto Tweak variable accepted and is the only Auto Tweak config which is finally loaded
 LOADAUTOCFG=""
-STLICON="/dev/shm/stl-steam-checked.png"
-#STLICON="gtk-yes"
+DSHM="/dev/shm"
+STLSHM="$DSHM/$PROGCMD"
+STLICON="$STLSHM/stl-steam-checked.png"
+NOICON="$STLSHM/empty.png"
+DFDIR="$STLSHM/desktopfiles"
+CLOSETMP="$STLSHM/${PROGCMD}-closing.tmp"
+TEMPLOG="$STLSHM/${PROGCMD}.log"
+GWIDFILE="$STLSHM/${PROGCMD}-sbsgwid"
 
 ### default vars ###
 
@@ -77,6 +88,19 @@ STLVORTEXDIR="$STLCFGDIR/vortex"															# stl vortex dir
 PLACEHOLDERAID="31337"
 PLACEHOLDERGN="Placeholder"
 GHURL="https://github.com"
+
+STLGAMES="$STLCFGDIR/games"
+STLGDESKD="$STLGAMES/desktop"
+STLGHEADD="$STLGAMES/header"
+#STLGSCPTD="$STLGAMES/scripts"
+NOGAMES=",70_2260196511,228980,858280,961940,1054830,1070560,1113280,1245040,1391110,1420170,"
+
+#PROTON37="858280"
+#PROTON316="961940"
+#PROTON42="1054830"
+#PROTON411="1113280"
+#PROTON50="1245040"
+#PROTON513="1420170"
 
 function setAID {
 # shellcheck disable=SC2154		# SteamAppId comes from Steam
@@ -125,20 +149,30 @@ GLDLSTLLANGDIR="$GLDLSTLDIR/lang"
 
 STLLANGDIR="$STLCFGDIR/lang"
 STLDEFLANG="english"
+HSR="$HOME/.steam/root"
 HSS="$HOME/.steam/steam"
-HSSCC="$HSS/config/config.vdf"
+HSRU="$HSR/userdata"
+
+
+HSRCC="$HSR/config/config.vdf"
+if [ ! -f "$HSRCC" ];then
+	HSRCC="$HSS/config/config.vdf"
+fi
+
 USS="/usr/share/steam"
-STEAMCOMPATOOLS="$HSS/compatibilitytools.d"
+STEAMCOMPATOOLS="$HSR/compatibilitytools.d"
 SYSSTEAMCOMPATOOLS="$USS/compatibilitytools.d"
 STLDXVKDIR="$STLCFGDIR/dxvk"																# base dxvk config dir from where default per game configs are automatically parsed
 ISGAME=0																					# 1=game was launched, 2=windows game, 3=linux game
 WFEAR="waitforexitandrun"
-SAC="steamapps/common"
+SA="steamapps"
+SAC="$SA/common"
 SLR="SteamLinuxRuntime"
 DBW="dist/bin/wine"
 PROCU="proton/custom"
 CTVDF="compatibilitytool.vdf"
-GWIDFILE="/tmp/stl-sbsgwid"																	# temp file holding the game window id - worksforme
+SCV="sharedconfig.vdf"
+SRSCV="7/remote/$SCV"
 LASTRUN="$LOGDIR/lastrun.txt"																# some variables from the last run which might be reused
 RS_D3D47_DEST="d3dcompiler_47.dll"
 RS_DX_DEST="dxgi.dll"
@@ -153,9 +187,235 @@ YADBORDER=34
 
 ################
 
+function GetGamePic {
+	if [ "$DLGAMEDATA" -eq 1 ]; then
+		DLPIC="$1"
+		if [ ! -f "$DLPIC" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Downloading picture for game '$(basename "${1//.jpg/}")'"
+			"$WGET" -q "$2" -O "$DLPIC"
+		fi
+	fi
+}
+
+function getGameName {
+	if [ -n "$GN" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - using 'GN' as Game Name: '$GN'"
+		GNRAW="$GN"
+	elif [ -f "$STLGAMEDIR/$1.conf" ]; then
+		GNRAW="$(grep "#GAMENAME" "$STLGAMEDIR/$1.conf" | cut -d '=' -f2)"
+		writelog "INFO" "${FUNCNAME[0]} - found Game Name '$GNRAW' in '$STLGAMEDIR/$1.conf'"
+	elif grep -q "_${1}\." <<< "$(listAppManifests)" ; then
+		APPMA="$(grep "_${1}\." <<< "$(listAppManifests)")"
+		if [ -n "$APPMA" ]; then
+			GNRAW1="$(grep "\"name\"" "$APPMA" | awk -F '"name"' '{print $NF}')"
+			GNRAW="$(awk '{$1=$1};1' <<< "$GNRAW1")"
+			writelog "INFO" "${FUNCNAME[0]} - found Game Name '$GNRAW' in '$APPMA'"
+		fi
+	else
+		if [ "$DLGAMEDATA" -eq 1 ]; then
+			APIURL="https://api.steampowered.com/ISteamApps/GetAppList/v2"
+			APIDL="$STLDLDIR/SteamApps.json"
+			MAXAGE=1440
+			if [ ! -f "$APIDL" ] || test "$(find "$APIDL" -mmin +"$MAXAGE")"; then
+				writelog "INFO" "${FUNCNAME[0]} - downloading $APIDL"
+				"$WGET" -q "$APIURL" -O "$APIDL"
+			fi
+		fi
+
+		if [ -f "$APIDL" ]; then
+			if  [ ! -x "$(command -v "$("$WHICH" "$JQ" 2>/dev/null)" 2>/dev/null)" ]; then
+				writelog "WARN" "${FUNCNAME[0]} - can't get data from '$APIDL' because '$JQ' is not installed"
+			else
+				writelog "INFO" "${FUNCNAME[0]} - searching Game Name for '$1' in $APIDL"
+				GNRAW="$("$JQ" ".applist.apps[] | select (.appid==$1) | .name" "$APIDL")"
+				
+				if [ -n "$GNRAW" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - found Game Name '$GNRAW' in $APIDL"
+				fi
+			fi
+		fi
+	fi
+	GAMENAME="${GNRAW//\"/}"
+}
+
+function writeDesktopFile {
+	if [ -f "$STLGDESKD/$1.desktop" ]; then
+		writelog "SKIP" "${FUNCNAME[0]} - $STLGDESKD/$1.desktop already exists"
+	else
+		getGameName "$1"
+	
+		if [ -n "$GAMENAME" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - creating $STLGDESKD/$1.desktop" "E"
+
+			{
+				echo "[Desktop Entry]"
+				echo "Name=${GAMENAME//\"/}"
+				echo "Comment=$DF_COMMENT"
+				echo "Exec=steam steam://rungameid/$1"
+				echo "Icon=$STLGHEADD/$1.jpg"
+				echo "Terminal=false"
+				echo "Type=Application"
+				echo "Categories=Game;"
+			} >> "$STLGDESKD/$1.desktop"
+		fi
+	fi
+}
+
+function getGameData {
+	if  ! grep -q ",${1}," <<< "$NOGAMES" ; then
+		GetGamePic "$STLGHEADD/$1.jpg" "$STASSURL/$1/header.jpg"
+		writeDesktopFile "$1"
+	fi
+}
+
+function getParsableGameList {
+	STEAMUSERID="$(find "$HSRU" -maxdepth 1 -type d -name "[1-9]*")"
+	SC="$STEAMUSERID/$SRSCV"
+	APPI="Apps"
+	APPO="StartMenuShortcutCheck"
+	awk "/$APPI/,/$APPO/" "$SC" | grep -v "$APPI\|$APPO" | awk '{printf "%s+",$0} END {print ""}' |  sed 's/"[0-9][0-9]/\n&/g'
+}
+
+function getInstalledGamesFromCategory {
+	if [ -n "$1" ]; then
+		CAT="$1"
+	else
+		CAT="installed"
+	fi
+
+	if [ -n "$CAT" ]; then
+		while read -r CATAID; do
+		echo "$CATAID"
+		done <<< "$(getParsableGameList | grep "\"installed\"" | grep "\"$CAT\"" | sed "s:\"::g" | sort -n | cut -d '+' -f1)"
+	fi
+}
+
+function getGameDataForInstalledGames {
+	while read -r CATAID; do
+		getGameData "$CATAID"
+	done <  <(getInstalledGamesFromCategory "installed")
+}
+
+function getDataForAllGamesinSharedConfig {
+	while read -r CATAID; do
+		getGameData "$CATAID"
+	done <<< "$(getParsableGameList | cut -d '+' -f1 | sed "s:\"::g" | grep "[0-9]" | sort -n)"
+}
+
+function getActiveSteamCategories {
+	getParsableGameList | grep "\"installed\"" | grep "\"tags\"" | awk -F '"tags"+' '{print $NF}' | sed  's/\t/\n/g' | grep -v "^\"[0-9]\"\|^+\|^{+\|^}+" | sed "s:\"+$::g" | sed "s:^\"::g" | sort -u | sed '/^[[:space:]]*$/d'
+}
+
+function createCategoryMenus {
+	mkdir -p "$DFDIR" 2>/dev/null
+
+	if [ -n "$1" ] && [ "$1" == "update" ] && [ "$(find "$DFDIR" -name "*.desktop" | wc -l)" -gt 0 ]; then
+		find "$DFDIR" -name "*.desktop" -exec rm {} \;
+	fi
+	
+	if  [ "$(find "$DFDIR" -name "*.desktop" | wc -l)" -eq 0 ]; then
+		while read -r CAT; do
+			DFCDIR="$DFDIR/$CAT"
+			mkdir -p "$DFCDIR" 2>/dev/null
+			while read -r CATGAME; do
+				if [ -f "$STLGDESKD/$CATGAME.desktop" ]; then
+					if [ ! -h "$DFCDIR/$CATGAME.desktop" ]; then
+						ln -s "$STLGDESKD/$CATGAME.desktop" "$DFCDIR"
+					fi
+				fi
+			done <<< "$(getInstalledGamesFromCategory "$CAT")"
+		done < <(getActiveSteamCategories)
+	fi
+}
+
+function listAppManifests {
+	function findAppMa {
+		find "$1" -mindepth 1 -maxdepth 1 -type f -name "appmanifest_*.acf"
+	}
+	
+	findAppMa "$HSR/$SA"
+	while read -r BIF; do
+		findAppMa "${BIF//\"/}/$SA"
+	done <<< "$(grep "BaseInstallFolder" "$HSRCC" | awk '{print $2}')"
+}
+
+function openGameLauncher {
+	function GLgui {
+		"$YAD" --icons  --read-dir="$DFDIR/$1" "$WINDECO" --title="$TITLE" --single-click --keep-icon-size --center --compact --sort-by-name --geometry="$LAUNCHERWIDTH"x"$LAUNCHERHEIGHT"+0+0
+	}
+
+	if grep -q "update"  <<< "$@"; then
+		createCategoryMenus "update"
+	else
+		createCategoryMenus "dummy"
+	fi
+
+	if  [ "$(find "$DFDIR" -name "*.desktop" | wc -l)" -eq 0 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - no desktop file found in '$DFDIR'" "E"
+		if [ "$1" == "auto" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - found arument 'auto'. Automatically creating/downloading required data for all installed games found" "E"
+			getGameDataForInstalledGames
+			if [ -n "$2" ] && [ "$2" == "update" ]; then
+				createCategoryMenus "$2"
+			else
+				createCategoryMenus "dummy"
+			fi
+		else
+			writelog "INFO" "${FUNCNAME[0]} - either add argument 'auto' to automatically create/download required data or check '$PROGCMD --help'" "E"
+			exit
+		fi
+	fi
+
+	TITLE="${PROGNAME}-Launcher"
+	loadCfg "$STLGUICFG" X
+	updateWinRes "$TITLE" "$STLGUICFG" "LAUNCHERWIDTH" "LAUNCHERHEIGHT" &
+
+	if [ -z "$1" ] || [ "$1" == "auto" ] || [ "$1" == "update" ]; then
+		GLgui "installed"
+	else
+		if [ "$1" == "menu" ]; then
+
+			while read -r CATMENU; do
+				mapfile -t -O "${#CATCSV[@]}" CATCSV <<< "$CATMENU"
+			done <<< "$(printf "%s\n" "$(ls "$DFDIR")")"
+			CATLIST="$(printf "!%s\n" "${CATCSV[@]//\"/}" | sort -u | cut -d ';' -f1 | tr -d '\n' ;printf "\n")"
+			CATMENU="$(LC_ALL="" "$YAD" --window-icon="$STLICON" --borders="$YADBORDER" --center "$WINDECO" --form --scroll --separator="\n" --quoted-output \
+			--text="<span font_weight='bold'>$GUI_CHOOSECAT</span>" \
+			--field="$GUI_CHOOSECATS":CB "installed!$CATLIST" \
+			--title="$TITLE" \
+			--geometry="$LAUNCHERWIDTH"x"$LAUNCHERHEIGHT"+0+0)"
+			
+			if [ -n "${CATMENU//\'}" ]; then
+				GLgui "${CATMENU//\'}"
+			fi
+		elif [ "$1" == "last" ]; then
+			if [ -f "$LASTRUN" ]; then
+				PREVAID="$(grep "^PREVAID" "$LASTRUN" | cut -d '=' -f2)"
+				if [ -n "$PREVAID" ]; then
+					AID="${PREVAID//\"}"
+					if [ -f "$STLGDESKD/$AID.desktop" ]; then
+						writelog "INFO" "${FUNCNAME[0]} - '$1' selected, so opening splash for '$STLGDESKD/$AID.desktop'" "E"
+						DFCDIR="$DFDIR/last"
+						mkdir -p "$DFCDIR" 2>/dev/null
+						cp "$STLGDESKD/$AID.desktop" "$DFCDIR"
+						GLgui "$1"
+					else
+						writelog "SKIP" "${FUNCNAME[0]} - '$1' selected, but file '$STLGDESKD/$AID.desktop' not found" "E"
+					fi
+				fi
+			fi
+		elif [ -d "$DFDIR/$1" ]; then
+			GLgui "$1"
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - Steam Category '$1' not found in '$DFDIR'" "E"
+			writelog "SKIP" "${FUNCNAME[0]} - only found '$(ls "$DFDIR")'" "E"
+		fi
+	fi
+}
+
+
 function DBGMS {
-#	echo "$(date +"%T. %3N") - $1" >> "/tmp/DBGMS.txt"
-	echo "$(date) - $1" >> "/tmp/DBGMS.txt"
+	echo "$(date) - $1" >> "$STLSHM/DBGMS.txt"
 }
 
 function resetAID {
@@ -212,9 +472,17 @@ function setGameVars {
 		EFD="$(dirname "$GP")"																	# the absolute directory where the game exe lives - for optional custom program
 	else
 	# linux game
-		GP="$(printf "%s\n" "$@" | grep -m1 "$SAC")"											# the absolute game path of the game exe
+		GPRAW="$(printf "%s\n" "$@" | grep -m1 "$SAC")"											# the absolute game path of the game exe
+		if grep -q "/./" <<< "$GPRAW"; then
+			GP="${GPRAW//\/.\//\/}"
+		else
+			GP="$GPRAW"
+		fi
+		
 		GE="$(basename "$GP")"																	# the game executable
-		EFD="${GP//$GE/}"																		# the absolute directory where the game exe lives - for optional custom program # dirname fails at least with 206420
+#		EFD="${GP//$GE/}"																		# the absolute directory where the game exe lives - for optional custom program # dirname fails at least with 206420
+		EFD="$(dirname "$GP")"
+
 	fi
 
 	# common
@@ -222,7 +490,6 @@ function setGameVars {
 	GN="$(grep -oE 'common/[^\/]+' <<< "$EFD" | awk -F 'common/' '{print $NF}')"				# THIS is hopefully the proper game name
 
 	# SLR
-	
 	if grep -q "$SLR" <<< "$@"; then
 		FOUNDSLR=0
 		while read -r ORGARG; do
@@ -244,12 +511,12 @@ function setGameVars {
 
 function checkZenity {
 	if [ "$USEGUI" == "$ZENITY" ]; then
-		if [ -x "$(command -v "$(which "$ZENITY" 2>/dev/null)" 2>/dev/null)" ]; then
-				ZENBIN="$(which "$ZENITY" 2>/dev/null)"
+		if [ -x "$(command -v "$("$WHICH" "$ZENITY" 2>/dev/null)" 2>/dev/null)" ]; then
+				ZENBIN="$("$WHICH" "$ZENITY" 2>/dev/null)"
 			writelog "INFO" "${FUNCNAME[0]} - using '$ZENBIN' for the GUI"
-		elif [ -x "$(command -v "$(which "$YAD" 2>/dev/null)" 2>/dev/null)" ]; then
+		elif [ -x "$(command -v "$("$WHICH" "$YAD" 2>/dev/null)" 2>/dev/null)" ]; then
 				writelog "WARN" "${FUNCNAME[0]} - '$USEGUI' is set to '$ZENITY', but it is not available - falling back to '$YAD'"
-				ZENBIN="$(which "$YAD" 2>/dev/null)"
+				ZENBIN="$("$WHICH" "$YAD" 2>/dev/null)"
 		fi
 
 		if [ -z "$ZENBIN" ]; then
@@ -273,7 +540,7 @@ function prepareGUI {
 			checkZenity
 			writelog "INFO" "${FUNCNAME[0]} - using '$ZENBIN' for '$ZENITY'"
 		else
-			writelog "WARN" "${FUNCNAME[0]} - USEGUI '$USEGUI' is neither '$YAD' nor '$ZENITY' - please make sure your config is correct"
+			writelog "WARN" "${FUNCNAME[0]} - USEGUI '$USEGUI' is neither '$YAD' nor '$ZENITY' - make sure your config is correct"
 			USEGUI="$YAD"
 			"${FUNCNAME[0]}"
 		fi
@@ -283,7 +550,7 @@ function prepareGUI {
 
 	if [ -n "$USEWINDECO" ]; then
 		if [ "$USEWINDECO" -eq 1 ]; then
-			WINDECO=""
+			WINDECO="--decorated"
 		else
 			WINDECO="--undecorated"
 		fi
@@ -440,7 +707,7 @@ function fillProtonCSV {
 }
 
 function getAvailableProtonVersions {
-	PROTONCSV="/dev/shm/ProtonCSV.txt"
+	PROTONCSV="$STLSHM/ProtonCSV.txt"
 	unset ProtonList
 
 	if [ ! -f "$PROTONCSV" ] || { [ -n "$1" ] &&  [ "$1" = "up" ]; }; then
@@ -460,17 +727,16 @@ function getAvailableProtonVersions {
 			if [ -f "$PROTBIN" ]; then
 				fillProtonCSV
 			fi
-		done <<< "$(find "$HSS/$SAC" -maxdepth 1 -maxdepth 1 -type d -name "Proton*")"	
+		done <<< "$(find "$HSR/$SAC" -maxdepth 1 -maxdepth 1 -type d -name "Proton*")"	
 
 		# official proton versions installed via Steam in additional SteamLibrary Paths
-		HSSCC="$HSS/config/config.vdf"
-		if [ -f "$HSSCC" ]; then
+		if [ -f "$HSRCC" ]; then
 			while read -r protondir; do
 				PROTBIN="$protondir/proton"
 				if [ -f "$PROTBIN" ]; then
 					fillProtonCSV
 				fi
-			done <<< "$(while read -r SLP; do find "${SLP//\"/}/$SAC" -maxdepth 1 -maxdepth 1 -type d -name "Proton*"; done <<< "$(grep "BaseInstallFolder" "$HSSCC" | awk '{print $2}')")"
+			done <<< "$(while read -r SLP; do find "${SLP//\"/}/$SAC" -maxdepth 1 -maxdepth 1 -type d -name "Proton*"; done <<< "$(grep "BaseInstallFolder" "$HSRCC" | awk '{print $2}')")"
 		fi
 
 		# custom Proton List:
@@ -545,6 +811,7 @@ function calculateDefaultResolutions {
 	CUSTPROGREQSCALE=30
 	CUSTPROTREQSCALE=15
 	SEREQSCALE=40
+	LAUNCHERSCALE=30
 
 	# Calculated initial gui sizes:
 	DEFSETWIDTH=$(( SCREENWIDTH * SETSCALE / 100 ));
@@ -576,6 +843,9 @@ function calculateDefaultResolutions {
 	
 	DEFSEREQWIDTH=$(( SCREENWIDTH * SEREQSCALE / 100 ));
 	DEFSEREQHEIGHT=$(( SCREENHEIGHT * SEREQSCALE / 100 ));
+
+	DEFLAUNCHERWIDTH=$(( SCREENWIDTH * LAUNCHERSCALE / 100 ));
+	DEFLAUNCHERHEIGHT=$(( SCREENHEIGHT * LAUNCHERSCALE / 100 ));
 }
 
 function setDefaultCfgValues {
@@ -588,7 +858,7 @@ function setDefaultCfgValues {
 		if [ -z "$DL_D3D47_64" ]		; then	DL_D3D47_64="https://lutris.net/files/tools/dll/d3dcompiler_47.dll"; fi
 		if [ -z "$DL_D3D47_32" ]		; then	DL_D3D47_32="http://dege.freeweb.hu/dgVoodoo2/D3DCompiler_47.zip"; fi
 		if [ -z "$RESHADEDLURL" ]		; then	RESHADEDLURL="https://reshade.me/downloads"; fi
-		if [ -z "$EDITORURL" ]			; then	EDITORURL="https://www.protondb.com/app"; fi
+		if [ -z "$EDITORURL" ]			; then	EDITORURL="https://steamdb.info/app/AID/info"; fi
 		if [ -z "$DEPTH3DURL" ]			; then	DEPTH3DURL="https://github.com/BlueSkyDefender/Depth3D.git"; fi
 		if [ -z "$VORTEXURL" ]			; then	VORTEXURL="https://github.com/Nexus-Mods/Vortex/releases/download/v"; fi
 		if [ -z "$DXVKURL" ]			; then	DXVKURL="https://github.com/doitsujin/dxvk"; fi
@@ -598,6 +868,7 @@ function setDefaultCfgValues {
 		if [ -z "$PROTONISSUES" ]		; then	PROTONISSUES="https://github.com/ValveSoftware/Proton/issues"; fi
 		if [ -z "$PIAPI" ]				; then	PIAPI="https://api.github.com/repos/ValveSoftware/Proton/issues"; fi
 		if [ -z "$WMP10URL" ]			; then	WMP10URL="https://web.archive.org/web/20050303001123/http://download.microsoft.com/download/1/2/A/12A31F29-2FA9-4F50-B95D-E45EF7013F87"; fi
+		if [ -z "$STASSURL" ]			; then	STASSURL="https://steamcdn-a.akamaihd.net/steam/apps"; fi
 	}
 
 	function setDefaultCfgValuesgui {
@@ -626,27 +897,27 @@ function setDefaultCfgValues {
 		if [ -z "$CUSTPROTREQHEIGHT" ]	; then	CUSTPROTREQHEIGHT="$DEFCUSTPROTREQHEIGHT"; fi
 		if [ -z "$SEREQWIDTH" ]			; then	SEREQWIDTH="$DEFSEREQWIDTH"; fi
 		if [ -z "$SEREQHEIGHT" ]		; then	SEREQHEIGHT="$DEFSEREQHEIGHT"; fi
+		if [ -z "$LAUNCHERWIDTH" ]		; then	LAUNCHERWIDTH="$DEFLAUNCHERWIDTH"; fi
+		if [ -z "$LAUNCHERHEIGHT" ]		; then	LAUNCHERHEIGHT="$DEFLAUNCHERHEIGHT"; fi
 	}
 
 	function setDefaultCfgValuesglobal {
 		if [ -z "$DLGLOBAL" ]			; then	DLGLOBAL="1"; fi
 		if [ -z "$STLLANG" ]			; then	STLLANG="$STLDEFLANG"; fi
 		if [ -z "$USESTLCSS" ]			; then	USESTLCSS="0"; fi
-		if [ -z "$CSSUPDATE" ]			; then	CSSUPDATE="1"; fi
 		if [ -z "$AUTOTWEAKS" ]			; then	AUTOTWEAKS="$AUTOTWEAKPLATFORMS"; fi
 		if [ -z "$STRACEDIR" ]			; then	STRACEDIR="$LOGDIR"; fi
 		if [ -z "$LOGDIR" ]				; then	LOGDIR="$LOGDIR"; fi
 		if [ -z "$LOGLEVEL" ]			; then	LOGLEVEL="2"; fi
-		if [ -z "$STLEDITOR" ]			; then	STLEDITOR="$(which geany 2>/dev/null)"; fi
-		if [ -z "$WAITEDITOR" ]			; then	WAITEDITOR="2";	fi
+		if [ -z "$STLEDITOR" ]			; then	STLEDITOR="$("$WHICH" geany 2>/dev/null)"; fi
 		if [ -z "$MAXASK" ]				; then	MAXASK="3"; fi
-		if [ -z "$BROWSER" ]			; then	BROWSER="$(which firefox 2>/dev/null)"; fi
-		if [ -z "$NOTY" ]				; then	NOTY="$(which notify-send 2>/dev/null)"; fi
+		if [ -z "$BROWSER" ]			; then	BROWSER="$("$WHICH" firefox 2>/dev/null)"; fi
+		if [ -z "$NOTY" ]				; then	NOTY="$("$WHICH" notify-send 2>/dev/null)"; fi
 		if [ -z "$USENOTIFIER" ]		; then	USENOTIFIER="1"; fi
-		if [ -z "$NETMON" ]				; then	NETMON="$(which netstat 2>/dev/null)"; fi
+		if [ -z "$NETMON" ]				; then	NETMON="$("$WHICH" netstat 2>/dev/null)"; fi
 		if [ -z "$NETOPTS" ]			; then	NETOPTS="-taucp -W"; fi
 		if [ -z "$NETMONDIR" ]			; then	NETMONDIR="$LOGDIR"; fi
-		if [ -z "$VRVIDEOPLAYER" ]		; then	VRVIDEOPLAYER="$(which vr-video-player 2>/dev/null)"; fi
+		if [ -z "$VRVIDEOPLAYER" ]		; then	VRVIDEOPLAYER="$("$WHICH" vr-video-player 2>/dev/null)"; fi
 		if [ -z "$CREATETWEAKS" ]		; then	CREATETWEAKS="1"; fi
 		if [ -z "$GAMCON" ]				; then	GAMCON="/usr/share/gameconqueror/GameConqueror.py"; fi
 		if [ -z "$ATVALIDATE" ]			; then	ATVALIDATE="2"; fi
@@ -681,6 +952,9 @@ function setDefaultCfgValues {
 		if [ -z "$USEGUI" ]				; then	USEGUI="$YAD"; fi
 		if [ -z "$USEWINDECO" ]			; then	USEWINDECO="0"; fi
 		if [ -z "$USETRAYICON" ]		; then	USETRAYICON="1"; fi
+		if [ -z "$USEGAMEPICS" ]		; then	USEGAMEPICS="1"; fi
+		if [ -z "$USEGAMEPICINMENU" ]	; then	USEGAMEPICINMENU="1"; fi
+		if [ -z "$DLGAMEDATA" ]			; then	DLGAMEDATA="1"; fi
 		if [ -z "$AUTOLASTPROTON" ]		; then	AUTOLASTPROTON="1"; fi
 		if [ -z "$AUTOPULLPROTON" ]		; then	AUTOPULLPROTON="1"; fi
 		if [ -z "$CUSTPROTDLDIR" ]		; then	CUSTPROTDLDIR="$STLDLDIR/$PROCU"; fi
@@ -692,7 +966,7 @@ function setDefaultCfgValues {
 		if [ -z "$USEPROTON" ]			; then	USEPROTON="$(getDefaultProton)"; fi
 		if [ -z "$OVERRIDEPROTON" ]		; then	OVERRIDEPROTON="0"; fi
 		if [ -z "$RUN_CUSTOMCMD" ]		; then	RUN_CUSTOMCMD="0"; fi
-		if [ -z "$CUSTOMCMD" ]			; then	CUSTOMCMD="$(which echo 2>/dev/null)"; fi
+		if [ -z "$CUSTOMCMD" ]			; then	CUSTOMCMD="$("$WHICH" echo 2>/dev/null)"; fi
 		if [ -z "$CUSTOMCMD_ARGS" ]		; then	CUSTOMCMD_ARGS="none"; fi
 		if [ -z "$ONLY_CUSTOMCMD" ]		; then	ONLY_CUSTOMCMD="0";	fi
 		if [ -z "$FORK_CUSTOMCMD" ]		; then	FORK_CUSTOMCMD="0";	fi
@@ -705,7 +979,7 @@ function setDefaultCfgValues {
 		if [ -z "$RUN_NYRNA" ]			; then	RUN_NYRNA="0"; fi
 		if [ -z "$RUN_REPLAY" ]			; then	RUN_REPLAY="0";	fi
 		if [ -z "$RUN_GAMCON" ]			; then	RUN_GAMCON="0";	fi
-		if [ -z "$GAMCONWAITEXE" ]		; then	GAMCONWAITEXE="$(which echo 2>/dev/null)"; fi
+		if [ -z "$GAMCONWAITEXE" ]		; then	GAMCONWAITEXE="$("$WHICH" echo 2>/dev/null)"; fi
 		if [ -z "$VORTEXMODE" ]			; then	VORTEXMODE="disabled";	fi
 		if [ -z "$CHANGE_PULSE_LATENCY" ] 	; then	CHANGE_PULSE_LATENCY="0"; fi
 		if [ -z "$STL_PULSE_LATENCY_MSEC" ]	; then	STL_PULSE_LATENCY_MSEC="60"; fi
@@ -726,6 +1000,8 @@ function setDefaultCfgValues {
 		if [ -z "$SBSZOOM" ]			; then	SBSZOOM="1.0"; fi
 		if [ -z "$SBSVRVK" ]			; then	SBSVRVK="0"; fi
 		if [ -z "$SBSVRRS" ]			; then	SBSVRRS="0"; fi
+		if [ -z "$MINVRWINH" ] 			; then	MINVRWINH="640"; fi
+		if [ -z "$WAITFORTHISPID" ]		; then	WAITFORTHISPID="empty"; fi
 		if [ -z "$GAMEWINDOW" ]			; then	GAMEWINDOW="empty"; fi
 		if [ -z "$WAITEDITOR" ]			; then	WAITEDITOR="2"; fi
 		if [ -z "$OPENEDITORURL" ]		; then	OPENEDITORURL="0"; fi
@@ -748,8 +1024,8 @@ function setDefaultCfgValues {
 		if [ -z "$PROTON_FORCE_LARGE_ADDRESS_AWARE" ]; then	PROTON_FORCE_LARGE_ADDRESS_AWARE="1"; fi	
 		if [ -z "$PROTON_DUMP_DEBUG_COMMANDS" ]	; then	PROTON_DUMP_DEBUG_COMMANDS="0"; fi
 		if [ -z "$WINE_FULLSCREEN_INTEGER_SCALING" ]; then	WINE_FULLSCREEN_INTEGER_SCALING="0"; fi
-		if [ -z "$USERSTART" ]			; then	USERSTART="$(which echo 2>/dev/null)"; fi
-		if [ -z "$USERSTOP" ]			; then	USERSTOP="$(which echo 2>/dev/null)"; fi
+		if [ -z "$USERSTART" ]			; then	USERSTART="$("$WHICH" echo 2>/dev/null)"; fi
+		if [ -z "$USERSTOP" ]			; then	USERSTOP="$("$WHICH" echo 2>/dev/null)"; fi
 	}
 
 	function setDefaultCfgValuesvortex {
@@ -815,7 +1091,9 @@ function saveCfg {
 			echo "## Xlive DL URL"
 			echo "XLIVEURL=\"$XLIVEURL\""
 			echo "## WMP10 DL URL"
-			echo "WMP10URL=\"$WMP10URL\""		
+			echo "WMP10URL=\"$WMP10URL\""
+			echo "## Steam Asset URL"
+			echo "STASSURL=\"$STASSURL\""
 			} >> "$1"
 			#ENDsaveCfgurl
 		fi
@@ -861,6 +1139,9 @@ function saveCfg {
 			echo "## Script Extender Requester:"
 			echo "SEREQWIDTH=\"$SEREQWIDTH\""
 			echo "SEREQHEIGHT=\"$SEREQHEIGHT\""
+			echo "## Game Launcher:"
+			echo "LAUNCHERWIDTH=\"$LAUNCHERWIDTH\""
+			echo "LAUNCHERHEIGHT=\"$LAUNCHERHEIGHT\""
 			} >> "$1"
 			#ENDsaveCfggui
 		fi
@@ -877,14 +1158,12 @@ function saveCfg {
 			{
 			echo "## config Version: $PROGVERS"
 			echo "##########################"
-			echo "## $DESC_DLGLOBAL"
+			echo "## $(strFix "$DESC_DLGLOBAL" "$PROGCMD" "$PROJECTPAGE")"
 			echo "DLGLOBAL=\"$DLGLOBAL\""
 			echo "## $DESC_STLLANG"
 			echo "STLLANG=\"$STLLANG\""
 			echo "## $DESC_USESTLCSS"
 			echo "USESTLCSS=\"$USESTLCSS\""
-			echo "## $DESC_CSSUPDATE"
-			echo "CSSUPDATE=\"$CSSUPDATE\""
 			echo "## $DESC_AUTOTWEAKS"
 			echo "AUTOTWEAKS=\"$AUTOTWEAKS\""
 			echo "## $DESC_CUSTPROTDLDIR"
@@ -897,14 +1176,12 @@ function saveCfg {
 			echo "AUTOLASTPROTON=\"$AUTOLASTPROTON\""
 			echo "## $DESC_STRACEDIR"
 			echo "STRACEDIR=\"$STRACEDIR\""
-			echo "## $DESC_LOGDIR"
+			echo "## $(strFix "$DESC_LOGDIR" "$PROGNAME")"
 			echo "LOGDIR=\"$LOGDIR\""
 			echo "## $DESC_LOGLEVEL"
 			echo "LOGLEVEL=\"$LOGLEVEL\""
 			echo "## $DESC_STLEDITOR"
 			echo "STLEDITOR=\"$STLEDITOR\""
-			echo "## $DESC_WAITEDITOR"
-			echo "WAITEDITOR=\"$WAITEDITOR\""
 			echo "## $DESC_MAXASK"
 			echo "MAXASK=\"$MAXASK\""
 			echo "## $DESC_BROWSER"
@@ -987,6 +1264,12 @@ function saveCfg {
 			echo "USEWINDECO=\"$USEWINDECO\""
 			echo "## $DESC_USETRAYICON"
 			echo "USETRAYICON=\"$USETRAYICON\""
+			echo "## $DESC_USEGAMEPICS"
+			echo "USEGAMEPICS=\"$USEGAMEPICS\""
+			echo "## $DESC_USEGAMEPICINMENU"
+			echo "USEGAMEPICINMENU=\"$USEGAMEPICINMENU\""
+			echo "## $DESC_DLGAMEDATA"
+			echo "DLGAMEDATA=\"$DLGAMEDATA\""
 			} >> "$1"
 			#ENDsaveCfgglobal
 		fi
@@ -1006,7 +1289,7 @@ function saveCfg {
 			echo "##########################"
 			echo "## $DESC_SLR"
 			echo "USESLR=\"$USESLR\""
-			echo "## $DESC_OVERRIDEPROTON"
+			echo "## $(strFix "$DESC_OVERRIDEPROTON" "$PROGCMD")"
 			echo "OVERRIDEPROTON=\"$OVERRIDEPROTON\""
 			echo "## $DESC_USEPROTON"
 			echo "USEPROTON=\"$USEPROTON\""
@@ -1079,7 +1362,11 @@ function saveCfg {
 			echo "## $DESC_SBSVRVK"
 			echo "SBSVRVK=\"$SBSVRVK\""
 			echo "## $DESC_SBSVRRS"
-			echo "SBSVRRS=\"$SBSVRRS\""	
+			echo "SBSVRRS=\"$SBSVRRS\""
+			echo "## $DESC_MINVRWINH"
+			echo "MINVRWINH=\"$MINVRWINH\""
+			echo "## $DESC_WAITFORTHISPID"
+			echo "WAITFORTHISPID=\"$WAITFORTHISPID\""
 			echo "## $DESC_GAMEWINDOW"
 			echo "GAMEWINDOW=\"$GAMEWINDOW\""
 			echo "## $DESC_WAITEDITOR"
@@ -1094,7 +1381,7 @@ function saveCfg {
 			echo "IGNOREAUTOTWEAKS=\"$IGNOREAUTOTWEAKS\""
 			echo "## $DESC_CHECKCATEGORIES"
 			echo "CHECKCATEGORIES=\"$CHECKCATEGORIES\""
-			echo "## $DESC_DXVKVARS"
+			echo "## $(strFix "$DESC_DXVKVARS" "$DXVKURL")"
 			echo "DXVK_HUD=\"$DXVK_HUD\""
 			echo "## $DESC_DXVK_LOG_LEVEL"
 			echo "DXVK_LOG_LEVEL=\"$DXVK_LOG_LEVEL\""
@@ -1160,7 +1447,7 @@ function saveCfg {
 			echo "VORTEXINSTALL=\"$VORTEXINSTALL\""
 			echo "## $DESC_VORTEXVERSION"
 			echo "VORTEXVERSION=\"$VORTEXVERSION\""
-			echo "## $DESC_DISABLE_AUTOSTAGES"
+			echo "## $(strFix "$DESC_DISABLE_AUTOSTAGES" "$PROGNAME")"
 			echo "DISABLE_AUTOSTAGES=\"$DISABLE_AUTOSTAGES\""
 			} >> "$1"
 			#ENDsaveCfgvortex
@@ -1172,19 +1459,22 @@ function saveCfg {
 }
 
 function notiShow {
-	SHOWNOTERAW="$1"
+	if [ "$USENOTIFIER" -eq 1 ]; then
+		"$NOTY" "$1"
+	fi	
+}
+
+function strFix {
+	STRIN="$1"
 
 	if [ -z "$2" ]; then
-		SHOWNOTE="$SHOWNOTERAW"
+		echo "$STRIN"
 	else
-		SHOWNOTE2="${SHOWNOTERAW//XXX/$2}"
-		SHOWNOTE3="${SHOWNOTE2//YYY/$3}"
-		SHOWNOTE="${SHOWNOTE3//ZZZ/$4}"
+		STRIN2="${STRIN//XXX/$2}"
+		STRIN3="${STRIN2//YYY/$3}"
+		STRIN4="${STRIN3//ZZZ/$4}"
+		echo "${STRIN4//QQQ/$5}"
 	fi
-
-	if [ "$USENOTIFIER" -eq 1 ]; then
-		"$NOTY" "$SHOWNOTE"
-	fi	
 }
 
 function PROTPATH {
@@ -1210,7 +1500,7 @@ function setNewProtVars {
 		USEPROTON="$PROTONVERSION"
 	else
 		writelog "SKIP" "${FUNCNAME[0]} - using 'Steam Proton $FIRSTUSEPROTON' instead of '$PROGCMD Proton $USEPROTON' because OVERRIDEPROTON is disabled"
-		notiShow "$NOTY_SETNEWPROTVARS" "$FIRSTUSEPROTON"
+		notiShow "$(strFix "$NOTY_SETNEWPROTVARS" "$FIRSTUSEPROTON")"
 	fi
 }
 
@@ -1275,22 +1565,22 @@ function dlCustomProton {
 	DSTDL="$CUSTPROTDLDIR/$CPURLFILE"
 	if [ ! -f "$DSTDL" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - downloading '$CPURL' to '$CUSTPROTDLDIR'"
-		notiShow "$NOTY_DLCUSTOMPROTON" "$CPURL"
+		notiShow "$(strFix "$NOTY_DLCUSTOMPROTON" "$CPURL")"
 		"$WGET" "$CPURL" -O "$DSTDL"
-		notiShow "$NOTY_DLCUSTOMPROTON2" "$CPURL"
+		notiShow "$(strFix "$NOTY_DLCUSTOMPROTON2" "$CPURL")"
 	else
 		writelog "INFO" "${FUNCNAME[0]} - file '$DSTDL' already exists - nothing to download"
 	fi
 
 	if grep -q "\.tar\." <<< "$DSTDL"; then
-		PROTRELPATH="$("$TAR" -ztf "$DSTDL" | grep "proton$" 2>/dev/null )"
+		PROTRELPATH="$("$TAR" -tf "$DSTDL" | grep "proton$" 2>/dev/null )"
 		if [ -n "$PROTRELPATH" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - archive contains proton in subdirectory '$PROTRELPATH'"
 			PROTFULLPATH="$CUSTPROTEXTDIR/$PROTRELPATH"
 			if [ -f "$PROTFULLPATH" ]; then
 				writelog "SKIP" "${FUNCNAME[0]} - the destination path '$PROTFULLPATH' already exists - looks like '$DSTDL' was already extracted before"
 			else
-				notiShow "$NOTY_DLCUSTOMPROTON3" "$CPURL"
+				notiShow "$(strFix "$NOTY_DLCUSTOMPROTON3" "$CPURL")"
 				"$TAR" xf "$DSTDL" -C "$CUSTPROTEXTDIR" 2>/dev/null
 			fi
 		else
@@ -1305,7 +1595,7 @@ function dlCustomProton {
 			if [ -f "$PROTFULLPATH" ]; then
 				writelog "SKIP" "${FUNCNAME[0]} - the destination path '$PROTFULLPATH' already exists - looks like '$DSTDL' was already extracted before"
 			else
-				notiShow "$NOTY_DLCUSTOMPROTON3" "$CPURL"
+				notiShow "$(strFix "$NOTY_DLCUSTOMPROTON3" "$CPURL")"
 				"$UNZIP" "$DSTDL" -d "$CUSTPROTEXTDIR/$SUBDIR" 2>/dev/null
 			fi
 		else
@@ -1432,6 +1722,19 @@ function addCustomProtonToList {
 	fi
 }
 
+function dlCustomProtonGate {
+	if [ -z "$1" ]; then
+		dlCustomProtonGUI
+	else
+		if grep -q "^http" <<< "$1"; then
+			writelog "INFO" "${FUNCNAME[0]} - '$1' is an URL - sending directly to dlCustomProton"
+			dlCustomProton "$@"
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - don't know what to do with argument '$1'"
+		fi
+	fi
+}
+
 function addCustomProton {
 	if [ -z "$1" ]; then
 		if [ ! -f "$CUSTOMPROTONLIST" ]; then 
@@ -1468,19 +1771,12 @@ function addCustomProton {
 		fi
 		addCustomProtonToList "$NEWCUSTPROT"
 	else
-		if [ "$1" == "dl" ] || [ "$1" == "download" ]; then
-			dlCustomProtonGUI
-		elif grep -q "^http" <<< "$1"; then
-			writelog "INFO" "${FUNCNAME[0]} - '$1' is an URL - sending directly to dlCustomProton"
-			dlCustomProton "$@"
-		else
-			if grep -q "proton$" <<< "$1"; then
-				if [ -f "$1" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - '$1' is a path to an existing 'proton' file - adding to the Custom Proton List"
-					addCustomProtonToList "$@"
-				else
-				writelog "SKIP" "${FUNCNAME[0]} - file '$1' does not exist - skipping"
-				fi
+		if grep -q "proton$" <<< "$1"; then
+			if [ -f "$1" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - '$1' is a path to an existing 'proton' file - adding to the Custom Proton List"
+				addCustomProtonToList "$@"
+			else
+			writelog "SKIP" "${FUNCNAME[0]} - file '$1' does not exist - skipping"
 			fi
 		fi
 	fi
@@ -1497,7 +1793,7 @@ function saveYadCfg {
 
 		loadCfg "$YADCFG"
 		YLC=1
-		YADCATLIST="/tmp/yadcatlist.txt"
+		YADCATLIST="$STLSHM/yadcatlist.txt"
 		extRun sed -n "/^#STARTYAD$DELIM/,/^#ENDYAD$DELIM/p;/^#ENDYAD$DELIM/q" "$0" | grep "\-\-field" | rev | cut -d '{' -f1 | rev | sed '/LBL/c\NOVAL' | sed '/BTN/c\NOVAL' | cut -d '/' -f1 > "$YADCATLIST"
 
 		while extRun read -r YADVAL; do
@@ -1617,14 +1913,14 @@ function updateEditor {
 		if [ -x "$XDGED" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - xdg-mime points to '$XDGED', which also exists"
 			FOUNDEDITOR="$XDGED"
-		elif  [ -x "$(command -v "$(which geany 2>/dev/null)" 2>/dev/null)" ]; then
-			FOUNDEDITOR="$(which geany 2>/dev/null)"
-		elif  [ -x "$(command -v "$(which gedit 2>/dev/null)" 2>/dev/null)" ]; then
-			FOUNDEDITOR="$(which gedit 2>/dev/null)"
-		elif  [ -x "$(command -v "$(which leafpad 2>/dev/null)" 2>/dev/null)" ]; then
-			FOUNDEDITOR="$(which leafpad 2>/dev/null)"
-		elif  [ -x "$(command -v "$(which kwrite 2>/dev/null)" 2>/dev/null)" ]; then
-			FOUNDEDITOR="$(which kwrite 2>/dev/null)"
+		elif  [ -x "$(command -v "$("$WHICH" geany 2>/dev/null)" 2>/dev/null)" ]; then
+			FOUNDEDITOR="$("$WHICH" geany 2>/dev/null)"
+		elif  [ -x "$(command -v "$("$WHICH" gedit 2>/dev/null)" 2>/dev/null)" ]; then
+			FOUNDEDITOR="$("$WHICH" gedit 2>/dev/null)"
+		elif  [ -x "$(command -v "$("$WHICH" leafpad 2>/dev/null)" 2>/dev/null)" ]; then
+			FOUNDEDITOR="$("$WHICH" leafpad 2>/dev/null)"
+		elif  [ -x "$(command -v "$("$WHICH" kwrite 2>/dev/null)" 2>/dev/null)" ]; then
+			FOUNDEDITOR="$("$WHICH" kwrite 2>/dev/null)"
 		else
 			writelog "SKIP" "${FUNCNAME[0]} - no valid editor found - leaving '$XDGO'"
 		fi
@@ -1661,11 +1957,15 @@ function EditorDialog {
 
 	loadCfg "$STLGUICFG" X
 	updateWinRes "$TITLE" "$STLGUICFG" "EDREQWIDTH" "EDREQHEIGHT" &
-
 	if [ "$USEGUI" == "$YAD" ]; then
+		if [ "$USEGAMEPICS" -eq 1 ] && [ -f "$STLGHEADD/$AID.jpg" ]; then
+			SHOWPIC="$STLGHEADD/$AID.jpg"
+		else
+			SHOWPIC="$NOICON"
+		fi
 		IFS=" " read -r -a EDFILES <<< "$(for f in $(printf '%s\n' "${CfgFiles[@]}"); do echo FALSE ; echo "$f" ; done | \
-		LC_ALL="" "$YAD" --window-icon="$STLICON" --borders="$YADBORDER" --center "$WINDECO" --list --checklist --column=Edit --column=ConfigFile --separator=" " --print-column="2" \
-		--text="<span font_weight='bold'>$GUI_EDITORDIALOG</span>" \
+		LC_ALL="" "$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --borders="$YADBORDER" --center "$WINDECO" --list --checklist --column=Edit --column=ConfigFile --separator=" " --print-column="2" \
+		--text="<span font_weight='bold'>$(strFix "$GUI_EDITORDIALOG" "$GN" "$AID")</span>" \
 		--title="$TITLE" \
 		--geometry="$EDREQWIDTH"x"$EDREQHEIGHT"+0+0 | tr '\n' ' ')"
 	elif [ "$USEGUI" == "$ZENITY" ]; then
@@ -1680,12 +1980,12 @@ function EditorDialog {
 			writelog "INFO" "${FUNCNAME[0]} - OPENEDITORURL is set to 1 - also opening the url '$EDITORURL' in the browser"
 			if [ -x "$(command -v "$BROWSER" 2>/dev/null)" ]; then
 				# if we open a new BROWSER instance here, we're going to kill it when the game launches, else the game won't "exit" in steam 
-				if pgrep -f "$BROWSER" ; then
+				if "$PGREP" -f "$BROWSER" >/dev/null; then
 					KILLBROWSER=0
 				else
 					KILLBROWSER=1
-				fi
-				"$BROWSER" "$EDITORURL/$AID" & 
+				fi		
+				"$BROWSER" "${EDITORURL//AID/$AID}" & 
 			fi
 		fi
 
@@ -1695,7 +1995,7 @@ function EditorDialog {
 		# kill browser if it was opened with the editor:
 		if [ -n "$KILLBROWSER" ];then
 			if [ "$KILLBROWSER" -eq 1 ]; then
-				pkill -f "$BROWSER"
+				"$PKILL" -f "$BROWSER"
 			fi
 		fi
 
@@ -1748,6 +2048,7 @@ function TrayIconExports {
 
 	export -f pickWindowName
 	export -f getActiveWindowName
+	export -f getActiveWindowSize
 	export -f killProtonGame
 	export -f PauseGame
 }
@@ -1777,8 +2078,16 @@ function trayIcon {
 				updateConfigEntry "GAMEWINDOW" "$PICKWINDOWNAME" "$STLGAMECFG"
 			}
 
+			function getActiveWindowSize {
+				resetAID "$AID"
+				PICKMINVRWINH="$(("$(sleep 5 && "$XDO" getactivewindow getwindowgeometry | tail -n1 | cut -d ':' -f2 | cut -d 'x' -f2)"))";
+				writelog "INFO" "${FUNCNAME[0]} - trayIcon: found windowheight '$PICKMINVRWINH'"
+				updateConfigEntry "MINVRWINH" "$PICKMINVRWINH" "$STLGAMECFG"
+			}
+
 			function killProtonGame {
 				WINEPREFIX="$GPFX" "$RUNWINESERVER" -k
+				touch "$CLOSETMP"
 			}
 
 			function PauseGame {
@@ -1800,9 +2109,10 @@ function trayIcon {
 			LC_ALL="" "$YAD" --image="$STLICON" --notification --item-separator=","\
 			--menu="$TRAY_PICKWINDOW,bash -c pickWindowName
 			|$TRAY_GETACTIVEWINDOW,bash -c getActiveWindowName \
+			|$TRAY_GETACTIVEWINDOWSIZE,bash -c getActiveWindowSize \
 			|$TRAY_KILLSWITCH,bash -c killProtonGame \
 			|$TRAY_PAUSE,bash -c PauseGame" \
-			--text="TRAY_TOOLTIP" >/dev/null 2>/dev/null &
+			--text="$TRAY_TOOLTIP" >/dev/null 2>/dev/null &
 			YADTRAYPID="$!"
 		fi
 	fi
@@ -1822,82 +2132,90 @@ function openGameMenu {
 	cfgX="$4"
 	loadCfg "$CFG" X
 
-	LC_ALL="" "$YAD" --plug="$YADKEY" --tabnum="$TABNR" --borders="$YADBORDER" --form --scroll \
+	if [ "$USEGAMEPICS" -eq 1 ] && [ -f "$STLGHEADD/$AID.jpg" ] && [ "$TABNR" -eq 1 ] && [ "$USEGAMEPICINMENU" -eq 1 ] ; then
+		SHOWPIC="$STLGHEADD/$AID.jpg"
+	else
+		SHOWPIC="$NOICON"
+	fi
+
+	LC_ALL="" "$YAD" --image "$SHOWPIC" --image-on-top --plug="$YADKEY" --tabnum="$TABNR" --borders="$YADBORDER" --form --scroll \
 	--separator="\n" \
 	--quoted-output \
 	--columns="$GAMETABCOLS" \
 	--text="<span font_weight='bold'>$TEXT</span>" \
-	--field="     $GUI_USE_GAMCON!$DESC_RUN_GAMCON":CHK "${RUN_GAMCON/#-/ -}" \
-	--field="     $GUI_GAMCONWAITEXE!$DESC_GAMCONWAITEXE $GUI_ECHOPLAC":FL "${GAMCONWAITEXE/#-/ -}" \
-	--field="     $GUI_USEGAMEMODERUN!$DESC_USEGAMEMODERUN":CHK "${USEGAMEMODERUN/#-/ -}" \
-	--field="     $GUI_GAMESCOPE!$DESC_USEGAMESCOPE":CHK "${USEGAMESCOPE/#-/ -}" \
-	--field="     $GUI_GAMESCOPEARGS!$DESC_GAMESCOPE_ARGS" "${GAMESCOPE_ARGS/#-/ -}" \
-	--field="     $GUI_USE_NYRNA!$DESC_RUN_NYRNA":CHK "${RUN_NYRNA/#-/ -}" \
-	--field="     $GUI_MANGOHUD!$DESC_MANGOHUD":CHK "${MANGOHUD/#-/ -}" \
-	--field="     $GUI_REPLAYSORCERY!$DESC_RUN_REPLAY":CHK "${RUN_REPLAY/#-/ -}" \
-	--field="     $GUI_VORTEXMODE!$DESC_VORTEXMODE":CB "${VORTEXMODE/#-/ -}!disabled!normal!quickstart!editormode" \
+	--field="     $GUI_USE_GAMCON!$DESC_RUN_GAMCON ('RUN_GAMCON')":CHK "${RUN_GAMCON/#-/ -}" \
+	--field="     $GUI_GAMCONWAITEXE!$DESC_GAMCONWAITEXE $GUI_ECHOPLAC ('GAMCONWAITEXE')":FL "${GAMCONWAITEXE/#-/ -}" \
+	--field="     $GUI_USEGAMEMODERUN!$DESC_USEGAMEMODERUN ('USEGAMEMODERUN')":CHK "${USEGAMEMODERUN/#-/ -}" \
+	--field="     $GUI_GAMESCOPE!$DESC_USEGAMESCOPE ('USEGAMESCOPE')":CHK "${USEGAMESCOPE/#-/ -}" \
+	--field="     $GUI_GAMESCOPEARGS!$DESC_GAMESCOPE_ARGS ('GAMESCOPE_ARGS')" "${GAMESCOPE_ARGS/#-/ -}" \
+	--field="     $GUI_USE_NYRNA!$DESC_RUN_NYRNA ('RUN_NYRNA')":CHK "${RUN_NYRNA/#-/ -}" \
+	--field="     $GUI_MANGOHUD!$DESC_MANGOHUD ('MANGOHUD')":CHK "${MANGOHUD/#-/ -}" \
+	--field="     $GUI_REPLAYSORCERY!$DESC_RUN_REPLAY ('RUN_REPLAY')":CHK "${RUN_REPLAY/#-/ -}" \
+	--field="     $GUI_VORTEXMODE!$DESC_VORTEXMODE ('VORTEXMODE')":CB "${VORTEXMODE/#-/ -}!disabled!normal!quickstart!editormode" \
 	--field=" ":LBL " " \
-	--field="     $GUI_USE_BOXTRON!$DESC_USEBOXTRON":CHK "${USEBOXTRON/#-/ -}" \
-	--field="     $GUI_USE_ROBERTA!$DESC_USEROBERTA":CHK "${USEROBERTA/#-/ -}" \
-	--field="     $GUI_USE_LUXTORPEDA!$DESC_USELUXTORPEDA":CHK "${USELUXTORPEDA/#-/ -}" \
+	--field="     $GUI_USE_BOXTRON!$DESC_USEBOXTRON ('USEBOXTRON')":CHK "${USEBOXTRON/#-/ -}" \
+	--field="     $GUI_USE_ROBERTA!$DESC_USEROBERTA ('USEROBERTA')":CHK "${USEROBERTA/#-/ -}" \
+	--field="     $GUI_USE_LUXTORPEDA!$DESC_USELUXTORPEDA ('USELUXTORPEDA')":CHK "${USELUXTORPEDA/#-/ -}" \
 	--field=" ":LBL " " \
-	--field="     $GUI_USE_WINETRICKS!$DESC_RUN_WINETRICKS":CHK "${RUN_WINETRICKS/#-/ -}" \
-	--field="     $GUI_USE_WINETRICKSPAKS!$DESC_WINETRICKSPAKS" "${WINETRICKSPAKS/#-/ -}" \
-	--field="     $GUI_USE_WINECFG!$DESC_RUN_WINECFG":CHK "${RUN_WINECFG/#-/ -}" \
-	--field="     $GUI_REGEDIT!$DESC_REGEDIT":CHK "${REGEDIT/#-/ -}" \
-	--field="     $GUI_VIRTUALDESKTOP!$DESC_VIRTUALDESKTOP":CHK "${VIRTUALDESKTOP/#-/ -}" \
+	--field="     $GUI_USE_WINETRICKS!$DESC_RUN_WINETRICKS ('RUN_WINETRICKS')":CHK "${RUN_WINETRICKS/#-/ -}" \
+	--field="     $GUI_USE_WINETRICKSPAKS!$DESC_WINETRICKSPAKS ('WINETRICKSPAKS')" "${WINETRICKSPAKS/#-/ -}" \
+	--field="     $GUI_USE_WINECFG!$DESC_RUN_WINECFG ('RUN_WINECFG')":CHK "${RUN_WINECFG/#-/ -}" \
+	--field="     $GUI_REGEDIT!$DESC_REGEDIT ('REGEDIT')":CHK "${REGEDIT/#-/ -}" \
+	--field="     $GUI_VIRTUALDESKTOP!$DESC_VIRTUALDESKTOP ('VIRTUALDESKTOP')":CHK "${VIRTUALDESKTOP/#-/ -}" \
 	--field=" ":LBL " " \
-	--field="     $GUI_RUN_CUSTOMCMD!$DESC_RUN_CUSTOMCMD":CB "${RUN_CUSTOMCMD/#-/ -}!0!1!2" \
-	--field="     $GUI_THISCUSTOMCMD!$DESC_CUSTOMCMD $GUI_ECHOPLAC":FL "${CUSTOMCMD/#-/ -}" \
-	--field="     $GUI_CUSTOMCMD_ARGS!$DESC_CUSTOMCMD_ARGS" "${CUSTOMCMD_ARGS/#-/ -}" \
-	--field="     $GUI_ONLY_CUSTOMCMD!$DESC_ONLY_CUSTOMCMD":CHK "${ONLY_CUSTOMCMD/#-/ -}" \
-	--field="     $GUI_FORK_CUSTOMCMD!$DESC_FORK_CUSTOMCMD":CHK "${FORK_CUSTOMCMD/#-/ -}" \
+	--field="     $GUI_RUN_CUSTOMCMD!$DESC_RUN_CUSTOMCMD ('RUN_CUSTOMCMD')":CB "${RUN_CUSTOMCMD/#-/ -}!0!1!2" \
+	--field="     $GUI_THISCUSTOMCMD!$DESC_CUSTOMCMD $GUI_ECHOPLAC ('CUSTOMCMD')":FL "${CUSTOMCMD/#-/ -}" \
+	--field="     $GUI_CUSTOMCMD_ARGS!$DESC_CUSTOMCMD_ARGS ('CUSTOMCMD_ARGS')" "${CUSTOMCMD_ARGS/#-/ -}" \
+	--field="     $GUI_ONLY_CUSTOMCMD!$DESC_ONLY_CUSTOMCMD ('ONLY_CUSTOMCMD')":CHK "${ONLY_CUSTOMCMD/#-/ -}" \
+	--field="     $GUI_FORK_CUSTOMCMD!$DESC_FORK_CUSTOMCMD ('FORK_CUSTOMCMD')":CHK "${FORK_CUSTOMCMD/#-/ -}" \
 	--field=" ":LBL " " \
-	--field="     $GUI_INSTALL_RESHADE!$DESC_INSTALL_RESHADE":CHK "${INSTALL_RESHADE/#-/ -}" \
-	--field="     $GUI_RESHADE_DEPTH3D!$DESC_RESHADE_DEPTH3D":CHK "${RESHADE_DEPTH3D/#-/ -}" \
-	--field="     $GUI_USERESHADE!$DESC_USERESHADE":CHK "${USERESHADE/#-/ -}" \
-	--field="     $GUI_ENABLE_VKBASALT!$DESC_ENABLE_VKBASALT":CHK "${ENABLE_VKBASALT/#-/ -}" \
-	--field="     $GUI_RUNSBSVR!$DESC_RUNSBSVR":CHK "${RUNSBSVR/#-/ -}" \
-	--field="     $GUI_SBSVRRS!$DESC_SBSVRRS":CHK "${SBSVRRS/#-/ -}" \
-	--field="     $GUI_SBSVRVK!$DESC_SBSVRVK":CHK "${SBSVRVK/#-/ -}" \
-	--field="     $GUI_VRVIDEOPLAYERARGS!$DESC_VRVIDEOPLAYERARGS" "${VRVIDEOPLAYERARGS/#-/ -}" \
-	--field="     $GUI_SBSZOOM!$DESC_SBSZOOM" "${SBSZOOM/#-/ -}" \
-	--field="     $GUI_GAMEWINDOW!$DESC_GAMEWINDOW" "${GAMEWINDOW/#-/ -}" \
+	--field="     $GUI_INSTALL_RESHADE!$DESC_INSTALL_RESHADE ('INSTALL_RESHADE')":CHK "${INSTALL_RESHADE/#-/ -}" \
+	--field="     $GUI_RESHADE_DEPTH3D!$DESC_RESHADE_DEPTH3D ('RESHADE_DEPTH3D')":CHK "${RESHADE_DEPTH3D/#-/ -}" \
+	--field="     $GUI_USERESHADE!$DESC_USERESHADE ('USERESHADE')":CHK "${USERESHADE/#-/ -}" \
+	--field="     $GUI_ENABLE_VKBASALT!$DESC_ENABLE_VKBASALT ('ENABLE_VKBASALT')":CHK "${ENABLE_VKBASALT/#-/ -}" \
+	--field="     $GUI_RUNSBSVR!$DESC_RUNSBSVR ('RUNSBSVR')":CHK "${RUNSBSVR/#-/ -}" \
+	--field="     $GUI_SBSVRRS!$DESC_SBSVRRS ('SBSVRRS')":CHK "${SBSVRRS/#-/ -}" \
+	--field="     $GUI_SBSVRVK!$DESC_SBSVRVK ('SBSVRVK')":CHK "${SBSVRVK/#-/ -}" \
+	--field="     $GUI_VRVIDEOPLAYERARGS!$DESC_VRVIDEOPLAYERARGS ('VRVIDEOPLAYERARGS')" "${VRVIDEOPLAYERARGS/#-/ -}" \
+	--field="     $GUI_SBSZOOM!$DESC_SBSZOOM ('SBSZOOM')" "${SBSZOOM/#-/ -}" \
+	--field="     $GUI_GAMEWINDOW!$DESC_GAMEWINDOW ('GAMEWINDOW')" "${GAMEWINDOW/#-/ -}" \
+	--field="     $GUI_WAITFORTHISPID!$DESC_WAITFORTHISPID ('WAITFORTHISPID')" "${WAITFORTHISPID/#-/ -}" \
+	--field="     $GUI_MINVRWINH!$DESC_MINVRWINH ('MINVRWINH')":NUM "${MINVRWINH/#-/ -}" \
 	--field=" ":LBL " " \
-	--field="     $GUI_CPL!$DESC_CHANGE_PULSE_LATENCY":CHK "${CHANGE_PULSE_LATENCY/#-/ -}" \
-	--field="     $GUI_PULSEMSEC!$DESC_STL_PULSE_LATENCY_MSEC":NUM "${STL_PULSE_LATENCY_MSEC/#-/ -}" \
-	--field="     $GUI_DXVK_HUD!$DESC_DXVK_HUD devinfo,fps,frametimes,submissions,drawcalls,pipelines,memory,gpuload,version,api,compiler,samplers,full,1" "${DXVK_HUD/#-/ -}" \
-	--field="     $GUI_DXVK_LOG_LEVEL!$DESC_DXVK_LOG_LEVEL":CB "${DXVK_LOG_LEVEL/#-/ -}!none!error!warn!info!debug" \
-	--field="     $GUI_WINEFSIS!$DESC_WINEFSIS":CHK "${WINE_FULLSCREEN_INTEGER_SCALING/#-/ -}" \
-	--field="     $GUI_PROTON_LOG!$DESC_PROTON_LOG $HOME/steam-$AID.log":CHK "${PROTON_LOG/#-/ -}" \
-	--field="     $GUI_PROTON_USE_WINED3D!$DESC_PROTON_USE_WINED3D":CHK "${PROTON_USE_WINED3D/#-/ -}" \
-	--field="     $GUI_PROTON_NO_D3D11!$DESC_PROTON_NO_D3D11":CHK "${PROTON_NO_D3D11/#-/ -}" \
-	--field="     $GUI_PROTON_NO_D3D10!$DESC_PROTON_NO_D3D10":CHK "${PROTON_NO_D3D10/#-/ -}" \
-	--field="     $GUI_PROTON_NO_ESYNC!$DESC_PROTON_NO_ESYNC":CHK "${PROTON_NO_ESYNC/#-/ -}" \
-	--field="     $GUI_PROTON_NO_FSYNC!$DESC_PROTON_NO_FSYNC":CHK "${PROTON_NO_FSYNC/#-/ -}" \
-	--field="     $GUI_PROTONFLAA!$DESC_PROTONFLAA":CHK "${PROTON_FORCE_LARGE_ADDRESS_AWARE/#-/ -}" \
-	--field="     $GUI_PROTON_DUMP_DEBUG_COMMANDS!$DESC_PROTON_DUMP_DEBUG_COMMANDS":CHK "${PROTON_DUMP_DEBUG_COMMANDS/#-/ -}" \
-	--field="     $GUI_PROTON_DEBUG_DIR!$DESC_PROTON_DEBUG_DIR":DIR "${PROTON_DEBUG_DIR/#-/ -}" \
-	--field="     $GUI_OVERRIDEPROTON!$DESC_OVERRIDEPROTON":CHK "${OVERRIDEPROTON/#-/ -}" \
-	--field="     $GUI_USEPROTON!$DESC_USEPROTON":CB "${USEPROTON/#-/ -}!$PROTYADLIST" \
-	--field="     $GUI_USESLR!$DESC_USESLR":CHK "${USESLR/#-/ -}" \
+	--field="     $GUI_CPL!$DESC_CHANGE_PULSE_LATENCY ('CHANGE_PULSE_LATENCY')":CHK "${CHANGE_PULSE_LATENCY/#-/ -}" \
+	--field="     $GUI_PULSEMSEC!$DESC_STL_PULSE_LATENCY_MSEC ('STL_PULSE_LATENCY_MSEC')":NUM "${STL_PULSE_LATENCY_MSEC/#-/ -}" \
+	--field="     $GUI_DXVK_HUD!$DESC_DXVK_HUD devinfo,fps,frametimes,submissions,drawcalls,pipelines,memory,gpuload,version,api,compiler,samplers,full,1 ('DXVK_HUD')" "${DXVK_HUD/#-/ -}" \
+	--field="     $GUI_DXVK_LOG_LEVEL!$DESC_DXVK_LOG_LEVEL ('DXVK_LOG_LEVEL')":CB "${DXVK_LOG_LEVEL/#-/ -}!none!error!warn!info!debug" \
+	--field="     $GUI_WINEFSIS!$DESC_WINEFSIS ('WINE_FULLSCREEN_INTEGER_SCALING')":CHK "${WINE_FULLSCREEN_INTEGER_SCALING/#-/ -}" \
+	--field="     $GUI_PROTON_LOG!$DESC_PROTON_LOG $HOME/steam-$AID.log ('PROTON_LOG')":CHK "${PROTON_LOG/#-/ -}" \
+	--field="     $GUI_PROTON_USE_WINED3D!$DESC_PROTON_USE_WINED3D ('PROTON_USE_WINED3D')":CHK "${PROTON_USE_WINED3D/#-/ -}" \
+	--field="     $GUI_PROTON_NO_D3D11!$DESC_PROTON_NO_D3D11 ('PROTON_NO_D3D11')":CHK "${PROTON_NO_D3D11/#-/ -}" \
+	--field="     $GUI_PROTON_NO_D3D10!$DESC_PROTON_NO_D3D10 ('PROTON_NO_D3D10')":CHK "${PROTON_NO_D3D10/#-/ -}" \
+	--field="     $GUI_PROTON_NO_ESYNC!$DESC_PROTON_NO_ESYNC ('PROTON_NO_ESYNC')":CHK "${PROTON_NO_ESYNC/#-/ -}" \
+	--field="     $GUI_PROTON_NO_FSYNC!$DESC_PROTON_NO_FSYNC ('PROTON_NO_FSYNC')":CHK "${PROTON_NO_FSYNC/#-/ -}" \
+	--field="     $GUI_PROTONFLAA!$DESC_PROTONFLAA ('PROTON_FORCE_LARGE_ADDRESS_AWARE')":CHK "${PROTON_FORCE_LARGE_ADDRESS_AWARE/#-/ -}" \
+	--field="     $GUI_PROTON_DUMP_DEBUG_COMMANDS!$DESC_PROTON_DUMP_DEBUG_COMMANDS ('PROTON_DUMP_DEBUG_COMMANDS')":CHK "${PROTON_DUMP_DEBUG_COMMANDS/#-/ -}" \
+	--field="     $GUI_PROTON_DEBUG_DIR!$DESC_PROTON_DEBUG_DIR ('PROTON_DEBUG_DIR')":DIR "${PROTON_DEBUG_DIR/#-/ -}" \
+	--field="     $GUI_OVERRIDEPROTON!$(strFix "$DESC_OVERRIDEPROTON" "$PROGCMD") ('OVERRIDEPROTON')":CHK "${OVERRIDEPROTON/#-/ -}" \
+	--field="     $GUI_USEPROTON!$DESC_USEPROTON ('USEPROTON')":CB "${USEPROTON/#-/ -}!$PROTYADLIST" \
+	--field="     $GUI_USESLR!$DESC_USESLR ('USESLR')":CHK "${USESLR/#-/ -}" \
 	--field=" ":LBL " " \
-	--field="     $GUI_ATVALIDATE!$DESC_ATVALIDATE":NUM "${ATVALIDATE/#-/ -}" \
-	--field="     $GUI_IGNOREAUTOTWEAKS!$DESC_IGNOREAUTOTWEAKS":CHK "${IGNOREAUTOTWEAKS/#-/ -}" \
-	--field="     $GUI_ATADOPT!$DESC_ATADOPT":CHK "${ATADOPT/#-/ -}" \
-	--field="     $GUI_CHECKCATEGORIES!$DESC_CHECKCATEGORIES":CHK "${CHECKCATEGORIES/#-/ -}" \
+	--field="     $GUI_ATVALIDATE!$DESC_ATVALIDATE ('ATVALIDATE')":NUM "${ATVALIDATE/#-/ -}" \
+	--field="     $GUI_IGNOREAUTOTWEAKS!$DESC_IGNOREAUTOTWEAKS ('IGNOREAUTOTWEAKS')":CHK "${IGNOREAUTOTWEAKS/#-/ -}" \
+	--field="     $GUI_ATADOPT!$DESC_ATADOPT ('ATADOPT')":CHK "${ATADOPT/#-/ -}" \
+	--field="     $GUI_CHECKCATEGORIES!$DESC_CHECKCATEGORIES ('CHECKCATEGORIES')":CHK "${CHECKCATEGORIES/#-/ -}" \
 	--field=" ":LBL " " \
-	--field="     $GUI_TOGGLEWINDOWS!$DESC_TOGGLEWINDOWS":CHK "${TOGGLEWINDOWS/#-/ -}" \
-	--field="     $GUI_GAMEARGS!$DESC_GAMEARGS" "${GAMEARGS/#-/ -}" \
+	--field="     $GUI_TOGGLEWINDOWS!$DESC_TOGGLEWINDOWS ('TOGGLEWINDOWS')":CHK "${TOGGLEWINDOWS/#-/ -}" \
+	--field="     $GUI_GAMEARGS!$DESC_GAMEARGS ('GAMEARGS')" "${GAMEARGS/#-/ -}" \
 	--field=" ":LBL " " \
-	--field="     $GUI_STRACERUN!$DESC_STRACERUN":CHK "${STRACERUN/#-/ -}" \
-	--field="     $GUI_STRACEOPTS!$DESC_STRACEOPTS" "${STRACEOPTS/#-/ -}" \
-	--field="     $GUI_USENETMON!$DESC_USENETMON":CHK "${USENETMON/#-/ -}" \
+	--field="     $GUI_STRACERUN!$DESC_STRACERUN ('STRACERUN')":CHK "${STRACERUN/#-/ -}" \
+	--field="     $GUI_STRACEOPTS!$DESC_STRACEOPTS ('STRACEOPTS')" "${STRACEOPTS/#-/ -}" \
+	--field="     $GUI_USENETMON!$DESC_USENETMON ('USENETMON')":CHK "${USENETMON/#-/ -}" \
 	--field=" ":LBL " " \
-	--field="     $GUI_USERSTART!$DESC_USERSTART $GUI_ECHOPLAC":FL "${USERSTART/#-/ -}" \
-	--field="     $GUI_USERSTOP!$DESC_USERSTOP $GUI_ECHOPLAC":FL "${USERSTOP/#-/ -}" \
-	--field="     $GUI_WAITEDITOR!$DESC_WAITEDITOR":NUM "${WAITEDITOR/#-/ -}" \
-	--field="     $GUI_OPENEDITOR!$DESC_OPENEDITORURL":CHK "${OPENEDITORURL/#-/ -}" \
+	--field="     $GUI_USERSTART!$DESC_USERSTART $GUI_ECHOPLAC ('USERSTART')":FL "${USERSTART/#-/ -}" \
+	--field="     $GUI_USERSTOP!$DESC_USERSTOP $GUI_ECHOPLAC ('USERSTOP')":FL "${USERSTOP/#-/ -}" \
+	--field="     $GUI_WAITEDITOR!$DESC_WAITEDITOR ('WAITEDITOR')":NUM "${WAITEDITOR/#-/ -}" \
+	--field="     $GUI_OPENEDITOR!$DESC_OPENEDITORURL ('OPENEDITORURL')":CHK "${OPENEDITORURL/#-/ -}" \
 	> "$cfgX" &
 }
 #ENDYADTEMPLATE
@@ -1923,7 +2241,13 @@ function openSettings {
 	createGameCfg
 
 	if [ -z "$GN" ]; then
-		GN="$(grep "^#GAMENAME" "$STLGAMECFG" | cut -d'=' -f2)"
+		getGameName "$1"
+		GN="$GAMENAME"
+	fi
+
+	if [ -z "$GN" ]; then
+		writelog "ERROR" "${FUNCNAME[0]} - no game name found for '$AID' - this should not happen"
+		exit
 	fi
 
 	# load  global config for optional gtk css style:
@@ -1935,7 +2259,7 @@ function openSettings {
 	createLanguageList
 
 	# The Tab for the current game is almost identical to the Default Game Template Tab, so using a generic function here to avoid redundant code:
-	openGameMenu "$STLGAMECFG" "1" "$GUI_SETHEAD1" "$cfg1"
+	openGameMenu "$STLGAMECFG" "1" "$(strFix "$GUI_SETHEAD1" "$GN" "$AID")" "$cfg1"
 	YADPID1="$!"
 
 	openGameMenu "$STLDEFGAMECFG" "2" "$GUI_SETHEAD2" "$cfg2"
@@ -1952,72 +2276,73 @@ function openSettings {
 	--quoted-output \
 	--columns="$GLOBTABCOLS" \
 	--text="<span font_weight='bold'>$GUI_SETHEAD3</span>" \
-	--field="     $GUI_DLGLOBAL $PROGCMD!$DESC_DLGLOBAL":CHK "${DLGLOBAL/#-/ -}" \
-	--field="     $GUI_STLLANG!$DESC_STLLANG":CB "${STLLANG/#-/ -}!$LANGYADLIST" \
-	--field="     $GUI_USEGUI!$DESC_USEGUI":CB "${USEGUI/#-/ -}!$YAD!$ZENITY" \
-	--field="     $GUI_USEWINDECO!$DESC_USEWINDECO":CHK "${USEWINDECO/#-/ -}" \
-	--field="     $GUI_USETRAYICON!$DESC_USETRAYICON":CHK "${USETRAYICON/#-/ -}" \
-	--field="     $GUI_USESTLCSS!$DESC_USESTLCSS '${PROGCMD}-steam'":CHK "${USESTLCSS/#-/ -}" \
-	--field="     $GUI_CSSUPDATE!$DESC_CSSUPDATE '${PROGCMD}-steam'":CHK "${CSSUPDATE/#-/ -}" \
+	--field="     $GUI_DLGLOBAL $PROGCMD!$(strFix "$DESC_DLGLOBAL" "$PROGCMD" "$PROJECTPAGE") ('DLGLOBAL')":CHK "${DLGLOBAL/#-/ -}" \
+	--field="     $GUI_STLLANG!$DESC_STLLANG ('STLLANG')":CB "${STLLANG/#-/ -}!$LANGYADLIST" \
+	--field="     $GUI_USEGUI!$DESC_USEGUI ('USEGUI')":CB "${USEGUI/#-/ -}!$YAD!$ZENITY" \
+	--field="     $GUI_USEWINDECO!$DESC_USEWINDECO ('USEWINDECO')":CHK "${USEWINDECO/#-/ -}" \
+	--field="     $GUI_USETRAYICON!$DESC_USETRAYICON ('USETRAYICON')":CHK "${USETRAYICON/#-/ -}" \
+	--field="     $GUI_USEGAMEPICS!$DESC_USEGAMEPICS ('USEGAMEPICS')":CHK "${USEGAMEPICS/#-/ -}" \
+	--field="     $GUI_USEGAMEPICINMENU!$DESC_USEGAMEPICINMENU ('USEGAMEPICINMENU')":CHK "${USEGAMEPICINMENU/#-/ -}" \
+	--field="     $GUI_DLGAMEDATA!$DESC_DLGAMEDATA ('DLGAMEDATA')":CHK "${DLGAMEDATA/#-/ -}" \
+	--field="     $GUI_USESTLCSS!$DESC_USESTLCSS '${PROGCMD}-steam' ('USESTLCSS')":CHK "${USESTLCSS/#-/ -}" \
 	--field=" ":LBL " " \
-	--field="     $GUI_BOXTRONCMD!$DESC_BOXTRONCMD":FL "${BOXTRONCMD/#-/ -}" \
-	--field="     $GUI_BOXTRONARGS!$DESC_BOXTRONARGS" "${BOXTRONARGS/#-/ -}" \
-	--field="     $GUI_ROBERTACMD!$DESC_ROBERTACMD":FL "${ROBERTACMD/#-/ -}" \
-	--field="     $GUI_ROBERTAARGS!$DESC_ROBERTAARGS" "${ROBERTAARGS/#-/ -}" \
-	--field="     $GUI_LUXTORPEDACMD!$DESC_LUXTORPEDACMD":FL "${LUXTORPEDACMD/#-/ -}" \
-	--field="     $GUI_LUXTORPEDAARGS!$DESC_LUXTORPEDAARGS" "${LUXTORPEDAARGS/#-/ -}" \
-	--field="     $GUI_GAMCONBIN!$DESC_GAMCON":FL "${GAMCON/#-/ -}" \
+	--field="     $GUI_BOXTRONCMD!$DESC_BOXTRONCMD ('BOXTRONCMD')":FL "${BOXTRONCMD/#-/ -}" \
+	--field="     $GUI_BOXTRONARGS!$DESC_BOXTRONARGS ('BOXTRONARGS')" "${BOXTRONARGS/#-/ -}" \
+	--field="     $GUI_ROBERTACMD!$DESC_ROBERTACMD ('ROBERTACMD')":FL "${ROBERTACMD/#-/ -}" \
+	--field="     $GUI_ROBERTAARGS!$DESC_ROBERTAARGS ('ROBERTAARGS')" "${ROBERTAARGS/#-/ -}" \
+	--field="     $GUI_LUXTORPEDACMD!$DESC_LUXTORPEDACMD ('LUXTORPEDACMD')":FL "${LUXTORPEDACMD/#-/ -}" \
+	--field="     $GUI_LUXTORPEDAARGS!$DESC_LUXTORPEDAARGS ('LUXTORPEDAARGS')" "${LUXTORPEDAARGS/#-/ -}" \
+	--field="     $GUI_GAMCONBIN!$DESC_GAMCON ('GAMCON')":FL "${GAMCON/#-/ -}" \
 	--field=" ":LBL " " \
-	--field="     $GUI_VRVIDEOPLAYER!$DESC_VRVIDEOPLAYER":FL "${VRVIDEOPLAYER/#-/ -}" \
-	--field="     $GUI_CLONE_DEPTH3D!$DESC_CLONE_DEPTH3D":CHK "${CLONE_DEPTH3D/#-/ -}" \
-	--field="     $GUI_DEPTH3DSRCDIR!$DESC_DEPTH3DSRCDIR":DIR "${DEPTH3DSRCDIR/#-/ -}" \
+	--field="     $GUI_VRVIDEOPLAYER!$DESC_VRVIDEOPLAYER ('VRVIDEOPLAYER')":FL "${VRVIDEOPLAYER/#-/ -}" \
+	--field="     $GUI_CLONE_DEPTH3D!$DESC_CLONE_DEPTH3D ('CLONE_DEPTH3D')":CHK "${CLONE_DEPTH3D/#-/ -}" \
+	--field="     $GUI_DEPTH3DSRCDIR!$DESC_DEPTH3DSRCDIR ('DEPTH3DSRCDIR')":DIR "${DEPTH3DSRCDIR/#-/ -}" \
 	--field=" ":LBL " " \
-	--field="     $GUI_NETMON!$DESC_NETMON":FL "${NETMON/#-/ -}" \
-	--field="     $GUI_NETMONDIR!$DESC_NETMONDIR":DIR "${NETMONDIR/#-/ -}" \
-	--field="     $GUI_NETOPTS!$DESC_NETOPTS" "${NETOPTS/#-/ -}" \
+	--field="     $GUI_NETMON!$DESC_NETMON ('NETMON')":FL "${NETMON/#-/ -}" \
+	--field="     $GUI_NETMONDIR!$DESC_NETMONDIR ('NETMONDIR')":DIR "${NETMONDIR/#-/ -}" \
+	--field="     $GUI_NETOPTS!$DESC_NETOPTS ('NETOPTS')" "${NETOPTS/#-/ -}" \
 	--field=" ":LBL " " \
-	--field="     $GUI_GLOBALREGDIR!$DESC_GLOBALREGDIR":DIR "${GLOBALREGDIR/#-/ -}" \
-	--field="     $GUI_GLOBALTWEAKDIR!$DESC_GLOBALTWEAKDIR":DIR "${GLOBALTWEAKDIR/#-/ -}" \
-	--field="     $GUI_GLOBALSBSTWEAKDIR!$DESC_GLOBALSBSTWEAKDIR":DIR "${GLOBALSBSTWEAKDIR/#-/ -}" \
-	--field="     $GUI_GLOBALUSERTWEAKDIR!$DESC_GLOBALUSERTWEAKDIR":DIR "${GLOBALUSERTWEAKDIR/#-/ -}" \
-	--field="     $GUI_GLOBALTWEAKCMDDIR!$DESC_GLOBALTWEAKCMDDIR":DIR "${GLOBALTWEAKCMDDIR/#-/ -}" \
-	--field="     $GUI_GLOBALCATEGORYDIR!$DESC_GLOBALCATEGORYDIR":DIR "${GLOBALCATEGORYDIR/#-/ -}" \
-	--field="     $GUI_GLOBALMISCDIR!$DESC_GLOBALMISCDIR":DIR "${GLOBALMISCDIR/#-/ -}" \
-	--field="     $GUI_GLOBALSTLLANGDIR!$DESC_GLOBALSTLLANGDIR":DIR "${GLOBALSTLLANGDIR/#-/ -}" \
-	--field="     $GUI_STRACEDIR!$DESC_STRACEDIR":DIR "${STRACEDIR/#-/ -}" \
-	--field="     $PROGNAME $GUI_LOGDIR!$DESC_LOGDIR":DIR "${LOGDIR/#-/ -}" \
-	--field="     $GUI_LOGLEVEL!$DESC_LOGLEVEL":CB "${LOGLEVEL/#-/ -}!0!1!2" \
+	--field="     $GUI_GLOBALREGDIR!$DESC_GLOBALREGDIR ('GLOBALREGDIR')":DIR "${GLOBALREGDIR/#-/ -}" \
+	--field="     $GUI_GLOBALTWEAKDIR!$DESC_GLOBALTWEAKDIR ('GLOBALTWEAKDIR')":DIR "${GLOBALTWEAKDIR/#-/ -}" \
+	--field="     $GUI_GLOBALSBSTWEAKDIR!$DESC_GLOBALSBSTWEAKDIR ('GLOBALSBSTWEAKDIR')":DIR "${GLOBALSBSTWEAKDIR/#-/ -}" \
+	--field="     $GUI_GLOBALUSERTWEAKDIR!$DESC_GLOBALUSERTWEAKDIR ('GLOBALUSERTWEAKDIR')":DIR "${GLOBALUSERTWEAKDIR/#-/ -}" \
+	--field="     $GUI_GLOBALTWEAKCMDDIR!$DESC_GLOBALTWEAKCMDDIR ('GLOBALTWEAKCMDDIR')":DIR "${GLOBALTWEAKCMDDIR/#-/ -}" \
+	--field="     $GUI_GLOBALCATEGORYDIR!$DESC_GLOBALCATEGORYDIR ('GLOBALCATEGORYDIR')":DIR "${GLOBALCATEGORYDIR/#-/ -}" \
+	--field="     $GUI_GLOBALMISCDIR!$DESC_GLOBALMISCDIR ('GLOBALMISCDIR')":DIR "${GLOBALMISCDIR/#-/ -}" \
+	--field="     $GUI_GLOBALSTLLANGDIR!$DESC_GLOBALSTLLANGDIR ('GLOBALSTLLANGDIR')":DIR "${GLOBALSTLLANGDIR/#-/ -}" \
+	--field="     $GUI_STRACEDIR!$DESC_STRACEDIR ('STRACEDIR')":DIR "${STRACEDIR/#-/ -}" \
+	--field="     $PROGNAME $GUI_LOGDIR!$(strFix "$DESC_LOGDIR" "$PROGNAME") ('LOGDIR')":DIR "${LOGDIR/#-/ -}" \
+	--field="     $GUI_LOGLEVEL!$DESC_LOGLEVEL ('LOGLEVEL')":CB "${LOGLEVEL/#-/ -}!0!1!2" \
 	--field=" ":LBL " " \
-	--field="     $GUI_CREATETWEAKS!$DESC_CREATETWEAKS":CHK "${CREATETWEAKS/#-/ -}" \
-	--field="     $GUI_ATVALIDATE!$DESC_ATVALIDATE":NUM "${ATVALIDATE/#-/ -}" \
-	--field="     $GUI_AUTOTWEAKS!$DESC_AUTOTWEAKS" "${AUTOTWEAKS/#-/ -}" \
+	--field="     $GUI_CREATETWEAKS!$DESC_CREATETWEAKS ('CREATETWEAKS')":CHK "${CREATETWEAKS/#-/ -}" \
+	--field="     $GUI_ATVALIDATE!$DESC_ATVALIDATE ('ATVALIDATE')":NUM "${ATVALIDATE/#-/ -}" \
+	--field="     $GUI_AUTOTWEAKS!$DESC_AUTOTWEAKS ('AUTOTWEAKS')" "${AUTOTWEAKS/#-/ -}" \
 	--field=" ":LBL " " \
-	--field="     $GUI_USENOTIFIER!$DESC_USENOTIFIER":CHK "${USENOTIFIER/#-/ -}" \
-	--field="     $GUI_NOTY!$DESC_NOTY":FL "${NOTY/#-/ -}" \
+	--field="     $GUI_USENOTIFIER!$DESC_USENOTIFIER ('USENOTIFIER')":CHK "${USENOTIFIER/#-/ -}" \
+	--field="     $GUI_NOTY!$DESC_NOTY ('NOTY')":FL "${NOTY/#-/ -}" \
 	--field=" ":LBL " " \
-	--field="     $GUI_STLEDITOR!$DESC_STLEDITOR":FL "${STLEDITOR/#-/ -}" \
-	--field="     $GUI_WAITEDITOR!$DESC_WAITEDITOR":NUM "${WAITEDITOR/#-/ -}" \
-	--field="     $GUI_MAXASK!$DESC_MAXASK":NUM "${MAXASK/#-/ -}" \
-	--field="     $GUI_BROWSER!$DESC_BROWSER":FL "${BROWSER/#-/ -}" \
+	--field="     $GUI_STLEDITOR!$DESC_STLEDITOR ('STLEDITOR')":FL "${STLEDITOR/#-/ -}" \
+	--field="     $GUI_MAXASK!$DESC_MAXASK ('MAXASK')":NUM "${MAXASK/#-/ -}" \
+	--field="     $GUI_BROWSER!$DESC_BROWSER ('BROWSER')":FL "${BROWSER/#-/ -}" \
 	--field=" ":LBL " " \
-	--field="     $GUI_DOWNLOAD_RESHADE!$DESC_DOWNLOAD_RESHADE":CHK "${DOWNLOAD_RESHADE/#-/ -}" \
-	--field="     $GUI_RSVERS!$DESC_RSVERS" "${RSVERS/#-/ -}" \
-	--field="     $GUI_RESHADESRCDIR!$DESC_RESHADESRCDIR":DIR "${RESHADESRCDIR/#-/ -}" \
-	--field="     $GUI_RS_64!$DESC_RS_64" "${RS_64/#-/ -}" \
-	--field="     $GUI_RS_32!$DESC_RS_32" "${RS_32/#-/ -}" \
-	--field="     $GUI_RS_D3D47_64!$DESC_RS_D3D47_64" "${RS_D3D47_64/#-/ -}" \
-	--field="     $GUI_RS_D3D47_32!$DESC_RS_D3D47_32" "${RS_D3D47_32/#-/ -}" \
+	--field="     $GUI_DOWNLOAD_RESHADE!$DESC_DOWNLOAD_RESHADE ('DOWNLOAD_RESHADE')":CHK "${DOWNLOAD_RESHADE/#-/ -}" \
+	--field="     $GUI_RSVERS!$DESC_RSVERS ('RSVERS')" "${RSVERS/#-/ -}" \
+	--field="     $GUI_RESHADESRCDIR!$DESC_RESHADESRCDIR ('RESHADESRCDIR')":DIR "${RESHADESRCDIR/#-/ -}" \
+	--field="     $GUI_RS_64!$DESC_RS_64 ('RS_64')" "${RS_64/#-/ -}" \
+	--field="     $GUI_RS_32!$DESC_RS_32 ('RS_32')" "${RS_32/#-/ -}" \
+	--field="     $GUI_RS_D3D47_64!$DESC_RS_D3D47_64 ('RS_D3D47_64')" "${RS_D3D47_64/#-/ -}" \
+	--field="     $GUI_RS_D3D47_32!$DESC_RS_D3D47_32 ('RS_D3D47_32')" "${RS_D3D47_32/#-/ -}" \
 	--field=" ":LBL " " \
-	--field="     $GUI_SAVESETSIZE!$DESC_SAVESETSIZE":CHK "${SAVESETSIZE/#-/ -}" \
-	--field="     $GUI_AUTOPULLPROTON!$DESC_AUTOPULLPROTON":CHK "${AUTOPULLPROTON/#-/ -}" \
-	--field="     $GUI_AUTOLASTPROTON!$DESC_AUTOLASTPROTON":CHK "${AUTOLASTPROTON/#-/ -}" \
-	--field="     $GUI_CUSTPROTDLDIR!$DESC_CUSTPROTDLDIR":DIR "${CUSTPROTDLDIR/#-/ -}" \
-	--field="     $GUI_CUSTPROTEXTDIR!$DESC_CUSTPROTEXTDIR":DIR "${CUSTPROTEXTDIR/#-/ -}" \
+	--field="     $GUI_SAVESETSIZE!$DESC_SAVESETSIZE ('SAVESETSIZE')":CHK "${SAVESETSIZE/#-/ -}" \
+	--field="     $GUI_AUTOPULLPROTON!$DESC_AUTOPULLPROTON ('AUTOPULLPROTON')":CHK "${AUTOPULLPROTON/#-/ -}" \
+	--field="     $GUI_AUTOLASTPROTON!$DESC_AUTOLASTPROTON ('AUTOLASTPROTON')":CHK "${AUTOLASTPROTON/#-/ -}" \
+	--field="     $GUI_CUSTPROTDLDIR!$DESC_CUSTPROTDLDIR ('CUSTPROTDLDIR')":DIR "${CUSTPROTDLDIR/#-/ -}" \
+	--field="     $GUI_CUSTPROTEXTDIR!$DESC_CUSTPROTEXTDIR ('CUSTPROTEXTDIR')":DIR "${CUSTPROTEXTDIR/#-/ -}" \
 	--field="     $GUI_ADDCUSTPROT!$BUT_ADDCUSTPROT":BTN "\"$0\" acp" \
 	--field="     $GUI_DLCUSTPROT!$BUT_DLCUSTPROT":BTN "\"$0\" acp dl" \
-	--field="     $GUI_GAMETABCOLS!$DESC_GAMETABCOLS":CB "${GAMETABCOLS/#-/ -}!1!2!3!4!5" \
-	--field="     $GUI_GLOBTABCOLS!$DESC_GLOBTABCOLS":CB "${GLOBTABCOLS/#-/ -}!1!2!3!4!5" \
-	--field="     $GUI_VORTTABCOLS!$DESC_VORTTABCOLS":CB "${VORTTABCOLS/#-/ -}!1!2!3!4!5" \
+	--field="     $GUI_GAMETABCOLS!$DESC_GAMETABCOLS ('GAMETABCOLS')":CB "${GAMETABCOLS/#-/ -}!1!2!3!4!5" \
+	--field="     $GUI_GLOBTABCOLS!$DESC_GLOBTABCOLS ('GLOBTABCOLS')":CB "${GLOBTABCOLS/#-/ -}!1!2!3!4!5" \
+	--field="     $GUI_VORTTABCOLS!$DESC_VORTTABCOLS ('VORTTABCOLS')":CB "${VORTTABCOLS/#-/ -}!1!2!3!4!5" \
 	> "$cfg3" &
 	YADPID3="$!"
 
@@ -2032,16 +2357,16 @@ function openSettings {
 	--columns="$VORTTABCOLS" \
 	--text="<span font_weight='bold'>$GUI_SETHEAD4</span>" \
 	--field=" ":LBL " " \
-	--field="     $GUI_VORTEXINSTALL!$DESC_VORTEXINSTALL":CHK "${VORTEXINSTALL/#-/ -}" \
-	--field="     $GUI_VORTEXWINE!$DESC_VORTEXWINE":FL "${VORTEXWINE/#-/ -}" \
-	--field="     $GUI_VORTEXPREFIX!$DESC_VORTEXPREFIX":DIR "${VORTEXPREFIX/#-/ -}" \
-	--field="     $GUI_VORTEXWINEDEBUG!$DESC_VORTEXWINEDEBUG" "${VORTEXWINEDEBUG/#-/ -}" \
-	--field="     $GUI_VORTEX_DXVK_LOG_LEVEL!$DESC_VORTEX_DXVK_LOG_LEVEL":CB "${VORTEX_DXVK_LOG_LEVEL/#-/ -}!none!error!warn!info!debug" \
-	--field="     $GUI_VORTEX_DXVK_LOG_PATH!$DESC_VORTEX_DXVK_LOG_PATH" "${VORTEX_DXVK_LOG_PATH/#-/ -}" \
-	--field="     $GUI_VORTEXDOWNLOADPATH!$DESC_VORTEXDOWNLOADPATH":DIR "${VORTEXDOWNLOADPATH/#-/ -}" \
-	--field="     $GUI_VORTEXVERSION!$DESC_VORTEXVERSION" "${VORTEXVERSION/#-/ -}" \
+	--field="     $GUI_VORTEXINSTALL!$DESC_VORTEXINSTALL ('VORTEXINSTALL')":CHK "${VORTEXINSTALL/#-/ -}" \
+	--field="     $GUI_VORTEXWINE!$DESC_VORTEXWINE ('VORTEXWINE')":FL "${VORTEXWINE/#-/ -}" \
+	--field="     $GUI_VORTEXPREFIX!$DESC_VORTEXPREFIX ('VORTEXPREFIX')":DIR "${VORTEXPREFIX/#-/ -}" \
+	--field="     $GUI_VORTEXWINEDEBUG!$DESC_VORTEXWINEDEBUG ('VORTEXWINEDEBUG')" "${VORTEXWINEDEBUG/#-/ -}" \
+	--field="     $GUI_VORTEX_DXVK_LOG_LEVEL!$DESC_VORTEX_DXVK_LOG_LEVEL ('VORTEX_DXVK_LOG_LEVEL')":CB "${VORTEX_DXVK_LOG_LEVEL/#-/ -}!none!error!warn!info!debug" \
+	--field="     $GUI_VORTEX_DXVK_LOG_PATH!$DESC_VORTEX_DXVK_LOG_PATH ('VORTEX_DXVK_LOG_PATH')" "${VORTEX_DXVK_LOG_PATH/#-/ -}" \
+	--field="     $GUI_VORTEXDOWNLOADPATH!$DESC_VORTEXDOWNLOADPATH ('VORTEXDOWNLOADPATH')":DIR "${VORTEXDOWNLOADPATH/#-/ -}" \
+	--field="     $GUI_VORTEXVERSION!$DESC_VORTEXVERSION ('VORTEXVERSION')" "${VORTEXVERSION/#-/ -}" \
 	--field="     $GUI_ADDVORTSTAGE!$BUT_ADDVORTSTAGE":BTN "stl vortex stage" \
-	--field="     $GUI_DISAS!$DESC_DISABLE_AUTOSTAGES":CHK "${DISABLE_AUTOSTAGES/#-/ -}" \
+	--field="     $GUI_DISAS!$(strFix "$DESC_DISABLE_AUTOSTAGES" "$PROGNAME") ('DISABLE_AUTOSTAGES')":CHK "${DISABLE_AUTOSTAGES/#-/ -}" \
 	--field=" ":LBL " " \
 	--field=" ":LBL " " > "$cfg4" &
 	YADPID4="$!"
@@ -2054,18 +2379,13 @@ function openSettings {
 	loadCfg "$STLGUICFG" X
 	updateWinRes "$TITLE" "$STLGUICFG" "SETWIDTH" "SETHEIGHT" &
 
-	if [ "$ISGAME" -ge 1 ]; then
-		BUT0="$BUT_SAVEPLAY"
-		BUT5="$BUT_PLAY"
-	else
-		BUT0="$BUT_SAVEEXIT"
-		BUT5="$BUT_EXIT"
-	fi
-
+	BUT0="$BUT_SAVEPLAY"
 	BUT1="$BUT_EDITORMENU"
 	BUT2="$BUT_RELOAD"
 #	BUT3="BROKEN"
 	BUT4="$BUT_SAVERELOAD"
+	BUT5="$BUT_PLAY"
+	BUT6="$BUT_EXIT"
 
 	SETHEAD="${PROGNAME} (${PROGCMD}) - ${PROGVERS} $GUI_SET"
 	
@@ -2074,14 +2394,29 @@ function openSettings {
     --title="$TITLE" \
 	--geometry="$SETWIDTH"x"$SETHEIGHT"+0+0 \
     --text="$SETHEAD" \
+	--button="$BUT6":6 \
 	--button="$BUT5":5 \
 	--button="$BUT1":1 \
 	--button="$BUT2":2 \
 	--button="$BUT4":4 \
 	--button="$BUT0":0
 	case $? in
+		6)  {
+				closeSTL
+				writelog "INFO" " ######### STOP EARLY $PROGNAME $PROGVERS #########"
+				exit
+			}
+		;;
 		5) 	{
-			writelog "INFO" "${FUNCNAME[0]} - exiting GUI"
+				if [ "$ISGAME" -ge 1 ]; then
+					writelog "INFO" "${FUNCNAME[0]} - starting game" "E"
+				else
+					 if [ "$ISGAME" -ne 1 ] && [ "$AID" != "$PLACEHOLDERAID" ]; then
+						STEAMARGS=(-applaunch "$AID")
+						writelog "INFO" "${FUNCNAME[0]} - -------- starting game $AID in steam --------" "E"
+						"$STEAM" "${STEAMARGS[@]}" 2>/dev/null >/dev/null &
+					fi
+				fi
 			}
 		;;
 		1) 	{
@@ -2113,11 +2448,18 @@ function openSettings {
 			writelog "INFO" "${FUNCNAME[0]} - start saveAllYadConfigs"
 			saveAllYadConfigs
 			writelog "INFO" "${FUNCNAME[0]} - stop saveAllYadConfigs"
+			if [ "$ISGAME" -ge 1 ]; then
+				writelog "INFO" "${FUNCNAME[0]} - starting game"
+			else
+				 if [ "$ISGAME" -ne 1 ] && [ "$AID" != "$PLACEHOLDERAID" ]; then
+					STEAMARGS=(-applaunch "$AID")
+					writelog "INFO" "${FUNCNAME[0]} - -------- starting game $AID in steam --------" "E"
+					"$STEAM" "${STEAMARGS[@]}" 2>/dev/null >/dev/null &
+				fi
+			fi
 			}
 		;;
 	esac
-
-# when setting above '5' to '4' and the '4' to '3' (so not leaving out '3') the SAVE/RELOAD function doesn't save!? wtf?
 
 	writelog "INFO" "${FUNCNAME[0]} - cleaning YadFiles"
 	cleanYadFiles
@@ -2152,75 +2494,54 @@ function howto {
 	echo "========================="
 	echo "$PROGNAME $PROGVERS"
 	echo "========================="
-	echo "  general usage:"
-	echo "-----------------------"
-	echo "  Just add this program to your steam game command line like:"
-	echo "  'stl %command%'"
+	echo "Usage: $PROGCMD [options]..."
 	echo ""
-	echo "  game specific use:"
-	echo "-----------------------"
-	echo "  When starting a game with $PROGCMD it will check if a config file exists in $STLGAMEDIR/$SteamAppId.conf for the game"
-	echo "  if it is not available it is created from the default config file (which is automatically created if not found)."
-	echo "  $PROGCMD also has a global configfile $STLDEFGLOBALCFG, all settings configured in here are initialized at first and therefore are default for all games,"
-	echo "  and will only be overridden, if the game specific config $STLGAMEDIR/$SteamAppId.conf has an other value"
-	echo ""
-	echo "  When starting the game a small requester will popup (default 2 seconds)."
-	echo "  When you want to change settings for that game press space to open the game configuration and adjust it to your needs."
-	echo "  The game start will wait until you're done and your changes are used on the fly."
-	echo "  for more functions please check the configs and or the README - if something is not clear please file a bugreport on the projectpage $PROJECTPAGE"
-	echo ""
-	echo "  you can also change settings via command line with"
-	echo "  'stl set ENTRY ($SteamAppId or 'all') VALUE'"
-	echo "  example:"
-	echo "  'stl set PROTON_DEBUG_DIR_FILE 1232570 /random/path/'"
-	echo "  will set PROTON_DEBUG_DIR for the game 1232570 to /random/path/ if the game has a config file in $STLGAMEDIR"
-	echo "  'stl set RUN_REPLAY all 1'"
-	echo "  will enable RUN_REPLAY in all game config files found in $STLGAMEDIR"
-	echo "------------------------"
-	echo "  custom commands:"
-	echo "------------------------"
-	echo " 'stl settings (optional steamid or 'last')'"
-	echo "  using $YAD this will open the $PROGCMD settings gui optionally with game SteamAppID or 'last' for the last SteamAppID stored in '$LASTRUN'"
-	echo "  using $ZENITY this will open the $PROGCMD Editor dialog optionally with game SteamAppID or 'last' for the last SteamAppID stored in '$LASTRUN'"
-	echo "------------------------"
-	echo " 'stl addcustomproton' or just 'stl acp'"
-	echo "  will open a filerequester where a custom proton executable can be added to the Autogenerated list with available Proton Versions"
-	echo "  alternatively the command accepts:"
-	echo "  - an absolute path to a proton executable"
-	echo "  - a download URL of a proton archive"
-	echo "  (both with optional Proton Version name as argument 2)"
-	echo "  - 'dl' will open a dropdownmenu with online available custom proton builds to choose from (autodownload and install)"
-	echo "  (the dropdownmenu also accepts text input to enter a download URL directly)"
-	echo "------------------------"
-	echo " 'stl compat 'add|del|get'"
-	echo "  will add|del|get $PROGCMD as Steam compatibility tool under '$STEAMCOMPATOOLS'"
-	echo "------------------------"
-	echo " 'stl dl git'"
-	echo "  will update $PROGCMD git repo in '$GLDLSTLDIR'"
-	echo "------------------------"
-	echo "  'stl vortex ENTRY VALUE'"
-	echo "  example:"
-	echo "  'stl vortex install'"
-	echo "  will install vortex"
-	echo "  'stl vortex start'"
-	echo "  will start vortex"
-	echo "  'stl vortex getset'"
-	echo "  will list vortex configuration"
-	echo "  'stl vortex stage'"
-	echo "  will open a dialog where a vortex stage directory can be added"
-	echo "  (accepts absolute path to the (to be created) directory as argument to skip the dialog)"
-	echo "------------------------"
-	echo "  'stl autotweaks PLAFTORM (optional steamid)'"
-	echo "  will autogenerate all tweak files for every parsible game of platform PLATFORM or just for the optional SteamAppID"
-	echo "  where valid platforms are"
-	echo "  $AUTOTWEAKPLATFORMS"
-	echo "------------------------"
-	echo "  'lang=' option"
-	echo "  You can either append a valid language file name without suffix or an absolute path to a valid language file"
-	echo "  example:"
-	echo "  'stl lang=german'"
-	echo "  'stl lang=/some/path/to/german.txt'"
-	echo "------------------------"
+	echo "where options include:"
+	echo "    compat <cmd>                     Will (add|del|get) $PROGCMD as" 
+	echo "                                     Steam compatibility tool"
+	echo "                                     under 'STEAMCOMPATOOLS'"
+	echo "    settings <value>                 Opens the settings menu"
+	echo "                                     (for 'SteamAppID' or 'last')"
+	echo "    dlcustomproton|dcp <url>         Download/install custom Proton"
+	echo "                                     from filerequester or"
+	echo "                                     directly from <url>"
+	echo "    addcustomproton|acp <path>       Adds local custom Proton to"
+	echo "                                     the internal list from dialog"
+	echo "                                     or directly from <path>"
+	echo "    update <value>                   Updates <value>:"
+    echo "           git                       Will update $PROGCMD git repo"
+    echo "                                     in 'GLDLSTLDIR'"
+	echo "           gamedata <SteamAppID>     Updates missing desktopfiles"
+	echo "                                     and pictures of installed games"
+	echo "                                     or only from <SteamAppID>"
+	echo "           allgamedata               The same as above for"
+	echo "                                     all games in $SCV"
+	echo "    vortex <value>                   Vortex commandline options"
+	echo "           install                   Installs vortex"
+	echo "           start                     Starts vortex"
+	echo "           getset                    Show config of installed vortex"
+	echo "           stage <path>              Add vortex stage via dialog"
+    echo "                                     or directly the one given in <path>"
+	echo "    autotweaks|at ('dl') <platform>  Import all fixes as $PROGCMD-tweak"
+    echo "                                     from <platform>. Valid platforms:"
+    echo "                                     $AUTOTWEAKPLATFORMS"
+    echo "                                     'dl' updates the source before import"
+ 	echo "    launcher <args>                  Start the Game Launcher"
+	echo "             CATEGORY                Show only installed games"
+	echo "                                     from Steam Category CATEGORY"
+	echo "             menu                    Open Steam Category Menu"
+	echo "             last                    Open last Game as 'Menu'"
+	echo "             auto                    Create/Download data for all"
+	echo "                                     installed games before opening the launcher"
+	echo "             update                  ReCreate all Category Menus"
+	echo "                                     Can be combined with auto"
+	echo "    set <var> <for> <value>          Change configuration settings"
+	echo "                                     Example:"
+	echo "    set RUN_REPLAY all 1             Set RUN_REPLAY for all games to 1"
+	echo "    lang=<option>                    Mostly to get translated configs"
+	echo "                                     on inital setup. <option> can be"
+	echo "                                     a language file name without suffix"
+	echo "                                     or an path to a valid language file"
 }
 
 function writelog {
@@ -2237,16 +2558,18 @@ LOGONE="404,ERROR,SKIP,WARN,CREATE"
 		LOGLEVEL=2
 	fi
 	
-	if [ "$AID" != "$PLACEHOLDERAID" ]; then
-		if [ "$LOGLEVEL" -eq 1 ]; then
-			if grep -q "$1" <<< "$LOGONE"; then
-				echo "$(date) $1 - $2" >> "$LOGFILE"
-			fi
-		fi
+	if [ "$AID" == "$PLACEHOLDERAID" ]; then
+		LOGFILE="$TEMPLOG"
+	fi
 
-		if [ "$LOGLEVEL" -eq 2 ]; then
+	if [ "$LOGLEVEL" -eq 1 ]; then
+		if grep -q "$1" <<< "$LOGONE"; then
 			echo "$(date) $1 - $2" >> "$LOGFILE"
 		fi
+	fi
+
+	if [ "$LOGLEVEL" -eq 2 ]; then
+		echo "$(date) $1 - $2" >> "$LOGFILE"
 	fi
 
 	if [ -n "$3" ]; then
@@ -2339,71 +2662,51 @@ function usevkBasalt {
 	fi
 }
 
+function getWindowHeight {
+	WINID="$1"
+	"$XWININFO" -id "$WINID" -stats | awk '$1=="-geometry" {print $2}' | cut -d '+' -f1 | cut -d 'x' -f2
+}
+
 function waitForGameWindow {
+	writelog "INFO" "${FUNCNAME[0]} trying to autofind game windowid for the biggest window of game exe '$GE' running with PID '$SBSVRKGPID'"
+
 	FOUNDWIN=0
 
 	while [ "$("$XDO" search --pid "$SBSVRKGPID" | wc -l)" -eq 0 ]; do 
 		writelog "WAIT" "${FUNCNAME[0]} - waiting for any window id to appear for PID '$SBSVRKGPID' - currently '$("$XDO" search --pid "$SBSVRKGPID" | wc -l)'"
 		sleep 1
+		if [ -f "$CLOSETMP" ]; then
+			writelog "WAIT" "${FUNCNAME[0]} - $PROGCMD is just closing - leaving loop"
+			break
+		fi
 	done
 	writelog "INFO" "${FUNCNAME[0]} - found '$("$XDO" search --pid "$SBSVRKGPID" | wc -l)' window ids of PID '$SBSVRKGPID' to analyze"	
 
 	while read -r WINS; do
-
-	if [ "$("$XPROP" -id "$(printf 0x%x'\n' "$WINS")" | grep "_NET_WM_STATE(ATOM)" -c)" -ge 1 ]; then
-		writelog "INFO" "${FUNCNAME[0]} - found a controllable windowid"
-		WSIZ=$(($("$XWININFO" -id "$WINS" -stats | awk '$1=="-geometry" {print $2}' | awk -F '+'  '{print $1}' | sed "s:x:\*:")))
-		if [ "$WSIZ" -lt "307200" ]; then
-			writelog "SKIP" "${FUNCNAME[0]} - '$(printf 0x%x'\n' "$WINS")' is smaller than 640x480 - this is very likely not the game window - skipping"
-		else
-			writelog "INFO" "${FUNCNAME[0]} - found a big enough window with windowid '$(printf 0x%x'\n' "$WINS")'"
-			writelog "INFO" "${FUNCNAME[0]} - this is probably the game window, but making another check"
-			WSIZ=$(($("$XWININFO" -id "$WINS" -stats | awk '$1=="-geometry" {print $2}' | awk -F '+'  '{print $1}' | sed "s:x:\*:")))
-			FOUNDWIN=1
-			break
+		if [ "$("$XPROP" -id "$(printf 0x%x'\n' "$WINS")" | grep "_NET_WM_STATE(ATOM)" -c)" -ge 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - found a controllable windowid"
+			WSIZ="$(getWindowHeight "$WINS")"
+			if [ "$WSIZ" -lt "$MINVRWINH" ]; then
+				writelog "SKIP" "${FUNCNAME[0]} - '$(printf 0x%x'\n' "$WINS")' height is less than $MINVRWINH - this is very likely not the game window - skipping"
+			else
+				writelog "INFO" "${FUNCNAME[0]} found windowid $(printf 0x%x'\n' "$WINS") for '$GE' running with PID '$SBSVRKGPID'"
+				export GAMEWINDOWID="$WINS"
+				FOUNDWIN=1
+				break
+			fi
 		fi
-	fi
 	done <<< "$("$XDO" search --pid "$SBSVRKGPID")"
 
 	if [ "$FOUNDWIN" -eq 0 ]; then
-		writelog "INFO" "${FUNCNAME[0]} - no usable game window found - trying again"
-		"${FUNCNAME[0]}"
+		if [ -f "$CLOSETMP" ]; then
+			writelog "WAIT" "${FUNCNAME[0]} - $PROGCMD is just closing - leaving loop"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - no usable game window found - trying again"
+			"${FUNCNAME[0]}"
+		fi
 	else
 		writelog "INFO" "${FUNCNAME[0]} - found a usable gamewindow'"
 	fi
-}
-
-# exports GAMEWINDOWID - the windowid of the biggest window of $GE
-function getBiggestGameWindowWID {
-	writelog "INFO" "${FUNCNAME[0]} trying to autofind game windowid for the biggest window of game exe '$GE' running with PID '$SBSVRKGPID'"
-
-	declare -i MAXSIZ=0
-	MAXWIN="0x0"
-	
-	waitForGameWindow
-		
-	while read -r WINS; do
-		writelog "DEBUG" "${FUNCNAME[0]} found window id '$WINS' for PID '$SBSVRKGPID' with geometry: $("$XWININFO" -id "$WINS" -stats | awk '$1=="-geometry" {print $2}')"
-		if [ "$("$XPROP" -id "$(printf 0x%x'\n' "$WINS")" | grep "_NET_WM_STATE(ATOM)" -c)" -ge 1 ]; then
-			WSIZ=$(($("$XWININFO" -id "$WINS" -stats | awk '$1=="-geometry" {print $2}' | awk -F '+'  '{print $1}' | sed "s:x:\*:")))
-			if [ "$WSIZ" -lt "307200" ]; then
-				writelog "SKIP" "${FUNCNAME[0]} - '$(printf 0x%x'\n' "$WINS")' is smaller than 640x480 - this is very likely not the game window - skipping"
-			else
-				writelog "DEBUG" "${FUNCNAME[0]} found WINS '$WINS' window ID for PID '$SBSVRKGPID' with geometry: $("$XWININFO" -id "$WINS" -stats | awk '$1=="-geometry" {print $2}') so WSIZ is '$WSIZ' and MAXSIZ currently is '$MAXSIZ'"
-				if [ "$WSIZ" -gt "$MAXSIZ" ]; then
-					MAXSIZ=$WSIZ	
-					MAXWIN="$(printf 0x%x'\n' "$WINS")"
-					writelog "DEBUG" "${FUNCNAME[0]} MAXSIZ now is '$MAXSIZ' WINS is '$WINS' and MAXWIN is '$MAXWIN'"
-				fi
-			fi
-		else
-			writelog "DEBUG" "${FUNCNAME[0]} skipping '$WINS' - doesn't look usable"
-		fi
-
-	done <<< "$("$XDO" search --pid "$SBSVRKGPID")"
-	
-	writelog "INFO" "${FUNCNAME[0]} found windowid $(printf 0x%x'\n' "$MAXWIN") for '$GE' running with PID '$SBSVRKGPID'"
-	export GAMEWINDOWID="$MAXWIN"
 }
 
 function SBSstartSVR {
@@ -2413,10 +2716,10 @@ function SBSstartSVR {
 
 		writelog "INFO" "${FUNCNAME[0]} - -------- starting SBS-VR --------"
 
-		if pgrep "" -a | grep -v grep | grep "/vrcompositor" -q ; then
+		if "$PGREP" -a "vrcompositor" >/dev/null ; then
 			writelog "INFO" "${FUNCNAME[0]} - looks like SteamVR is already running - skipping this function"
 		else
-			if [ "$(pgrep "" -a | grep -v grep | grep "/vrcompositor" -c)" -eq 0 ] ; then
+			if ! "$PGREP" -a "vrcompositor" >/dev/null ; then
 				writelog "INFO" "${FUNCNAME[0]} - vrcompositor not running, so starting SteamVR now:"
 				if ! "$STEAM" "${STEAMVRARGS[@]}" 2>/dev/null >/dev/null ; then
 					writelog "SKIP" "${FUNCNAME[0]} - starting SteamVR FAILED - skipping SBS-VR"
@@ -2427,14 +2730,18 @@ function SBSstartSVR {
 				fi
 			fi
 
-			if [ "$(pgrep "" -a | grep -v grep | grep "/vrstartup" -c)" -eq 0 ] ; then
+			if ! "$PGREP" -a "vrstartup" >/dev/null ; then
 				writelog "INFO" "${FUNCNAME[0]} - no vrstartup process running"
 			else
 				if [ "$SVRJUSTSTARTED" -eq 1 ]; then
 					writelog "INFO" "${FUNCNAME[0]} - SteamVR initializing"
 					while true; do
 						writelog "INFO" "${FUNCNAME[0]} - waiting for end of vrstartup"
-						if [ "$(pgrep "" -a | grep -v grep | grep "/vrstartup" -c)" -eq 0 ] ; then
+						if ! "$PGREP" -a "vrstartup" >/dev/null ; then
+							break
+						fi
+						if [ -f "$CLOSETMP" ]; then
+							writelog "WAIT" "${FUNCNAME[0]} - $PROGCMD is just closing - leaving loop"
 							break
 						fi
 					done
@@ -2446,21 +2753,25 @@ function SBSstartSVR {
 
 			if [ "$SVRJUSTSTARTED" -eq 1 ]; then
 				while true; do
-					if [ "$(pgrep "" -a | grep -v grep | grep "/vrstartup" -c)" -eq 0 ] ; then
+					if ! "$PGREP" -a "vrstartup" >/dev/null ; then
 						writelog "WAIT" "${FUNCNAME[0]} - no vrstartup instance running"
 						break
 					fi
-					writelog "WAIT" "${FUNCNAME[0]} - waiting for end of vrstartup TIMEOUT?"
+					if [ -f "$CLOSETMP" ]; then
+						writelog "WAIT" "${FUNCNAME[0]} - $PROGCMD is just closing - leaving loop"
+						break
+					fi
+					writelog "WAIT" "${FUNCNAME[0]} - waiting for end of vrstartup"
 				done
 			fi
 
 			if [ "$SVRJUSTSTARTED" -eq 1 ]; then
 			MAXWAIT=10
 			COUNTER=0
-				while ! pgrep "" -a | grep -v grep | grep "/vrcompositor" -q; do
+				while ! "$PGREP" -a "vrcompositor" >/dev/null; do
 					if [[ "$COUNTER" -ge "MAXWAIT" ]]; then
 						writelog "SKIP" "${FUNCNAME[0]} - ERROR - timeout waiting for SteamVR - exit"
-						pkill -f "$VRVIDEOPLAYER"
+						"$PKILL" -f "$VRVIDEOPLAYER"
 						RUNSBSVR=0
 						exit 1
 					fi
@@ -2472,9 +2783,9 @@ function SBSstartSVR {
 				writelog "INFO" "${FUNCNAME[0]} -  we didn't start SteamVR before so no need to wait for vrcompositor"
 			fi
 
-			if pgrep "" -a | grep -v grep | grep "/vrcompositor" -q ; then
+			if "$PGREP" -a "vrcompositor" >/dev/null ; then
 				while true; do
-					if [ "$(pgrep "" -a | grep -v grep | grep "/vrstartup" -c)" -eq 0 ] ; then
+					if ! "$PGREP" -a "vrstartup" >/dev/null ; then
 						writelog "WAIT" "${FUNCNAME[0]} - no vrstartup instance running - looks good"
 						break
 					fi
@@ -2524,7 +2835,7 @@ function getGameWindowData {
 	# GAMEPID is required for getBiggestGameWindow, so getting it:
 	SBSgetGamePID
 
-	getBiggestGameWindowWID
+	waitForGameWindow
 
 	if [ "$GAMEWINDOWID" == "0x0" ]; then
 		writelog "SKIP" "${FUNCNAME[0]} - autodetecting the windowid failed - has to be selected manually"
@@ -2532,11 +2843,21 @@ function getGameWindowData {
 	fi
 
 	if [ -n "$GAMEWINDOWID" ]; then
-		# GAMEWINDOWID is already enough to continue, but also saving the GAMEWINDOW into the config to speed up future starts
-		if [ "$GAMEWINDOWID" != "0x0" ]; then
-			getGameWindowName "$GAMEWINDOWID"
+
+
+		WSIZ="$(getWindowHeight "$WINS")"
+		writelog "INFO" "${FUNCNAME[0]} - Found Window Height for gameid '$GAMEWINDOWID' is '$WSIZ' and minimal VR Height is '$MINVRWINH'"
+
+		if [ "$WSIZ" -lt "$MINVRWINH" ]; then
+			writelog "SKIP" "${FUNCNAME[0]} - found GAMEWINDOWID '$GAMEWINDOWID' is smaller than allowed MINVRWINH '$MINVRWINH for game '$GN'"
+			writelog "SKIP" "${FUNCNAME[0]} - not saving game window as this is possibly is not the correct window"
 		else
-			writelog "SKIP" "${FUNCNAME[0]} - GAMEWINDOWID '$GAMEWINDOWID' is invalid - giving up!"
+			# GAMEWINDOWID is already enough to continue, but also saving the GAMEWINDOW into the config to speed up future starts
+			if [ "$GAMEWINDOWID" != "0x0" ]; then
+				getGameWindowName "$GAMEWINDOWID"
+			else
+				writelog "SKIP" "${FUNCNAME[0]} - GAMEWINDOWID '$GAMEWINDOWID' is invalid - giving up!"
+			fi
 		fi
 	else
 		writelog "SKIP" "${FUNCNAME[0]} - could not determine the windowid of the game GAMEWINDOWID and therefore also not the GAMEWINDOW"
@@ -2545,7 +2866,7 @@ function getGameWindowData {
 
 function getCfgHeader {
 	echo "#########"
-	echo "#GAMENAME=\"$GN\""
+	echo "#GAMENAME=\"$GAMENAME\""
 	echo "#GAMEEXE=\"$GE\""
 	echo "#GAMEID=\"$AID\""
 	echo "#PROTONVERSION=\"$PROTONVERSION\""
@@ -2558,6 +2879,7 @@ function SBScheckSBScfg  {
 			writelog "INFO" "${FUNCNAME[0]} - loading SBS configfile '$SBSTWEAKCFG' to get current values"
 			loadCfg "$SBSTWEAKCFG"
 		else
+			getGameName "$AID"
 			getCfgHeader >> "$SBSTWEAKCFG"
 			writelog "INFO" "${FUNCNAME[0]} - created base config $SBSTWEAKCFG"
 		fi
@@ -2616,8 +2938,8 @@ function SBSrunVRVideoPlayer {
 	if [ "$RUNSBSVR" -ge 1 ]; then
 		if [ -z "$GAMEWINDOWID" ]; then
 			writelog "SKIP" "${FUNCNAME[0]} - ERROR - GAMEWINDOWID is empty - "
-			writelog "SKIP" "${FUNCNAME[0]} - ERROR - forcefully killing game with pkill -9 '$SBSVRKGPID' - should exit this script as well"
-			pkill -9 "$SBSVRKGPID"
+			writelog "SKIP" "${FUNCNAME[0]} - ERROR - forcefully killing game with $PKILL -9 '$SBSVRKGPID' - should exit this script as well"
+			"$PKILL" -9 "$SBSVRKGPID"
 		else
 			if [ -z "$VRVIDEOPLAYERARGS" ];
 			then
@@ -2644,12 +2966,12 @@ function SBSrunVRVideoPlayer {
 			while ! "$XWININFO" -name "$SBSVRWINNAME" -stats  >/dev/null 2>/dev/null; do
 				if [[ "$COUNTER" -ge "MAXWAIT" ]]; then
 					writelog "SKIP" "${FUNCNAME[0]} - ERROR - timeout waiting for '$VRVIDEOPLAYER' - exit"
-					pkill -f "$VRVIDEOPLAYER"
+					"$PKILL" -f "$VRVIDEOPLAYER"
 					RUNSBSVR=0
 					exit 1
 				fi
 
-				if ! pgrep -f "$VRVIDEOPLAYER" ; then
+				if ! "$PGREP" -f "$VRVIDEOPLAYER" ; then
 					if [ "$COUNTER" -ge 3 ]; then
 						writelog "SKIP" "${FUNCNAME[0]} - ERROR - '$VRVIDEOPLAYER' not running (crashed?) no need to wait for its window to appear - exit"
 						RUNSBSVR=0
@@ -2716,8 +3038,8 @@ function SBSinitVRVideoPlayer {
 function SBSstopVRVideoPlayer {
 	if [ "$RUNSBSVR" -ge 1 ]; then
 		writelog "INFO" "${FUNCNAME[0]} - waiting for game process '$SBSVRKGPID' to finish..."
-		
-		if [ "$(pgrep "" -a | grep -v grep | grep "/vrcompositor" -c)" -eq 0 ] ; then
+
+		if ! "$PGREP" -a "vrcompositor" >/dev/null ; then
 			writelog "SKIP" "${FUNCNAME[0]} - ERROR - vrcompositor not running but it should - bailing out DRYRUN"
 		fi
 
@@ -2726,7 +3048,7 @@ function SBSstopVRVideoPlayer {
 
 		if [ -f "$GWIDFILE" ]; then
 			source "$GWIDFILE"
-			GWIDTXT=/tmp/"$VRVIDEOPLAYER"_"$GWIDDEC"
+			GWIDTXT="/tmp/${VRVIDEOPLAYER}_${GWIDDEC}"
 
 			if [ -f "$GWIDTXT" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - '$GWIDTXT' found"
@@ -2736,7 +3058,7 @@ function SBSstopVRVideoPlayer {
 			rm "$GWIDFILE" >/dev/null 2>/dev/null
 		fi
 
-		pkill -f "$VRVIDEOPLAYER"
+		"$PKILL" -f "$VRVIDEOPLAYER"
 
 		writelog "OK" "${FUNCNAME[0]} - -------- finished SBS-VR --------"
 	else
@@ -2756,7 +3078,7 @@ function startSBSVR {
 }
 
 function checkHMDPresent {
-	if pgrep "" -a | grep -v grep | grep "/vrcompositor" -q ; then
+	if "$PGREP" -a "vrcompositor" >/dev/null ; then
 		writelog "INFO" "${FUNCNAME[0]} - looks like SteamVR is already running - skipping this function"
 	else
 		if [ "$CHECKHMD" -eq 1 ]; then
@@ -3096,7 +3418,7 @@ function getUsedVars {
 }
 
 function customUserScriptStart {
-	if [ -n "$USERSTART" ] && [ "$USERSTART" != "$(which echo 2>/dev/null)" ]; then
+	if [ -n "$USERSTART" ] && [ "$USERSTART" != "$("$WHICH" echo 2>/dev/null)" ]; then
 		if [ -x "$USERSTART" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - starting custom user startscript '$USERSTART'"
 			extRun "$USERSTART" "$AID" "$GP" "$GPFX" &
@@ -3107,7 +3429,7 @@ function customUserScriptStart {
 }
 
 function customUserScriptStop {
-	if [ -n "$USERSTOP" ] && [ "$USERSTART" != "$(which echo 2>/dev/null)" ]; then
+	if [ -n "$USERSTOP" ] && [ "$USERSTART" != "$("$WHICH" echo 2>/dev/null)" ]; then
 		if [ -x "$USERSTOP" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - starting custom user stopscript '$USERSTOP'"
 			extRun  "$USERSTOP" "$AID" "$GP" "$GPFX" &
@@ -3133,12 +3455,12 @@ function editorSkipped {
 		ASKCNT="$SETASKCNT"
 
 		if [ "$ASKCNT" -ge "$MAXASK" ]; then
-			notiShow "$NOTY_CANCELREQ1" "$MAXASK"
+			notiShow "$(strFix "$NOTY_CANCELREQ1" "$MAXASK" "$GN" "$AID")"
 			writelog "INFO" "${FUNCNAME[0]} - 'ASKCNT $ASKCNT' reached  'MAXASK $MAXASK' - disabling requester and resetting counter"
 			updateConfigEntry "WAITEDITOR" "0" "$STLGAMECFG"
 			updateConfigEntry "ASKCNT" "0" "$STLGAMECFG"
 		elif [ "$ASKCNT" -lt "$MAXASK" ]; then
-			notiShow "$NOTY_CANCELREQ2" "$ASKCNT" $((MAXASK - ASKCNT))
+			notiShow "$(strFix "$NOTY_CANCELREQ2" "$ASKCNT" $((MAXASK - ASKCNT)) "$GN" "$AID")"
 		fi
 	fi
 }
@@ -3146,6 +3468,12 @@ function editorSkipped {
 function askSettings {
 	if ! grep -q "^WAITEDITOR=\"0\"" "$STLGAMECFG"; then
 		# open editor requester 
+		if grep -q "^WAITEDITOR" "$STLGAMECFG"; then
+			WEDGAME="$(grep "^WAITEDITOR" "$STLGAMECFG"| cut -d '=' -f2)"
+			WAITEDITOR="${WEDGAME//\"/}"
+			writelog "INFO" "${FUNCNAME[0]} - using game specific requester timeout '$WAITEDITOR'"
+		fi
+
 		if [ "$WAITEDITOR" -gt 0 ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Opening Requester with timeout '$WAITEDITOR'"
 			FOUNDTWEAKCFG=""
@@ -3164,9 +3492,14 @@ function askSettings {
 			updateWinRes "$TITLE" "$STLGUICFG" "ASKSETREQWIDTH" "ASKSETREQHEIGHT" &
 
 			if [ "$USEGUI" == "$YAD" ]; then
-
+				if [ "$USEGAMEPICS" -eq 1 ] && [ -f "$STLGHEADD/$AID.jpg" ]; then
+					SHOWPIC="$STLGHEADD/$AID.jpg"
+					else
+						SHOWPIC="$NOICON"
+					fi
+		
 				if [ -n "$FOUNDTWEAKCFG" ]; then
-					LC_ALL="" "$YAD" --borders="$YADBORDER" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
+					LC_ALL="" "$YAD" --image "$SHOWPIC" --image-on-top --borders="$YADBORDER" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
 					--title="$TITLE" \
 					--geometry="$ASKSETREQWIDTH"x"$ASKSETREQHEIGHT"+0+0 \
 					--text="<span font_weight='bold'>$GN ($AID) - $GUI_ASKOPENSET</span>" \
@@ -3179,7 +3512,7 @@ function askSettings {
 					--timeout="$WAITEDITOR" \
 					--timeout-indicator=top
 				else
-					LC_ALL="" "$YAD" --borders="$YADBORDER" --window-icon="$STLICON" --form --center --on-top -undecorated \
+					LC_ALL="" "$YAD" --image "$SHOWPIC" --image-on-top --borders="$YADBORDER" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
 					--title="$TITLE" \
 					--geometry="$ASKSETREQWIDTH"x"$ASKSETREQHEIGHT"+0+0 \
 					--text="<span font_weight='bold'>$GN ($AID) - $GUI_ASKOPENSET</span>" \
@@ -3251,6 +3584,10 @@ function createProjectDirs {
 	mkProjDir "$RESHADESRCDIR" 1
 	mkProjDir "$CUSTPROTDLDIR" 1
 	mkProjDir "$CUSTPROTEXTDIR" 1
+	mkProjDir "$STLGAMES" 1
+	mkProjDir "$STLGDESKD" 1
+	mkProjDir "$STLGHEADD" 1
+#	mkProjDir "$STLGSCPTD" 1
 }
 
 # add missing config entries to configfile $1 using seperator $2:
@@ -3273,6 +3610,10 @@ function updateConfigFile {
 		else
 			OLDVERS="$(grep "config Version" "$CFGFILE" | awk -F ': ' '{print $2}')"
 			
+			if [ "$CFGFILE" == "$STLGUICFG" ]; then
+				calculateDefaultResolutions
+			fi
+			
 			if [ -n "$OLDVERS" ]; then
 				writelog "OK" "${FUNCNAME[0]} - updating '$CFGFILE' from '$OLDVERS' to '$PROGVERS'"
 				sed "s/config Version: $OLDVERS/config Version: $PROGVERS/" -i "$CFGFILE"
@@ -3289,7 +3630,12 @@ function updateConfigFile {
 				if ! grep "^${LCAT}=" "$CFGFILE" >/dev/null ; then
 					writelog "UPDATE" "${FUNCNAME[0]} - entry '$LCAT' is missing in '$CFGFILE' - adding it now!"
 					if grep -q "\\$" <<< "$LVAL"; then
-						VARNAM=${LVAL//\$/}
+
+						if grep -q "WIDTH$\|HEIGHT$" <<< "$LVAL"; then
+							VARNAM=${LVAL//\$/DEF}
+						else
+							VARNAM=${LVAL//\$/}
+						fi
 						OUTVAL=${!VARNAM}
 					else
 						OUTVAL="$LVAL"
@@ -3316,6 +3662,8 @@ function createGameCfg {
 		# add missing config entries in the default global config:
 		updateConfigFile "$STLGAMECFG" "saveCfgdefault_template"
 	else
+		getGameName "$AID"
+		if [ -n "$GAMENAME" ]; then
 		{
 		echo "## config Version: $PROGVERS"
 		echo "##########################"
@@ -3329,6 +3677,9 @@ function createGameCfg {
 		echo "VKBASALT_CONFIG_FILE=\"$STLCFGDIR/vkBasalt.conf\""
 		grep -v "config Version" "$STLDEFGAMECFG"
 		} >> "$STLGAMECFG"
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - no game name found for '$AID' - does the game exist?" "E"
+		fi
 	fi
 }
 
@@ -3339,6 +3690,7 @@ function createTweakTemplateCfg {
 		if [ "$CREATETWEAKS" -eq 1 ]; then
 			# write tweak header if tweak config not found:			
 			if [ ! -f "$TWEAKTEMPLATECFG" ] ; then
+				getGameName "$AID"
 				getCfgHeader >> "$TWEAKTEMPLATECFG"
 			fi
 		fi
@@ -3348,22 +3700,29 @@ function createTweakTemplateCfg {
 function GAMEPID {
 	if	[ "$RUN_CUSTOMCMD" -ge 1 ] && [ "$ONLY_CUSTOMCMD" -eq 1 ];then
 		if [ "$CUSTOMCMD" == "$LU" ]; then
-			pgrep "" -a | grep -v grep | grep "$LU-wrapper" | cut -d ' ' -f1 | tail -n1
+			"$PGREP" -a "$LU-wrapper" | cut -d ' ' -f1 | tail -n1
 		else
-			pgrep "" -a | grep -v grep | grep "$CUSTOMCMD" | cut -d ' ' -f1 | tail -n1
+			"$PGREP" -a "$CUSTOMCMD" | cut -d ' ' -f1 | tail -n1
 		fi
 	else
-		GAMPI="$(pgrep "" -a | grep -v grep | grep "Z:" | grep "$GE" | grep "\.exe" | grep -v "CrashHandler"  | cut -d ' ' -f1 | tail -n1)"
+		if [ -n "$WAITFORTHISPID" ] && [ "$WAITFORTHISPID" != "empty" ]; then
+			GAMPI="$("$PIDOF" "$WAITFORTHISPID" | cut -d ' ' -f1)"
+		else
+			GAMPI="$("$PGREP" -a "$GE" | grep "Z:" | grep "\.exe" | grep -v "CrashHandler"  | cut -d ' ' -f1 | tail -n1)"
+		fi
 		echo "$GAMPI"
 	fi
 }
 
 function waitForGamePid {
+	if [ -n "$WAITFORTHISPID" ] && [ "$WAITFORTHISPID" != "empty" ]; then
+		writelog "WAIT" "${FUNCNAME[0]} - waiting for alternative process WAITFORTHISPID '$WAITFORTHISPID'"
+	fi
 	while [ -z "$(GAMEPID)" ]; do 
 		writelog "WAIT" "${FUNCNAME[0]} - waiting for game process $(GAMEPID)"
 		sleep 1
 	done
-	writelog "INFO" "${FUNCNAME[0]} - game process $GE found at $(GAMEPID)"
+	writelog "INFO" "${FUNCNAME[0]} - game process found at $(GAMEPID)"
 }
 
 # override game configs with a tweak config if available:
@@ -3439,11 +3798,17 @@ function checkSTLCSS {
 	if [ ! -f "$STLICON" ]; then
 		base64 -d <<< "$checked64" > "$STLICON"
 	fi
+
+	onepix64="R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw=="
+
+	if [ ! -f "$NOICON" ]; then
+		base64 -d <<< "$onepix64" > "$NOICON"
+	fi
 		
 	if [ "$USESTLCSS" -eq 1 ]; then
 		unchecked64="iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7MK6iAAABhGlDQ1BJQ0MgcHJvZmlsZQAAKJF9kTtIw0Acxr+mig+qDlYQcchQnSz4xlGrUIQKoVZo1cHk0hc0aUhSXBwF14KDj8Wqg4uzrg6ugiD4AHFydFJ0kRL/lxRaxHpw3I/v7vu4+w4QKgWmWS2jgKbbZjwaEZOpVbHtFR3oQzemMCYzy5iTpBiajq97+Ph6F+ZZzc/9ObrUtMUAn0g8ywzTJt4gnt60Dc77xEGWk1Xic+IRky5I/Mh1xeM3zlmXBZ4ZNBPxeeIgsZhtYKWBWc7UiCeJQ6qmU76Q9FjlvMVZK5RY7Z78hYG0vrLMdZqDiGIRS5AgQkEJeRRgI0yrToqFOO1HmvgHXL9ELoVceTByLKAIDbLrB/+D391amYlxLykQAVpfHOdjCGjbBaplx/k+dpzqCeB/Bq70ur9YAWY+SS/XtdAR0LMNXFzXNWUPuNwB+p8M2ZRdyU9TyGSA9zP6phTQewt0rnm91fZx+gAkqKvYDXBwCAxnKXu9ybvbG3v790ytvx/W0XLPAuUPuQAAAAZiS0dEAP8A/wD/oL2nkwAAAAlwSFlzAAALEwAACxMBAJqcGAAAAAd0SU1FB+QJFQ43ClGaUsgAAABASURBVEjH7dexDQAgCERRzrgrM920UjGBiRT+X9G9QIcy88RAK4baPdjWC7AvPLYxMDAwMDAwMDAwMPB9+u53Kvy2CKXoQHekAAAAAElFTkSuQmCC"
 
-		uncheckedpng="/dev/shm/stl-steam-unchecked.png"
+		uncheckedpng="$STLSHM/stl-steam-unchecked.png"
 
 		if [ ! -f "$uncheckedpng" ]; then
 			base64 -d <<< "$unchecked64" > "$uncheckedpng"
@@ -3456,7 +3821,7 @@ function checkSTLCSS {
 			mkdir -p "$CSSDIR" 2>/dev/null
 		fi
 		
-		if [ ! -f "$CSSDIR/gtk.css" ] || [ "$CSSUPDATE" -eq 1 ] ; then
+		if [ ! -f "$CSSDIR/gtk.css" ]; then
 			if [ -z "$1" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - installing '$PROGNAME' Steam Theme to '$CSSDIR/gtk.css'"
 			fi
@@ -3469,7 +3834,6 @@ function checkSTLCSS {
 
 			if [ -f "$SRCCSS" ] ; then
 				cp "$SRCCSS" "$CSSDIR/gtk.css"
-				updateConfigEntry "CSSUPDATE" "0" "$STLDEFGLOBALCFG"
 			fi
 		fi
 
@@ -3484,6 +3848,12 @@ function checkSTLCSS {
 
 function createDefaultCfgs {
 	createProjectDirs
+
+	mkdir -p "$STLSHM" 2>/dev/null
+
+	if [ -f "$TEMPLOG" ]; then
+		rm "$TEMPLOG"
+	fi
 
 	loadLanguage "$@"
 
@@ -3567,8 +3937,8 @@ function updateConfigEntry {
 # autoapply configuration settings based on the steam categories the game is in:
 function autoCategorySettings {
 	if [ "$CHECKCATEGORIES" -eq 1 ]; then
-		STEAMUSERID="$(find "$HSS/userdata/" -maxdepth 1 -type d -name "[1-9]*")"
-		SC="$STEAMUSERID/7/remote/sharedconfig.vdf"
+		STEAMUSERID="$(find "$HSRU" -maxdepth 1 -type d -name "[1-9]*")"
+		SC="$STEAMUSERID/$SRSCV"
 
 		if [ ! -f "$SC" ]; then
 			writelog "SKIP" "${FUNCNAME[0]} - file '$(basename "$SC")' not found in steam userid dir - skipping"
@@ -3660,9 +4030,9 @@ function checkXliveless {
 			rm -rf "$GPFX/drive_c/Program Files (x86)/Microsoft Games for Windows - LIVE"
 			rm -rf "$GPFX/drive_c/Program Files/Common Files/Microsoft Shared/Windows Live"
 			WLID="WLIDSvcM.exe"
-			if pgrep "$WLID"; then
-				writelog "INFO" "${FUNCNAME[0]} - GFWL starts $WLID directly after installation and it never exists - killing it now"
-				pkill -9 "$WLID"
+			if "$PGREP" "$WLID" >/dev/null; then
+				writelog "INFO" "${FUNCNAME[0]} - GFWL starts '$WLID' directly after installation and it never exists - killing it now"
+				"$PKILL" -9 "$WLID"
 			fi
 
 			XLIVEDLL="xlive.dll"
@@ -3948,8 +4318,8 @@ function createAutoTweakLU {
 
 		if [ -n "$LUATDEBUG" ]; then
 			if [ "$LUATDEBUG" -eq 1 ]; then
-				LUTWEAK1DEBUG="/tmp/LUTWEAKDEBUG-raw.txt"
-				LUTWEAKDEBUG="/tmp/LUTWEAKDEBUG.txt"
+				LUTWEAK1DEBUG="$STLSHM/LUTWEAKDEBUG-raw.txt"
+				LUTWEAKDEBUG="$STLSHM/LUTWEAKDEBUG.txt"
 			fi
 		fi
 
@@ -4373,7 +4743,7 @@ function AskAdoptAutoTweak {
 		--geometry="$CATREQWIDTH"x"$CATREQHEIGHT"+0+0 \
 		--text="<span font_weight='bold'>$GN ($AID) - $GUI_ASKCOBERTAT</span>" \
 		--field=" ":LBL " " \
-		--field="$GUI_ADOPTANDSKIP":LBL \
+		--field="$(strFix "$GUI_ADOPTANDSKIP" "$GN" "$AID")":LBL \
 		--field="<span font=\"italic\">($GUI_WILLBEBACKED)</span>":LBL \
 		--field=" ":LBL " " \
 		--button="$BUT_ADOPT":0  \
@@ -4452,7 +4822,7 @@ function autoGenTweak {
 }
 
 function launchCustomProg {
-	if [ -z "$CUSTOMCMD" ] || [ "$CUSTOMCMD" == "$(which echo 2>/dev/null)" ]; then
+	if [ -z "$CUSTOMCMD" ] || [ "$CUSTOMCMD" == "$("$WHICH" echo 2>/dev/null)" ]; then
 
 		writelog "INFO" "${FUNCNAME[0]} - CUSTOMCMD variable is empty - opening file requester"
 
@@ -4502,7 +4872,7 @@ function launchCustomProg {
 	if  [ -x "$(command -v "$CUSTOMCMD" 2>/dev/null)" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - '$CUSTOMCMD' found in PATH"
 		LACO="$CUSTOMCMD"
-		CUSTCOM="$(which "$CUSTOMCMD" 2>/dev/null)"
+		CUSTCOM="$("$WHICH" "$CUSTOMCMD" 2>/dev/null)"
 	else
 		writelog "INFO" "${FUNCNAME[0]} - '$CUSTOMCMD' not in path - searching in gamedir"
 
@@ -4590,13 +4960,16 @@ function launchCustomProg {
 function wmp10toPFX {
 		while [ ! -d "$SWOW" ]; do 
 			writelog "WAIT" "${FUNCNAME[0]} - waiting for directory '$SWOW' to appear"
-			# timeout?
 			sleep 1
+			if [ -f "$CLOSETMP" ]; then
+				writelog "WAIT" "${FUNCNAME[0]} - $PROGCMD is just closing - leaving loop"
+				break
+			fi
 		done
 
 		if [ -f "$STLDLDIR/$MP10S" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - extracting '$STLDLDIR/$MP10S' to '$SWOW'"
-			notiShow "$NOTY_WMP2" "$MP10S" "$SWOW"
+			notiShow "$(strFix "$NOTY_WMP2" "$MP10S" "$SWOW")"
 			"$CABEXTRACT" -d "$SWOW" "$STLDLDIR/$MP10S" 2>/dev/null
 			writelog "INFO" "${FUNCNAME[0]} - removing two wine dlls which come uppercase with '$MP10S'"
 			rm "${SWOW}/wmasf.dll" 2>/dev/null
@@ -4623,7 +4996,7 @@ function wmp10hack {
 		MP10S="MP10Setup.exe"
 		if [ ! -f "$STLDLDIR/$MP10S" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - downloading '$MP10S' from '$WMP10URL'"
-			notiShow "$NOTY_WMP1" "$MP10S" "$WMP10URL"
+			notiShow "$(strFix "$NOTY_WMP1" "$MP10S" "$WMP10URL")"
 			"$WGET" "$WMP10URL/$MP10S" -O "$STLDLDIR/$MP10S"
 		else
 			writelog "SKIP" "${FUNCNAME[0]} - found '$MP10S' in '$STLDLDIR' - nothing to download"
@@ -4663,7 +5036,7 @@ function checkCustomLaunch {
 					exit
 				fi
 			else
-				if [ -n "$CUSTOMCMD" ] && [ "$CUSTOMCMD" != "$(which echo 2>/dev/null)" ]; then
+				if [ -n "$CUSTOMCMD" ] && [ "$CUSTOMCMD" != "$("$WHICH" echo 2>/dev/null)" ]; then
 					writelog "SKIP" "${FUNCNAME[0]} - RUN_CUSTOMCMD is set to 0 therefore skipping the custom program '$CUSTOMCMD'"
 				fi
 			fi
@@ -4703,7 +5076,7 @@ function toggleWindows {
 						fi
 					fi
 				fi
-			done<<< "$("$WMCTRL" -l | cut -d ' ' -f1)"
+			done <<< "$("$WMCTRL" -l | cut -d ' ' -f1)"
 			
 			if [ "$1" == "windowminimize" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - following windows won't be raised on exit, as they are minimized: '$MINIMIZEDWINDOWS'"
@@ -4788,7 +5161,7 @@ function regEdit {
 function customRegs {
 	if [ -n  "$VIRTUALDESKTOP" ]; then
 		if [ "$VIRTUALDESKTOP" -eq 1 ]; then
-			TEMPREG="/tmp/temp.reg"
+			TEMPREG="$STLSHM/temp.reg"
 			if [ -f "$TEMPREG" ]; then
 				rm "$TEMPREG"
 			fi
@@ -4852,7 +5225,7 @@ function customRegs {
 function useNyrna {
 	if [ -n "$RUN_NYRNA" ]; then
 		if [ "$RUN_NYRNA" -eq 1 ]; then
-			if pgrep -f "$NYRNA" ; then
+			if "$PGREP" -f "$NYRNA" >/dev/null; then
 				writelog "SKIP" "${FUNCNAME[0]} - '$NYRNA' already running - skipping"
 				RUN_NYRNA=0
 			else
@@ -4866,7 +5239,7 @@ function useNyrna {
 function useReplay {
 	if [ -n "$RUN_REPLAY" ]; then
 		if [ "$RUN_REPLAY" -eq 1 ]; then
-			if pgrep -f "$REPLAY" ; then
+			if "$PGREP" -f "$REPLAY" >/dev/null; then
 				writelog "SKIP" "${FUNCNAME[0]} - '$REPLAY' already running - skipping"
 				RUN_REPLAY=0
 			else
@@ -4883,14 +5256,14 @@ function runGamCon {
 		if [ "$RUN_GAMCON" -eq 1 ]; then
 			writelog "OK" "${FUNCNAME[0]} - starting '$GAMCON' process"
 
-			if [ -n "$GAMCONWAITEXE" ] && [ "$GAMCONWAITEXE" != "$(which echo 2>/dev/null)" ]; then
+			if [ -n "$GAMCONWAITEXE" ] && [ "$GAMCONWAITEXE" != "$("$WHICH" echo 2>/dev/null)" ]; then
 				if [ -f "$GAMCONWAITEXE" ]; then
 					writelog "OK" "${FUNCNAME[0]} - waiting for alternative '$GAMCONWAITEXE' process"
-					while [ -z "$(pidof "$GAMCONWAITEXE" | cut -d ' ' -f1)" ]; do 
+					while [ -z "$("$PIDOF" "$GAMCONWAITEXE" | cut -d ' ' -f1)" ]; do 
 						writelog "WAIT" "${FUNCNAME[0]} - waiting for '$GAMCONWAITEXE' PID"
 						sleep 1
 					done
-					GCGPID="$(pidof "$GAMCONWAITEXE" | cut -d ' ' -f1)"
+					GCGPID="$("$PIDOF" "$GAMCONWAITEXE" | cut -d ' ' -f1)"
 				else
 					writelog "SKIP" "${FUNCNAME[0]} - alternative '$GAMCONWAITEXE' defined but file doesn't exist - continuing with regular game exe"
 					waitForGamePid
@@ -5013,9 +5386,9 @@ function installVortexDeps {
 
 function cleanVortex {
 	MSCOR="mscorsvw.exe"
-	if pgrep "$MSCOR"; then
+	if "$PGREP" "$MSCOR" >/dev/null; then
 		writelog "INFO" "${FUNCNAME[0]} - killing leftovers of $MSCOR"
-		pkill -9 "$MSCOR"
+		"$PKILL" -9 "$MSCOR"
 	fi
 }
 
@@ -5610,9 +5983,9 @@ function initVortexStuff {
 				writelog "OK" "${FUNCNAME[0]} - using RUNWINE '$RUNWINE' as VORTEXWINE"
 				VORTEXWINE="${RUNWINE//\"/}"
 			else
-				if  [ -x "$(command -v "$(which wine 2>/dev/null)" 2>/dev/null)" ]; then
-					writelog "OK" "${FUNCNAME[0]} - using '$(which wine)' as VORTEXWINE"
-					VORTEXWINE="$(which wine 2>/dev/null)"
+				if  [ -x "$(command -v "$("$WHICH" wine 2>/dev/null)" 2>/dev/null)" ]; then
+					writelog "OK" "${FUNCNAME[0]} - using '$("$WHICH" wine)' as VORTEXWINE"
+					VORTEXWINE="$("$WHICH" wine 2>/dev/null)"
 				else
 					writelog "SKIP" "${FUNCNAME[0]} - can't find a usable wine binary for VORTEXWINE - skipping"
 					VORTEXMODE="disabled"
@@ -5782,8 +6155,9 @@ function checkDep {
 
 	if [ -n "${!CATNAM##*[!0-9]*}" ]; then
 		if [ "${!CATNAM}" -eq 1 ]; then
-			if  [ ! -x "$(command -v "$(which "$CHECKPROG" 2>/dev/null)" 2>/dev/null)" ]; then
+			if  [ ! -x "$(command -v "$("$WHICH" "$CHECKPROG" 2>/dev/null)" 2>/dev/null)" ]; then
 				writelog "WARN" "${FUNCNAME[0]} - disabling '$CATNAM' because '$CHECKPROG' is missing"
+				notiShow "$(strFix "$NOTY_PROGRAMMISSING" "$CATNAM" "$CHECKPROG")"
 				unset "$CATNAM"
 			fi
 		fi
@@ -5808,20 +6182,19 @@ function checkExtDeps {
 	checkDep "RUN_WINECFG" "$WINECFG"
 	checkDep "HACKWMP10" "$CABEXTRACT"
 	checkDep "CHECKHMD" "$LSUSB"
-	
 }
 
 function checkIntDeps {
 	DEPSMISSING=0
 
 	while read -r INTDEP; do
-		if  [ ! -x "$(command -v "$(which "${!INTDEP}" 2>/dev/null)" 2>/dev/null)" ]; then
+		if  [ ! -x "$(command -v "$("$WHICH" "${!INTDEP}" 2>/dev/null)" 2>/dev/null)" ]; then
 			echo "${!INTDEP} not found!"
 			DEPSMISSING=1
 		fi
 	done <<< "$(sed -n "/^#STARTINTDEPS/,/^#ENDINTDEPS/p;/^#ENDINTDEPS/q" "$0" | grep -v "^#" | cut -d '=' -f1)"
 
-	if  [ ! -x "$(command -v "$(which "$YAD" 2>/dev/null)" 2>/dev/null)" ] && [ ! -x "$(command -v "$(which "$ZENITY" 2>/dev/null)" 2>/dev/null)" ]; then
+	if  [ ! -x "$(command -v "$("$WHICH" "$YAD" 2>/dev/null)" 2>/dev/null)" ] && [ ! -x "$(command -v "$("$WHICH" "$ZENITY" 2>/dev/null)" 2>/dev/null)" ]; then
 		DEPSMISSING=1
 		echo "neither '$YAD' nor '$ZENITY' was found, but at least one of them is required!"
 	fi
@@ -5861,9 +6234,14 @@ function setLinGameVals {
 }
 
 function prepareLaunch {
+
+	mkdir -p "$STLSHM" 2>/dev/null
+
 	if [ -f "$LOGDIR/$AID.log" ]; then
 		rm "$LOGDIR/$AID.log"
 	fi
+
+	rm "$CLOSETMP" 2>/dev/null
 
 	createProjectDirs
 
@@ -5875,6 +6253,9 @@ function prepareLaunch {
 	createDefaultCfgs "${ORGGCMD[@]}"
 
 	checkSTLDLGlobal
+ 
+	getGameData "$AID"
+
 	writelog "INFO" "${FUNCNAME[0]} - game launch args '${ORGGCMD[*]}'"
 	writelog "INFO" "${FUNCNAME[0]} - gamedir '$GFD'"
 	writelog "INFO" "${FUNCNAME[0]} - wineprefix '$GPFX'"
@@ -5913,7 +6294,7 @@ function prepareLaunch {
 
 
 	# (re)initialize Proton dependant variables, when USEPROTON changed in askSettings (SettingsMenu/EditorDialog) above
-	if [ "$USEPROTON" != "$FIRSTUSEPROTON" ];then
+	if [ "$USEPROTON" != "$FIRSTUSEPROTON" ] && [ "$ISGAME" -eq 2 ]; then
 		setNewProtVars "$(PROTPATH "$USEPROTON")"
 	fi
 
@@ -6075,7 +6456,8 @@ function wantProton {
 	if [ -n "$WANTPROTON" ]; then
 		if [ "$WANTPROTON" != "$USEPROTON" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Proton version '$WANTPROTON' required, but '$USEPROTON' is set"
-			notiShow "$NOTY_WANTPROTON" "$WANTPROTON" "$USEPROTON"
+			notiShow "$(strFix "$NOTY_WANTPROTON" "$WANTPROTON" "$USEPROTON")"
+
 			OVERRIDEPROTON=1
 			switchProton "$WANTPROTON"	
 		fi
@@ -6105,31 +6487,31 @@ function launchSteamGame {
 	if [ "$USESLR" -eq 1 ] && [ -n "${RUNSLR[0]}" ]; then
 		if [ "$USEBOXTRON" -eq 1 ]; then
 			writelog "WARN" "${FUNCNAME[0]} - '$SLR' conflicts with BOXTRON"
-			notiShow "$NOTY_SLRCONFLICT" "BOXTRON"
+			notiShow "$(strFix "$NOTY_SLRCONFLICT" "BOXTRON")"
 		fi
 		if [ "$USEROBERTA" -eq 1 ]; then
 			writelog "WARN" "${FUNCNAME[0]} - '$SLR' conflicts with ROBERTA"
-			notiShow "$NOTY_SLRCONFLICT" "ROBERTA"
+			notiShow "$(strFix "$NOTY_SLRCONFLICT" "ROBERTA")"
 		fi
 		if [ "$USELUXTORPEDA" -eq 1 ]; then
 			writelog "WARN" "${FUNCNAME[0]} - '$SLR' conflicts with LUXTORPEDA"
-			notiShow "$NOTY_SLRCONFLICT" "LUXTORPEDA"
+			notiShow "$(strFix "$NOTY_SLRCONFLICT" "LUXTORPEDA")"
 		fi
 		if [ "$MANGOHUD" -eq 1 ]; then
 			writelog "WARN" "${FUNCNAME[0]} - '$SLR' conflicts with MANGOHUD"
-			notiShow "$NOTY_SLRCONFLICT" "MANGOHUD"
+			notiShow "$(strFix "$NOTY_SLRCONFLICT" "MANGOHUD")"
 		fi
 		if [ "$ENABLE_VKBASALT" -eq 1 ] ; then
 			writelog "WARN" "${FUNCNAME[0]} - '$SLR' conflicts with VKBASALT"
-			notiShow "$NOTY_SLRCONFLICT" "VKBASALT"
+			notiShow "$(strFix "$NOTY_SLRCONFLICT" "VKBASALT")"
 		fi
 		if [ "$USEGAMEMODERUN" -eq 1 ]; then
 			writelog "WARN" "${FUNCNAME[0]} - '$SLR' conflicts with GAMEMODERUN"
-			notiShow "$NOTY_SLRCONFLICT" "GAMEMODERUN"
+			notiShow "$(strFix "$NOTY_SLRCONFLICT" "GAMEMODERUN")"
 		fi
 		if [ "$USEGAMESCOPE" -eq 1 ]; then
 			writelog "WARN" "${FUNCNAME[0]} - '$SLR' conflicts with GAMESCOPE"
-			notiShow "$NOTY_SLRCONFLICT" "GAMESCOPE"
+			notiShow "$(strFix "$NOTY_SLRCONFLICT" "GAMESCOPE")"
 		fi
 	fi
 
@@ -6152,7 +6534,7 @@ function launchSteamGame {
 		if [ "$USEBOXTRON" -eq 1 ]; then
 			DOSEXE="$GP"
 			if  [ -x "$(command -v "$BOXTRONCMD" 2>/dev/null)" ]; then
-				notiShow "$NOTY_BOXTRON"
+				notiShow "$(strFix "$NOTY_BOXTRON" "$GN" "$AID")"
 				# disable CHANGE_PULSE_LATENCY else audio gets stuck
 				CHANGE_PULSE_LATENCY="0"
 
@@ -6168,7 +6550,7 @@ function launchSteamGame {
 			VMEXE="$GP"
 			if  [ -x "$(command -v "$ROBERTACMD" 2>/dev/null)" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - starting game '$AID' with roberta: '$ROBERTACMD $ROBERTAARGS $VMEXE'"
-				notiShow "$NOTY_ROBERTA"
+				notiShow "$(strFix "$NOTY_ROBERTA" "$GN" "$AID")"
 				RUNROBERTACMD=("$ROBERTACMD" "$ROBERTAARGS" "$VMEXE")
 				extRun "${RUNROBERTACMD[@]}"
 			else
@@ -6183,10 +6565,10 @@ function launchSteamGame {
 				# skip download if engine_choice.txt exists already:
 				if [ ! -f "$HOME"/.config/luxtorpeda/"$AID"/engine_choice.txt ]; then
 					writelog "INFO" "${FUNCNAME[0]} - downloading native game data for '$AID' with luxtorpeda: '$LUXTORPEDACMD' manual-download $AID"
-					notiShow "$NOTY_LUXTORPEDA1"
+					notiShow "$(strFix "$NOTY_LUXTORPEDA1" "$GN" "$AID")"
 					"$LUXTORPEDACMD" manual-download "$AID"
 				fi
-				notiShow "$NOTY_LUXTORPEDA2"
+				notiShow "$(strFix "$NOTY_LUXTORPEDA2" "$GN" "$AID")"
 				writelog "INFO" "${FUNCNAME[0]} - starting game '$AID' with luxtorpeda: '$LUXTORPEDACMD $LUXTORPEDAARGS $LUXEXE'"
 				RUNLUXTORPEDACMD=("$LUXTORPEDACMD" "$LUXTORPEDAARGS" "$LUXEXE")
 				extRun "${RUNLUXTORPEDACMD[@]}"
@@ -6199,14 +6581,14 @@ function launchSteamGame {
 			# start with gamemoderun:
 			if [ "$USEGAMEMODERUN" -eq 1 ]; then
 				writelog "INFO" "${FUNCNAME[0]} - starting native game '$GN ($AID)' with '$GAMEMODERUN' - ${GAMESTARTCMD[*]}"
-				notiShow "$NOTY_STARTNATGAMO"
+				notiShow "$(strFix "$NOTY_STARTNATGAMO" "$GN" "$AID")"
 				writelog "INFO" "${FUNCNAME[0]} - full start command is '$GAMEMODERUN ${GAMESTARTCMD[*]}'"
 				"$GAMEMODERUN" "${GAMESTARTCMD[@]}"		
 
 			# start with gamescope:
 			elif [ "$USEGAMESCOPE" -eq 1 ]; then
 				writelog "INFO" "${FUNCNAME[0]} - starting native game '$GN ($AID)' with $GAMESCOPE arguments '$GAMESCOPE_ARGS'"
-				notiShow "$NOTY_STARTNATGAMSCO"
+				notiShow "$(strFix "$NOTY_STARTNATGAMSCO" "$GN" "$AID")"
 				IFS=" " read -r -a RUNGAMESCOPE_ARGS <<< "$GAMESCOPE_ARGS"
 				writelog "INFO" "${FUNCNAME[0]} - full start command is '$GAMESCOPE ${RUNGAMESCOPE_ARGS[*]} ${GAMESTARTCMD[*]}'"
 				"$GAMESCOPE" "${RUNGAMESCOPE_ARGS[@]}" "${GAMESTARTCMD[@]}"
@@ -6214,7 +6596,7 @@ function launchSteamGame {
 			# regular start:
 			else
 				writelog "INFO" "${FUNCNAME[0]} - starting native game '$GN ($AID)'"
-				notiShow "$NOTY_STARTNAT"
+				notiShow "$(strFix "$NOTY_STARTNAT" "$GN" "$AID")"
 				if [ "$USESLR" -eq 1 ]; then
 					writelog "INFO" "${FUNCNAME[0]} - full start command is '${RUNSLR[*]} ${GAMESTARTCMD[*]}'"
 					"${RUNSLR[@]}" "${GAMESTARTCMD[@]}"
@@ -6226,7 +6608,6 @@ function launchSteamGame {
 		fi
 	# now games using proton:
 	elif [ "$ISGAME" -eq 2 ]; then
-
 
 		# proton variants start here:
 
@@ -6261,9 +6642,14 @@ function launchSteamGame {
 				writelog "INFO" "${FUNCNAME[0]} - ORIGINAL game start command is: ${GAMESTARTCMD[*]}"
 
 				if [ ! -f "${RUNPROTON//\"/}" ]; then
-					# TODO? - minor version bumps of vanilla Proton are not always visible, which cause a false positive here, but AUTOLASTPROTON=1 should cover that, as older Proton versions are not updated
 					writelog "WARN" "${FUNCNAME[0]} - '$USEPROTON' seems outdated as the executable ${RUNPROTON//\"/} wasn't found"
-					if [ "$AUTOLASTPROTON" -eq 1 ]; then
+
+					NEWMINORPROT="$(grep "${USEPROTON%-*}" <<< "$(printf "%s\n" "${ProtonCSV[@]//\"/}")")"
+					NEWMINORRUN="$(PROTPATH "${NEWMINORPROT//\"/}")"
+					if [ -f "$NEWMINORRUN" ]; then
+						setNewProtVars "$(PROTPATH "$NEWMINORRUN")"
+						writelog "INFO" "${FUNCNAME[0]} - tried to autodetect a minor version change - untested"
+					elif [ "$AUTOLASTPROTON" -eq 1 ]; then
 						writelog "INFO" "${FUNCNAME[0]} - automatically selecting newest official one"
 						setNOP
 					else
@@ -6309,15 +6695,16 @@ function launchSteamGame {
 				writelog "SKIP" "${FUNCNAME[0]} - skipping '$GAMESCOPE' as '$GAMEMODERUN' is enabled as well"
 			fi
 			writelog "INFO" "${FUNCNAME[0]} - starting '$GN ($AID)' with Proton: '$PROTONVERSION' with '$GAMEMODERUN'"
+			notiShow "$(strFix "$NOTY_STARTPROTGAMO" "$PROTONVERSION" "$GN" "$AID")"
 
-			notiShow "$NOTY_STARTPROTGAMO" "$PROTONVERSION"
 			writelog "INFO" "${FUNCNAME[0]} - full start command is '$GAMEMODERUN ${GAMESTARTCMD[*]}'"
 			"$GAMEMODERUN" "${GAMESTARTCMD[@]}"		
 	
 		# start with gamescope:
 		elif [ "$USEGAMESCOPE" -eq 1 ]; then
 			writelog "INFO" "${FUNCNAME[0]} - starting '$GN ($AID)' with Proton: '$PROTONVERSION' with $GAMESCOPE arguments '$GAMESCOPE_ARGS'"
-			notiShow "$NOTY_STARTPROTGAMSCO" "$PROTONVERSION"
+			notiShow "$(strFix "$NOTY_STARTPROTGAMSCO" "$PROTONVERSION" "$GN" "$AID")"
+
 			IFS=" " read -r -a RUNGAMESCOPE_ARGS <<< "$GAMESCOPE_ARGS"
 
 			writelog "INFO" "${FUNCNAME[0]} - full start command is '$GAMESCOPE ${RUNGAMESCOPE_ARGS[*]} ${GAMESTARTCMD[*]}'"
@@ -6325,8 +6712,7 @@ function launchSteamGame {
 		# regular start:
 		else
 			writelog "INFO" "${FUNCNAME[0]} - starting '$GN ($AID)' with Proton: '$PROTONVERSION'"
-			notiShow "$NOTY_STARTPROT" "$PROTONVERSION"
-
+			notiShow "$(strFix "$NOTY_STARTPROT" "$PROTONVERSION" "$GN" "$AID")"
 			if [ "$USESLR" -eq 1 ]; then
 				writelog "INFO" "${FUNCNAME[0]} - full start command is '${RUNSLR[*]} ${GAMESTARTCMD[*]}'"
 				"${RUNSLR[@]}" "${GAMESTARTCMD[@]}"
@@ -6350,7 +6736,7 @@ function CompatTool {
 	SCTS="$STEAMCOMPATOOLS/$PROGNAME"
 
 	if [ "$1" == "add" ] ; then
-		if [ -d "$HSS" ]; then
+		if [ -d "$HSR" ]; then
 			if [ ! -d "$STEAMCOMPATOOLS" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - initially creating dir '$STEAMCOMPATOOLS'" "E"
 				mkdir -p "$STEAMCOMPATOOLS" 2>/dev/null
@@ -6402,7 +6788,7 @@ function CompatTool {
 				fi
 			fi
 		else
-			writelog "SKIP" "${FUNCNAME[0]} - Steam Home Dir '$HSS' not found!" "E"
+			writelog "SKIP" "${FUNCNAME[0]} - Steam Home Dir '$HSR' not found!" "E"
 		fi
 	elif [ "$1" == "del" ]; then
 		if [ ! -d "$SCTS" ]; then
@@ -6535,19 +6921,42 @@ function commandline {
 				howto	
 			fi
 		fi
-	elif  [ "$1" == "autotweaks" ]; then
+	elif  [ "$1" == "autotweaks" ] || [ "$1" == "at" ]; then
 		if [ -n "$2" ]; then
 			if [ "$2" == "$PF" ]; then
 				createTweak"$PF" "$3"
 			elif [ "$2" == "$LU" ]; then
 				createTweak"$LU" "$3"
+			elif [ "$2" == "dl" ]; then
+				if [ -n "$3" ]; then
+					if [ "$3" == "$PF" ]; then
+						dlPF
+						createTweak"$PF" "$4"
+					elif [ "$3" == "$LU" ]; then
+						dlLU
+						createTweak"$LU" "$4"
+					fi
+				else
+					howto
+				fi
 			fi
+		else
+			howto
 		fi
-	elif  [ "$1" == "dl" ]; then
+	elif  [ "$1" == "update" ]; then
 		if [ -n "$2" ]; then
 			if [ "$2" == "$GIT" ]; then
 				gitUpdate "$GLDLSTLDIR" "$PROJECTPAGE"
 				date > "$GLDLSTLTXT"
+			elif [ "$2" == "gamedata" ]; then
+				if [ -z "$3" ]; then
+					getGameDataForInstalledGames
+				else
+					echo getGameData "$3"
+					getGameData "$3"
+				fi
+			elif [ "$2" == "allgamedata" ]; then
+				getDataForAllGamesinSharedConfig
 			else
 				howto
 			fi
@@ -6566,6 +6975,8 @@ function commandline {
 		fi
 	elif  [ "$1" == "addcustomproton" ] || [ "$1" == "acp" ]; then
 		addCustomProton "$2" "$3"
+	elif  [ "$1" == "dlcustomproton" ] || [ "$1" == "dcp" ]; then
+		dlCustomProtonGate "$2"
 	elif  [ "$1" == "settings" ]; then
 		createDefaultCfgs
 		if [ "$USEGUI" == "$YAD" ]; then
@@ -6583,6 +6994,11 @@ function commandline {
 				EditorDialog "$AID"
 			fi
 		fi
+	elif  [ "$1" == "launcher" ]; then
+		openGameLauncher "$2" "$3"
+	elif  [ "$1" == "help" ] || [ "$1" == "--help" ]; then
+		createDefaultCfgs
+		howto
 	else
 		if ! grep -q "lang=\|run" <<< "$@" ; then
 			echo "-----------------------"
@@ -6612,11 +7028,14 @@ function writeLastRun {
 function closeSTL {
 	writelog "INFO" "${FUNCNAME[0]} - game $GN ($AID) exited - cleaning up custom processes if necessary"
 
+	# dummy file which could be used to stop possible while loops
+	touch "$CLOSETMP"
+
 	# kill $VRVIDEOPLAYER in case it wasn't closed before
 	if [ -n "$RUNSBSVR" ]; then
 		if [ "$RUNSBSVR" -ge 1 ]; then
-			if pgrep -f "$VRVIDEOPLAYER" ; then
-				pkill -f "$VRVIDEOPLAYER"
+			if "$PGREP" -f "$VRVIDEOPLAYER" >/dev/null; then
+				"$PKILL" -f "$VRVIDEOPLAYER"
 				writelog "INFO" "${FUNCNAME[0]} - $VRVIDEOPLAYER killed"
 			fi
 		fi
@@ -6625,8 +7044,8 @@ function closeSTL {
 	# kill $NYRNA if running
 	if [ -n "$RUN_NYRNA" ]; then
 		if [ "$RUN_NYRNA" -eq 1 ]; then
-			if pgrep -f "$NYRNA" ; then
-				pkill -f "$NYRNA"
+			if "$PGREP" -f "$NYRNA" >/dev/null; then
+				"$PKILL" -f "$NYRNA"
 				# also remove systray created in /tmp/ ("systray_" with 6 random chars should be save enough)
 				find /tmp -maxdepth 1 -type f -regextype posix-extended -regex '^.*systray_[A-Z,a-z,0-9]{6}' -exec rm {} \;
 				writelog "INFO" "${FUNCNAME[0]} - $NYRNA killed"
@@ -6637,8 +7056,8 @@ function closeSTL {
 	# kill $REPLAY if running
 	if [ -n "$RUN_REPLAY" ]; then
 		if [ "$RUN_REPLAY" -eq 1 ]; then
-			if pgrep -f "$REPLAY" ; then
-				pkill -f "$REPLAY"
+			if "$PGREP" -f "$REPLAY" >/dev/null; then
+				"$PKILL" -f "$REPLAY"
 				writelog "INFO" "${FUNCNAME[0]} - $REPLAY killed"
 			fi
 		fi
@@ -6647,15 +7066,15 @@ function closeSTL {
 	# kill $GAMCON if running
 	if [ "$RUN_GAMCON" -eq 1 ]; then
 		writelog "INFO" "${FUNCNAME[0]} - game process finished - closing '$GAMCON'"
-		pkill -f "$GAMCON"
+		"$PKILL" -f "$GAMCON"
 		writelog "INFO" "${FUNCNAME[0]} - killed '$GAMCON' script"
 	fi
 	
 	# stop network monitor if running
 
 	if [ "$USENETMON" -eq 1 ]; then
-		if pgrep "$NETMON" ; then
-			pkill -f "$NETMON"
+		if "$PGREP" "$NETMON" >/dev/null; then
+			"$PKILL" -f "$NETMON"
 			writelog "INFO" "${FUNCNAME[0]} - $NETMON killed"
 			# remove duplicate lines to make reading easier
 			awk -i inplace '!visited[$0]++' "$NETMONDIR/$AID-$NETMON.log"
@@ -6668,8 +7087,9 @@ function closeSTL {
 
 	cleanYadLeftOvers
 
-	notiShow "$NOTY_STLSTOP"
+	notiShow "$(strFix "$NOTY_STLSTOP" "$GN" "$AID" "$PROGNAME")"
 	writelog "STOP" "#########  ${FUNCNAME[0]} $PROGNAME $PROGVERS #########"
+	rm "$CLOSETMP"
 
 # only useful for win games:
 	if [ "$ISGAME" -eq 2 ]; then
@@ -6702,7 +7122,7 @@ function initLaunch {
 checkIntDeps
 
 if [ -z "$1" ]; then
-	writelog "INFO" "${FUNCNAME[0]} - no arguments provided - you probably didn't launch this via steam command line arguments" "E"
+	writelog "INFO" "${FUNCNAME[0]} - no arguments provided. See '$PROGCMD --help' for possible command line parameters" "E"
 	createDefaultCfgs "$@"
 else
 	if grep -q "$SAC" <<< "$@"; then
@@ -6712,7 +7132,6 @@ else
 			initLaunch
 		elif [ -f "$GP" ]; then
 			ISGAME=3
-			writelog "INFO" "${FUNCNAME[0]} - please report if this is no linux native game: '${ORGGCMD[*]}'" "E"
 			initLaunch
 		else
 			writelog "INFO" "${FUNCNAME[0]} - unknown parameter '${ORGGCMD[*]}'" "E"

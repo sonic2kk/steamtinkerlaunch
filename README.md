@@ -93,6 +93,9 @@ It might be a good idea to start with configuring everything in the [Settings Me
 * **[Proton Selection](#Proton-Selection)** switch between Proton-Versions, automatically download custom Proton builds...
 * **[Multi Language](#Multi-Language-Support)** Multi-Language Support
 * **[Steam Linux Runtime](#Steam-Linux-Runtime)** the Steam Linux Runtime can be disabled optionally
+* **[Game Launcher](#Game-Launcher)** built in game launcher mode
+* **[Game Pictures](#Game-Pictures)** uses Game Pictures
+* **[Desktop Files](#Desktop-Files)** automatic creation of *(stl-internal)* desktop files
 
 ## Requirements
 *(no special order)*
@@ -100,8 +103,10 @@ It might be a good idea to start with configuring everything in the [Settings Me
 Programs required for a full internal functionality:
 - bash *(only shell tested)*
 - git
+- pgrep
 - unzip
 - wget
+- which
 - wmctrl
 - xdotool
 - xprop
@@ -130,8 +135,9 @@ Programs needed for optional external features *(no special order)*:
 - [GameConqueror/scanmem](#GameConqueror) to optionally cheat
 - [GameScope](#GameScope)
 - zenity *(see description for yad above)*
-- cabextract *(currently only to extract the [WMP10](#WMP10) setup exe)*
+- cabextract *(currently only used to extract the [WMP10](#WMP10) setup exe)*
 - lsusb *(for an optional [SBS-VR](#Side-by-Side-VR) check if a VR HMD was found)*
+- jq *(currently only used to extract game names from the steam api)*
 
 
 ## Configuration
@@ -152,10 +158,13 @@ Tooltips give a basic description for every entry.
 
 The Options apply to **all** config files at once!:
 - **EXIT** - leave Settings Menu without doing anything
+- **PLAY** - start the game
 - **EDITOR MENU** - Opens a little Editor Menu from where all found user-editable config files can be opened in the [Editor](#Editor)
 - **RELOAD** - discard all changes and reload all config files
-- **SAVE/RELOAD** - save all changes and reload them
-- **SAVE/EXIT** - save all changes and leave the Settings Menu
+- **SAVE AND RELOAD** - save all changes and reload them
+- **SAVE AND PLAY** - save all changes and start the game
+
+When **stl** was launched "standalone" via command line the corresponding game will be started using the steam `-applaunch` parameter.
 
 #### Disable Settings Menu
 If you prefer to simply use your favourite texteditor or have problems with 'yad' you can change `USEGUI` to "zenity" in the Global Config Tab or [global.conf](#Global-Config).
@@ -178,6 +187,8 @@ Feel free to improve and contribute it though!
 ##### On Game Launch
 When a game is started a small requester will wait `WAITEDITOR` seconds for User input *(either Space or press `OK`)*
 If selected the Settings Menu will open directly with the settings for the launched game in Tab 1 (see [Settings Menu](#Settings-Menu))
+
+![stl requester](https://github.com/frostworx/repo-assets/blob/master/pics/stl-requester.jpg)
 
 When `WAITEDITOR` is set to 0 **stl** will directly start the game.
 If `MAXASK` in the [global.conf](#Global-Config) is defined, the requester can be cancelled maximal `MAXASK` times
@@ -210,6 +221,7 @@ Middle Click Closes The Menu
 #### Tray Icon Buttons
 - "Pick Window Name" *(pick the window name and save it into the [Game Config](#Game-Configurations))*
 - "Get Active Window Name" *(waits 5 seconds and saves the window name of the active window into the [Game Config](#Game-Configurations))*
+- "Get Active Window Size" *(waits 5 seconds and saves the window size of the active window into the [Game Config](#Game-Configurations))* (f.e. for minimal [SBS-VR](#Side-by-Side-VR) window size)
 - "Kill Proton Game" *(kills the currently running Proton game by killing its wineserver)*
 - "Pause/Unpause active window" *(waits 5 seconds and un-/pauses the process of the window which is currently active)*
 
@@ -438,18 +450,21 @@ This config is then applied like described in [Auto Tweaks](#Auto Tweaks) above.
 
 Creating Auto Tweaks via **stl** command line:
 
-`stl autotweaks PLAFTORM (optional steamid)`
+`stl autotweaks|at ('dl') PLAFTORM (optional steamid)`
 
 Will autogenerate all tweak files for every parsible game of platform PLATFORM or just for the optional SteamAppID
-  
 Example:
 
-`stl autotweaks lutris`
+`stl autotweaks|at lutris`
 Creates for all supported Games Autotweak files in `AUTOTWEAKDIR/lutris`
 
-`stl autotweaks lutris 883710`
+`stl autotweaks|at lutris 883710`
 
 Creates only for game 883710 an Autotweak file.
+
+Using the option 'dl' the corresponding platform source is updated before the actual process starts - f.e:
+`stl at dl lutris`
+
 
 **Depending on the platform stl filters several original configuration options.
 If you think something important is missing please open an issue!**
@@ -470,15 +485,8 @@ Currently following options are imported into the Auto Tweak file:
 
 #### Lutris
 [Lutris](https://github.com/lutris/lutris) is pretty huge and supports many different platforms.
-**stl** uses multiple different filters to extract the steam-relevant games.
-If you think something important was filtered out please open an issue!
-Lines which were not filtered out, but were not used as well can be logged
-*(into "/tmp/LUTWEAKDEBUG-raw.txt" (all) and
-"/tmp/LUTWEAKDEBUG-raw.txt" (after another filter, which sorts out some more unused lines))*
+**stl** uses multiple filters to extract the following options into the Auto Tweak file:
 
-by setting the variable `LUATDEBUG=1` directly within **stl**
-
-Currently following options are imported into the Auto Tweak file:
 - winetricks packages
 - commandline arguments
 - env variables
@@ -591,13 +599,64 @@ When no language file was found as a last resort **stl** will download its own p
 simply duplicate one of the existing ones and translate all variables inside)*
 
 #### Steam Linux Runtime
-With proton 5.13-1 the Steam Linux Runtime is autostarted and part of the game command line parameters.
+Introduced with proton 5.13-1 the Steam Linux Runtime is autostarted and part of the game command line parameters.
 
 This *(currently)* breaks compatibility with several tools like
 [MangoHud](#MangoHud), [vkBasalt](#vkBasalt), [Gamemode](#GameMode), [GameScope](#GameScope), [Boxtron](#Boxtron), [Roberta](#Roberta), [Luxtorpeda](#Luxtorpeda)
 *(not sure of all of them are affected or others are missing, feel free to test and report bugs)*
-With **stl** the Steam Linux Runtime can be disabled per game in the **GAME SETTINGS** of the [Settings Menu](#Settings-Menu) or [in game configfile `$STLGAMECFG`](#Game-Specific-Configuration).
-If one (or more) of above confliciting tools are enabled **stl** warns that it is incompatible with the Steam Linux Runtime.
+
+With **stl** is used as [Launch Option](#Launch-Option)
+both the Steam Linux Runtime and the [Proton Version](#Proton Selection) show up in the Steam Game launch command and therefore can be read by **stl**.
+In that case the Steam Linux Runtime can be disabled per game in the **GAME SETTINGS** of the [Settings Menu](#Settings-Menu) or [in game configfile `$STLGAMECFG`](#Game-Specific-Configuration)
+and if one *(or more)* of above confliciting tools are enabled **stl** warns that it is incompatible with the Steam Linux Runtime *(for now)*.
+
+When starting **stl** as [Steam Compatibility Tool](#Steam-Compatibility-Tool) there are no Steam Linux Runtime parameters in the Steam Game launch command and therefore cannot be disabled
+*(maybe comparable to the [Proton Version](#Proton Selection) which doesn't show up as command line parameter as well and is used 'under the hood')*.
+
+
+#### Game Launcher
+
+**stl** comes with a small Game Launcher, which starts selected games using the steam `-applaunch` parameter.
+The Launcher has several modes, which can be selected via command line:
+- Without additional command line parameters:
+  `stl launcher` *(will start the Game Launcher with all installed games)*
+- Optional arguments for launcher are:
+
+ - `stl launcher $CATEGORY` *(will show only the installed games in the steam category `$CATEGORY`)*
+ - `stl launcher menu` 		*(will open a small menu with all available steam categories)*
+ - `stl launcher last` 		*(will open the last played game as 'menu')*
+ - `stl launcher auto` 		*(automatically creates/downloads required data for all installed games before opening the launcher with all installed games)*
+ - `stl launcher update` 	*(recreates the already autogenerated category menus - can be combined with auto')*
+ - `stl launcher $INVALID` 	*(with any invalid parameter all faound valid Steam Categories will be listed)*
+
+The contents of the corresponding categories are autogenerated on the fly *(in `/dev/shm/`)* using [Game Pictures](#Game-Pictures) and [Desktop Files](#Desktop-Files).
+With above `auto` both [Game Pictures](#Game-Pictures) and [Desktop Files](#Desktop-Files) are autogenerated/downloaded if missing.
+
+![stl Game Launcher](https://github.com/frostworx/repo-assets/blob/master/pics/stl-gamelauncher.jpg)
+
+#### Game Pictures
+
+By default **stl** downloads automatically the main `header.jpg` picture from *(configurable `STASSURL`)* if not found and saves it under the `SteamAppID` name.
+Those pictures are used in the [Game Launcher](#Game-Launcher) *(via [Desktop File](#Desktop-Files))* and also in the ["Main Timeout Window"](#On-Game-Launch),
+in the [Editor Dialog](#Editor-Dialog) and in the [Settings Menu](#Settings-Menu).
+
+Downloading of the Game Pictures can be disabled with `DLGAMEDATA` in the **GLOBAL SETTINGS** of the [Settings Menu](#Settings-Menu).
+Displaying the Game Pictures can be disabled in the **GLOBAL SETTINGS** of the [Settings Menu](#Settings-Menu) as well or directly by disabling `USEGAMEPICS`.
+Displaying the Game Pictures only  can be disabled  in the [Settings Menu](#Settings-Menu) or directly by disabling `USEGAMEPICINMENU`.
+
+#### Desktop-Files
+The [Game Launcher](#Game-Launcher) *(yad)* takes a directory containing desktopfiles as argument and lists all of them.
+Those Desktop-Files are [autogenerated](#Game-Data) using the *(big)* [Game Pictures](#Game-Pictures) in the `STLCFGDIR` and therefore are of no use for generic usage.
+
+#### Game Data
+
+Both [Game Pictures](#Game-Pictures) and [Desktop Files](#Desktop-Files) *(for the [Game Launcher](#Game-Launcher))* are autogenerated/downloaded
+per game start by default but also can be batch created via command line:
+
+- `stl update gamedata` *(updates missing desktopfiles and pictures of installed games and exits - depending on the missing files this might need some time)*
+- `stl update gamedata $APPID` *(updates missing desktopfiles and picture for game `$APPID`)*
+- `stl update allgamedata` *(updates missing desktopfiles and pictures of **all** games in 'sharedconfig.vdf' and exit - depending on the missing files this might need some time)*
+
 
 #### Custom Program
 
@@ -727,12 +786,7 @@ Vortex will start, with the selected game preconfigured and ready to mod
 and when you exit Vortex the selected game will start normally (with your mods).
 
 ###### Start Vortex using commandline:
-**stl Vortex commandline options:**
-`stl vortex install`: starts a full Vortex installation with all dependencies
-`stl vortex start`: starts Vortex
-`stl vortex getset`: lists all configured Vortex settings
-`stl vortex stage`: will open a dialog where a vortex stage directory can be added
-                    *(accepts absolute path to the (to be created) directory as argument to skip the dialog)*
+see `stl --help`
 
 ###### Start Vortex by enabling it in the Settings Menu:
 The `VORTEXMODE` option in the Game Tab of the [Settings Menu](#Settings-Menu) has the following modes:
@@ -970,6 +1024,7 @@ If xdg-open is configured as `STLEDITOR` or if the configured editor is not foun
 
 Set `OPENEDITORURL` to 1 to additionally open the `EDITORURL` url for the game in your `BROWSER` when starting the editor from the [Editor Dialog](#Editor-Dialog).
 *(by default the url `$OPENEDITORURL/$SteamAppID` is opened, if this doesn't work with the url you want to open just open an issue)*
+If `EDITORURL` contains "AID" it will be replaced by the current SteamAppID.
 
 #### Editor Dialog
 A little File selection requester allowing to choose which config files to open with the [Editor](#Editor).
@@ -990,14 +1045,4 @@ Here are some examples which improve the start notably *(all settings can be con
 - set `WAITEDITOR` to `0` [on Game Launch](#On-Game-Launch)
 - set `CHECKCATEGORIES` to `0` if the Game has no [Steam Category](#Steam-Categories) Tweak anyway
 - set `SAVESETSIZE` to `0` when all windows have their optimal [size](#Gui-Window-Size)
-
-## Contribution
-
-**Any contribution is welcome and everybody can help!**
-
-- help improving the **README**
-- create [Tweakfiles](#Tweakfiles) and share them with the community, either open a pull request, or open an issue if you don't like git too much :)
-- add new functions & fix bugs (please open a pull request)
-- bugreports (please also post the relevant stl logfile)
-- spread the word *(**stl** is still pretty unknown - the more people know it the more can help to improve it)*
 
