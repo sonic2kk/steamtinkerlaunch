@@ -97,6 +97,7 @@ It might be a good idea to start with configuring everything in the [Settings Me
 * **[Game Pictures](#Game-Pictures)** uses Game Pictures
 * **[Desktop Files](#Desktop-Files)** automatic creation of *(stl-internal)* desktop files
 
+
 ## Requirements
 *(no special order)*
 
