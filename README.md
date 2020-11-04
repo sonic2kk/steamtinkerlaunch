@@ -96,7 +96,7 @@ It might be a good idea to start with configuring everything in the [Settings Me
 * **[Game Launcher](#Game-Launcher)** built in game launcher mode
 * **[Game Pictures](#Game-Pictures)** uses Game Pictures
 * **[Desktop Files](#Desktop-Files)** automatic creation of *(stl-internal)* desktop files
-
+* **[Shader Management](#Shader-Management)** Download/Update/Install/Enable/Disable Shaders
 
 ## Requirements
 *(no special order)*
@@ -1015,6 +1015,23 @@ If `CLONE_DEPTH3D` is set to 1 the git repository will be automatically cloned/p
 
 With `RESHADE_DEPTH3D` enabled `Overwatch.fxh`, `SuperDepth3D.fx`, `SuperDepth3D_VR.fx` from Depth3D are copied to the gamedir.
 When the game started just create a initial profile by selecting the autodetected `SuperDepth3D_VR.fx`
+Also see [Shader Management](#Shader-Management)
+
+#### Shader-Management
+**stl** has a built in shader management with following features:
+- Downloader/Updater of several Shader repositories *(if important/good repos are missing feel free to open an issue)*
+- Shader Selection Menu
+  - all available Shaders are automatically listed
+  - all Shaders already installed in the current game directory are checked
+  - all checked Shaders will be installed into the current game directory
+  - all unchecked Shaders will be removed from the current game directory
+  - The Shader Selection Menu can be started
+    - via command line _(with any directory as destination path)_
+    - directly from the [Settings Menu](#Settings-Menu)
+    - automatically before game start
+    - via [Tray-Icon](https://github.com/frostworx/steamtinkerlaunch#Tray-Icon) _(so Shaders could be installed while the game is already running)_
+- for games with launchers not being in the same path as the actual game exe the destination path can be overridden _(used for both Shaders and [ReShade](#ReShade))_
+- added ShaderMenu Steam Category which installs [ReShade](#ReShade) into the game directory and opens the [Shader Selection Menu](#Shader-Selection-Menu)
 
 #### Editor
 Config files can optionally be opened with the texteditor `STLEDITOR` if desired, either by accepting a requester (for editing Tweakfiles) or by opening
