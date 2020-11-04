@@ -109,7 +109,6 @@ Programs required for a full internal functionality:
 - unzip
 - wget
 - which
-- wmctrl
 - xdotool
 - xprop
 - xrandr
@@ -963,7 +962,7 @@ Set `USEGAMESCOPE` to 1 to automatically start GameScope when the game starts, e
 The commandline arguments used *(`GAMESCOPE_ARGS`)* can be configured both per game and globally as well.
 
 #### Toggle Open Windows
-minimize all open windows on game start and maximize them when game exited using wmctrl
+minimize all open windows on game start and maximize them when game exited using xprop
 - `TOGGLEWINDOWS`: toggle visibility of all open windows on start/stop
 
 #### Strace
