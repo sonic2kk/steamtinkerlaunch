@@ -102,6 +102,7 @@ It might be a good idea to start with configuring everything in the [Settings Me
 *(no special order)*
 
 Programs required for a full internal functionality:
+- awk *(gawk)*
 - bash *(only shell tested)*
 - git
 - pgrep

@@ -4,7 +4,7 @@
 ### project ###
 
 PROGNAME="SteamTinkerLaunch"
-PROGVERS="v2.7.0"
+PROGVERS="v2.7.1"
 PROGCMD="$(basename "$0")"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -25,6 +25,7 @@ XRANDR="xrandr"
 XWININFO="xwininfo"
 YAD="yad"
 ZENITY="zenity"
+AWK="gawk"
 #ENDINTDEPS
 
 ### (optionally) used programs ###
@@ -232,8 +233,8 @@ function getGameName {
 	elif grep -q "_${1}\." <<< "$(listAppManifests)" ; then
 		APPMA="$(grep "_${1}\." <<< "$(listAppManifests)")"
 		if [ -n "$APPMA" ]; then
-			GNRAW1="$(grep "\"name\"" "$APPMA" | awk -F '"name"' '{print $NF}')"
-			GNRAW="$(awk '{$1=$1};1' <<< "$GNRAW1")"
+			GNRAW1="$(grep "\"name\"" "$APPMA" | "$AWK" -F '"name"' '{print $NF}')"
+			GNRAW="$("$AWK" '{$1=$1};1' <<< "$GNRAW1")"
 			writelog "INFO" "${FUNCNAME[0]} - found Game Name '$GNRAW' in '$APPMA'"
 		fi
 	else
@@ -299,7 +300,7 @@ function getParsableGameList {
 		SC="$STEAMUSERID/$SRSCV"
 		APPI="Apps"
 		APPO="StartMenuShortcutCheck"
-		awk "/$APPI/,/$APPO/" "$SC" | grep -v "$APPI\|$APPO" | awk '{printf "%s+",$0} END {print ""}' |  sed 's/"[0-9][0-9]/\n&/g'
+		"$AWK" "/$APPI/,/$APPO/" "$SC" | grep -v "$APPI\|$APPO" | "$AWK" '{printf "%s+",$0} END {print ""}' |  sed 's/"[0-9][0-9]/\n&/g'
 	else
 		writelog "SKIP" "${FUNCNAME[0]} - '$SUSDA' not found - this should not happen! - skipping"
 	fi
@@ -332,7 +333,7 @@ function getDataForAllGamesinSharedConfig {
 }
 
 function getActiveSteamCategories {
-	getParsableGameList | grep "\"installed\"" | grep "\"tags\"" | awk -F '"tags"+' '{print $NF}' | sed  's/\t/\n/g' | grep -v "^\"[0-9]\"\|^+\|^{+\|^}+" | sed "s:\"+$::g" | sed "s:^\"::g" | sort -u | sed '/^[[:space:]]*$/d'
+	getParsableGameList | grep "\"installed\"" | grep "\"tags\"" | "$AWK" -F '"tags"+' '{print $NF}' | sed  's/\t/\n/g' | grep -v "^\"[0-9]\"\|^+\|^{+\|^}+" | sed "s:\"+$::g" | sed "s:^\"::g" | sort -u | sed '/^[[:space:]]*$/d'
 }
 
 function createCategoryMenus {
@@ -371,7 +372,7 @@ function listAppManifests {
 	if [ -f "$CFGVDF" ]; then
 		while read -r BIF; do
 			findAppMa "${BIF//\"/}/$SA"
-		done <<< "$(grep "BaseInstallFolder" "$CFGVDF" | awk '{print $2}')"
+		done <<< "$(grep "BaseInstallFolder" "$CFGVDF" | "$AWK" '{print $2}')"
 	else
 		writelog "SKIP" "${FUNCNAME[0]} - '$CFGVDF' not found - this should not happen! - skipping"
 	fi
@@ -506,7 +507,7 @@ function setGameVars {
 	# win game
 		GPFX="$STEAM_COMPAT_DATA_PATH/pfx"														# currently used WINEPREFIX
 		GP="$(printf "%s\n" "$@" | grep -v "proton\|$SLR" | grep -m1 "$SAC")"					# the absolute game path of the windows game exe
-		GE="$(basename "$GP" | awk -F '.exe' '{print $1}')"										# just the windows game exe name
+		GE="$(basename "$GP" | "$AWK" -F '.exe' '{print $1}')"										# just the windows game exe name
 		EFD="$(dirname "$GP")"																	# the absolute directory where the game exe lives - for optional custom program
 	else
 	# linux game
@@ -524,8 +525,8 @@ function setGameVars {
 	fi
 
 	# common
-	GFD="$(awk -F 'common' '{print $1}' <<< "$EFD")common/$(awk -F 'common' '{print $NF}' <<< "$EFD" | cut -d'/' -f2)" # f.e. used for vortex symlinks
-	GN="$(grep -oE 'common/[^\/]+' <<< "$EFD" | awk -F 'common/' '{print $NF}')"				# THIS is hopefully the proper game name
+	GFD="$("$AWK" -F 'common' '{print $1}' <<< "$EFD")common/$("$AWK" -F 'common' '{print $NF}' <<< "$EFD" | cut -d'/' -f2)" # f.e. used for vortex symlinks
+	GN="$(grep -oE 'common/[^\/]+' <<< "$EFD" | "$AWK" -F 'common/' '{print $NF}')"				# THIS is hopefully the proper game name
 
 	# SLR
 	if grep -q "$SLR" <<< "$@"; then
@@ -675,7 +676,7 @@ function loadLanguage {
 		STLLRAW="$(grep "^STLLANG" "$STLDEFGLOBALCFG" | cut -d '=' -f2)"
 		STLLANG="${STLLRAW//\"/}"
 	else
-		ARGSLANG="$(awk -F 'lang=' '{print $2}' <<< "$@" | cut -d ' ' -f1)"
+		ARGSLANG="$("$AWK" -F 'lang=' '{print $2}' <<< "$@" | cut -d ' ' -f1)"
 		if [ -n "$ARGSLANG" ]; then
 			STLLANG="$ARGSLANG"
 		fi
@@ -717,7 +718,7 @@ function setProtonPathVersion {
 		if [ -f "$CTVDF" ]; then
 			PROTVOUT="$(grep "display_name" "$CTVDF" | grep -v "e.g." | sed "s:\" \":\";\":g" | cut -d ';' -f2)"
 		elif [ -f "$PPV" ]; then
-			PROTVOUT="$(awk '{print $2}' < "$PPV")"
+			PROTVOUT="$("$AWK" '{print $2}' < "$PPV")"
 		fi
 
 		if [ -z "$PROTVOUT" ]; then
@@ -791,14 +792,14 @@ function getAvailableProtonVersions {
 				if [ -f "$PROTBIN" ]; then
 					fillProtonCSV
 				fi
-			done <<< "$(while read -r SLP; do find "${SLP//\"/}/$SAC" -maxdepth 1 -maxdepth 1 -type d -name "Proton*"; done <<< "$(grep "BaseInstallFolder" "$CFGVDF" | awk '{print $2}')")"
+			done <<< "$(while read -r SLP; do find "${SLP//\"/}/$SAC" -maxdepth 1 -maxdepth 1 -type d -name "Proton*"; done <<< "$(grep "BaseInstallFolder" "$CFGVDF" | "$AWK" '{print $2}')")"
 		else
 			writelog "SKIP" "${FUNCNAME[0]} - file CFGVDF '$CFGVDF' not found - this should not happen! - skipping"
 		fi
 
 		# custom Proton List:
 		if [ -f "$CUSTOMPROTONLIST" ]; then
-			awk -i inplace '!visited[$0]++' "$CUSTOMPROTONLIST"
+			"$AWK" -i inplace '!visited[$0]++' "$CUSTOMPROTONLIST"
 
 			while read -r PROTLINE; do
 				writelog "INFO" "${FUNCNAME[0]} - checking line '$PROTLINE' in '$CUSTOMPROTONLIST'"
@@ -831,7 +832,7 @@ function getAvailableProtonVersions {
 	fi
 
 	printf "%s\n" "${ProtonCSV[@]//\"/}" > "$PROTONCSV"
-	awk -i inplace '!visited[$0]++' "$PROTONCSV"
+	"$AWK" -i inplace '!visited[$0]++' "$PROTONCSV"
 }
 
 
@@ -845,7 +846,7 @@ function calculateDefaultResolutions {
 		SCREENHEIGHT="$DUMMYSCREENHEIGHT"		
 	}
 
-	SCREENRES="$("$XRANDR" --current | grep "\*" | awk '{print $1}' | sort -gur | head -n1)"
+	SCREENRES="$("$XRANDR" --current | grep "\*" | "$AWK" '{print $1}' | sort -gur | head -n1)"
 	writelog "INFO" "${FUNCNAME[0]} - '$XRANDR' found screenresolution '$SCREENRES'" "X"
 	SCREENWIDTH="${SCREENRES%x*}"
 	SCREENHEIGHT="${SCREENRES#*x}"
@@ -1954,7 +1955,7 @@ function updateWinRes {
 		writelog "INFO" "${FUNCNAME[0]} - Window '$WNAM' is running - polling the resolution"
 
 		while true; do
-			SRES="$("$XWININFO" -name "$WNAM" -stats 2>/dev/null | awk '$1=="-geometry" {print $2}' | cut -d '+' -f1)"
+			SRES="$("$XWININFO" -name "$WNAM" -stats 2>/dev/null | "$AWK" '$1=="-geometry" {print $2}' | cut -d '+' -f1)"
 			if grep -q "x" <<< "$SRES"; then
 				PREVW="$NEWW"
 				PREVH="$NEWH"
@@ -2764,7 +2765,7 @@ function usevkBasalt {
 
 function getWindowHeight {
 	WINID="$1"
-	"$XWININFO" -id "$WINID" -stats | awk '$1=="-geometry" {print $2}' | cut -d '+' -f1 | cut -d 'x' -f2
+	"$XWININFO" -id "$WINID" -stats | "$AWK" '$1=="-geometry" {print $2}' | cut -d '+' -f1 | cut -d 'x' -f2
 }
 
 function waitForGameWindow {
@@ -2999,7 +3000,7 @@ function SBSgetGamePID {
 			writelog "INFO" "${FUNCNAME[0]} - getting the game PID"
 			while true; do
 				if [ -n "$GAMEWINDOW" ] && [ "$GAMEWINDOW" != "empty" ] ; then
-					GPID="$("$XWININFO" -name "${GAMEWINDOW//\"/}" -wm | grep "Process id:" | awk -F 'Process id: ' '{print $2}' | cut -d ' ' -f1)"
+					GPID="$("$XWININFO" -name "${GAMEWINDOW//\"/}" -wm | grep "Process id:" | "$AWK" -F 'Process id: ' '{print $2}' | cut -d ' ' -f1)"
 					if [ -n "$GPID" ]; then
 						writelog "INFO" "${FUNCNAME[0]} - game pid '$GPID' found for GAMEWINDOW '$GAMEWINDOW'"
 						export SBSVRKGPID="$GPID"
@@ -3086,7 +3087,7 @@ function SBSrunVRVideoPlayer {
 			done
 
 			# player windowid:
-			SBSVRWID=$("$XWININFO" -name "$SBSVRWINNAME" -stats | grep "^$XWININFO" | awk -F 'id: ' '{print $2}' | cut -d ' ' -f1)
+			SBSVRWID=$("$XWININFO" -name "$SBSVRWINNAME" -stats | grep "^$XWININFO" | "$AWK" -F 'id: ' '{print $2}' | cut -d ' ' -f1)
 				
 			if [ -n "$SBSVRWID" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - pressing w in '$VRVIDEOPLAYER' window '$SBSVRWINNAME' to adjust view: '$XDO windowactivate --sync $SBSVRWID key w'"
@@ -3119,7 +3120,7 @@ function SBSinitVRVideoPlayer {
 			fi
 		else
 			if [ -n "$GAMEWINDOW" ] && [ "$GAMEWINDOW" != "empty" ] ; then
-				GAMEWINDOWID="$("$XWININFO" -name "${GAMEWINDOW//\"/}" -stats | grep "^$XWININFO" | awk -F 'id: ' '{print $2}' | cut -d ' ' -f1)"
+				GAMEWINDOWID="$("$XWININFO" -name "${GAMEWINDOW//\"/}" -stats | grep "^$XWININFO" | "$AWK" -F 'id: ' '{print $2}' | cut -d ' ' -f1)"
 				if [ -z "$GAMEWINDOWID" ]; then
 					writelog "SKIP" "${FUNCNAME[0]} - ERROR - could not find windowid '$GAMEWINDOWID' for the windowname '$GAMEWINDOW'"
 					RUNSBSVR=0
@@ -3680,7 +3681,7 @@ function useReshade {
 function getUsedVars {
 	while read -r line; do 
 		if  grep -q -v "^#" <<< "$line"; then
-			awk -F '=' '{print $1}' <<< "$line" 
+			"$AWK" -F '=' '{print $1}' <<< "$line" 
 		fi
 	done <"$1"
 }
@@ -3877,7 +3878,7 @@ function updateConfigFile {
 		if grep -q "config Version: $PROGVERS" "$1"; then
 			writelog "SKIP" "${FUNCNAME[0]} - config file '$CFGFILE' already at version '$PROGVERS'"
 		else
-			OLDVERS="$(grep "config Version" "$CFGFILE" | awk -F ': ' '{print $2}')"
+			OLDVERS="$(grep "config Version" "$CFGFILE" | "$AWK" -F ': ' '{print $2}')"
 			
 			if [ "$CFGFILE" == "$STLGUICFG" ]; then
 				calculateDefaultResolutions
@@ -3914,7 +3915,7 @@ function updateConfigFile {
 					writelog "UPDATE" "${FUNCNAME[0]} - adding line '$ADDLINE'"
 					echo "$ADDLINE" >> "$CFGFILE"
 				fi
-			done <<< "$(sed -n "/#START$SEP/,/#END$SEP/p;/#END$SEP/q" "$0" | awk -F 'echo ' '{print $2}' | grep -v "\"##" | sed '/^[[:space:]]*$/d'| sed 's/\"//g' | sed 's/=\\/=/g' | sed 's/\\$//g')"
+			done <<< "$(sed -n "/#START$SEP/,/#END$SEP/p;/#END$SEP/q" "$0" | "$AWK" -F 'echo ' '{print $2}' | grep -v "\"##" | sed '/^[[:space:]]*$/d'| sed 's/\"//g' | sed 's/=\\/=/g' | sed 's/\\$//g')"
 		fi
 
 		# re-enable logging
@@ -3974,7 +3975,7 @@ function GAMEPID {
 	fi
 
 	if [ -n "$GAMEWINDOW" ] && [ "$GAMEWINDOW" != "empty" ] ; then
-		GWINPID="$("$XWININFO" -name "${GAMEWINDOW//\"/}" -wm | grep "Process id:" | awk -F 'Process id: ' '{print $2}' | cut -d ' ' -f1)"
+		GWINPID="$("$XWININFO" -name "${GAMEWINDOW//\"/}" -wm | grep "Process id:" | "$AWK" -F 'Process id: ' '{print $2}' | cut -d ' ' -f1)"
 		writelog "INFO" "${FUNCNAME[0]} - found gamewindow PID $GWINPID"
 	fi
 	
@@ -4051,7 +4052,7 @@ function checkTweakLaunch {
 			if grep -q "^TWEAKFILE" "$RUNTWEAK"; then
 				# dependency for tweak command defined
 				writelog "INFO" "${FUNCNAME[0]} - TWEAKFILE configured in $RUNTWEAK as dependency - checking if the file exists in gamedir - relative to the gameexe"
-				TWEAKFILE="$(grep "^TWEAKFILE" "$RUNTWEAK" | awk -F 'TWEAKFILE=' '{print $2}')"
+				TWEAKFILE="$(grep "^TWEAKFILE" "$RUNTWEAK" | "$AWK" -F 'TWEAKFILE=' '{print $2}')"
 				if [ -f "$EFD/$TWEAKFILE" ]; then
 					# dependency for tweak command found
 					writelog "INFO" "${FUNCNAME[0]} - found tweakcmd dependency in $EFD/$TWEAKFILE - starting the tweakcmd now"
@@ -4252,7 +4253,7 @@ function autoCategorySettings {
 						writelog "SKIP" "${FUNCNAME[0]} - config '$SCATCONF' not found - skipping"
 					fi
 
-				done <<< "$(sed -n "/\"$AID\"/,/}/p;" "$SC" | sed -n "/\"tags\"/,/}/p" | sed -n "/{/,/}/p" | grep -v '{\|}' | awk '{print $2}' | sed "s:\"::g")"
+				done <<< "$(sed -n "/\"$AID\"/,/}/p;" "$SC" | sed -n "/\"tags\"/,/}/p" | sed -n "/{/,/}/p" | grep -v '{\|}' | "$AWK" '{print $2}' | sed "s:\"::g")"
 			fi
 		else
 			writelog "SKIP" "${FUNCNAME[0]} - '$SUSDA' not found - this should not happen! - skipping"
@@ -4371,7 +4372,7 @@ function createAutoTweakPF {
 	else
 		writelog "INFO" "${FUNCNAME[0]} - auto creating tweakfile $PFTWEAKCFG from $PF gamefix"
 
-		WINETRICKSPAKS="$(grep "util.protontricks" "$GFPY" | grep -o -P "(?<=').*(?=')" | tr '\n' ' ' | awk '{$1=$1};1')"
+		WINETRICKSPAKS="$(grep "util.protontricks" "$GFPY" | grep -o -P "(?<=').*(?=')" | tr '\n' ' ' | "$AWK" '{$1=$1};1')"
 		if [ -n "$WINETRICKSPAKS" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - adding WINETRICKSPAKS=\"$WINETRICKSPAKS\" to the tweakfile $PFTWEAKCFG"
 			echo "WINETRICKSPAKS=\"$WINETRICKSPAKS\"" >> "$PFTWEAKCFG"
@@ -4393,7 +4394,7 @@ function createAutoTweakPF {
 			echo "$PFENV" >> "$PFTWEAKCFG"
 		fi
 		
-		WINEDLLOVERRIDES="$(grep "util.winedll_override" "$GFPY" | grep -o -P "(?<=').*(?=')" | tr '\n' ' ' | sed "s:', ':=:g"  | awk '{$1=$1};1' | tr ' ' ';')"
+		WINEDLLOVERRIDES="$(grep "util.winedll_override" "$GFPY" | grep -o -P "(?<=').*(?=')" | tr '\n' ' ' | sed "s:', ':=:g"  | "$AWK" '{$1=$1};1' | tr ' ' ';')"
 		if [ -n "$WINEDLLOVERRIDES" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - adding WINEDLLOVERRIDES=$WINEDLLOVERRIDES to the tweakfile $PFTWEAKCFG"
 			echo "WINEDLLOVERRIDES=\"$WINEDLLOVERRIDES\"" >> "$PFTWEAKCFG"
@@ -4405,7 +4406,7 @@ function createAutoTweakPF {
 			echo "PROTON_NO_FSYNC=\"1\"" >> "$PFTWEAKCFG"
 		fi
 		
-		GAMEARGS="$(grep "util.append_argument\|sys.argv.append" "$GFPY" | grep -o -P "(?<=').*(?=')" | tr '\n' ' ' | awk '{$1=$1};1')"
+		GAMEARGS="$(grep "util.append_argument\|sys.argv.append" "$GFPY" | grep -o -P "(?<=').*(?=')" | tr '\n' ' ' | "$AWK" '{$1=$1};1')"
 		if [ -n "$GAMEARGS" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - adding GAMEARGS=$GAMEARGS to the tweakfile $PFTWEAKCFG"
 			echo "GAMEARGS=\"$GAMEARGS\"" >> "$PFTWEAKCFG"
@@ -4421,7 +4422,7 @@ function createAutoTweakPF {
 		if [ -f "$PFTWEAKCFG" ]; then
 
 			# remove duplicate lines:
-			awk -i inplace '!visited[$0]++' "$PFTWEAKCFG"
+			"$AWK" -i inplace '!visited[$0]++' "$PFTWEAKCFG"
 
 			writelog "CREATE" "${FUNCNAME[0]} - '$PFGN ($PFID)' $PF-autotweak created: '$PFTWEAKCFG'"
 
@@ -4463,7 +4464,7 @@ function getAutoTweakInfoPF {
 				elif grep -q "Mania\|Potatoman\|Slug\|Crashday" "$GFPY"; then
 					writelog "SKIP" "${FUNCNAME[0]} - found $PF file $GFPY is currently not supported by stl - skipping"
 				else
-					PFGN="$(head -n1 "$GFPY" | awk -F 'Game fix ' '{print $2}' | sed "s:^for ::g" | sed "s:/::g")"
+					PFGN="$(head -n1 "$GFPY" | "$AWK" -F 'Game fix ' '{print $2}' | sed "s:^for ::g" | sed "s:/::g")"
 					createAutoTweakPF "$PFID"
 				fi
 			else
@@ -4583,8 +4584,8 @@ function createLUSteamList {
 		dlLU
 	fi
 		
-	awk -F '"script"' '{print $NF}' < "$LULIST" | grep "\"appid\"" | awk 'length($0)>100' | sort -u  > "$LUSTEAMFLIST"
-	awk -F '"content"' '{print $1}' < "$LUSTEAMFLIST" | grep -v "run_without_steam\| select \|GOG\|bms\|Itch.io" | sort -u  > "$LUSTEAMLIST"
+	"$AWK" -F '"script"' '{print $NF}' < "$LULIST" | grep "\"appid\"" | "$AWK" 'length($0)>100' | sort -u  > "$LUSTEAMFLIST"
+	"$AWK" -F '"content"' '{print $1}' < "$LUSTEAMFLIST" | grep -v "run_without_steam\| select \|GOG\|bms\|Itch.io" | sort -u  > "$LUSTEAMLIST"
 	writelog "INFO" "${FUNCNAME[0]} full $LU steam list ready at $LUSTEAMLIST"
 }
 
@@ -4633,7 +4634,7 @@ function createAutoTweakLU {
 
 			# command line args
 			if grep -oE 'game\"[^\}]+' <<< "$line" | grep -q "\"args\":"; then
-			IFS=" " read -r -a ARGS <<< "$(grep -oE 'game\"[^\}]+' <<< "$line" | grep "\"args\":" | awk -F '"args":"' '{print $2}' | cut -d'"' -f1)"
+			IFS=" " read -r -a ARGS <<< "$(grep -oE 'game\"[^\}]+' <<< "$line" | grep "\"args\":" | "$AWK" -F '"args":"' '{print $2}' | cut -d'"' -f1)"
 				for i in "${ARGS[@]}"; do
 					if grep -q "^PROTON\|^RADV" <<< "$i"; then
 						writelog "INFO" "${FUNCNAME[0]} - '$i' is a variable - adding to '$LUTWEAKCFG'"
@@ -4655,7 +4656,7 @@ function createAutoTweakLU {
 							writelog "INFO" "${FUNCNAME[0]} - found variable $luvar"
 							echo "$luvar" >> "$LUTWEAKCFG"
 						fi
-					done <<< "$(grep -oE 'env\"[^\}]+' <<< "$line" | awk -F':{' '{print $2}' | sed "s:,:\n:g" | sed "s:\"::g" | sed "s:\::=:g")"
+					done <<< "$(grep -oE 'env\"[^\}]+' <<< "$line" | "$AWK" -F':{' '{print $2}' | sed "s:,:\n:g" | sed "s:\"::g" | sed "s:\::=:g")"
 				fi
 				LINECONV=1
 			fi
@@ -4663,7 +4664,7 @@ function createAutoTweakLU {
 			# dll overrides
 			if grep -q -oE 'overrides\"[^\}]+' <<< "$line"; then
 				writelog "INFO" "${FUNCNAME[0]} - found overrides"
-				ORLINE="$(grep -oE 'overrides\"[^\}]+' <<< "$line" | awk -F':{' '{print $2}' | sed "s:\",:;:g" | sed "s:\"::g" | sed "s:\::=:g" | sed "s:disabled:d:g" | sed "s:native:n:g" | sed "s:builtin:b:g")"
+				ORLINE="$(grep -oE 'overrides\"[^\}]+' <<< "$line" | "$AWK" -F':{' '{print $2}' | sed "s:\",:;:g" | sed "s:\"::g" | sed "s:\::=:g" | sed "s:disabled:d:g" | sed "s:native:n:g" | sed "s:builtin:b:g")"
 				echo "WINEDLLOVERRIDES=\"$ORLINE\"" >> "$LUTWEAKCFG"
 				LINECONV=1
 			fi
@@ -4737,9 +4738,9 @@ function createAutoTweakLU {
 
 		if [ -n "$LUATDEBUG" ]; then
 			if [ "$LUATDEBUG" -eq 1 ]; then
-				awk -i inplace '!visited[$0]++' "$LUTWEAK1DEBUG"
+				"$AWK" -i inplace '!visited[$0]++' "$LUTWEAK1DEBUG"
 				grep -v "write_config\|KB976932\|appid\|insert-disc\|\"winesteam\"\|''\|create_prefix\|winekill\|\"description\"\|N\/A\|\"files\"" "$LUTWEAK1DEBUG" >> "$LUTWEAKDEBUG"
-				awk -i inplace '!visited[$0]++' "$LUTWEAKDEBUG"
+				"$AWK" -i inplace '!visited[$0]++' "$LUTWEAKDEBUG"
 			fi
 		fi
 
@@ -4751,7 +4752,7 @@ function createAutoTweakLU {
 			if [ "$GAMEID" == "12170" ]; then
 				echo "WINETRICKSPAKS=\"mfc42\"" >> "$LUTWEAKCFG"
 			else
-				WTO="$(echo "${WTARR[*]}" | tr ' ' '\n' | sort -u | tr '\n' ' ' | awk '{$1=$1};1')"	
+				WTO="$(echo "${WTARR[*]}" | tr ' ' '\n' | sort -u | tr '\n' ' ' | "$AWK" '{$1=$1};1')"	
 				echo "WINETRICKSPAKS=\"$WTO\"" >> "$LUTWEAKCFG"
 			fi
 		fi
@@ -4764,11 +4765,11 @@ function createAutoTweakLU {
 
 		if [ -f "$LUTWEAKCFG" ]; then
 			# remove duplicate lines:
-			awk -i inplace '!visited[$0]++' "$LUTWEAKCFG"
+			"$AWK" -i inplace '!visited[$0]++' "$LUTWEAKCFG"
 
-			LUGN="$(grep -m1 "\"appid\":$GAMEID," "$LULIST" | awk -F '"name":' '{print $2}' | cut -d ',' -f1 | sed "s:/::g")"
+			LUGN="$(grep -m1 "\"appid\":$GAMEID," "$LULIST" | "$AWK" -F '"name":' '{print $2}' | cut -d ',' -f1 | sed "s:/::g")"
 			if [ -z "$LUGN" ]; then
-				LUGN="$(grep -m1 "\"appid\":$GAMEID}" "$LULIST" | awk -F '"name":' '{print $2}' | cut -d ',' -f1 | sed "s:/::g")"
+				LUGN="$(grep -m1 "\"appid\":$GAMEID}" "$LULIST" | "$AWK" -F '"name":' '{print $2}' | cut -d ',' -f1 | sed "s:/::g")"
 			fi
 			
 			writelog "CREATE" "${FUNCNAME[0]} - '$LUGN ($GAMEID)' $LU-autotweak created: '$LUTWEAKCFG'"
@@ -4781,10 +4782,10 @@ function createAutoTweakLU {
 		fi
 		
 		if [ -f "$TWEAKLUCMD" ];then
-			awk -i inplace '!visited[$0]++' "$TWEAKLUCMD"
-			LUGN="$(grep -m1 "\"appid\":$GAMEID," "$LULIST" | awk -F '"name":' '{print $2}' | cut -d ',' -f1 | sed "s:/::g")"
+			"$AWK" -i inplace '!visited[$0]++' "$TWEAKLUCMD"
+			LUGN="$(grep -m1 "\"appid\":$GAMEID," "$LULIST" | "$AWK" -F '"name":' '{print $2}' | cut -d ',' -f1 | sed "s:/::g")"
 			if [ -z "$LUGN" ]; then
-				LUGN="$(grep -m1 "\"appid\":$GAMEID}" "$LULIST" | awk -F '"name":' '{print $2}' | cut -d ',' -f1 | sed "s:/::g")"
+				LUGN="$(grep -m1 "\"appid\":$GAMEID}" "$LULIST" | "$AWK" -F '"name":' '{print $2}' | cut -d ',' -f1 | sed "s:/::g")"
 			fi
 
 			writelog "CREATE" "${FUNCNAME[0]} - '$LUGN ($GAMEID)' TWEAKCMD created: '$TWEAKLUCMD'"
@@ -4876,7 +4877,7 @@ function createTweaklutris {
 		if [ "$AID" == "$PLACEHOLDERAID" ]; then
 			while read -r line; do
 				getAutoTweakInfoLU "$line"
-			done <<< "$(awk -F '"appid":' '{print $2}' < "$LUSTEAMLIST" | cut -d ',' -f1 | grep -Eo '[0-9]{1,10}' | sort -u)"
+			done <<< "$("$AWK" -F '"appid":' '{print $2}' < "$LUSTEAMLIST" | cut -d ',' -f1 | grep -Eo '[0-9]{1,10}' | sort -u)"
 		else
 			getAutoTweakInfoLU "$AID"
 		fi
@@ -5461,7 +5462,7 @@ function customRegs {
 				echo "[HKEY_CURRENT_USER\Software\Wine\Explorer]"
 				echo "\"Desktop\"=\"Default\""
 				echo "[HKEY_CURRENT_USER\Software\Wine\Explorer\Desktops]"
-				echo "\"Default\"=\"$(xrandr | grep "\*" | awk '{print $1}')\""
+				echo "\"Default\"=\"$(xrandr | grep "\*" | "$AWK" '{print $1}')\""
 				} >> "$TEMPREG"
 
 				regEdit "$TEMPREG"
@@ -5636,7 +5637,7 @@ function addVortexStage {
 	
 	if [ -n "$NEWVS" ];then
 		echo "$NEWVS" >> "$VORTEXSTAGELIST"
-		awk -i inplace '!visited[$0]++' "$VORTEXSTAGELIST"
+		"$AWK" -i inplace '!visited[$0]++' "$VORTEXSTAGELIST"
 	fi
 }
 
@@ -5813,7 +5814,7 @@ function setupGameVortex {
 				if [ -n "$NEXUSGAMEID" ] ;then
 					writelog "INFO" "${FUNCNAME[0]} - found Nexus GameID '$NEXUSGAMEID' for the game '$GN ($AID)' in game config"
 				else
-					NEXUSGAMEID="$(awk -F 'game-' '{print $2}' <<< "$(basename "$(awk -F '/index.js' '{print $1}' <<< "$NEXUSGAMEFILE")")")"
+					NEXUSGAMEID="$("$AWK" -F 'game-' '{print $2}' <<< "$(basename "$("$AWK" -F '/index.js' '{print $1}' <<< "$NEXUSGAMEFILE")")")"
 					if [ -n "$NEXUSGAMEID" ]; then
 						writelog "OK" "${FUNCNAME[0]} - autodetected Nexus GameID '$NEXUSGAMEID' - adding it to the game config '$STLGAMECFG'"
 						updateConfigEntry "NEXUSGAMEID" "$NEXUSGAMEID" "$STLGAMECFG"
@@ -5879,7 +5880,7 @@ function setupGameVortex {
 			if grep -q -E 'getPath.*documents' "$NEXUSGAMEFILE"; then
 				writelog "INFO" "${FUNCNAME[0]} - found Modpath in $NEXUSGAMEFILE - creating it in '$GPFX'"
 				# LOAD_ORDER_FILENAME exclude for witcher3
-				GMODPATH="$(grep -E 'getPath.*documents' "$NEXUSGAMEFILE" | grep -v "LOAD_ORDER_FILENAME\|()" | awk -F ')\, ' '{print $NF}' |  awk -F ')' '{print $1}'  | sed "s:, :\/:g" | sed "s:'::g")"
+				GMODPATH="$(grep -E 'getPath.*documents' "$NEXUSGAMEFILE" | grep -v "LOAD_ORDER_FILENAME\|()" | "$AWK" -F ')\, ' '{print $NF}' | "$AWK" -F ')' '{print $1}' | sed "s:, :\/:g" | sed "s:'::g")"
 				if [ -n "$SteamUserMyDocs" ] && [ -n "$GMODPATH" ]; then
 					writelog "INFO" "${FUNCNAME[0]} - creating directory $SteamUserMyDocs/$GMODPATH"
 					mkdir -p "$SteamUserMyDocs/$GMODPATH" 2>/dev/null
@@ -5887,7 +5888,7 @@ function setupGameVortex {
 			fi
 
 			# find matching Staging Directory:
-			GAMEMP="$(df -P "$GP" | awk 'END{print $NF}')"
+			GAMEMP="$(df -P "$GP" | "$AWK" 'END{print $NF}')"
 			writelog "INFO" "${FUNCNAME[0]} - mount point of partition where the game is installed: '$GAMEMP'"
 			CONFSTAGE=""
 
@@ -5910,7 +5911,7 @@ function setupGameVortex {
 					VORTEXMODE="disabled"
 				else
 					PARTLOG=" - using that as VORTEXSTAGING dir for all games on partition' $GAMEMP'"
-					HOMEMP="$(df -P "$STLVORTEXDIR" | awk 'END{print $NF}')"
+					HOMEMP="$(df -P "$STLVORTEXDIR" | "$AWK" 'END{print $NF}')"
 					writelog "INFO" "${FUNCNAME[0]} - HOMEMP is $HOMEMP and GAMEMP is $GAMEMP"
 
 					# don't pollute base steam installation with a ~/.steam/steam/Vortex dir, so default to $STLVORTEXDIR/stageing
@@ -5922,7 +5923,7 @@ function setupGameVortex {
 					getVortexStage "$GAMEMP/Vortex"
 
 					# then try in the current SteamLibrary dir besides steamapps, as it should be writeable by the user and is unused from steam(?):
-					getVortexStage "$(awk -F 'steamapps' '{print $1}' <<< "$GP")Vortex"
+					getVortexStage "$("$AWK" -F 'steamapps' '{print $1}' <<< "$GP")Vortex"
 
 					# updating Vortex config with the new found VORTEXSTAGING dir:
 					if [ -n "$VORTEXSTAGING" ]; then
@@ -5968,7 +5969,7 @@ function setupGameVortex {
 				PATHKEY=""
 
 				# would as well work in a loop for all index.js files, but better just take those which are actually need:
-				RAWREG="$(grep -E 'instPath.*winapi.RegGetValue' "$NEXUSGAMEFILE" -A3 | tr -d "\n\r" | awk -F 'RegGetValue' '{print $2}' | cut -d';' -f1  | tr -s " " | sed "s:^(::g" | sed "s:)$::g" | sed  's/, /,/g' | awk '{$1=$1;print}')"
+				RAWREG="$(grep -E 'instPath.*winapi.RegGetValue' "$NEXUSGAMEFILE" -A3 | tr -d "\n\r" | "$AWK" -F 'RegGetValue' '{print $2}' | cut -d';' -f1  | tr -s " " | sed "s:^(::g" | sed "s:)$::g" | sed  's/, /,/g' | "$AWK" '{$1=$1;print}')"
 				
 				if [ -n "$RAWREG" ]; then
 					writelog "INFO" "${FUNCNAME[0]} - analyzing found registry snipplet '$RAWREG'"
@@ -5981,8 +5982,8 @@ function setupGameVortex {
 						
 						writelog "INFO" "${FUNCNAME[0]} - REGWIP is '$REGWIP'"
 
-						REGWIPKEY="$(awk -F ',' '{print $1}' <<< "$REGWIP" | sed "s:'::g")"
-						PATHKEY="$(awk -F ',' '{print $2}' <<< "$REGWIP" | sed "s:'::g")"
+						REGWIPKEY="$("$AWK" -F ',' '{print $1}' <<< "$REGWIP" | sed "s:'::g")"
+						PATHKEY="$("$AWK" -F ',' '{print $2}' <<< "$REGWIP" | sed "s:'::g")"
 
 						if grep -q -i "WOW6432Node" <<< "$REGWIPKEY"; then
 							writelog "INFO" "${FUNCNAME[0]} - squeezing in a 'WOW6432Node' into the '$REGWIPKEY' string, to make the generic function checkVortexRegs happy"
@@ -6134,7 +6135,7 @@ function checkVortexRegs {
 	if wineVortexRun "$VORTEXWINE" reg QUERY "$REGKEY" >/dev/null ; then
 		writelog "INFO" "${FUNCNAME[0]} - registry path $REGKEY already set"
 		# value of the currently set registry path:
-		REGPATH="$(wineVortexRun "$VORTEXWINE" reg QUERY "$REGKEY" | grep -i "$PATHKEY" | awk -F 'REG_SZ' '{print $NF}' | awk '{$1=$1};1' | tr -d "\n\r")"
+		REGPATH="$(wineVortexRun "$VORTEXWINE" reg QUERY "$REGKEY" | grep -i "$PATHKEY" | "$AWK" -F 'REG_SZ' '{print $NF}' | "$AWK" '{$1=$1};1' | tr -d "\n\r")"
 		WSACPATH="$(SteamAppsCommonRelativeW=${SteamAppsCommonRelative//drive_c/C:}; echo "${SteamAppsCommonRelativeW//\//\\}"\\"$GN")"
 
 		if [ "$REGPATH" == "$WSACPATH" ]; then
@@ -7392,7 +7393,7 @@ function closeSTL {
 			"$PKILL" -f "$NETMON"
 			writelog "INFO" "${FUNCNAME[0]} - $NETMON killed"
 			# remove duplicate lines to make reading easier
-			awk -i inplace '!visited[$0]++' "$NETMONDIR/$AID-$NETMON.log"
+			"$AWK" -i inplace '!visited[$0]++' "$NETMONDIR/$AID-$NETMON.log"
 		fi
 	fi
 
