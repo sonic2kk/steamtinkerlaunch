@@ -18,7 +18,6 @@ TAR="tar"
 UNZIP="unzip"
 WGET="wget"
 WHICH="which"
-WMCTRL="wmctrl"
 XDO="xdotool"
 XPROP="xprop"
 XRANDR="xrandr"
@@ -5347,7 +5346,8 @@ function toggleWindows {
 			writelog "INFO" "${FUNCNAME[0]} - setting windows to $1"
 			WSTATE="$1"
 
-			while read -r WINNAME; do
+			while read -r WN; do
+				WINNAME="${WN##*[[:blank:]]}"
 				if "$XPROP" -id "$WINNAME" | grep "_NET_WM_ACTION_MINIMIZE" -q ;then
 					if [ "$WSTATE" == "windowminimize" ]; then
 						if "$XPROP" -id "$WINNAME" | grep "_NET_WM_STATE_HIDDEN" -q ;then
@@ -5363,13 +5363,13 @@ function toggleWindows {
 							writelog "INFO" "${FUNCNAME[0]} - raising '$WINNAME'"
 							"$XDO" "$WSTATE" "$WINNAME"
 							# apparently sometimes windows don't raise although the command was executed ($XDO bug or executed too fast?)
-							# so simply raising twice here
-							"$XDO" "$WSTATE" "$WINNAME"
+							# so simply raising twice here # TODO
+#sleep 1
+#							"$XDO" "$WSTATE" "$WINNAME"
 						fi
 					fi
 				fi
-			done <<< "$("$WMCTRL" -l | cut -d ' ' -f1)"
-			
+			done <<< "$("$XPROP" -root | grep "_NET_CLIENT_LIST(WINDOW)" | cut -d '#' -f2 | tr ',' '\n')"
 			if [ "$1" == "windowminimize" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - following windows won't be raised on exit, as they are minimized: '$MINIMIZEDWINDOWS'"
 			elif [ "$2" == "windowraise" ]; then
