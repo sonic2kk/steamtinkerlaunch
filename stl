@@ -95,7 +95,7 @@ STLGAMES="$STLCFGDIR/games"
 STLGDESKD="$STLGAMES/desktop"
 STLGHEADD="$STLGAMES/header"
 STLPATH="/usr/local/bin:/usr/bin:/bin:/usr/local/games:/usr/games"
-
+OWNWINDOW=""
 #STLGSCPTD="$STLGAMES/scripts"
 NOGAMES=",70_2260196511,228980,858280,961940,1054830,1070560,1113280,1245040,1391110,1420170,"
 
@@ -212,7 +212,6 @@ function setSteamPaths {
 
 	mkdir -p "$SROOT/$CTD" 2>/dev/null
 	setSteamPath "STEAMCOMPATOOLS" "$CTD"
-
 }
 
 function getGamePic {
@@ -752,12 +751,22 @@ function fillProtonCSV {
 	fi
 }
 
+function delEmptyFile {
+	if [ -f "$1" ]; then
+		if [ "$(wc -l < "$1")" -eq 0 ]; then
+			rm "$1" 2>/dev/null
+		fi
+	fi
+}
+
 function getAvailableProtonVersions {
 	PROTONCSV="$STLSHM/ProtonCSV.txt"
 	unset ProtonList
 
-	if [ ! -f "$PROTONCSV" ] || { [ -n "$1" ] &&  [ "$1" = "up" ]; }; then
+	delEmptyFile "$PROTONCSV"
 
+	if [ ! -f "$PROTONCSV" ] || { [ -n "$1" ] &&  [ "$1" = "up" ]; }; then
+		
 		# user installed compatibilitytool:
 		if [ -d "$STEAMCOMPATOOLS" ]; then
 			while read -r PROTBIN; do
@@ -1949,7 +1958,7 @@ function updateWinRes {
 		COUNTER=0
 
 		while ! "$XWININFO" -name "$WNAM" -stats >/dev/null 2>/dev/null; do
-			if [[ "$COUNTER" -ge "MAXWAIT" ]]; then
+			if [[ "$COUNTER" -ge "$MAXWAIT" ]]; then
 				writelog "SKIP" "${FUNCNAME[0]} - timeout waiting for Window '$WNAM'"
 				return 
 			fi
@@ -2876,7 +2885,7 @@ function SBSstartSVR {
 			MAXWAIT=10
 			COUNTER=0
 				while ! "$PGREP" -a "vrcompositor" >/dev/null; do
-					if [[ "$COUNTER" -ge "MAXWAIT" ]]; then
+					if [[ "$COUNTER" -ge "$MAXWAIT" ]]; then
 						writelog "SKIP" "${FUNCNAME[0]} - ERROR - timeout waiting for SteamVR - exit"
 						"$PKILL" -f "$VRVIDEOPLAYER"
 						RUNSBSVR=0
@@ -3070,7 +3079,7 @@ function SBSrunVRVideoPlayer {
 			COUNTER=0
 			
 			while ! "$XWININFO" -name "$SBSVRWINNAME" -stats  >/dev/null 2>/dev/null; do
-				if [[ "$COUNTER" -ge "MAXWAIT" ]]; then
+				if [[ "$COUNTER" -ge "$MAXWAIT" ]]; then
 					writelog "SKIP" "${FUNCNAME[0]} - ERROR - timeout waiting for '$VRVIDEOPLAYER' - exit"
 					"$PKILL" -f "$VRVIDEOPLAYER"
 					RUNSBSVR=0
@@ -5367,14 +5376,31 @@ function toggleWindows {
 						else
 							writelog "INFO" "${FUNCNAME[0]} - raising '$WINNAME'"
 							"$XDO" "$WSTATE" "$WINNAME"
-							# apparently sometimes windows don't raise although the command was executed ($XDO bug or executed too fast?)
-							# so simply raising twice here # TODO
-#sleep 1
-#							"$XDO" "$WSTATE" "$WINNAME"
+							COUNTER=0
+							MAXTRY=3
+							
+							while grep -q "_NET_WM_STATE_HIDDEN" -q <<< "$("$XPROP" -id "$WINNAME")"; do
+								if [[ "$COUNTER" -ge "$MAXTRY" ]]; then
+									OWNWINDOW="$WINNAME"
+									break
+								else
+									writelog "INFO" "${FUNCNAME[0]} - '$WINNAME' minimized after $COUNTER tries - raising again"
+									"$XDO" "$WSTATE" "$WINNAME"
+									COUNTER=$((COUNTER+1))
+								fi
+							done
 						fi
 					fi
 				fi
 			done <<< "$("$XPROP" -root | grep "_NET_CLIENT_LIST(WINDOW)" | cut -d '#' -f2 | tr ',' '\n')"
+
+			if [ "$WSTATE" == "windowraise" ]; then
+				if [ -n "$OWNWINDOW" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - raising lazy window (always only own terminal?) '$OWNWINDOW'"
+					"$XDO" "$WSTATE" "$OWNWINDOW"
+				fi
+			fi
+
 			if [ "$1" == "windowminimize" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - following windows won't be raised on exit, as they are minimized: '$MINIMIZEDWINDOWS'"
 			elif [ "$2" == "windowraise" ]; then
