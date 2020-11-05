@@ -788,13 +788,17 @@ function getAvailableProtonVersions {
 		fi
 
 		# official proton versions installed via Steam in additional SteamLibrary Paths
-		if [ -f "$CFGVDF" ] && grep -q "BaseInstallFolder" "$CFGVDF"; then
-			while read -r protondir; do
-				PROTBIN="$protondir/proton"
-				if [ -f "$PROTBIN" ]; then
-					fillProtonCSV
-				fi
-			done <<< "$(while read -r SLP; do find "${SLP//\"/}/$SAC" -maxdepth 1 -maxdepth 1 -type d -name "Proton*"; done <<< "$(grep "BaseInstallFolder" "$CFGVDF" | gawk '{print $2}')")"
+		if [ -f "$CFGVDF" ]; then
+			if ! grep -q "BaseInstallFolder" "$CFGVDF"; then
+				writelog "INFO" "${FUNCNAME[0]} - no additional Steam Libraries configured in '$CFGVDF' - so no need to search in there"
+			else
+				while read -r protondir; do
+					PROTBIN="$protondir/proton"
+					if [ -f "$PROTBIN" ]; then
+						fillProtonCSV
+					fi
+				done <<< "$(while read -r SLP; do find "${SLP//\"/}/$SAC" -maxdepth 1 -maxdepth 1 -type d -name "Proton*"; done <<< "$(grep "BaseInstallFolder" "$CFGVDF" | gawk '{print $2}')")"
+			fi
 		else
 			writelog "SKIP" "${FUNCNAME[0]} - file CFGVDF '$CFGVDF' not found - this should not happen! - skipping"
 		fi
@@ -4143,6 +4147,7 @@ function createDefaultCfgs {
 	fi
 
 	loadLanguage "$@"
+	setSteamPaths
 
 	saveCfg "$STLDEFGLOBALCFG" X
 	loadCfg "$STLDEFGLOBALCFG" X
@@ -7443,8 +7448,6 @@ function initLaunch {
 # main:#################
 
 checkIntDeps
-
-setSteamPaths
 
 if [ -z "$1" ]; then
 	writelog "INFO" "${FUNCNAME[0]} - no arguments provided. See '$PROGCMD --help' for possible command line parameters" "E"
