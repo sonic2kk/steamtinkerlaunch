@@ -4,7 +4,7 @@
 ### project ###
 
 PROGNAME="SteamTinkerLaunch"
-PROGVERS="v2.7.4-wip1.1"
+PROGVERS="v2.7.4-wip1.2"
 PROGCMD="$(basename "$0")"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -1053,6 +1053,7 @@ function setDefaultCfgValues {
 		if [ -z "$USEPROTON" ]			; then	USEPROTON="$(getDefaultProton)"; fi
 		if [ -z "$OVERRIDEPROTON" ]		; then	OVERRIDEPROTON="0"; fi
 		if [ -z "$CHECKPROTON" ]		; then	CHECKPROTON="0"; fi
+		if [ -z "$RECOMMENDPROTON" ]	; then	RECOMMENDPROTON="0"; fi
 		if [ -z "$RUN_CUSTOMCMD" ]		; then	RUN_CUSTOMCMD="0"; fi
 		if [ -z "$CUSTOMCMD" ]			; then	CUSTOMCMD="$("$WHICH" echo 2>/dev/null)"; fi
 		if [ -z "$CUSTOMCMD_ARGS" ]		; then	CUSTOMCMD_ARGS="none"; fi
@@ -1398,6 +1399,8 @@ function saveCfg {
 			echo "USEPROTON=\"$USEPROTON\""
 			echo "## $DESC_CHECKPROTON"
 			echo "CHECKPROTON=\"$CHECKPROTON\""
+			echo "## $DESC_RECOMMENDPROTON"
+			echo "RECOMMENDPROTON=\"$RECOMMENDPROTON\""
 			echo "## $DESC_RUN_CUSTOMCMD"
 			echo "RUN_CUSTOMCMD=\"$RUN_CUSTOMCMD\""
 			echo "## $DESC_CUSTOMCMD"
@@ -2402,6 +2405,7 @@ function openGameMenu {
 	--field="     $GUI_OVERRIDEPROTON!$(strFix "$DESC_OVERRIDEPROTON" "$PROGCMD") ('OVERRIDEPROTON')":CHK "${OVERRIDEPROTON/#-/ -}" \
 	--field="     $GUI_USEPROTON!$DESC_USEPROTON ('USEPROTON')":CB "${USEPROTON/#-/ -}!$PROTYADLIST" \
 	--field="     $GUI_CHECKPROTON!$DESC_CHECKPROTON ('CHECKPROTON')":CB "${CHECKPROTON/#-/ -}!0!1!2!3!4!5" \
+	--field="     $GUI_RECOMMENDPROTON!$DESC_RECOMMENDPROTON ('RECOMMENDPROTON')":CHK "${RECOMMENDPROTON/#-/ -}" \
 	--field="     $GUI_USESLR!$DESC_USESLR ('USESLR')":CHK "${USESLR/#-/ -}" \
 	--field=" ":LBL " " \
 	--field="     $GUI_ATVALIDATE!$DESC_ATVALIDATE ('ATVALIDATE')":NUM "${ATVALIDATE/#-/ -}" \
@@ -6916,12 +6920,13 @@ function switchProton {
 }
 
 function fixProtonVersionMismatch {
-	NEWMINORPROT="$(grep "^${WANTPROTON%-*}" <<< "$(printf "%s\n" "${ProtonCSV[@]//\"/}")" | cut -d ';' -f1 | sort -nr | head -n1)"
+	MIMAPROT="$1"
+	NEWMINORPROT="$(grep "^${MIMAPROT%-*}" <<< "$(printf "%s\n" "${ProtonCSV[@]//\"/}")" | cut -d ';' -f1 | sort -nr | head -n1)"
 	NEWMINORRUN="$(PROTPATH "${NEWMINORPROT//\"/}")"
 	if [ -f "$NEWMINORRUN" ]; then
 		switchProton  "$NEWMINORPROT"
-		writelog "INFO" "${FUNCNAME[0]} - minor version mismatch - using '$NEWMINORPROT' instead of requested '$WANTPROTON'"
-		notiShow "$(strFix "$NOTY_WANTPROTON2" "$NEWMINORPROT" "$WANTPROTON")"
+		writelog "INFO" "${FUNCNAME[0]} - minor version mismatch - using '$NEWMINORPROT' instead of requested '$MIMAPROT'"
+		notiShow "$(strFix "$NOTY_WANTPROTON2" "$NEWMINORPROT" "$MIMAPROT")"
 	elif [ "$AUTOLASTPROTON" -eq 1 ]; then
 		writelog "INFO" "${FUNCNAME[0]} - automatically selecting newest official one"
 		setNOP
@@ -6991,16 +6996,21 @@ function checkProtonBump {
 function wantProton {
 	if [ -n "$WANTPROTON" ]; then
 		if [ "$WANTPROTON" != "$USEPROTON" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Proton version '$WANTPROTON' required, but '$USEPROTON' is set"
-			notiShow "$(strFix "$NOTY_WANTPROTON" "$WANTPROTON" "$USEPROTON")"
-
-			OVERRIDEPROTON=1
-		
-			if [ -f "$(PROTPATH "$WANTPROTON")" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Proton version '$WANTPROTON' does exist - switching"
-				switchProton "$WANTPROTON"
+			if [ "$RECOMMENDPROTON" -eq 1 ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Proton version '$WANTPROTON' recommended, but '$USEPROTON' is set"
+				notiShow "$(strFix "$NOTY_RECOMMENDPROTON" "$WANTPROTON" "$USEPROTON")"
 			else
-				fixProtonVersionMismatch
+				writelog "INFO" "${FUNCNAME[0]} - Proton version '$WANTPROTON' required, but '$USEPROTON' is set"
+				notiShow "$(strFix "$NOTY_WANTPROTON" "$WANTPROTON" "$USEPROTON")"
+
+				OVERRIDEPROTON=1
+			
+				if [ -f "$(PROTPATH "$WANTPROTON")" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Proton version '$WANTPROTON' does exist - switching"
+					switchProton "$WANTPROTON"
+				else
+					fixProtonVersionMismatch "$WANTPROTON"
+				fi
 			fi
 		fi
 	fi	
@@ -7183,7 +7193,7 @@ function launchSteamGame {
 
 				if [ ! -f "${RUNPROTON//\"/}" ]; then
 					writelog "WARN" "${FUNCNAME[0]} - '$USEPROTON' seems outdated as the executable ${RUNPROTON//\"/} wasn't found"
-					fixProtonVersionMismatch
+					fixProtonVersionMismatch "$USEPROTON"
 				fi
 				
 				if [ -n "$SLOPROT" ]; then
