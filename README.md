@@ -97,6 +97,7 @@ It might be a good idea to start with configuring everything in the [Settings Me
 * **[Game Pictures](#Game-Pictures)** uses Game Pictures
 * **[Desktop Files](#Desktop-Files)** automatic creation of *(stl-internal)* desktop files
 * **[Shader Management](#Shader-Management)** Download/Update/Install/Enable/Disable Shaders
+* **[Custom Proton Autoupdate](#Custom-Proton-Autoupdate)** optionally Download/Install/Enable version bumps of Custom Proton version per game
 
 ## Requirements
 *(no special order)*
@@ -583,6 +584,26 @@ Packages *(`tar.*`, `zip`)* containing a `proton` file will be extracted and add
 Using the variable `WANTPROTON` in configs and tweaks it is possible to automatically request a specific proton version to be used with the corresponding game.
 If `AUTOPULLPROTON` is enabled *(it is by default)* **stl** will automatically download the specific proton version and install it.
 
+#### Custom Proton Autoupdate
+**stl** can optionally check if a newer version of the currently (per game) configured custom *(only!)* proton exists
+and automatically reacts depending on the user configuration.
+
+The variable `CHECKPROTON` can be set per game to either 0,1,2,3,4,5 where
+- 0 : the whole check is skipped
+- 1 : call checkProtonBump only when the settings menu is opened and open a [Custom Proton Autoupdate Requester](#Custom-Proton-Autoupdate-Requester)
+- 2 : call the function only before the game is launched and open a [Custom Proton Autoupdate Requester](#Custom-Proton-Autoupdate-Requester)
+- 3 : automatically download and extract  but don't replace the currently used custom proton version
+- 4 : automatically download, extract and replace the active custom proton version of the current game
+- 5 : only pop up notifier
+
+##### Custom Proton Autoupdate Requester
+If a newer minor version for the currently used custom Proton is available and 
+`CHECKPROTON` is either `1` or `2` (see [Custom Proton Autoupdate](#Custom-Proton-Autoupdate)
+a Requester will pope up, giving the option to either
+- skip the update
+- only download and extract the new custom proton version
+- download, extract and immediately use the new custom proton version for the current game
+
 
 #### Multi-Language Support
 **stl** Multi-Language Support *(currently with [these languages](https://github.com/frostworx/steamtinkerlaunch/tree/master/lang))*.
@@ -695,6 +716,10 @@ Set `RUN_WINETRICKS` to 1 to start winetricks gui before game launch
 
 Silent winetricks installation:
 - `WINETRICKSPAKS`: install all packages in WINETRICKSPAKS silently with winetricks
+
+
+Set `DLWINETRICKS` to 1 download/and automatically update winetricks instead of using/depending on the systemwide installation
+
 
 #### Winecfg
 - `RUN_WINECFG`: set to 1 to start winecfg before game launch
