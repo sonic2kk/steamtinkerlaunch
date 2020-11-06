@@ -4,7 +4,7 @@
 ### project ###
 
 PROGNAME="SteamTinkerLaunch"
-PROGVERS="v2.7.1"
+PROGVERS="v2.7.4-wip1"
 PROGCMD="$(basename "$0")"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -34,7 +34,7 @@ NYRNA="nyrna"
 STEAM="steam"
 STRACE="strace"
 WINECFG="winecfg"
-WINETRICKS="winetricks"
+SYSWINETRICKS="winetricks"
 REPLAY="replay-sorcery"
 CABEXTRACT="cabextract"
 LSUSB="lsusb"
@@ -76,6 +76,8 @@ STLGAMEDIR="$STLCFGDIR/gamecfgs"															# default basedir for game the ga
 STLCATEGORYDIR="$STLCFGDIR/categories"														# the directory holding config files with preconfigured settings for games in specific steamcategories
 STLREGDIR="$STLCFGDIR/regs"																	# the directory holding registry files
 STLDLDIR="$STLCFGDIR/downloads"																# the directory holding optional downloads
+WTDLDIR="$STLDLDIR/winetricks"
+DLWT="$WTDLDIR/src/winetricks"
 STLSHADDIR="$STLDLDIR/shaders"
 TWEAKDIR="$STLCFGDIR/tweaks"																# the parent directory for all user tweakfiles
 USERTWEAKDIR="$TWEAKDIR/user"																# the place for the users own main tweakfiles - tweaks in here override all other ones!
@@ -949,6 +951,7 @@ function setDefaultCfgValues {
 		if [ -z "$SHADER_FUBAX" ]		; then	SHADER_FUBAX="https://github.com/Fubaxiusz/fubax-shaders.git"; fi
 		if [ -z "$SHADER_FUBAXDEV" ]	; then	SHADER_FUBAXDEV="https://github.com/Fubaxiusz/fubax-shaders-dev.git"; fi
 		if [ -z "$SHADER_CROSIRE" ]		; then	SHADER_CROSIRE="https://github.com/crosire/reshade-shaders.git"; fi
+		if [ -z "$WINETRICKSURL" ]		; then	WINETRICKSURL="https://github.com/Winetricks/winetricks"; fi
 	}
 
 	function setDefaultCfgValuesgui {
@@ -987,6 +990,7 @@ function setDefaultCfgValues {
 		if [ -z "$DLGLOBAL" ]			; then	DLGLOBAL="1"; fi
 		if [ -z "$STLLANG" ]			; then	STLLANG="$STLDEFLANG"; fi
 		if [ -z "$USESTLCSS" ]			; then	USESTLCSS="0"; fi
+		if [ -z "$SKIPINTDEPCHECK" ]	; then	SKIPINTDEPCHECK="0"; fi
 		if [ -z "$AUTOTWEAKS" ]			; then	AUTOTWEAKS="$AUTOTWEAKPLATFORMS"; fi
 		if [ -z "$STRACEDIR" ]			; then	STRACEDIR="$LOGDIR"; fi
 		if [ -z "$LOGDIR" ]				; then	LOGDIR="$LOGDIR"; fi
@@ -1047,6 +1051,7 @@ function setDefaultCfgValues {
 		if [ -z "$USESLR" ]				; then	USESLR="1"; fi
 		if [ -z "$USEPROTON" ]			; then	USEPROTON="$(getDefaultProton)"; fi
 		if [ -z "$OVERRIDEPROTON" ]		; then	OVERRIDEPROTON="0"; fi
+		if [ -z "$CHECKPROTON" ]		; then	CHECKPROTON="0"; fi
 		if [ -z "$RUN_CUSTOMCMD" ]		; then	RUN_CUSTOMCMD="0"; fi
 		if [ -z "$CUSTOMCMD" ]			; then	CUSTOMCMD="$("$WHICH" echo 2>/dev/null)"; fi
 		if [ -z "$CUSTOMCMD_ARGS" ]		; then	CUSTOMCMD_ARGS="none"; fi
@@ -1257,6 +1262,8 @@ function saveCfg {
 			echo "STLLANG=\"$STLLANG\""
 			echo "## $DESC_USESTLCSS"
 			echo "USESTLCSS=\"$USESTLCSS\""
+			echo "## $DESC_SKIPINTDEPCHECK"
+			echo "SKIPINTDEPCHECK=\"$SKIPINTDEPCHECK\""
 			echo "## $DESC_AUTOTWEAKS"
 			echo "AUTOTWEAKS=\"$AUTOTWEAKS\""
 			echo "## $DESC_CUSTPROTDLDIR"
@@ -1386,6 +1393,8 @@ function saveCfg {
 			echo "OVERRIDEPROTON=\"$OVERRIDEPROTON\""
 			echo "## $DESC_USEPROTON"
 			echo "USEPROTON=\"$USEPROTON\""
+			echo "## $DESC_CHECKPROTON"
+			echo "CHECKPROTON=\"$CHECKPROTON\""
 			echo "## $DESC_RUN_CUSTOMCMD"
 			echo "RUN_CUSTOMCMD=\"$RUN_CUSTOMCMD\""
 			echo "## $DESC_CUSTOMCMD"
@@ -1580,12 +1589,10 @@ function PROTPATH {
 
 function setNewProtVars {
 # arg1 is absolute proton path
-
 	if [ "$(OVPROT)" -eq 1 ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Setting new Proton Variables based on '$1'"
 		RUNPROTON="$1"
 		CHECKWINE="$(dirname "$RUNPROTON")/$DBW"
-
 		if [ -f "$CHECKWINE" ]; then
 			RUNWINE="$CHECKWINE"
 			writelog "INFO" "${FUNCNAME[0]} - set the wine binary for proton in path '$RUNPROTON' to '$RUNWINE'"
@@ -1596,7 +1603,7 @@ function setNewProtVars {
 		PROTONVERSION="$(setProtonPathVersion "$RUNPROTON")"
 		USEPROTON="$PROTONVERSION"
 	else
-		writelog "SKIP" "${FUNCNAME[0]} - using 'Steam Proton $FIRSTUSEPROTON' instead of '$PROGCMD Proton $USEPROTON' because OVERRIDEPROTON is disabled"
+		writelog "SKIP" "${FUNCNAME[0]} - using Steam Proton '$FIRSTUSEPROTON' instead of $PROGCMD Proton '$USEPROTON' because OVERRIDEPROTON is disabled"
 		notiShow "$(strFix "$NOTY_SETNEWPROTVARS" "$FIRSTUSEPROTON")"
 	fi
 }
@@ -1667,41 +1674,50 @@ function dlCustomProton {
 		notiShow "$(strFix "$NOTY_DLCUSTOMPROTON2" "$CPURL")"
 	else
 		writelog "INFO" "${FUNCNAME[0]} - file '$DSTDL' already exists - nothing to download"
+		notiShow "$(strFix "$NOTY_DLCUSTOMPROTON4" "$(basename "$CPURL")")"
 	fi
-
-	if grep -q "\.tar\." <<< "$DSTDL"; then
-		PROTRELPATH="$("$TAR" -tf "$DSTDL" | grep "proton$" 2>/dev/null )"
-		if [ -n "$PROTRELPATH" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - archive contains proton in subdirectory '$PROTRELPATH'"
-			PROTFULLPATH="$CUSTPROTEXTDIR/$PROTRELPATH"
-			if [ -f "$PROTFULLPATH" ]; then
-				writelog "SKIP" "${FUNCNAME[0]} - the destination path '$PROTFULLPATH' already exists - looks like '$DSTDL' was already extracted before"
-			else
-				notiShow "$(strFix "$NOTY_DLCUSTOMPROTON3" "$CPURL")"
-				"$TAR" xf "$DSTDL" -C "$CUSTPROTEXTDIR" 2>/dev/null
-			fi
-		else
-			writelog "SKIP" "${FUNCNAME[0]} - archive doesn't seem to contain a 'proton' file"
-		fi
-	elif grep -q "\.zip$" <<< "$DSTDL"; then
-		if grep -q "proton$" <<< "$("$UNZIP" -l "$DSTDL" 2>/dev/null)"; then
-			writelog "INFO" "${FUNCNAME[0]} - archive contains proton"
-			SUBDIR="$(basename "${DSTDL//.zip/}")"
-			PROTRELPATH="$SUBDIR/proton"
-			PROTFULLPATH="$CUSTPROTEXTDIR/$PROTRELPATH"
-			if [ -f "$PROTFULLPATH" ]; then
-				writelog "SKIP" "${FUNCNAME[0]} - the destination path '$PROTFULLPATH' already exists - looks like '$DSTDL' was already extracted before"
-			else
-				notiShow "$(strFix "$NOTY_DLCUSTOMPROTON3" "$CPURL")"
-				"$UNZIP" "$DSTDL" -d "$CUSTPROTEXTDIR/$SUBDIR" 2>/dev/null
-			fi
-		else
-			writelog "SKIP" "${FUNCNAME[0]} - archive doesn't seem to contain a 'proton' file"
-		fi
+	
+	PROTNAMERAW="${CPURLFILE//.tar.gz/}"
+	PROTNAME="${PROTNAMERAW//.zip/}"
+	if [ -d "$CUSTPROTEXTDIR/$PROTNAME" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - directory '$CUSTPROTEXTDIR/$PROTNAME' already exists - nothing to extract"
 	else
-		writelog "SKIP" "${FUNCNAME[0]} - don't know how to extract "
+		if grep -q "\.tar\." <<< "$DSTDL"; then
+			PROTRELPATH="$("$TAR" -tf "$DSTDL" | grep "proton$" 2>/dev/null )"
+			if [ -n "$PROTRELPATH" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - archive contains proton in subdirectory '$PROTRELPATH'"
+				PROTFULLPATH="$CUSTPROTEXTDIR/$PROTRELPATH"
+				if [ -f "$PROTFULLPATH" ]; then
+					writelog "SKIP" "${FUNCNAME[0]} - the destination path '$PROTFULLPATH' already exists - looks like '$DSTDL' was already extracted before"
+				else
+					notiShow "$(strFix "$NOTY_DLCUSTOMPROTON3" "$CPURL")"
+					"$TAR" xf "$DSTDL" -C "$CUSTPROTEXTDIR" 2>/dev/null
+					getAvailableProtonVersions "up"
+				fi
+			else
+				writelog "SKIP" "${FUNCNAME[0]} - archive doesn't seem to contain a 'proton' file"
+			fi
+		elif grep -q "\.zip$" <<< "$DSTDL"; then
+			if grep -q "proton$" <<< "$("$UNZIP" -l "$DSTDL" 2>/dev/null)"; then
+				writelog "INFO" "${FUNCNAME[0]} - archive contains proton"
+				SUBDIR="$(basename "${DSTDL//.zip/}")"
+				PROTRELPATH="$SUBDIR/proton"
+				PROTFULLPATH="$CUSTPROTEXTDIR/$PROTRELPATH"
+				if [ -f "$PROTFULLPATH" ]; then
+					writelog "SKIP" "${FUNCNAME[0]} - the destination path '$PROTFULLPATH' already exists - looks like '$DSTDL' was already extracted before"
+				else
+					notiShow "$(strFix "$NOTY_DLCUSTOMPROTON3" "$CPURL")"
+					"$UNZIP" "$DSTDL" -d "$CUSTPROTEXTDIR/$SUBDIR" 2>/dev/null
+					getAvailableProtonVersions "up"
+				fi
+			else
+				writelog "SKIP" "${FUNCNAME[0]} - archive doesn't seem to contain a 'proton' file"
+			fi
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - don't know how to extract "
+		fi
 	fi
-
+	
 	if [ -f "$PROTFULLPATH" ]; then
 		if [ -n "$PROTV" ]; then
 			addCustomProtonToList "$PROTFULLPATH" "$PROTV"
@@ -1714,19 +1730,25 @@ function dlCustomProton {
 function createDLProtList {
 	writelog "INFO" "${FUNCNAME[0]} - generating list of online available custom Proton builds"
 
+	PROTDLLIST="$STLSHM/ProtonDL.txt"
+	MAXAGE=360
+
+	if [ ! -f "$PROTDLLIST" ] || test "$(find "$PROTDLLIST" -mmin +"$MAXAGE")"; then
+		rm "$PROTDLLIST" 2>/dev/null
+		while read -r CPURL; do
+		if grep -q "$GHURL" <<< "${!CPURL}"; then
+			"$WGET" -q "${!CPURL}"  -O -  | grep "tar.gz\|zip" | grep "releases" | grep -oE '\"/[^\\"]+' | sed "s|^\"|$GHURL|g" >> "$PROTDLLIST"
+		fi
+		done <<< "$(grep "^CP_" "$STLURLCFG" | cut -d '=' -f1)"
+	fi
+
 	unset ProtonDLList
 	unset ProtonDLDispList
 
 	while read -r CPVERS; do
 		mapfile -t -O "${#ProtonDLList[@]}" ProtonDLList <<< "$CPVERS"
 		mapfile -t -O "${#ProtonDLDispList[@]}" ProtonDLDispList <<< "$(basename "$CPVERS")"
-	done <<< "$(
-	while read -r CPURL; do
-	if grep -q "$GHURL" <<< "${!CPURL}"; then
-		"$WGET" -q "${!CPURL}"  -O -  | grep "tar.gz\|zip" | grep "releases" | grep -oE '\"/[^\\"]+' | sed "s|^\"|$GHURL|g"
-	fi
-	done <<< "$(grep "^CP_" "$STLURLCFG" | cut -d '=' -f1)"
-	)"
+	done < "$PROTDLLIST"
 }
 
 function dlCustomProtonGUI {
@@ -1769,6 +1791,66 @@ function dlCustomProtonGUI {
 
 		setProtYadList
 	fi
+}
+
+function dlNewCustomProt {
+	NEWESTPROT="$1"
+	DLURL="$(grep "$NEWESTPROT" <<< "$(printf "%s\n" "${ProtonDLList[@]}")")"
+	dlCustomProton "$DLURL"
+}
+
+function dlUpCustomProton {
+	NEWESTPROT="$1"
+	dlNewCustomProt "$NEWESTPROT"
+	NEWMINORPROT="$(grep "^${NEWESTPROT%-*}" <<< "$(printf "%s\n" "${ProtonCSV[@]//\"/}")" | cut -d ';' -f1 | sort -nr | head -n1)"
+	NEWMINORRUN="$(PROTPATH "${NEWMINORPROT//\"/}")"
+	if [ -f "$NEWMINORRUN" ]; then
+		OVERRIDEPROTON=1
+		switchProton "$NEWMINORPROT"
+		writelog "INFO" "${FUNCNAME[0]} - $(strFix "$NOTY_NEWPROTON2" "$CURPROTON" "$NEWMINORPROT")"
+		notiShow "$(strFix "$NOTY_NEWPROTON2" "$CURPROTON" "$NEWMINORPROT")"
+		updateConfigEntry "USEPROTON" "$NEWMINORPROT" "$STLGAMECFG"
+		loadCfg "$STLGAMECFG"
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - file '$NEWMINORRUN' couldn't be found - skipping version change"
+	fi
+}
+
+function dlCustomProtonAsk {
+	NEWESTPROT="$1"
+
+	writelog "INFO" "${FUNCNAME[0]} - Asking if proton version '$NEWESTPROT' should be updated"
+
+	if [ "$USEGAMEPICS" -eq 1 ] && [ -f "$STLGHEADD/$AID.jpg" ]; then
+		SHOWPIC="$STLGHEADD/$AID.jpg"
+	else
+		SHOWPIC="$NOICON"
+	fi
+
+	TITLE="${PROGNAME}-NewProtonAvailable"
+	LC_ALL="" "$YAD" --image "$SHOWPIC" --image-on-top --borders="$YADSETBORD" --window-icon="$STLICON" --form --scroll --center "$WINDECO" \
+    --title="$TITLE" \
+	--geometry="$CUSTPROTREQWIDTH"x"$CUSTPROTREQHEIGHT"+0+0 \
+	--text="<span font_weight='bold'>$(strFix "$NOTY_NEWPROTON" "$NEWESTPROT" "$CURPROTON")\n$(strFix "$GUI_DLCUSTPROTASK" "$NEWESTPROT")</span>" \
+	--button="$ASKPROTBUTC":0 \
+	--button="$ASKPROTBUTD":1 \
+	--button="$ASKPROTBUTU":2
+	case $? in
+		0)  {
+				writelog "INFO" "${FUNCNAME[0]} - Selected cancel - doing dothing"
+			}
+		;;
+		1) 	{
+				writelog "INFO" "${FUNCNAME[0]} - Selected to only download '$NEWESTPROT'"
+				dlNewCustomProt "$NEWESTPROT"
+			}
+		;;
+		2) 	{
+				writelog "INFO" "${FUNCNAME[0]} - Selected to download and use '$NEWESTPROT'"
+				dlUpCustomProton "$NEWESTPROT"
+			}
+		;;
+	esac
 }
 
 function addCustomProtonToList {
@@ -2316,6 +2398,7 @@ function openGameMenu {
 	--field="     $GUI_PROTON_DEBUG_DIR!$DESC_PROTON_DEBUG_DIR ('PROTON_DEBUG_DIR')":DIR "${PROTON_DEBUG_DIR/#-/ -}" \
 	--field="     $GUI_OVERRIDEPROTON!$(strFix "$DESC_OVERRIDEPROTON" "$PROGCMD") ('OVERRIDEPROTON')":CHK "${OVERRIDEPROTON/#-/ -}" \
 	--field="     $GUI_USEPROTON!$DESC_USEPROTON ('USEPROTON')":CB "${USEPROTON/#-/ -}!$PROTYADLIST" \
+	--field="     $GUI_CHECKPROTON!$DESC_CHECKPROTON ('CHECKPROTON')":CB "${CHECKPROTON/#-/ -}!0!1!2!3!4!5" \
 	--field="     $GUI_USESLR!$DESC_USESLR ('USESLR')":CHK "${USESLR/#-/ -}" \
 	--field=" ":LBL " " \
 	--field="     $GUI_ATVALIDATE!$DESC_ATVALIDATE ('ATVALIDATE')":NUM "${ATVALIDATE/#-/ -}" \
@@ -2340,6 +2423,14 @@ function openGameMenu {
 #ENDYADGAME
 
 function openSettings {
+
+	loadCfg "$STLGAMECFG"
+
+	if [ "$CHECKPROTON" -eq 0 ] || [ "$CHECKPROTON" -eq 1 ] || [ "$CHECKPROTON" -eq 5 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - entering checkProtonBump"
+		checkProtonBump "$USEPROTON" 
+	fi
+
 	writelog "INFO" "${FUNCNAME[0]} - Opening Settings Menu" "X"
 
 	if [ -z "$YADTRAYPID" ]; then
@@ -2403,6 +2494,7 @@ function openSettings {
 	--field="     $GUI_USEGAMEPICINMENU!$DESC_USEGAMEPICINMENU ('USEGAMEPICINMENU')":CHK "${USEGAMEPICINMENU/#-/ -}" \
 	--field="     $GUI_DLGAMEDATA!$DESC_DLGAMEDATA ('DLGAMEDATA')":CHK "${DLGAMEDATA/#-/ -}" \
 	--field="     $GUI_USESTLCSS!$DESC_USESTLCSS '${PROGCMD}-steam' ('USESTLCSS')":CHK "${USESTLCSS/#-/ -}" \
+	--field="     $GUI_SKIPINTDEPCHECK!$DESC_SKIPINTDEPCHECK ('SKIPINTDEPCHECK')":CHK "${SKIPINTDEPCHECK/#-/ -}" \
 	--field=" ":LBL " " \
 	--field="     $GUI_BOXTRONCMD!$DESC_BOXTRONCMD ('BOXTRONCMD')":FL "${BOXTRONCMD/#-/ -}" \
 	--field="     $GUI_BOXTRONARGS!$DESC_BOXTRONARGS ('BOXTRONARGS')" "${BOXTRONARGS/#-/ -}" \
@@ -3750,6 +3842,7 @@ function editorSkipped {
 }
 
 function askSettings {
+
 	if ! grep -q "^WAITEDITOR=\"0\"" "$STLGAMECFG"; then
 		# open editor requester 
 		if grep -q "^WAITEDITOR" "$STLGAMECFG"; then
@@ -3778,9 +3871,9 @@ function askSettings {
 			if [ "$USEGUI" == "$YAD" ]; then
 				if [ "$USEGAMEPICS" -eq 1 ] && [ -f "$STLGHEADD/$AID.jpg" ]; then
 					SHOWPIC="$STLGHEADD/$AID.jpg"
-					else
-						SHOWPIC="$NOICON"
-					fi
+				else
+					SHOWPIC="$NOICON"
+				fi
 		
 				if [ -n "$FOUNDTWEAKCFG" ]; then
 					LC_ALL="" "$YAD" --image "$SHOWPIC" --image-on-top --borders="$YADBORDER" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
@@ -4495,7 +4588,6 @@ function getAutoTweakInfoPF {
 }
 
 function createTweakprotonfixes {
-	createDefaultCfgs
 	if [ -n "$1" ]; then
 		getAutoTweakInfoPF "$1"
 	else
@@ -4882,7 +4974,6 @@ function getAutoTweakInfoLU {
 }
 
 function createTweaklutris {
-	createDefaultCfgs
 	if [ -n "$1" ]; then
 		getAutoTweakInfoLU "$1"
 	else
@@ -5450,6 +5541,31 @@ function checkWinetricksLaunch {
 	fi
 	# silent
 	checkWinetricksInstPak
+}
+
+function chooseWinetricks {
+	if [ "$DLWINETRICKS" -eq 1 ]; then
+
+		WTDLLAST="${WTDLDIR}.txt"
+		MAXAGE=1440
+
+		if [ ! -f "$DLWT" ] || [ ! -f "$WTDLLAST" ] || test "$(find "$WTDLLAST" -mmin +"$MAXAGE")"; then
+			gitUpdate "$WTDLDIR" "$WINETRICKSURL"
+			echo "$(date) - ${FUNCNAME[0]}" > "$WTDLLAST"
+		fi
+
+		if [ -f "$DLWT" ]; then
+			WINETRICKS="$DLWT"
+			writelog "INFO" "${FUNCNAME[0]} - using '$DLWT' with version '$($DLWT -V | cut -d ' ' -f1)'"
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - DLWINETRICKS is set to '$DLWINETRICKS', but '$DLWT' was not found!"
+		fi
+	else
+		if  [ -x "$(command -v "$("$WHICH" "$SYSWINETRICKS" 2>/dev/null)" 2>/dev/null)" ]; then
+			WINETRICKS="$SYSWINETRICKS"
+			writelog "INFO" "${FUNCNAME[0]} - using systemwide winetricks with version '$($SYSWINETRICKS -V | cut -d ' ' -f1)'"
+		fi	
+	fi
 }
 
 # start $WINECFG before game launch:
@@ -6508,35 +6624,42 @@ function checkExtDeps {
 }
 
 function checkIntDeps {
-	DEPSMISSING=0
+	if [ "$SKIPINTDEPCHECK" -eq 1 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Skipping dependency check for internally used programs" "E"!
+	else
+		DEPSMISSING=0
 
-	while read -r INTDEP; do
-		if  [ ! -x "$(command -v "$("$WHICH" "${!INTDEP}" 2>/dev/null)" 2>/dev/null)" ]; then
-			echo "${!INTDEP} not found!"
+		while read -r INTDEP; do
+			if  [ ! -x "$(command -v "$("$WHICH" "${!INTDEP}" 2>/dev/null)" 2>/dev/null)" ]; then
+				writelog "ERROR" "${FUNCNAME[0]} - ${!INTDEP} not found!" "E"!
+				DEPSMISSING=1
+			fi
+		done <<< "$(sed -n "/^#STARTINTDEPS/,/^#ENDINTDEPS/p;/^#ENDINTDEPS/q" "$0" | grep -v "^#" | cut -d '=' -f1)"
+
+		if  [ ! -x "$(command -v "$("$WHICH" "$YAD" 2>/dev/null)" 2>/dev/null)" ] && [ ! -x "$(command -v "$("$WHICH" "$ZENITY" 2>/dev/null)" 2>/dev/null)" ]; then
 			DEPSMISSING=1
+			writelog "ERROR" "${FUNCNAME[0]} - neither '$YAD' nor '$ZENITY' was found, but at least one of them is required!" "E"!
 		fi
-	done <<< "$(sed -n "/^#STARTINTDEPS/,/^#ENDINTDEPS/p;/^#ENDINTDEPS/q" "$0" | grep -v "^#" | cut -d '=' -f1)"
 
-	if  [ ! -x "$(command -v "$("$WHICH" "$YAD" 2>/dev/null)" 2>/dev/null)" ] && [ ! -x "$(command -v "$("$WHICH" "$ZENITY" 2>/dev/null)" 2>/dev/null)" ]; then
-		DEPSMISSING=1
-		echo "neither '$YAD' nor '$ZENITY' was found, but at least one of them is required!"
-	fi
+		MINYAD="7.0"
+		YADVER="$("$YAD" --version | cut -d ' ' -f1)"
+		
+		if  [ -x "$(command -v "$("$WHICH" "awk" 2>/dev/null)" 2>/dev/null)" ] && [ ! -x "$(command -v "$("$WHICH" "$AWK" 2>/dev/null)" 2>/dev/null)" ]; then
+			writelog "WARN" "${FUNCNAME[0]} - binary awk was found, but not '$AWK'. As awk can also be a different binary with different parameters 'gawk' is used for '$AWK'" "E"!
+		fi	
+		if [ "$(printf '%s\n' "$MINYAD" "$YADVER" | sort -V | head -n1)" != "$MINYAD" ]; then 
+			echo ""
+			writelog "ERROR" "${FUNCNAME[0]} - yad version '$("$YAD" --version | cut -d ' ' -f1)' is too old. You need to update to at least '$MINYAD'" "E"!
+			exit
+		fi	
 
-	MINYAD="7.0"
-	YADVER="$("$YAD" --version | cut -d ' ' -f1)"
-	
-	if  [ -x "$(command -v "$("$WHICH" "awk" 2>/dev/null)" 2>/dev/null)" ] && [ ! -x "$(command -v "$("$WHICH" "$AWK" 2>/dev/null)" 2>/dev/null)" ]; then
-		echo "binary awk was found, but not '$AWK'. As awk can also be a different binary with different parameters 'gawk' is used for '$AWK'"
-	fi	
-	if [ "$(printf '%s\n' "$MINYAD" "$YADVER" | sort -V | head -n1)" != "$MINYAD" ]; then 
-		echo "ERROR yad version '$("$YAD" --version | cut -d ' ' -f1)' is too old. You need to update to at least '$MINYAD'"
-		exit
-	fi	
-
-
-	if [ "$DEPSMISSING" -eq 1 ]; then
-		echo "Above programs need to be installed to use '$PROGCMD' - exiting now"
-		exit
+		if [ "$DEPSMISSING" -eq 1 ]; then
+			writelog "ERROR" "${FUNCNAME[0]} - Above programs need to be installed to use '$PROGCMD'" "E"!
+			writelog "ERROR" "${FUNCNAME[0]} The dependency check can be disabled with enabling 'SKIPINTDEPCHECK' - exiting now" "E"!
+			exit
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Dependency check for internally used programs was successful" "E"!
+		fi
 	fi
 }
 
@@ -6560,7 +6683,6 @@ function setLinGameVals {
 }
 
 function prepareLaunch {
-
 	mkdir -p "$STLSHM" 2>/dev/null
 
 	if [ -f "$LOGDIR/$AID.log" ]; then
@@ -6623,6 +6745,11 @@ function prepareLaunch {
 		setNewProtVars "$(PROTPATH "$USEPROTON")"
 	fi
 
+	if [ "$CHECKPROTON" -eq 2 ] || [ "$CHECKPROTON" -eq 3 ] || [ "$CHECKPROTON" -eq 4 ] ; then
+		writelog "INFO" "${FUNCNAME[0]} - entering checkProtonBump"
+		checkProtonBump "$USEPROTON" 
+	fi
+
 	# export DXVK_CONFIG_FILE if STLDXVKCFG was found:
 	if [ -f "$STLDXVKCFG" ]; then
 		export DXVK_CONFIG_FILE="$STLDXVKCFG"
@@ -6669,6 +6796,9 @@ function prepareLaunch {
 
 	# remove GFWL if NOGFWL is 1
 	checkXliveless
+
+	# choose either system winetricks or downloaded one
+	chooseWinetricks
 
 	# check dependencies - disable functions if dependency programs are missing and/or warn
 	checkExtDeps
@@ -6798,6 +6928,62 @@ function fixProtonVersionMismatch {
 
 }
 
+function checkProtonBump {
+
+	if [ -z "$1" ]; then
+		writelog "SKIP" "${FUNCNAME[0]} - need Proton version as argument 1" "E"
+	else
+		CURPROTON="$1"
+
+		if [ "$CHECKPROTON" -eq 0 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - CHECKPROTON is $CHECKPROTON - nothing to do"
+		else
+			if [ "$OVERRIDEPROTON" -eq 0 ]; then
+				writelog "INFO" "${FUNCNAME[0]} - OVERRIDEPROTON is $OVERRIDEPROTON - so currently set '$USEPROTON' isn't used anyway - nothing to do"
+			else		
+				if [ -z "${ProtonDLList[0]}" ]; then
+					createDLProtList
+				fi
+
+				if [ -z "${ProtonDLDispList[0]}" ]; then
+					writelog "SKIP" "${FUNCNAME[0]} - ProtonDLList is empty, so createDLProtList failed here!"
+				else
+					writelog "INFO" "${FUNCNAME[0]} - searching in created Proton Download List for possible updates"
+
+					if grep -q -Eo '[0-9]$' <<< "$CURPROTON"; then
+						NEWESTPROTR1="$(grep "^${CURPROTON%-*}" <<< "$(printf "%s\n" "${ProtonDLDispList[@]//\"/}")" | sort -Vr | head -n1)"
+					else
+						MINV="$(grep -Eo "[0-9]*" <<< "$CURPROTON" | tail -n1)"
+						SEARCHPAT="${CURPROTON//$MINV/[0-9]}"
+						NEWESTPROTR1="$(grep "^$SEARCHPAT" <<< "$(printf "%s\n" "${ProtonDLDispList[@]//\"/}")" | sort -Vr | head -n1)"
+					fi
+				
+					NEWESTPROTR2="${NEWESTPROTR1//.tar.gz/}"
+					NEWESTPROT="${NEWESTPROTR2//.zip/}"
+
+					if [ "$(printf '%s\n' "$NEWESTPROT" "$CURPROTON" | sort -V | head -n1)" != "$NEWESTPROT" ]; then 
+						writelog "INFO" "${FUNCNAME[0]} - found an update for '$CURPROTON' to version '$NEWESTPROT'"
+					
+						notiShow "$(strFix "$NOTY_NEWPROTON" "$NEWESTPROT" "$CURPROTON")"
+					
+						writelog "INFO" "${FUNCNAME[0]} - CHECKPROTON is currently set to '$CHECKPROTON'"
+					
+						if [ "$CHECKPROTON" -eq 1 ] || [ "$CHECKPROTON" -eq 2 ]; then
+							dlCustomProtonAsk "$NEWESTPROT"
+						elif [ "$CHECKPROTON" -eq 3 ]; then
+							dlNewCustomProt "$NEWESTPROT"
+						elif [ "$CHECKPROTON" -eq 4 ]; then
+							dlUpCustomProton "$NEWESTPROT"
+						elif [ "$CHECKPROTON" -eq 5 ]; then
+							writelog "INFO" "${FUNCNAME[0]} - only opening a notifier about the new version"
+						fi
+					fi
+				fi
+			fi
+		fi
+	fi
+}
+
 function wantProton {
 	if [ -n "$WANTPROTON" ]; then
 		if [ "$WANTPROTON" != "$USEPROTON" ]; then
@@ -6807,7 +6993,7 @@ function wantProton {
 			OVERRIDEPROTON=1
 		
 			if [ -f "$(PROTPATH "$WANTPROTON")" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Proton version '$WANTPROTON' does exist -switching"
+				writelog "INFO" "${FUNCNAME[0]} - Proton version '$WANTPROTON' does exist - switching"
 				switchProton "$WANTPROTON"
 			else
 				fixProtonVersionMismatch
@@ -6984,7 +7170,6 @@ function launchSteamGame {
 					needNewProton
 				fi
 			fi
-
 
 			if [ "$SLOPROT" == "$RUNPROTON" ] && [ -n "$SLOPROT" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - command line proton '$SLOPROT' is identical to 'RUNPROTON' (path for '$USEPROTON') - nothing to change"
@@ -7256,7 +7441,6 @@ function commandline {
 				addVortexStage "$3"
 			else	
 				echo "arg2 $1 is no valid command"
-				createDefaultCfgs
 				howto	
 			fi
 		fi
@@ -7331,9 +7515,13 @@ function commandline {
 	elif  [ "$1" == "dlcustomproton" ] || [ "$1" == "dcp" ]; then
 		dlCustomProtonGate "$2"
 	elif  [ "$1" == "settings" ]; then
-		createDefaultCfgs
 		if [ "$USEGUI" == "$YAD" ]; then
 			if [ -n "$2" ]; then
+				if [ -f "$LOGDIR/$2.log" ]; then
+					rm "$LOGDIR/$2.log"
+				fi
+
+				resetAID "$2"
 				openSettings "$2"
 				cleanYadLeftOvers
 			else
@@ -7350,16 +7538,13 @@ function commandline {
 	elif  [ "$1" == "launcher" ]; then
 		openGameLauncher "$2" "$3"
 	elif  [ "$1" == "help" ] || [ "$1" == "--help" ]; then
-		createDefaultCfgs
 		howto
 	else
 		if ! grep -q "lang=\|run" <<< "$@" ; then
 			echo "-----------------------"
 			echo "arg1 $1 is no valid command"
-			createDefaultCfgs
 			howto
 		fi
-		createDefaultCfgs
 	fi
 }
 
@@ -7473,15 +7658,14 @@ function initLaunch {
 
 # main:#################
 
+createDefaultCfgs "$@"
 checkIntDeps
 
 if [ -z "$1" ]; then
 	writelog "INFO" "${FUNCNAME[0]} - no arguments provided. See '$PROGCMD --help' for possible command line parameters" "E"
-	createDefaultCfgs "$@"
 else
 	if grep -q "$SAC" <<< "$@"; then
 		if grep -q "update" <<< "$@"; then
-			createDefaultCfgs "$@"
 			commandline "$@"
 		else
 			setGameVars "$@"
@@ -7496,7 +7680,6 @@ else
 			fi
 		fi
 	else
-		createDefaultCfgs "$@"
 		commandline "$@"
 	fi
 fi
