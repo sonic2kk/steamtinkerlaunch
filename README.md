@@ -114,10 +114,8 @@ Programs required for a full internal functionality:
 - xprop
 - xrandr
 - xwininfo
-- [Yad](https://github.com/v1cont/yad). The *(by default enabled)* [Settings Menu](#Settings-Menu) and the [Tray Icon](#Tray-Icon) only work with yad.
-  The [Editor Dialog](#Editor-Dialog), which can be used as limited alternative to the [Settings Menu](#Settings-Menu) also works with zenity.
-  *(so this should be an `or dependency` in distribution packages)*
-  Only tested yad 7.2 on Arch linux *(at least Debian (derivatives) seem to use a very old yad version by default, which will not work - see #98)*
+- [Yad](https://github.com/v1cont/yad) All GUI elements like [Settings Menu](#Settings-Menu), [Tray Icon](#Tray-Icon), the [Editor Dialog](#Editor-Dialog)
+  and all other windows use yad. **A new enough version *(>=7.2; see #98)* is required**
    
 Programs needed for optional external features *(no special order)*:
 - [strace](#Strace)
@@ -136,7 +134,6 @@ Programs needed for optional external features *(no special order)*:
 - wine for optional [Vortex](#Vortex) support
 - [GameConqueror/scanmem](#GameConqueror) to optionally cheat
 - [GameScope](#GameScope)
-- zenity *(see description for yad above)*
 - cabextract *(currently only used to extract the [WMP10](#WMP10) setup exe)*
 - lsusb *(for an optional [SBS-VR](#Side-by-Side-VR) check if a VR HMD was found)*
 - jq *(currently only used to extract game names from the steam api)*
@@ -168,12 +165,6 @@ The Options apply to **all** config files at once!:
 
 When **stl** was launched "standalone" via command line the corresponding game will be started using the steam `-applaunch` parameter.
 
-#### Disable Settings Menu
-If you prefer to simply use your favourite texteditor or have problems with 'yad' you can change `USEGUI` to "zenity" in the Global Config Tab or [global.conf](#Global-Config).
-**stl** won't use/depend on yad then and uses zenity instead.
-Instead of the [Settings Menu](#Settings-Menu) zenity will open the [Editor Dialog](#Editor-Dialog), from where you can choose which configs to edit.
-This also applies to the [command line](#via Command Line).
-
 #### Settings Menu Theme
 
 ![stl Settings Menu](https://github.com/frostworx/repo-assets/blob/master/gifs/stl-2.0-settings.gif)
@@ -199,16 +190,13 @@ Letting the requester timeout does not count as cancelled.
 The "Cancelled counter" is stored directly in the [Game specific configuration file](#User-Configurations) as `ASKCNT`
 and is resetted to 0 when `MAXASK` was reached and `WAITEDITOR` was set to 0.
 
-If `USEGUI` is set to "zenity" the [Editor Dialog](#Editor-Dialog) will open instead of the [Settings Menu](#Settings-Menu), but the parameters are the same.
-
 ##### via Command Line
-The Settings Menu can also be opened via commandline:
-`stl settings` opens the Menu with placeholder SteamAppID `31337` as default
-an optional commandline argument can be either a SteamAppID or `last` for opening the config of the last played game stored in `LASTRUN`
-If `USEGUI` is set to "zenity" the [Editor Dialog](#Editor-Dialog) will open instead of the [Settings Menu](#Settings-Menu), but the parameters are the same.
+Both the Settings Menu and the Editor Dialog can also be opened via commandline:
+`stl settings` opens the Menu and `stl editor` opens the Editor Dialog with placeholder SteamAppID `31337` as default.
+An optional commandline argument can be either a SteamAppID or `last` for opening the config of the last played game stored in `LASTRUN`
 
 #### Gui Window Size
-When `SAVESETSIZE` is enabled in the Global Config Tab or [global.conf](#Global-Config) *(by default it is)* resolution changes of every **stl** window (both yad and zenity) are automatically saved
+When `SAVESETSIZE` is enabled in the Global Config Tab or [global.conf](#Global-Config) *(by default it is)* resolution changes of every **stl** window are automatically saved
 when the corresponding window is closed. This function requires xwininfo to work.
 All resolutions will be stored in the [gui config file](#Gui-Config).
 If you prefer window decoration to resize windows, you can enable it in the Global Config Tab or [global.conf](#Global-Config)
@@ -1074,10 +1062,7 @@ If `EDITORURL` contains "AID" it will be replaced by the current SteamAppID.
 
 #### Editor Dialog
 A little File selection requester allowing to choose which config files to open with the [Editor](#Editor).
-The requester works with both `USEGUI` set to 'yad' and 'zenity'.
-If `USEGUI` is set to "zenity" in the [global config](#Global-Config) the [Editor Dialog](#Editor-Dialog) will open directly instead of the [Settings Menu](#Settings-Menu)
-when selected [on Game Launch](#On-Game-Launch) and also [via Command Line](#via-Command-Line).
-
+The [Editor Dialog](#Editor-Dialog) can be opened either via [Settings Menu](#Settings-Menu) or [via Command Line](#via-Command-Line).
 
 #### ENV Variables
 Literally every env variable can be set in [gameconfig `$STLGAMECFG`](#Game-Configurations) and [system-wide configuration](#Global-Config),

@@ -4,7 +4,7 @@
 ### project ###
 
 PROGNAME="SteamTinkerLaunch"
-PROGVERS="v2.7.4-wip1.2"
+PROGVERS="v2.7.4-wip1.3"
 PROGCMD="$(basename "$0")"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -23,7 +23,6 @@ XPROP="xprop"
 XRANDR="xrandr"
 XWININFO="xwininfo"
 YAD="yad"
-ZENITY="zenity"
 AWK="gawk"
 #ENDINTDEPS
 
@@ -40,7 +39,6 @@ CABEXTRACT="cabextract"
 LSUSB="lsusb"
 JQ="jq"
 
-ZENBIN=""
 CHECKHMD=1 # will be set to 0 if $LSUSB is not found. Then the hmd presence check is skipped
 
 # autotweak platforms
@@ -551,50 +549,12 @@ function setGameVars {
 	fi
 }
 
-function checkZenity {
-	if [ "$USEGUI" == "$ZENITY" ]; then
-		if [ -x "$(command -v "$("$WHICH" "$ZENITY" 2>/dev/null)" 2>/dev/null)" ]; then
-				ZENBIN="$("$WHICH" "$ZENITY" 2>/dev/null)"
-			writelog "INFO" "${FUNCNAME[0]} - using '$ZENBIN' for the GUI"
-		elif [ -x "$(command -v "$("$WHICH" "$YAD" 2>/dev/null)" 2>/dev/null)" ]; then
-				writelog "WARN" "${FUNCNAME[0]} - '$USEGUI' is set to '$ZENITY', but it is not available - falling back to '$YAD'"
-				ZENBIN="$("$WHICH" "$YAD" 2>/dev/null)"
-		fi
-
-		if [ -z "$ZENBIN" ]; then
-			writelog "ERROR" "${FUNCNAME[0]} - no usable binary found for '$ZENITY' - this should not happen! Either install '$ZENITY' or '$YAD'"
-			exit
-		fi
-	fi
-}
-
 function prepareGUI {
-	if [ -n "$USEGUI" ]; then
-		if [ "$USEGUI" == "$YAD" ]; then
-			if [ -x "$(command -v "$YAD" 2>/dev/null)" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - using '$YAD' for the GUI"
-			else
-				writelog "WARN" "${FUNCNAME[0]} - USEGUI is set to '$USEGUI' but '$YAD' was not found - retrying with using '$ZENITY' instead - you should update your config"
-				USEGUI="$ZENITY"
-				"${FUNCNAME[0]}"
-			fi
-		elif [ "$USEGUI" == "$ZENITY" ]; then
-			checkZenity
-			writelog "INFO" "${FUNCNAME[0]} - using '$ZENBIN' for '$ZENITY'"
-		else
-			writelog "WARN" "${FUNCNAME[0]} - USEGUI '$USEGUI' is neither '$YAD' nor '$ZENITY' - make sure your config is correct"
-			USEGUI="$YAD"
-			"${FUNCNAME[0]}"
-		fi
-	fi
-
 	WINDECO="--undecorated"
 
 	if [ -n "$USEWINDECO" ]; then
 		if [ "$USEWINDECO" -eq 1 ]; then
 			WINDECO="--decorated"
-		else
-			WINDECO="--undecorated"
 		fi
 	fi
 }
@@ -1035,7 +995,6 @@ function setDefaultCfgValues {
 		if [ -z "$GLOBTABCOLS" ]		; then	GLOBTABCOLS="3"; fi
 		if [ -z "$RESHTABCOLS" ]		; then	RESHTABCOLS="1"; fi
 		if [ -z "$VORTTABCOLS" ]		; then	VORTTABCOLS="1"; fi
-		if [ -z "$USEGUI" ]				; then	USEGUI="$YAD"; fi
 		if [ -z "$USEWINDECO" ]			; then	USEWINDECO="0"; fi
 		if [ -z "$USETRAYICON" ]		; then	USETRAYICON="1"; fi
 		if [ -z "$USEGAMEPICS" ]		; then	USEGAMEPICS="1"; fi
@@ -1360,8 +1319,6 @@ function saveCfg {
 			echo "GLOBTABCOLS=\"$GLOBTABCOLS\""
 			echo "## $DESC_VORTTABCOLS"
 			echo "VORTTABCOLS=\"$VORTTABCOLS\""
-			echo "## $DESC_USEGUI"
-			echo "USEGUI=\"$USEGUI\""
 			echo "## $DESC_USEWINDECO"
 			echo "USEWINDECO=\"$USEWINDECO\""
 			echo "## $DESC_USETRAYICON"
@@ -1647,16 +1604,12 @@ function needNewProton {
 		getAvailableProtonVersions "up"
 		TITLE="Proton Version"
 		writelog "INFO" "${FUNCNAME[0]} - no Proton Version was found - opening a requester to choose from one"
-		if [ "$USEGUI" == "$YAD" ]; then
-			PROTYADLIST="$(printf "!%s\n" "${ProtonCSV[@]//\"/}" | sort -u | cut -d ';' -f1 | tr -d '\n' ;printf "\n")"
-			PICKPROTON="$(LC_ALL="" "$YAD" --window-icon="$STLICON" --borders="$YADBORDER" --center "$WINDECO" --form --scroll --separator="\n" --quoted-output \
-			--text="<span font_weight='bold'>$GUI_NEEDNEWPROTON</span>" \
-			--field="$GUI_NEEDNEWPROTON2":CB "${USEPROTON/#-/ -}!$PROTYADLIST" \
-			--title="$TITLE" \
-			--geometry="$ASKSETREQWIDTH"x"$ASKSETREQHEIGHT"+0+0)"
-		elif [ "$USEGUI" == "$ZENITY" ]; then
-			PICKPROTON="$(zenity --list --width="$ASKSETREQWIDTH" --height="$ASKSETREQHEIGHT" --title="$TITLE" --text="$GUI_NEEDNEWPROTON" 2>/dev/null)"
-		fi
+		PROTYADLIST="$(printf "!%s\n" "${ProtonCSV[@]//\"/}" | sort -u | cut -d ';' -f1 | tr -d '\n' ;printf "\n")"
+		PICKPROTON="$(LC_ALL="" "$YAD" --window-icon="$STLICON" --borders="$YADBORDER" --center "$WINDECO" --form --scroll --separator="\n" --quoted-output \
+		--text="<span font_weight='bold'>$GUI_NEEDNEWPROTON</span>" \
+		--field="$GUI_NEEDNEWPROTON2":CB "${USEPROTON/#-/ -}!$PROTYADLIST" \
+		--title="$TITLE" \
+		--geometry="$ASKSETREQWIDTH"x"$ASKSETREQHEIGHT"+0+0)"
 
 		if [ -n "$PICKPROTON" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - selected Proton Version $PICKPROTON"
@@ -1758,10 +1711,6 @@ function createDLProtList {
 }
 
 function dlCustomProtonGUI {
-	if [ "$USEGUI" == "$ZENITY" ]; then
-		"$ZENITY" --width="$CUSTPROTREQWIDTH" --height="$CUSTPROTREQHEIGHT" --info --text="$NOTY_NOZEN"
-		return
-	fi
 
 	createDLProtList
 
@@ -1774,15 +1723,13 @@ function dlCustomProtonGUI {
 	loadCfg "$STLGUICFG" X
 	updateWinRes "$TITLE" "$STLGUICFG" "CUSTPROTREQWIDTH" "CUSTPROTREQHEIGHT" &
 
-	if [ "$USEGUI" == "$YAD" ]; then
-		DLDISPCUSTPROT="$(LC_ALL="" "$YAD" --window-icon="$STLICON" --borders="$YADBORDER" --form --center --on-top "$WINDECO" \
-		--title="$TITLE" \
-		--geometry="$CUSTPROTREQWIDTH"x"$CUSTPROTREQHEIGHT"+0+0 \
-		--text="<span font_weight='bold'>$GUI_DLCUSTPROTTEXT</span>" \
-		--field=" ":LBL " " \
-		--field="$GUI_DLCUSTPROTTEXT2!$GUI_DLCUSTPROTTEXT":CBE "${DLPROTON/#-/ -}!$DLPROTLIST" \
-		)"
-	fi
+	DLDISPCUSTPROT="$(LC_ALL="" "$YAD" --window-icon="$STLICON" --borders="$YADBORDER" --form --center --on-top "$WINDECO" \
+	--title="$TITLE" \
+	--geometry="$CUSTPROTREQWIDTH"x"$CUSTPROTREQHEIGHT"+0+0 \
+	--text="<span font_weight='bold'>$GUI_DLCUSTPROTTEXT</span>" \
+	--field=" ":LBL " " \
+	--field="$GUI_DLCUSTPROTTEXT2!$GUI_DLCUSTPROTTEXT":CBE "${DLPROTON/#-/ -}!$DLPROTLIST" \
+	)"
 	
 	if [ -n "${DLDISPCUSTPROT//|/\"}" ]; then
 		if grep -q "^http" <<< "${DLDISPCUSTPROT//|/\"}"; then
@@ -1943,17 +1890,14 @@ function addCustomProton {
 		loadCfg "$STLGUICFG" X
 		updateWinRes "$TITLE" "$STLGUICFG" "CUSTPROTREQWIDTH" "CUSTPROTREQHEIGHT" &
 
-		if [ "$USEGUI" == "$YAD" ]; then
-			NEWCUSTPROT="$(LC_ALL="" "$YAD" --window-icon="$STLICON" --borders="$YADBORDER" --form --center --on-top "$WINDECO" \
-			--title="$TITLE" \
-			--geometry="$CUSTPROTREQWIDTH"x"$CUSTPROTREQHEIGHT"+0+0 \
-			--text="<span font_weight='bold'>$GUI_ADDCUSTOMBINARY</span>" \
-			--field=" ":LBL " " \
-			--field="$GUI_PROTONVERSIONNAME!$DESC_PROTONVERSIONNAME" "Proton-" \
-			--field="$GUI_CUSTOMPROTONBINARY":FL "proton" --file-filter="$GUI_PROTONFILES (proton)| proton")"
-		elif [ "$USEGUI" == "$ZENITY" ]; then
-			NEWCUSTPROT="$("$ZENITY" --file-selection --file-filter="$GUI_PROTONFILES (proton)| proton" --width="$CUSTPROTREQWIDTH" --height="$CUSTPROTREQHEIGHT" --title="$GUI_ADDCUSTOMBINARY" 2>/dev/null)"
-		fi
+		NEWCUSTPROT="$(LC_ALL="" "$YAD" --window-icon="$STLICON" --borders="$YADBORDER" --form --center --on-top "$WINDECO" \
+		--title="$TITLE" \
+		--geometry="$CUSTPROTREQWIDTH"x"$CUSTPROTREQHEIGHT"+0+0 \
+		--text="<span font_weight='bold'>$GUI_ADDCUSTOMBINARY</span>" \
+		--field=" ":LBL " " \
+		--field="$GUI_PROTONVERSIONNAME!$DESC_PROTONVERSIONNAME" "Proton-" \
+		--field="$GUI_CUSTOMPROTONBINARY":FL "proton" --file-filter="$GUI_PROTONFILES (proton)| proton")"
+
 		addCustomProtonToList "$NEWCUSTPROT"
 	else
 		if grep -q "proton$" <<< "$1"; then
@@ -2146,23 +2090,17 @@ function EditorDialog {
 
 	loadCfg "$STLGUICFG" X
 	updateWinRes "$TITLE" "$STLGUICFG" "EDREQWIDTH" "EDREQHEIGHT" &
-	if [ "$USEGUI" == "$YAD" ]; then
-		if [ "$USEGAMEPICS" -eq 1 ] && [ -f "$STLGHEADD/$AID.jpg" ]; then
-			SHOWPIC="$STLGHEADD/$AID.jpg"
-		else
-			SHOWPIC="$NOICON"
-		fi
-		IFS=" " read -r -a EDFILES <<< "$(for f in $(printf '%s\n' "${CfgFiles[@]}"); do echo FALSE ; echo "$f" ; done | \
-		LC_ALL="" "$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --borders="$YADBORDER" --center "$WINDECO" --list --checklist --column=Edit --column=ConfigFile --separator=" " --print-column="2" \
-		--text="<span font_weight='bold'>$(strFix "$GUI_EDITORDIALOG" "$GN" "$AID")</span>" \
-		--title="$TITLE" \
-		--geometry="$EDREQWIDTH"x"$EDREQHEIGHT"+0+0 | tr '\n' ' ')"
-	elif [ "$USEGUI" == "$ZENITY" ]; then
-		IFS=" " read -r -a EDFILES <<< "$(for f in $(printf '%s\n' "${CfgFiles[@]}"); do echo FALSE ; echo "$f" ; done | \
-		"$ZENBIN" --list --checklist --column=Edit --column=ConfigFile --separator=" " --print-column="2" \
-		--text="<span font_weight='bold'>$GUI_EDITORDIALOG</span>" \
-		--width="$EDREQWIDTH" --height="$EDREQHEIGHT" 2>/dev/null | tr '\n' ' ')"
+
+	if [ "$USEGAMEPICS" -eq 1 ] && [ -f "$STLGHEADD/$AID.jpg" ]; then
+		SHOWPIC="$STLGHEADD/$AID.jpg"
+	else
+		SHOWPIC="$NOICON"
 	fi
+	IFS=" " read -r -a EDFILES <<< "$(for f in $(printf '%s\n' "${CfgFiles[@]}"); do echo FALSE ; echo "$f" ; done | \
+	LC_ALL="" "$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --borders="$YADBORDER" --center "$WINDECO" --list --checklist --column=Edit --column=ConfigFile --separator=" " --print-column="2" \
+	--text="<span font_weight='bold'>$(strFix "$GUI_EDITORDIALOG" "$GN" "$AID")</span>" \
+	--title="$TITLE" \
+	--geometry="$EDREQWIDTH"x"$EDREQHEIGHT"+0+0 | tr '\n' ' ')"
 
 	if [ -n "${EDFILES[0]}" ]; then
 		if [ "$OPENEDITORURL" -eq 1 ]; then
@@ -2188,14 +2126,15 @@ function EditorDialog {
 			fi
 		fi
 
-		if [ "$USEGUI" == "$YAD" ]; then
+
+		if [ -n "$2" ] && [ "$2" == "back" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Editor closed - Going back to the Main Settings"
 			openSettings
 		else
 			writelog "INFO" "${FUNCNAME[0]} - Editor closed"
 		fi
 	else
-		if [ "$USEGUI" == "$YAD" ]; then
+		if [ -n "$2" ] && [ "$2" == "back" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - no Config Files were selected - Going back to the Main Settings"
 			openSettings
 		else
@@ -2213,13 +2152,10 @@ function cleanYadFiles {
 
 function cleanYadLeftOvers {
 	# delete some possible "$YAD" leftovers
-	if [ "$USEGUI" == "$YAD" ]; then
-		kill "$YADTRAYPID" 2>/dev/null
-		find /tmp -maxdepth 1 -type f -regextype posix-extended -regex '^.*cfg[0-9].[A-Z,a-z,0-9]{8}' -exec rm {} \;
-		ipcrm -M "$YADKEY" 2>/dev/null
-	fi
+	kill "$YADTRAYPID" 2>/dev/null
+	find /tmp -maxdepth 1 -type f -regextype posix-extended -regex '^.*cfg[0-9].[A-Z,a-z,0-9]{8}' -exec rm {} \;
+	ipcrm -M "$YADKEY" 2>/dev/null
 }
-
 
 function TrayIconExports {
 	export XWI="$XWININFO"
@@ -2251,73 +2187,71 @@ function TrayIconExports {
 }
 
 function trayIcon {
-	if [ "$USEGUI" == "$YAD" ]; then
-		if [ "$USETRAYICON" -eq 1 ]; then
-			# variables and functions used by exported functions below
+	if [ "$USETRAYICON" -eq 1 ]; then
+		# variables and functions used by exported functions below
 
 
-			# functions for the trayIcon Menu
-			function pickWindowName {
-				resetAID "$AID"
-				PICKWINDOWNAME="$(sleep 2 && "$XWI" -stats | grep ^"$XWI" | tail -n1 | cut -d '"' -f2)";
-				if [ -z "$PICKWINDOWNAME" ] || grep -q "$XWI" <<< "$PICKWINDOWNAME"; then
-					writelog "SKIP" "${FUNCNAME[0]} - '$XWI' didn't pick the correct window name: '$PICKWINDOWNAME'"
-				else
-					writelog "INFO" "${FUNCNAME[0]} - trayIcon: picked '$PICKWINDOWNAME'"
-					updateConfigEntry "GAMEWINDOW" "$PICKWINDOWNAME" "$STLGAMECFG"
-					echo "GAMEWINDOW=$PICKWINDOWNAME" > "$TEMPWINNAME"
-				fi
-			}
-
-			function getActiveWindowName {
-				resetAID "$AID"
-				PICKWINDOWNAME="$(sleep 5 && "$XDO" getactivewindow getwindowname)";
-				writelog "INFO" "${FUNCNAME[0]} - trayIcon: found windowname '$PICKWINDOWNAME'"
+		# functions for the trayIcon Menu
+		function pickWindowName {
+			resetAID "$AID"
+			PICKWINDOWNAME="$(sleep 2 && "$XWI" -stats | grep ^"$XWI" | tail -n1 | cut -d '"' -f2)";
+			if [ -z "$PICKWINDOWNAME" ] || grep -q "$XWI" <<< "$PICKWINDOWNAME"; then
+				writelog "SKIP" "${FUNCNAME[0]} - '$XWI' didn't pick the correct window name: '$PICKWINDOWNAME'"
+			else
+				writelog "INFO" "${FUNCNAME[0]} - trayIcon: picked '$PICKWINDOWNAME'"
 				updateConfigEntry "GAMEWINDOW" "$PICKWINDOWNAME" "$STLGAMECFG"
-				echo "GAMEWINDOW=$PICKWINDOWNAME" >"$TEMPWINNAME"
-			}
+				echo "GAMEWINDOW=$PICKWINDOWNAME" > "$TEMPWINNAME"
+			fi
+		}
 
-			function getActiveWindowSize {
-				resetAID "$AID"
-				PICKMINVRWINH="$(("$(sleep 5 && "$XDO" getactivewindow getwindowgeometry | tail -n1 | cut -d ':' -f2 | cut -d 'x' -f2)"))";
-				writelog "INFO" "${FUNCNAME[0]} - trayIcon: found windowheight '$PICKMINVRWINH'"
-				updateConfigEntry "MINVRWINH" "$PICKMINVRWINH" "$STLGAMECFG"
-			}
+		function getActiveWindowName {
+			resetAID "$AID"
+			PICKWINDOWNAME="$(sleep 5 && "$XDO" getactivewindow getwindowname)";
+			writelog "INFO" "${FUNCNAME[0]} - trayIcon: found windowname '$PICKWINDOWNAME'"
+			updateConfigEntry "GAMEWINDOW" "$PICKWINDOWNAME" "$STLGAMECFG"
+			echo "GAMEWINDOW=$PICKWINDOWNAME" >"$TEMPWINNAME"
+		}
 
-			function killProtonGame {
-				WINEPREFIX="$GPFX" "$RUNWINESERVER" -k
-				touch "$CLOSETMP"
-			}
+		function getActiveWindowSize {
+			resetAID "$AID"
+			PICKMINVRWINH="$(("$(sleep 5 && "$XDO" getactivewindow getwindowgeometry | tail -n1 | cut -d ':' -f2 | cut -d 'x' -f2)"))";
+			writelog "INFO" "${FUNCNAME[0]} - trayIcon: found windowheight '$PICKMINVRWINH'"
+			updateConfigEntry "MINVRWINH" "$PICKMINVRWINH" "$STLGAMECFG"
+		}
 
-			function PauseGame {
-				GAMEPID="$(sleep 5 && "$XDO" getactivewindow getwindowpid)"
-				# idea taken with friendly permission from https://github.com/Ilazki:
-				GAMESTATE="$(ps -q "$GAMEPID" -o state --no-headers)"
-				GAMESIG="-STOP"
+		function killProtonGame {
+			WINEPREFIX="$GPFX" "$RUNWINESERVER" -k
+			touch "$CLOSETMP"
+		}
 
-				if [ "x$GAMESTATE" = "xT" ] ; then
-					GAMESIG="-CONT"
-				fi
+		function PauseGame {
+			GAMEPID="$(sleep 5 && "$XDO" getactivewindow getwindowpid)"
+			# idea taken with friendly permission from https://github.com/Ilazki:
+			GAMESTATE="$(ps -q "$GAMEPID" -o state --no-headers)"
+			GAMESIG="-STOP"
 
-				kill "$GAMESIG" "$GAMEPID"
-			}
-			
-			function TrayShaderMenu {
-				"$0" update gameshaders "$SHADDESTDIR"
-			}
-			
-			TrayIconExports
-			
-			# actually open the actual trayIcon	
-			LC_ALL="" "$YAD" --image="$STLICON" --notification --item-separator=","\
-			--menu="$TRAY_PICKWINDOW,bash -c pickWindowName
-			|$TRAY_GETACTIVEWINDOW,bash -c getActiveWindowName \
-			|$TRAY_GETACTIVEWINDOWSIZE,bash -c getActiveWindowSize \
-			|$TRAY_KILLSWITCH,bash -c killProtonGame \
-			|$TRAY_PAUSE,bash -c PauseGame" \
-			--text="$TRAY_TOOLTIP" >/dev/null 2>/dev/null &
-			YADTRAYPID="$!"
-		fi
+			if [ "x$GAMESTATE" = "xT" ] ; then
+				GAMESIG="-CONT"
+			fi
+
+			kill "$GAMESIG" "$GAMEPID"
+		}
+		
+		function TrayShaderMenu {
+			"$0" update gameshaders "$SHADDESTDIR"
+		}
+		
+		TrayIconExports
+		
+		# actually open the actual trayIcon	
+		LC_ALL="" "$YAD" --image="$STLICON" --notification --item-separator=","\
+		--menu="$TRAY_PICKWINDOW,bash -c pickWindowName
+		|$TRAY_GETACTIVEWINDOW,bash -c getActiveWindowName \
+		|$TRAY_GETACTIVEWINDOWSIZE,bash -c getActiveWindowSize \
+		|$TRAY_KILLSWITCH,bash -c killProtonGame \
+		|$TRAY_PAUSE,bash -c PauseGame" \
+		--text="$TRAY_TOOLTIP" >/dev/null 2>/dev/null &
+		YADTRAYPID="$!"
 	fi
 }
 
@@ -2494,7 +2428,6 @@ function openSettings {
 	--text="<span font_weight='bold'>$GUI_SETHEAD3</span>" \
 	--field="     $GUI_DLGLOBAL $PROGCMD!$(strFix "$DESC_DLGLOBAL" "$PROGCMD" "$PROJECTPAGE") ('DLGLOBAL')":CHK "${DLGLOBAL/#-/ -}" \
 	--field="     $GUI_STLLANG!$DESC_STLLANG ('STLLANG')":CB "${STLLANG/#-/ -}!$LANGYADLIST" \
-	--field="     $GUI_USEGUI!$DESC_USEGUI ('USEGUI')":CB "${USEGUI/#-/ -}!$YAD!$ZENITY" \
 	--field="     $GUI_USEWINDECO!$DESC_USEWINDECO ('USEWINDECO')":CHK "${USEWINDECO/#-/ -}" \
 	--field="     $GUI_USETRAYICON!$DESC_USETRAYICON ('USETRAYICON')":CHK "${USETRAYICON/#-/ -}" \
 	--field="     $GUI_USEGAMEPICS!$DESC_USEGAMEPICS ('USEGAMEPICS')":CHK "${USEGAMEPICS/#-/ -}" \
@@ -2639,7 +2572,7 @@ function openSettings {
 		;;
 		1) 	{
 			writelog "INFO" "${FUNCNAME[0]} - exiting GUI and opening EditorDialog"
-			EditorDialog "$AID"
+			EditorDialog "$AID" "back"
 			}
 		;;
 		2) 	{
@@ -2719,6 +2652,8 @@ function howto {
 	echo "                                     Steam compatibility tool"
 	echo "                                     under 'STEAMCOMPATOOLS'"
 	echo "    settings <value>                 Opens the settings menu"
+	echo "                                     (for 'SteamAppID' or 'last')"
+	echo "    editor <value>                 	Opens the editor menu"
 	echo "                                     (for 'SteamAppID' or 'last')"
 	echo "    dlcustomproton|dcp <url>         Download/install custom Proton"
 	echo "                                     from filerequester or"
@@ -3512,19 +3447,13 @@ function GameShaderDialog {
 	loadCfg "$STLGUICFG" X
 	updateWinRes "$TITLE" "$STLGUICFG" "SHADREQWIDTH" "SHADREQHEIGHT" &
 
-	if [ "$USEGUI" == "$YAD" ]; then
-		IFS=" " read -r -a SHADFILES <<< \
-		"$(for f in $(printf '%s\n' "${ShaderFiles[@]}"); do if [ ! -f "$SHADDESTDIR/$(basename "$f")" ]; then echo FALSE ; echo "$f" ; else echo TRUE ; echo "$f" ;fi ; done | \
-		LC_ALL="" "$YAD" --window-icon="$STLICON" --borders="$YADBORDER" --center "$WINDECO" --list --checklist --column=Edit --column=ConfigFile --separator=" " --print-column="2" \
-		--text="<span font_weight='bold'>$(strFix "$GUI_SHADERDIALOG" "$SHADDESTDIR")</span>" \
-		--title="$TITLE" \
-		--geometry="$SHADREQWIDTH"x"$SHADREQHEIGHT"+0+0 | tr '\n' ' ')"
-	elif [ "$USEGUI" == "$ZENITY" ]; then
-		IFS=" " read -r -a SHADFILES <<< "$(for f in $(printf '%s\n' "${ShaderFiles[@]}"); do if [ ! -f "$SHADDESTDIR/$(basename "$f")" ]; then echo FALSE ; echo "$f" ; else echo TRUE ; echo "$f" ;fi ; done | \
-		"$ZENBIN" --list --checklist --column=Edit --column=ConfigFile --separator=" " --print-column="2" \
-		--text="<span font_weight='bold'>$GUI_SHADERDIALOG</span>" \
-		--width="$SHADREQWIDTH" --height="$SHADREQHEIGHT" 2>/dev/null | tr '\n' ' ')"
-	fi
+	IFS=" " read -r -a SHADFILES <<< \
+	"$(for f in $(printf '%s\n' "${ShaderFiles[@]}"); do if [ ! -f "$SHADDESTDIR/$(basename "$f")" ]; then echo FALSE ; echo "$f" ; else echo TRUE ; echo "$f" ;fi ; done | \
+	LC_ALL="" "$YAD" --window-icon="$STLICON" --borders="$YADBORDER" --center "$WINDECO" --list --checklist --column=Edit --column=ConfigFile --separator=" " --print-column="2" \
+	--text="<span font_weight='bold'>$(strFix "$GUI_SHADERDIALOG" "$SHADDESTDIR")</span>" \
+	--title="$TITLE" \
+	--geometry="$SHADREQWIDTH"x"$SHADREQHEIGHT"+0+0 | tr '\n' ' ')"
+
 	while read -r upshad; do
 		if [ -f "$SHADDESTDIR/$(basename "$upshad")" ]; then
 			if ! grep -q "$upshad" <<< "${SHADFILES[@]}"; then
@@ -3876,63 +3805,47 @@ function askSettings {
 			loadCfg "$STLGUICFG" X
 			updateWinRes "$TITLE" "$STLGUICFG" "ASKSETREQWIDTH" "ASKSETREQHEIGHT" &
 
-			if [ "$USEGUI" == "$YAD" ]; then
-				if [ "$USEGAMEPICS" -eq 1 ] && [ -f "$STLGHEADD/$AID.jpg" ]; then
-					SHOWPIC="$STLGHEADD/$AID.jpg"
-				else
-					SHOWPIC="$NOICON"
-				fi
-		
-				if [ -n "$FOUNDTWEAKCFG" ]; then
-					LC_ALL="" "$YAD" --image "$SHOWPIC" --image-on-top --borders="$YADBORDER" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
-					--title="$TITLE" \
-					--geometry="$ASKSETREQWIDTH"x"$ASKSETREQHEIGHT"+0+0 \
-					--text="<span font_weight='bold'>$GN ($AID) - $GUI_ASKOPENSET</span>" \
-					--field="<span font=\"italic\">${#CfgFiles[@]} $GUI_EDITABLECFGS</span>":LBL \
-					--field=" ":LBL " " \
-					--field="$GUI_TWEAKFOUND $FOUNDTWEAKCFG":LBL \
-					--field="<span font=\"italic\">($GUI_SHOULDWORK)</span>":LBL \
-					--button="$BUT_SET":0  \
-					--button="$BUT_CAN":1  \
-					--timeout="$WAITEDITOR" \
-					--timeout-indicator=top
-				else
-					LC_ALL="" "$YAD" --image "$SHOWPIC" --image-on-top --borders="$YADBORDER" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
-					--title="$TITLE" \
-					--geometry="$ASKSETREQWIDTH"x"$ASKSETREQHEIGHT"+0+0 \
-					--text="<span font_weight='bold'>$GN ($AID) - $GUI_ASKOPENSET</span>" \
-					--field="<span font=\"italic\">(${#CfgFiles[@]} $GUI_EDITABLECFGS)</span>":LBL \
-					--field=" ":LBL " " \
-					--button="$BUT_SET":0  \
-					--button="$BUT_CAN":1  \
-					--timeout="$WAITEDITOR" \
-					--timeout-indicator=top
-				fi
-				case $? in
-					0)  writelog "INFO" "${FUNCNAME[0]} - Selected SETTINGS - Opening settings"
-						openSettings "$AID"
-					;;
-					1)  writelog "INFO" "${FUNCNAME[0]} - Selected CANCEL - Starting game without settings"
-						editorSkipped
-					;;
-					70) writelog "INFO" "${FUNCNAME[0]} - TIMEOUT - Starting game without settings"
-					;;
-				esac
-
-			elif [ "$USEGUI" == "$ZENITY" ]; then
-				if [ -n "$FOUNDTWEAKCFG" ]; then
-					"$ZENBIN" --title="$PROGNAME ($PROGCMD) - $PROGVERS" --question --text="edit game configfile?\n'$STLGAMECFG'\n(tweakfile '$FOUNDTWEAKCFG' found,\nthe game should 'just work' using it)" --ok-label=Edit --cancel-label=Cancel --timeout="$WAITEDITOR" --width="$ASKSETREQWIDTH" --heigth="$ASKSETREQHEIGHT" 2>/dev/null
-				else
-					"$ZENBIN" --title="$PROGNAME ($PROGCMD) - $PROGVERS" --question --text="edit game configfile?\n'$STLGAMECFG'" --ok-label=Edit --cancel-label=Cancel --timeout="$WAITEDITOR" --width="$ASKSETREQWIDTH" --heigth="$ASKSETREQHEIGHT" 2>/dev/null
-				fi
-				case $? in
-					0)  EditorDialog "$AID"
-					;;
-					1)  writelog "INFO" "${FUNCNAME[0]} - key not pressed - starting game"
-						editorSkipped
-					;;
-				esac
+			if [ "$USEGAMEPICS" -eq 1 ] && [ -f "$STLGHEADD/$AID.jpg" ]; then
+				SHOWPIC="$STLGHEADD/$AID.jpg"
+			else
+				SHOWPIC="$NOICON"
 			fi
+	
+			if [ -n "$FOUNDTWEAKCFG" ]; then
+				LC_ALL="" "$YAD" --image "$SHOWPIC" --image-on-top --borders="$YADBORDER" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
+				--title="$TITLE" \
+				--geometry="$ASKSETREQWIDTH"x"$ASKSETREQHEIGHT"+0+0 \
+				--text="<span font_weight='bold'>$GN ($AID) - $GUI_ASKOPENSET</span>" \
+				--field="<span font=\"italic\">${#CfgFiles[@]} $GUI_EDITABLECFGS</span>":LBL \
+				--field=" ":LBL " " \
+				--field="$GUI_TWEAKFOUND $FOUNDTWEAKCFG":LBL \
+				--field="<span font=\"italic\">($GUI_SHOULDWORK)</span>":LBL \
+				--button="$BUT_SET":0  \
+				--button="$BUT_CAN":1  \
+				--timeout="$WAITEDITOR" \
+				--timeout-indicator=top
+			else
+				LC_ALL="" "$YAD" --image "$SHOWPIC" --image-on-top --borders="$YADBORDER" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
+				--title="$TITLE" \
+				--geometry="$ASKSETREQWIDTH"x"$ASKSETREQHEIGHT"+0+0 \
+				--text="<span font_weight='bold'>$GN ($AID) - $GUI_ASKOPENSET</span>" \
+				--field="<span font=\"italic\">(${#CfgFiles[@]} $GUI_EDITABLECFGS)</span>":LBL \
+				--field=" ":LBL " " \
+				--button="$BUT_SET":0  \
+				--button="$BUT_CAN":1  \
+				--timeout="$WAITEDITOR" \
+				--timeout-indicator=top
+			fi
+			case $? in
+				0)  writelog "INFO" "${FUNCNAME[0]} - Selected SETTINGS - Opening settings"
+					openSettings "$AID"
+				;;
+				1)  writelog "INFO" "${FUNCNAME[0]} - Selected CANCEL - Starting game without settings"
+					editorSkipped
+				;;
+				70) writelog "INFO" "${FUNCNAME[0]} - TIMEOUT - Starting game without settings"
+				;;
+			esac
 		fi
 	fi
 }
@@ -5008,46 +4921,26 @@ function guiLoadCfg {
 	updateWinRes "$TITLE" "$STLGUICFG" "ALTREQWIDTH" "ALTREQHEIGHT" &
 
 	writelog "INFO" "${FUNCNAME[0]} - requester asking if '$GUICFG' should be loaded"
-	if [ "$USEGUI" == "$YAD" ]; then
-		LC_ALL="" "$YAD" --borders="$YADBORDER" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
-		--title="$TITLE" \
-		--geometry="$ALTREQWIDTH"x"$ALTREQHEIGHT"+0+0 \
-		--field="$GUI_LOADATCFG '$VALCFG'?":LBL \
-		--field="<span font=\"italic\">($GUI_SKIPLOADATFOR '$GN ($AID)')</span>":LBL \
-		--button="$BUT_SKIP":0  \
-		--button="$BUT_LOAD":1  \
-		--button="$BUT_IGNORE":2  \
-		--timeout="$WAITEDITOR" \
-		--timeout-indicator=top
-		case $? in
-			0)  writelog "SKIP" "${FUNCNAME[0]} - selected to skip '$GUICFG'"
-			;; 
-			1)	LOADAUTOCFG="$GUICFG"
-				writelog "INFO" "${FUNCNAME[0]} - marked '$LOADAUTOCFG' for loading"
-			;;
-			2)	writelog "INFO" "${FUNCNAME[0]} - adding 'IGNOREAUTOTWEAKS=\"1\"' to '$TWEAKCFG'"
-				updateConfigEntry "IGNOREAUTOTWEAKS" "1" "$STLGAMECFG"
-			;;
-		esac
-	elif [ "$USEGUI" == "$ZENITY" ]; then
-		ZENSEL="$("$ZENBIN" --list --title="$PROGNAME ($PROGCMD) - $PROGVERS" --text="$GUI_LOADATCFG\n'VALCFG'?\n($GUI_SKIPLOADATFOR '$GN ($AID)')" --radiolist --column "Choose" --column "Option" FALSE "Load" FALSE "Skip" FALSE "Ignore" --timeout="$WAITEDITOR" --width="$ALTREQWIDTH" --height="$ALTREQHEIGHT" 2>/dev/null)"
-		if [ "$ZENSEL" == "Load" ]; then
-			LOADAUTOCFG="$GUICFG"
+	LC_ALL="" "$YAD" --borders="$YADBORDER" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
+	--title="$TITLE" \
+	--geometry="$ALTREQWIDTH"x"$ALTREQHEIGHT"+0+0 \
+	--field="$GUI_LOADATCFG '$VALCFG'?":LBL \
+	--field="<span font=\"italic\">($GUI_SKIPLOADATFOR '$GN ($AID)')</span>":LBL \
+	--button="$BUT_SKIP":0  \
+	--button="$BUT_LOAD":1  \
+	--button="$BUT_IGNORE":2  \
+	--timeout="$WAITEDITOR" \
+	--timeout-indicator=top
+	case $? in
+		0)  writelog "SKIP" "${FUNCNAME[0]} - selected to skip '$GUICFG'"
+		;; 
+		1)	LOADAUTOCFG="$GUICFG"
 			writelog "INFO" "${FUNCNAME[0]} - marked '$LOADAUTOCFG' for loading"
-		elif [ "$ZENSEL" == "Skip" ]; then
-			writelog "SKIP" "${FUNCNAME[0]} - selected to skip '$GUICFG'"
-		elif [ "$ZENSEL" == "Ignore" ]; then
-			if [ -f "$TWEAKCFG" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - adding 'IGNOREAUTOTWEAKS=\"1\"' to '$TWEAKCFG'"
-				updateConfigEntry "IGNOREAUTOTWEAKS" "1" "$TWEAKCFG"
-			else
-				writelog "INFO" "${FUNCNAME[0]} - adding 'IGNOREAUTOTWEAKS=\"1\"' to '$STLGAMECFG'"
-				updateConfigEntry "IGNOREAUTOTWEAKS" "1" "$STLGAMECFG"
-			fi
-		else
-			writelog "SKIP" "${FUNCNAME[0]} - Nothing selected - skipping '$GUICFG'"
-		fi	
-	fi
+		;;
+		2)	writelog "INFO" "${FUNCNAME[0]} - adding 'IGNOREAUTOTWEAKS=\"1\"' to '$TWEAKCFG'"
+			updateConfigEntry "IGNOREAUTOTWEAKS" "1" "$STLGAMECFG"
+		;;
+	esac
 }
 
 function validateATCfg {
@@ -5065,55 +4958,33 @@ function validateATCfg {
 
 		writelog "INFO" "${FUNCNAME[0]} - gui asking if '$VALCFG' should be edited as ATVALIDATE is '$ATVALIDATE', autoloaded, skipped or ignored"
 		
-		if [ "$USEGUI" == "$YAD" ]; then
-			LC_ALL="" "$YAD" --borders="$YADBORDER" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
-			--title="$TITLE" \
-			--geometry="$AETREQWIDTH"x"$AETREQHEIGHT"+0+0 \
-			--field="$GUI_FOUNDATCFG '$VALCFG'":LBL \
-			--field="<span font=\"italic\">($GUI_EDIT/$GUI_SKIPLOADATFOR '$GN ($AID)')</span>":LBL \
-			--button="$BUT_EDIT":0  \
-			--button="$BUT_SKIP":1  \
-			--button="$BUT_LOAD":2  \
-			--button="$BUT_IGNORE":3  \
-			--timeout="$ATVALIDATE" \
-			--timeout-indicator=top
-			case $? in
-				0)	writelog "INFO" "${FUNCNAME[0]} - selected EDIT - opening '$VALCFG' with the editor now"
-					"$STLEDITOR" "$VALCFG"
-					guiLoadCfg "$VALCFG"
-				;;
-				1)  writelog "SKIP" "${FUNCNAME[0]} - selected SKIP"
-				;; 
-				2)	LOADAUTOCFG="$GUICFG"
-					writelog "INFO" "${FUNCNAME[0]} - selected LOAD - marked '$LOADAUTOCFG' for loading"
-				;;
-				3)	writelog "INFO" "${FUNCNAME[0]} - selected IGNORE - adding 'IGNOREAUTOTWEAKS=\"1\"' to '$STLGAMECFG'"
-					updateConfigEntry "IGNOREAUTOTWEAKS" "1" "$STLGAMECFG"
-				;;
-				70) writelog "SKIP" "${FUNCNAME[0]} - TIMEOUT - skipping"
-				;;
-			esac
-		elif [ "$USEGUI" == "$ZENITY" ]; then
-				ZENSEL="$("$ZENBIN" --list --title="$PROGNAME ($PROGCMD) - $PROGVERS" --text="$GUI_FOUNDATCFG '$VALCFG'.\n($GUI_EDIT/$GUI_SKIPLOADATFOR '$GN ($AID)')" --radiolist --column "Choose" --column "Option" FALSE "Edit" FALSE "Skip" FALSE "Load" FALSE "Ignore" --timeout="$ATVALIDATE" --width="$AETREQWIDTH" --height="$AETREQHEIGHT" 2>/dev/null)"
-				if [ "$ZENSEL" == "Edit" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - selected EDIT - opening '$VALCFG' with the editor now"
-					"$STLEDITOR" "$VALCFG"
-					guiLoadCfg "$VALCFG"
-				elif [ "$ZENSEL" == "Load" ]; then
-					LOADAUTOCFG="$GUICFG"
-					writelog "INFO" "${FUNCNAME[0]} - selected LOAD - marked '$LOADAUTOCFG' for loading"
-				elif [ "$ZENSEL" == "Skip" ]; then
-					writelog "SKIP" "${FUNCNAME[0]} - selected to skip '$GUICFG'"
-				elif [ "$ZENSEL" == "Ignore" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - selected IGNORE - adding 'IGNOREAUTOTWEAKS=\"1\"' to '$STLGAMECFG'"
-					updateConfigEntry "IGNOREAUTOTWEAKS" "1" "$STLGAMECFG"
-				else
-					writelog "SKIP" "${FUNCNAME[0]} - Nothing selected - skipping '$GUICFG'"
-				fi
-		else
-			LOADAUTOCFG="$VALCFG"
-			writelog "WARN" "${FUNCNAME[0]} - USEGUI '$USEGUI' invalid - marked '$VALCFG' for loading automatically"
-		fi
+		LC_ALL="" "$YAD" --borders="$YADBORDER" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
+		--title="$TITLE" \
+		--geometry="$AETREQWIDTH"x"$AETREQHEIGHT"+0+0 \
+		--field="$GUI_FOUNDATCFG '$VALCFG'":LBL \
+		--field="<span font=\"italic\">($GUI_EDIT/$GUI_SKIPLOADATFOR '$GN ($AID)')</span>":LBL \
+		--button="$BUT_EDIT":0  \
+		--button="$BUT_SKIP":1  \
+		--button="$BUT_LOAD":2  \
+		--button="$BUT_IGNORE":3  \
+		--timeout="$ATVALIDATE" \
+		--timeout-indicator=top
+		case $? in
+			0)	writelog "INFO" "${FUNCNAME[0]} - selected EDIT - opening '$VALCFG' with the editor now"
+				"$STLEDITOR" "$VALCFG"
+				guiLoadCfg "$VALCFG"
+			;;
+			1)  writelog "SKIP" "${FUNCNAME[0]} - selected SKIP"
+			;; 
+			2)	LOADAUTOCFG="$GUICFG"
+				writelog "INFO" "${FUNCNAME[0]} - selected LOAD - marked '$LOADAUTOCFG' for loading"
+			;;
+			3)	writelog "INFO" "${FUNCNAME[0]} - selected IGNORE - adding 'IGNOREAUTOTWEAKS=\"1\"' to '$STLGAMECFG'"
+				updateConfigEntry "IGNOREAUTOTWEAKS" "1" "$STLGAMECFG"
+			;;
+			70) writelog "SKIP" "${FUNCNAME[0]} - TIMEOUT - skipping"
+			;;
+		esac
 	else
 		LOADAUTOCFG="$VALCFG"
 		writelog "INFO" "${FUNCNAME[0]} - ATVALIDATE is '$ATVALIDATE' - marked '$VALCFG' for loading automatically"
@@ -5135,45 +5006,32 @@ function AdoptAutoTweak {
 }
 
 function AskAdoptAutoTweak {
-	if [ "$USEGUI" == "$YAD" ]; then
+	TITLE="${PROGNAME}-ConvertAutoTweak"
 
-		TITLE="${PROGNAME}-ConvertAutoTweak"
+	loadCfg "$STLGUICFG" X
+	updateWinRes "$TITLE" "$STLGUICFG" "CATREQWIDTH" "CATREQHEIGHT" &
 
-		loadCfg "$STLGUICFG" X
-		updateWinRes "$TITLE" "$STLGUICFG" "CATREQWIDTH" "CATREQHEIGHT" &
-	
-		LC_ALL="" "$YAD" --borders="$YADBORDER" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
-		--title="$TITLE" \
-		--geometry="$CATREQWIDTH"x"$CATREQHEIGHT"+0+0 \
-		--text="<span font_weight='bold'>$GN ($AID) - $GUI_ASKCOBERTAT</span>" \
-		--field=" ":LBL " " \
-		--field="$(strFix "$GUI_ADOPTANDSKIP" "$GN" "$AID")":LBL \
-		--field="<span font=\"italic\">($GUI_WILLBEBACKED)</span>":LBL \
-		--field=" ":LBL " " \
-		--button="$BUT_ADOPT":0  \
-		--button="$BUT_CANCEL":1  \
-		--timeout="$WAITEDITOR" \
-		--timeout-indicator=top
-		case $? in
-			0) writelog "INFO" "${FUNCNAME[0]} - selected ADOPT - converting '$LOADAUTOCFG' to a regular tweakfile"
-			   AdoptAutoTweak
-			;;
-			1) writelog "SKIP" "${FUNCNAME[0]} - selected CANCEL - not using '$LOADAUTOCFG' as regular tweakfile for '$GN ($AID)'"
-			;;
-			70) writelog "INFO" "${FUNCNAME[0]} - TIMEOUT - doing nothing"
-			;;
-		esac
-	elif [ "$USEGUI" == "$ZENITY" ]; then
-		ZENSEL="$("$ZENBIN" --list --title="$PROGNAME ($PROGCMD) - $PROGVERS" --text="$GUI_ASKCOBERTAT" --radiolist --column "Choose" --column "Option" FALSE "Adobt" FALSE "Cancel" --timeout="$WAITEDITOR" --width="$CATREQWIDTH" --height="$CATREQHEIGHT" 2>/dev/null)"
-		if [ "$ZENSEL" == "Adobt" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - selected ADOPT - converting '$LOADAUTOCFG' to a regular tweakfile"
+	LC_ALL="" "$YAD" --borders="$YADBORDER" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
+	--title="$TITLE" \
+	--geometry="$CATREQWIDTH"x"$CATREQHEIGHT"+0+0 \
+	--text="<span font_weight='bold'>$GN ($AID) - $GUI_ASKCOBERTAT</span>" \
+	--field=" ":LBL " " \
+	--field="$(strFix "$GUI_ADOPTANDSKIP" "$GN" "$AID")":LBL \
+	--field="<span font=\"italic\">($GUI_WILLBEBACKED)</span>":LBL \
+	--field=" ":LBL " " \
+	--button="$BUT_ADOPT":0  \
+	--button="$BUT_CANCEL":1  \
+	--timeout="$WAITEDITOR" \
+	--timeout-indicator=top
+	case $? in
+		0) writelog "INFO" "${FUNCNAME[0]} - selected ADOPT - converting '$LOADAUTOCFG' to a regular tweakfile"
 		   AdoptAutoTweak
-		elif [ "$ZENSEL" == "Cancel" ]; then
-			writelog "SKIP" "${FUNCNAME[0]} - selected CANCEL - not using '$LOADAUTOCFG' as regular tweakfile for '$GN ($AID)'"
-		else
-			writelog "INFO" "${FUNCNAME[0]} - TIMEOUT - doing nothing"
-		fi
-	fi
+		;;
+		1) writelog "SKIP" "${FUNCNAME[0]} - selected CANCEL - not using '$LOADAUTOCFG' as regular tweakfile for '$GN ($AID)'"
+		;;
+		70) writelog "INFO" "${FUNCNAME[0]} - TIMEOUT - doing nothing"
+		;;
+	esac
 }
 
 
@@ -5235,17 +5093,12 @@ function launchCustomProg {
 		loadCfg "$STLGUICFG" X
 		updateWinRes "$TITLE" "$STLGUICFG" "CUSTPROGREQWIDTH" "CUSTPROGREQHEIGHT" &
 
-		if [ "$USEGUI" == "$YAD" ]; then
-			ZCUST="$(LC_ALL="" "$YAD" --window-icon="$STLICON" --borders="$YADBORDER" --form --center --on-top "$WINDECO" \
-			--title="$TITLE" \
-			--geometry="$CUSTPROGREQWIDTH"x"$CUSTPROGREQHEIGHT"+0+0 \
-			--text="<span font_weight='bold'>$GN ($AID) - $GUI_SELECTCUSTOMEXE</span>" \
-			--field=" ":LBL " " \
-			--field="$GUI_SELECTEXE":FL)"
-
-		elif [ "$USEGUI" == "$ZENITY" ]; then
-			ZCUST="$("$ZENBIN" --file-selection --width="$CUSTPROGREQWIDTH" --height="$CUSTPROGREQHEIGHT" --title="$GUI_SELECTCUSTOMEXE" 2>/dev/null)"
-		fi
+		ZCUST="$(LC_ALL="" "$YAD" --window-icon="$STLICON" --borders="$YADBORDER" --form --center --on-top "$WINDECO" \
+		--title="$TITLE" \
+		--geometry="$CUSTPROGREQWIDTH"x"$CUSTPROGREQHEIGHT"+0+0 \
+		--text="<span font_weight='bold'>$GN ($AID) - $GUI_SELECTCUSTOMEXE</span>" \
+		--field=" ":LBL " " \
+		--field="$GUI_SELECTEXE":FL)"
 
 		if [ -n "$ZCUST" ]; then
 			if [ "$RUN_CUSTOMCMD" -eq 2 ]; then
@@ -5299,16 +5152,12 @@ function launchCustomProg {
 				loadCfg "$STLGUICFG" X
 				updateWinRes "$TITLE" "$STLGUICFG" "CUSTPROGREQWIDTH" "CUSTPROGREQHEIGHT" &
 				
-				if [ "$USEGUI" == "$YAD" ]; then
-					ZCUST="$(LC_ALL="" "$YAD" --window-icon="$STLICON" --borders="$YADBORDER" --form --center --on-top "$WINDECO" \
-					--title="$TITLE" \
-					--geometry="$CUSTPROGREQWIDTH"x"$CUSTPROGREQHEIGHT"+0+0 \
-					--text="<span font_weight='bold'>$GN ($AID) - $GUI_SELECTCUSTOMEXE</span>" \
-					--field=" ":LBL " " \
-					--field="$GUI_SELECTEXE":FL)"		
-				elif [ "$USEGUI" == "$ZENITY" ]; then
-					ZCUST="$("$ZENBIN" --file-selection --width="$CUSTPROGREQWIDTH" --height="$CUSTPROGREQHEIGHT" --title="$GUI_SELECTCUSTOMEXE" 2>/dev/null)"
-				fi
+				ZCUST="$(LC_ALL="" "$YAD" --window-icon="$STLICON" --borders="$YADBORDER" --form --center --on-top "$WINDECO" \
+				--title="$TITLE" \
+				--geometry="$CUSTPROGREQWIDTH"x"$CUSTPROGREQHEIGHT"+0+0 \
+				--text="<span font_weight='bold'>$GN ($AID) - $GUI_SELECTCUSTOMEXE</span>" \
+				--field=" ":LBL " " \
+				--field="$GUI_SELECTEXE":FL)"		
 				
 				if [ -n "$ZCUST" ]; then
 					writelog "INFO" "${FUNCNAME[0]} - '${ZCUST//|/}' selected for CUSTOMCMD - updating configfile '$STLGAMECFG'"
@@ -5772,15 +5621,11 @@ function addVortexStage {
 		loadCfg "$STLGUICFG" X
 		updateWinRes "$TITLE" "$STLGUICFG" "AVSREQWIDTH" "AVSREQHEIGHT" &
 
-		if [ "$USEGUI" == "$YAD" ]; then
-			NEWVS="$(LC_ALL="" "$YAD" --window-icon="$STLICON" --borders="$YADBORDER" --form --center --on-top "$WINDECO" \
-			--file --directory \
-			--title="$TITLE" \
-			--geometry="$AVSREQWIDTH"x"$AVSREQHEIGHT"+0+0 \
-			--text="<span font_weight='bold'>$GUI_SELECTVORTEXDIR</span>" )"
-		elif [ "$USEGUI" == "$ZENITY" ]; then
-			NEWVS="$("$ZENITY" --file-selection --directory --width="$AVSREQWIDTH" --height="$AVSREQHEIGHT" --title="$GUI_SELECTVORTEXDIR" 2>/dev/null)"
-		fi
+		NEWVS="$(LC_ALL="" "$YAD" --window-icon="$STLICON" --borders="$YADBORDER" --form --center --on-top "$WINDECO" \
+		--file --directory \
+		--title="$TITLE" \
+		--geometry="$AVSREQWIDTH"x"$AVSREQHEIGHT"+0+0 \
+		--text="<span font_weight='bold'>$GUI_SELECTVORTEXDIR</span>" )"
 	else
 		if [ -d "$1" ]; then
 			NEWVS="$1"
@@ -6330,50 +6175,46 @@ function setVortexSELaunch {
 		else
 			writelog "INFO" "${FUNCNAME[0]} - found special exe '$2' for '$GN ($AID)' in gamedir '$EFD'"
 
-			if [ "$USEGUI" == "$ZENITY" ]; then
-				writelog "SKIP" "${FUNCNAME[0]} - skipping zenity here - the whole '${FUNCNAME[0]}' is too bloated anyway for its benefit"
-			else
-				LC_ALL="" "$YAD" --notebook --borders="$YADSETBORD" --window-icon="$STLICON"  --center "$WINDECO" \
-				--title="$TITLE" \
-				--text="$GUI_SEBINFOUND '$EFD/$2'" \
-				--button="${GE^^}":0 \
-				--button="$BUT_SAVERUN ${GE^^}":1 \
-				--button="${2^^}":2 \
-				--button="$BUT_SAVERUN ${2^^}":3 
-				case $? in
-					0)  {
-						writelog "INFO" "${FUNCNAME[0]} - Starting with the regular Game Exe '$GE'"
-						RUN_CUSTOMCMD=0
-						}
-					;;
-					1) 	{
-						writelog "INFO" "${FUNCNAME[0]} - Starting with the regular Game Exe '$GE' and don't ask again"
-						RUN_CUSTOMCMD=0
-						updateConfigEntry "SELAUNCH" "0" "$STLGAMECFG"
-						}
-					;;
-					2)  {
-						writelog "INFO" "${FUNCNAME[0]} - Starting with the Script Extender Exe '$2'"
-						CUSTOMCMD="$SEEXE"
-						RUN_CUSTOMCMD=1
-						ONLY_CUSTOMCMD=1
-						}
-					;;
-					3)  {
-						writelog "INFO" "${FUNCNAME[0]} - Starting with the Script Extender Exe '$2' and saving as default"
-						writelog "INFO" "${FUNCNAME[0]} - configuring default start of special exe '$2' by enabling SELAUNCH in '$STLGAMECFG'"
-						updateConfigEntry "CUSTOMCMD" "$SEEXE" "$STLGAMECFG"
-						updateConfigEntry "RUN_CUSTOMCMD" "1" "$STLGAMECFG"
-						updateConfigEntry "ONLY_CUSTOMCMD" "1" "$STLGAMECFG"
-						updateConfigEntry "SELAUNCH" "0" "$STLGAMECFG"
-						CUSTOMCMD="$SEEXE"
-						RUN_CUSTOMCMD=1
-						ONLY_CUSTOMCMD=1
-						writelog "INFO" "${FUNCNAME[0]} - starting $SEEXE instead of the game exe directly after this Vortex instance"
-						}
-					;;
-				esac
-			fi
+			LC_ALL="" "$YAD" --notebook --borders="$YADSETBORD" --window-icon="$STLICON"  --center "$WINDECO" \
+			--title="$TITLE" \
+			--text="$GUI_SEBINFOUND '$EFD/$2'" \
+			--button="${GE^^}":0 \
+			--button="$BUT_SAVERUN ${GE^^}":1 \
+			--button="${2^^}":2 \
+			--button="$BUT_SAVERUN ${2^^}":3 
+			case $? in
+				0)  {
+					writelog "INFO" "${FUNCNAME[0]} - Starting with the regular Game Exe '$GE'"
+					RUN_CUSTOMCMD=0
+					}
+				;;
+				1) 	{
+					writelog "INFO" "${FUNCNAME[0]} - Starting with the regular Game Exe '$GE' and don't ask again"
+					RUN_CUSTOMCMD=0
+					updateConfigEntry "SELAUNCH" "0" "$STLGAMECFG"
+					}
+				;;
+				2)  {
+					writelog "INFO" "${FUNCNAME[0]} - Starting with the Script Extender Exe '$2'"
+					CUSTOMCMD="$SEEXE"
+					RUN_CUSTOMCMD=1
+					ONLY_CUSTOMCMD=1
+					}
+				;;
+				3)  {
+					writelog "INFO" "${FUNCNAME[0]} - Starting with the Script Extender Exe '$2' and saving as default"
+					writelog "INFO" "${FUNCNAME[0]} - configuring default start of special exe '$2' by enabling SELAUNCH in '$STLGAMECFG'"
+					updateConfigEntry "CUSTOMCMD" "$SEEXE" "$STLGAMECFG"
+					updateConfigEntry "RUN_CUSTOMCMD" "1" "$STLGAMECFG"
+					updateConfigEntry "ONLY_CUSTOMCMD" "1" "$STLGAMECFG"
+					updateConfigEntry "SELAUNCH" "0" "$STLGAMECFG"
+					CUSTOMCMD="$SEEXE"
+					RUN_CUSTOMCMD=1
+					ONLY_CUSTOMCMD=1
+					writelog "INFO" "${FUNCNAME[0]} - starting $SEEXE instead of the game exe directly after this Vortex instance"
+					}
+				;;
+			esac
 		fi
 	fi
 }
@@ -6644,9 +6485,9 @@ function checkIntDeps {
 			fi
 		done <<< "$(sed -n "/^#STARTINTDEPS/,/^#ENDINTDEPS/p;/^#ENDINTDEPS/q" "$0" | grep -v "^#" | cut -d '=' -f1)"
 
-		if  [ ! -x "$(command -v "$("$WHICH" "$YAD" 2>/dev/null)" 2>/dev/null)" ] && [ ! -x "$(command -v "$("$WHICH" "$ZENITY" 2>/dev/null)" 2>/dev/null)" ]; then
+		if  [ ! -x "$(command -v "$("$WHICH" "$YAD" 2>/dev/null)" 2>/dev/null)" ]; then
 			DEPSMISSING=1
-			writelog "ERROR" "${FUNCNAME[0]} - neither '$YAD' nor '$ZENITY' was found, but at least one of them is required!" "E"!
+			writelog "ERROR" "${FUNCNAME[0]} - '$YAD' was not found!" "E"!
 		fi
 
 		MINYAD="7.0"
@@ -7529,25 +7370,23 @@ function commandline {
 	elif  [ "$1" == "dlcustomproton" ] || [ "$1" == "dcp" ]; then
 		dlCustomProtonGate "$2"
 	elif  [ "$1" == "settings" ]; then
-		if [ "$USEGUI" == "$YAD" ]; then
-			if [ -n "$2" ]; then
-				if [ -f "$LOGDIR/$2.log" ]; then
-					rm "$LOGDIR/$2.log"
-				fi
+		if [ -n "$2" ]; then
+			if [ -f "$LOGDIR/$2.log" ]; then
+				rm "$LOGDIR/$2.log"
+			fi
 
-				resetAID "$2"
-				openSettings "$2"
-				cleanYadLeftOvers
-			else
-				openSettings "$AID"
-				cleanYadLeftOvers
-			fi
-		elif [ "$USEGUI" == "$ZENITY" ]; then
-			if [ -n "$2" ]; then
-				EditorDialog "$2"
-			else
-				EditorDialog "$AID"
-			fi
+			resetAID "$2"
+			openSettings "$2"
+			cleanYadLeftOvers
+		else
+			openSettings "$AID"
+			cleanYadLeftOvers
+		fi
+	elif  [ "$1" == "editor" ]; then
+		if [ -n "$2" ]; then
+			EditorDialog "$2"
+		else
+			EditorDialog "$AID"
 		fi
 	elif  [ "$1" == "launcher" ]; then
 		openGameLauncher "$2" "$3"
