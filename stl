@@ -4,7 +4,7 @@
 ### project ###
 
 PROGNAME="SteamTinkerLaunch"
-PROGVERS="v2.7.4-woot"
+PROGVERS="v2.7.4-wip1"
 PROGCMD="$(basename "$0")"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -621,8 +621,7 @@ function loadLangFile {
 					writelog "INFO" "${FUNCNAME[0]} - loading system wide $LAFI"
 					source "$LAFI"
 				else
-					writelog "ERROR" "${FUNCNAME[0]} - language file '$LAFI' missing"
-					echo "ERROR" "${FUNCNAME[0]} - language file '$LAFI' missing - downloading ' $PROJECTPAGE' and trying again"
+					writelog "ERROR" "${FUNCNAME[0]} - language file '$LAFI' missing - downloading ' $PROJECTPAGE' and trying again" "E"
 					gitPullStl
 					${FUNCNAME[0]}
 				fi
@@ -635,6 +634,9 @@ function loadLanguage {
 	writelog "INFO" "${FUNCNAME[0]} - first load the default language to make sure all variables are filled"
 	loadLangFile "$STLDEFLANG"
 
+	saveCfg "$STLDEFGLOBALCFG" X
+	loadCfg "$STLDEFGLOBALCFG" X
+
 	if [ -f "$STLDEFGLOBALCFG" ]; then
 		STLLRAW="$(grep "^STLLANG" "$STLDEFGLOBALCFG" | cut -d '=' -f2)"
 		STLLANG="${STLLRAW//\"/}"
@@ -645,20 +647,15 @@ function loadLanguage {
 		fi
 	fi
 	if [ -n "$STLLANG" ]; then 
-		if [ "$STLDEFLANG" != "$STLLANG" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - now load the language defined by the user"
-			loadLangFile "$STLLANG"
-		else
-			writelog "SKIP" "${FUNCNAME[0]} - user defined language is the same as the default language - no need to load it again"
-		fi
+		writelog "INFO" "${FUNCNAME[0]} - now load the language file '$STLLANG'" "E"
+		loadLangFile "$STLLANG"
 	fi
 	
 	if [ -z "$DESC_STLLANG" ]; then 
-		echo "###############################"
-		echo "ERROR - no language file could be loaded! For the initial setup at least one file (default english) is required"
-		echo "ERROR - You can ether copy a valid file to '$STLLANGDIR' or '$SYSTEMSTLCFGDIR/lang' or provide an absolute path via command line using the lang= option" 
-		echo "###############################"
-
+		writelog "ERROR"  "${FUNCNAME[0]} - ###############################" "E"
+		writelog "ERROR"  "${FUNCNAME[0]} - No language file could be loaded! For the initial setup at least one file (default english) is required" "E"
+		writelog "ERROR"  "${FUNCNAME[0]} - You can ether copy a valid file to '$STLLANGDIR' or '$SYSTEMSTLCFGDIR/lang' or provide an absolute path via command line using the lang= option" "E"
+		writelog "ERROR"  "${FUNCNAME[0]} - ###############################" "E"
 		exit
 	fi
 }
