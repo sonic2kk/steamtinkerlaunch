@@ -587,7 +587,7 @@ The variable `CHECKPROTON` can be set per game to either 0,1,2,3,4,5 where
 ##### Custom Proton Autoupdate Requester
 If a newer minor version for the currently used custom Proton is available and 
 `CHECKPROTON` is either `1` or `2` (see [Custom Proton Autoupdate](#Custom-Proton-Autoupdate)
-a Requester will pope up, giving the option to either
+a Requester will pop up, giving the option to either
 - skip the update
 - only download and extract the new custom proton version
 - download, extract and immediately use the new custom proton version for the current game
