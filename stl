@@ -59,6 +59,7 @@ CLOSETMP="$STLSHM/${PROGCMD}-closing.tmp"
 TEMPLOG="$STLSHM/${PROGCMD}.log"
 TEMPWINNAME="$STLSHM/windowname.txt"
 GWIDFILE="$STLSHM/${PROGCMD}-sbsgwid"
+TEMPSBSPIDFILE="$STLSHM/sbsvrkgpid.txt"
 
 ### default vars ###
 
@@ -2160,6 +2161,8 @@ function TrayIconExports {
 	export SBSTWEAKDIR="$SBSTWEAKDIR"
 	export STLGAMEDIR="$STLGAMEDIR"
 	export TEMPWINNAME="$TEMPWINNAME"
+	export PROGCMD="$PROGCMD"
+
 	export -f setAID
 	export -f setAIDCfgs
 	export -f resetAID
@@ -2178,9 +2181,10 @@ function TrayIconExports {
 	if [ -n "$ALTEXEPATH" ] && [ "$ALTEXEPATH" != "/tmp" ]; then
 		export SHADDESTDIR="$ALTEXEPATH"
 	else
-		export SHADDESTDIR="$STLGAMEDIR"
+		export SHADDESTDIR="$EFD"
 	fi
 	export -f TrayShaderMenu
+	export -f TrayVR
 }
 
 function trayIcon {
@@ -2235,9 +2239,18 @@ function trayIcon {
 		}
 		
 		function TrayShaderMenu {
-			"$0" update gameshaders "$SHADDESTDIR"
+			"$PROGCMD" update gameshaders "$SHADDESTDIR"
 		}
 		
+		function TrayVR {
+			PICKWINDOWNAME="$(sleep 2 && "$XWI" -stats | grep ^"$XWI" | tail -n1 | cut -d '"' -f2)";
+			if [ -z "$PICKWINDOWNAME" ] || grep -q "$XWI" <<< "$PICKWINDOWNAME"; then
+				writelog "SKIP" "${FUNCNAME[0]} - '$XWI' didn't pick the correct window name: '$PICKWINDOWNAME'"
+			else
+				writelog "INFO" "${FUNCNAME[0]} - trayIcon: picked '$PICKWINDOWNAME'"
+				"$PROGCMD" vr "$PICKWINDOWNAME" "$AID"
+			fi
+		}	
 		TrayIconExports
 		
 		# actually open the actual trayIcon	
@@ -2246,7 +2259,9 @@ function trayIcon {
 		|$TRAY_GETACTIVEWINDOW,bash -c getActiveWindowName \
 		|$TRAY_GETACTIVEWINDOWSIZE,bash -c getActiveWindowSize \
 		|$TRAY_KILLSWITCH,bash -c killProtonGame \
-		|$TRAY_PAUSE,bash -c PauseGame" \
+		|$TRAY_PAUSE,bash -c PauseGame \
+		|$TRAY_SHADER,bash -c TrayShaderMenu \
+		|$TRAY_VR,bash -c TrayVR" \
 		--text="$TRAY_TOOLTIP" >/dev/null 2>/dev/null &
 		YADTRAYPID="$!"
 	fi
@@ -2689,6 +2704,9 @@ function howto {
 	echo "                                     installed games before opening the launcher"
 	echo "             update                  ReCreate all Category Menus"
 	echo "                                     Can be combined with auto"
+	echo "    vr <windowname> <SteamAppID> <s> Start SBS-VR mode for <windowname>"
+	echo "                                     and game <SteamAppID>"
+	echo "                                     's'ave windowname for the game"
 	echo "    set <var> <for> <value>          Change configuration settings"
 	echo "                                     Example:"
 	echo "    set RUN_REPLAY all 1             Set RUN_REPLAY for all games to 1"
@@ -3051,6 +3069,7 @@ function SBSgetGamePID {
 					if [ -n "$GPID" ]; then
 						writelog "INFO" "${FUNCNAME[0]} - game pid '$GPID' found for GAMEWINDOW '$GAMEWINDOW'"
 						export SBSVRKGPID="$GPID"
+						echo "SBSVRKGPID=\"$GPID\"" > "$TEMPSBSPIDFILE"
 						break
 					fi
 				else
@@ -3060,6 +3079,7 @@ function SBSgetGamePID {
 					if [ -n "$GPID" ]; then
 						writelog "INFO" "${FUNCNAME[0]} - game pid '$GPID' found"
 						export SBSVRKGPID="$GPID"
+						echo "SBSVRKGPID=\"$GPID\"" > "$TEMPSBSPIDFILE"
 						break
 					fi
 				fi
@@ -3078,6 +3098,14 @@ function SBSgetGamePID {
 	fi
 }
 
+function getSBSPidFromFile {
+	if [ -z "$SBSVRKGPID" ] && [ -f "$TEMPSBSPIDFILE" ]; then
+		loadCfg "$TEMPSBSPIDFILE"
+		rm "$TEMPSBSPIDFILE"
+		writelog "INFO" "${FUNCNAME[0]} - got SBSVRKGPID '$SBSVRKGPID' from file"
+	fi
+}
+
 function SBSrunVRVideoPlayer {
 	
 	SBSVRWINNAME="vr-video-player"
@@ -3086,6 +3114,8 @@ function SBSrunVRVideoPlayer {
 		if [ -z "$GAMEWINDOWID" ]; then
 			writelog "SKIP" "${FUNCNAME[0]} - ERROR - GAMEWINDOWID is empty - "
 			writelog "SKIP" "${FUNCNAME[0]} - ERROR - forcefully killing game with $PKILL -9 '$SBSVRKGPID' - should exit this script as well"
+			getSBSPidFromFile
+
 			"$PKILL" -9 "$SBSVRKGPID"
 		else
 			if [ -z "$VRVIDEOPLAYERARGS" ];
@@ -3184,6 +3214,7 @@ function SBSinitVRVideoPlayer {
 
 function SBSstopVRVideoPlayer {
 	if [ "$RUNSBSVR" -ge 1 ]; then
+		getSBSPidFromFile
 		writelog "INFO" "${FUNCNAME[0]} - waiting for game process '$SBSVRKGPID' to finish..."
 
 		if ! "$PGREP" -a "vrcompositor" >/dev/null ; then
@@ -3215,6 +3246,9 @@ function SBSstopVRVideoPlayer {
 
 function startSBSVR {
 	if [ "$RUNSBSVR" -ge 1 ]; then
+
+echo "startSBSVR GAMEWINDOW $GAMEWINDOW AID $AID XXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+
 		checkHMDPresent
 		SBSstartSVR
 		SBScheckSBScfg
@@ -3276,6 +3310,10 @@ function checkHMDPresent {
 
 # start game in side-by-side VR:
 function checkSBSVRLaunch {
+	if [ "$1" != "empty" ]; then
+		RUNSBSVR=1
+	fi
+
 	if [ -n "$RUNSBSVR" ]; then
 		if [ "$RUNSBSVR" -ge 1 ]; then
 		# override game configs with a sbs-tweak config if available:
@@ -3293,7 +3331,13 @@ function checkSBSVRLaunch {
 			fi
 
 		# start the whole side-by-side process:
-			export GAMEWINDOW="$GAMEWINDOW"
+			if [ "$1" != "empty" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - ${FUNCNAME[0]} - using argument 1 as GAMEWINDOW '$GAMEWINDOW'"
+				export GAMEWINDOW="$1"
+			else
+				export GAMEWINDOW="$GAMEWINDOW"
+			fi
+
 			writelog "INFO" "${FUNCNAME[0]} - ${FUNCNAME[0]} - starting VRlaunch '$GAMEWINDOW' for '$AID'"
 			if [ "$RUNSBSVR" -eq 1 ]; then
 				startSBSVR &
@@ -6695,7 +6739,7 @@ function prepareLaunch {
 
 	# start game with side-by-side VR if RUNSBSVR is not 0 
 	writelog "INFO" "${FUNCNAME[0]} - checkSBSVRLaunch:"
-	checkSBSVRLaunch
+	checkSBSVRLaunch "empty"
 
 	# start Vortex if VORTEXMODE is not 'disabled'
 	writelog "INFO" "${FUNCNAME[0]} - checkVortex:"
@@ -7387,6 +7431,18 @@ function commandline {
 		fi
 	elif  [ "$1" == "launcher" ]; then
 		openGameLauncher "$2" "$3"
+	elif  [ "$1" == "vr" ]; then
+		if [ -n "$3" ]; then
+			GAMEWINDOW="$2"
+			AID="$3"
+			setAIDCfgs
+			if [ -n "$4" ] && [ "$4" == "s" ]; then
+				updateConfigEntry "GAMEWINDOW" "$2" "$STLGAMECFG"
+			fi
+			checkSBSVRLaunch "$2" 
+		else
+			howto
+		fi
 	elif  [ "$1" == "help" ] || [ "$1" == "--help" ]; then
 		howto
 	else
