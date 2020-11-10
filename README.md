@@ -1064,7 +1064,7 @@ Also see [Shader Management](#Shader-Management)
     - automatically before game start
     - via [Tray-Icon](https://github.com/frostworx/steamtinkerlaunch#Tray-Icon) _(so Shaders could be installed while the game is already running)_
 - for games with launchers not being in the same path as the actual game exe the destination path can be overridden _(used for both Shaders and [ReShade](#ReShade))_
-- added ShaderMenu Steam Category which installs [ReShade](#ReShade) into the game directory and opens the [Shader Selection Menu](#Shader-Selection-Menu)
+- added ShaderMenu Steam Category which installs [ReShade](#ReShade) into the game directory and opens the Shader Selection Menu
 
 #### Editor
 Config files can optionally be opened with the texteditor `STLEDITOR` if desired, either by accepting a requester (for editing Tweakfiles) or by opening
