@@ -59,6 +59,11 @@ It might be a good idea to start with configuring everything in the [Settings Me
 
 *(no special order)*
 
+**This README might not always be up2date, because with English not being my mother tounge
+formulating it takes more time than I want to spend on it additionally to the programming
+so it could be also a good idea to check the [Changes on the release page](https://github.com/frostworx/steamtinkerlaunch/releases)
+or just to browse through the latest version**
+
 * **[ENV Variables](#ENV-Variables)** can be easily set for every single game (f.e `PROTON`* , `DXVK`* , `MANGOHUD`, `RADV_PERFTEST`, `WINE`...)
 * **[Custom Program](#Custom-Program)** launch custom programs before or instead the game itself (also windows exes)
 * **[winetricks](#Winetricks)** start winetricks before game launch *(gui or silent)*
@@ -89,7 +94,7 @@ It might be a good idea to start with configuring everything in the [Settings Me
 * **[GameScope](#GameScope)** start/stop gamescope per game
 * **[Settings Menu](#Settings-Menu)** easy configuration for almost all settings with the builtin Settings Menu
 * **[native Support](#Native-Games)** support native Linux games
-* **[Steam Compatibility Tool](#Steam Compatibility Tool)** can be used as [Steam Launch Option](#Steam-Launch-Option) and as [Steam Compatibility Tool](#Steam-Compatibility-Tool)
+* **[Steam Compatibility Tool](#Steam-Compatibility-Tool)** can be used as [Steam Launch Option](#Steam-Launch-Option) and as [Steam Compatibility Tool](#Steam-Compatibility-Tool)
 * **[Proton Selection](#Proton-Selection)** switch between Proton-Versions, automatically download custom Proton builds...
 * **[Multi Language](#Multi-Language-Support)** Multi-Language Support
 * **[Steam Linux Runtime](#Steam-Linux-Runtime)** the Steam Linux Runtime can be disabled optionally
@@ -98,6 +103,7 @@ It might be a good idea to start with configuring everything in the [Settings Me
 * **[Desktop Files](#Desktop-Files)** automatic creation of *(stl-internal)* desktop files
 * **[Shader Management](#Shader-Management)** Download/Update/Install/Enable/Disable Shaders
 * **[Custom Proton Autoupdate](#Custom-Proton-Autoupdate)** optionally Download/Install/Enable version bumps of Custom Proton version per game
+* **[ReShade Presets](#ReShade-Presets)** Select ReShade Presets
 
 ## Requirements
 *(no special order)*
@@ -1017,6 +1023,17 @@ both downloadfiles and basic configuration were taken from [r/linux_gaming](http
 If `USERESHADE` is disabled and the corresponding game is started, the previously installed ReShade dll will be renamed, so ReShade is disabled when the game starts.
 When `USERESHADE` is re-enabled the renamed dll will be re-activated.
 
+##### ReShade-Presets
+Available ReShade Presets can be selected via Dropdown Menu in the [Settings Menu](#Settings-Menu) per game,
+to automatically create a default ReShade configuration on the first launch.
+
+The bundled minimal SuperDepth3D_VR ReShade Preset is automatically used when [SBSVRRS](#Side-by-Side-VR) *(f.e. via [Steam Category](#Steam-Categories))* is enabled
+
+##### ReShade-Auto-Update
+With `RESHADEUPDATE` being enabled *(per game)* in the [Settings Menu](#Settings-Menu)
+- new ReShade Setups are downloaded/extracted automatically *(every Setup is also stored versioned from now on)*
+- ReShade dlls are automatically updated in every game directory
+  
 #### vkBasalt
 [vkBasalt](https://github.com/DadSchoorse/vkBasalt)
 - `ENABLE_VKBASALT`: set `ENABLE_VKBASALT` to 1 to start the game with vkbasalt *(does nothing in stl itself, but just exports the upstream variable)*

@@ -4,7 +4,7 @@
 ### project ###
 
 PROGNAME="SteamTinkerLaunch"
-PROGVERS="v2.7.4-wip1"
+PROGVERS="v2.8.0"
 PROGCMD="$(basename "$0")"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -70,11 +70,15 @@ else
 fi
 
 SYSTEMSTLCFGDIR="/usr/share/$PROGCMD"														# systemwide config dir
-LOGDIR="$STLCFGDIR/logs"																	# default logfile dir
+BASELOGDIR="$STLCFGDIR/logs"																# base logfile dir
+LOGDIR="$BASELOGDIR/$PROGCMD"																# default stllogfile dir
+STLPROTONLOGDIR="$BASELOGDIR/proton"														# proton logfile dir
 STLGAMEDIR="$STLCFGDIR/gamecfgs"															# default basedir for game the gamespecific configs
 STLCATEGORYDIR="$STLCFGDIR/categories"														# the directory holding config files with preconfigured settings for games in specific steamcategories
 STLREGDIR="$STLCFGDIR/regs"																	# the directory holding registry files
 STLDLDIR="$STLCFGDIR/downloads"																# the directory holding optional downloads
+RSP="reshadepresets"
+STLRSPRESETDIR="$STLCFGDIR/$RSP"
 WTDLDIR="$STLDLDIR/winetricks"
 DLWT="$WTDLDIR/src/winetricks"
 STLSHADDIR="$STLDLDIR/shaders"
@@ -148,6 +152,7 @@ GLDLUSERTWEAKDIR="$GLDLTWEAKDIR/user"
 GLDLSBSTWEAKDIR="$GLDLTWEAKDIR/sbs"
 GLDLTWEAKCMDDIR="$GLDLTWEAKDIR/cmd"
 GLDLCATEGORYDIR="$GLDLSTLDIR/categories"
+GLDLRSPDIR="$GLDLSTLDIR/$RSP"
 GLDLMISCDIR="$GLDLSTLDIR/misc"
 GLDLREGDIR="$GLDLSTLDIR/regs"
 GLDLSTLLANGDIR="$GLDLSTLDIR/lang"
@@ -173,9 +178,12 @@ LASTRUN="$LOGDIR/lastrun.txt"																# some variables from the last run 
 RS_D3D47_DEST="d3dcompiler_47.dll"
 RS_DX_DEST="dxgi.dll"
 RS_D9_DEST="d3d9.dll"
+RSSU="ReShade_Setup"
+RSINI="ReShade.ini"
+RSPINI="ReShadePreset.ini"
+SD3DVR="SuperDepth3D_VR"
 RSENABLED="ReShade-${PROGCMD}-enabled.txt"
 RSDISABLED="ReShade-${PROGCMD}-disabled.txt"
-
 YADKEY="$PLACEHOLDERAID"
 # currently hardcoded borders used in yad:
 YADSETBORD=8
@@ -380,6 +388,21 @@ function listAppManifests {
 	fi
 }
 
+function createCategoriesList {
+	if [ "$(USEDLGLOBAL)" -ge 1 ]; then
+		GRSPDIR="$GLDLRSPDIR"
+	else
+		GRSPDIR="$GLOBALRSPRESETDIR"
+	fi
+
+	function listCAT {
+		while read -r CATMENU; do
+			basename "$CATMENU"
+		done <<< "$(find "$DFDIR" -mindepth 1 -maxdepth 1 -type d)"
+	}
+	CATLIST="$(listCAT | sort -u | tr '\n' '!' | sed "s:^!::" | sed "s:!$::")"
+} 
+
 function openGameLauncher {
 	function GLgui {
 		"$YAD" --icons  --window-icon="$STLICON" --read-dir="$DFDIR/$1" "$WINDECO" --title="$TITLE" --single-click --keep-icon-size --center --compact --sort-by-name --geometry="$LAUNCHERWIDTH"x"$LAUNCHERHEIGHT"+0+0
@@ -415,11 +438,7 @@ function openGameLauncher {
 		GLgui "installed"
 	else
 		if [ "$1" == "menu" ]; then
-
-			while read -r CATMENU; do
-				mapfile -t -O "${#CATCSV[@]}" CATCSV <<< "$CATMENU"
-			done <<< "$(printf "%s\n" "$(ls "$DFDIR")")"
-			CATLIST="$(printf "!%s\n" "${CATCSV[@]//\"/}" | sort -u | cut -d ';' -f1 | tr -d '\n' ;printf "\n")"
+			createCategoriesList
 			CATMENU="$(LC_ALL="" "$YAD" --window-icon="$STLICON" --borders="$YADBORDER" --center "$WINDECO" --form --scroll --separator="\n" --quoted-output \
 			--text="<span font_weight='bold'>$GUI_CHOOSECAT</span>" \
 			--field="$GUI_CHOOSECATS":CB "installed!$CATLIST" \
@@ -567,19 +586,16 @@ function createLanguageList {
 		GLOBLANG="$GLOBALSTLLANGDIR"
 	fi
 
-	while read -r LANGPATH; do
-		LANGFILE="$(basename "$LANGPATH")"
-		mapfile -t -O "${#LangList[@]}" LangList <<< "$LANGFILE"
-	done < <(find "$STLLANGDIR" -name "*.txt")
+	function listLANG {
+		while read -r RSPF; do
+			basename "$RSPF"
+		done <<< "$(find "$STLLANGDIR" -name "*.txt")"
 
-	if [ -d "$GLOBLANG" ]; then
-	 	while read -r LANGPATH; do
-			LANGFILE="$(basename "$LANGPATH")"
-			mapfile -t -O "${#LangList[@]}" LangList <<< "$LANGFILE"
-		done <  <(find "$GLOBLANG" -name "*.txt")
-	fi
-	
-	LANGYADLIST="$(printf "!%s\n" "${LangList[@]//.txt/}" | sort -u | tr -d '\n' ;printf "\n")"
+		while read -r RSPF; do
+			basename "$RSPF"
+		done <<< "$(find "$GLOBLANG" -name "*.txt")"
+	}
+	LANGYADLIST="$(listLANG | sort -u | tr '\n' '!' | sed "s:^!::" | sed "s:!$::")"
 }
 
 function gitPullStl {
@@ -973,13 +989,14 @@ function setDefaultCfgValues {
 		if [ -z "$GLOBALCATEGORYDIR" ]	; then	GLOBALCATEGORYDIR="$SYSTEMSTLCFGDIR/categories"; fi
 		if [ -z "$GLOBALMISCDIR" ]		; then	GLOBALMISCDIR="$SYSTEMSTLCFGDIR/misc"; fi
 		if [ -z "$GLOBALSTLLANGDIR" ]	; then	GLOBALSTLLANGDIR="$SYSTEMSTLCFGDIR/lang"; fi
+		if [ -z "$GLOBALRSPRESETDIR" ]	; then	GLOBALRSPRESETDIR="$SYSTEMSTLCFGDIR/$RSP"; fi
 		if [ -z "$BOXTRONCMD" ]			; then	BOXTRONCMD="/usr/share/boxtron/run-dosbox"; fi
 		if [ -z "$BOXTRONARGS" ]		; then	BOXTRONARGS="--wait-before-run"; fi
 		if [ -z "$ROBERTACMD" ]			; then	ROBERTACMD="$STEAMCOMPATOOLS/roberta/run-vm"; fi
 		if [ -z "$ROBERTAARGS" ]		; then	ROBERTAARGS="--wait-before-run"; fi
 		if [ -z "$LUXTORPEDACMD" ]		; then	LUXTORPEDACMD="$STEAMCOMPATOOLS/luxtorpeda/luxtorpeda"; fi
 		if [ -z "$LUXTORPEDAARGS" ]		; then	LUXTORPEDAARGS="wait-before-run"; fi
-		if [ -z "$RSVERS" ]				; then	RSVERS="4.8.1"; fi
+		if [ -z "$RSVERS" ]				; then	RSVERS="4.8.2"; fi
 		if [ -z "$DOWNLOAD_RESHADE" ]	; then	DOWNLOAD_RESHADE="1"; fi
 		if [ -z "$RESHADESRCDIR" ]		; then	RESHADESRCDIR="$STLDLDIR/reshade"; fi
 		if [ -z "$RS_D3D47_64" ]		; then	RS_D3D47_64="d3dcompiler_47_64.dll"; fi
@@ -1041,6 +1058,8 @@ function setDefaultCfgValues {
 		if [ -z "$INSTALL_RESHADE" ]	; then	INSTALL_RESHADE="0"; fi
 		if [ -z "$RESHADE_DEPTH3D" ]	; then	RESHADE_DEPTH3D="0"; fi
 		if [ -z "$USERESHADE" ]			; then	USERESHADE="0"; fi
+		if [ -z "$RESHADEUPDATE" ]		; then	RESHADEUPDATE="0"; fi
+		if [ -z "$RESHADEPRESET" ]		; then	RESHADEPRESET="empty"; fi
 		if [ -z "$CHOOSESHADERS" ]		; then	CHOOSESHADERS="0"; fi
 		if [ -z "$ALTEXEPATH" ]			; then	ALTEXEPATH="/tmp"; fi
 		if [ -z "$RUNSBSVR" ]			; then	RUNSBSVR="0"; fi
@@ -1063,6 +1082,7 @@ function setDefaultCfgValues {
 		if [ -z "$DXVK_HUD" ]			; then	DXVK_HUD="0"; fi
 		if [ -z "$DXVK_LOG_LEVEL" ]		; then	DXVK_LOG_LEVEL="none"; fi
 		if [ -z "$PROTON_LOG" ]			; then	PROTON_LOG="0"; fi
+		if [ -z "$PROTON_LOG_DIR" ]		; then	PROTON_LOG_DIR="$STLPROTONLOGDIR"; fi
 		if [ -z "$PROTON_DEBUG_DIR" ]	; then	PROTON_DEBUG_DIR="/tmp"; fi
 		if [ -z "$PROTON_USE_WINED3D" ]	; then	PROTON_USE_WINED3D="0"; fi
 		if [ -z "$PROTON_NO_D3D11" ]	; then	PROTON_NO_D3D11="0"; fi
@@ -1275,6 +1295,8 @@ function saveCfg {
 			echo "GLOBALTWEAKCMDDIR=\"$GLOBALTWEAKCMDDIR\""
 			echo "## $DESC_GLOBALCATEGORYDIR"
 			echo "GLOBALCATEGORYDIR=\"$GLOBALCATEGORYDIR\""
+			echo "## $DESC_GLOBALRSPRESETDIR"
+			echo "GLOBALRSPRESETDIR=\"$GLOBALRSPRESETDIR\""
 			echo "## $DESC_GLOBALMISCDIR"
 			echo "GLOBALMISCDIR=\"$GLOBALMISCDIR\""
 			echo "## $DESC_GLOBALSTLLANGDIR"
@@ -1416,6 +1438,10 @@ function saveCfg {
 			echo "RESHADE_DEPTH3D=\"$RESHADE_DEPTH3D\""
 			echo "## $DESC_USERESHADE"
 			echo "USERESHADE=\"$USERESHADE\""
+			echo "## $DESC_RESHADEUPDATE"
+			echo "RESHADEUPDATE=\"$RESHADEUPDATE\""
+			echo "## $DESC_RESHADEPRESET"
+			echo "RESHADEPRESET=\"$RESHADEPRESET\""
 			echo "## $DESC_CHOOSESHADERS"
 			echo "CHOOSESHADERS=\"$CHOOSESHADERS\""
 			echo "## $DESC_ALTEXEPATH"
@@ -1460,6 +1486,8 @@ function saveCfg {
 			echo "USENETMON=\"$USENETMON\""
 			echo "## $DESC_PROTON_LOG"
 			echo "PROTON_LOG=\"$PROTON_LOG\""
+			echo "## $DESC_PROTON_LOG_DIR"
+			echo "PROTON_LOG_DIR=\"$PROTON_LOG_DIR\""
 			echo "## $DESC_PROTON_DUMP_DEBUG_COMMANDS"
 			echo "PROTON_DUMP_DEBUG_COMMANDS=\"$PROTON_DUMP_DEBUG_COMMANDS\""
 			echo "## $DESC_PROTON_DEBUG_DIR"
@@ -1602,7 +1630,7 @@ function needNewProton {
 		getAvailableProtonVersions "up"
 		TITLE="Proton Version"
 		writelog "INFO" "${FUNCNAME[0]} - no Proton Version was found - opening a requester to choose from one"
-		PROTYADLIST="$(printf "!%s\n" "${ProtonCSV[@]//\"/}" | sort -u | cut -d ';' -f1 | tr -d '\n' ;printf "\n")"
+		createProtonList
 		PICKPROTON="$(LC_ALL="" "$YAD" --window-icon="$STLICON" --borders="$YADBORDER" --center "$WINDECO" --form --scroll --separator="\n" --quoted-output \
 		--text="<span font_weight='bold'>$GUI_NEEDNEWPROTON</span>" \
 		--field="$GUI_NEEDNEWPROTON2":CB "${USEPROTON/#-/ -}!$PROTYADLIST" \
@@ -1714,12 +1742,15 @@ function dlCustomProtonGUI {
 
 	writelog "INFO" "${FUNCNAME[0]} - opening dialog to choose a download"
 
-	DLPROTLIST="$(printf "!%s\n" "${ProtonDLDispList[@]//\"/}" | tr -d '\n' ;printf "\n")"
-
+	DLPROTLIST="$(printf "!%s\n" "${ProtonDLDispList[@]//\"/}" | tr -d '\n' | sed "s:^!::" | sed "s:!$::")"
 	TITLE="${PROGNAME}-DownloadCustomProton"
 
 	loadCfg "$STLGUICFG" X
 	updateWinRes "$TITLE" "$STLGUICFG" "CUSTPROTREQWIDTH" "CUSTPROTREQHEIGHT" &
+
+	if [ -z "$DLPROTON" ]; then
+		DLPROTON="${ProtonDLDispList[0]}"
+	fi
 
 	DLDISPCUSTPROT="$(LC_ALL="" "$YAD" --window-icon="$STLICON" --borders="$YADBORDER" --form --center --on-top "$WINDECO" \
 	--title="$TITLE" \
@@ -1740,7 +1771,7 @@ function dlCustomProtonGUI {
 			dlCustomProton "${DLURL//|/\"}"
 		fi
 
-		setProtYadList
+		createProtonList
 	fi
 }
 
@@ -2155,6 +2186,16 @@ function cleanYadLeftOvers {
 	ipcrm -M "$YADKEY" 2>/dev/null
 }
 
+function GETALTEXEPATH {
+	if [ -n "$ALTEXEPATH" ] && [ "$ALTEXEPATH" != "/tmp" ]; then
+		if [ -d "$ALTEXEPATH" ];then
+			echo "$ALTEXEPATH"
+		elif [ -d "$EFD/$ALTEXEPATH" ];then
+			echo "$EFD/$ALTEXEPATH"
+		fi
+	fi
+}
+
 function TrayIconExports {
 	export XWI="$XWININFO"
 	export XDO="$XDO"
@@ -2178,11 +2219,13 @@ function TrayIconExports {
 	export -f killProtonGame
 	export -f PauseGame
 
-	if [ -n "$ALTEXEPATH" ] && [ "$ALTEXEPATH" != "/tmp" ]; then
-		export SHADDESTDIR="$ALTEXEPATH"
+	if [ -n "$(GETALTEXEPATH)" ]; then
+		TSHADDESTDIR="$(GETALTEXEPATH)"
 	else
-		export SHADDESTDIR="$EFD"
+		TSHADDESTDIR="$EFD"
 	fi
+
+	export SHADDESTDIR="$TSHADDESTDIR"
 	export -f TrayShaderMenu
 	export -f TrayVR
 }
@@ -2248,7 +2291,7 @@ function trayIcon {
 				writelog "SKIP" "${FUNCNAME[0]} - '$XWI' didn't pick the correct window name: '$PICKWINDOWNAME'"
 			else
 				writelog "INFO" "${FUNCNAME[0]} - trayIcon: picked '$PICKWINDOWNAME'"
-				"$PROGCMD" vr "$PICKWINDOWNAME" "$AID"
+				"$PROGCMD" vr "$PICKWINDOWNAME" "$AID" "s"
 			fi
 		}	
 		TrayIconExports
@@ -2267,9 +2310,9 @@ function trayIcon {
 	fi
 }
 
-function setProtYadList {
-	writelog "INFO" "${FUNCNAME[0]} - Updating the Proton Dropdown List for the Settings Menu"
-	PROTYADLIST="$(printf "!%s\n" "${ProtonCSV[@]//\"/}" | sort -u | cut -d ';' -f1 | tr -d '\n' ;printf "\n")"
+function createProtonList {
+	writelog "INFO" "${FUNCNAME[0]} - Updating the Proton Dropdown List"
+	PROTYADLIST="$(printf "!%s\n" "${ProtonCSV[@]//\"/}" | sort -u | cut -d ';' -f1 | tr -d '\n'  | sed "s:^!::" | sed "s:!$::")"
 }
 
 #STARTYADGAME
@@ -2321,6 +2364,8 @@ function openGameMenu {
 	--field="     $GUI_INSTALL_RESHADE!$DESC_INSTALL_RESHADE ('INSTALL_RESHADE')":CHK "${INSTALL_RESHADE/#-/ -}" \
 	--field="     $GUI_RESHADE_DEPTH3D!$DESC_RESHADE_DEPTH3D ('RESHADE_DEPTH3D')":CHK "${RESHADE_DEPTH3D/#-/ -}" \
 	--field="     $GUI_USERESHADE!$DESC_USERESHADE ('USERESHADE')":CHK "${USERESHADE/#-/ -}" \
+	--field="     $GUI_RESHADEUPDATE!$DESC_RESHADEUPDATE ('RESHADEUPDATE')":CHK "${RESHADEUPDATE/#-/ -}" \
+	--field="     $GUI_RESHADEPRESET!$DESC_RESHADEPRESET ('RESHADEPRESET')":CB "${RESHADEPRESET/#-/ -}!$RSPRESETLIST" \
 	--field="     $GUI_ENABLE_VKBASALT!$DESC_ENABLE_VKBASALT ('ENABLE_VKBASALT')":CHK "${ENABLE_VKBASALT/#-/ -}" \
 	--field="     $GUI_ALTEXEPATH!$DESC_ALTEXEPATH ('DESC_ALTEXEPATH')":DIR "${ALTEXEPATH/#-/ -}" \
 	--field="     $GUI_CHOOSESHADERS!$DESC_CHOOSESHADERS ('CHOOSESHADERS')":CHK "${CHOOSESHADERS/#-/ -}" \
@@ -2340,6 +2385,7 @@ function openGameMenu {
 	--field="     $GUI_DXVK_LOG_LEVEL!$DESC_DXVK_LOG_LEVEL ('DXVK_LOG_LEVEL')":CB "${DXVK_LOG_LEVEL/#-/ -}!none!error!warn!info!debug" \
 	--field="     $GUI_WINEFSIS!$DESC_WINEFSIS ('WINE_FULLSCREEN_INTEGER_SCALING')":CHK "${WINE_FULLSCREEN_INTEGER_SCALING/#-/ -}" \
 	--field="     $GUI_PROTON_LOG!$DESC_PROTON_LOG $HOME/steam-$AID.log ('PROTON_LOG')":CHK "${PROTON_LOG/#-/ -}" \
+	--field="     $GUI_PROTON_LOG_DIR!$DESC_PROTON_LOG_DIR ('PROTON_LOG_DIR')":DIR "${PROTON_LOG_DIR/#-/ -}" \
 	--field="     $GUI_PROTON_USE_WINED3D!$DESC_PROTON_USE_WINED3D ('PROTON_USE_WINED3D')":CHK "${PROTON_USE_WINED3D/#-/ -}" \
 	--field="     $GUI_PROTON_NO_D3D11!$DESC_PROTON_NO_D3D11 ('PROTON_NO_D3D11')":CHK "${PROTON_NO_D3D11/#-/ -}" \
 	--field="     $GUI_PROTON_NO_D3D10!$DESC_PROTON_NO_D3D10 ('PROTON_NO_D3D10')":CHK "${PROTON_NO_D3D10/#-/ -}" \
@@ -2417,8 +2463,9 @@ function openSettings {
 
 	checkSTLCSS X
 
-	setProtYadList
+	createProtonList
 	createLanguageList
+	createReShadePresetList
 
 	# The Tab for the current game is almost identical to the Default Game Template Tab, so using a generic function here to avoid redundant code:
 	openGameMenu "$STLGAMECFG" "1" "$(strFix "$GUI_SETHEAD1" "$GN" "$AID")" "$cfg1"
@@ -2468,6 +2515,7 @@ function openSettings {
 	--field="     $GUI_GLOBALUSERTWEAKDIR!$DESC_GLOBALUSERTWEAKDIR ('GLOBALUSERTWEAKDIR')":DIR "${GLOBALUSERTWEAKDIR/#-/ -}" \
 	--field="     $GUI_GLOBALTWEAKCMDDIR!$DESC_GLOBALTWEAKCMDDIR ('GLOBALTWEAKCMDDIR')":DIR "${GLOBALTWEAKCMDDIR/#-/ -}" \
 	--field="     $GUI_GLOBALCATEGORYDIR!$DESC_GLOBALCATEGORYDIR ('GLOBALCATEGORYDIR')":DIR "${GLOBALCATEGORYDIR/#-/ -}" \
+	--field="     $GUI_GLOBALRSPRESETDIR!$DESC_GLOBALRSPRESETDIR ('GLOBALRSPRESETDIR')":DIR "${GLOBALRSPRESETDIR/#-/ -}" \
 	--field="     $GUI_GLOBALMISCDIR!$DESC_GLOBALMISCDIR ('GLOBALMISCDIR')":DIR "${GLOBALMISCDIR/#-/ -}" \
 	--field="     $GUI_GLOBALSTLLANGDIR!$DESC_GLOBALSTLLANGDIR ('GLOBALSTLLANGDIR')":DIR "${GLOBALSTLLANGDIR/#-/ -}" \
 	--field="     $GUI_STRACEDIR!$DESC_STRACEDIR ('STRACEDIR')":DIR "${STRACEDIR/#-/ -}" \
@@ -2803,7 +2851,7 @@ function extWine64Run {
 
 function usevkBasalt {
 	SBSSHADERDIR="Depth3D/Shaders"
-	SBSSHADER="$SBSSHADERDIR/SuperDepth3D_VR.fx"
+	SBSSHADER="$SBSSHADERDIR/${SD3DVR}.fx"
 	if [ -n "$ENABLE_VKBASALT" ] ; then
 		if [ "$ENABLE_VKBASALT" -eq 1 ] ; then
 			writelog "INFO" "${FUNCNAME[0]} - vkBasalt enabled"
@@ -3349,6 +3397,71 @@ function checkSBSVRLaunch {
 	fi
 }
 
+function RSiniToGameDir {
+	DESTINIABS="$1"
+	DESTINI="$(basename "$1")"
+	GSRSINI="$GRSPDIR/$RESHADEPRESET/$DESTINI"
+	USRSINI="$STLRSPRESETDIR/$RESHADEPRESET/$DESTINI"
+
+	if [ ! -f "$DESTINIABS" ]; then
+		if [ -f "$GSRSINI" ] && [ -f "$USRSINI" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - both global and user '$DESTINI' exist for '$RESHADEPRESET'- copying user file into gamedir"
+			cp "$USRSINI" "$DESTINIABS"
+		elif [ ! -f "$GSRSINI" ] && [ -f "$USRSINI" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - user '$DESTINI' exist for '$RESHADEPRESET'- copying into gamedir"
+			cp "$USRSINI" "$DESTINIABS"
+		elif [ -f "$GSRSINI" ] && [ ! -f "$USRSINI" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - global '$DESTINI' exist for '$RESHADEPRESET'- copying into gamedir"
+			cp "$GSRSINI" "$DESTINIABS"
+		elif [ ! -f "$GSRSINI" ] && [ ! -f "$USRSINI" ]; then
+			writelog "SKIP" "${FUNCNAME[0]} - neither global nor user '$DESTINI' exist - nothing to copy - skipping"
+		fi	
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - '$DESTINIABS' already exists - nothing to do - skipping"
+	fi
+
+}
+
+function presetReShade {
+
+	if [ -n "$RESHADEPRESET" ] && [ "$RESHADEPRESET" != "empty" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - RESHADEPRESET is set to '$RESHADEPRESET'"
+		DRSINI="$1/$RSINI"
+		DRSPINI="$1/$RSPINI"
+		
+		if [ "$(USEDLGLOBAL)" -ge 1 ]; then
+			GRSPDIR="$GLDLRSPDIR"
+		else
+			GRSPDIR="$GLOBALRSPRESETDIR"
+		fi
+
+		RSiniToGameDir "$DRSINI"
+		RSiniToGameDir "$DRSPINI"
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - no specific ReShade Preset $RESHADEPRESET configured - skipping"
+	fi
+}
+
+function createReShadePresetList {
+	if [ "$(USEDLGLOBAL)" -ge 1 ]; then
+		GRSPDIR="$GLDLRSPDIR"
+	else
+		GRSPDIR="$GLOBALRSPRESETDIR"
+	fi
+
+	function listRSP {
+		while read -r RSPF; do
+			basename "$RSPF"
+		done <<< "$(find "$GRSPDIR" -mindepth 1 -maxdepth 1 -type d)"
+
+		while read -r RSPF; do
+			basename "$RSPF"
+		done <<< "$(find "$STLRSPRESETDIR" -mindepth 1 -maxdepth 1 -type d)"
+	}
+	RSPRESETLIST="$(listRSP | sort -u | tr '\n' '!' | sed "s:^!::" | sed "s:!$::")"
+}
+
+
 function dlReShade {
 	if [ -z "$1" ]; then
 		DLVERS="$RSVERS"
@@ -3360,10 +3473,19 @@ function dlReShade {
 	rm "$RESHADESRCDIR/${RS_64//.dll/.json}" 2>/dev/null
 	rm "$RESHADESRCDIR/${RS_32//.dll/.json}" 2>/dev/null
 
-	RSSU="ReShade_Setup"
 	DLDST="${RESHADESRCDIR}/${RSSU}.exe"
+	DLDSTV="${RESHADESRCDIR}/${RSSU}_${DLVERS}.exe"
+
 	RSSETUP="${RESHADEDLURL}/${RSSU}_${DLVERS}.exe"
+
 	"$WGET" -q "$RSSETUP" -O "$DLDST"
+	if [ ! -f "$DLDSTV" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - creating backup '${RSSU}_${DLVERS}.exe'" "E"
+		cp "$DLDST" "$DLDSTV"
+	fi
+
+	echo "$DLVERS" > "${DLDST//.exe/.log}"
+
 	if [ ! -s "$DLDST" ]; then
 		writelog "SKIP" "${FUNCNAME[0]} - downloaded file '$DLDST' is empty - removing" "E"
 		rm "$DLDST" 2>/dev/null
@@ -3404,6 +3526,16 @@ function prepareReshadeFiles {
 			if [ ! -f "$RESHADESRCDIR/$RS_64" ] || [ ! -f "$RESHADESRCDIR/$RS_32" ]; then
 				writelog "404" "${FUNCNAME[0]} - '$RESHADESRCDIR/$RS_64' and/or '$RS_32' missing - downloading"
 				dlReShade
+			fi
+
+			if [ "$RESHADEUPDATE" -eq 1 ]; then
+				if [ -f "${RESHADESRCDIR}/${RSSU}.log" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - found ReShade download log '${RESHADESRCDIR}/${RSSU}.log'"
+					if [ "$RSVERS" != "$(cat "${RESHADESRCDIR}/${RSSU}.log")" ]; then
+						writelog "INFO" "${FUNCNAME[0]} - last downloaded is ReShade Version '$(cat "${RESHADESRCDIR}/${RSSU}.log")' is not equal to the latest available ReShade Version '$RSVERS' - updating"
+						dlReShade
+					fi
+				fi
 			fi
 		fi
 	fi
@@ -3467,8 +3599,8 @@ function GameShaderDialog {
 		fi
 	fi
 
-	if [ -n "$ALTEXEPATH" ] && [ "$ALTEXEPATH" != "/tmp" ]; then
-		SHADDESTDIR="$ALTEXEPATH"
+	if [ -n "$(GETALTEXEPATH)" ]; then
+		SHADDESTDIR="$(GETALTEXEPATH)"
 	fi
 	
 	if [ ! -d "$SHADDESTDIR" ]; then
@@ -3476,7 +3608,7 @@ function GameShaderDialog {
 	fi
 	
 	writelog "INFO" "${FUNCNAME[0]} - Opening Shader Selection Dialog for dir '$SHADDESTDIR'"
-
+	dlShaders
 	getAvailableShaders
 	writelog "INFO" "${FUNCNAME[0]} - found ${#ShaderFiles[@]} available Shader Files - opening Selection"
 
@@ -3556,6 +3688,46 @@ function chooseShaders {
 	fi
 }
 
+function installRSdll {
+	if [ ! -f "$INSTDESTDIR/$1" ] || [ "$1" == "F" ]; then
+		if [ "$2" -eq 1 ]; then
+			writelog "SKIP" "${FUNCNAME[0]} - skipping installation of $1 because 'NOD3D9' is enabled"
+		else
+			if [ ! -f "$RESHADESRCDIR/$3" ]; then
+				writelog "SKIP" "${FUNCNAME[0]} - sourcefile '$RESHADESRCDIR/$3' missing - skipping this file" 
+			else
+				cp "$RESHADESRCDIR/$3" "$INSTDESTDIR/$1" >/dev/null 2>/dev/null
+				echo "$1" > "$INSTDESTDIR/$RSENABLED"
+				writelog "INFO" "${FUNCNAME[0]} - copied '$RESHADESRCDIR/$3' to '$INSTDESTDIR/$1'" 
+			fi
+		fi
+	else
+		if [ "$RESHADEUPDATE" -eq 0 ]; then
+			writelog "SKIP" "${FUNCNAME[0]} - destfile '$INSTDESTDIR/$1' already exists, but not checking the installed version, because RESHADEUPDATE is '$RESHADEUPDATE'" 
+		else
+			if grep -q "$RSVERS" <<< "$(strings "$INSTDESTDIR/$1" | grep "^Initializing")"; then
+				writelog "SKIP" "${FUNCNAME[0]} - destfile '$INSTDESTDIR/$1' already exists in the same version '$RSVERS' - skipping this file" 
+			else
+				writelog "INFO" "${FUNCNAME[0]} - destfile '$INSTDESTDIR/$1' already exists, but has a different version - updating"
+				cp "$RESHADESRCDIR/$3" "$INSTDESTDIR/$1" >/dev/null 2>/dev/null
+			fi
+		fi
+	fi
+}
+
+function installRSd3d47dll {
+	if [ ! -f "$INSTDESTDIR/$RS_D3D47_DEST" ]; then
+		if [ ! -f "$RESHADESRCDIR/$1" ]; then
+			writelog "SKIP" "${FUNCNAME[0]} - sourcefile '$RESHADESRCDIR/$1' missing - skipping this file" 
+		else
+			cp "$RESHADESRCDIR/$1" "$INSTDESTDIR/$RS_D3D47_DEST" >/dev/null 2>/dev/null
+			writelog "INFO" "${FUNCNAME[0]} - copied '$RESHADESRCDIR/$1' to '$INSTDESTDIR/$RS_D3D47_DEST'" 
+		fi
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - destfile '$INSTDESTDIR/$RS_D3D47_DEST' already exists - skipping this file" 
+	fi
+}
+
 # install reshade:
 function installReshade {
 	if [ -n "$INSTALL_RESHADE" ]; then
@@ -3563,11 +3735,13 @@ function installReshade {
 
 			prepareReshadeFiles
 
-			if [ -z "$ALTEXEPATH" ] || [ "$ALTEXEPATH" == "/tmp" ]; then
-				INSTDESTDIR="$EFD"
+			if [ -n "$(GETALTEXEPATH)" ]; then
+				INSTDESTDIR="$(GETALTEXEPATH)"
 			else
-				INSTDESTDIR="$ALTEXEPATH"
+				INSTDESTDIR="$EFD"
 			fi
+
+			presetReShade "$INSTDESTDIR"
 
 			# checking for previous dll conficts between $RS_D3D47_DEST and $RS_D9_DEST
 			if [ -f "$INSTDESTDIR/${RS_DX_DEST//.dll/.log}" ]; then
@@ -3595,92 +3769,22 @@ function installReshade {
 			#32bit:
 			if [ "$(getArch "$GP")" == "32" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - installing 32bit Reshade as '$GE' is 32bit" 
-
-				if [ ! -f "$INSTDESTDIR/$RS_D3D47_DEST" ]; then
-					if [ ! -f "$RESHADESRCDIR/$RS_D3D47_32" ]; then
-						writelog "SKIP" "${FUNCNAME[0]} - sourcefile '$RESHADESRCDIR/$RS_D3D47_32' missing - skipping this file" 
-					else
-						cp "$RESHADESRCDIR/$RS_D3D47_32" "$INSTDESTDIR/$RS_D3D47_DEST" >/dev/null 2>/dev/null
-						writelog "INFO" "${FUNCNAME[0]} - copied '$RESHADESRCDIR/$RS_D3D47_32' to '$INSTDESTDIR/$RS_D3D47_DEST'" 
-					fi
-				else
-					writelog "SKIP" "${FUNCNAME[0]} - destfile '$INSTDESTDIR/$RS_D3D47_DEST' already exists - skipping this file" 
-				fi
-
+				#d3d47
+				installRSd3d47dll "$RS_D3D47_32"
 				#dxgi:
-				if [ ! -f "$INSTDESTDIR/$RS_DX_DEST" ] || [ "$1" == "F" ]; then
-					if [ ! -f "$RESHADESRCDIR/$RS_32" ]; then
-						writelog "SKIP" "${FUNCNAME[0]} - sourcefile '$RESHADESRCDIR/$RS_32' missing - skipping this file" 
-					else
-						cp "$RESHADESRCDIR/$RS_32" "$INSTDESTDIR/$RS_DX_DEST" >/dev/null 2>/dev/null
-						echo "$RS_DX_DEST" > "$INSTDESTDIR/$RSENABLED"
-						writelog "INFO" "${FUNCNAME[0]} - copied '$RESHADESRCDIR/$RS_32' to '$INSTDESTDIR/$RS_DX_DEST'" 
-					fi
-				else
-					writelog "SKIP" "${FUNCNAME[0]} - destfile '$INSTDESTDIR/$RS_DX_DEST' already exists - skipping this file" 
-				fi
-
+				installRSdll "$RS_DX_DEST" "0" "$RS_32"
 				#d3d9:
-				if [ ! -f "$INSTDESTDIR/$RS_D9_DEST" ] || [ "$1" == "F" ]; then
-					if [ -n "$NOD3D9" ] && [ "$NOD3D9" -eq 1 ]; then
-						writelog "SKIP" "${FUNCNAME[0]} - skipping installation of $RS_D9_DEST because 'NOD3D9' is enabled"
-					else
-						if [ ! -f "$RESHADESRCDIR/$RS_32" ]; then
-							writelog "SKIP" "${FUNCNAME[0]} - sourcefile '$RESHADESRCDIR/$RS_32' missing - skipping this file" 
-						else
-							cp "$RESHADESRCDIR/$RS_32" "$INSTDESTDIR/$RS_D9_DEST" >/dev/null 2>/dev/null
-							echo "$RS_D9_DEST" > "$INSTDESTDIR/$RSENABLED"
-							writelog "INFO" "${FUNCNAME[0]} - copied '$RESHADESRCDIR/$RS_32' to '$INSTDESTDIR/$RS_D9_DEST'" 
-						fi
-					fi
-				else
-					writelog "SKIP" "${FUNCNAME[0]} - destfile '$INSTDESTDIR/$RS_D9_DEST' already exists - skipping this file" 
-				fi
+				installRSdll "$RS_D9_DEST" "$NOD3D9" "$RS_32"
 
 			# 64bit:
 			elif [ "$(getArch "$GP")" == "64" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - installing 64bit Reshade as '$GE' is 64bit" 
-
-				if [ ! -f "$INSTDESTDIR/$RS_D3D47_DEST" ]; then
-					if [ ! -f "$RESHADESRCDIR/$RS_D3D47_64" ]; then
-						writelog "SKIP" "${FUNCNAME[0]} - sourcefile '$RESHADESRCDIR/$RS_D3D47_64' missing - skipping this file" 
-					else
-						cp "$RESHADESRCDIR/$RS_D3D47_64" "$INSTDESTDIR/$RS_D3D47_DEST" >/dev/null 2>/dev/null
-						writelog "INFO" "${FUNCNAME[0]} - copied '$RESHADESRCDIR/$RS_D3D47_64' to '$INSTDESTDIR/$RS_D3D47_DEST'" 
-					fi
-				else
-					writelog "SKIP" "${FUNCNAME[0]} - destfile '$INSTDESTDIR/$RS_D3D47_DEST' already exists - skipping this file" 
-				fi
-
+				#d3d47
+				installRSd3d47dll "$RS_D3D47_64"
 				#dxgi:
-				if [ ! -f "$INSTDESTDIR/$RS_DX_DEST" ] || [ "$1" == "F" ]; then
-					if [ ! -f "$RESHADESRCDIR/$RS_64" ]; then
-						writelog "SKIP" "${FUNCNAME[0]} - sourcefile '$RESHADESRCDIR/$RS_64' missing - skipping this file" 
-					else
-						cp "$RESHADESRCDIR/$RS_64" "$INSTDESTDIR/$RS_DX_DEST" >/dev/null 2>/dev/null
-						echo "$RS_DX_DEST" > "$INSTDESTDIR/$RSENABLED"
-						writelog "INFO" "${FUNCNAME[0]} - copied '$RESHADESRCDIR/$RS_64' to '$INSTDESTDIR/$RS_DX_DEST'"
-					fi
-				else
-					writelog "SKIP" "${FUNCNAME[0]} - destfile '$INSTDESTDIR/$RS_DX_DEST' already exists - skipping this file" 
-				fi
-
+				installRSdll "$RS_DX_DEST" "0" "$RS_64"
 				#d3d9:
-				if [ ! -f "$INSTDESTDIR/$RS_D9_DEST" ] || [ "$1" == "F" ]; then
-					if [ -n "$NOD3D9" ] && [ "$NOD3D9" -eq 1 ]; then
-						writelog "SKIP" "${FUNCNAME[0]} - skipping installation of $RS_D9_DEST because 'NOD3D9' is enabled"
-					else
-						if [ ! -f "$RESHADESRCDIR/$RS_64" ]; then
-							writelog "SKIP" "${FUNCNAME[0]} - sourcefile '$RESHADESRCDIR/$RS_64' missing - skipping this file" 
-						else
-							cp "$RESHADESRCDIR/$RS_64" "$INSTDESTDIR/$RS_D9_DEST" >/dev/null 2>/dev/null
-							echo "$RS_D9_DEST" > "$INSTDESTDIR/$RSENABLED"
-							writelog "INFO" "${FUNCNAME[0]} - copied '$RESHADESRCDIR/$RS_64' to '$INSTDESTDIR/$RS_D9_DEST'" 
-						fi
-					fi
-				else
-					writelog "SKIP" "${FUNCNAME[0]} - destfile '$INSTDESTDIR/$RS_D9_DEST' already exists - skipping this file" 
-				fi
+				installRSdll "$RS_D9_DEST" "$NOD3D9" "$RS_64"
 			else
 				writelog "SKIP" "${FUNCNAME[0]} - ERROR in ReShade installation - no file information detected for '$GP' or any 'neighbor file' - setting USERESHADE=0 for this session"
 				export USERESHADE=0
@@ -3689,8 +3793,6 @@ function installReshade {
 	fi
 }
 
-
-
 function installReshadeDepth3D {
 	SHADERPOOL="depth3d"
 	
@@ -3698,11 +3800,14 @@ function installReshadeDepth3D {
 		if [ "$RESHADE_DEPTH3D" -eq 1 ]; then
 			dlShaders "$SHADERPOOL"
 
-			if [ -z "$ALTEXEPATH" ] || [ "$ALTEXEPATH" == "/tmp" ]; then
-				INSTDESTDIR="$EFD"
+			if [ -n "$(GETALTEXEPATH)" ]; then
+				INSTDESTDIR="$(GETALTEXEPATH)"
 			else
-				INSTDESTDIR="$ALTEXEPATH"
+				INSTDESTDIR="$EFD"
 			fi
+			
+			RESHADEPRESET="$SD3DVR"
+			presetReShade "$INSTDESTDIR"
 
 			writelog "INFO" "${FUNCNAME[0]} - copying shaders into gamedir"
 			while read -r file; do
@@ -3904,6 +4009,7 @@ function createProjectDirs {
 	mkProjDir "$STLCFGDIR" 1
 	mkProjDir "$STLLANGDIR" 1
 	mkProjDir "$LOGDIR" 1
+	mkProjDir "$STLPROTONLOGDIR" 1
 	mkProjDir "$STLGAMEDIR" 1
 	mkProjDir "$STLCATEGORYDIR" 1
 	mkProjDir "$TWEAKDIR" 1
@@ -3924,7 +4030,7 @@ function createProjectDirs {
 	mkProjDir "$STLGAMES" 1
 	mkProjDir "$STLGDESKD" 1
 	mkProjDir "$STLGHEADD" 1
-#	mkProjDir "$STLGSCPTD" 1
+	mkProjDir "$STLRSPRESETDIR" 1
 }
 
 # add missing config entries to configfile $1 using seperator $2:
@@ -4036,7 +4142,7 @@ function createTweakTemplateCfg {
 
 function GAMEPID {
 	if [ -f "$TEMPWINNAME" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - found '$TEMPWINNAME' - loading"
+		writelog "INFO" "${FUNCNAME[0]} - found TEMPWINNAME '$TEMPWINNAME' - loading"
 		loadCfg "$TEMPWINNAME"
 		rm "$TEMPWINNAME" 2>/dev/null
 	fi
@@ -4046,7 +4152,7 @@ function GAMEPID {
 		writelog "INFO" "${FUNCNAME[0]} - found gamewindow PID $GWINPID"
 	fi
 	
-	if [ -z "$GWINPID" ]; then	
+	if [ -z "$GWINPID" ]; then
 		if	[ "$RUN_CUSTOMCMD" -ge 1 ] && [ "$ONLY_CUSTOMCMD" -eq 1 ];then
 			if [ "$CUSTOMCMD" == "$LU" ]; then
 				"$PGREP" -a "$LU-wrapper" | cut -d ' ' -f1 | tail -n1
@@ -4057,7 +4163,7 @@ function GAMEPID {
 			if [ -n "$WAITFORTHISPID" ] && [ "$WAITFORTHISPID" != "empty" ]; then
 				GAMPI="$("$PIDOF" "$WAITFORTHISPID" | cut -d ' ' -f1)"
 			else
-				GAMPI="$("$PGREP" -a "$GE" | grep "Z:" | grep "\.exe" | grep -v "CrashHandler"  | cut -d ' ' -f1 | tail -n1)"
+				GAMPI="$("$PGREP" -a "" | grep "$GE" | grep "Z:" | grep "\.exe" | grep -v "CrashHandler"  | cut -d ' ' -f1 | tail -n1)"
 			fi
 			echo "$GAMPI"
 		fi
@@ -6628,7 +6734,7 @@ function prepareLaunch {
 	loadCfg "$STLGAMECFG"
 
 	# (re)initialize Proton dependant variables, when USEPROTON changed in askSettings (SettingsMenu/EditorDialog) above
-	if [ "$USEPROTON" != "$FIRSTUSEPROTON" ] && [ "$ISGAME" -eq 2 ]; then
+	if [ -n "$USEPROTON" ] && [ "$USEPROTON" != "$FIRSTUSEPROTON" ] && [ "$ISGAME" -eq 2 ]; then
 		setNewProtVars "$(PROTPATH "$USEPROTON")"
 	fi
 
@@ -6875,12 +6981,17 @@ function checkProtonBump {
 function wantProton {
 	if [ -n "$WANTPROTON" ]; then
 		if [ "$WANTPROTON" != "$USEPROTON" ]; then
-			if [ "$RECOMMENDPROTON" -eq 1 ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Proton version '$WANTPROTON' recommended, but '$USEPROTON' is set"
-				notiShow "$(strFix "$NOTY_RECOMMENDPROTON" "$WANTPROTON" "$USEPROTON")"
+			if [ -z "$USEPROTON" ]; then
+				DISPPROT="none"
 			else
-				writelog "INFO" "${FUNCNAME[0]} - Proton version '$WANTPROTON' required, but '$USEPROTON' is set"
-				notiShow "$(strFix "$NOTY_WANTPROTON" "$WANTPROTON" "$USEPROTON")"
+				DISPPROT="$USEPROTON"
+			fi
+			if [ "$RECOMMENDPROTON" -eq 1 ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Proton version '$WANTPROTON' recommended, but '$DISPPROT' is set"
+				notiShow "$(strFix "$NOTY_RECOMMENDPROTON" "$WANTPROTON" "$DISPPROT")"
+			else
+				writelog "INFO" "${FUNCNAME[0]} - Proton version '$WANTPROTON' required, but '$DISPPROT' is set"
+				notiShow "$(strFix "$NOTY_WANTPROTON" "$WANTPROTON" "$DISPPROT")"
 
 				OVERRIDEPROTON=1
 			
@@ -6950,7 +7061,11 @@ function launchSteamGame {
 		if [ -n "${RUNSLR[0]}" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - USESLR is enabled, so adding RUNSLR '${RUNSLR[*]}' to the actual start command"
 		else
-			writelog "SKIP" "${FUNCNAME[0]} - USESLR is enabled, but RUNSLR is empty - skipping"
+			if [ "$STARTMODE" -eq 2 ] || [ "$STARTMODE" -eq 3 ]; then
+				writelog "INFO" "${FUNCNAME[0]} - STARTMODE='$STARTMODE', means '$PROGNAME' was used as Steam Compatibility Tool, so no SLR available"
+			else
+				writelog "SKIP" "${FUNCNAME[0]} - USESLR is enabled, but RUNSLR is empty - skipping"
+			fi
 			USESLR=0
 		fi
 	else
