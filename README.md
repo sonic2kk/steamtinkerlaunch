@@ -57,12 +57,12 @@ It might be a good idea to start with configuring everything in the [Settings Me
 
 ## Features
 
-*(no special order)*
-
 **This README might not always be up2date, because with English not being my mother tounge
 formulating it takes more time than I want to spend on it additionally to the programming
 so it could be also a good idea to check the [Changes on the release page](https://github.com/frostworx/steamtinkerlaunch/releases)
 or just to browse through the latest version**
+
+*(no special order)*
 
 * **[ENV Variables](#ENV-Variables)** can be easily set for every single game (f.e `PROTON`* , `DXVK`* , `MANGOHUD`, `RADV_PERFTEST`, `WINE`...)
 * **[Custom Program](#Custom-Program)** launch custom programs before or instead the game itself (also windows exes)
@@ -121,7 +121,7 @@ Programs required for a full internal functionality:
 - xrandr
 - xwininfo
 - [Yad](https://github.com/v1cont/yad) All GUI elements like [Settings Menu](#Settings-Menu), [Tray Icon](#Tray-Icon), the [Editor Dialog](#Editor-Dialog)
-  and all other windows use yad. **A new enough version *(>=7.2; see #98)* is required**
+  and all other windows use yad. **A new enough version *(>=7.2; see [here](https://github.com/frostworx/steamtinkerlaunch/issues/98))* is required**
    
 Programs needed for optional external features *(no special order)*:
 - [strace](#Strace)
