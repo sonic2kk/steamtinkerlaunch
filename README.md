@@ -1,5 +1,3 @@
-<img align="left" width="48" height="48" src="https://github.com/frostworx/repo-assets/blob/master/pics/steamtinkerlaunch-logo_64px.png" alt="**SteamTinkerLaunch** (short **stl**) is a Linux wrapper tool for use with the Steam client">
-
 **SteamTinkerLaunch** (short **stl**) is a Linux wrapper tool for use with the Steam client
 which allows to customize and start tools and options for games quickly on the fly *(see [Features](#Features))*
 
