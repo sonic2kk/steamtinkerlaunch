@@ -1,5 +1,9 @@
+
+<img align="left" width="64" height="64" src="https://github.com/frostworx/repo-assets/blob/master/pics/steamtinkerlaunch-logo_64px.png" alt="**SteamTinkerLaunch** (short **stl**) is a Linux wrapper tool for use with the Steam client">
+
 **SteamTinkerLaunch** (short **stl**) is a Linux wrapper tool for use with the Steam client
 which allows to customize and start tools and options for games quickly on the fly *(see [Features](#Features))*
+
 
 By using a versatile configuration structure it is both easy to setup and flexible.
 
@@ -48,6 +52,17 @@ If you are on Arch Linux you can install stl from [AUR](https://aur.archlinux.or
 `yay -S steamtinkerlaunch`
 
 [![Packaging status](https://repology.org/badge/vertical-allrepos/steamtinkerlaunch.svg)](https://repology.org/project/steamtinkerlaunch/versions)
+
+## Community
+Feel free to contribute to the project - there are many possibilites to do so:
+- implement new features
+- make good bugreports
+- suggest new features
+- maintain a package for your distribution
+- add translations
+- add your tinkered tweaks
+- discuss it anywhere
+- discuss it on Reddit [/r/SteamTinkerLaunch/](https://www.reddit.com/r/SteamTinkerLaunch/)
 
 ## Quickstart
 When **stl** is started for the first time it will create its default [configuration](#Configuration) structure.
