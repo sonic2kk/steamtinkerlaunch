@@ -153,7 +153,7 @@ GLDLSBSTWEAKDIR="$GLDLTWEAKDIR/sbs"
 GLDLTWEAKCMDDIR="$GLDLTWEAKDIR/cmd"
 GLDLCATEGORYDIR="$GLDLSTLDIR/categories"
 GLDLRSPDIR="$GLDLSTLDIR/$RSP"
-GLDLMISCDIR="$GLDLSTLDIR/misc"
+#GLDLMISCDIR="$GLDLSTLDIR/misc"
 GLDLREGDIR="$GLDLSTLDIR/regs"
 GLDLSTLLANGDIR="$GLDLSTLDIR/lang"
 
@@ -963,7 +963,6 @@ function setDefaultCfgValues {
 	function setDefaultCfgValuesglobal {
 		if [ -z "$DLGLOBAL" ]			; then	DLGLOBAL="1"; fi
 		if [ -z "$STLLANG" ]			; then	STLLANG="$STLDEFLANG"; fi
-		if [ -z "$USESTLCSS" ]			; then	USESTLCSS="0"; fi
 		if [ -z "$SKIPINTDEPCHECK" ]	; then	SKIPINTDEPCHECK="0"; fi
 		if [ -z "$AUTOTWEAKS" ]			; then	AUTOTWEAKS="$AUTOTWEAKPLATFORMS"; fi
 		if [ -z "$STRACEDIR" ]			; then	STRACEDIR="$LOGDIR"; fi
@@ -1238,8 +1237,6 @@ function saveCfg {
 			echo "DLGLOBAL=\"$DLGLOBAL\""
 			echo "## $DESC_STLLANG"
 			echo "STLLANG=\"$STLLANG\""
-			echo "## $DESC_USESTLCSS"
-			echo "USESTLCSS=\"$USESTLCSS\""
 			echo "## $DESC_SKIPINTDEPCHECK"
 			echo "SKIPINTDEPCHECK=\"$SKIPINTDEPCHECK\""
 			echo "## $DESC_AUTOTWEAKS"
@@ -2463,10 +2460,9 @@ function openSettings {
 		exit
 	fi
 
-	# load  global config for optional gtk css style:
 	loadCfg "$STLDEFGLOBALCFG" X
 
-	checkSTLCSS X
+	genDefIcon
 
 	createProtonList
 	createLanguageList
@@ -2497,7 +2493,6 @@ function openSettings {
 	--field="     $GUI_USEGAMEPICS!$DESC_USEGAMEPICS ('USEGAMEPICS')":CHK "${USEGAMEPICS/#-/ -}" \
 	--field="     $GUI_USEGAMEPICINMENU!$DESC_USEGAMEPICINMENU ('USEGAMEPICINMENU')":CHK "${USEGAMEPICINMENU/#-/ -}" \
 	--field="     $GUI_DLGAMEDATA!$DESC_DLGAMEDATA ('DLGAMEDATA')":CHK "${DLGAMEDATA/#-/ -}" \
-	--field="     $GUI_USESTLCSS!$DESC_USESTLCSS '${PROGCMD}-steam' ('USESTLCSS')":CHK "${USESTLCSS/#-/ -}" \
 	--field="     $GUI_SKIPINTDEPCHECK!$DESC_SKIPINTDEPCHECK ('SKIPINTDEPCHECK')":CHK "${SKIPINTDEPCHECK/#-/ -}" \
 	--field=" ":LBL " " \
 	--field="     $GUI_BOXTRONCMD!$DESC_BOXTRONCMD ('BOXTRONCMD')":FL "${BOXTRONCMD/#-/ -}" \
@@ -4252,59 +4247,17 @@ function checkTweakLaunch {
 	fi
 }
 
-function checkSTLCSS {
-	# maybe this doesn't make any sense, but I try to leave the project as plain as possible without any bundled assets. That's why the two icons are base64 encoded:
-
-	checked64="iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7MK6iAAABhGlDQ1BJQ0MgcHJvZmlsZQAAKJF9kTtIw0Acxr+mig+qDlYQcchQnSz4xlGrUIQKoVZo1cHk0hc0aUhSXBwF14KDj8Wqg4uzrg6ugiD4AHFydFJ0kRL/lxRaxHpw3I/v7vu4+w4QKgWmWS2jgKbbZjwaEZOpVbHtFR3oQzemMCYzy5iTpBiajq97+Ph6F+ZZzc/9ObrUtMUAn0g8ywzTJt4gnt60Dc77xEGWk1Xic+IRky5I/Mh1xeM3zlmXBZ4ZNBPxeeIgsZhtYKWBWc7UiCeJQ6qmU76Q9FjlvMVZK5RY7Z78hYG0vrLMdZqDiGIRS5AgQkEJeRRgI0yrToqFOO1HmvgHXL9ELoVceTByLKAIDbLrB/+D391amYlxLykQAVpfHOdjCGjbBaplx/k+dpzqCeB/Bq70ur9YAWY+SS/XtdAR0LMNXFzXNWUPuNwB+p8M2ZRdyU9TyGSA9zP6phTQewt0rnm91fZx+gAkqKvYDXBwCAxnKXu9ybvbG3v790ytvx/W0XLPAuUPuQAAAAZiS0dEAP8A/wD/oL2nkwAAAAlwSFlzAAALEwAACxMBAJqcGAAAAAd0SU1FB+QJFQ43OwBEUvIAAAGHSURBVEjHYwwNDf3PMACAiWGAAAuMsXr1akZ6WAgL4QHz8ajFVAX/////T3eL8VlKM4sJWUoTi2/duv2fojh2dvNaQY6lqqoqlCUuZyeH8KTUjP+0sBSvxczMzAxzZ01n8PYPImj5jp27SLIUr8VcXFwMDAwMDFs2rGXw9A38j89SdzdXrHLTps8k3WI+Xl44e9umdQyOrp65pFi6ecs2huysDEaSLWbnYEfh79u1bRIyf868+Tgt3bRlK4Ofrzcj1bITLH/OmTf/f3JiAlY1x46fYPD39SFY07Hgkvj79x/JhcORo8cYbG2sGSlKXCtWrSEplR47foJoS/FavHn9asaY+GSiDLlx4yaDtZUlI1WyEwMDA8PSRfMYM7LzCFqqqalBcuuFYOKaOW0yY3llDVUtJTpVd3W0MrZ3dqOIvX37jmxLScpOVRVljKvXrGNgYGBgeP3mDUNIRHQgVVqZxICw0GDGKdNm/F+1dr3Yob07X9PNYgYGBoYcPMXgaGMPH2AccX0nAG78jzcJ3eJlAAAAAElFTkSuQmCC"
+function genDefIcon {
+	stlicon64="iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAMAAACdt4HsAAAAZlBMVEUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAcHByAgIAAAAD///8AAACfn5+AgIC/v78QEBDv7+9gYGBQUFCvr6/Pz88wMDAgICDf399wcHBAQECPj4/mYUh/AAAAEXRSTlMAYICf778gj3DfUEAwz48gEPfJjAsAAAKXSURBVFjDnZfpetsgFEQtW17jtGVAgNBi9/1fsiDz5dbBTKLMH286xwgBFzaSa7Pdbi+Hzc9y+NXikffmJ/wp4pM3xvQWOF9X8zugH1yIgqD0BDSreRucsUixxvloWMsP8wiMsQXpZdDrDMfIqwljp1K6CdaVhsv2VZaL3oBBqVvv1CPOT059NjR4nbf42xlGlckG4dO/qKF7yoh9asCkVM0gvLFWq0/xAK6xB26KGDKv1WCR7lLieowex80enWKGzC+A/SsKbeFdF+8BUIoaMh8TJlivuxjtLWyIXwFJQA3Cx+gROaN2SgTMsPCSOZiYMMe3WdDCEYNPfD0ObezEQFrAeRViJ57gOc/icdocgJnw80z4GTikudjXed6GHru0mLUwhCcGg/awzFRAV3li0MBFxnqVFwOfbZrwgGa8GEpeDJQXQ8mPoxgIL4ay/+RdjRdDwUPFQAwVXgzClwJowovhmYd3zkMMVV4MwuNmeizpzS0bCC+rvw5IWcb3HTH3ZdQuCZlnRVZHakm3cNnUAYsr8bsqnnuBtUAjpqF8TKUPpIcayseUT0H4L55iTjkOhOfjSAyFIPN8JEuKuSA8nUsSmY0Fz2ZzaSh4sp5UDMLzFa1mEL5muJB1V/j6qix1oYwWvlYXpDLR6kQq0wGg5W9OPKmNUp1JG2h13iOs4cv9QQvHec93KCv2SEXW7tK4gO8TieC7O9XX6bD/9l75ZW44frVb54YJ8Xz2DkN4ajDY5xPLc7t64alhAN4+zkwq3B+dOd9hhWeGweIopzZlgN4E0yN+4Kuu8Lv/z43KfNQSX1v3vZKED15OrtoYo52e6pVn0hkfemC3+ux8PQO2jxf5CWhPzz/+3p6/cXpv3vHIefsnf/UP3QHUzgWHsSYAAAAASUVORK5CYII="
 
 	if [ ! -f "$STLICON" ]; then
-		base64 -d <<< "$checked64" > "$STLICON"
+		base64 -d <<< "$stlicon64" > "$STLICON"
 	fi
 
 	onepix64="R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw=="
 
 	if [ ! -f "$NOICON" ]; then
 		base64 -d <<< "$onepix64" > "$NOICON"
-	fi
-		
-	if [ "$USESTLCSS" -eq 1 ]; then
-		unchecked64="iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7MK6iAAABhGlDQ1BJQ0MgcHJvZmlsZQAAKJF9kTtIw0Acxr+mig+qDlYQcchQnSz4xlGrUIQKoVZo1cHk0hc0aUhSXBwF14KDj8Wqg4uzrg6ugiD4AHFydFJ0kRL/lxRaxHpw3I/v7vu4+w4QKgWmWS2jgKbbZjwaEZOpVbHtFR3oQzemMCYzy5iTpBiajq97+Ph6F+ZZzc/9ObrUtMUAn0g8ywzTJt4gnt60Dc77xEGWk1Xic+IRky5I/Mh1xeM3zlmXBZ4ZNBPxeeIgsZhtYKWBWc7UiCeJQ6qmU76Q9FjlvMVZK5RY7Z78hYG0vrLMdZqDiGIRS5AgQkEJeRRgI0yrToqFOO1HmvgHXL9ELoVceTByLKAIDbLrB/+D391amYlxLykQAVpfHOdjCGjbBaplx/k+dpzqCeB/Bq70ur9YAWY+SS/XtdAR0LMNXFzXNWUPuNwB+p8M2ZRdyU9TyGSA9zP6phTQewt0rnm91fZx+gAkqKvYDXBwCAxnKXu9ybvbG3v790ytvx/W0XLPAuUPuQAAAAZiS0dEAP8A/wD/oL2nkwAAAAlwSFlzAAALEwAACxMBAJqcGAAAAAd0SU1FB+QJFQ43ClGaUsgAAABASURBVEjH7dexDQAgCERRzrgrM920UjGBiRT+X9G9QIcy88RAK4baPdjWC7AvPLYxMDAwMDAwMDAwMPB9+u53Kvy2CKXoQHekAAAAAElFTkSuQmCC"
-
-		uncheckedpng="$STLSHM/stl-steam-unchecked.png"
-
-		if [ ! -f "$uncheckedpng" ]; then
-			base64 -d <<< "$unchecked64" > "$uncheckedpng"
-		fi
-
-		STLTHEME="${PROGCMD}-steam"
-		CSSDIR="$HOME/.local/share/themes/$STLTHEME/gtk-3.0"
-
-		if [ ! -d "$CSSDIR" ]; then
-			mkdir -p "$CSSDIR" 2>/dev/null
-		fi
-		
-		if [ ! -f "$CSSDIR/gtk.css" ]; then
-			if [ -z "$1" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - installing '$PROGNAME' Steam Theme to '$CSSDIR/gtk.css'"
-			fi
-
-			if [ "$(USEDLGLOBAL)" -ge 1 ]; then
-				SRCCSS="$GLDLMISCDIR/gtk.css"
-			else
-				SRCCSS="$GLOBALMISCDIR/gtk.css"
-			fi
-
-			if [ -f "$SRCCSS" ] ; then
-				cp "$SRCCSS" "$CSSDIR/gtk.css"
-			fi
-		fi
-
-		if [ -f "$CSSDIR/gtk.css" ] ; then
-			if [ -z "$1" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - setting 'GTK_THEME=$STLTHEME'"
-			fi
-			export GTK_THEME="$STLTHEME"
-		fi
 	fi
 }
 
@@ -4329,7 +4282,7 @@ function createDefaultCfgs {
 
 	prepareGUI
 
-	checkSTLCSS X
+	genDefIcon
 	createProjectDirs
 	
 	getAvailableProtonVersions "n"
