@@ -186,15 +186,7 @@ The Options apply to **all** config files at once!:
 
 When **stl** was launched "standalone" via command line the corresponding game will be started using the steam `-applaunch` parameter.
 
-#### Settings Menu Theme
-
 ![stl Settings Menu](https://github.com/frostworx/repo-assets/blob/master/gifs/stl-2.0-settings.gif)
-
-When enabled an optional self-rolled stl-steam gtk-css theme is installed into `~/share/themes/stl-steam/gtk-3.0/gtk.css`
-which tries to mimic the steam theme to integrate as good as possible. It can be en-/disabled in [Settings Menu](#Settings-Menu).
-Every gtk program which is started from **stl** will use the theme as well (f.e. winetricks).
-The css is no complete theme and might look incomplete when used with other gtk programs.
-Feel free to improve and contribute it though!
 
 #### Opening the Settings Menu
 
