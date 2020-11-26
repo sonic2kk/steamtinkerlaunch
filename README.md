@@ -63,6 +63,7 @@ Feel free to contribute to the project - there are many possibilites to do so:
 - add your tinkered tweaks
 - discuss it anywhere
 - discuss it on Reddit [/r/SteamTinkerLaunch/](https://www.reddit.com/r/SteamTinkerLaunch/)
+- discuss it on [Discord](https://discord.gg/ws52hK4sM4)
 
 ## Quickstart
 When **stl** is started for the first time it will create its default [configuration](#Configuration) structure.
