@@ -4,7 +4,6 @@
 **SteamTinkerLaunch** (short **stl**) is a Linux wrapper tool for use with the Steam client
 which allows to customize and start tools and options for games quickly on the fly *(see [Features](#Features))*
 
-
 By using a versatile configuration structure it is both easy to setup and flexible.
 
 ## How to use
@@ -12,17 +11,19 @@ By using a versatile configuration structure it is both easy to setup and flexib
 ### General usage
 **stl works with linux native games and with games using proton!**
 *(Some features (f.e. [ReShade](#ReShade)) are only available for games using proton)*
+*(Non-Steam games added to Steam are supported as well)*
 
 #### Steam Launch Option
-To use **stl** as Steam Launch Option just add it to your Steam Game Launch Option command line like:
-'stl %command%'
+To use **stl** as Steam Launch Option just add it to your Steam Game Launch Option command line like this:
+
+`stl %command%`
 
 ![stl starter](https://github.com/frostworx/repo-assets/blob/master/gifs/stl-command.gif)
 
 *A little script which automatically does this for every game in the Steam library can be found [here](https://gist.github.com/frostworx/36bd76e705a0c87af523fa57cfeebaf8)*
 
 #### Steam Compatibility Tool
-**stl** can also be used as Steam Compatibility Tool, simply by using the **stl** builtin command line options:
+**stl** can also be used as Steam Compatibility Tool, simply by using the **stl** builtin [Command Line](#Command-Line) options:
 
 `stl compat add` *(adds stl under compatibilitytools.d/SteamTinkerLaunch)*
 `stl compat del` *(deletes compatibilitytools.d/SteamTinkerLaunch)*
@@ -37,15 +38,15 @@ If `add` is selected and stl is started from a different path than before, the s
 *(It doesn't make any sense, but a game also works, when stl is set both as Launch Option and as Steam Compatibility Tool)*
 
 ### Game specific use
-When starting a game a small requester will popup.
-If within a short waiting period (default 2 seconds) the spacebar is pressed the [Settings Menu](#Settings-Menu) will open where everything can be configured comfortably.
+When starting a game a small [Wait requester](#Wait-Requester) will popup.
+If within a short waiting period *(default 2 seconds)* the spacebar is pressed the [Settings Menu](#Settings-Menu) will open where everything can be configured comfortably.
 When done with configuring (or when the requester timeouts) the game will be started regularly with all tools and options configured.
 
 ## Installation
 This is one single bash script. Just copy it wherever you want (f.e. '/usr/local/bin/') and make it executable:
 `chmod +x stl`
-The enclosed directories containing optional configuration files can be either dropped into '/usr/share/stl/' (prefered location)
-or automatically pulled from git (default if '/usr/share/stl/' does not exist).
+The enclosed directories containing optional configuration files can be either dropped into '/usr/share/stl/' *(preferred location)*
+or automatically pulled from git *(default if '/usr/share/stl/' does not exist)*.
 
 If you are on Arch Linux you can install stl from [AUR](https://aur.archlinux.org/packages/steamtinkerlaunch) *(f.e. using yay)*:
 
@@ -61,15 +62,16 @@ Feel free to contribute to the project - there are many possibilites to do so:
 - maintain a package for your distribution
 - add translations
 - add your tinkered tweaks
-- discuss it anywhere
-- discuss it on Reddit [/r/SteamTinkerLaunch/](https://www.reddit.com/r/SteamTinkerLaunch/)
-- discuss it on [Discord](https://discord.gg/ws52hK4sM4)
+- find out how cool it is and tell others :)
+- help to improve/shorten this monstrous README *(especially if english is your mother language)*
+
+Got and idea or suggestions, but don't want to open an issue?
+Try [/r/SteamTinkerLaunch/](https://www.reddit.com/r/SteamTinkerLaunch/) or [Discord](https://discord.gg/ws52hK4sM4)
 
 ## Quickstart
 When **stl** is started for the first time it will create its default [configuration](#Configuration) structure.
 Almost everything can be configured with the built-in [Settings Menu](#Settings-Menu), but optionally also with a graphical text editor.
 It might be a good idea to start with configuring everything in the [Settings Menu](#Settings-Menu) to your needs
-*(for general configuration the most important tabs are the [Default Settings](#Default-Template-Config) and the [Global Settings](#Global-Config))*.
 
 ## Features
 
@@ -81,7 +83,7 @@ or just to browse through the latest version**
 *(no special order)*
 
 * **[ENV Variables](#ENV-Variables)** can be easily set for every single game (f.e `PROTON`* , `DXVK`* , `MANGOHUD`, `RADV_PERFTEST`, `WINE`...)
-* **[Custom Program](#Custom-Program)** launch custom programs before or instead the game itself (also windows exes)
+* **[Custom Program](#Custom-Program)** launch custom programs before or instead the game itself *(also windows exes)*
 * **[winetricks](#Winetricks)** start winetricks before game launch *(gui or silent)*
 * **[winecfg](#Winecfg)** start winecfg before game launch
 * **[GameMode](#GameMode)** start/stop gamemoderun per game
@@ -108,7 +110,7 @@ or just to browse through the latest version**
 * **[GameConqueror](#GameConqueror)** automatically open gameconqueror (scanmem gui) with the game exe on game launch
 * **[Custom User Start/Stop scripts](#Start-Stop-Scripts)** optional start custom scripts when game starts/ends
 * **[GameScope](#GameScope)** start/stop gamescope per game
-* **[Settings Menu](#Settings-Menu)** easy configuration for almost all settings with the builtin Settings Menu
+* **[Settings Menu](#Settings-Menu)** easy configuration for almost all settings with the builtin modular Settings Menu
 * **[native Support](#Native-Games)** support native Linux games
 * **[Steam Compatibility Tool](#Steam-Compatibility-Tool)** can be used as [Steam Launch Option](#Steam-Launch-Option) and as [Steam Compatibility Tool](#Steam-Compatibility-Tool)
 * **[Proton Selection](#Proton-Selection)** switch between Proton-Versions, automatically download custom Proton builds...
@@ -120,6 +122,7 @@ or just to browse through the latest version**
 * **[Shader Management](#Shader-Management)** Download/Update/Install/Enable/Disable Shaders
 * **[Custom Proton Autoupdate](#Custom-Proton-Autoupdate)** optionally Download/Install/Enable version bumps of Custom Proton version per game
 * **[ReShade Presets](#ReShade-Presets)** Select ReShade Presets
+* **[Cheat Engine](#Cheat-Engine)** automatic CheatEngine download, install, autostart per game and autostop on game exit
 
 ## Requirements
 *(no special order)*
@@ -127,6 +130,7 @@ or just to browse through the latest version**
 Programs required for a full internal functionality:
 - awk *(gawk)*
 - bash *(only shell tested)*
+- bc
 - git
 - pgrep
 - unzip
@@ -145,7 +149,7 @@ Programs needed for optional external features *(no special order)*:
 - [MangoHud](#MangoHud)
 - [winetricks](#Winetricks)
 - vr-video-player for playing regular games side-by-side in VR ([SBS-VR](#Side-by-Side-VR))
-- a graphical text editor and optionally a internetbrowser see [global.conf](#Global-Config)
+- a graphical text editor and optionally a internetbrowser see [Global Config](#Global-Config)
 - [vkBasalt](#vkBasalt)
 - [Nyrna](#Nyrna)
 - [ReplaySorcery](#ReplaySorcery)
@@ -153,81 +157,163 @@ Programs needed for optional external features *(no special order)*:
 - [Boxtron](#Boxtron) and dosbox to optionally start dos games with linux native dosbox
 - ScummVM to optionally start compatible games natively using [Roberta](https://github.com/dreamer/roberta)
 - [luxtorpeda-dev](https://github.com/luxtorpeda-dev/luxtorpeda) or [Luxtorpeda](https://github.com/dreamer/luxtorpeda) to optionally start supported games with a linux native binary
-- wine for optional [Vortex](#Vortex) support
 - [GameConqueror/scanmem](#GameConqueror) to optionally cheat
 - [GameScope](#GameScope)
 - cabextract *(currently only used to extract the [WMP10](#WMP10) setup exe)*
+- innoextract *(currently only used to extract the [Cheat Engine](#Cheat-Engine) setup exe - with wine as fallback)*
 - lsusb *(for an optional [SBS-VR](#Side-by-Side-VR) check if a VR HMD was found)*
 - jq *(currently only used to extract game names from the steam api)*
-
+- convert from imagemagick *(currently only used to scale a custom installed game header picture)*
 
 ## Configuration
 All configuration files are self-contained documented and always growing, so not every option is documented in here.
 For a general overview what can be configured, just check the [Features](#Features) or simply browse through the 
 [Settings Menu](#Settings-Menu), which covers almost everything available.
 
-### Settings Menu
-Almost all user configuration options can be changed with the built-in Settings Menu *(using [Yad](https://github.com/v1cont/yad))*
-Tooltips give a basic description for every entry.
-
-*(Currently)* the Menu has following Tabs:
-
- - Tab 1 is the **GAME SETTINGS** Menu for the selected game (either started from steam or via commandline) *([`$STLGAMECFG`](#Game-Configurations))*
- - Tab 2 is the **DEFAULT SETTINGS** Menu, which is the template for all newly created **GAME SETTINGS**  *([`$STLDEFGAMECFG`](#Default-Template-Config))*
- - Tab 3 is the **GLOBAL SETTINGS** Menu, where all global applicable settings can be configured *([`$STLDEFGLOBALCFG`](#Global-Config))*
- - Tab 4 is the **VORTEX SETTINGS** Menu, for Vortex Configuration *([`$STLVORTEXCFG`](#Vortex-Configuration))*
-
-The Options apply to **all** config files at once!:
-- **EXIT** - leave Settings Menu without doing anything
-- **PLAY** - start the game
-- **EDITOR MENU** - Opens a little Editor Menu from where all found user-editable config files can be opened in the [Editor](#Editor)
-- **RELOAD** - discard all changes and reload all config files
-- **SAVE AND RELOAD** - save all changes and reload them
-- **SAVE AND PLAY** - save all changes and start the game
-
-When **stl** was launched "standalone" via command line the corresponding game will be started using the steam `-applaunch` parameter.
-
-![stl Settings Menu](https://github.com/frostworx/repo-assets/blob/master/gifs/stl-2.0-settings.gif)
-
-#### Opening the Settings Menu
-
-##### On Game Launch
-When a game is started a small requester will wait `WAITEDITOR` seconds for User input *(either Space or press `OK`)*
-If selected the Settings Menu will open directly with the settings for the launched game in Tab 1 (see [Settings Menu](#Settings-Menu))
+### Wait requester
+The initial Requester which acts as gate to the [Settings Menu](#Settings-Menu).
+If selected within a [timeout](#Wait-requester-duration) the [Start Menu](#Start-Menu) will open,
+else the game starts seamlessly with all configurations set.
+It also shows how many game-related config files *(or tweakfiles)* are found.
 
 ![stl requester](https://github.com/frostworx/repo-assets/blob/master/pics/stl-requester.jpg)
 
-When `WAITEDITOR` is set to 0 **stl** will directly start the game.
-If `MAXASK` in the [global.conf](#Global-Config) is defined, the requester can be cancelled maximal `MAXASK` times
+### Wait requester duration
+The [Wait requester](#Wait-requester) will wait `WAITEDITOR` seconds for User input *(either Space or press `OK`)*
+
+When `WAITEDITOR` is set to 0 *(in [Game Menu](#Game-Menu))* **stl** will directly start the game with the current configuration.
+If `MAXASK` in the [Global Config](#Global-Config) *(f.e. via [Global Menu](#Global-Menu))* is defined, the requester can be cancelled maximal `MAXASK` times
 before `WAITEDITOR` is automatically set to 0 for the selected game.
 Letting the requester timeout does not count as cancelled.
-The "Cancelled counter" is stored directly in the [Game specific configuration file](#User-Configurations) as `ASKCNT`
+The "Cancelled counter" is stored directly in the [Game Config](#Game-Config) as `ASKCNT`
 and is resetted to 0 when `MAXASK` was reached and `WAITEDITOR` was set to 0.
 
-##### via Command Line
-Both the Settings Menu and the Editor Dialog can also be opened via commandline:
-`stl settings` opens the Menu and `stl editor` opens the Editor Dialog with placeholder SteamAppID `31337` as default.
-An optional commandline argument can be either a SteamAppID or `last` for opening the config of the last played game stored in `LASTRUN`
+#### Start Menu
+The menu which should open as initial Menu when accepting the [Wait requester](#Wait-Requester).
+Can for example be configured in the [GUI Options](#GUI-Options)
+Options are
+- [Selection Menu](#Selection-Menu) *(default)*
+- [Favorites Menu](#Favorites-Menu)
+- [Game Menu](#Game-Menu)
+- [Editor Dialog](#Editor-Dialog)
+
+### Settings Menu
+The Settings Menu consists of multiple separate submenus, where most be be reached via [Selection Menu](#Selection-Menu).
+Tooltips give a basic description for every entry in all submenus.
+When **stl** was launched "standalone" via [Command Line](#Command-Line) the corresponding game will be started using the steam `-applaunch` parameter.
+
+#### Selection Menu
+There central menu is the Selection Menu
+from where all other submenus can be reached directly or indirectly.
+*(Currently)* it has following options:
+
+- **Exit** - Exit the program. If started from Steam game launch will be canceled as well
+- **GUI SETS** - Opens the submenu [Gui Settings Menu](#Gui-Settings-Menu) for several Gui related Settings 
+- **CATEGORY** - Opens the dropdown [Category Menu](#Category-Menu)
+- **GAME MENU** - Opens the [Game Menu](#Game-Menu)
+- **DEFAULT** - Opens the [Default Menu](#Default-Menu)
+- **GLOBAL** - Opens the 1st part of the [Global Menu](#Global-Menu)
+- **GLOBAL** - Opens the 2nd part of the [Global Menu](#Global-Menu)
+- **FAVORITES** - Opens the [Favorites Menu](#Favorites-Menu)
+- **EDITOR** - Opens the [Editor Dialog](#Editor-Dialog)
+- **PLAY** - Starts the current game
+
+![gui selection](https://github.com/frostworx/repo-assets/blob/master/pics/gui-selection.jpg)
+
+#### Gui Settings Menu
+ - **BACK** - Go back to previous menu
+ - **FAVORITES SELECTION** - Opens the [Favorites Selection](#Favorites-Selection) where the [Favorites Menu](#Favorites-Menu) entries can be selected
+ - **BLOCK CATEGORIES** - Opens the [Block Categories Selection](#Block-Categories-Selection) where whole Categories can be disabled
+ - **SORT CATEGORIES** -see [Sort Categories](#Sort-Categories)
+ - **GUI OPTIONS** - Opens the [GUI Options](#GUI-Options)
+ - **EXTRA BUTTONS** - Opens the [Extra Buttons Menu](#Extra-Buttons)
+
+![gui settings](https://github.com/frostworx/repo-assets/blob/master/pics/gui-settings.jpg)
+
+#### Category Menu
+A small dropdown Menu where a Sub Category Menu to open can be selected.
+The Menus are all autogenerated from the code.
+![category selection](https://github.com/frostworx/repo-assets/blob/master/pics/category-selection.jpg)
+
+The [GUI Options](#GUI-Options) option from the [Gui Settings Menu](#Gui-Settings-Menu) is simply one of those Menus.
+
+##### GUI Options
+An autogenerated Menu which offers all GUI related configuration options.
+
+![gui menu](https://github.com/frostworx/repo-assets/blob/master/pics/gui-menu.jpg)
+
+#### Game Menu
+The Game Menu is the Menu for the selected game *(either started from steam or via [Command Line](#Command-Line)/last started one)*
+All options in here are stored in the [Game Config](#Game-Config).
+
+#### Default Menu
+In the Default Menu the template [Default Config](#Default-Config) for all newly created gameconfigs
+for the [Game Menu](#Game-Menu) can be configured.
+
+#### Global Menu
+Here are all global configurations which are valid for all games. As these are pretty many Menu is split into two parts.
+
+#### Favorites Menu
+This is the user customizable Favorites Menu, which shows only the entries the user is interested in.
+It can be opened 
+- as [Start Menu](#Start-Menu) for the wait requester
+- via 
+- via [Selection Menu](#Selection-Menu)
+
+![favorites menu](https://github.com/frostworx/repo-assets/blob/master/pics/favorites-menu.jpg)
+
+It can be configured with the [Favorites Selection](#Favorites-Selection), which is opened automatically with a basic preset if nothing was selected yet.
+ 
+##### Favorites Selection
+Here the [Favorites Menu](#Favorites-Menu) entries can be selected.
+Every available Menu option can be selected via checkbox and is listed with description, tooltip and variablename.
+This Menu optionally also shows up, when the [Favorites Menu](#Favorites-Menu) is opened and no custom [Favorites Config](#Favorites-Config) exists (yet).
+For a quickstart, when started for the first time some entries are preselected. 
+
+![favorites selection](https://github.com/frostworx/repo-assets/blob/master/pics/favorites-selection.jpg)
+ 
+#### Block Categories Selection
+Here categories can be selected via checkbox, which should not show up in the Settings Menus at all.
+
+![block selection](https://github.com/frostworx/repo-assets/blob/master/pics/block-selection.jpg)
+
+#### Sort Categories
+An optionally preconfigured "menusort.conf" is opened with the [Editor](#Editor) where the default category sort order can be configured.
+Duplicate entries will be removed automatically.
+
+#### Extra Buttons
+A little Menu with some functions behind buttons, which do not find good into other locations.
+*(you have to export lots of variables and functions for 'vertical buttons' in yad, therefore this solution)*
+Currently only constist of
+
+- **BACK** - Go back to previous menu
+- **DOWNLOAD CUSTOM PROTON** - Opens the [Download Custom Proton](#Download-Custom-Proton) Menu
+- **UPDATE SHADERS** - Opens the [Shader Management](#Shader-Management) for the current game
+
+![extra buttons](https://github.com/frostworx/repo-assets/blob/master/pics/extra-buttons.jpg)
+
+#### Editor Dialog
+A little File selection requester allowing to choose which config files to open with the [Editor](#Editor).
+The [Editor Dialog](#Editor-Dialog) can be opened either via [Settings Menu](#Settings-Menu) or [via Command Line](#via-Command-Line).
 
 #### Gui Window Size
-When `SAVESETSIZE` is enabled in the Global Config Tab or [global.conf](#Global-Config) *(by default it is)* resolution changes of every **stl** window are automatically saved
+When `SAVESETSIZE` is enabled in the [Global Config](#Global-Config) *(f.e. via [Global Menu](#Global-Menu))* *(by default it is)* resolution changes of every **stl** window are automatically saved
 when the corresponding window is closed. This function requires xwininfo to work.
-All resolutions will be stored in the [gui config file](#Gui-Config).
-If you prefer window decoration to resize windows, you can enable it in the Global Config Tab or [global.conf](#Global-Config)
+All resolutions will be stored in the [Gui Config](#Gui-Config).
+If you prefer window decoration to resize windows, you can enable it in the [Global Menu](#Global-Menu) or directly in the [Global Config](#Global-Config)
 *(else hold Left-Alt while resizing the window while holding the right mouse button)*.
 
 ### Tray Icon
-When yad is used **stl** also offers a Tray Icon, which automatically starts and is available until **stl** (or the started game) exits.
-Can be disabled *(by default enabled)* with disabling `USETRAYICON` in the [Settings Menu](#Settings-Menu) Global Config Tab or [global.conf](#Global-Config).
+**stl** also offers a Tray Icon, which automatically starts and is available until **stl** *(or the started game)* exits.
+Can be disabled *(by default enabled)* with disabling `USETRAYICON` in the [Global Config](#Global-Config) *(f.e. via [Global Menu](#Global-Menu))* .
 Right Click opens The Menu.
 Middle Click Closes The Menu
 
 #### Tray Icon Buttons
-- "Pick Window Name" *(pick the window name and save it into the [Game Config](#Game-Configurations))*
-- "Get Active Window Name" *(waits 5 seconds and saves the window name of the active window into the [Game Config](#Game-Configurations))*
-- "Get Active Window Size" *(waits 5 seconds and saves the window size of the active window into the [Game Config](#Game-Configurations))* (f.e. for minimal [SBS-VR](#Side-by-Side-VR) window size)
 - "Kill Proton Game" *(kills the currently running Proton game by killing its wineserver)*
 - "Pause/Unpause active window" *(waits 5 seconds and un-/pauses the process of the window which is currently active)*
+- "Shader Menu" *(opens [Shader Management](#Shader-Management) for the currently running Game - Shaders can be added/removed on the fly here)*
+- "Open running game in VR" *(opens the running game in [SBS-VR](#Side-by-Side-VR))*
 
 ### Configuration Locations
 
@@ -237,7 +323,6 @@ The main user configuration directory `STLCFGDIR` can be found under
 `$HOME/.config/stl` (or `XDG_CONFIG_HOME/stl` if `XDG_CONFIG_HOME` is set).
 
 When started for the first time **stl** will initially create a default configuration structure in its configdir `STLCFGDIR`
-
 
 #### Systemwide Configuration
 The systemwide configuration directory `SYSTEMSTLCFGDIR` can be found under `/usr/share/$PROGCMD` *(/usr/share/stl/)*
@@ -250,7 +335,7 @@ custom per-game [registry](#Registry) files, which are autodetected and applied 
 *community contributed* [sbs tweaks](#SBS-Tweaks) which make sure specific games work ootb in [SBS-VR](#Side-by-Side-VR) mode using the provided configuration options
 
 ##### self maintaining configs
-With the variable `DLGLOBAL` being set to 1 (it is by default) **stl**
+With the variable `DLGLOBAL` being set to 1 *(it is by default)* **stl**
 uses systemwide configurations from the directory `STLDLDIR/stl` and also git pulls this repo into there (max once per day).
 This **only** is used when the systemwide configuration directory `SYSTEMSTLCFGDIR` does not exist at all!
 As almost no distro provides a stl package, the idea is that the user only has to copy stl into `$PATH`
@@ -259,40 +344,46 @@ No executable files will be used from here!
 
 Auto-generated [auto tweaks](#Auto Tweaks) imported from other platform will be loaded before global configs, so global configs override them by default.
 
-
-### Default Template Config
-`STLDEFGAMECFG` *(`$STLCFGDIR/default_template.conf`)*
-
-Contains the default configurations options used as template for every new game specific configfile.
-Most options are disabled by default. To deploy appropriate global options early this file should be adjusted early.
-
 ### Global Config
 `STLDEFGLOBALCFG` *(`$STLCFGDIR/global.conf`)*
 
 Contains universal configuration options used all games, f.e.
 file paths, command line options for supported 3rd party programs, but also general "behavior" settings
 *(f.e. [Logs](#Logs) mode or timeout for the [Settings Menu](#Settings-Menu) and [Editor](#Editor)WAITEDITOR)*
+All available options can be configured in the [Settings Menu](#Settings-Menu) with [Global Menu](#Global-Menu) being the central location.
+
 
 ### Gui Config
 `STLGUICFG` *(`$STLCFGDIR/gui.conf`)*
-All [window sizes](#Gui-Window-Size) will be stored in this config when `SAVESETSIZE` is enabled *(by default it is)*.
-
+All [window sizes](#Gui-Window-Size) will be stored in this config when `SAVESETSIZE` is enabled *(by default it is)* - see [Gui Window Size](#Gui-Window-Size).
 The initial resolution of all windows is calculated based on the screen-resolution.
 
 ### Url Config
 `STLURLCFG` *(`$STLCFGDIR/url.conf`)*
 For a transparent and easy overview all URLs available in **stl** are stored in here.
-As all variables are in plaintext, there's no extra URLs Tab in the [Settings Menu](#Settings-Menu)
-but the file can always be selected in the [Editor Dialog](#Editor-Dialog).
+The file can always be selected in the [Editor Dialog](#Editor-Dialog), but Url is also a usable Category available in the [Category Menu](#Category-Menu)
 
 ### Game Configurations
 
-`$STLGAMECFG` *(`$STLCFGDIR/gamecfgs/$SteamAppId.conf`)*
+#### Game Config
+`STLGAMECFG` *(`$STLCFGDIR/gamecfgs/$SteamAppId.conf`)*
 
-When starting a game using **stl** the game specific config file is searched in `STLGAMEDIR`
-and created if not available from the default config file *(which in turn is automatically created as well if not found)*.
-Additional individual configs can be loaded via multiple different [Tweaks](#Tweaks).
-Any option configured in here and also in [global.conf](#Global-Config) is overridden by this config.
+When starting a game using **stl** the game specific config file `STLGAMECFG` is searched in `STLGAMEDIR`
+and created if not available from the [Default config](#Default-Config) file *(which in turn is automatically created as well if not found)*.
+All available options can be configured in the [Settings Menu](#Settings-Menu) with [Game Menu](#Game-Menu) being the central location.
+
+#### Default Config
+`STLDEFGAMECFG` *(`$STLCFGDIR/default_template.conf`)*
+
+Contains the default configurations options used as template for every new [Game Config](#Game-Config).
+Most options are disabled by default. To deploy appropriate global options early this file should be adjusted early.
+All available options can be configured in the [Settings Menu](#Settings-Menu) with [Default Menu](#Default-Menu) being the central location.
+
+#### Favorites Config
+`STLFAVMENUCFG` *(`$STLCFGDIR/favorites.conf`)*
+Basically a plain list with all user selected configuration options variables which should be available in the
+[Favorites Menu](#Favorites-Menu). The config can be configured with the [Favorites Selection](#Favorites-Selection).
+
 
 ### Steam Categories
 **stl** parses the Steam categories of the started game and examines if a associated **stl** configuration file exists
@@ -310,27 +401,35 @@ or in the [system-wide](#Systemwide-Configuration) dir `GLOBALCATEGORYDIR` *(`SY
 where some category files are already preconfigured:
 
 a game in the corresponding category
+- **CheatEngine.conf** [Cheat Engine](#Cheat-Engine) is automatically started with the game.
 - **DOSBox.conf** is started automatically with linux native dosbox provided by [Boxtron](#Boxtron)
+- **GameConqueror.conf** [GameConqueror](#GameConqueror) is automatically started with the game.
 - **Luxtorpeda.conf** is started automatically with linux native binary provided by [Luxtorpeda](#Luxtorpeda)
 - **ReShadeVR.conf** is started automatically in [SBS-VR](#Side-by-Side-VR) mode using [ReShade](#ReShade)
 - **SBS-VR.conf** is started automatically in [SBS-VR](#Side-by-Side-VR) mode without Shader (for games with builtin Stereoscopic3D support)
 - **ScummVM.conf** is started automatically with linux native scummvm provided by [Roberta](#Roberta)
 - **Vortex.conf** is started automatically with the [Vortex](#Vortex) Mod Manager
 - **vkVR.conf** is started automatically in [SBS-VR](#Side-by-Side-VR) mode using [vkBasalt](#vkBasalt) and 
-- **Installer.conf** won't be started at all, but a requester lets one choose an exe which is started instead.
-- **Cheat.conf** [GameConqueror](#GameConqueror) is automatically started with the game.
 
 Multiple Category Configuration Files are possible, they are loaded one after another, with the last one overriding settings also found in the previous files.
 All settings which are also configured in `$STLGAMECFG` are overridden (but not overwritten).
 
 The function can be diabled per game with the option `CHECKCATEGORIES` 
 
+The same function also checks if a script with the same name  *(".sh" suffix expected)* as the Steam category is in the global `GLOBALTWEAKCMDDIR` and in the user `TWEAKCMDDIR`.
+When found it is executed before the game with following 3 commandline parameters
+ 1) SteamAppID
+ 2) Game directory
+ 3) Game wineprefix
+
+*(of course the script should not block the actual game start, and it is up to the user what is actually executed in the script)*
+
 ### Tweaks
 
 All different user writable tweakfiles live in their own subdirectory under `TWEAKDIR` *("$STLCFGDIR/tweaks")*
 
-If a tweak config `TWEAKCFG` ( `SteamAppID.conf` ) in `GLOBALTWEAKDIR` or `USERTWEAKDIR` (overrides global) is found its settings
-overrides the settings in the [`$STLGAMECFG`](#Game-Configurations).
+If a tweak config `TWEAKCFG` ( `SteamAppID.conf` ) in `GLOBALTWEAKDIR` or `USERTWEAKDIR` *(overrides global)* is found its settings
+overrides the settings in the [Game Config](#Game-Config).
 By means of this function it is be possible to contribute tweak configs required to get games to work hazzlefree out of the box to the community.
 With `CREATETWEAKS` a default template tweak file is autogenerated on game launch, to make creating one a bit easier.
 
@@ -390,7 +489,7 @@ Not exported variables are not available in the script, but usually none should 
 ### SBS Tweaks
 
 Game specific config files `SteamAppID.conf` both in and [system-wide](#Systemwide-Configuration) *(`GLOBALSBSTWEAKDIR`)* and [User Configurations](#User-Configuration) *(`SBSTWEAKDIR`)*
-with optimal settings for [SBS-VR](#Side-by-Side-VR) (f.e. launcher skips using the game exe as custom command).
+with optimal settings for [SBS-VR](#Side-by-Side-VR) *(f.e. launcher skips using the game exe as custom command)*.
 
 Here's an example config for trine 2 `STLCFGDIR/sbs/35720.conf`
 
@@ -399,7 +498,7 @@ Here's an example config for trine 2 `STLCFGDIR/sbs/35720.conf`
 #GAMENAME=Trine 2
 #GAMEEXE=trine2_launcher
 #GAMEID=35720
-RUN_CUSTOMCMD=1
+CUSTOMCMDMODE="always"
 CUSTOMCMD=trine2_32bit.exe
 ONLY_CUSTOMCMD=1
 GAMEWINDOW=Trine 2
@@ -452,7 +551,7 @@ When started directly from Steam **stl** searches for a gamefix for the current 
 If one is found the gamefix will be converted into a **stl** autotweakfile under `AUTOTWEAKDIR/protonfixes`.
 This config is then applied like described in [Auto Tweaks](#Auto Tweaks) above.
 
-Creating Auto Tweaks via **stl** command line:
+Creating Auto Tweaks via **stl** [Command Line](#Command-Line):
 
 `stl autotweaks|at ('dl') PLAFTORM (optional steamid)`
 
@@ -504,13 +603,9 @@ Currently following options are imported into the Auto Tweak file:
 To see how Auto Tweak files are created read general describtion from above [here](# Creating Auto Tweaks)
 
 
-### vortex.conf
-See [Vortex Configuration](#Vortex-Configuration)
-
-
 ### Downloads
 The `STLDLDIR` directory stores all downloads started through **stl**
-As of writing those are
+To name a few those are
 [Depth3D](#Depth3D) shader files
 [Vortex](#Vortex) the installation setup exe
 [ReShade](#ReShade) ReShade itself and required d3dcompiler dlls
@@ -518,21 +613,21 @@ As of writing those are
 [GFWL/xlive](#GFWL) xlive replacement
 [self maintaining configs](#self-maintaining-configs) stl itself will be downloaded here when self-maintaining-configs are used
 [Proton packages](#Proton) Proton packages
-
+[Shaders](#Shaders) all Shader repositories
 
 ### Logs
-Logs are written into the `LOGDIR` defined in the [global.conf](#Global-Config).
+Logs are written into the `LOGDIR` defined in the [Global Menu](#Global-Menu) / [Global Config](#Global-Config).
 The verbosity of the logfile depends on `WRITELOG` *(write logfile if not 0, increase verbosity from 1-2 (1:less, 2:all))*
-also defined in the [global.conf](#Global-Config).
+in the same location.
 There are several logfiles, those which are written mostly are the game specific ones *($SteamAppId.log)*
 
 ## Features in detail:
 
 #### Proton Selection
 **stl** provides the option to easily choose a specific Proton Version per game, by simply selecting one from an autogenerated dropdown Menu in
-the Game Settings Tab of the [Settings Menu](#Settings-Menu).
+the [Game Menu](#Game-Menu).
 
-The function can be en-/disabled in the [Settings Menu](#Settings-Menu) *(by default disabled!)*, but if **stl** is used as [Steam Compatibility Tool](#Steam-Compatibility-Tool) with a Proton game,
+The function can also be en-/disabled in the [Game Menu](#Game-Menu) *(by default disabled!)*, but if **stl** is used as [Steam Compatibility Tool](#Steam-Compatibility-Tool) with a Proton game,
 a force override flag disables the set flag, as it obviously requires any Proton version to start. In this case the latest official Proton Version is set by default.
 
 The List of available Proton Versions is generated on the first **stl** launch *(in `/dev/shm`)* and recreated when a new Proton Version was added on the fly.
@@ -554,19 +649,17 @@ There are several methods to add new entries to the list
 *(besides editing it manually / via [Editor Dialog](#Editor-Dialog))*:
 
 ###### Adding local Custom Proton
-a locally installed Custom Proton can be added either by
-
-- using the button `Add local Custom Proton` in the Game Settings Tab of the [Settings Menu](#Settings-Menu)
-- via command line: `stl addcustomproton` or just `stl acp` 
+a locally installed Custom Proton can be added
+- via [Command Line](#Command-Line): `stl addcustomproton` or just `stl acp` 
   *(accepting an absolute path to a proton executable as optional argument)*
 
-With either method a `proton` file can be selected via file-requester
+A `proton` file can be selected via file-requester
 and an optional "proton version name" can be entered in a separate field.
 
 ###### Download Custom Proton
 Custom Proton packages can also be downloaded and added by
-- using the button `Download Custom Proton` in the Game Settings Tab of the [Settings Menu](#Settings-Menu)
-- via command line: `stl dlcustomproton|dcp <url>`
+- using the button `Download Custom Proton` in the [Extra Buttons Menu](#Extra-Buttons)
+- via [Command Line](#Command-Line): `stl dlcustomproton|dcp <url>`
   *(accepting direct download URL  as optional argument)*
 
 With either method a download requester with a dropdown menu is opened.
@@ -590,17 +683,17 @@ If `AUTOPULLPROTON` is enabled *(it is by default)* **stl** will automatically d
 **stl** can optionally check if a newer version of the currently (per game) configured custom *(only!)* proton exists
 and automatically reacts depending on the user configuration.
 
-The variable `CHECKPROTON` can be set per game to either 0,1,2,3,4,5 where
-- 0 : the whole check is skipped
-- 1 : call checkProtonBump only when the settings menu is opened and open a [Custom Proton Autoupdate Requester](#Custom-Proton-Autoupdate-Requester)
-- 2 : call the function only before the game is launched and open a [Custom Proton Autoupdate Requester](#Custom-Proton-Autoupdate-Requester)
-- 3 : automatically download and extract  but don't replace the currently used custom proton version
-- 4 : automatically download, extract and replace the active custom proton version of the current game
-- 5 : only pop up notifier
+The variable `PROTONCHECK` can be set per game to one of the following:
+- `disabled`              : the whole check is skipped
+- `ask_before_menu`       : call checkProtonBump only when the settings menu is opened and open a [Custom Proton Autoupdate Requester](#Custom-Proton-Autoupdate-Requester)
+- `ask_before_game`       : call the function only before the game is launched and open a [Custom Proton Autoupdate Requester](#Custom-Proton-Autoupdate-Requester)
+- `auto_download`         : automatically download and extract  but don't replace the currently used custom proton version
+- `auto_download_and_use` : automatically download, extract and replace the active custom proton version of the current game
+- `only_notify`           : only pop up notifier
 
 ##### Custom Proton Autoupdate Requester
 If a newer minor version for the currently used custom Proton is available and 
-`CHECKPROTON` is either `1` or `2` (see [Custom Proton Autoupdate](#Custom-Proton-Autoupdate)
+`PROTONCHECK` is either `ask_before_menu` or `ask_before_game` (see [Custom Proton Autoupdate](#Custom-Proton-Autoupdate)
 a Requester will pop up, giving the option to either
 - skip the update
 - only download and extract the new custom proton version
@@ -614,11 +707,11 @@ At least the default language file (english) needs to be found, else **stl** wil
 **stl** searches both in the [Systemwide Configuration](#Systemwide-Configuration) and in the [User Configuration](#User-Configuration) for language files,
 where those in the latter have a higher priority *(so copying a systemwide file to improve it is possible)*
 
-Every language found can be selected from the Language Dropdown Menu in the Global Settings Tab of the [Settings Menu](#Settings-Menu).
+Every language found can be selected from the Language Dropdown Menu in the [GUI Options](#GUI-Options).
 *(a change requires a restart to take effect)*.
 
 To give also the option to get a translated description in freshly created **stl** configfiles
-it is also possible to define an available language or an absolute path to a valid language file with the `lang=` command line option.
+it is also possible to define an available language or an absolute path to a valid language file with the `lang=` [Command Line](#Command-Line) option.
 
 When no language file was found as a last resort **stl** will download its own projectpage and use the language file from there.
 
@@ -628,23 +721,18 @@ simply duplicate one of the existing ones and translate all variables inside)*
 #### Steam Linux Runtime
 Introduced with proton 5.13-1 the Steam Linux Runtime is autostarted and part of the game command line parameters.
 
-This *(currently)* breaks compatibility with several tools like
-[MangoHud](#MangoHud), [vkBasalt](#vkBasalt), [Gamemode](#GameMode), [GameScope](#GameScope), [Boxtron](#Boxtron), [Roberta](#Roberta), [Luxtorpeda](#Luxtorpeda)
-*(not sure of all of them are affected or others are missing, feel free to test and report bugs)*
-
-With **stl** is used as [Launch Option](#Launch-Option)
+When **stl** is used as [Launch Option](#Launch-Option)
 both the Steam Linux Runtime and the [Proton Version](#Proton Selection) show up in the Steam Game launch command and therefore can be read by **stl**.
-In that case the Steam Linux Runtime can be disabled per game in the **GAME SETTINGS** of the [Settings Menu](#Settings-Menu) or [in game configfile `$STLGAMECFG`](#Game-Specific-Configuration)
+In that case the Steam Linux Runtime can be disabled per game in the [Game Config](#Menu-Config) *(f.e. via [Game Menu](#Game-Menu))*
 and if one *(or more)* of above confliciting tools are enabled **stl** warns that it is incompatible with the Steam Linux Runtime *(for now)*.
 
 When starting **stl** as [Steam Compatibility Tool](#Steam-Compatibility-Tool) there are no Steam Linux Runtime parameters in the Steam Game launch command and therefore cannot be disabled
 *(maybe comparable to the [Proton Version](#Proton Selection) which doesn't show up as command line parameter as well and is used 'under the hood')*.
 
-
 #### Game Launcher
 
 **stl** comes with a small Game Launcher, which starts selected games using the steam `-applaunch` parameter.
-The Launcher has several modes, which can be selected via command line:
+The Launcher has several modes, which can be selected via [Command Line](#Command-Line):
 - Without additional command line parameters:
   `stl launcher` *(will start the Game Launcher with all installed games)*
 - Optional arguments for launcher are:
@@ -664,7 +752,7 @@ With above `auto` both [Game Pictures](#Game-Pictures) and [Desktop Files](#Desk
 #### Game Pictures
 
 By default **stl** downloads automatically the main `header.jpg` picture from *(configurable `STASSURL`)* if not found and saves it under the `SteamAppID` name.
-Those pictures are used in the [Game Launcher](#Game-Launcher) *(via [Desktop File](#Desktop-Files))* and also in the ["Main Timeout Window"](#On-Game-Launch),
+Those pictures are for example used in the [Game Launcher](#Game-Launcher) *(via [Desktop File](#Desktop-Files))* and also in the [Wait requester](#Wait-Requester),
 in the [Editor Dialog](#Editor-Dialog) and in the [Settings Menu](#Settings-Menu).
 
 Downloading of the Game Pictures can be disabled with `DLGAMEDATA` in the **GLOBAL SETTINGS** of the [Settings Menu](#Settings-Menu).
@@ -678,7 +766,7 @@ Those Desktop-Files are [autogenerated](#Game-Data) using the *(big)* [Game Pict
 #### Game Data
 
 Both [Game Pictures](#Game-Pictures) and [Desktop Files](#Desktop-Files) *(for the [Game Launcher](#Game-Launcher))* are autogenerated/downloaded
-per game start by default but also can be batch created via command line:
+per game start by default but also can be batch created via [Command Line](#Command-Line):
 
 - `stl update gamedata` *(updates missing desktopfiles and pictures of installed games and exits - depending on the missing files this might need some time)*
 - `stl update gamedata $APPID` *(updates missing desktopfiles and picture for game `$APPID`)*
@@ -686,24 +774,27 @@ per game start by default but also can be batch created via command line:
 
 
 #### Custom Program
+*(in [Game Menu](#Game-Menu) and [Game Config](#Game-Config))*
 
 When enabled you can start custom programs easily with the following per-game config options:
 
-- `RUN_CUSTOMCMD`: set to 1 or 2 *(see below)* to start the custom command `CUSTOMCMD`
+- `CUSTOMCMDMODE`: set to 1 or 2 *(see below)* to start the custom command `CUSTOMCMD`
 - `CUSTOMCMD`: start this custom command
 - `CUSTOMCMD_ARGS`: start `CUSTOMCMD` command with those args
 - `ONLY_CUSTOMCMD`: set to 1 to only start `CUSTOMCMD` and not the game command itself
 - `FORK_CUSTOMCMD`: set to 1 to fork the custom `CUSTOMCMD` into the background and continue with starting `%command%`
 
-If only `RUN_CUSTOMCMD` is enabled, but `CUSTOMCMD` is empty, a requester will open where a executable file can be selected.
-When `RUN_CUSTOMCMD` is 1 this selected file is automatically written into the [in game configfile `$STLGAMECFG`](#Game-Specific-Configuration).
-When `RUN_CUSTOMCMD` is 2 this selected file is only started this time without saving the exe into the config.
+If only `CUSTOMCMDMODE` is enabled, but `CUSTOMCMD` is empty, a requester will open where a executable file can be selected.
+When `CUSTOMCMDMODE` is `"always"` this selected file is automatically written into the [Game Config](#Game-Config).
+When `CUSTOMCMDMODE` is `"once"` this selected file is only started this time without saving the exe into the config.
 This is especially useful for installers *(see provided [Steam Category](#Steam-Categories) 'Installer')*
 
 If string `CUSTOMCMD` can't be found as file in either `PATH`, in game dir or as absolute filepath the requester will open as well.
 
 #### Start Stop Scripts
 If commands are defined in `USERSTART` `USERSTOP` they will be executed when a game starts/ends.
+*(in [Game Menu](#Game-Menu) and [Game Config](#Game-Config))*
+
 Of course the user is responsbile for what is executed here and needs take care that it both works and exits correctly!
 
 Both scripts make use of following commandline arguments:
@@ -713,25 +804,27 @@ Both scripts make use of following commandline arguments:
 
 #### Winetricks
 [Winetricks](https://wiki.winehq.org/Winetricks)
+*(in [Game Menu](#Game-Menu) and [Game Config](#Game-Config))*
 GUI:
 Set `RUN_WINETRICKS` to 1 to start winetricks gui before game launch
 
 Silent winetricks installation:
 - `WINETRICKSPAKS`: install all packages in WINETRICKSPAKS silently with winetricks
 
-
 Set `DLWINETRICKS` to 1 download/and automatically update winetricks instead of using/depending on the systemwide installation
 
+dotnet installation might be problematic because of this [wine bug](https://bugs.winehq.org/show_bug.cgi?id=49897)
+**stl** opens a *(non-blocking)* warn requester if a incompatible wine version was found until the bug is fixed.
 
 #### Winecfg
+*(in [Game Menu](#Game-Menu) and [Game Config](#Game-Config))*
 - `RUN_WINECFG`: set to 1 to start winecfg before game launch
-
 
 #### Boxtron
 
 [Boxtron](https://github.com/dreamer/boxtron):
 
-The global configs `BOXTRONCMD` and `BOXTRONARGS` in the [global.conf](#Global-Config) need to be set correcty initially.
+The global configs `BOXTRONCMD` and `BOXTRONARGS` in the [Global Config](#Global-Config) *(f.e. via [Global Menu](#Global-Menu))*  need to be set correcty initially.
 It should not be necessary to change the default `ROBERTAARGS`.
 Defaults are:
 **
@@ -740,14 +833,14 @@ BOXTRONARGS=--wait-before-run
 **
 which is at least valid if you are on Arch Linux and installed boxtron from AUR.
 
-To start a game with boxtron either set `USEBOXTRON` in the [gameconfig `$STLGAMECFG`](#Game-Configurations) or put the game into the [steam category](#Steam-Categories) "DOSBox"
+To start a game with boxtron either set `USEBOXTRON` in the [Game Config](#Menu-Config) *(f.e. via [Game Menu](#Game-Menu))* or put the game into the [steam category](#Steam-Categories) "DOSBox"
 Alternatively duplicate the file to a different name which you want to use as category name, ideally into [`STLCATEGORYDIR`.](#Steam-Categories).
 
 #### Roberta
 
 [Roberta](https://github.com/dreamer/roberta):
 
-The global configs `ROBERTACMD` and `ROBERTAARGS` in the [global.conf](#Global-Config) need to be set correcty initially.
+The global configs `ROBERTACMD` and `ROBERTAARGS` in the [Global Config](#Global-Config) *(f.e. via [Global Menu](#Global-Menu))* need to be set correcty initially.
 It should not be necessary to change the default `ROBERTAARGS`.
 Defaults are:
 **
@@ -756,13 +849,13 @@ ROBERTAARGS=--wait-before-run
 **
 which is at least valid if you installed roberta manually.
 
-To start a game with roberta either set `USEROBERTA` in the [gameconfig `$STLGAMECFG`](#Game-Configurations) or put the game into the [steam category](#Steam-Categories) "ScummVM"
+To start a game with roberta either set `USEROBERTA` in the [Game Config](#Menu-Config) *(f.e. via [Game Menu](#Game-Menu))* or put the game into the [steam category](#Steam-Categories) "ScummVM"
 Alternatively duplicate the file to a different name which you want to use as category name, ideally into [`STLCATEGORYDIR`.](#Steam-Categories-dir).
 
 #### Luxtorpeda
-[Luxtorpeda-dev](https://github.com/luxtorpeda-dev/luxtorpeda) or (untested) the [main branch](https://github.com/dreamer/luxtorpeda)
+[Luxtorpeda-dev](https://github.com/luxtorpeda-dev/luxtorpeda) or *(untested)* the [main branch](https://github.com/dreamer/luxtorpeda)
 
-The global configs `LUXTORPEDACMD` and `LUXTORPEDAARGS` in the [global.conf](#Global-Config) need to be set correctly initially.
+The global configs `LUXTORPEDACMD` and `LUXTORPEDAARGS` in the [Global Config](#Global-Config) *(f.e. via [Global Menu](#Global-Menu))*  need to be set correctly initially.
 It should not be necessary to change the default `LUXTORPEDAARGS`.
 
 Defaults are:
@@ -772,30 +865,33 @@ LUXTORPEDAARGS=wait-before-run
 **
 which is at least valid if you installed roberta manually.
 
-To start a game with luxtorpeda either set `USELUXTORPEDA` in the [gameconfig `$STLGAMECFG`](#Game-Configurations) or put the game into the [steam category](#Steam-Categories) "Luxtorpeda"
+To start a game with luxtorpeda either set `USELUXTORPEDA` in the [Game Config](#Menu-Config) *(f.e. via [Game Menu](#Game-Menu))* or put the game into the [steam category](#Steam-Categories) **"Luxtorpeda"**
 Alternatively duplicate the file to a different name which you want to use as category name, ideally into [`STLCATEGORYDIR`.](#Steam-Categories-dir).
 The luxtorpeda-dev dev was so kind to add a manual-download option in v20, so if native game files are missing they are downloaded before the actual game launch now.
 Therefore it is recommended to use the lastest luxtorpeda-dev version.
 
 #### Native Games
 **stl** also works with native linux games.
-The implementation is pretty new, so please report back if there are false positives in the detection. Currently the first distinction is if "waitforexitandrun" appears in the game %command%.
+Currently the first distinction is if "waitforexitandrun" appears in the game %command%.
 If yes, **stl** assumes we have a proton game. Now, when another check finds "steamapps/common" (without "waitforexitandrun") a linux game is assumed, and the *(now generic)* launchSteamGame function is started.
 Looks like only proton games have the Variable `STEAM_COMPAT_DATA_PATH`, so if it is missing several features are disabled in the setLinGameVals function,
-as they do not work with native linux games (f.e. [ReShade](#ReShade)) *(still visible in the Settings though)*. The Game and Exe Path Variables are differently extracted as well when `STEAM_COMPAT_DATA_PATH` is missing.
+as they do not work with native linux games (f.e. [ReShade](#ReShade)). The Game and Exe Path Variables are differently extracted as well when `STEAM_COMPAT_DATA_PATH` is missing.
 
 
 #### GFWL
 Some games still depend on GFWL which is discountinued and doesn't work under wine.
 With the variable `NOGFWL` set to 1 for a game **stl** takes care that
 everything is configured automatically to start the game ootb.
+*(in [Game Menu](#Game-Menu) and [Game Config](#Game-Config))*
 If the dependant xlive.dll is missing it will be downloaded automatically
 ( [from Ultimate-ASI-Loader](https://github.com/ThirteenAG/Ultimate-ASI-Loader/releases) )
 into `$STLDLDIR/xlive/` and installed into the gamedir.
-**stl** ships already several tweak files, which enable `NOGFWL` for several games (f.e.: "Fable 3 (105400)", "Resident Evil 5 (21690)", "Kane and Lynch Dead Men (8080)", "FlatOut Ultimate Carnage (12360)"
+**stl** ships already several tweak files, which enable `NOGFWL` for some games (f.e.: "Fable 3 (105400)", "Resident Evil 5 (21690)", "Kane and Lynch Dead Men (8080)", "FlatOut Ultimate Carnage (12360)"
 
 #### WMP10
 Games which depend on WMP10 can be played by setting the variable `HACKWMP10` to 1.
+*(in [Game Menu](#Game-Menu) and [Game Config](#Game-Config))*
+
 [Tweak](#Tweaks) with automatic support already implemented for
 
 **
@@ -817,10 +913,10 @@ Vortex will start, with the selected game preconfigured and ready to mod
 and when you exit Vortex the selected game will start normally (with your mods).
 
 ###### Start Vortex using commandline:
-see `stl --help`
+see [Command Line](#Command-Line)
 
 ###### Start Vortex by enabling it in the Settings Menu:
-The `VORTEXMODE` option in the Game Tab of the [Settings Menu](#Settings-Menu) has the following modes:
+The `VORTEXMODE` option in the [Game Config](#Menu-Config) *(f.e. via [Game Menu](#Game-Menu))* has the following modes:
 - "disabled": Vortex won't be used
 - "normal": Vortex will be started regularly
 - "quickstart": Vortex will be started but some checks are skipped
@@ -829,12 +925,17 @@ The `VORTEXMODE` option in the Game Tab of the [Settings Menu](#Settings-Menu) h
 ##### stl Vortex gif
 ![stl Vortex in action](https://github.com/frostworx/repo-assets/blob/master/gifs/stl-vortex.gif)
 
-**Installation?**
-If Vortex is not yet installed, it will be installed on the first launch, so the first launch will need some time (mostly depends on dotnets mind of its own... maybe 5 minutes).
-Alternatively you can also install it via command line (see below).
-If using proton-wine for `VORTEXWINE` (which is default if it is not configured) the `WINEPREFIX` user is "steamuser" (as always with proton wine).
-When you switch to a wine version which doesn't patch the username to "steamuser" your user-settings are emtpy of course.
+**Installation**
+If Vortex is not yet installed, it will be installed on the first launch, so the first launch will need some time
+*(mostly depends on dotnets mind of its own... maybe 5 minutes - see [Additional Vortex Notes](#Additional-Vortex-Notes))*.
+
+Alternatively you can also install it via [Command Line](#Command-Line) *(see below)*.
+If using proton-wine for `VORTEXWINE` (which is default if it is not configured) the `WINEPREFIX` user is "steamuser" *(as always with proton wine)*.
+When you switch to a wine version which doesn't patch the username to "steamuser" your user-settings are empty of course *(not recommended)*
 **stl** will not symlink in between those two users!
+
+**Currently it [is recommended](#Additional-Vortex-Notes) to use an older wine/proton version with Vortex.**
+**When the default wine for Vortex is unconfigured stl tries to autodetect an old Proton4 wine and use that (when found)**
 
 **Functionality**:
 Some settings are preconfigured, to make this working without any user configuration, but of course all of the settings can be as well configured if you want.
@@ -842,14 +943,8 @@ Some settings are preconfigured, to make this working without any user configura
 ##### Vortex Configuration
 
 **stl** uses an extra vortex directory inside `STLCFGDIR` defined under `STLVORTEXDIR`
-This directory contains the Vortex configfile `STLVORTEXCFG` *(`STLCFGDIR`/vortex/vortex.conf`)*
-
-Here are the main configuration options, for a full list, simply look into the [Settings Menu](#Settings-Menu)
-- `VORTEXWINE`: the wine binary used for Vortex - **defaults to wine from Newest Official Proton installed**
-- `VORTEXPREFIX`:the `WINEPREFIX` path used for Vortex - **default is `STLVORTEXDIR/wineprefix`**
-- `VORTEXDOWNLOADPATH`: the path where all Vortex downloads should be stored - **default is `STLVORTEXDIR/downloads`**
-- `VORTEXINSTALL`: download and install Vortex automatically if set to 1 **default enabled**
-- `DISABLE_AUTOSTAGES`: set to 1 if you don't want **stl** to try to auto set/create [Vortex Stages](#Vortex-Stages) directories **default 0**
+Vortex is one of the **stl** Categories so it has an own Vortex Menu available in the [Category Menu](#Category-Menu)
+Most available options are stored in the [Global Config](#Global-Config)
 
 ##### Vortex Stages
 
@@ -873,10 +968,6 @@ Here the default "Vortex Staging directory" is `STLVORTEXDIR/staging` instead.
 Other additional paths can be added easily, just make suggestions.
 If you don't want that automation just set `DISABLE_AUTOSTAGES` to 1 and set them manually instead:
 
-###### Manual `VORTEXSTAGELIST` configuration
-Simply add one writable directory per Steam Library partition you want to use to the `VORTEXSTAGELIST`.
-This can also be done directly by using the `add Vortex Stage button` in the Vortex Tab of the [Settings Menu](#Settings-Menu).
-
 ##### Script Extender
 Several games *(Skyrim, Fallout flavours)* have many mods which depends on a special "Script Extender" program ("SE").
 Unfortunately those "SE" programs don't [work with default proton since some time](https://github.com/ValveSoftware/Proton/issues/170).
@@ -889,17 +980,18 @@ When **stl** detects one of those "SE exe" files in the game dir, a requester wi
 When choosing "SE exe" make sure the [selected Proton Version](#Proton-Selection) is can actually run the exe!
 
 *(The "don't ask again" option `SELAUNCH` can't be set in the [Settings Menu](#Settings-Menu)
-and must be removed manually from the [game config](#Game Configurations) -f.e. via [Editor Dialog](#Editor-Dialog)*
+and must be removed manually from the [Game Config](#Game-Config) -f.e. via [Editor Dialog](#Editor-Dialog)*
 
-
-#####  Some additional Notes
+##### Additional Vortex Notes
 
 - On the first start Vortex warns that it is started with admin privileges. Very likely wine related, just click it away, it won't pop up again
-- I tested ~25 games and they worked ootb, feel free to open an issue for a not (automatically) working game if you think this is a **stl** bug. (Nehrim doesn't seem to work (yet))
+- I tested ~25 games and they worked ootb, feel free to open an issue for a not *(automatically)* working game if you think this is a **stl** bug. *(Nehrim doesn't seem to work (yet))*
 - It was pretty much work to get this into the current state, but although I tested a lot there still might be glitches and problems.
-  Also Vortex can stop working under linux/wine anytime after an update (as it already did before).
-  Don't complain and rant when it doesn't work as expected (anymore) (as it happened already before with other Vortex-linux solutions),
-  but try to help fixing the issue instead then (no offense, but imho linux already had better times regarding this).
+  Also Vortex can stop working under linux/wine anytime after an update *(as it already did before)*.
+  Don't complain and rant when it doesn't work as expected *(anymore)* *(as it happened already before with other Vortex-linux solutions)*,
+  but try to help fixing the issue instead then *(no offense, but imho linux already had better times regarding this!)* **!**
+- Vortex depends on dotnet48. See [Winetricks](#Winetricks) for initial installation & check your winetricks.log
+  *(Vortex installs and works fine with wine from Proton 4.11)*
 
 #### Registry
 
@@ -946,35 +1038,37 @@ The vr-video-player author was so kind to accept a little patch, to work better 
 It is possible to live zoom in and out and the zoom state is written into a temporary file, which **stl** picks up.
 The value is stored in the internal [SBS Tweak](#SBS-Tweaks) config (also when changed) and read from there from now on.
 
-To make switching between game- and vr-video-player window easier (with hmd) there is also the option `TOGGLEWINDOWS`:
-When enabled, all visible windows will minimize on game start, and will maximize back when game finishes
+To make switching between game- and vr-video-player window easier (with hmd) there is also the option [Toggle Open Windows](#Toggle-Open-Windows)
 So switching between the windows is easily possible with *Alt+Tab*.
-`TOGGLEWINDOWS` is also enabled by default in the **VR** [Steam Categories](#Steam-Categories) *(ReShadeVR,SBS-VR,vkVR.conf)*
+It is also enabled by default in the **VR** [Steam Categories](#Steam-Categories) *(ReShadeVR,SBS-VR,vkVR.conf)*
 
 #### GameMode
 [gamemode](https://github.com/FeralInteractive/gamemode)
-- `USEGAMEMODERUN`: set to 1 to start game with gamemoderun
-*([User Configuration](#User-Configuration) overrides [system-wide configuration](#Systemwide-Configuration))*
+*(in [Game Menu](#Game-Menu) and [Game Config](#Game-Config))*
+`USEGAMEMODERUN`: set to 1 to start game with gamemoderun
 
 #### Notifier
 Set `NOTY` to your notifier to draw some start/stop **stl** messages
 
 #### MangoHud
 [MangoHud](https://github.com/flightlessmango/MangoHud)
+*(in [Game Menu](#Game-Menu) and [Game Config](#Game-Config))*
 Set `MANGOHUD` to 1 to enable mangohud *(does nothing in stl itself, but just exports the upstream variable)*
 
 #### Nyrna
 [Nyrna](https://github.com/Merrit/nyrna)
+*(in [Game Menu](#Game-Menu) and [Game Config](#Game-Config))*
 Set `RUN_NYRNA` to 1 to enable nyrna while game is running 
-*([User Configuration](#User-Configuration) overrides [system-wide configuration](#Systemwide-Configuration))*
 
 #### ReplaySorcery
 [ReplaySorcery](https://github.com/matanui159/ReplaySorcery)
+*(in [Game Menu](#Game-Menu) and [Game Config](#Game-Config))*
 Set `RUN_REPLAY` to 1 to enable replay-sorcery while game is running 
-*([User Configuration](#User-Configuration) overrides [system-wide configuration](#Systemwide-Configuration))*
 
 #### GameConqueror
 [GameConqueror](https://github.com/scanmem/scanmem)
+*(in [Game Menu](#Game-Menu) and [Game Config](#Game-Config))*
+
 Set `RUN_GAMCON` to 1 to automatically start GameConqueror when the game starts.
 The game exe will be loaded into GC automatically,
 but also can be overridden with `GAMCONWAITEXE` *(f.e. for games starting a launcher)*.
@@ -986,16 +1080,37 @@ Enabling GameConqueror is also possible by simply adding the game to the "Cheat"
 
 Some games *(afaik mostly multiplayer)* are not cheat-safe and could lead to a ban, so **be careful with cheating**!
 
+#### Cheat Engine
+[CheatEngine](https://github.com/cheat-engine/cheat-engine)
+*(in [Game Menu](#Game-Menu) and [Game Config](#Game-Config))*
+Set `RUN_CHEATENGINE` to 1 to automatically start CheatEngine when the game starts.
+When the game exits CheatEngine will be closed automatically as well.
+
+When the CheatEngine installation can't be found, it will be installed automatically,
+using innoextract if available or with wine as fallback.
+For the latter an own temporary `WINEPREFIX` is created and removed after succesful extraction of the CheatEngine directory.
+In both cases the productive directory is inside the `STLCEDIR` and is used from there without any active installation into the corresponding game `WINEPREFIX`.
+
+If the CheatEngine Installer Setup can't be found, it will be downloaded automatically.
+The CheatEngine Version `CHEATENGINEVERSION` can be found in the [global.conf](#Global-Config).
+
+Enabling CheatEngine is also possible by simply adding the game to the "CheatEngine" [[Steam Category](#Steam-Categories).
+
+Some games *(afaik mostly multiplayer)* are not cheat-safe and could lead to a ban, so **be careful with cheating**!
+
 #### GameScope
 [GameScope](https://github.com/Plagman/gamescope)
+*(in [Game Menu](#Game-Menu) and [Game Config](#Game-Config))*
 Set `USEGAMESCOPE` to 1 to automatically start GameScope when the game starts, either per game or globally.
 The commandline arguments used *(`GAMESCOPE_ARGS`)* can be configured both per game and globally as well.
 
 #### Toggle Open Windows
+*(in [Global Menu](#Global-Menu) and [Global Config](#Global-Config))*
 minimize all open windows on game start and maximize them when game exited using xprop
 - `TOGGLEWINDOWS`: toggle visibility of all open windows on start/stop
 
 #### Strace
+*(in [Game Menu](#Game-Menu) and [Game Config](#Game-Config))*
 If `STRACERUN` is set to 1 **stl** will write a strace log of the launched game
 strace is launched with the commandline arguments found in `STRACEOPTS`.
 
@@ -1007,6 +1122,7 @@ Either
 as root or enable it persistent in sysctl.
 
 #### Network Monitoring
+*(in [Game Menu](#Game-Menu) and [Game Config](#Game-Config))*
 Basic Network Traffic Monitor
 - `NETMON`: program to record game network-traffic with arguments `NETOPTS` - used when enabled
 
@@ -1015,6 +1131,7 @@ duplicate lines are unique sorted at the end.
 
 #### ReShade
 [ReShade](https://reshade.me)
+*(in [Game Menu](#Game-Menu) and [Game Config](#Game-Config))*
 Set `INSTALL_RESHADE` to 1 to automatically install reshade into the selected game dir.
 Set `USERESHADE` to 1 to start game with ReShade enabled
 
@@ -1056,6 +1173,8 @@ If `CLONE_DEPTH3D` is set to 1 the git repository will be automatically cloned/p
 
 With `RESHADE_DEPTH3D` enabled `Overwatch.fxh`, `SuperDepth3D.fx`, `SuperDepth3D_VR.fx` from Depth3D are copied to the gamedir.
 When the game started just create a initial profile by selecting the autodetected `SuperDepth3D_VR.fx`
+The Depth3D Shader is automatically deactivated if HMD wasn't detected or VR mode was stopped otherwise and re-enabled on success.
+
 Also see [Shader Management](#Shader-Management)
 
 #### Shader-Management
@@ -1067,15 +1186,18 @@ Also see [Shader Management](#Shader-Management)
   - all checked Shaders will be installed into the current game directory
   - all unchecked Shaders will be removed from the current game directory
   - The Shader Selection Menu can be started
-    - via command line _(with any directory as destination path)_
-    - directly from the [Settings Menu](#Settings-Menu)
+    - via [Command Line](#Command-Line) _(with any directory as destination path)_
+    - directly from the [Extra Buttons Menu](#Extra-Buttons)
     - automatically before game start
     - via [Tray-Icon](https://github.com/frostworx/steamtinkerlaunch#Tray-Icon) _(so Shaders could be installed while the game is already running)_
 - for games with launchers not being in the same path as the actual game exe the destination path can be overridden _(used for both Shaders and [ReShade](#ReShade))_
 - added ShaderMenu Steam Category which installs [ReShade](#ReShade) into the game directory and opens the Shader Selection Menu
+- additional files required by installed Shaders (f.e. textures) are automatically installed as well into the game directory
+
+![shader dialog](https://github.com/frostworx/repo-assets/blob/master/pics/shader-dialog.jpg)
 
 #### Editor
-Config files can optionally be opened with the texteditor `STLEDITOR` if desired, either by accepting a requester (for editing Tweakfiles) or by opening
+Config files can optionally be opened with the texteditor `STLEDITOR` if desired, either by accepting a requester *(for editing Tweakfiles)* or by opening
 Configfiles within the [Editor Dialog](#Editor-Dialog) started directly or as submenu of the [Settings Menu](#Settings-Menu).
 
 If xdg-open is configured as `STLEDITOR` or if the configured editor is not found, **stl** tries to autoconfigure an installed texteditor.
@@ -1085,12 +1207,9 @@ Set `OPENEDITORURL` to 1 to additionally open the `EDITORURL` url for the game i
 *(by default the url `$OPENEDITORURL/$SteamAppID` is opened, if this doesn't work with the url you want to open just open an issue)*
 If `EDITORURL` contains "AID" it will be replaced by the current SteamAppID.
 
-#### Editor Dialog
-A little File selection requester allowing to choose which config files to open with the [Editor](#Editor).
-The [Editor Dialog](#Editor-Dialog) can be opened either via [Settings Menu](#Settings-Menu) or [via Command Line](#via-Command-Line).
 
 #### ENV Variables
-Literally every env variable can be set in [gameconfig `$STLGAMECFG`](#Game-Configurations) and [system-wide configuration](#Global-Config),
+Literally every env variable can be set for example in [Game Config](#Game-Config) or [Global Config](#Global-Config),
 making it pretty easy to tinker with important ones *(f.e `PROTON`* , `DXVK`* , `MANGOHUD`, `RADV_PERFTEST`, `WINE`...)*
 The Possibilities Are Endless...
 
@@ -1098,7 +1217,78 @@ The Possibilities Are Endless...
 **stl** has pretty much to check, but when everything is configured, several option-checks can be disabled (per game)
 to speed up the actual game start process.
 Here are some examples which improve the start notably *(all settings can be configured in the [Settings Menu](#Settings-Menu))*
-- set `WAITEDITOR` to `0` [on Game Launch](#On-Game-Launch)
+- set `WAITEDITOR` to `0` [Wait requester](#Wait-Requester)
 - set `CHECKCATEGORIES` to `0` if the Game has no [Steam Category](#Steam-Categories) Tweak anyway
 - set `SAVESETSIZE` to `0` when all windows have their optimal [size](#Gui-Window-Size)
+- *(IMHO)* games start much faster when **stl** is configured as [Steam Compatibility Tool](#Steam-Compatibility-Tool) instead of [Launch Option](#Launch-Option).
+  The reason is probably simply that the Steam Linux Runtime isn't loaded when using a [Steam Compatibility Tool](#Steam-Compatibility-Tool).
+
+## Command Line
+**stl** also has several command line options which are useful outside steam.
+Available options are *(output of `stl help`)*:
+$ stl help
+=========================
+SteamTinkerLaunch v3.1.335
+=========================
+Usage: stl [options]...
+
+where options include:
+    addcustomproton|acp <path>       Adds local custom Proton to
+                                       the internal list from dialog
+                                       or directly from <path>
+    autotweaks|at ('dl') <platform>  Import all fixes as stl-tweak
+                                       from <platform>. Valid platforms:
+                                       protonfixes lutris
+                                       'dl' updates the source before import
+    block                            Opens the category Block selection menu
+    compat <cmd>                     Will (add|del|get) stl as
+                                       Steam compatibility tool
+                                       under 'STEAMCOMPATOOLS'
+    dlcustomproton|dcp <url>         Download/install custom Proton
+                                       from filerequester or
+                                       directly from <url>
+    editor <value>                   Opens the editor menu
+                                       (for 'SteamAppID' or 'last')
+    fav <value>                      Opens the favorite menu
+                                       (for 'SteamAppID' or 'last')
+    lang=<option>                    Mostly to get translated configs
+                                       on inital setup. <option> can be
+                                       a language file name without suffix
+                                       or an path to a valid language file
+    launcher <args>                  Start the Game Launcher
+             CATEGORY                  Show only installed games
+                                       from Steam Category CATEGORY
+             menu                      Open Steam Category Menu
+             last                      Open last Game as 'Menu'
+             auto                      Create/Download data for all
+                                       installed games first
+             update                    ReCreate all Category Menus
+                                       Can be combined with auto
+    set <var> <for> <value>          Change configuration settings
+                                       Example:
+    set RUN_REPLAY all 1               Set RUN_REPLAY for all games to 1
+    settings <value>                 Opens the Settings Menu
+                                       (for 'SteamAppID' or 'last')
+    update <value>                   Updates <value>:
+           git                         Will update stl git repo
+                                       in 'GLDLSTLDIR'
+           gamedata <SteamAppID>       Updates missing desktopfiles
+                                       and pictures of installed games
+                                       or only from <SteamAppID>
+           allgamedata                 The same as above for
+                                       all games in sharedconfig.vdf
+           shaders <shadername>        all enabled shaders or <shadername>
+                                       'list' to list shaders
+           gameshaders <gamedir>       open shader selection for <gamedir>
+                                       or for last gamedir
+           reshade <version>           (re)-download ReShade (version)
+    vortex <value>                   Vortex commandline options
+           install                     Installs vortex
+           start                       Starts vortex
+           getset                      Show config of installed vortex
+           stage <path>                Add vortex stage via dialog
+                                       or directly the one given in <path>
+    vr <windowname> <SteamAppID> <s> Start SBS-VR mode for <windowname>
+                                       and game <SteamAppID>
+                                       's'ave windowname for the game
 
