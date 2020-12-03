@@ -123,6 +123,7 @@ or just to browse through the latest version**
 * **[Custom Proton Autoupdate](#Custom-Proton-Autoupdate)** optionally Download/Install/Enable version bumps of Custom Proton version per game
 * **[ReShade Presets](#ReShade-Presets)** Select ReShade Presets
 * **[Cheat Engine](#Cheat-Engine)** automatic CheatEngine download, install, autostart per game and autostop on game exit
+* **[Pressure Vessel](#Pressure-Vessel)** Some Pressure Vessel options
 
 ## Requirements
 *(no special order)*
@@ -1212,6 +1213,16 @@ If `EDITORURL` contains "AID" it will be replaced by the current SteamAppID.
 Literally every env variable can be set for example in [Game Config](#Game-Config) or [Global Config](#Global-Config),
 making it pretty easy to tinker with important ones *(f.e `PROTON`* , `DXVK`* , `MANGOHUD`, `RADV_PERFTEST`, `WINE`...)*
 The Possibilities Are Endless...
+
+#### Pressure Vessel
+Pressure Vessel is *(currently)* only active when not using a [Steam Compatibility Tool](#Steam-Compatibility-Tool).
+So if you want to use any of the variables via **stl**, it must be set as [Launch Option](#Launch-Option) and not as [Steam Compatibility Tool](#Steam-Compatibility-Tool).
+
+All Pressure Vessel *(PV)* options are in a separate PressureVessel category and therefore available in the [Category Menu](#Category-Menu).
+
+- `PRESSURE_VESSEL_VERBOSE`
+  With `STL_PV_VERBOSE` enabled, the PV variable `PRESSURE_VESSEL_VERBOSE` enabled and the output is written to `"$STLPVLOGDIR/pressure-vessel-${AID}.log"`
+
 
 ## Game Launch Speed
 **stl** has pretty much to check, but when everything is configured, several option-checks can be disabled (per game)

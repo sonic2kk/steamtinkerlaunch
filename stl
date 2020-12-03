@@ -4,7 +4,7 @@
 ### project ###
 
 PROGNAME="SteamTinkerLaunch"
-PROGVERS="v3.1.335"
+PROGVERS="v3.1.336-next"
 PROGCMD="$(basename "$0")"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -104,6 +104,7 @@ SYSTEMSTLCFGDIR="/usr/share/$PROGCMD"														# systemwide config dir
 BASELOGDIR="$STLCFGDIR/logs"																# base logfile dir
 LOGDIR="$BASELOGDIR/$PROGCMD"																# default stllogfile dir
 STLPROTONLOGDIR="$BASELOGDIR/proton"														# proton logfile dir
+STLPVLOGDIR="$BASELOGDIR/pv"																# pressure vessel logfile dir
 STLGAMEDIR="$STLCFGDIR/gamecfgs"															# default basedir for game the gamespecific configs
 STLCATEGORYDIR="$STLCFGDIR/categories"														# the directory holding config files with preconfigured settings for games in specific steamcategories
 STLREGDIR="$STLCFGDIR/regs"																	# the directory holding registry files
@@ -1246,6 +1247,7 @@ function setDefaultCfgValues {
 		if [ -z "$STLWINEDEBUG" ]		; then	STLWINEDEBUG="-all"; fi
 		if [ -z "$USERSTART" ]			; then	USERSTART="$("$WHICH" echo 2>/dev/null)"; fi
 		if [ -z "$USERSTOP" ]			; then	USERSTOP="$("$WHICH" echo 2>/dev/null)"; fi
+		if [ -z "$STL_PV_VERBOSE" ]		; then	STL_PV_VERBOSE="0"; fi
 	}
 	
 	"${FUNCNAME[0]}$1"
@@ -1697,6 +1699,8 @@ function saveCfg {
 			echo "USERSTART=\"$USERSTART\""
 			echo "## $DESC_USERSTOP"
 			echo "USERSTOP=\"$USERSTOP\""
+			echo "## $DESC_STL_PV_VERBOSE"
+			echo "STL_PV_VERBOSE=\"$STL_PV_VERBOSE\""
 			} >> "$1"
 			#ENDsaveCfgdefault_template
 		fi
@@ -2790,6 +2794,8 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_VIRTUALDESKTOP!$DESC_VIRTUALDESKTOP ('VIRTUALDESKTOP')":CHK "${VIRTUALDESKTOP/#-/ -}" `#CAT_Wine` `#SUB_Checkbox` `#MENU_GAME`  \
 --field="     $GUI_STLWINEDEBUG!$DESC_STLWINEDEBUG ('STLWINEDEBUG')":CBE "${STLWINEDEBUG/#-/ -}!$SOMEWINEDEBUGOPTIONS" `#CAT_Wine` `#MENU_GAME` \
 --field="     $GUI_WINE_FULLSCREEN_INTEGER_SCALING!$DESC_WINE_FULLSCREEN_INTEGER_SCALING ('WINE_FULLSCREEN_INTEGER_SCALING')":CHK "${WINE_FULLSCREEN_INTEGER_SCALING/#-/ -}" `#CAT_Wine` `#SUB_Checkbox` `#MENU_GAME` \
+--field="$(spanFont "$GUI_OPTSPV" "H")":LBL "SKIP" `#CAT_PressureVessel` `#HEAD_PressureVessel` `#MENU_GAME` `#MENU_GLOBAL`  \
+--field="     $GUI_STL_PV_VERBOSE!$DESC_STL_PV_VERBOSE ('STL_PV_VERBOSE')":CHK "${STL_PV_VERBOSE/#-/ -}" `#CAT_PressureVessel` `#SUB_Checkbox` `#MENU_GAME` \
 #ENDSETENTRIES
 }
 
@@ -5088,6 +5094,7 @@ function createProjectDirs {
 	mkProjDir "$STLLANGDIR" 1
 	mkProjDir "$LOGDIR" 1
 	mkProjDir "$STLPROTONLOGDIR" 1
+	mkProjDir "$STLPVLOGDIR" 1
 	mkProjDir "$STLGAMEDIR" 1
 	mkProjDir "$STLCATEGORYDIR" 1
 	mkProjDir "$TWEAKDIR" 1
@@ -8193,7 +8200,14 @@ function startGame {
 
 	writelog "INFO" "${FUNCNAME[0]} - ## GAMESTART with command '$*'"
 	restoreOrgVars # restore original LC_ and friends for the game
-	"$@"		   # "$@" starts the game here - COMMENT FOR DEBUG:
+
+	if [ "$USESLR" -eq 0 ] && [ "$STL_PV_VERBOSE" -eq 1 ]; then
+		# logged gamestart
+		PRESSURE_VESSEL_VERBOSE="$STL_PV_VERBOSE" "$@"  2>&1 | tee "$STLPVLOGDIR/pressure-vessel-${AID}.log"
+	else
+		# regular gamestart - COMMENTDEBUG:
+		"$@"
+	fi
 	emptyVars "O" "X" # clear original variables again (mostly for a continous log (date)) 
 	writelog "INFO" "${FUNCNAME[0]} - ## GAMESTOP (or forked?)"
 }
