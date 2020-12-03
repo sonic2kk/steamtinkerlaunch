@@ -1225,8 +1225,12 @@ All Pressure Vessel *(PV)* options are in a separate PressureVessel category and
   With `STL_PV_VERBOSE` enabled, the PV variable `PRESSURE_VESSEL_VERBOSE` enabled and the output is written to `"$STLPVLOGDIR/pressure-vessel-${AID}.log"`
 
 - `PRESSURE_VESSEL_SHELL`
-  With `STL_PV_SHELL` enabled, the PV variable `PRESSURE_VESSEL_SHELL` is set to "instead" which starts a PV shell "instead" of the game
-
+  With `STL_PV_SHELL` enabled, the PV variable `PRESSURE_VESSEL_SHELL` is set to `STL_PV_SHELL`
+  can be
+  - none  *(disabled - `PRESSURE_VESSEL_SHELL` won't be even set)*
+  - after *(shell starts after the game)*
+  - fail  *(shell starts only after the game crashed)*
+  - instead *(shell starts and game start is skipped)*
 
 ## Game Launch Speed
 **stl** has pretty much to check, but when everything is configured, several option-checks can be disabled (per game)
