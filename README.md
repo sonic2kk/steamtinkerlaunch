@@ -1219,9 +1219,13 @@ Pressure Vessel is *(currently)* only active when not using a [Steam Compatibili
 So if you want to use any of the variables via **stl**, it must be set as [Launch Option](#Launch-Option) and not as [Steam Compatibility Tool](#Steam-Compatibility-Tool).
 
 All Pressure Vessel *(PV)* options are in a separate PressureVessel category and therefore available in the [Category Menu](#Category-Menu).
+*(Currently)* Only one of the available options can be used *(until there are enough to know which can be combined)* in order of below appearance *(first wins)*
 
 - `PRESSURE_VESSEL_VERBOSE`
   With `STL_PV_VERBOSE` enabled, the PV variable `PRESSURE_VESSEL_VERBOSE` enabled and the output is written to `"$STLPVLOGDIR/pressure-vessel-${AID}.log"`
+
+- `PRESSURE_VESSEL_SHELL`
+  With `STL_PV_SHELL` enabled, the PV variable `PRESSURE_VESSEL_SHELL` is set to "instead" which starts a PV shell "instead" of the game
 
 
 ## Game Launch Speed

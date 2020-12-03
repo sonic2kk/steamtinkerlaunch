@@ -4,7 +4,7 @@
 ### project ###
 
 PROGNAME="SteamTinkerLaunch"
-PROGVERS="v3.1.336-next"
+PROGVERS="v3.1.336-next1"
 PROGCMD="$(basename "$0")"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -1248,6 +1248,7 @@ function setDefaultCfgValues {
 		if [ -z "$USERSTART" ]			; then	USERSTART="$("$WHICH" echo 2>/dev/null)"; fi
 		if [ -z "$USERSTOP" ]			; then	USERSTOP="$("$WHICH" echo 2>/dev/null)"; fi
 		if [ -z "$STL_PV_VERBOSE" ]		; then	STL_PV_VERBOSE="0"; fi
+		if [ -z "$STL_PV_SHELL" ]		; then	STL_PV_SHELL="none"; fi
 	}
 	
 	"${FUNCNAME[0]}$1"
@@ -1701,6 +1702,8 @@ function saveCfg {
 			echo "USERSTOP=\"$USERSTOP\""
 			echo "## $DESC_STL_PV_VERBOSE"
 			echo "STL_PV_VERBOSE=\"$STL_PV_VERBOSE\""
+			echo "## $DESC_STL_PV_SHELL"
+			echo "STL_PV_SHELL=\"$STL_PV_SHELL\""
 			} >> "$1"
 			#ENDsaveCfgdefault_template
 		fi
@@ -2796,6 +2799,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_WINE_FULLSCREEN_INTEGER_SCALING!$DESC_WINE_FULLSCREEN_INTEGER_SCALING ('WINE_FULLSCREEN_INTEGER_SCALING')":CHK "${WINE_FULLSCREEN_INTEGER_SCALING/#-/ -}" `#CAT_Wine` `#SUB_Checkbox` `#MENU_GAME` \
 --field="$(spanFont "$GUI_OPTSPV" "H")":LBL "SKIP" `#CAT_PressureVessel` `#HEAD_PressureVessel` `#MENU_GAME` `#MENU_GLOBAL`  \
 --field="     $GUI_STL_PV_VERBOSE!$DESC_STL_PV_VERBOSE ('STL_PV_VERBOSE')":CHK "${STL_PV_VERBOSE/#-/ -}" `#CAT_PressureVessel` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_STL_PV_SHELL!$DESC_STL_PV_SHELL ('STL_PV_SHELL')":CB "${STL_PV_SHELL/#-/ -}!none!instead" `#CAT_PressureVessel` `#SUB_Checkbox` `#MENU_GAME` \
 #ENDSETENTRIES
 }
 
@@ -8204,6 +8208,9 @@ function startGame {
 	if [ "$USESLR" -eq 1 ] && [ "$STL_PV_VERBOSE" -eq 1 ]; then
 		# logged gamestart
 		PRESSURE_VESSEL_VERBOSE="$STL_PV_VERBOSE" "$@"  2>&1 | tee "$STLPVLOGDIR/pressure-vessel-${AID}.log"
+		# start PV shell "instead"
+	elif [ "$USESLR" -eq 1 ] && [ "$STL_PV_SHELL" == "instead" ]; then
+		PRESSURE_VESSEL_SHELL="$STL_PV_SHELL" "$@"
 	else
 		# regular gamestart - COMMENTDEBUG:
 		"$@"
