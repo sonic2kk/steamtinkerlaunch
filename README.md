@@ -66,7 +66,7 @@ Feel free to contribute to the project - there are many possibilites to do so:
 - help to improve/shorten this monstrous README *(especially if english is your mother language)*
 
 Got and idea or suggestions, but don't want to open an issue?
-Try [/r/SteamTinkerLaunch/](https://www.reddit.com/r/SteamTinkerLaunch/) or [Discord](https://discord.gg/ws52hK4sM4)
+Visit [/r/SteamTinkerLaunch/](https://www.reddit.com/r/SteamTinkerLaunch)
 
 ## Quickstart
 When **stl** is started for the first time it will create its default [configuration](#Configuration) structure.
@@ -1231,6 +1231,10 @@ All Pressure Vessel *(PV)* options are in a separate PressureVessel category and
   - after *(shell starts after the game)*
   - fail  *(shell starts only after the game crashed)*
   - instead *(shell starts and game start is skipped)*
+
+- `PRESSURE_VESSEL_TERMINAL`
+  With `STL_PV_TERMINAL` enabled, the PV variable `PRESSURE_VESSEL_TERMINAL` is set to `STL_PV_TERMINAL`
+
 
 ## Game Launch Speed
 **stl** has pretty much to check, but when everything is configured, several option-checks can be disabled (per game)

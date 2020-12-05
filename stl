@@ -1241,14 +1241,15 @@ function setDefaultCfgValues {
 		if [ -z "$PROTON_NO_D3D10" ]	; then	PROTON_NO_D3D10="0"; fi
 		if [ -z "$PROTON_NO_ESYNC" ]	; then	PROTON_NO_ESYNC="0"; fi
 		if [ -z "$PROTON_NO_FSYNC" ]	; then	PROTON_NO_FSYNC="0"; fi
-		if [ -z "$PROTON_FORCE_LARGE_ADDRESS_AWARE" ]; then	PROTON_FORCE_LARGE_ADDRESS_AWARE="1"; fi	
+		if [ -z "$PROTON_FORCE_LARGE_ADDRESS_AWARE" ]; then	PROTON_FORCE_LARGE_ADDRESS_AWARE="1"; fi
 		if [ -z "$PROTON_DUMP_DEBUG_COMMANDS" ]	; then	PROTON_DUMP_DEBUG_COMMANDS="0"; fi
 		if [ -z "$WINE_FULLSCREEN_INTEGER_SCALING" ]; then	WINE_FULLSCREEN_INTEGER_SCALING="0"; fi
 		if [ -z "$STLWINEDEBUG" ]		; then	STLWINEDEBUG="-all"; fi
 		if [ -z "$USERSTART" ]			; then	USERSTART="$("$WHICH" echo 2>/dev/null)"; fi
-		if [ -z "$USERSTOP" ]			; then	USERSTOP="$("$WHICH" echo 2>/dev/null)"; fi
+		if [ -z "$USERSTOP" ]			; then	USERSTOP="$("$WHICH" echo 2>/dev/null)"; fi	
 		if [ -z "$STL_PV_VERBOSE" ]		; then	STL_PV_VERBOSE="0"; fi
 		if [ -z "$STL_PV_SHELL" ]		; then	STL_PV_SHELL="none"; fi
+		if [ -z "$STL_PV_TERMINAL" ]	; then	STL_PV_TERMINAL="none"; fi
 	}
 	
 	"${FUNCNAME[0]}$1"
@@ -1704,6 +1705,8 @@ function saveCfg {
 			echo "STL_PV_VERBOSE=\"$STL_PV_VERBOSE\""
 			echo "## $DESC_STL_PV_SHELL"
 			echo "STL_PV_SHELL=\"$STL_PV_SHELL\""
+			echo "## $DESC_STL_PV_TERMINAL"
+			echo "STL_PV_TERMINAL=\"$STL_PV_TERMINAL\""
 			} >> "$1"
 			#ENDsaveCfgdefault_template
 		fi
@@ -2417,6 +2420,7 @@ function GETALTEXEPATH {
 	fi
 }
 
+#STARTIEX
 function TrayIconExports {
 	export XWI="$XWININFO"
 	export XDO="$XDO"
@@ -2439,6 +2443,7 @@ function TrayIconExports {
 	export -f TrayShaderMenu
 	export -f TrayVR
 }
+#ENDIEX
 
 function openTrayIcon {
 	if [ -z "$YADTRAYPID" ] && [ "$USETRAYICON" -eq 1 ]; then
@@ -2800,6 +2805,8 @@ function AllSettingsEntriesDummyFunction {
 --field="$(spanFont "$GUI_OPTSPV" "H")":LBL "SKIP" `#CAT_PressureVessel` `#HEAD_PressureVessel` `#MENU_GAME` `#MENU_GLOBAL`  \
 --field="     $GUI_STL_PV_VERBOSE!$DESC_STL_PV_VERBOSE ('STL_PV_VERBOSE')":CHK "${STL_PV_VERBOSE/#-/ -}" `#CAT_PressureVessel` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_STL_PV_SHELL!$DESC_STL_PV_SHELL ('STL_PV_SHELL')":CB "${STL_PV_SHELL/#-/ -}!none!after!fail!instead" `#CAT_PressureVessel` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_STL_PV_TERMINAL!$DESC_STL_PV_TERMINAL ('STL_PV_TERMINAL')":CB "${STL_PV_TERMINAL/#-/ -}!none!auto!tty!xterm" `#CAT_PressureVessel` `#SUB_Checkbox` `#MENU_GAME` \
+
 #ENDSETENTRIES
 }
 
@@ -8200,6 +8207,8 @@ function wantProton {
 }
 
 function startGame {
+
+	#kind works, but should be optimized
 #	emptyVars "S"  # unset some internal variables before the game starts
 
 	writelog "INFO" "${FUNCNAME[0]} - ## GAMESTART with command '$*'"
@@ -8211,11 +8220,14 @@ function startGame {
 		# start PV shell "instead"
 	elif [ "$USESLR" -eq 1 ] && [ "$STL_PV_SHELL" != "$NON" ]; then
 		PRESSURE_VESSEL_SHELL="$STL_PV_SHELL" "$@"
+	elif [ "$USESLR" -eq 1 ] && [ "$STL_PV_TERMINAL" != "$NON" ]; then
+		PRESSURE_VESSEL_TERMINAL="$STL_PV_TERMINAL" "$@"
 	else
 		# regular gamestart - COMMENTDEBUG:
 		"$@"
 	fi
-	emptyVars "O" "X" # clear original variables again (mostly for a continous log (date)) 
+	emptyVars "O" "X" # clear original variables again (mostly for a continous log (date))
+
 	writelog "INFO" "${FUNCNAME[0]} - ## GAMESTOP (or forked?)"
 }
 
@@ -8454,7 +8466,7 @@ function launchSteamGame {
 	else
 		writelog "SKIP" "${FUNCNAME[0]} - with ISGAME='$ISGAME' the game failed to start"
 	fi
-	unset RUNGAMESCOPE_ARGS
+
 	writelog "STOP" "######### $PROGNAME $PROGVERS #########"
 }
 
@@ -8862,8 +8874,6 @@ function commandline {
 
 ### COMMAND LINE END ###
 
-### CLOSE STL START ###
-
 function writeLastRun {
 	writelog "INFO" "${FUNCNAME[0]} - recreating $LASTRUN"
 	{
@@ -8885,8 +8895,14 @@ function delWinetricksTemps {
 	find "/tmp" -maxdepth 1 -type d -regextype posix-extended -regex '^.*winetricks.[A-Z,a-z,0-9]{8}' -exec rmdir {} \;	2>/dev/null
 }
 
+#STARTCLOSESTL ###
 function closeSTL {
 	writelog "INFO" "${FUNCNAME[0]} - game $GN ($AID) exited - cleaning up custom processes if necessary"
+
+# all variables in closeSTL are blocked from being unset before gamestart - dirty list with variables to keep which are not used here:
+#DXVK_HUD DXVK_LOG_LEVEL ENABLE_VKBASALT LOGDIR LOGLEVEL MANGOHUD NETOPTS PROTON_DEBUG_DIR PROTON_DUMP_DEBUG_COMMANDS PROTON_FORCE_LARGE_ADDRESS_AWARE
+#PROTON_LOG PROTON_LOG_DIR PROTON_NO_D3D10 PROTON_NO_D3D11 PROTON_NO_ESYNC PROTON_NO_FSYNC PROTON_USE_WINED3D STL_PV_SHELL STL_PV_TERMINAL
+#STL_PV_VERBOSE USESLR VKBASALT_CONFIG_FILE WINEDLLOVERRIDES WINE_FULLSCREEN_INTEGER_SCALING
 
 	# dummy file which could be used to stop possible while loops
 	touch "$CLOSETMP"
@@ -8947,9 +8963,9 @@ function closeSTL {
 		fi
 	fi
 
-	togWindows windowraise
+	togWindows windowraise	# TOGGLEWINDOWS
 
-	customUserScriptStop
+	customUserScriptStop	# USERSTOP
 
 	cleanYadLeftOvers
 
@@ -8977,10 +8993,9 @@ function closeSTL {
 	delMenuTemps
 	delWinetricksTemps
 	
-	emptyVars "A" "$1"
+#	emptyVars "A" "$1"
 }
-
-### CLOSE STL END ###
+#ENDCLOSESTL ###
 
 # main:#################
 
@@ -8997,6 +9012,7 @@ function saveOrgVars {
 
 function emptyVars {
 	# clear "original" variables
+
 	if [ "$1" == "O" ] ; then
 		if [ -z "$2" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - emptying some original Variables as they slowdown several system calls when started from steam"
@@ -9007,9 +9023,55 @@ function emptyVars {
 		LD_LIBRARY_PATH=""
 		LD_PRELOAD=""
 #	# empty "some" internal variables created by $PROGCMD (before starting the game)
-#	elif [ "$1" == "S" ]; then
-#		writelog "INFO" "${FUNCNAME[0]} - clearing some '$PROGCMD' internal Variables before the game starts"
-	# empty "all" internal variables created by $PROGCMD - the ending logfile is "$2" and is written here
+	elif [ "$1" == "S" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - clearing some '$PROGCMD' internal Variables before the game starts"
+
+		TIEXV="$STLSHM/TrayIconVars.txt"
+		TIEXF="$STLSHM/TrayIconFuncs.txt"
+
+		if [ ! -f "$TIEXV" ]; then
+			sed -n "/^#STARTIEX/,/^#ENDIEX/p;/^#ENDIEX/q" "$0" | grep export | grep -v "export \-f" | cut -d '=' -f1 | awk -F 'export ' '{print $2}' > "$TIEXV"
+		fi
+
+		if [ ! -f "$TIEXF" ]; then
+			sed -n "/^#STARTIEX/,/^#ENDIEX/p;/^#ENDIEX/q" "$0" | grep "export \-f" | awk -F '-f ' '{print $2}' > "$TIEXF"
+		fi
+
+		while read -r intvar; do
+			if [ -n "$intvar" ]; then
+				if [[ "$intvar" =~ "BASH_FUNC" ]]; then
+					BAFU1="${intvar#BASH_FUNC_*}"
+					BAFU="${BAFU1%%\%}"
+					if grep -q "${BAFU%%\%}" "$STLSHM/TIEXF"; then
+						writelog "INFO" "${FUNCNAME[0]} - skipping TrayIcon function '${BAFU%%\%}'"
+					else
+						if grep -q "function ${BAFU%%\%}" "$0"; then
+							writelog "INFO" "${FUNCNAME[0]} - clearing function '${BAFU%%\%}'"
+							unset -f "${BAFU%%\%}"
+						else
+							writelog "INFO" "${FUNCNAME[0]} - skipping unknown function '${BAFU%%\%}'"
+						fi
+					fi
+				else
+					if grep -q "$intvar" "$STLSHM/TIEXV"; then
+						writelog "INFO" "${FUNCNAME[0]} - skipping TrayIcon variable '$intvar'"
+					else
+						if ! grep -q "\$${intvar}" "$0" ; then
+							writelog "INFO" "${FUNCNAME[0]} - skipping unknown variable '$intvar'"
+						else
+							if grep -q "$intvar" <<< "$(sed -n "/^#STARTCLOSESTL/,/^#ENDCLOSESTL/p;/^#ENDCLOSESTL/q" "$0")"; then
+								writelog "INFO" "${FUNCNAME[0]} - skipping variable in closeSTL '$intvar'"
+							else
+								writelog "INFO" "${FUNCNAME[0]} - clearing variable '$intvar'"
+								unset "$intvar"
+							fi
+						fi
+					fi
+				fi
+			fi
+		done <<< "$(comm -32 <(cut -d '=' -f1 < "$STLSHM/${FUNCNAME[0]}-in") <(cut -d '=' -f1 < "$VARSIN"))"
+
+# empty "all" internal variables created by $PROGCMD - the ending logfile is "$2" and is written here
 	elif [ "$1" == "A" ]; then
 #		writelog "INFO" "${FUNCNAME[0]} - clearing 'all' '$PROGCMD' internal Variables (before exit)"
 		env | grep "="  | grep -v "^ " | sort -o "$STLSHM/${FUNCNAME[0]}-in"
