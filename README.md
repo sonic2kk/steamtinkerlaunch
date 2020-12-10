@@ -45,16 +45,21 @@ If within a short waiting period *(default 2 seconds)* the spacebar is pressed t
 When done with configuring (or when the requester timeouts) the game will be started regularly with all tools and options configured.
 
 ## Installation
-This is one single bash script. Just copy it wherever you want (f.e. '/usr/local/bin/') and make it executable:
-`chmod +x stl`
-The enclosed directories containing optional configuration files can be either dropped into '/usr/share/stl/' *(preferred location)*
-or automatically pulled from git *(default if '/usr/share/stl/' does not exist)*.
-
+### Installation via Package Management
 If you are on Arch Linux you can install stl from [AUR](https://aur.archlinux.org/packages/steamtinkerlaunch) *(f.e. using yay)*:
-
 `yay -S steamtinkerlaunch`
 
 [![Packaging status](https://repology.org/badge/vertical-allrepos/steamtinkerlaunch.svg)](https://repology.org/project/steamtinkerlaunch/versions)
+
+### Manual Installation:
+If **stl** is not in your package management yet, just `make install`
+
+Alternatively copy `stl` wherever you want (f.e. `/usr/local/bin/`) and make it executable:
+`chmod +x stl`
+
+When copying manually the enclosed directories *(containing optional configuration files)*
+should be dropped into `/usr/share/stl/` *(preferred location)*.
+Else they are automatically pulled from git *(default if `/usr/share/stl/` does not exist)*.
 
 ## Community
 Feel free to contribute to the project - there are many possibilites to do so:
