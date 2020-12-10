@@ -1050,6 +1050,9 @@ To make switching between game- and vr-video-player window easier (with hmd) the
 So switching between the windows is easily possible with *Alt+Tab*.
 It is also enabled by default in the **VR** [Steam Categories](#Steam-Categories) *(ReShadeVR,SBS-VR,vkVR.conf)*
 
+![Cyberpunk 2077 VR category German](https://github.com/frostworx/repo-assets/blob/master/pics/stl-vr-gui.jpg)
+
+
 #### GameMode
 [gamemode](https://github.com/FeralInteractive/gamemode)
 *(in [Game Menu](#Game-Menu) and [Game Config](#Game-Config))*
