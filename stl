@@ -4,7 +4,7 @@
 ### project ###
 
 PROGNAME="SteamTinkerLaunch"
-PROGVERS="v3.1.336-next1"
+PROGVERS="v3.1.336-next2"
 PROGCMD="$(basename "$0")"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -1214,6 +1214,7 @@ function setDefaultCfgValues {
 		if [ -z "$RESHADEPRESET" ]		; then	RESHADEPRESET="$NON"; fi
 		if [ -z "$CHOOSESHADERS" ]		; then	CHOOSESHADERS="0"; fi
 		if [ -z "$ALTEXEPATH" ]			; then	ALTEXEPATH="/tmp"; fi
+		if [ -z "$ARCHALTEXE" ]			; then	ARCHALTEXE="$("$WHICH" echo 2>/dev/null)"; fi
 		if [ -z "$RUNSBSVR" ]			; then	RUNSBSVR="0"; fi
 		if [ -z "$VRVIDEOPLAYERARGS" ]	; then	VRVIDEOPLAYERARGS="--flat"; fi
 		if [ -z "$SBSZOOM" ]			; then	SBSZOOM="1.0"; fi
@@ -1635,6 +1636,8 @@ function saveCfg {
 			echo "CHOOSESHADERS=\"$CHOOSESHADERS\""
 			echo "## $DESC_ALTEXEPATH"
 			echo "ALTEXEPATH=\"$ALTEXEPATH\""
+			echo "## $DESC_ARCHALTEXE"
+			echo "ARCHALTEXE=\"$ARCHALTEXE\""
 			echo "## $DESC_RUNSBSVR"
 			echo "RUNSBSVR=\"$RUNSBSVR\""
 			echo "## $DESC_VRVIDEOPLAYERARGS"
@@ -2432,7 +2435,8 @@ function TrayIconExports {
 	export GPFX="$GPFX"
 	export -f killProtonGame
 	export -f PauseGame
-
+	export EFD="$EFD"
+	
 	if [ -n "$(GETALTEXEPATH)" ]; then
 		TSHADDESTDIR="$(GETALTEXEPATH)"
 	else
@@ -2446,6 +2450,10 @@ function TrayIconExports {
 #ENDIEX
 
 function openTrayIcon {
+	# loading gameconfig here, as some vars might have to be exported
+	writelog "INFO" "${FUNCNAME[0]} - loadCfg: $STLGAMECFG"
+	loadCfg "$STLGAMECFG"
+
 	if [ -z "$YADTRAYPID" ] && [ "$USETRAYICON" -eq 1 ]; then
 		writelog "INFO" "${FUNCNAME[0]} - opening trayIcon:" "X"
 
@@ -2470,6 +2478,7 @@ function openTrayIcon {
 
 			kill "$GAMESIG" "$GAMEPID"
 		}
+
 		function TrayShaderMenu {
 			"$PROGCMD" update gameshaders
 		}
@@ -2693,6 +2702,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_RS_64!$DESC_RS_64 ('RS_64')" "${RS_64/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#MENU_GLOBAL` \
 --field="     $GUI_RS_D3D47_32!$DESC_RS_D3D47_32 ('RS_D3D47_32')" "${RS_D3D47_32/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#MENU_GLOBAL` \
 --field="     $GUI_RS_D3D47_64!$DESC_RS_D3D47_64 ('RS_D3D47_64')" "${RS_D3D47_64/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#MENU_GLOBAL` \
+--field="     $GUI_ARCHALTEXE!$DESC_ARCHALTEXE ('ARCHALTEXE')":FL "${ARCHALTEXE/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#MENU_GAME` \
 --field="     $GUI_ALTEXEPATH!$DESC_ALTEXEPATH ('ALTEXEPATH')":DIR "${ALTEXEPATH/#-/ -}" `#CAT_Shader` `#SUB_Directories` `#MENU_GAME` \
 --field="     $GUI_RESHADEPRESET!$DESC_RESHADEPRESET ('RESHADEPRESET')":CB "${RESHADEPRESET/#-/ -}!$RSPRESETLIST" `#CAT_Shader` `#MENU_GAME` \
 --field="     $GUI_RESHADESRCDIR!$DESC_RESHADESRCDIR ('RESHADESRCDIR')":DIR "${RESHADESRCDIR/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#SUB_Directories` `#MENU_GLOBAL` \
@@ -4599,41 +4609,45 @@ function getAvailableShaders {
 }
 
 function GameShaderDialog {
-	if [ -z "$1" ]; then
-		SHADDESTDIR="$EFD"
-		if [ -n "$EFD" ] && [ -d "$EFD" ]; then
+
+	if [ -n "$(GETALTEXEPATH)" ]; then
+		SHADDESTDIR="$(GETALTEXEPATH)"
+		writelog "INFO" "${FUNCNAME[0]} - Overriding SHADDESTDIR to '$SHADDESTDIR' because ALTEXEPATH is set to '$ALTEXEPATH'"
+	fi
+
+	if [ -z "$SHADDESTDIR" ]; then
+		if [ -z "$1" ]; then
 			SHADDESTDIR="$EFD"
-		else
-			resetAID "last"
-			if [ -f "$LASTRUN" ] && grep -q "$AID" "$LASTRUN"; then
-				PREVEFD="$(grep "^PREVEFD" "$LASTRUN" | cut -d '=' -f2)"
-				if [ -d "${PREVEFD//\"/}" ]; then
-					 SHADDESTDIR="${PREVEFD//\"/}"
-				fi
-			fi
-		fi
-	else
-		if [ "$1" == "last" ]; then
-			resetAID "last"
-			if [ -f "$LASTRUN" ] && grep -q "$AID" "$LASTRUN"; then
-				PREVEFD="$(grep "^PREVEFD" "$LASTRUN" | cut -d '=' -f2)"
-				if [ -d "${PREVEFD//\"/}" ]; then
-					 SHADDESTDIR="${PREVEFD//\"/}"
+			if [ -n "$EFD" ] && [ -d "$EFD" ]; then
+				SHADDESTDIR="$EFD"
+			else
+				resetAID "last"
+				if [ -f "$LASTRUN" ] && grep -q "$AID" "$LASTRUN"; then
+					PREVEFD="$(grep "^PREVEFD" "$LASTRUN" | cut -d '=' -f2)"
+					if [ -d "${PREVEFD//\"/}" ]; then
+						 SHADDESTDIR="${PREVEFD//\"/}"
+					fi
 				fi
 			fi
 		else
-			if [ -f "$1" ]; then
-				SHADDESTDIR="$(dirname "$1")"
-			else 
-				SHADDESTDIR="$1"
+			if [ "$1" == "last" ]; then
+				resetAID "last"
+				if [ -f "$LASTRUN" ] && grep -q "$AID" "$LASTRUN"; then
+					PREVEFD="$(grep "^PREVEFD" "$LASTRUN" | cut -d '=' -f2)"
+					if [ -d "${PREVEFD//\"/}" ]; then
+						 SHADDESTDIR="${PREVEFD//\"/}"
+					fi
+				fi
+			else
+				if [ -f "$1" ]; then
+					SHADDESTDIR="$(dirname "$1")"
+				else 
+					SHADDESTDIR="$1"
+				fi
 			fi
 		fi
 	fi
 
-	if [ -n "$(GETALTEXEPATH)" ]; then
-		SHADDESTDIR="$(GETALTEXEPATH)"
-	fi
-	
 	if [ ! -d "$SHADDESTDIR" ]; then
 		mkdir -p "$SHADDESTDIR" 2>/dev/null
 	fi
@@ -4655,12 +4669,13 @@ function GameShaderDialog {
 		TITLE="${PROGNAME}-Shader"
 
 		loadCfg "$STLGUICFG" X
+		updateWinRes "$TITLE" "$STLGUICFG" "SHADREQWIDTH" "SHADREQWIDTH" &
 
 		setShowPic
 
 		SHADFILES="$(for f in $(printf '%s\n' "${ShaderFiles[@]}"); do if [ ! -f "$SHADDESTDIR/$(basename "$f")" ]; then echo FALSE ; echo "$f" ; else echo TRUE ; echo "$f" ;fi ; done | \
 		"$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center "$WINDECO" --list --checklist --column=Edit --column=ConfigFile --separator=" " --print-column="2" \
-		--text="$(spanFont "$(strFix "$GUI_SHADERDIALOG" "$GN")" "H")" --title="$TITLE" --geometry="$SHADREQWIDTH"x"$SHADREQHEIGHT"+0+0)"
+		--text="$(spanFont "$(strFix "$GUI_SHADERDIALOG" "$SHADDESTDIR")" "H")" --title="$TITLE" --geometry="$SHADREQWIDTH"x"$SHADREQHEIGHT"+0+0)"
 		case $? in
 			0)  {
 					while read -r upshad; do
@@ -4832,10 +4847,15 @@ function installReshade {
 			else
 				writelog "INFO" "${FUNCNAME[0]} - no old logfile ${RS_DX_DEST//.dll/.log} found"
 			fi
+			if [ -n "$ARCHALTEXE" ] && [ "$ARCHALTEXE" != "$("$WHICH" echo 2>/dev/null)" ]; then
+				CHARCH="$ARCHALTEXE"
+			else
+				CHARCH="$GP"
+			fi
 
 			#32bit:
-			if [ "$(getArch "$GP")" == "32" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - installing 32bit Reshade as '$GE' is 32bit" 
+			if [ "$(getArch "$CHARCH")" == "32" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - installing 32bit Reshade as '$CHARCH' is 32bit" 
 				#d3d47
 				installRSd3d47dll "$RS_D3D47_32"
 				#dxgi:
@@ -4844,8 +4864,8 @@ function installReshade {
 				installRSdll "$RS_D9_DEST" "$NOD3D9" "$RS_32"
 
 			# 64bit:
-			elif [ "$(getArch "$GP")" == "64" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - installing 64bit Reshade as '$GE' is 64bit" 
+			elif [ "$(getArch "$CHARCH")" == "64" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - installing 64bit Reshade as '$CHARCH' is 64bit" 
 				#d3d47
 				installRSd3d47dll "$RS_D3D47_64"
 				#dxgi:
@@ -4853,7 +4873,7 @@ function installReshade {
 				#d3d9:
 				installRSdll "$RS_D9_DEST" "$NOD3D9" "$RS_64"
 			else
-				writelog "SKIP" "${FUNCNAME[0]} - ERROR in ReShade installation - no file information detected for '$GP' or any 'neighbor file' - setting USERESHADE=0 for this session"
+				writelog "SKIP" "${FUNCNAME[0]} - ERROR in ReShade installation - no file information detected for '$CHARCH' or any 'neighbor file' - setting USERESHADE=0 for this session"
 				export USERESHADE=0
 			fi
 		fi
@@ -7895,9 +7915,7 @@ function prepareLaunch {
 		loadCfg "$LOADAUTOCFG"
 	fi
 
-	# export game specific variables, exports die with this script, so no worries:
-	writelog "INFO" "${FUNCNAME[0]} - exporting game specific variables"
-	writelog "INFO" "${FUNCNAME[0]} - loadCfg:"
+	writelog "INFO" "${FUNCNAME[0]} - loadCfg: $STLGAMECFG"
 	loadCfg "$STLGAMECFG"
 
 	# (re)initialize Proton dependant variables, when USEPROTON changed in a menu above
