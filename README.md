@@ -6,8 +6,6 @@ which allows to customize and start tools and options for games quickly on the f
 
 By using a versatile configuration structure it is both easy to setup and flexible.
 
-[🎲 ...iacta est](https://github.com/frostworx/steamtinkerlaunch/issues/166)
-
 ## How to use
 
 ### General usage
