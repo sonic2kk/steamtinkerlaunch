@@ -13,6 +13,9 @@ By using a versatile configuration structure it is both easy to setup and flexib
 *(Some features (f.e. [ReShade](#ReShade)) are only available for games using proton)*
 *(Non-Steam games added to Steam are supported as well)*
 
+There are two ways to use **stl** with steam.
+Either as [Launch Option](#Launch-Option) or as [Steam Compatibility Tool](#Steam-Compatibility-Tool)
+
 #### Steam Launch Option
 To use **stl** as Steam Launch Option just add it to your Steam Game Launch Option command line like this:
 
@@ -25,13 +28,15 @@ To use **stl** as Steam Launch Option just add it to your Steam Game Launch Opti
 #### Steam Compatibility Tool
 **stl** can also be used as Steam Compatibility Tool, simply by using the **stl** builtin [Command Line](#Command-Line) options:
 
-`stl compat add` *(adds stl under compatibilitytools.d/SteamTinkerLaunch)*
-`stl compat del` *(deletes compatibilitytools.d/SteamTinkerLaunch)*
-`stl compat (get)` *(checks the state of compatibilitytools.d/SteamTinkerLaunch)*
+- `stl compat add` *(adds stl under compatibilitytools.d/SteamTinkerLaunch)*
+- `stl compat del` *(deletes compatibilitytools.d/SteamTinkerLaunch)*
+- `stl compat (get)` *(checks the state of compatibilitytools.d/SteamTinkerLaunch)*
 
 If `add` is selected and stl is started from a different path than before, the symlink will be automatically updated.
 
 *(as usual, when a Steam Compatibility Tool was added, Steam needs to be restarted to make the added Tool available)*
+
+All programs used as custom Compatibility Tool *(of course including **stl**)* are started without the [Steam Linux Runtime](#Steam-Linux-Runtime)!
 
 ![stl steam compat](https://github.com/frostworx/repo-assets/blob/master/gifs/stl-steam-compat.gif)
 
