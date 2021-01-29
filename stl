@@ -4,7 +4,7 @@
 ### project ###
 
 PROGNAME="SteamTinkerLaunch"
-PROGVERS="v3.6"
+PROGVERS="v3.7-next"
 PROGCMD="$(basename "$0")"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -108,6 +108,8 @@ fi
 SYSTEMSTLCFGDIR="/usr/share/$PROGCMD"														# systemwide config dir
 BASELOGDIR="$STLCFGDIR/logs"																# base logfile dir
 LOGDIR="$BASELOGDIR/$PROGCMD"																# default stllogfile dir
+LOGDIRID="$LOGDIR/id"
+LOGDIRTI="$LOGDIR/title"
 STLPROTONLOGDIR="$BASELOGDIR/proton"														# proton logfile dir
 STLWINELOGDIR="$BASELOGDIR/wine"															# wine logfile dir
 STLPVLOGDIR="$BASELOGDIR/pv"																# pressure vessel logfile dir
@@ -144,7 +146,6 @@ SOMEWINEDEBUGOPTIONS="-all,+timestamp,+pid,+tid,+seh,+debugstr,+loaddll,+mscoree
 STLGAMES="$STLCFGDIR/games"
 STLGDESKD="$STLGAMES/desktop"
 STLGHEADD="$STLGAMES/header"
-STLPATH="/usr/local/bin:/usr/bin:/bin:/usr/local/games:/usr/games"
 
 #STLGSCPTD="$STLGAMES/scripts"
 NOGAMES=",70_2260196511,228980,858280,961940,1054830,1070560,1113280,1245040,1391110,1420170,"
@@ -169,6 +170,11 @@ function setAID {
 	fi
 }
 
+function setSTLPath {
+	STLPATH="$(tr ':' '\n' <<< "$PATH" | grep -v "$STERU" | tr '\n' ':')"
+	PATH="$STLPATH"
+}
+
 setAID
 STLFAVMENUCFG="$STLCFGDIR/$FACO"															# optional config (in fact just a list with variables) which holds all entries for the individual favorites menu
 STLMENUSORTCFG="$STLCFGDIR/$MENSO"																# optional config (in fact just a list with variables) which holds the category sort order for all menus
@@ -181,7 +187,7 @@ function setAIDCfgs {
 STLGAMECFG="$STLGAMEDIR/$AID.conf"															# the game specific config file which is used by the launched game - created from $STLDEFGAMECFG if not found
 TWEAKCFG="$USERTWEAKDIR/$AID.conf"															# the game specific shareable config tweak overrides
 SBSTWEAKCFG="$SBSTWEAKDIR/$AID.conf"														# the game specific shareable config sbs tweak overrides
-LOGFILE="$LOGDIR/$AID.log"																	
+LOGFILE="$LOGDIRID/$AID.log"																	
 TWEAKTEMPLATECFG="$TWEAKTEMPLATEDIR/$AID.conf"												# Tweak Template autowritten when CREATETWEAKS is set
 PFTWEAKCFG="$PFTWEAKDIR/$AID.conf"
 LUTWEAKCFG="$LUTWEAKDIR/$AID.conf"	
@@ -219,6 +225,7 @@ CTD="compatibilitytools.d"
 USS="/usr/share/steam"
 SYSSTEAMCOMPATOOLS="$USS/$CTD"
 SLR="SteamLinuxRuntime"
+STERU="steam-runtime"
 DBW="dist/bin/wine"
 PROCU="proton/custom"
 CTVDF="compatibilitytool.vdf"
@@ -573,7 +580,23 @@ function setGN {
 	if [ -z "$GN" ]; then
 		getGameName "$1"
 		GN="$GAMENAME"
-	fi	
+	fi
+}
+
+function linkLog {
+	if [ -z "$GN" ]; then
+		writelog "SKIP" "${FUNCNAME[0]} - Skipping symlinking logfile - no valid game name found"
+	else
+		TILOGF="${GN/$LGS /}"
+		TILOG="${LOGDIRTI}/$TILOGF.log"
+
+		if [ ! -L "$TILOG" ] && [ -f "$LOGFILE" ]; then
+			ln -s "$LOGFILE" "$TILOG"
+			writelog "INFO" "${FUNCNAME[0]} - Set symlink from '$LOGFILE' to '$TILOG'"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Symlink '$TILOG' already exists"
+		fi
+	fi
 }
 
 function setGlobalAIDCfgs {
@@ -1142,6 +1165,7 @@ function setDefaultCfgValues {
 		if [ -z "$STRACEDIR" ]			; then	STRACEDIR="$LOGDIR"; fi
 		if [ -z "$LOGDIR" ]				; then	LOGDIR="$LOGDIR"; fi
 		if [ -z "$LOGLEVEL" ]			; then	LOGLEVEL="2"; fi
+		if [ -z "$RESETLOG" ]			; then	RESETLOG="1"; fi
 		if [ -z "$STLEDITOR" ]			; then	STLEDITOR="$("$WHICH" geany 2>/dev/null)"; fi
 		if [ -z "$MAXASK" ]				; then	MAXASK="3"; fi
 		if [ -z "$BROWSER" ]			; then	BROWSER="$("$WHICH" firefox 2>/dev/null)"; fi
@@ -1200,7 +1224,7 @@ function setDefaultCfgValues {
 		if [ -z "$VORTEX_DXVK_LOG_PATH" ]	; then	VORTEX_DXVK_LOG_PATH="$NON"; fi
 		if [ -z "$VORTEXDOWNLOADPATH" ]	; then	VORTEXDOWNLOADPATH="$STLVORTEXDIR/downloads"; fi
 		if [ -z "$VORTEXINSTALL" ]		; then	VORTEXINSTALL="1"; fi
-		if [ -z "$VORTEXVERSION" ]		; then	VORTEXVERSION="1.3.19"; fi
+		if [ -z "$VORTEXVERSION" ]		; then	VORTEXVERSION="1.3.22"; fi
 		if [ -z "$DISABLE_AUTOSTAGES" ]	; then	DISABLE_AUTOSTAGES="0"; fi
 		if [ -z "$CHEATENGINEVERSION" ]	; then	CHEATENGINEVERSION="7.2"; fi
 	}
@@ -1480,6 +1504,8 @@ function saveCfg {
 			echo "LOGDIR=\"$LOGDIR\""
 			echo "## $DESC_LOGLEVEL"
 			echo "LOGLEVEL=\"$LOGLEVEL\""
+			echo "## $DESC_RESETLOG"
+			echo "RESETLOG=\"$RESETLOG\""
 			echo "## $DESC_STLEDITOR"
 			echo "STLEDITOR=\"$STLEDITOR\""
 			echo "## $DESC_MAXASK"
@@ -2750,6 +2776,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_STL_PULSE_LATENCY_MSEC!$DESC_STL_PULSE_LATENCY_MSEC ('STL_PULSE_LATENCY_MSEC')":NUM "${STL_PULSE_LATENCY_MSEC/#-/ -}" `#CAT_Misc` `#MENU_GAME` \
 --field="     $GUI_DLGLOBAL $PROGCMD!$(strFix "$DESC_DLGLOBAL" "$PROGCMD" "$PROJECTPAGE") ('DLGLOBAL')":CHK "${DLGLOBAL/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_LOGLEVEL!$DESC_LOGLEVEL ('LOGLEVEL')":CB "${LOGLEVEL/#-/ -}!0!1!2" `#CAT_Misc` `#MENU_GLOBAL` \
+--field="     $GUI_RESETLOG!$DESC_RESETLOG ('RESETLOG')":CHK "${RESETLOG/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_OPENEDITORURL!$DESC_OPENEDITORURL ('OPENEDITORURL')":CHK "${OPENEDITORURL/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_SKIPINTDEPCHECK!$DESC_SKIPINTDEPCHECK ('SKIPINTDEPCHECK')":CHK "${SKIPINTDEPCHECK/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="$(spanFont "$GUI_OPTSPROTON" "H")":LBL "SKIP" `#CAT_Proton` `#HEAD_Proton` `#MENU_GAME` `#MENU_GLOBAL`  \
@@ -5283,7 +5310,8 @@ function mkProjDir {
 function createProjectDirs {
 	mkProjDir "$STLCFGDIR" 1
 	mkProjDir "$STLLANGDIR" 1
-	mkProjDir "$LOGDIR" 1
+	mkProjDir "$LOGDIRID" 1
+	mkProjDir "$LOGDIRTI" 1
 	mkProjDir "$STLPROTONLOGDIR" 1
 	mkProjDir "$STLWINELOGDIR" 1
 	mkProjDir "$STLPVLOGDIR" 1
@@ -7930,13 +7958,17 @@ function checkVortex {
 
 				# Vortex is not installed
 				else
-					writelog "WARN" "${FUNCNAME[0]} - VORTEXEXE $VORTEXEXE does not exist"
+					writelog "WARN" "${FUNCNAME[0]} - VORTEXEXE '$VORTEXEXE' does not exist"
 					if [ "$VORTEXINSTALL" -eq 1 ]; then
 						writelog "INFO" "${FUNCNAME[0]} - VORTEXINSTALL is set to 1 so installing it now"
 						writelog "INFO" "${FUNCNAME[0]} - Running through all setup steps, even if some might be not required at this point:"
 						installVortexPack
-						writelog "INFO" "${FUNCNAME[0]} - Vortex was hopefully installed correctly - retrying to start it"
-						checkVortex
+						if [ -f "$VORTEXEXE" ]; then
+							writelog "INFO" "${FUNCNAME[0]} - Looks like Vortex was installed correctly now - retrying to start it"
+							checkVortex
+						else
+							writelog "ERROR" "${FUNCNAME[0]} - '$VORTEXEXE' still does not exist - please check '$VORTEXINSTDIR' or even the whole '$VORTEXPREFIX'"
+						fi
 					else
 						writelog "SKIP" "${FUNCNAME[0]} - VORTEXINSTALL is set to 0 - skipping Vortex"
 					fi
@@ -8056,11 +8088,9 @@ function setLinGameVals {
 }
 
 function prepareLaunch {
-	if [ -f "$LOGDIR/$AID.log" ]; then
-		rm "$LOGDIR/$AID.log"
-	fi
-
 	rm "$CLOSETMP" 2>/dev/null
+
+	linkLog
 
 	createProjectDirs
 
@@ -9553,7 +9583,7 @@ function closeSTL {
 # main:#################
 
 function saveOrgVars {
-	writelog "INFO" "${FUNCNAME[0]} - Storing some original Variables to restore them later"
+	# Storing some original Variables to restore them later
 
 	env | grep "=" | sort -o "$VARSIN"
 
@@ -9567,14 +9597,11 @@ function emptyVars {
 	# clear "original" variables
 
 	if [ "$1" == "O" ] ; then
-		if [ -z "$2" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Emptying some original Variables as they slowdown several system calls when started from steam"
-		fi
-
 		LC_ALL="" 
-		PATH="$STLPATH"
+		setSTLPath
 		LD_LIBRARY_PATH=""
 		LD_PRELOAD=""
+
 #	# empty "some" internal variables created by $PROGCMD (before starting the game)
 	elif [ "$1" == "S" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Clearing some '$PROGCMD' internal Variables before the game starts"
@@ -9671,6 +9698,16 @@ getCurrentCommandline "$@"
 
 saveOrgVars
 emptyVars "O"
+
+if [ -f "$STLDEFGLOBALCFG" ] && grep -q "^RESETLOG=\"1\"" "$STLDEFGLOBALCFG"; then
+	rm "$LOGFILE" 2>/dev/null
+	writelog "START" "######### Initializing Game Launch $AID #########"
+	writelog "INFO" "Starting with a clean log"
+else
+	writelog "START" "######### Initializing Game Launch $AID #########"
+fi
+
+writelog "INFO" "emptyVars - Emptied some original Variables as they slowdown several system calls when started from steam"
 createDefaultCfgs "$@"
 checkIntDeps
 
@@ -9691,7 +9728,6 @@ else
 			commandline "$@"
 		else
 			setGameVars "$@"
-
 			if grep -q "$WFEAR" <<< "${ORGGCMD[@]}"; then
 				ISGAME=2
 				prepareLaunch
