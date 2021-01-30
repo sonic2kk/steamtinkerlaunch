@@ -114,6 +114,8 @@ STLPROTONLOGDIR="$BASELOGDIR/proton"														# proton logfile dir
 STLWINELOGDIR="$BASELOGDIR/wine"															# wine logfile dir
 STLPVLOGDIR="$BASELOGDIR/pv"																# pressure vessel logfile dir
 STLGAMEDIR="$STLCFGDIR/gamecfgs"															# default basedir for game the gamespecific configs
+STLGAMEDIRID="$STLGAMEDIR/id"
+STLGAMEDIRTI="$STLGAMEDIR/title"
 STLCATEGORYDIR="$STLCFGDIR/categories"														# the directory holding config files with preconfigured settings for games in specific steamcategories
 STLREGDIR="$STLCFGDIR/regs"																	# the directory holding registry files
 STLDLDIR="$STLCFGDIR/downloads"																# the directory holding optional downloads
@@ -183,7 +185,8 @@ STLDEFGLOBALCFG="$STLCFGDIR/global.conf"													# global config
 STLDEFGAMECFG="$STLCFGDIR/default_template.conf"											# the default config template used to create new per game configs - will be auto created if not found
 
 function setAIDCfgs {
-STLGAMECFG="$STLGAMEDIR/$AID.conf"															# the game specific config file which is used by the launched game - created from $STLDEFGAMECFG if not found
+STLOLDGAMECFG="$STLGAMEDIR/$AID.conf"														# for migrating into $STLGAMEDIRID - will be removed later - TODO
+STLGAMECFG="$STLGAMEDIRID/$AID.conf"														# the game specific config file which is used by the launched game - created from $STLDEFGAMECFG if not found
 TWEAKCFG="$USERTWEAKDIR/$AID.conf"															# the game specific shareable config tweak overrides
 SBSTWEAKCFG="$SBSTWEAKDIR/$AID.conf"														# the game specific shareable config sbs tweak overrides
 LOGFILE="$LOGDIRID/$AID.log"																	
@@ -5326,7 +5329,8 @@ function createProjectDirs {
 	mkProjDir "$STLPROTONLOGDIR" 1
 	mkProjDir "$STLWINELOGDIR" 1
 	mkProjDir "$STLPVLOGDIR" 1
-	mkProjDir "$STLGAMEDIR" 1
+	mkProjDir "$STLGAMEDIRID" 1
+	mkProjDir "$STLGAMEDIRTI" 1
 	mkProjDir "$STLCATEGORYDIR" 1
 	mkProjDir "$TWEAKDIR" 1
 	mkProjDir "$USERTWEAKDIR" 1
@@ -5417,8 +5421,24 @@ function updateConfigFile {
 	fi
 }
 
+function linkGameCfg {
+	if [ -z "$GN" ]; then
+		writelog "SKIP" "${FUNCNAME[0]} - Skipping symlinking config - no valid game name found"
+	else
+		TICFGF="${GN/$LGS /}"
+		TICFG="${STLGAMEDIRTI}/${GN}.conf"
+
+		if [ ! -L "$TICFG" ] && [ -f "$LOGFILE" ]; then
+			ln -s "$STLGAMECFG" "$TICFG"
+			writelog "INFO" "${FUNCNAME[0]} - Set symlink from '$STLGAMECFG' to '$TICFG'"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Symlink '$TICFG' already exists"
+		fi
+	fi
+}
+
 # create game configs:
-function createGameCfg {
+function createGameCfgOrg {	
 
 	if [ -f "$STLGAMECFG" ]; then
 		# add missing config entries in the default global config:
@@ -5443,8 +5463,23 @@ function createGameCfg {
 			writelog "SKIP" "${FUNCNAME[0]} - No game name found for '$AID' - does the game exist?" "E"
 		fi
 	fi
+
+	linkGameCfg
 }
 
+# for migrating into $STLGAMEDIRID - will be removed later - TODO
+function createGameCfg {	
+	if [ -f "$STLOLDGAMECFG" ]; then
+		if [ -f "$STLGAMECFG" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Found old gameconfig '$STLOLDGAMECFG' but also a new one '$STLGAMECFG', so just deleting the old one"
+			rm "$STLOLDGAMECFG" 2>/dev/null
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Found an old gameconfig under '$STLOLDGAMECFG' - Moving it to '$STLGAMECFG'"
+			mv "$STLOLDGAMECFG" "$STLGAMECFG"
+		fi
+	fi
+	createGameCfgOrg
+}	
 
 function createTweakTemplateCfg {
 	# TWEAK CONFIG TEMPLATE:
