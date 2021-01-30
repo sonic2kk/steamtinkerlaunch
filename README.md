@@ -1279,7 +1279,8 @@ or via [Command Line](#Command-Line): `stl dlwine|dw <url>` *(accepting direct d
 #### Backup Support
 With enabling `BACKUPSTEAMUSER` *(either directly in the [Game Config](#Game-Config) or by adding the game to the `Backup` [Steam Category](#Steam-Categories))*
 all directories with files from the `steamuser` inside the Proton pfx will be backed *(using `rsync`)* when closing the game.
-
+The destination directory is `STLCFGDIR/backup/steamuser/id/$AID`. 
+A `STLCFGDIR/backup/steamuser/title/$GAMETITLE` symlink pointing to it will be created as well.
 
 ## Game Launch Speed
 **stl** has pretty much to check, but when everything is configured, several option-checks can be disabled (per game)
