@@ -4,7 +4,7 @@
 ### project ###
 
 PROGNAME="SteamTinkerLaunch"
-PROGVERS="v3.7-next"
+PROGVERS="v3.7-next1"
 PROGCMD="$(basename "$0")"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -175,7 +175,6 @@ function setSTLPath {
 	PATH="$STLPATH"
 }
 
-setAID
 STLFAVMENUCFG="$STLCFGDIR/$FACO"															# optional config (in fact just a list with variables) which holds all entries for the individual favorites menu
 STLMENUSORTCFG="$STLCFGDIR/$MENSO"																# optional config (in fact just a list with variables) which holds the category sort order for all menus
 STLMENUBLOCKCFG="$STLCFGDIR/$MENUBLOCK"
@@ -197,8 +196,6 @@ CUSTOMPROTONLIST="$STLCFGDIR/protonlist.txt"												# plain textfile with ad
 VORTEXSTAGELIST="$STLVORTEXDIR/stages.txt"													# plain textfile with Vortex Stage directories - one per Steam Library partition
 #ENDEDITORCFGLIST
 STLGUICFG="$STLCFGDIR/gui.conf"																# gui config
-
-setAIDCfgs
 
 # optional global config replacement dirs, which can be pulled using DLGLOBAL:
 GLDLSTLDIR="$STLDLDIR/$PROGNAME"
@@ -1005,6 +1002,7 @@ function calculateDefaultResolutions {
 	BLOCKSELSCALE=20
 	EXTSELSCALE=20
 	WINSELSCALE=15
+	ASKVTXREQSCALE=15
 
 	# Calculated initial gui sizes:
 	DEFSETWIDTH=$(( SCREENWIDTH * SETSCALE / 100 ));
@@ -1072,6 +1070,10 @@ function calculateDefaultResolutions {
 
 	DEFWINSELWIDTH=$(( SCREENWIDTH * WINSELSCALE / 100 ));
 	DEFWINSELHEIGHT=$(( SCREENHEIGHT * WINSELSCALE / 100 ));
+
+	DEFASKVTXREQWIDTH=$(( SCREENWIDTH * ASKVTXREQSCALE / 100 ));
+	DEFASKVTXREQHEIGHT=$(( SCREENHEIGHT * ASKVTXREQSCALE / 100 ));
+
 }
 
 function setDefaultCfgValues {
@@ -1155,6 +1157,8 @@ function setDefaultCfgValues {
 		if [ -z "$EXTSELHEIGHT" ]		; then	EXTSELHEIGHT="$DEFEXTSELHEIGHT"; fi
 		if [ -z "$WINSELWIDTH" ]		; then	WINSELWIDTH="$DEFWINSELWIDTH"; fi
 		if [ -z "$WINSELHEIGHT" ]		; then	WINSELHEIGHT="$DEFWINSELHEIGHT"; fi
+		if [ -z "$ASKVTXREQWIDTH" ]		; then	ASKVTXREQWIDTH="$DEFASKVTXREQWIDTH"; fi
+		if [ -z "$ASKVTXREQHEIGHT" ]	; then	ASKVTXREQHEIGHT="$DEFASKVTXREQHEIGHT"; fi
 	}
 
 	function setDefaultCfgValuesglobal {
@@ -1252,6 +1256,7 @@ function setDefaultCfgValues {
 		if [ -z "$RUN_CHEATENGINE" ]	; then	RUN_CHEATENGINE="0";	fi
 		if [ -z "$GAMCONWAITEXE" ]		; then	GAMCONWAITEXE="$("$WHICH" echo 2>/dev/null)"; fi
 		if [ -z "$VORTEXMODE" ]			; then	VORTEXMODE="disabled";	fi
+		if [ -z "$WAITVORTEX" ]			; then	WAITVORTEX="2"; fi
 		if [ -z "$CHANGE_PULSE_LATENCY" ] 	; then	CHANGE_PULSE_LATENCY="0"; fi
 		if [ -z "$STL_PULSE_LATENCY_MSEC" ]	; then	STL_PULSE_LATENCY_MSEC="60"; fi
 		if [ -z "$TOGGLEWINDOWS" ]		; then	TOGGLEWINDOWS="0"; fi
@@ -1462,6 +1467,9 @@ function saveCfg {
 			echo "## Wine Selection:"
 			echo "WINSELWIDTH=\"$WINSELWIDTH\""
 			echo "WINSELHEIGHT=\"$WINSELHEIGHT\""
+			echo "## Ask Open Vortex Requester:"
+			echo "ASKVTXREQWIDTH=\"$ASKVTXREQWIDTH\""
+			echo "ASKVTXREQHEIGHT=\"$ASKVTXREQHEIGHT\""
 			} >> "$1"
 			#ENDsaveCfggui
 		fi
@@ -1677,6 +1685,8 @@ function saveCfg {
 			echo "GAMCONWAITEXE=\"$GAMCONWAITEXE\""
 			echo "## $DESC_VORTEXMODE"
 			echo "VORTEXMODE=\"$VORTEXMODE\""
+			echo "## $DESC_WAITVORTEX"
+			echo "WAITVORTEX=\"$WAITVORTEX\""
 			echo "## $DESC_CHANGE_PULSE_LATENCY"
 			echo "CHANGE_PULSE_LATENCY=\"$CHANGE_PULSE_LATENCY\""
 			echo "## $DESC_STL_PULSE_LATENCY_MSEC"
@@ -2905,6 +2915,7 @@ function AllSettingsEntriesDummyFunction {
 --field="$(spanFont "$GUI_OPTSVORTEX" "H")":LBL "SKIP" `#CAT_Vortex` `#HEAD_Vortex` `#MENU_GAME` `#MENU_GLOBAL`  \
 --field="     $GUI_VORTEXINSTALL!$DESC_VORTEXINSTALL ('VORTEXINSTALL')":CHK "${VORTEXINSTALL/#-/ -}" `#CAT_Vortex` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_VORTEXMODE!$DESC_VORTEXMODE ('VORTEXMODE')":CB "${VORTEXMODE/#-/ -}!disabled!normal!quickstart!editormode" `#CAT_Vortex` `#MENU_GAME` \
+--field="     $GUI_WAITVORTEX!$DESC_WAITVORTEX ('WAITVORTEX')":NUM "${WAITVORTEX/#-/ -}" `#CAT_Vortex` `#MENU_GAME` \
 --field="     $GUI_VORTEXVERSION!$DESC_VORTEXVERSION ('VORTEXVERSION')" "${VORTEXVERSION/#-/ -}" `#CAT_Vortex``#MENU_GLOBAL`  \
 --field="     $GUI_VORTEXDOWNLOADPATH!$DESC_VORTEXDOWNLOADPATH ('VORTEXDOWNLOADPATH')":DIR "${VORTEXDOWNLOADPATH/#-/ -}" `#CAT_Vortex` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_VORTEXPREFIX!$DESC_VORTEXPREFIX ('VORTEXPREFIX')":DIR "${VORTEXPREFIX/#-/ -}" `#CAT_Vortex` `#SUB_Directories` `#MENU_GLOBAL` \
@@ -7802,6 +7813,50 @@ function installVortexPack {
 	setVortexDLMime
 }
 
+function askVortex {
+	if [ "$VORTEXMODE" == "normal" ]; then
+		if [ "$WAITVORTEX" -gt 0 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Opening Vortex Requester with timeout '$WAITVORTEX'"
+
+			TITLE="${PROGNAME}-OpenVortex"
+
+			loadCfg "$STLGUICFG" X
+			updateWinRes "$TITLE" "$STLGUICFG" "ASKVTXREQWIDTH" "ASKVTXREQHEIGHT" &
+
+			setShowPic
+
+			"$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
+			--title="$TITLE" \
+			--geometry="$ASKVTXREQWIDTH"x"$ASKVTXREQHEIGHT"+0+0 \
+			--text="$(spanFont "$GN ($AID) - $GUI_ASKVORTEX" "H")" \
+			--button="$BUT_VORTEX":0  \
+			--button="$BUT_CAN":1  \
+			--timeout="$WAITVORTEX" \
+			--timeout-indicator=top
+
+			case $? in
+				0)  {
+						writelog "INFO" "${FUNCNAME[0]} - Selected to Start Vortex, so not disabling it"
+					}
+				;;
+				1)  {
+						writelog "INFO" "${FUNCNAME[0]} - Selected CANCEL - Not starting Vortex"
+						VORTEXMODE="disabled"
+					}
+				;;
+				70) {
+						writelog "INFO" "${FUNCNAME[0]} - TIMEOUT - Not starting Vortex"
+						VORTEXMODE="disabled"
+					}
+				;;
+			esac
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Vortex Requester was skipped because WAITVORTEX is '$WAITVORTEX'"
+		fi
+	fi
+}
+
+
 function initVortexStuff {
 	if [ "$VORTEXMODE" == "normal" ] || [ "$VORTEXMODE" == "quickstart" ] || [ "$VORTEXMODE" == "editormode" ]; then
 		if [ -z "$VORTEXWINE" ] || [ ! -f "$VORTEXWINE" ]; then
@@ -7844,6 +7899,7 @@ function installVortexFull {
 
 function checkVortex {
 	if [ "$VORTEXMODE" != "disabled" ]; then
+		askVortex
 		initVortexStuff
 	fi
 
@@ -9694,51 +9750,59 @@ function getCurrentCommandline {
 
 ##################
 
-getCurrentCommandline "$@"
+function main {
+	setAID
+	setAIDCfgs
+	getCurrentCommandline "$@"
+	saveOrgVars
+	emptyVars "O"
 
-saveOrgVars
-emptyVars "O"
-
-if [ -f "$STLDEFGLOBALCFG" ] && grep -q "^RESETLOG=\"1\"" "$STLDEFGLOBALCFG"; then
-	rm "$LOGFILE" 2>/dev/null
-	writelog "START" "######### Initializing Game Launch $AID #########"
-	writelog "INFO" "Starting with a clean log"
-else
-	writelog "START" "######### Initializing Game Launch $AID #########"
-fi
-
-writelog "INFO" "emptyVars - Emptied some original Variables as they slowdown several system calls when started from steam"
-createDefaultCfgs "$@"
-checkIntDeps
-
-if [ -z "$1" ]; then
-	writelog "INFO" "${FUNCNAME[0]} - No arguments provided. See '$PROGCMD --help' for possible command line parameters" "E"
-else
-	if [ -n "$SteamAppId" ] && [ "$SteamAppId" -eq "0" ]; then
-		setCustomGameVars "$@"
-		if [ -n "$ISGAME" ]; then
-			if [ "$ISGAME" -eq 2 ] || [ "$ISGAME" -eq 3 ]; then
-				prepareLaunch
-			fi
-		else
-			writelog "ERROR" "${FUNCNAME[0]} - Unknown command '$*'" "E"
-		fi
-	elif grep -q "$SAC" <<< "$@"; then
-		if grep -q "update" <<< "$@"; then
-			commandline "$@"
-		else
-			setGameVars "$@"
-			if grep -q "$WFEAR" <<< "${ORGGCMD[@]}"; then
-				ISGAME=2
-				prepareLaunch
-			elif [ -f "$GP" ]; then
-				ISGAME=3
-				prepareLaunch
-			else
-				writelog "INFO" "${FUNCNAME[0]} - Unknown parameter '${ORGGCMD[*]}'" "E"
-			fi
-		fi
+	if [ -f "$STLDEFGLOBALCFG" ] && grep -q "^RESETLOG=\"1\"" "$STLDEFGLOBALCFG"; then
+		rm "$LOGFILE" 2>/dev/null
+		writelog "START" "######### Initializing Game Launch $AID #########"
+		writelog "INFO" "Starting with a clean log"
 	else
-		commandline "$@"
+		writelog "START" "######### Initializing Game Launch $AID #########"
 	fi
-fi
+
+	writelog "INFO" "emptyVars - Emptied some original Variables as they slowdown several system calls when started from steam"
+	createDefaultCfgs "$@"
+	checkIntDeps
+
+	if [ -z "$1" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - No arguments provided. See '$PROGCMD --help' for possible command line parameters" "E"
+	else
+		if [ -n "$SteamAppId" ] && [ "$SteamAppId" -eq "0" ]; then
+			setCustomGameVars "$@"
+			if [ -n "$ISGAME" ]; then
+				if [ "$ISGAME" -eq 2 ] || [ "$ISGAME" -eq 3 ]; then
+					prepareLaunch
+				fi
+			else
+				writelog "ERROR" "${FUNCNAME[0]} - Unknown command '$*'" "E"
+			fi
+		elif grep -q "$SAC" <<< "$@"; then
+			if grep -q "update" <<< "$@"; then
+				commandline "$@"
+			else
+				setGameVars "$@"
+				if grep -q "$WFEAR" <<< "${ORGGCMD[@]}"; then
+					ISGAME=2
+					prepareLaunch
+				elif [ -f "$GP" ]; then
+					ISGAME=3
+					prepareLaunch
+				else
+					writelog "INFO" "${FUNCNAME[0]} - Unknown parameter '${ORGGCMD[*]}'" "E"
+				fi
+			fi
+		else
+			commandline "$@"
+		fi
+	fi
+
+}
+
+main "$@"
+
+
