@@ -177,6 +177,7 @@ Programs needed for optional external features *(no special order)*:
 - lsusb *(for an optional [SBS-VR](#Side-by-Side-VR) check if a VR HMD was found)*
 - jq *(used to extract game names from the steam api and for receiving the Lutris wine list)*
 - convert from imagemagick *(currently only used to scale a custom installed game header picture)*
+- rsync *(for backup support)*
 
 ## Configuration
 All configuration files are self-contained documented and always growing, so not every option is documented in here.
