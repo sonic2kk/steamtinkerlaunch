@@ -4,7 +4,7 @@
 ### project ###
 
 PROGNAME="SteamTinkerLaunch"
-PROGVERS="v3.7-next1"
+PROGVERS="v3.7-next2"
 PROGCMD="$(basename "$0")"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -42,6 +42,7 @@ INNOEXTRACT="innoextract"
 LSUSB="lsusb"
 JQ="jq"
 CONVERT="convert"
+RSYNC="rsync"
 CHECKHMD=1 # will be set to 0 if $LSUSB is not found. Then the hmd presence check is skipped
 
 # autotweak platforms
@@ -119,6 +120,12 @@ STLGAMEDIRTI="$STLGAMEDIR/title"
 STLCATEGORYDIR="$STLCFGDIR/categories"														# the directory holding config files with preconfigured settings for games in specific steamcategories
 STLREGDIR="$STLCFGDIR/regs"																	# the directory holding registry files
 STLDLDIR="$STLCFGDIR/downloads"																# the directory holding optional downloads
+STLBACKDIR="$STLCFGDIR/backup"
+DRCU="drive_c/users"
+STUS="steamuser"
+SUBADIR="$STLBACKDIR/$STUS"
+SUBADIRID="$SUBADIR/id"
+SUBADIRTI="$SUBADIR/title"
 RSP="reshadepresets"
 STLRSPRESETDIR="$STLCFGDIR/$RSP"
 WTDLDIR="$STLDLDIR/winetricks"
@@ -1299,6 +1306,7 @@ function setDefaultCfgValues {
 		if [ -z "$ATADOPT" ]			; then	ATADOPT="0"; fi
 		if [ -z "$IGNOREAUTOTWEAKS" ]	; then	IGNOREAUTOTWEAKS="1"; fi
 		if [ -z "$CHECKCATEGORIES" ]	; then	CHECKCATEGORIES="1"; fi
+		if [ -z "$BACKUPSTEAMUSER" ]	; then	BACKUPSTEAMUSER="0"; fi
 		if [ -z "$STRACERUN" ]			; then	STRACERUN="0"; fi
 		if [ -z "$STRACEOPTS" ]			; then	STRACEOPTS="-f -t -e trace=file"; fi
 		if [ -z "$USENETMON" ]			; then	USENETMON="0"; fi
@@ -1768,6 +1776,8 @@ function saveCfg {
 			echo "IGNOREAUTOTWEAKS=\"$IGNOREAUTOTWEAKS\""
 			echo "## $DESC_CHECKCATEGORIES"
 			echo "CHECKCATEGORIES=\"$CHECKCATEGORIES\""
+			echo "## $DESC_BACKUPSTEAMUSER"
+			echo "BACKUPSTEAMUSER=\"$BACKUPSTEAMUSER\""
 			echo "## $(strFix "$DESC_DXVKVARS" "$DXVKURL")"
 			echo "DXVK_HUD=\"$DXVK_HUD\""
 			echo "## $DESC_DXVK_LOG_LEVEL"
@@ -2814,6 +2824,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_RECOMMENDPROTON!$DESC_RECOMMENDPROTON ('RECOMMENDPROTON')":CHK "${RECOMMENDPROTON/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_CUSTPROTDLDIR!$DESC_CUSTPROTDLDIR ('CUSTPROTDLDIR')":DIR "${CUSTPROTDLDIR/#-/ -}" `#CAT_Proton` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_CUSTPROTEXTDIR!$DESC_CUSTPROTEXTDIR ('CUSTPROTEXTDIR')":DIR "${CUSTPROTEXTDIR/#-/ -}" `#CAT_Proton` `#SUB_Directories` `#MENU_GLOBAL` \
+--field="     $GUI_BACKUPSTEAMUSER!$DESC_BACKUPSTEAMUSER ('BACKUPSTEAMUSER')":CHK "${BACKUPSTEAMUSER/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="$(spanFont "$GUI_OPTSSHADER" "H")":LBL "SKIP" `#CAT_Shader` `#HEAD_Shader` `#MENU_GAME` `#MENU_GLOBAL`  \
 --field="     $GUI_USERESHADE!$DESC_USERESHADE ('USERESHADE')":CHK "${USERESHADE/#-/ -}" `#CAT_Shader` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_DOWNLOAD_RESHADE!$DESC_DOWNLOAD_RESHADE ('DOWNLOAD_RESHADE')":CHK "${DOWNLOAD_RESHADE/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#SUB_Checkbox` `#MENU_GLOBAL` \
@@ -6200,7 +6211,7 @@ function createAutoTweakLU {
 						writelog "SKIP" "${FUNCNAME[0]} - TWEAKCMD $TWEAKLUCMD does already exists - not autogenerating"
 					else
 						writelog "INFO" "${FUNCNAME[0]} - Creating TWEAKCMD $TWEAKLUCMD"
-						WCFILE="$(grep -oE '"file":"[^\",]+' <<< "$line" | cut -d':' -f2 | sed "s:^\"::" | sed "s:\$GAMEDIR/prefix:\$GPFX:"| sed "s:\$GAMEDIR:\"\$GPFX\":" | sed  "s:\$USER:steamuser:")"
+						WCFILE="$(grep -oE '"file":"[^\",]+' <<< "$line" | cut -d':' -f2 | sed "s:^\"::" | sed "s:\$GAMEDIR/prefix:\$GPFX:"| sed "s:\$GAMEDIR:\"\$GPFX\":" | sed  "s:\$USER:\$STUS:")"
 						WCKEY="$(grep -oE '"key":"[^\",]+' <<< "$line" | cut -d':' -f2 | sed "s:^\"::")"
 						WCSECTION="$(grep -oE '"section":"[^\",]+' <<< "$line" | cut -d':' -f2 | sed "s:^\"::")"
 						WCVALUE="$(grep -oE '"value":"[^\",]+' <<< "$line" | cut -d':' -f2 | sed "s:^\"::")"
@@ -7968,17 +7979,17 @@ function checkVortex {
 					MyDocsMyGames="$MyDocs/My Games"
 					LocalSetAppData="Local Settings/Application Data"
 					
-					if [ -d "${VORTEXPREFIX//\"/}/drive_c/users/steamuser" ];then
-						writelog "INFO" "${FUNCNAME[0]} - Vortex is running with Proton wine - configuring for user 'steamuser'"
-						VUSER="steamuser"
+					if [ -d "${VORTEXPREFIX//\"/}/$DRCU/$STUS" ];then
+						writelog "INFO" "${FUNCNAME[0]} - Vortex is running with Proton wine - configuring for user '$STUS'"
+						VUSER="$STUS"
 					else
 						writelog "INFO" "${FUNCNAME[0]} - Vortex is running with regular wine - configuring for user '$USER'"
 						VUSER="$USER"
 					fi
 					
-					UserMyDocs="${VORTEXPREFIX//\"/}/drive_c/users/$VUSER/$MyDocs"
-					UserMyDocsMyGames="${VORTEXPREFIX//\"/}/drive_c/users/$VUSER/$MyDocsMyGames"
-					UserLocalSetAppData="${VORTEXPREFIX//\"/}/drive_c/users/$VUSER/$LocalSetAppData"
+					UserMyDocs="${VORTEXPREFIX//\"/}/$DRCU/$VUSER/$MyDocs"
+					UserMyDocsMyGames="${VORTEXPREFIX//\"/}/$DRCU/$VUSER/$MyDocsMyGames"
+					UserLocalSetAppData="${VORTEXPREFIX//\"/}/$DRCU/$VUSER/$LocalSetAppData"
 					
 					if readlink "$UserMyDocsMyGames" >/dev/null ; then
 						writelog "INFO" "${FUNCNAME[0]} - Removing symlink '$UserMyDocsMyGames' pointing to '$(readlink "$UserMyDocsMyGames")'"
@@ -8007,9 +8018,7 @@ function checkVortex {
 
 						# checking symlinks:
 						linkVortex "$GFD" "$VortexSteamAppsCommon/$GN"
-
-						STUSER="steamuser"
-						SteamUserDir="$GVFX/drive_c/users/$STUSER"
+						SteamUserDir="$GVFX/$DRCU/$STUS"
 						
 						SteamUserMyDocs="$SteamUserDir/$MyDocs"
 
@@ -8113,6 +8122,7 @@ function checkExtDeps {
 	checkDep "HACKWMP10" "$CABEXTRACT"
 	checkDep "CHECKHMD" "$LSUSB"
 	checkDep "HAVEINNO" "$INNOEXTRACT"
+	checkDep "BACKUPSTEAMUSER" "$RSYNC"
 }
 
 function checkIntDeps {
@@ -9569,8 +9579,47 @@ function delWinetricksTemps {
 	find "/tmp" -maxdepth 1 -type d -regextype posix-extended -regex '^.*winetricks.[A-Z,a-z,0-9]{8}' -exec rmdir {} \;	2>/dev/null
 }
 
+function backupSteamUser {
+	if [ "$BACKUPSTEAMUSER" -eq 1 ]; then
+		if [ -z "$GPFX" ]; then
+				writelog "SKIP" "${FUNCNAME[0]} - Game pfx unknown for '$GN ($AID)'"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Backup enabled for Game '$GN ($AID)'"
+			mkProjDir "$SUBADIRID/$AID" 1
+			mkProjDir "$SUBADIRTI" 1
+
+			SteamUserDir="$GPFX/$DRCU/$STUS"
+			
+			if [ -d "$SteamUserDir" ];then
+				writelog "INFO" "${FUNCNAME[0]} - backing up directory '$SteamUserDir' to '$SUBADIRID/$AID'"
+				notiShow "$(strFix "$NOTY_STARTBACKUP" "$GN" "$AID")"
+				"$RSYNC" -am "$SteamUserDir" "$SUBADIRID/$AID"
+				notiShow "$(strFix "$NOTY_STOPBACKUP" "$GN" "$AID")"
+			else
+				writelog "SKIP" "${FUNCNAME[0]} - directory '$SteamUserDir' does not exist - nothing to backup"
+			fi
+
+			if [ -z "$GN" ]; then
+				writelog "SKIP" "${FUNCNAME[0]} - Skipping symlinking backup - no valid game name found"
+			else
+				TICFGF="${GN/$LGS /}"
+				TIBA="$SUBADIRTI/$TICFGF"
+
+				if [ ! -L "$TIBA" ]; then
+					ln -s "$SUBADIRID/$AID" "$TIBA"
+					writelog "INFO" "${FUNCNAME[0]} - Set symlink from '$SUBADIRID/$AID' to '$TIBA'"
+				else
+					writelog "INFO" "${FUNCNAME[0]} - Symlink '$TIBA' already exists"
+				fi
+			fi
+		fi
+	fi
+}
+
 #STARTCLOSESTL ###
 function closeSTL {
+	backupSteamUser
+
 	writelog "INFO" "${FUNCNAME[0]} - Game $GN ($AID) exited - cleaning up custom processes if necessary"
 
 # all variables in closeSTL are blocked from being unset before gamestart - dirty list with variables to keep which are not used here:
@@ -9839,5 +9888,3 @@ function main {
 }
 
 main "$@"
-
-
