@@ -135,6 +135,7 @@ or just to browse through the latest version**
 * **[Cheat Engine](#Cheat-Engine)** automatic CheatEngine download, install, autostart per game and autostop on game exit
 * **[Pressure Vessel](#Pressure-Vessel)** Some Pressure Vessel options
 * **[Wine Support](#Wine-Support)** Download and use custom Wine archives instead of Proton
+* **[Backup Support](#Backup-Support)** optionally automatic backup of 'steamuser' files of the 'steamuser' files per Proton game
 
 ## Requirements
 *(no special order)*
@@ -1274,6 +1275,10 @@ The selected archive will be downloaded to `WINEDLDIR` and extracted to the prod
 
 The Requester can either be opened via the [Extra Buttons Menu](#Extra-Buttons), automatically when no Wine version could be determined using the [Wine Support](#Wine-Support)
 or via [Command Line](#Command-Line): `stl dlwine|dw <url>` *(accepting direct download URL as optional argument)*.
+
+#### Backup Support
+With enabling `BACKUPSTEAMUSER` *(either directly in the [Game Config](#Game-Config) or by adding the game to the `Backup` [Steam Category](#Steam-Categories))*
+all directories with files from the `steamuser` inside the Proton pfx will be backed *(using `rsync`)* when closing the game.
 
 
 ## Game Launch Speed
