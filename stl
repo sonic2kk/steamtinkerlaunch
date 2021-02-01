@@ -4,7 +4,7 @@
 ### project ###
 
 PROGNAME="SteamTinkerLaunch"
-PROGVERS="v3.8"
+PROGVERS="v3.9-next"
 PROGCMD="$(basename "$0")"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -119,6 +119,7 @@ STLCATEGORYDIR="$STLCFGDIR/categories"														# the directory holding conf
 STLREGDIR="$STLCFGDIR/regs"																	# the directory holding registry files
 STLDLDIR="$STLCFGDIR/downloads"																# the directory holding optional downloads
 STLBACKDIR="$STLCFGDIR/backup"
+BACKEX="$STLBACKDIR/exclude"
 METADIR="$STLCFGDIR/meta"
 GEMETA="$METADIR/id/general"
 CUMETA="$METADIR/id/custom"
@@ -206,6 +207,7 @@ LUTWEAKCFG="$LUTWEAKDIR/$AID.conf"
 STLURLCFG="$STLCFGDIR/url.conf"																# url config
 CUSTOMPROTONLIST="$STLCFGDIR/protonlist.txt"												# plain textfile with additional user proton versions
 VORTEXSTAGELIST="$STLVORTEXDIR/stages.txt"													# plain textfile with Vortex Stage directories - one per Steam Library partition
+EXGLOB="$BACKEX/exclude-global.txt"
 #ENDEDITORCFGLIST
 STLGUICFG="$STLCFGDIR/gui.conf"																# gui config
 
@@ -2459,6 +2461,14 @@ function EditorDialog {
 	loadCfg "$STLGAMECFG" X
 
 	getAvailableCfgs
+	
+	if [ "$BACKUPSTEAMUSER" -eq 1 ]; then
+		EXID="$BACKEX/exclude-${AID}.txt"
+		if [ -f "$EXID" ]; then
+			CfgFiles+=("$EXID")
+		fi
+	fi
+	
 	writelog "INFO" "${FUNCNAME[0]} - Found ${#CfgFiles[@]} available Config Files - opening Checklist"
 
 	TITLE="${PROGNAME}-Editor"
@@ -9681,7 +9691,11 @@ function backupSteamUser {
 				if [ -z "$2" ]; then
 					notiShow "$(strFix "$NOTY_STARTBACKUP" "$BACKTI" "$BAID")"
 				fi
-				"$RSYNC" -am "$SteamUserDir" "$SUBADIRID/$BAID"
+				mkProjDir "$BACKEX" 1
+				
+				EXID="$BACKEX/exclude-${BAID}.txt"
+				touch "$EXGLOB" "$EXID"
+				"$RSYNC" -am --exclude-from="$EXGLOB" --exclude-from="$EXID" "$SteamUserDir" "$SUBADIRID/$BAID"
 				if [ -z "$2" ]; then
 					notiShow "$(strFix "$NOTY_STOPBACKUP" "$BACKTI" "$BAID")"
 				fi

@@ -1282,6 +1282,13 @@ With enabling `BACKUPSTEAMUSER` *(either directly in the [Game Config](#Game-Con
 all directories with files from the `steamuser` inside the Proton pfx will be backed *(using `rsync`)* when closing the game.
 The destination directory is `STLCFGDIR/backup/steamuser/id/$AID`. 
 A `STLCFGDIR/backup/steamuser/title/$GAMETITLE` symlink pointing to it will be created as well.
+Files and directories can be excluded from the backup, by either adding them into the per game
+`STLCFGDIR/backup/exclude/exclude-$AID.txt`
+or into the globally parsed 
+`STLCFGDIR/backup/exclude/exclude-global.txt`
+exclude file.
+For easier editing both files are also available via the [Editor Dialog](#Editor-Dialog).
+
 
 ##### Backup using commandline:
 see [Command Line](#Command-Line)
