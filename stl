@@ -4,7 +4,7 @@
 ### project ###
 
 PROGNAME="SteamTinkerLaunch"
-PROGVERS="v3.7-next2"
+PROGVERS="v3.7-next3"
 PROGCMD="$(basename "$0")"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -112,6 +112,8 @@ LOGDIR="$BASELOGDIR/$PROGCMD"																# default stllogfile dir
 LOGDIRID="$LOGDIR/id"
 LOGDIRTI="$LOGDIR/title"
 STLPROTONLOGDIR="$BASELOGDIR/proton"														# proton logfile dir
+STLPROTONIDLOGDIR="$STLPROTONLOGDIR/id"														# proton id logfile dir
+STLPROTONTILOGDIR="$STLPROTONLOGDIR/title"													# proton title logfile dir
 STLWINELOGDIR="$BASELOGDIR/wine"															# wine logfile dir
 STLPVLOGDIR="$BASELOGDIR/pv"																# pressure vessel logfile dir
 STLGAMEDIR="$STLCFGDIR/gamecfgs"															# default basedir for game the gamespecific configs
@@ -121,6 +123,11 @@ STLCATEGORYDIR="$STLCFGDIR/categories"														# the directory holding conf
 STLREGDIR="$STLCFGDIR/regs"																	# the directory holding registry files
 STLDLDIR="$STLCFGDIR/downloads"																# the directory holding optional downloads
 STLBACKDIR="$STLCFGDIR/backup"
+METADIR="$STLCFGDIR/meta"
+GEMETA="$METADIR/id/general"
+CUMETA="$METADIR/id/custom"
+TIGEMETA="$METADIR/title/general"
+TICUMETA="$METADIR/title/custom"
 DRCU="drive_c/users"
 STUS="steamuser"
 SUBADIR="$STLBACKDIR/$STUS"
@@ -590,19 +597,26 @@ function setGN {
 	fi
 }
 
+function createSymLink {
+	if [ ! -L "$3" ] && [ -e "$2" ]; then
+		ln -s "$2" "$3"
+		writelog "INFO" "$1 - Set symlink from '$2' to '$3'"
+	else
+		if [ -L "$3" ] && [ -z "$4" ]; then
+			writelog "INFO" "$1 - Symlink '$3' already exists"
+		fi
+
+		if [ ! -e "$2" ]; then
+			writelog "INFO" "$1 - '$2' does not exists"
+		fi
+	fi
+}
+
 function linkLog {
 	if [ -z "$GN" ]; then
 		writelog "SKIP" "${FUNCNAME[0]} - Skipping symlinking logfile - no valid game name found"
 	else
-		TILOGF="${GN/$LGS /}"
-		TILOG="${LOGDIRTI}/$TILOGF.log"
-
-		if [ ! -L "$TILOG" ] && [ -f "$LOGFILE" ]; then
-			ln -s "$LOGFILE" "$TILOG"
-			writelog "INFO" "${FUNCNAME[0]} - Set symlink from '$LOGFILE' to '$TILOG'"
-		else
-			writelog "INFO" "${FUNCNAME[0]} - Symlink '$TILOG' already exists"
-		fi
+		createSymLink "${FUNCNAME[0]}" "$LOGFILE" "${LOGDIRTI}/${GN/$LGS /}.log"
 	fi
 }
 
@@ -623,7 +637,7 @@ function setGameVars {
 	# win game
 		GPFX="$STEAM_COMPAT_DATA_PATH/pfx"														# currently used WINEPREFIX
 		GP="$(printf "%s\n" "$@" | grep -v "proton\|$SLR" | grep -m1 "$SAC")"					# the absolute game path of the windows game exe
-		GE="$(basename "$GP" | gawk -F '.exe' '{print $1}')"										# just the windows game exe name
+		GE="$(basename "$GP" | gawk -F '.exe' '{print $1}')"									# just the windows game exe name
 		EFD="$(dirname "$GP")"																	# the absolute directory where the game exe lives - for optional custom program
 	else
 	# linux game
@@ -1313,7 +1327,7 @@ function setDefaultCfgValues {
 		if [ -z "$DXVK_HUD" ]			; then	DXVK_HUD="0"; fi
 		if [ -z "$DXVK_LOG_LEVEL" ]		; then	DXVK_LOG_LEVEL="$NON"; fi
 		if [ -z "$PROTON_LOG" ]			; then	PROTON_LOG="0"; fi
-		if [ -z "$PROTON_LOG_DIR" ]		; then	PROTON_LOG_DIR="$STLPROTONLOGDIR"; fi
+		if [ -z "$PROTON_LOG_DIR" ]		; then	PROTON_LOG_DIR="$STLPROTONIDLOGDIR"; fi
 		if [ -z "$WINE_LOG_DIR" ]		; then	WINE_LOG_DIR="$STLWINELOGDIR"; fi
 		if [ -z "$PROTON_DEBUG_DIR" ]	; then	PROTON_DEBUG_DIR="/tmp"; fi
 		if [ -z "$PROTON_USE_WINED3D" ]	; then	PROTON_USE_WINED3D="0"; fi
@@ -5337,7 +5351,8 @@ function createProjectDirs {
 	mkProjDir "$STLLANGDIR" 1
 	mkProjDir "$LOGDIRID" 1
 	mkProjDir "$LOGDIRTI" 1
-	mkProjDir "$STLPROTONLOGDIR" 1
+	mkProjDir "$STLPROTONIDLOGDIR" 1
+	mkProjDir "$STLPROTONTILOGDIR" 1
 	mkProjDir "$STLWINELOGDIR" 1
 	mkProjDir "$STLPVLOGDIR" 1
 	mkProjDir "$STLGAMEDIRID" 1
@@ -5436,15 +5451,7 @@ function linkGameCfg {
 	if [ -z "$GN" ]; then
 		writelog "SKIP" "${FUNCNAME[0]} - Skipping symlinking config - no valid game name found"
 	else
-		TICFGF="${GN/$LGS /}"
-		TICFG="${STLGAMEDIRTI}/${TICFGF}.conf"
-
-		if [ ! -L "$TICFG" ] && [ -f "$STLGAMECFG" ]; then
-			ln -s "$STLGAMECFG" "$TICFG"
-			writelog "INFO" "${FUNCNAME[0]} - Set symlink from '$STLGAMECFG' to '$TICFG'"
-		else
-			writelog "INFO" "${FUNCNAME[0]} - Symlink '$TICFG' already exists"
-		fi
+		createSymLink "${FUNCNAME[0]}" "$STLGAMECFG" "${STLGAMEDIRTI}/${GN/$LGS /}.conf"
 	fi
 }
 
@@ -5490,6 +5497,10 @@ function createGameCfg {
 		fi
 	fi
 	createGameCfgOrg
+
+# updating new default PROTON_LOG path
+	updateConfigEntry "PROTON_LOG_DIR" "$STLPROTONIDLOGDIR" "$STLGAMECFG"
+	updateConfigEntry "PROTON_LOG_DIR" "$STLPROTONIDLOGDIR" "$STLDEFGAMECFG"
 }	
 
 function createTweakTemplateCfg {
@@ -8379,10 +8390,12 @@ function prepareLaunch {
 	writelog "INFO" "${FUNCNAME[0]} - CheckVortex:"
 	checkVortex
 
-	# (mostly for Vortex) if SELAUNCH is 0 start a preconfigured exe directly
-	writelog "INFO" "${FUNCNAME[0]} - CheckVortexSELaunch with argument '$SELAUNCH':"
-	checkVortexSELaunch "$SELAUNCH"
-
+	# (for Vortex) if SELAUNCH is 0 start a preconfigured exe directly
+	if [ "$VORTEXMODE" != "disabled" ]; then	#shouldn't break anything(?)
+		writelog "INFO" "${FUNCNAME[0]} - CheckVortexSELaunch with argument '$SELAUNCH':"
+		checkVortexSELaunch "$SELAUNCH"
+	fi
+	
 	# start a custom program if CUSTOMCMDMODE is not disabled
 	writelog "INFO" "${FUNCNAME[0]} - CheckCustomLaunch:"
 	checkCustomLaunch
@@ -9570,6 +9583,47 @@ function writeLastRun {
 	} >	"$LASTRUN"
 }
 
+function storeMetaData {
+	writelog "INFO" "${FUNCNAME[0]} - Saving Game Meta data"
+
+	mkProjDir "$GEMETA" 1
+	mkProjDir "$CUMETA" 1
+	mkProjDir "$TIGEMETA" 1
+	mkProjDir "$TICUMETA" 1
+
+#	{
+#	echo "GAMEID=\"$AID\""
+#	echo "GAMENAME=\"$GN\""
+#	echo "GAMEEXE=\"$GE\""
+#	} > "$GEMETA/$AID.conf"
+
+	touch "$GEMETA/$AID.conf"
+	loadCfg "$GEMETA/$AID.conf" X
+	updateConfigEntry "GAMEID" "$AID" "$GEMETA/$AID.conf"
+	updateConfigEntry "GAMENAME" "$GN" "$GEMETA/$AID.conf"
+	updateConfigEntry "GAMEEXE" "$GE" "$GEMETA/$AID.conf"
+
+	if [ -n "$GAMEWINDOW" ] && [ "$GAMEWINDOW" != "$NON" ]; then
+#		echo "GAMEWINDOW=\"$GAMEWINDOW\"" >> "$GEMETA/$AID.conf"
+		updateConfigEntry "GAMEWINDOW" "$GAMEWINDOW" "$GEMETA/$AID.conf"
+	fi
+
+#	{
+#	echo "WINEPREFIX=\"$GPFX\""
+#	echo "GAMEDIR=\"$EFD\""
+#	} > "$CUMETA/$AID.conf"
+
+	touch "$CUMETA/$AID.conf"
+	loadCfg "$CUMETA/$AID.conf" X
+	updateConfigEntry "WINEPREFIX" "$GPFX" "$CUMETA/$AID.conf"
+	updateConfigEntry "GAMEDIR" "$EFD" "$CUMETA/$AID.conf"
+
+	createSymLink "${FUNCNAME[0]}" "$GEMETA/$AID.conf" "$TIGEMETA/${GN}.conf" X
+	createSymLink "${FUNCNAME[0]}" "$CUMETA/$AID.conf" "$TICUMETA/${GN}.conf" X
+
+# XXXXXXXXXXXXXXXXXXXXXXXXXXXXXX	
+}
+
 function delMenuTemps {
 	find "$STLSHM" -maxdepth 1 -type f -regextype posix-extended -regex '^.*menu.[A-Z,a-z,0-9]{8}' -exec rm {} \;	
 }
@@ -9581,10 +9635,13 @@ function delWinetricksTemps {
 
 function backupSteamUser {
 	if [ "$BACKUPSTEAMUSER" -eq 1 ]; then
+		TICFGF="${GN/$LGS /}"
+
 		if [ -z "$GPFX" ]; then
-				writelog "SKIP" "${FUNCNAME[0]} - Game pfx unknown for '$GN ($AID)'"
+			TICFGF="${GN/$LGS /}"
+			writelog "SKIP" "${FUNCNAME[0]} - Game pfx unknown for '$TICFGF ($AID)'"
 		else
-			writelog "INFO" "${FUNCNAME[0]} - Backup enabled for Game '$GN ($AID)'"
+			writelog "INFO" "${FUNCNAME[0]} - Backup enabled for Game '$TICFGF ($AID)'"
 			mkProjDir "$SUBADIRID/$AID" 1
 			mkProjDir "$SUBADIRTI" 1
 
@@ -9602,15 +9659,7 @@ function backupSteamUser {
 			if [ -z "$GN" ]; then
 				writelog "SKIP" "${FUNCNAME[0]} - Skipping symlinking backup - no valid game name found"
 			else
-				TICFGF="${GN/$LGS /}"
-				TIBA="$SUBADIRTI/$TICFGF"
-
-				if [ ! -L "$TIBA" ]; then
-					ln -s "$SUBADIRID/$AID" "$TIBA"
-					writelog "INFO" "${FUNCNAME[0]} - Set symlink from '$SUBADIRID/$AID' to '$TIBA'"
-				else
-					writelog "INFO" "${FUNCNAME[0]} - Symlink '$TIBA' already exists"
-				fi
+				createSymLink "${FUNCNAME[0]}" "$SUBADIRID/$AID" "$SUBADIRTI/$TICFGF"
 			fi
 		fi
 	fi
@@ -9619,6 +9668,10 @@ function backupSteamUser {
 #STARTCLOSESTL ###
 function closeSTL {
 	backupSteamUser
+
+	if [ "$PROTON_LOG" -eq 1 ]; then
+		createSymLink "${FUNCNAME[0]}" "$STLPROTONIDLOGDIR/steam-${AID}.log" "$STLPROTONTILOGDIR//steam-${GN}.log"
+	fi
 
 	writelog "INFO" "${FUNCNAME[0]} - Game $GN ($AID) exited - cleaning up custom processes if necessary"
 
@@ -9711,6 +9764,7 @@ function closeSTL {
 		fi
 
 		writeLastRun
+		storeMetaData
 	fi
 
 	delMenuTemps
@@ -9750,11 +9804,11 @@ function emptyVars {
 		TIEXF="$STLSHM/TrayIconFuncs.txt"
 
 		if [ ! -f "$TIEXV" ]; then
-			sed -n "/^#STARTIEX/,/^#ENDIEX/p;/^#ENDIEX/q" "$0" | grep export | grep -v "export \-f" | cut -d '=' -f1 | awk -F 'export ' '{print $2}' > "$TIEXV"
+			sed -n "/^#STARTIEX/,/^#ENDIEX/p;/^#ENDIEX/q" "$0" | grep export | grep -v "export \-f" | cut -d '=' -f1 | gawk -F 'export ' '{print $2}' > "$TIEXV"
 		fi
 
 		if [ ! -f "$TIEXF" ]; then
-			sed -n "/^#STARTIEX/,/^#ENDIEX/p;/^#ENDIEX/q" "$0" | grep "export \-f" | awk -F '-f ' '{print $2}' > "$TIEXF"
+			sed -n "/^#STARTIEX/,/^#ENDIEX/p;/^#ENDIEX/q" "$0" | grep "export \-f" | gawk -F '-f ' '{print $2}' > "$TIEXF"
 		fi
 
 		while read -r intvar; do
