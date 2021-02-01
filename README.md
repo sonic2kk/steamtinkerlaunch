@@ -1283,6 +1283,9 @@ all directories with files from the `steamuser` inside the Proton pfx will be ba
 The destination directory is `STLCFGDIR/backup/steamuser/id/$AID`. 
 A `STLCFGDIR/backup/steamuser/title/$GAMETITLE` symlink pointing to it will be created as well.
 
+##### Backup using commandline:
+see [Command Line](#Command-Line)
+
 ## Game Launch Speed
 **stl** has pretty much to check, but when everything is configured, several option-checks can be disabled (per game)
 to speed up the actual game start process.
