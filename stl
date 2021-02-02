@@ -2444,6 +2444,44 @@ function updateEditor {
 	fi
 }
 
+function setGPfxFromAppMa {
+	if [ -z "$GPFX" ]; then
+		APPMA="$(listAppManifests | grep "${1}.acf")"
+		AMF="$(basename "$APPMA")"
+		GPFX="$(dirname "$APPMA")/$CODA/$1/pfx"
+		writelog "INFO" "${FUNCNAME[0]} - Found WINEPREFIX '$GPFX' in '$AMF'"
+	fi
+	
+	if [ -z "$GPFX" ]; then
+		writelog "SKIP" "${FUNCNAME[0]} - Could not retrieve WINEPREFIX from '$AMF'"
+	fi
+}
+
+function getGameTextFiles {
+	setGPfxFromAppMa "$AID"
+	unset GameTxtFiles
+	
+	if [ -d "$GPFX/$DRCU/$STUS" ]; then
+		# an option to parse user-contributed per game config lists with the actual config files instead of searching for any textfile would be easy
+		EXID="$BACKEX/exclude-${AID}.txt"
+		touch "$EXID"
+		SKIPGTF=0
+		while read -r gtxtfile; do
+			while read -r skip; do
+				if grep -q "$skip" <<< "$gtxtfile"; then
+					SKIPGTF=1
+				fi
+			done < "$EXID"
+					
+			if [ "$SKIPGTF" -eq 0 ];then
+				GameTxtFiles+=("$gtxtfile")
+			else
+				SKIPGTF=0
+			fi
+		done <<< "$(find "$GPFX/$DRCU/$STUS" -type f -exec grep -Iq . {} \; -print)"	
+	fi
+}
+
 function getAvailableCfgs {
 	unset CfgFiles
 	while read -r cfgfile; do
@@ -2451,6 +2489,8 @@ function getAvailableCfgs {
 			CfgFiles+=("${!cfgfile}")
 		fi
 	done <<< "$(sed -n "/^#STARTEDITORCFGLIST/,/^#ENDEDITORCFGLIST/p;/^#ENDEDITORCFGLIST/q" "$0" | grep -v "^#" | grep -v "LOGFILE" | grep "=" | cut -d '=' -f1)"	
+
+	getGameTextFiles
 }
 
 function EditorDialog {
@@ -2468,7 +2508,9 @@ function EditorDialog {
 			CfgFiles+=("$EXID")
 		fi
 	fi
-	
+
+	CfgFiles+=("${GameTxtFiles[@]}")
+
 	writelog "INFO" "${FUNCNAME[0]} - Found ${#CfgFiles[@]} available Config Files - opening Checklist"
 
 	TITLE="${PROGNAME}-Editor"
@@ -2477,7 +2519,7 @@ function EditorDialog {
 	updateWinRes "$TITLE" "$STLGUICFG" "EDREQWIDTH" "EDREQHEIGHT" &
 	setShowPic
 
-	EDFILES="$(for f in $(printf '%s\n' "${CfgFiles[@]}"); do echo FALSE ; echo "$f" ; done | \
+	EDFILES="$(while read -r f; do	echo "FALSE"; echo "$f"; done <<< "$(printf "%s\n" "${CfgFiles[@]}")" | \
 	"$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center $WINDECO --list --checklist --column=Edit --column=ConfigFile --separator="\n" --print-column="2" \
 	--text="$(spanFont "$(strFix "$GUI_EDITORDIALOG" "$GN" "$AID")" "H")" --title="$TITLE" --geometry="$EDREQWIDTH"x"$EDREQHEIGHT"+0+0)"
 	case $? in
@@ -3389,7 +3431,7 @@ function openGuiSettings {
 	loadCfg "$STLGUICFG" X
 	updateWinRes "$TITLE" "$STLGUICFG" "GUISETWIDTH" "GUISETHEIGHT" &
 
-	SETHEAD="$(spanFont "${PROGNAME} (${PROGCMD}) - ${PROGVERS} \n \n$GN ($AID)" "H") \n <span font=\"italic\">(${#CfgFiles[@]} $GUI_EDITABLECFGS)</span>"
+	SETHEAD="$(spanFont "${PROGNAME} (${PROGCMD}) - ${PROGVERS} \n \n$GN ($AID)" "H") \n <span font=\"italic\">(${#CfgFiles[@]} $GUI_EDITABLECFGS)\n(${#GameTxtFiles[@]} $GUI_EDITABLEGAMECFGS)</span>"
 	
 	 "$YAD" --image "$SHOWPIC" --image-on-top --center --window-icon="$STLICON" --form --center "$WINDECO" \
     --title="$TITLE" \
@@ -3458,7 +3500,7 @@ function openSettings {
 	loadCfg "$STLGUICFG" X
 	updateWinRes "$TITLE" "$STLGUICFG" "SETWIDTH" "SETHEIGHT" &
 
-	SETHEAD="$(spanFont "${PROGNAME} (${PROGCMD}) - ${PROGVERS} \n \n$GN ($AID)" "H") \n <span font=\"italic\">(${#CfgFiles[@]} $GUI_EDITABLECFGS)</span>"
+	SETHEAD="$(spanFont "${PROGNAME} (${PROGCMD}) - ${PROGVERS} \n \n$GN ($AID)" "H") \n <span font=\"italic\">(${#CfgFiles[@]} $GUI_EDITABLECFGS)\n(${#GameTxtFiles[@]} $GUI_EDITABLEGAMECFGS)</span>"
 	
 	 "$YAD" --image "$SHOWPIC" --image-on-top --center --window-icon="$STLICON" --form --center "$WINDECO" \
     --title="$TITLE" \
@@ -4888,7 +4930,7 @@ function GameShaderDialog {
 		updateWinRes "$TITLE" "$STLGUICFG" "SHADREQWIDTH" "SHADREQWIDTH" &
 		setShowPic
 
-		SHADFILES="$(for f in $(printf '%s\n' "${ShaderFiles[@]}"); do if [ ! -f "$SHADDESTDIR/$(basename "$f")" ]; then echo FALSE ; echo "$f" ; else echo TRUE ; echo "$f" ;fi ; done | \
+		SHADFILES="$(while read -r f; do if [ ! -f "$SHADDESTDIR/$(basename "$f")" ]; then 	echo FALSE ; echo "$f"; else echo TRUE ; echo "$f" ;fi ; done <<< "$(printf "%s\n" "${ShaderFiles[@]}")" | \
 		"$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center "$WINDECO" --list --checklist --column=Edit --column=ConfigFile --separator=" " --print-column="2" \
 		--text="$(spanFont "$(strFix "$GUI_SHADERDIALOG" "$SHADDESTDIR")" "H")" --title="$TITLE" --geometry="$SHADREQWIDTH"x"$SHADREQHEIGHT"+0+0)"
 		case $? in
@@ -5296,6 +5338,7 @@ function askSettings {
 				--geometry="$ASKSETREQWIDTH"x"$ASKSETREQHEIGHT"+0+0 \
 				--text="$(spanFont "$GN ($AID) - $REQQEST" "H")" \
 				--field="<span font=\"italic\">${#CfgFiles[@]} $GUI_EDITABLECFGS</span>":LBL \
+				--field="<span font=\"italic\">(${#GameTxtFiles[@]} $GUI_EDITABLEGAMECFGS)</span>":LBL \
 				--field=" ":LBL " " \
 				--field="$GUI_TWEAKFOUND $FOUNDTWEAKCFG":LBL \
 				--field="<span font=\"italic\">($GUI_SHOULDWORK)</span>":LBL \
@@ -5309,6 +5352,7 @@ function askSettings {
 				--geometry="$ASKSETREQWIDTH"x"$ASKSETREQHEIGHT"+0+0 \
 				--text="$(spanFont "$GN ($AID) - $REQQEST" "H")" \
 				--field="<span font=\"italic\">(${#CfgFiles[@]} $GUI_EDITABLECFGS)</span>":LBL \
+				--field="<span font=\"italic\">(${#GameTxtFiles[@]} $GUI_EDITABLEGAMECFGS)</span>":LBL \
 				--field=" ":LBL " " \
 				--button="$REQBUT":0  \
 				--button="$BUT_CAN":1  \
@@ -9643,18 +9687,7 @@ function backupSteamUser {
 			fi
 		fi
 
-		if [ -z "$GPFX" ]; then
-
-			APPMA="$(listAppManifests | grep "${BAID}.acf")"
-			writelog "INFO" "${FUNCNAME[0]} - BAID '$BAID' + APPMA '$APPMA'" "E"
-
-			AMF="$(basename "$APPMA")"
-			GPFX="$(dirname "$APPMA")/$CODA/$BAID/pfx"
-			writelog "INFO" "${FUNCNAME[0]} - Found WINEPREFIX '$GPFX' in '$AMF'"
-		else
-			writelog "SKIP" "${FUNCNAME[0]} - Could not retrieve WINEPREFIX from '$AMF'"
-			GPFX=""	
-		fi
+		setGPfxFromAppMa "$BAID"
 
 		if [ -z "$GPFX" ]; then
 			if [ -f "$CUMETA/$BAID.conf" ]; then
