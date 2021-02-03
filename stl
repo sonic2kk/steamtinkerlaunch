@@ -873,8 +873,10 @@ function delEmptyFile {
 
 function getAvailableProtonVersions {
 	# skip this function if a linux game was started
-	if [ "$ISGAME" -eq 2 ]; then
-		# ...and if USEWINE is enabled
+	
+	if [ "$ISGAME" -eq 2 ] || [ -n "$2" ]; then
+		# ...and if USEWINE is enabled	
+
 		if [ -n "$USEWINE" ] && [ "$USEWINE" -eq 1 ]; then
 			writelog "SKIP" "${FUNCNAME[0]} - USEWINE is enabled - skipping this function"
 		elif grep -q "USEWINE=\"1\"" "$STLGAMECFG" ; then
@@ -2696,7 +2698,12 @@ function openTrayIcon {
 }
 
 function createProtonList {
-	if [ "$ISGAME" -eq 2 ]; then
+	if [ ! -f "$PROTONCSV" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Looking for available Proton versions"
+		getAvailableProtonVersions "up" X
+	fi
+
+	if [ "$ISGAME" -eq 2 ] || [ -n "$1" ] ; then
 		writelog "INFO" "${FUNCNAME[0]} - Updating the Proton Dropdown List"
 		PROTYADLIST="$(printf "!%s\n" "${ProtonCSV[@]//\"/}" | sort -u | cut -d ';' -f1 | tr -d '\n'  | sed "s:^!::" | sed "s:!$::")"
 	fi
@@ -9535,6 +9542,7 @@ function commandline {
 		fi
 	elif  [ "$1" == "settings" ]; then
 		FUSEID "$2"
+		createProtonList X
 		openTrayIcon
 		openSettings "$USEID"
 		cleanYadLeftOvers
