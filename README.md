@@ -6,6 +6,8 @@ which allows to customize and start tools and options for games quickly on the f
 
 By using a versatile configuration structure it is both easy to setup and flexible.
 
+<li><a href="https://liberapay.com/frostworx"><img alt="Liberapay receives" src="http://img.shields.io/liberapay/receives/frostworx.svg?logo=liberapay"></a></li>
+
 ## How to use
 
 ### General usage
