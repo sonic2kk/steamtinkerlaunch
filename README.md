@@ -74,6 +74,8 @@ Feel free to contribute to the project - there are many possibilites to do so:
 - add your tinkered tweaks
 - find out how cool it is and tell others :)
 - help to improve/shorten this monstrous README *(especially if english is your mother language)*
+- sponsor this project
+
 
 Got and idea or suggestions, but don't want to open an issue?
 Visit [/r/SteamTinkerLaunch/](https://www.reddit.com/r/SteamTinkerLaunch)
