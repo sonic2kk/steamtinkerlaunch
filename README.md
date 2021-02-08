@@ -140,6 +140,7 @@ or just to browse through the latest version**
 * **[Pressure Vessel](#Pressure-Vessel)** Some Pressure Vessel options
 * **[Wine Support](#Wine-Support)** Download and use custom Wine archives instead of Proton
 * **[Backup Support](#Backup-Support)** optionally automatic backup of 'steamuser' files of the 'steamuser' files per Proton game
+* **[Metadata Support](#Metadata-Support)** Collect as much as possible gamedata to make further automations easier and faster
 
 ## Requirements
 *(no special order)*
@@ -1293,6 +1294,35 @@ or into the globally parsed
 exclude file.
 For easier editing both files are also available via the [Editor Dialog](#Editor-Dialog).
 
+#### Metadata Support
+To improve and speedup existing and further automations and functions **stl** collects as many useful metadata as possible.
+
+The base storage directory for all metadata is `STLCFGDIR/meta` with subdirectories 
+- id
+  - custom
+  - general
+- title
+  - custom
+  - general
+
+All metadata files are created/updated in the id subdirectories and symlinks with the game titles are created in the corresponding title subdirectory.
+*(might make sense to use a sqlite3 db here, but having a transparent easily simple filestructure also has its benefits)*
+
+Metadata are separated into `custom` and `general` to make sharing of `general` metadata in the community possible.
+
+##### Custom Metadata
+Currently `custom` metadata are only the `WINEPREFIX` and the `GAMEDIR` of the game.
+
+##### General Metadata
+The very basic `general` metadata currently stored are `GAMEID` and `GAMENAME`, depending on the detection function `GAMEEXE` will be stored as well.
+The `GAMEWINDOWNAME` will be one of the next useful data to be added.
+
+##### Storing Metadata
+When metadata is created via [Command Line](#Command-Line) *(either directly using the `meta` or indirectly the `menu` command line argument)*
+only the `GAMEID`, `GAMENAME`, `WINEPREFIX` and the `GAMEDIR` are created/updated,
+as `GAMEEXE`, `GAMEWINDOWNAME` and probably any other value are simply not available outside steam.
+When launching a game via steam using **stl** *(here it doesn't matter if the game is actually started, or the user exists the launch via stl)*
+the additional values are stored as well when entering the `closeSTL` function *(so usually after the game has exited)*
 
 ##### Backup using commandline:
 see [Command Line](#Command-Line)

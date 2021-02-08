@@ -4,7 +4,7 @@
 ### project ###
 
 PROGNAME="SteamTinkerLaunch"
-PROGVERS="v3.9-next"
+PROGVERS="v3.9-next1"
 PROGCMD="$(basename "$0")"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -879,7 +879,7 @@ function getAvailableProtonVersions {
 
 		if [ -n "$USEWINE" ] && [ "$USEWINE" -eq 1 ]; then
 			writelog "SKIP" "${FUNCNAME[0]} - USEWINE is enabled - skipping this function"
-		elif grep -q "USEWINE=\"1\"" "$STLGAMECFG" ; then
+		elif [ -f "$STLGAMECFG" ] && grep -q "USEWINE=\"1\"" "$STLGAMECFG" ; then
 			writelog "SKIP" "${FUNCNAME[0]} - USEWINE is enabled in the to-be-loaded gameconfig '$STLGAMECFG' - skipping this function"
 			# could still be enabled via steamcategory, but this would be an overkill here, as ${FUNCNAME[0]} is non-fatal
 		else
@@ -1027,7 +1027,8 @@ function calculateDefaultResolutions {
 	EXTSELSCALE=20
 	WINSELSCALE=15
 	ASKVTXREQSCALE=15
-
+	MMSCALE=20
+	
 	# Calculated initial gui sizes:
 	DEFSETWIDTH=$(( SCREENWIDTH * SETSCALE / 100 ));
 	DEFSETHEIGHT=$(( SCREENHEIGHT * SETSCALE / 100 ));
@@ -1097,6 +1098,9 @@ function calculateDefaultResolutions {
 
 	DEFASKVTXREQWIDTH=$(( SCREENWIDTH * ASKVTXREQSCALE / 100 ));
 	DEFASKVTXREQHEIGHT=$(( SCREENHEIGHT * ASKVTXREQSCALE / 100 ));
+
+	DEFMMWIDTH=$(( SCREENWIDTH * MMSCALE / 100 ));
+	DEFMMHEIGHT=$(( SCREENHEIGHT * MMSCALE / 100 ));
 
 }
 
@@ -1183,6 +1187,8 @@ function setDefaultCfgValues {
 		if [ -z "$WINSELHEIGHT" ]		; then	WINSELHEIGHT="$DEFWINSELHEIGHT"; fi
 		if [ -z "$ASKVTXREQWIDTH" ]		; then	ASKVTXREQWIDTH="$DEFASKVTXREQWIDTH"; fi
 		if [ -z "$ASKVTXREQHEIGHT" ]	; then	ASKVTXREQHEIGHT="$DEFASKVTXREQHEIGHT"; fi
+		if [ -z "$MMWIDTH" ]			; then	MMWIDTH="$DEFMMWIDTH"; fi
+		if [ -z "$MMHEIGHT" ]			; then	MMHEIGHT="$DEFMMHEIGHT"; fi
 	}
 
 	function setDefaultCfgValuesglobal {
@@ -1495,6 +1501,9 @@ function saveCfg {
 			echo "## Ask Open Vortex Requester:"
 			echo "ASKVTXREQWIDTH=\"$ASKVTXREQWIDTH\""
 			echo "ASKVTXREQHEIGHT=\"$ASKVTXREQHEIGHT\""
+			echo "## Main Menu:"
+			echo "MMWIDTH=\"$MMWIDTH\""
+			echo "MMHEIGHT=\"$MMHEIGHT\""
 			} >> "$1"
 			#ENDsaveCfggui
 		fi
@@ -2513,6 +2522,14 @@ function EditorDialog {
 
 	CfgFiles+=("${GameTxtFiles[@]}")
 
+	if [ -f "$LOGFILE" ]; then
+		CfgFiles+=("$LOGFILE")
+	fi
+
+	if [ -f "$STLPROTONIDLOGDIR/steam-${AID}.log" ]; then
+		CfgFiles+=("$STLPROTONIDLOGDIR/steam-${AID}.log")
+	fi
+
 	writelog "INFO" "${FUNCNAME[0]} - Found ${#CfgFiles[@]} available Config Files - opening Checklist"
 
 	TITLE="${PROGNAME}-Editor"
@@ -2912,7 +2929,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_DLSHADER!$DESC_DLSHADER ('DLSHADER')":CHK "${DLSHADER/#-/ -}" `#CAT_Shader` `#SUB_Checkbox` `#MENU_GLOBAL`  \
 --field="     $GUI_CHOOSESHADERS!$DESC_CHOOSESHADERS ('CHOOSESHADERS')":CHK "${CHOOSESHADERS/#-/ -}" `#CAT_Shader` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_ENABLE_VKBASALT!$DESC_ENABLE_VKBASALT ('ENABLE_VKBASALT')":CHK "${ENABLE_VKBASALT/#-/ -}" `#CAT_Shader` `#SUB_Checkbox` `#MENU_GAME` \
---field="$(spanFont "$PROGNAME $GUI_OPTS" "H")":LBL "SKIP" `#CAT_Stl` `#HEAD_Stl` `#MEXXXNU_GAME` `#MENU_GLOBAL`  \
+--field="$(spanFont "$PROGNAME $GUI_OPTS" "H")":LBL "SKIP" `#CAT_Stl` `#HEAD_Stl` `#MENU_GLOBAL`  \
 --field="     $GUI_GLOBALCATEGORYDIR!$DESC_GLOBALCATEGORYDIR ('GLOBALCATEGORYDIR')":DIR "${GLOBALCATEGORYDIR/#-/ -}" `#CAT_Stl` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_GLOBALMISCDIR!$DESC_GLOBALMISCDIR ('GLOBALMISCDIR')":DIR "${GLOBALMISCDIR/#-/ -}" `#CAT_Stl` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_GLOBALREGDIR!$DESC_GLOBALREGDIR ('GLOBALREGDIR')":DIR "${GLOBALREGDIR/#-/ -}" `#CAT_Stl` `#SUB_Directories` `#MENU_GLOBAL` \
@@ -3132,8 +3149,6 @@ function startSteamGame {
 			STEAMARGS=(-applaunch "$AID")
 			writelog "INFO" "${FUNCNAME[0]} - -------- starting game $AID in steam --------" "E"
 			startGame "$STEAM" "${STEAMARGS[@]}" 2>/dev/null >/dev/null &
-
-
 		fi
 	fi	
 }
@@ -3430,6 +3445,8 @@ function openExtraSelection {
 function openGuiSettings {
 	prepareMenu "$@"
 
+	foundLogs
+
 	if [ "$USEGAMEPICS" -eq 1 ] && [ "$USEGAMEPICINMENU" -eq 1 ] ; then
 		setShowPic
 	fi
@@ -3438,7 +3455,7 @@ function openGuiSettings {
 	loadCfg "$STLGUICFG" X
 	updateWinRes "$TITLE" "$STLGUICFG" "GUISETWIDTH" "GUISETHEIGHT" &
 
-	SETHEAD="$(spanFont "${PROGNAME} (${PROGCMD}) - ${PROGVERS} \n \n$GN ($AID)" "H") \n <span font=\"italic\">(${#CfgFiles[@]} $GUI_EDITABLECFGS)\n(${#GameTxtFiles[@]} $GUI_EDITABLEGAMECFGS)</span>"
+	SETHEAD="$(spanFont "${PROGNAME} (${PROGCMD}) - ${PROGVERS} \n \n$GN ($AID)" "H") \n <span font=\"italic\">(${#CfgFiles[@]} $GUI_EDITABLECFGS)\n(${#GameTxtFiles[@]} $GUI_EDITABLEGAMECFGS)\n$FOSLOG\n$FOPLOG</span>"
 	
 	 "$YAD" --image "$SHOWPIC" --image-on-top --center --window-icon="$STLICON" --form --center "$WINDECO" \
     --title="$TITLE" \
@@ -3496,7 +3513,21 @@ function clickInfo {
 	writelog "INFO" "$1 - exiting '$4' and opening '$5'"
 }
 
+function foundLogs {
+	FOSLOG=""
+	FOPLOG=""
+	if [ -f "$LOGFILE" ]; then
+		FOSLOG="($PROGNAME $GUI_LOGFOUND)"
+	fi
+
+	if [ -f "$STLPROTONIDLOGDIR/steam-${AID}.log" ]; then
+		FOPLOG="(Proton $GUI_LOGFOUND)"
+	fi	
+}
+
 function openSettings {
+	foundLogs
+
 	prepareMenu "$@"
 
 	if [ "$USEGAMEPICS" -eq 1 ] && [ "$USEGAMEPICINMENU" -eq 1 ] ; then
@@ -3507,7 +3538,7 @@ function openSettings {
 	loadCfg "$STLGUICFG" X
 	updateWinRes "$TITLE" "$STLGUICFG" "SETWIDTH" "SETHEIGHT" &
 
-	SETHEAD="$(spanFont "${PROGNAME} (${PROGCMD}) - ${PROGVERS} \n \n$GN ($AID)" "H") \n <span font=\"italic\">(${#CfgFiles[@]} $GUI_EDITABLECFGS)\n(${#GameTxtFiles[@]} $GUI_EDITABLEGAMECFGS)</span>"
+	SETHEAD="$(spanFont "${PROGNAME} (${PROGCMD}) - ${PROGVERS} \n \n$GN ($AID)" "H") \n <span font=\"italic\">(${#CfgFiles[@]} $GUI_EDITABLECFGS)\n(${#GameTxtFiles[@]} $GUI_EDITABLEGAMECFGS)\n$FOSLOG\n$FOPLOG</span>"
 	
 	 "$YAD" --image "$SHOWPIC" --image-on-top --center --window-icon="$STLICON" --form --center "$WINDECO" \
     --title="$TITLE" \
@@ -3998,7 +4029,9 @@ function loadCfg {
 		fi
 
 		while read -r line; do
-			export "${line//\"/}"
+			if [ -n "$line" ]; then
+				export "${line//\"/}"
+			fi
 		done <<< "$(grep -v "^#\|^$" "$CFGFILE")"
 
 		# disable logging here when the program just started (cosmetics)
@@ -5339,6 +5372,8 @@ function askSettings {
 				LAUNCHMENU="openSettings"
 			fi
 
+			foundLogs
+
 			if [ -n "$FOUNDTWEAKCFG" ]; then
 				"$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
 				--title="$TITLE" \
@@ -5346,6 +5381,8 @@ function askSettings {
 				--text="$(spanFont "$GN ($AID) - $REQQEST" "H")" \
 				--field="<span font=\"italic\">${#CfgFiles[@]} $GUI_EDITABLECFGS</span>":LBL \
 				--field="<span font=\"italic\">(${#GameTxtFiles[@]} $GUI_EDITABLEGAMECFGS)</span>":LBL \
+				--field="<span font=\"italic\">$FOSLOG</span>":LBL \
+				--field="<span font=\"italic\">$FOPLOG</span>":LBL \
 				--field=" ":LBL " " \
 				--field="$GUI_TWEAKFOUND $FOUNDTWEAKCFG":LBL \
 				--field="<span font=\"italic\">($GUI_SHOULDWORK)</span>":LBL \
@@ -5360,6 +5397,8 @@ function askSettings {
 				--text="$(spanFont "$GN ($AID) - $REQQEST" "H")" \
 				--field="<span font=\"italic\">(${#CfgFiles[@]} $GUI_EDITABLECFGS)</span>":LBL \
 				--field="<span font=\"italic\">(${#GameTxtFiles[@]} $GUI_EDITABLEGAMECFGS)</span>":LBL \
+				--field="<span font=\"italic\">$FOSLOG</span>":LBL \
+				--field="<span font=\"italic\">$FOPLOG</span>":LBL \
 				--field=" ":LBL " " \
 				--button="$REQBUT":0  \
 				--button="$BUT_CAN":1  \
@@ -9411,6 +9450,9 @@ function howto {
 	echo "                                       installed games first"
 	echo "             update                    ReCreate all Category Menus"
 	echo "                                       Can be combined with auto"
+	echo "    menu                             Opens a Settings selection menu"
+	echo "    meta                             Generates/Updates metadata"
+	echo "                                       for all installed games"
 	echo "    set <var> <for> <value>          Change configuration settings"
 	echo "                                       Example:"
 	echo "    set RUN_REPLAY all 1               Set RUN_REPLAY for all games to 1"
@@ -9472,6 +9514,10 @@ function commandline {
 			FUSEID "$2"
 			backupSteamUserGate "$USEID"
 		fi
+	elif  [ "$1" == "menu" ]; then
+		openMainMenu "$2" "$3"
+	elif  [ "$1" == "meta" ]; then
+		createMetaData "yes"
 	elif  [ "$1" == "block" ]; then
 		FUSEID "$2"
 		setGuiBlockSelection "$USEID"
@@ -9541,11 +9587,7 @@ function commandline {
 			exit
 		fi
 	elif  [ "$1" == "settings" ]; then
-		FUSEID "$2"
-		createProtonList X
-		openTrayIcon
-		openSettings "$USEID"
-		cleanYadLeftOvers
+		startSettings "$2"
 	elif  [ "$1" == "update" ]; then
 		if [ -n "$2" ]; then
 			if [ "$2" == "$GIT" ]; then
@@ -9637,30 +9679,44 @@ function writeLastRun {
 }
 
 function storeMetaData {
-	writelog "INFO" "${FUNCNAME[0]} - Saving Game metadata"
+	MAID="$1"
+	MGNA1="${2//\//_}"
+	MGNA="${MGNA1//\"/}"
+	MPFX="$3"
+	GDIR="$4"
+
+	writelog "INFO" "${FUNCNAME[0]} - Saving metadata for game '$MGNA ($MAID)'"
 
 	mkProjDir "$GEMETA" 1
 	mkProjDir "$CUMETA" 1
 	mkProjDir "$TIGEMETA" 1
 	mkProjDir "$TICUMETA" 1
 
-	touch "$GEMETA/$AID.conf"
-	loadCfg "$GEMETA/$AID.conf" X
-	updateConfigEntry "GAMEID" "$AID" "$GEMETA/$AID.conf"
-	updateConfigEntry "GAMENAME" "$GN" "$GEMETA/$AID.conf"
-	updateConfigEntry "GAMEEXE" "$GE" "$GEMETA/$AID.conf"
+	if [ ! -f "$GEMETA/$MAID.conf" ]; then
+		touch "$GEMETA/$MAID.conf"
+	fi
+	
+	loadCfg "$GEMETA/$MAID.conf" X
+	updateConfigEntry "GAMEID" "$MAID" "$GEMETA/$MAID.conf"
+	updateConfigEntry "GAMENAME" "$MGNA" "$GEMETA/$MAID.conf"
 
-	if [ -n "$GAMEWINDOW" ] && [ "$GAMEWINDOW" != "$NON" ]; then
-		updateConfigEntry "GAMEWINDOW" "$GAMEWINDOW" "$GEMETA/$AID.conf"
+	if [ -n "$GE" ];then
+		updateConfigEntry "GAMEEXE" "$GE" "$GEMETA/$MAID.conf"
 	fi
 
-	touch "$CUMETA/$AID.conf"
-	loadCfg "$CUMETA/$AID.conf" X
-	updateConfigEntry "WINEPREFIX" "$GPFX" "$CUMETA/$AID.conf"
-	updateConfigEntry "GAMEDIR" "$EFD" "$CUMETA/$AID.conf"
+	if [ -n "$GAMEWINDOW" ] && [ "$GAMEWINDOW" != "$NON" ]; then
+		updateConfigEntry "GAMEWINDOW" "$GAMEWINDOW" "$GEMETA/$MAID.conf"
+	fi
 
-	createSymLink "${FUNCNAME[0]}" "$GEMETA/$AID.conf" "$TIGEMETA/${GN}.conf" X
-	createSymLink "${FUNCNAME[0]}" "$CUMETA/$AID.conf" "$TICUMETA/${GN}.conf" X
+	if [ ! -f "$CUMETA/$MAID.conf" ]; then
+		touch "$CUMETA/$MAID.conf"
+	fi
+	loadCfg "$CUMETA/$MAID.conf" X
+	updateConfigEntry "WINEPREFIX" "$MPFX" "$CUMETA/$MAID.conf"
+	updateConfigEntry "GAMEDIR" "$GDIR" "$CUMETA/$MAID.conf"
+
+	createSymLink "${FUNCNAME[0]}" "$GEMETA/$MAID.conf" "$TIGEMETA/${MGNA}.conf" X
+	createSymLink "${FUNCNAME[0]}" "$CUMETA/$MAID.conf" "$TICUMETA/${MGNA}.conf" X
 }
 
 function delMenuTemps {
@@ -9778,6 +9834,153 @@ function backupSteamUserGate {
 	fi
 }
 
+function createMetaData {
+	LASTMETAUP="$METADIR/lastmeta.txt"
+	MAXMETAAGE=1440
+	
+	if [ -n "$1" ] && [ "$1" == "yes" ];then
+		writelog "INFO" "${FUNCNAME[0]} - Updating metadata requested via command line" "E"
+		rm "$LASTMETAUP"
+	fi
+	
+	if [ ! -f "$LASTMETAUP" ] || test "$(find "$LASTMETAUP" -mmin +"$MAXMETAAGE")"; then
+		writelog "INFO" "${FUNCNAME[0]} - Creating/Updating metadata for all installed games found" "E"
+
+		while read -r APPMA; do
+			AMF="$(basename "$APPMA")"
+			MAID="$(cut -d'_' -f2 <<< "$AMF" | cut -d'.' -f1)"
+
+			GNRAW="$(grep "\"name\"" "$APPMA" | gawk -F '"name"' '{print $NF}')"
+			GNAM="$(gawk '{$1=$1};1' <<< "$GNRAW")"
+
+			GIRAW="$(grep "\"installdir\"" "$APPMA" | gawk -F '"installdir"' '{print $NF}')"
+			GINS="$(gawk '{$1=$1};1' <<< "${GIRAW//\"/}")"
+			GDIR="$(dirname "$APPMA")/common/$GINS"
+			MPFX="$(dirname "$APPMA")/$CODA/$MAID/pfx"
+
+			storeMetaData "$MAID" "$GNAM" "$MPFX" "$GDIR"
+	#		echo "$MAID;$GNAM;\"$GDIR\";\"$MPFX\""
+		done <  <(listAppManifests)
+		writelog "INFO" "${FUNCNAME[0]} - Done with Creating/Updating metadata" "E"
+		date +%y-%m-%d > "$LASTMETAUP"
+	fi
+}
+
+function createGameLists {
+	unset AidList
+	unset TitleList
+	unset ShowGameList
+
+	while read -r GENCONF; do
+		unset GAMEID GAMENAME
+		loadCfg "$GENCONF"
+		mapfile -t -O "${#AidList[@]}" AidList <<< "$GAMEID"
+		mapfile -t -O "${#TitleList[@]}" TitleList <<< "$GAMENAME"
+		mapfile -t -O "${#ShowGameList[@]}" ShowGameList <<< "$GAMENAME ($GAMEID)"
+	done <<< "$(find "$GEMETA" -name "*.conf")"
+}
+
+function startSettings {
+	FUSEID "$1"
+	createProtonList X
+	openTrayIcon
+	openSettings "$USEID"
+	cleanYadLeftOvers	
+}
+
+function openMainMenu {
+	function launchSel {
+
+#		function launch_PlayWithoutSteam {
+#			loadCfg "$STLGAMEDIRID/$1.conf"
+#			ls -la "$STLGAMEDIRID/$1.conf"
+#			ISGAME=2
+#			setNewProtVars "$(PROTPATH "$USEPROTON")"
+#
+#			echo WINE="$RUNWINE" WINEARCH=win64 WINEDEBUG="$STLWINEDEBUG" WINEPREFIX="$GPFX" "$@"
+#		}
+		
+		function launch_Settings {
+			writelog "INFO" "${FUNCNAME[0]} - Opening Settings for game '$2 ($1)'" "E"
+			startSettings "$1"
+		}
+
+		loadCfg "${CUMETA}/${SELAID}.conf"
+		GPFX="$WINEPREFIX"
+		EFD="$GAMEDIR"
+		writelog "INFO" "${FUNCNAME[0]} - Starting 'launch_${SELCO}' with for game '$SELTI ($SELAID)' with WINEPREFIX='$GPFX' and GAMEDIR='$EFD'" "E"
+		launch_"${SELCO}" "$SELAID" "$SELTI"
+	}
+	
+#XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+	UPMETA="$NON"
+	CMDAID="$NON"
+
+	if [ -n "$1" ]; then
+		if [[ "$1" =~ ^[0-9]+$ ]] ; then
+			CMDAID="$1"
+		else
+			UPMETA="yes"
+		fi
+	fi
+
+	if [ -n "$2" ]; then
+		if [[ "$2" =~ ^[0-9]+$ ]] ; then
+			CMDAID="$2"
+		else
+			UPMETA="yes"
+		fi	
+	fi
+
+	if [[ "$CMDAID" =~ ^[0-9]+$ ]] ; then
+		loadCfg "$GEMETA/$CMDAID.conf"
+		SELGAME="$GAMENAME ($CMDAID)"
+		writelog "INFO" "${FUNCNAME[0]} - Opening Main Menu directly for game '$SELGAME'" "E"
+		STIYADLIST="!$SELGAME"
+		GAMEHEAD="Main Menu for '$SELGAME'"
+	else
+		createMetaData "$UPMETA"
+		createGameLists
+		SELGAME="None"
+		STIYADLIST="$(printf "!%s\n" "${ShowGameList[@]//\!/}" | sort -u | cut -d ';' -f1 | tr -d '\n'  | sed "s:^!::" | sed "s:!$::")"
+		GAMEHEAD="${#ShowGameList[@]} ${GUI_INSTGAMES}:"
+	fi
+
+	SELACT="Settings"
+	TITLE="${PROGNAME}-MainMenu"
+
+	loadCfg "$STLGUICFG" X
+	updateWinRes "$TITLE" "$STLGUICFG" "MMWIDTH" "MMHEIGHT" &
+
+	writelog "INFO" "${FUNCNAME[0]} - Opening Main Menu"
+
+#		--field="${GUI_CHOOSACT}:":CB "${SELACT}!PlayWithoutSteam!Settings!" \
+#		--field="${GUI_CHOOSGAME}:":CB "${SELGAME}!$STIYADLIST" \
+
+	SELCMD="$("$YAD" --window-icon="$STLICON" --center $WINDECO --form --scroll --separator="\n" --quoted-output \
+		--text="$(spanFont "$GAMEHEAD" "H")" \
+		--field="${GUI_OPENSET}:":CB "${SELGAME}!$STIYADLIST" \
+		--title="$TITLE" \
+		--geometry="$MMWIDTH"x"$MMHEIGHT"+0+0)"
+
+#	SELCO="$(head -n1 <<< "${SELCMD//\'/}")"
+	SELCO="Settings"
+	SELSTI="$(tail -n1 <<< "${SELCMD//\'/}")"
+	SELTI="${SELSTI%% (*}"
+	SELAID="$(grep -oP '\(\K[^\)]+' <<< "$SELSTI")"
+	
+	if [ -z "$AID" ]; then
+		AID="$SELAID"
+	fi
+	
+	if [[ "$SELAID" =~ ^[0-9]+$ ]] ; then
+		writelog "INFO" "${FUNCNAME[0]} - Starting '${SELCO}' command for '$SELTI ($SELAID)'" "E"
+		launchSel "${SELCO}" "$SELAID" "$SELTI"
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - Could not find a valid Game ID '$SELAID'" "E"
+	fi
+}
+
 #STARTCLOSESTL ###
 function closeSTL {
 	backupSteamUser "$AID"
@@ -9877,7 +10080,7 @@ function closeSTL {
 		fi
 
 		writeLastRun
-		storeMetaData
+		storeMetaData "$AID" "$GN" "$GPFX" "$EFD"
 	fi
 
 	delMenuTemps
