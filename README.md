@@ -333,8 +333,10 @@ Middle Click Closes The Menu
 - "Kill Proton Game" *(kills the currently running Proton game by killing its wineserver)*
 - "Pause/Unpause active window" *(waits 5 seconds and un-/pauses the process of the window which is currently active)*
 - "Shader Menu" *(opens [Shader Management](#Shader-Management) for the currently running Game - Shaders can be added/removed on the fly here)*
-- "Open running game in VR" *(opens the running game in [SBS-VR](#Side-by-Side-VR))*
+- "Open running game in VR" *(opens the running game in [SBS-VR](#Side-by-Side-VR). If the current game window is unknown it can be picked)*
+- "Pick Window Name" *(the name of the picked window will be stored as `GAMEWINDOW` in the [Metadata](#Metadata-Support))*
 
+#
 ### Configuration Locations
 
 #### User Configuration
@@ -1194,8 +1196,8 @@ Mostly useful in combination with [SBS-VR](#Side-by-Side-VR).
 Set `RESHADE_DEPTH3D` to 1 to install ReShade Depth3D Shader into gamedir
 If `CLONE_DEPTH3D` is set to 1 the git repository will be automatically cloned/pulled (only when `RESHADE_DEPTH3D=1`) to `DEPTH3DSRCDIR` in [Downloads](#Downloads)
 
-With `RESHADE_DEPTH3D` enabled `Overwatch.fxh`, `SuperDepth3D.fx`, `SuperDepth3D_VR.fx` from Depth3D are copied to the gamedir.
-When the game started just create a initial profile by selecting the autodetected `SuperDepth3D_VR.fx`
+With `RESHADE_DEPTH3D` enabled `Overwatch.fxh`, `SuperDepth3D.fx`, `SuperDepth3D_VR+.fx` from Depth3D are copied to the gamedir.
+When the game started just create a initial profile by selecting the autodetected `SuperDepth3D_VR+.fx`
 The Depth3D Shader is automatically deactivated if HMD wasn't detected or VR mode was stopped otherwise and re-enabled on success.
 
 Also see [Shader Management](#Shader-Management)
@@ -1314,13 +1316,13 @@ Metadata are separated into `custom` and `general` to make sharing of `general` 
 Currently `custom` metadata are only the `WINEPREFIX` and the `GAMEDIR` of the game.
 
 ##### General Metadata
-The very basic `general` metadata currently stored are `GAMEID` and `GAMENAME`, depending on the detection function `GAMEEXE` will be stored as well.
-The `GAMEWINDOWNAME` will be one of the next useful data to be added.
-
+The very basic `general` metadata currently stored are `GAMEID` and `GAMENAME`, depending on the detection function `GAMEEXE` and `GAMEWINDOW` will be stored as well.
+**stl** tries to autodetect the `GAMEWINDOW` automatically in the background, but it can also be picked via [Tray Icon](#Tray-Icon) menu item.
+ 
 ##### Storing Metadata
 When metadata is created via [Command Line](#Command-Line) *(either directly using the `meta` or indirectly the `menu` command line argument)*
 only the `GAMEID`, `GAMENAME`, `WINEPREFIX` and the `GAMEDIR` are created/updated,
-as `GAMEEXE`, `GAMEWINDOWNAME` and probably any other value are simply not available outside steam.
+as `GAMEEXE`, `GAMEWINDOW` and probably any other value are simply not available outside steam.
 When launching a game via steam using **stl** *(here it doesn't matter if the game is actually started, or the user exists the launch via stl)*
 the additional values are stored as well when entering the `closeSTL` function *(so usually after the game has exited)*
 
