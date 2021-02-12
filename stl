@@ -263,6 +263,7 @@ CE="Cheat Engine"
 HEADLINEFONT="larger"
 FONTSIZES="!xx-small!x-small!small!smaller!medium!large!larger!!x-large!xx-large!"
 HAVEINNO="1"
+SREG="system.reg"
 
 # make SC happy:
 GUI_GAMCON=""
@@ -4451,7 +4452,7 @@ function getGameWindowPID {
 			writelog "INFO" "${FUNCNAME[0]} - Found PID '$TESTPID' for running exe '$(readlink "/proc/$RETPID/exe")'"
 			echo "$TESTPID"
 		else
-			writelog "SKIP" "${FUNCNAME[0]} - ERROR - timeout waiting for EFD window"
+			writelog "SKIP" "${FUNCNAME[0]} - ERROR - timeout waiting for '$EFD' window"
 			echo "$NON"
 		fi
 	fi
@@ -4493,10 +4494,25 @@ function getGameWindowName {
 		rm "$PIDLOCK" 2>/dev/null
 	else
 		rm "$TEMPGPIDFILE" 2>/dev/null
+		
+		if [ -n "$GPFX" ]; then
+			SYSREG="$GPFX/$SREG"
+			if [ ! -f "$SYSREG" ] ; then
+				writelog "WAIT" "${FUNCNAME[0]} - Waiting for the pfx '$GPFX' to be full created"
+			fi
+
+			while [ ! -f "$SYSREG" ]; do
+				if [ -f "$CLOSETMP" ]; then
+					break
+				fi
+				sleep 1
+			done
+		fi
+
 		writelog "INFO" "${FUNCNAME[0]} - No gamewindow name stored in metadata '$GEMETA/$AID.conf' yet. Trying to find it now"
 		FOUNDWIN="$NON"
 		GAMEWINPID="$(getGameWindowPID)"
-		if [[ "$CURWINPID" == "$NON" ]] ; then
+		if [[ "$GAMEWINPID" == "$NON" ]] ; then
 			writelog "SKIP" "${FUNCNAME[0]} - No valid game window PID found"
 		else
 			writelog "INFO" "${FUNCNAME[0]} - Found valid game window PID '$GAMEWINPID'"
@@ -4686,6 +4702,7 @@ function waitForGameWindowName {
 			if [ -f "$CLOSETMP" ] || [[ "$COUNTER" -ge "$MAXWAIT" ]]; then
 				break
 			fi
+			COUNTER=$((COUNTER+1))
 			sleep 1
 		done
 
