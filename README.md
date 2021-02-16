@@ -141,6 +141,7 @@ or just to browse through the latest version**
 * **[Wine Support](#Wine-Support)** Download and use custom Wine archives instead of Proton
 * **[Backup Support](#Backup-Support)** optionally automatic backup of 'steamuser' files of the 'steamuser' files per Proton game
 * **[Metadata Support](#Metadata-Support)** Collect as much as possible gamedata to make further automations easier and faster
+* **[X64dbg](#X64dbg-Support)** optionally start the selected game automatically with the *(autoinstalled)* debugger x64dbg
 
 ## Requirements
 *(no special order)*
@@ -636,6 +637,7 @@ To name a few those are
 [self maintaining configs](#self-maintaining-configs) stl itself will be downloaded here when self-maintaining-configs are used
 [Proton packages](#Proton) Proton packages
 [Shaders](#Shaders) all Shader repositories
+[X64dbg](#X64dbg-Support) debugger
 
 ### Logs
 Logs are written into the `LOGDIR` defined in the [Global Menu](#Global-Menu) / [Global Config](#Global-Config).
@@ -1328,6 +1330,17 @@ the additional values are stored as well when entering the `closeSTL` function *
 
 ##### Backup using commandline:
 see [Command Line](#Command-Line)
+
+#### X64dbg Support
+A selected game can automatically be started within the debugger [x64dbg](https://github.com/x64dbg/x64dbg)
+either by enabling "x64dbg Debug mode" in the [Game Config](#Game-Config) or by simply putting the game into the "x64dbg" [Steam Category](#Steam-Categories).
+
+If the debugger is not found *(in the [downloads](#Downloads) directory)*, the latest snapshot will be automatically downloaded and extracted first.
+Depending on the game exe architecture the corresponding debugger version *(x32 or x64)* will be used to open the game exe.
+A required [registry](#Registry) entry will be applied automatically before the actual start of the debugger.
+
+Be aware that the debugger can have problems with [custom Proton builds](#Custom-Proton-List)
+*(at least it hung when testing with Proton-GE)*!
 
 ## Game Launch Speed
 **stl** has pretty much to check, but when everything is configured, several option-checks can be disabled (per game)

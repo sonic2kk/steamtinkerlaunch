@@ -5,7 +5,7 @@
 
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v4.0-next1"
+PROGVERS="v4.0-next2"
 PROGCMD="$(basename "$0")"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -48,6 +48,8 @@ RSYNC="rsync"
 CHECKHMD=1 # will be set to 0 if $LSUSB is not found. Then the hmd presence check is skipped
 LU="lutris"
 PF="protonfixes"
+X32D="x32dbg"
+X64D="x64dbg"
 AUTOTWEAKPLATFORMS="$PF $LU"
 LUATDEBUG=0
 FORCEOVERRIDEPROTON=0
@@ -147,6 +149,7 @@ TWEAKCMDDIR="$TWEAKDIR/cmd"																	# dir for scriptfiles used by tweakf
 SBSTWEAKDIR="$TWEAKDIR/sbs"																	# directory for optional config overrides for easier side-by-side VR gaming
 ATDLDIR="$STLDLDIR/autotweak"																# main autotweak download dir
 CEDLDIR="$STLDLDIR/cheatengine"
+X64DBGDLDIR="$STLDLDIR/$X64D"
 STLCEDIR="$STLCFGDIR/cheatengine"
 STLVORTEXDIR="$STLCFGDIR/vortex"															# stl vortex dir
 PLACEHOLDERAID="31337"
@@ -1131,6 +1134,7 @@ function setDefaultCfgValues {
 		if [ -z "$SHADER_CROSIRE" ]		; then	SHADER_CROSIRE="https://github.com/crosire/reshade-shaders.git"; fi
 		if [ -z "$WINETRICKSURL" ]		; then	WINETRICKSURL="https://github.com/Winetricks/winetricks"; fi
 		if [ -z "$CHEATENGINEURL" ]		; then	CHEATENGINEURL="https://github.com/cheat-engine/cheat-engine/releases";fi
+		if [ -z "$X64DBGURL" ]			; then	X64DBGURL="https://github.com/x64dbg/x64dbg/releases/tag/snapshot";fi
 	}
 
 	function setDefaultCfgValuesgui {
@@ -1287,6 +1291,7 @@ function setDefaultCfgValues {
 		if [ -z "$RUN_GAMCON" ]			; then	RUN_GAMCON="0";	fi
 		if [ -z "$RUN_CHEATENGINE" ]	; then	RUN_CHEATENGINE="0";	fi
 		if [ -z "$GAMCONWAITEXE" ]		; then	GAMCONWAITEXE="$("$WHICH" echo 2>/dev/null)"; fi
+		if [ -z "$RUN_X64DBG" ]			; then	RUN_X64DBG="0";	fi
 		if [ -z "$VORTEXMODE" ]			; then	VORTEXMODE="disabled";	fi
 		if [ -z "$WAITVORTEX" ]			; then	WAITVORTEX="2"; fi
 		if [ -z "$CHANGE_PULSE_LATENCY" ] 	; then	CHANGE_PULSE_LATENCY="0"; fi
@@ -1411,6 +1416,12 @@ function saveCfg {
 			echo "SHADER_FUBAXDEV=\"$SHADER_FUBAXDEV\""
 			echo "## Crosire Shader URL"
 			echo "SHADER_CROSIRE=\"$SHADER_CROSIRE\""
+			echo "## winetricks URL"
+			echo "WINETRICKSURL=\"$WINETRICKSURL\""
+			echo "## Cheat Engine URL"
+			echo "CHEATENGINEURL=\"$CHEATENGINEURL\""
+			echo "## x64dbg URL"
+			echo "X64DBGURL=\"$X64DBGURL\""
 			} >> "$1"
 			#ENDsaveCfgurl
 		fi
@@ -1718,6 +1729,8 @@ function saveCfg {
 			echo "RUN_CHEATENGINE=\"$RUN_CHEATENGINE\""
 			echo "## $DESC_GAMCONWAITEXE"
 			echo "GAMCONWAITEXE=\"$GAMCONWAITEXE\""
+			echo "## $DESC_RUN_X64DBG"
+			echo "RUN_X64DBG=\"$RUN_X64DBG\""
 			echo "## $DESC_VORTEXMODE"
 			echo "VORTEXMODE=\"$VORTEXMODE\""
 			echo "## $DESC_WAITVORTEX"
@@ -2943,6 +2956,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_CUSTPROTDLDIR!$DESC_CUSTPROTDLDIR ('CUSTPROTDLDIR')":DIR "${CUSTPROTDLDIR/#-/ -}" `#CAT_Proton` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_CUSTPROTEXTDIR!$DESC_CUSTPROTEXTDIR ('CUSTPROTEXTDIR')":DIR "${CUSTPROTEXTDIR/#-/ -}" `#CAT_Proton` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_BACKUPSTEAMUSER!$DESC_BACKUPSTEAMUSER ('BACKUPSTEAMUSER')":CHK "${BACKUPSTEAMUSER/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_RUN_X64DBG!$DESC_RUN_X64DBG ('RUN_X64DBG')":CHK "${RUN_X64DBG/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="$(spanFont "$GUI_OPTSSHADER" "H")":LBL "SKIP" `#CAT_Shader` `#HEAD_Shader` `#MENU_GAME` `#MENU_GLOBAL`  \
 --field="     $GUI_USERESHADE!$DESC_USERESHADE ('USERESHADE')":CHK "${USERESHADE/#-/ -}" `#CAT_Shader` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_DOWNLOAD_RESHADE!$DESC_DOWNLOAD_RESHADE ('DOWNLOAD_RESHADE')":CHK "${DOWNLOAD_RESHADE/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#SUB_Checkbox` `#MENU_GLOBAL` \
@@ -3034,6 +3048,8 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_SHADER_FUBAXDEV!$DESC_SHADER_FUBAXDEV ('SHADER_FUBAXDEV')" "${SHADER_FUBAXDEV/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="     $GUI_SHADER_CROSIRE!$DESC_SHADER_CROSIRE ('SHADER_CROSIRE')" "${SHADER_CROSIRE/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="     $GUI_WINETRICKSURL!$DESC_WINETRICKSURL ('WINETRICKSURL')" "${WINETRICKSURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
+--field="     $GUI_CHEATENGINEURL!$DESC_CHEATENGINEURL ('CHEATENGINEURL')" "${CHEATENGINEURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
+--field="     $GUI_X64DBGURL!$DESC_X64DBGURL ('X64DBGURL')" "${X64DBGURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="$(spanFont "$GUI_OPTSVR" "H")":LBL "SKIP" `#CAT_VR` `#HEAD_VR` `#MENU_GAME` `#MENU_GLOBAL`  \
 --field="     $GUI_SBSVRRS!$DESC_SBSVRRS ('SBSVRRS')":CHK "${SBSVRRS/#-/ -}" `#CAT_VR` `#SUB_Checkbox` `#SUB_ReShade` `#MENU_GAME` \
 --field="     $GUI_RUNSBSVR!$DESC_RUNSBSVR ('RUNSBSVR')":CHK "${RUNSBSVR/#-/ -}" `#CAT_VR` `#SUB_Checkbox` `#MENU_GAME` \
@@ -7230,23 +7246,19 @@ function checkWineCfgLaunch {
 }
 
 function regEdit {
-	REGEDITCMD="regedit"
-	if  [ -x "$(command -v "$REGEDITCMD" 2>/dev/null)" ]; then
-		if [ -z "$1" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Starting $REGEDITCMD without arguments"
-			extWine64Run "$REGEDITCMD"
-		else
-			writelog "INFO" "${FUNCNAME[0]} - Starting $REGEDITCMD with argument $1"
-			if [ "$USEWINE" -eq 0 ]; then
-				extWine64Run "$REGEDITCMD" "$1"
-			else
-				extWine64Run "$RUNREGEDIT" "$1"
-			fi
-			writelog "INFO" "${FUNCNAME[0]} - Disabling $REGEDITCMD in '$STLGAMECFG' - need a config to skip this?"
-			updateConfigEntry "REGEDITCMD" "0" "$STLGAMECFG"
-		fi
+	REGEDIT="regedit"
+	if [ -z "$1" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Starting $REGEDIT without arguments"
+		extWine64Run "$RUNWINE" "$REGEDIT"
 	else
-		writelog "SKIP" "${FUNCNAME[0]} - Command '$REGEDITCMD' not found - skipping"
+		writelog "INFO" "${FUNCNAME[0]} - Starting $REGEDIT with argument $1"
+		if [ "$USEWINE" -eq 0 ]; then
+			extWine64Run "$RUNWINE" "$REGEDIT" "$1"
+		else
+			extWine64Run "$RUNWINE" "$RUNREGEDIT" "$1"
+		fi
+		writelog "INFO" "${FUNCNAME[0]} - Applied '$1' using '$REGEDIT' - Setting REGEDIT to 0 now in '$STLGAMECFG'"
+		updateConfigEntry "REGEDIT" "0" "$STLGAMECFG"
 	fi
 }
 
@@ -9231,7 +9243,7 @@ function launchSteamGame {
 				writelog "INFO" "${FUNCNAME[0]} - Starting native game '$GN ($AID)' with '$GAMEMODERUN' - ${GAMESTARTCMD[*]}"
 				notiShow "$(strFix "$NOTY_STARTNATGAMO" "$GN" "$AID")"
 				writelog "INFO" "${FUNCNAME[0]} - Full start command is '$GAMEMODERUN ${GAMESTARTCMD[*]}'"
-				startGame "$GAMEMODERUN" "${GAMESTARTCMD[@]}"		
+				startGame "$GAMEMODERUN" "${GAMESTARTCMD[@]}"
 			# start with gamescope:
 			elif [ "$USEGAMESCOPE" -eq 1 ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Starting native game '$GN ($AID)' with $GAMESCOPE arguments '$GAMESCOPE_ARGS'"
@@ -9360,7 +9372,10 @@ function launchSteamGame {
 			PROTONVERSION="$(setProtonPathVersion "$RUNPROTON")"
 
 			# start with gamemoderun:
-			if [ "$USEGAMEMODERUN" -eq 1 ]; then
+			if [ "$RUN_X64DBG" -eq 1 ]; then
+				checkX64dbgLaunch "${GAMESTARTCMD[@]}"
+			# start with gamemoderun:
+			elif [ "$USEGAMEMODERUN" -eq 1 ]; then
 				if [ "$USEGAMESCOPE" -eq 1 ]; then
 					writelog "SKIP" "${FUNCNAME[0]} - Skipping '$GAMESCOPE' as '$GAMEMODERUN' is enabled as well"
 				fi
@@ -9369,7 +9384,7 @@ function launchSteamGame {
 
 				writelog "INFO" "${FUNCNAME[0]} - Full start command is '$GAMEMODERUN ${GAMESTARTCMD[*]}'"
 
-				startGame "$GAMEMODERUN" "${GAMESTARTCMD[@]}"		
+				startGame "$GAMEMODERUN" "${GAMESTARTCMD[@]}"
 		
 			# start with gamescope:
 			elif [ "$USEGAMESCOPE" -eq 1 ]; then
@@ -10039,6 +10054,79 @@ function createGameLists {
 		mapfile -t -O "${#TitleList[@]}" TitleList <<< "$GAMENAME"
 		mapfile -t -O "${#ShowGameList[@]}" ShowGameList <<< "$GAMENAME ($GAMEID)"
 	done <<< "$(find "$GEMETA" -name "*.conf")"
+}
+
+
+function getLatestX64dbgSnap {
+	basename "$("$WGET" -q "$X64DBGURL" -O - |  grep -E 'releases.*download.*snapshot.*zip' | cut -d '"' -f2 | head -n1)"
+}
+
+function dlX64Dbg {
+	DLDST="$X64DBGDLDIR"
+	DLCH="$DLDST/commithash.txt"
+	if [ -f "$DLCH" ]; then
+		writelog "SKIP" "${FUNCNAME[0]} - '$X64D' is already ready"
+	else	
+		mkProjDir "$DLDST" 1
+		X64ZIP="$(getLatestX64dbgSnap)"
+
+		if [ ! -f "$DLDST/$X64ZIP" ]; then
+			notiShow "$(strFix "$NOTY_DLCUSTOMPROTON" "$X64ZIP")"
+			"$WGET" -q "${X64DBGURL//tag/download}/$X64ZIP" -O "$DLDST/$X64ZIP"
+			notiShow "$(strFix "$NOTY_DLCUSTOMPROTON2" "$X64ZIP")"
+		fi
+	
+		if [ ! -s "$DLDST/$X64ZIP" ]; then
+			writelog "SKIP" "${FUNCNAME[0]} - Downloaded file '$DLDST/$X64ZIP' is empty - removing"
+			rm "$DLDST/$X64ZIP" 2>/dev/null
+		else
+			notiShow "$(strFix "$NOTY_DLCUSTOMPROTON3" "$X64ZIP")"
+			writelog "INFO" "${FUNCNAME[0]} - Download of '$X64ZIP' to '$DLDST' was successful"
+			"$UNZIP" -q "$DLDST/$X64ZIP" -d "$DLDST" 2>/dev/null
+			if [ -f "$DLCH" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Extracted '$X64ZIP' to '$DLDST'"
+			else
+				writelog "SKIP" "${FUNCNAME[0]} - Extracting of file '$DLDST/$X64ZIP' failed"
+			fi
+		fi
+	fi
+}
+
+# start x64dbg
+function checkX64dbgLaunch {
+	if [ "$RUN_X64DBG" -eq 1 ] && [ "$ISGAME" -eq 2 ] && [ "$USEWINE" -eq 0 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Starting '$X64D' for '$GE ($AID)'"
+
+		if [ "$(getArch "$GP")" == "32" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Using '$X32D' as '$GE' is 32bit" 
+			XDBGEXE="$X32D"
+		elif [ "$(getArch "$GP")" == "64" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Using '$X64D' as '$GE' is 64bit" 
+			XDBGEXE="$X64D"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Could not get architecture of '$GP' - using '$X64D'" 
+			XDBGEXE="$X64D"	
+		fi
+		
+		XDBFPATH="$X64DBGDLDIR/release/${XDBGEXE//dbg/}/${XDBGEXE}.exe"
+		
+		if [ ! -f "$XDBFPATH" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - File '$X64EXE' does not exit - starting installer"
+			dlX64Dbg
+		fi
+
+		if [ ! -f "$XDBFPATH" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Installing failed - can't start '$XDBFPATH' - skipping"
+			RUN_X64DBG=0
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Applying registry '${X64D}.reg'"
+			regEdit "$GLOBALREGDIR/${X64D}.reg"
+
+			WGP="$(extWine64Run "$RUNWINE" winepath -w "$GP")"
+			writelog "INFO" "${FUNCNAME[0]} - Starting '$XDBFPATH' using extWine64Run for the game '$WGP'"
+			extWine64Run "$RUNWINE" "$XDBFPATH" "$WGP"
+		fi
+	fi
 }
 
 function startSettings {
