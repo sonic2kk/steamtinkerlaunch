@@ -6,7 +6,7 @@
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
 PROGVERS="v4.0-next2"
-PROGCMD="$(basename "$0")"
+PROGCMD="${0##*/}"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
 ### internal dependencies ###
@@ -180,7 +180,7 @@ function setAID {
 		AID="$PLACEHOLDERAID"
 	else
 		if [ "$SteamAppId" -eq "0" ]; then
-			AID="$(basename "$STEAM_COMPAT_DATA_PATH")"
+			AID="${STEAM_COMPAT_DATA_PATH##*/}"
 		else
 			AID="$SteamAppId"
 		fi
@@ -480,7 +480,7 @@ function createCategoriesList {
 
 	function listCAT {
 		while read -r CATMENU; do
-			basename "$CATMENU"
+			echo "${CATMENU##*/}"
 		done <<< "$(find "$DFDIR" -mindepth 1 -maxdepth 1 -type d)"
 	}
 	CATLIST="$(listCAT | sort -u | tr '\n' '!' | sed "s:^!::" | sed "s:!$::")"
@@ -640,7 +640,7 @@ function setGameVars {
 	# win game
 		GPFX="$STEAM_COMPAT_DATA_PATH/pfx"														# currently used WINEPREFIX
 		GP="$(printf "%s\n" "$@" | grep -v "proton\|$SLR" | grep -m1 "$SAC")"					# the absolute game path of the windows game exe
-		GE="$(basename "$GP" | gawk -F '.exe' '{print $1}')"									# just the windows game exe name
+		GE="$(gawk -F '.exe' '{print $1}' <<< "${GP##*/}")"										# just the windows game exe name
 		EFD="$(dirname "$GP")"																	# the absolute directory where the game exe lives - for optional custom program
 	else
 	# linux game
@@ -651,7 +651,7 @@ function setGameVars {
 			GP="$GPRAW"
 		fi
 		
-		GE="$(basename "$GP")"																	# the game executable
+		GE="${GP##*/}"																			# the game executable
 #		EFD="${GP//$GE/}"																		# the absolute directory where the game exe lives - for optional custom program # dirname fails at least with 206420
 		EFD="$(dirname "$GP")"
 
@@ -692,8 +692,8 @@ function setCustomGameVars {
 	else
 		ISGAME=3
 	fi
-
-	GE="$(basename "$GP" | gawk -F '.exe' '{print $1}')"
+	
+	GE="$(gawk -F '.exe' '{print $1}' <<< "${GP##*/}")"
 	EFD="$(dirname "$GP")"
 	# need to just guess here, because of missing fix strings
 	GFD="$EFD"
@@ -723,7 +723,7 @@ function createLanguageList {
 
 	function listLANG {
 		while read -r RSPF; do
-			basename "$RSPF"
+			echo "${RSPF##*/}"
 		done <<< "$(find "$STLLANGDIR" -name "*.txt")"
 
 		while read -r RSPF; do
@@ -754,7 +754,7 @@ function loadLangFile {
 		if [ -f "$LANGFILENAME" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Loading commandline langfile"
 			source "$LANGFILENAME"
-			STLLANG="$(basename "$LANGFILENAME" | cut -d '.' -f1)"
+			STLLANG="$(cut -d '.' -f1 <<< "${LANGFILENAME##*/}")"
 			LAFI="$STLLANGDIR/${STLLANG}.txt"
 			if [ ! -f "$LAFI" ]; then
 				mkProjDir "$STLLANGDIR" 1
@@ -2001,7 +2001,7 @@ function wgetGui {
 function dlCustomProton {
 	CPURL="${1//\"/}"
 	PROTV="${2//\"/}"
-	CPURLFILE="$(basename "$CPURL")"
+	CPURLFILE="${CPURL##*/}"
 	DSTDL="$CUSTPROTDLDIR/$CPURLFILE"
 	if [ ! -f "$DSTDL" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Downloading '$CPURL' to '$CUSTPROTDLDIR'"
@@ -2011,7 +2011,7 @@ function dlCustomProton {
 		notiShow "$(strFix "$NOTY_DLCUSTOMPROTON2" "$CPURL")"
 	else
 		writelog "INFO" "${FUNCNAME[0]} - File '$DSTDL' already exists - nothing to download"
-		notiShow "$(strFix "$NOTY_DLCUSTOMPROTON4" "$(basename "$CPURL")")"
+		notiShow "$(strFix "$NOTY_DLCUSTOMPROTON4" "$CPURLFILE")"
 	fi
 	
 	PROTNAMERAW="${CPURLFILE//.tar.gz/}"
@@ -2084,7 +2084,7 @@ function createDLProtList {
 
 	while read -r CPVERS; do
 		mapfile -t -O "${#ProtonDLList[@]}" ProtonDLList <<< "$CPVERS"
-		mapfile -t -O "${#ProtonDLDispList[@]}" ProtonDLDispList <<< "$(basename "$CPVERS")"
+		mapfile -t -O "${#ProtonDLDispList[@]}" ProtonDLDispList <<< "${CPVERS##*/}"
 	done < "$PROTDLLIST"
 }
 
@@ -2497,7 +2497,7 @@ function updateEditor {
 function setGPfxFromAppMa {
 	if [ -z "$GPFX" ]; then
 		APPMA="$(listAppManifests | grep "${1}.acf")"
-		AMF="$(basename "$APPMA")"
+		AMF="${APPMA##*/}"
 		GPFX="$(dirname "$APPMA")/$CODA/$1/pfx"
 		writelog "INFO" "${FUNCNAME[0]} - Found WINEPREFIX '$GPFX' in '$AMF'"
 	fi
@@ -4725,7 +4725,7 @@ function SBSstopVRVideoPlayer {
 
 		if [ -f "$GWIDFILE" ]; then
 			source "$GWIDFILE"
-			GWIDTXT="/tmp/$(basename "$VRVIDEOPLAYER")_${GWIDDEC}"
+			GWIDTXT="/tmp/${VRVIDEOPLAYER##*/}_${GWIDDEC}"
 
 			if [ -f "$GWIDTXT" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - '$GWIDTXT' found"
@@ -4966,7 +4966,7 @@ function checkSBSVRLaunch {
 
 function RSiniToGameDir {
 	DESTINIABS="$1"
-	DESTINI="$(basename "$1")"
+	DESTINI="${1##*/}"
 	GSRSINI="$GRSPDIR/$RESHADEPRESET/$DESTINI"
 	USRSINI="$STLRSPRESETDIR/$RESHADEPRESET/$DESTINI"
 
@@ -5018,11 +5018,11 @@ function createReShadePresetList {
 
 	function listRSP {
 		while read -r RSPF; do
-			basename "$RSPF"
+			echo "${RSPF##*/}"
 		done <<< "$(find "$GRSPDIR" -mindepth 1 -maxdepth 1 -type d)"
 
 		while read -r RSPF; do
-			basename "$RSPF"
+			echo "${RSPF##*/}"
 		done <<< "$(find "$STLRSPRESETDIR" -mindepth 1 -maxdepth 1 -type d)"
 	}
 	RSPRESETLIST="$(listRSP | sort -u | tr '\n' '!' | sed "s:^!::" | sed "s:!$::")"
@@ -5220,27 +5220,27 @@ function GameShaderDialog {
 		updateWinRes "$TITLE" "$STLGUICFG" "SHADREQWIDTH" "SHADREQWIDTH" &
 		setShowPic
 
-		SHADFILES="$(while read -r f; do if [ ! -f "$SHADDESTDIR/$(basename "$f")" ]; then 	echo FALSE ; echo "$f"; else echo TRUE ; echo "$f" ;fi ; done <<< "$(printf "%s\n" "${ShaderFiles[@]}")" | \
+		SHADFILES="$(while read -r f; do if [ ! -f "$SHADDESTDIR/${f##*/}" ]; then 	echo FALSE ; echo "$f"; else echo TRUE ; echo "$f" ;fi ; done <<< "$(printf "%s\n" "${ShaderFiles[@]}")" | \
 		"$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center "$WINDECO" --list --checklist --column=Edit --column=ConfigFile --separator=" " --print-column="2" \
 		--text="$(spanFont "$(strFix "$GUI_SHADERDIALOG" "$SHADDESTDIR")" "H")" --title="$TITLE" --geometry="$SHADREQWIDTH"x"$SHADREQHEIGHT"+0+0)"
 		case $? in
 			0)  {
 					while read -r upshad; do
-						if [ -f "$SHADDESTDIR/$(basename "$upshad")" ]; then
+						if [ -f "$SHADDESTDIR/${upshad##*/}" ]; then
 							if ! grep -q "$upshad" <<< "$SHADFILES"; then
-								writelog "INFO" "${FUNCNAME[0]} - File $SHADDESTDIR/$(basename "$upshad") exists, but is unchecked - removing"
-								rm "$SHADDESTDIR/$(basename "$upshad")"
+								writelog "INFO" "${FUNCNAME[0]} - File '$SHADDESTDIR/${upshad##*/}' exists, but is unchecked - removing"
+								rm "$SHADDESTDIR/${upshad##*/}"
 							fi
 						else
 							if grep -q "$upshad" <<< "$SHADFILES"; then
-								writelog "INFO" "${FUNCNAME[0]} - File $SHADDESTDIR/$(basename "$upshad") does not exist, but is checked - installing"
+								writelog "INFO" "${FUNCNAME[0]} - File '$SHADDESTDIR/${upshad##*/}' does not exist, but is checked - installing"
 								cp "$STLSHADDIR/$upshad" "$SHADDESTDIR"
 
 								if grep -q "\.jpg\|\.png" "$STLSHADDIR/$upshad"; then
 									while read -r texture; do
-										TNAM="$(basename "$texture")"
+										TNAM="${texture##*/}"
 										if grep -q "$TNAM" "$STLSHADDIR/$upshad"; then
-											writelog "INFO" "${FUNCNAME[0]} - Shader '$(basename "$upshad")' uses texture '$TNAM'"
+											writelog "INFO" "${FUNCNAME[0]} - Shader '${upshad##*/}' uses texture '$TNAM'"
 											if [ ! -f "$SHADDESTDIR/$TNAM" ]; then
 												writelog "INFO" "${FUNCNAME[0]} - Copying texture '$TNAM' into the gamedir"
 												cp "$texture" "$SHADDESTDIR"
@@ -5252,8 +5252,8 @@ function GameShaderDialog {
 								fi
 
 								while read -r shadadd; do
-									if [ ! -f "$SHADDESTDIR/$(basename "$shadadd")" ]; then
-										writelog "INFO" "${FUNCNAME[0]} - Installing shader helper file '$(basename "$shadadd")' into '$SHADDESTDIR'"
+									if [ ! -f "$SHADDESTDIR/${shadadd##*/}" ]; then
+										writelog "INFO" "${FUNCNAME[0]} - Installing shader helper file '${shadadd##*/}' into '$SHADDESTDIR'"
 										cp "$shadadd" "$SHADDESTDIR"
 									fi
 								done <  <(find "$(dirname "$STLSHADDIR/$upshad")" -name "*.fxh" -o -name "*.txt")
@@ -5451,10 +5451,10 @@ function installReshadeDepth3D {
 
 			writelog "INFO" "${FUNCNAME[0]} - Copying shaders into gamedir"
 			while read -r file; do
-				writelog "INFO" "${FUNCNAME[0]} - CHECKING '$INSTDESTDIR/$(basename "$file")'"
+				writelog "INFO" "${FUNCNAME[0]} - CHECKING '$INSTDESTDIR/${file##*/}'"
 
-				if [ -f "$INSTDESTDIR"/"$(basename "$file")" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - '$INSTDESTDIR/$(basename "$file")' already exists - updating"
+				if [ -f "$INSTDESTDIR"/"${file##*/}" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - '$INSTDESTDIR/${file##*/}' already exists - updating"
 					cp "$file" "$INSTDESTDIR"
 				else
 					writelog "INFO" "${FUNCNAME[0]} - Copying new file '$file' to '$EFD'"
@@ -5983,13 +5983,13 @@ function updateConfigEntry {
 				# only save value if it changed
 				if [ "${!CFGCAT}" != "$CFGVALUE" ] || [ -f "$FUPDATE" ]; then
 					if [ "$(grep -c "#${CFGCAT}=" "$CFGFILE")" -eq 1 ]; then
-						writelog "INFO" "${FUNCNAME[0]} - Option '$CFGCAT' commented out in config '$(basename "$CFGFILE")' - activating it with the new value '$CFGVALUE'"
+						writelog "INFO" "${FUNCNAME[0]} - Option '$CFGCAT' commented out in config '${CFGFILE##*/}' - activating it with the new value '$CFGVALUE'"
 						sed -i "/^#${CFGCAT}=/c$CFGCAT=\"$CFGVALUE\"" "$CFGFILE"
 					elif [ "$(grep -c "${CFGCAT}=" "$CFGFILE")" -eq 0 ]; then
-						writelog "INFO" "${FUNCNAME[0]} - '$CFGCAT' option missing in config '$(basename "$CFGFILE")' - adding a new line"
+						writelog "INFO" "${FUNCNAME[0]} - '$CFGCAT' option missing in config '${CFGFILE##*/}' - adding a new line"
 						echo "$CFGCAT=\"$CFGVALUE\"" >> "$CFGFILE"
 					else
-						writelog "INFO" "${FUNCNAME[0]} - Option '$CFGCAT' is updated with the new value $CFGVALUE in config '$(basename "$CFGFILE")'"
+						writelog "INFO" "${FUNCNAME[0]} - Option '$CFGCAT' is updated with the new value $CFGVALUE in config '${CFGFILE##*/}'"
 						sed -i "/^${CFGCAT}=/c$CFGCAT=\"$CFGVALUE\"" "$CFGFILE"
 					fi
 					rm "$FUPDATE" 2>/dev/null
@@ -6011,9 +6011,9 @@ function autoCategorySettings {
 			SC="$STEAMUSERID/$SRSCV"
 
 			if [ ! -f "$SC" ]; then
-				writelog "SKIP" "${FUNCNAME[0]} - File '$(basename "$SC")' not found in steam userid dir - skipping"
+				writelog "SKIP" "${FUNCNAME[0]} - File '${SC##*/}' not found in steam userid dir - skipping"
 			else
-				writelog "INFO" "${FUNCNAME[0]} - File '$(basename "$SC")' found in steam userid dir - searching categories for game '$AID'"
+				writelog "INFO" "${FUNCNAME[0]} - File '${SC##*/}' found in steam userid dir - searching categories for game '$AID'"
 
 				while read -r SCAT; do
 					if [ "$(USEDLGLOBAL)" -ge 1 ]; then
@@ -6142,7 +6142,7 @@ function checkXliveless {
 				if [ ! -f "$XLDL/$XLIVEDLL" ]; then
 					writelog "INFO" "${FUNCNAME[0]} - '$XLDL/$XLIVEDLL' not found - downloading automatically from '$XLIVEURL'"
 					"$WGET" "$XLIVEURL" -P "$XLDL"
-					"$UNZIP" "$XLDL/$(basename "$DLURL")" -d "$XLDL"
+					"$UNZIP" "$XLDL/${DLURL##*/}" -d "$XLDL"
 					if [ -f "$XLDL/dinput8.dll" ]; then
 						mv "$XLDL/dinput8.dll" "$XLDL/$XLIVEDLL"
 					fi
@@ -6296,7 +6296,7 @@ function createTweakprotonfixes {
 
 			while read -r fix; do
 				writelog "INFO" "${FUNCNAME[0]} - Analyzing $fix"
-				PFID="$(basename "$fix" | cut -d '.' -f1)"
+				PFID="$(cut -d '.' -f1 <<< "${fix##*/}")"
 				getAutoTweakInfoPF "$PFID"
 			done < <(find "$GFDIR" -name "[0-9]*.py")
 		else
@@ -8336,21 +8336,21 @@ function checkVortex {
 						# My Documents:
 						while read -r dir; do
 							writelog "INFO" "${FUNCNAME[0]} - Creating symlink from '$dir' to '$UserMyDocs'"
-							linkVortex "$dir" "$UserMyDocs/$(basename "$dir")"
+							linkVortex "$dir" "$UserMyDocs/${dir##*/}"
 						done <<< "$(find "$SteamUserMyDocs" -mindepth 1 -maxdepth 1 -type d | grep -v 'Music$\|Templates$\|Downloads$\|Pictures$\|Games$\|Videos$')"
 
 						# My Games:
 						SteamUserMyDocsMyGames="$SteamUserDir/$MyDocsMyGames"
 						while read -r dir; do
 							writelog "INFO" "${FUNCNAME[0]} - Creating symlink 'from' $dir to '$UserMyDocsMyGames'"
-							linkVortex "$dir" "$UserMyDocsMyGames/$(basename "$dir")"
+							linkVortex "$dir" "$UserMyDocsMyGames/${dir##*/}"
 						done <<< "$(find "$SteamUserMyDocsMyGames" -mindepth 1 -maxdepth 1 -type d)"
 
 						# Application Data:
 						SteamUserLocalSetAppData="$SteamUserDir/$LocalSetAppData"
 						while read -r dir; do
 							writelog "INFO" "${FUNCNAME[0]} - Creating symlink from '$dir' to '$UserLocalSetAppData'"
-							linkVortex "$dir" "$UserLocalSetAppData/$(basename "$dir")"
+							linkVortex "$dir" "$UserLocalSetAppData/${dir##*/}"
 						done <<< "$(find "$SteamUserLocalSetAppData" -mindepth 1 -maxdepth 1 -type d | grep -v 'Microsoft\|openvr')"			
 
 						# registry:
@@ -8974,7 +8974,7 @@ function dlWineGUI {
 
 function dlWine {
 	WURL="${1//\"/}"
-	WURLFILE="$(basename "$WURL")"
+	WURLFILE="${WURL##*/}"
 	DSTDL="$WINEDLDIR/$WURLFILE"
 	if [ ! -f "$DSTDL" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Downloading '$WURL' to '$WINEDLDIR'" "E"
@@ -8984,7 +8984,7 @@ function dlWine {
 		notiShow "$(strFix "$NOTY_DLCUSTOMPROTON2" "$WURL")"
 	else
 		writelog "INFO" "${FUNCNAME[0]} - File '$DSTDL' already exists - nothing to download" "E"
-		notiShow "$(strFix "$NOTY_DLCUSTOMPROTON4" "$(basename "$WURL")")"
+		notiShow "$(strFix "$NOTY_DLCUSTOMPROTON4" "${WURL##*/}")"
 	fi
 	extractWine "$DSTDL"
 }
@@ -9004,7 +9004,7 @@ function dlWineGate {
 
 function extractWine {
 	if [ -f "$1" ]; then
-		WURLFILE="$(basename "$1")"
+		WURLFILE="${1##*/}"
 		WDIRRAW="${WURLFILE//wine-/}"
 		WDIR="${WDIRRAW//.tar.xz}"
 		
@@ -9172,7 +9172,7 @@ function setWineVars {
 			RUNWINEARCH=win64
 		fi
 
-		writelog "INFO" "${FUNCNAME[0]} - Game binary '$(basename "$CHARCH")' is $(getArch "$CHARCH")-bit so creating '$RUNWINEARCH' wineprefix"
+		writelog "INFO" "${FUNCNAME[0]} - Game binary '${CHARCH##*/}' is $(getArch "$CHARCH")-bit so creating '$RUNWINEARCH' wineprefix"
 		GWFX="${GPFX//pfx/wfx}"
 		writelog "INFO" "${FUNCNAME[0]} - Using wineprefix '$GWFX'"
 	fi
@@ -10042,7 +10042,7 @@ function backupSteamUserGate {
 		writelog "INFO" "${FUNCNAME[0]} - Selected to backup all '$STUS' files from all found pfxes" "E"
 
 		while read -r APPMA; do
-			AMF="$(basename "$APPMA")"
+			AMF="${APPMA##*/}"
 			BAID="$(cut -d'_' -f2 <<< "$AMF" | cut -d'.' -f1)"
 			BPFX="$(dirname "$APPMA")/$CODA/$BAID/pfx"
 			if [ -d "$BPFX" ]; then
@@ -10066,7 +10066,7 @@ function createMetaData {
 		writelog "INFO" "${FUNCNAME[0]} - Creating/Updating metadata for all installed games found" "E"
 
 		while read -r APPMA; do
-			AMF="$(basename "$APPMA")"
+			AMF="${APPMA##*/}"
 			MAID="$(cut -d'_' -f2 <<< "$AMF" | cut -d'.' -f1)"
 
 			GNRAW="$(grep "\"name\"" "$APPMA" | gawk -F '"name"' '{print $NF}')"
