@@ -2542,6 +2542,12 @@ function getAvailableCfgs {
 
 	getGameTextFiles
 }
+function confirmReq {
+	QUESTION="$1"
+	TITLE="Question"
+	"$YAD" --window-icon="$STLICON" --center --on-top "$WINDECO" ---title="$TITLE" --text="$(spanFont "$QUESTION" "H")"
+	echo "$?"
+}
 
 function EditorDialog {
 	writelog "INFO" "${FUNCNAME[0]} - Opening Editor Dialog"
@@ -2584,7 +2590,7 @@ function EditorDialog {
 
 	EDFILES="$(while read -r f; do	echo "FALSE"; echo "$f"; done <<< "$(printf "%s\n" "${CfgFiles[@]}" | sort -u)" | \
 	"$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center $WINDECO --list --checklist --column=Edit --column=ConfigFile --separator="\n" --print-column="2" \
-	--text="$(spanFont "$(strFix "$GUI_EDITORDIALOG" "$GN" "$AID")" "H")" --title="$TITLE" --button="$BUT_EDIT":0 --button="$BUT_HIDE":2 --button="$BUT_CAN":4 --geometry="$EDREQWIDTH"x"$EDREQHEIGHT"+0+0)"
+	--text="$(spanFont "$(strFix "$GUI_EDITORDIALOG" "$GN" "$AID")" "H")" --title="$TITLE" --button="$BUT_EDIT":0 --button="$BUT_HIDE":2 --button="$BUT_OD":4 --button="$BUT_DEL":6 --button="$BUT_CAN":8 --geometry="$EDREQWIDTH"x"$EDREQHEIGHT"+0+0)"
 	case $? in
 		0)  {
 				if [ -n "$EDFILES" ]; then
@@ -2625,7 +2631,25 @@ function EditorDialog {
 				fi
 			}
 		;;
-		4)  writelog "INFO" "${FUNCNAME[0]} - Selected CANCEL"
+		4)  writelog "INFO" "${FUNCNAME[0]} - Selected Open Directory - Opening the directory containing the first selected file using '$XDGO'"
+			mapfile -t -O "${#EdArr[@]}" EdArr <<< "$EDFILES"
+			"$XDGO" "$(dirname "${EdArr[0]}")"
+			unset EdArr
+		;;
+		6)  writelog "INFO" "${FUNCNAME[0]} - Selected Delete"
+			RSEL="$(confirmReq "$GUI_DELSEL")"
+			if [ "$RSEL" -eq 0 ]; then
+			{
+				writelog "INFO" "${FUNCNAME[0]} - Confirmed deletion of all selected files"
+				mapfile -t -O "${#EdArr[@]}" EdArr <<< "$EDFILES"
+				rm "${EdArr[@]}" 2>/dev/null
+				unset EdArr
+			}
+			else
+				writelog "INFO" "${FUNCNAME[0]} - Selected CANCEL - Not deleting the files"
+			fi
+		;;
+		8)  writelog "INFO" "${FUNCNAME[0]} - Selected CANCEL"
 		;;
 	esac
 

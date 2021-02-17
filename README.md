@@ -316,7 +316,11 @@ Currently only constist of
 #### Editor Dialog
 A little File selection requester allowing to choose which config files to open with the [Editor](#Editor).
 The [Editor Dialog](#Editor-Dialog) can be opened either via [Settings Menu](#Settings-Menu) or [via Command Line](#via-Command-Line).
-
+Alternatively
+- the selected files can be hidden from the Editor Dialog *(a hide file is created which is listed then as well)*
+- the selected files can be removed (with confirmation requester)
+- the directory of the first selected file can be opened with the system file manager using xdg-open
+ 
 #### Gui Window Size
 When `SAVESETSIZE` is enabled in the [Global Config](#Global-Config) *(f.e. via [Global Menu](#Global-Menu))* *(by default it is)* resolution changes of every **stl** window are automatically saved
 when the corresponding window is closed. This function requires xwininfo to work.
