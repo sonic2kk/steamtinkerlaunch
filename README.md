@@ -466,6 +466,8 @@ If you use/create tweaks make sure to retest your game with later proton version
 The used proton Version is automatically written into the tweak file when created with `CREATETWEAKS`.
 User tweak-files in `USERTWEAKDIR` override global tweaks in `GLOBALTWEAKDIR`, [Autotweaks](#Auto Tweaks)
 
+[Tweak](#Tweaks) might be removed completely, because of total lack of any user contribution.
+
 #### Tweakfiles
 An example tweakfile looks like this:
 
@@ -924,10 +926,6 @@ the [downloads](#Downloads) directory, because it might be legally problematic
 *(it was also removed from archive.org with the note "Item not available The item is not available due to issues with the item's content." )*
 When found it will be extracted and installed automatically into the corresponding `WINEPREFIX`, else a requester pops up.
 
-
-[Tweak](#Tweaks) with automatic support already implemented for
-Several tweaks, which apply required tweaks automatically to get games working are bundled,
-but the feature might be removed, because of total lack of any user contribution.
 
 #### Vortex
 [Vortex Mod Manager](https://github.com/Nexus-Mods/Vortex)
