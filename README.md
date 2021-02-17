@@ -919,13 +919,15 @@ into `$STLDLDIR/xlive/` and installed into the gamedir.
 #### WMP10
 Games which depend on WMP10 can be played by setting the variable `HACKWMP10` to 1.
 *(in [Game Menu](#Game-Menu) and [Game Config](#Game-Config))*
+The required `MP10Setup.exe` file *(known md5sum `e57645c5ab34485d56d019aaa17c3150`)* needs to be placed manually into 
+the [downloads](#Downloads) directory, because it might be legally problematic
+*(it was also removed from archive.org with the note "Item not available The item is not available due to issues with the item's content." )*
+When found it will be extracted and installed automatically into the corresponding `WINEPREFIX`, else a requester pops up.
+
 
 [Tweak](#Tweaks) with automatic support already implemented for
-
-**
-Giana Sisters Twisted Dreams (223220)
-Giana Sisters - Rise of the Owlverlord (246960)	
-**
+Several tweaks, which apply required tweaks automatically to get games working are bundled,
+but the feature might be removed, because of total lack of any user contribution.
 
 #### Vortex
 [Vortex Mod Manager](https://github.com/Nexus-Mods/Vortex)
