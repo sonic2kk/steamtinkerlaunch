@@ -1977,6 +1977,27 @@ function needNewProton {
 	fi
 }
 
+function wgetGui {
+	SRCURL="$1"
+	DESTDIR="$2"
+	
+	TITLE="Download"
+	DLFILE="${1##*/}"
+	DLTEXT="$(strFix "$GUI_DLTO" "$DLFILE" "${DESTDIR//$DLFILE}")"
+	
+	writelog "INFO" "${FUNCNAME[0]} - $DLTEXT"
+
+	"$WGET" -q --show-progress "$SRCURL" -O "$DESTDIR" 2>&1 | sed -u -e "s:\.::g;s:%.*$::g;s:.*K::g;s:^[[:space:]]*::g" | \
+	"$YAD" --window-icon="$STLICON" --center --on-top "$WINDECO" ---title="$TITLE" --progress --auto-close --text="$(spanFont "$DLTEXT" "H")"
+	case $? in
+		0)  {
+				writelog "INFO" "${FUNCNAME[0]} - Clicked Close or Download failed - deleting the unfinished download"
+				rm "${DESTDIR//$DLFILE}/$DLFILE" 2>/dev/null
+			}
+		;;
+	esac
+}
+
 function dlCustomProton {
 	CPURL="${1//\"/}"
 	PROTV="${2//\"/}"
@@ -1985,7 +2006,8 @@ function dlCustomProton {
 	if [ ! -f "$DSTDL" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Downloading '$CPURL' to '$CUSTPROTDLDIR'"
 		notiShow "$(strFix "$NOTY_DLCUSTOMPROTON" "$CPURL")"
-		"$WGET" "$CPURL" -O "$DSTDL"
+		# "$WGET" "$CPURL" -O "$DSTDL"
+		wgetGui "$CPURL" "$DSTDL"
 		notiShow "$(strFix "$NOTY_DLCUSTOMPROTON2" "$CPURL")"
 	else
 		writelog "INFO" "${FUNCNAME[0]} - File '$DSTDL' already exists - nothing to download"
@@ -6884,11 +6906,14 @@ function launchCustomProg {
 	if [ -z "$CUSTOMCMD" ]; then
 		writelog "ERROR" "${FUNCNAME[0]} - CUSTOMCMD variable is empty - but it shouldn't be empty here!"
 	fi	
-		
+	
+	CHCUSTDIR=0
+	
 	if  [ -x "$(command -v "$CUSTOMCMD" 2>/dev/null)" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - '$CUSTOMCMD' found"
 		LACO="$CUSTOMCMD"
 		CUSTCOM="$("$WHICH" "$CUSTOMCMD" 2>/dev/null)"
+		CHCUSTDIR=1
 	else
 		writelog "INFO" "${FUNCNAME[0]} - '$CUSTOMCMD' not found - searching in gamedir"
 
@@ -6903,6 +6928,7 @@ function launchCustomProg {
 				writelog "INFO" "${FUNCNAME[0]} - '$CUSTOMCMD' is absolute path"
 				LACO="$CUSTOMCMD"
 				CUSTCOM="$CUSTOMCMD"
+				CHCUSTDIR=1
 			else
 				writelog "INFO" "${FUNCNAME[0]} - CUSTOMCMD file '$CUSTOMCMD' not found - opening file requester"
 			
@@ -6924,6 +6950,7 @@ function launchCustomProg {
 					LACO="${ZCUST//|/}"
 					CUSTCOM="${ZCUST//|/}"
 					CUSTOMCMD="${ZCUST//|/}"
+					CHCUSTDIR=1
 				else
 					writelog "SKIP" "${FUNCNAME[0]} - Nothing selected for CUSTOMCMD - skipping"
 					if [ "$ONLY_CUSTOMCMD" -eq 1 ]; then
@@ -6942,6 +6969,12 @@ function launchCustomProg {
 	if [ -z "$LACO" ]; then
 		writelog "SKIP" "${FUNCNAME[0]} - ERROR - launch command empty- skipping launch"
 	else
+		if [ "$CHCUSTDIR" -eq 1 ]; then
+			CUSTDIR="$(dirname "$CUSTOMCMD")"
+			writelog "INFO" "${FUNCNAME[0]} - Changing pwd into the custom directory '$CUSTDIR'"
+			cd "$CUSTDIR" || return
+		fi
+	
 		if [ "$(file "$CUSTCOM" | grep -c "PE32")" -eq 1 ]; then
 			writelog "INFO" "${FUNCNAME[0]} - '$CUSTCOM' seems to be a MS Windows exe - starting through proton"
 			if [ "$USEWICO" -eq 1 ] && [ "$(file "$CUSTCOM" | grep -c "(console)")" -eq 1 ]; then
@@ -6978,6 +7011,11 @@ function launchCustomProg {
 				"$LACO" "${RUNCUSTOMCMD_ARGS[@]}"
 			fi
 		fi
+		if [ "$CHCUSTDIR" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Changing pwd into previous directory"
+			cd - || return
+		fi
+
 	fi
 }
 
@@ -7022,7 +7060,8 @@ function wmp10hack {
 		if [ ! -f "$STLDLDIR/$MP10S" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Downloading '$MP10S' from '$WMP10URL'"
 			notiShow "$(strFix "$NOTY_WMP1" "$MP10S" "$WMP10URL")"
-			"$WGET" "$WMP10URL/$MP10S" -O "$STLDLDIR/$MP10S"
+#			"$WGET" "$WMP10URL/$MP10S" -O "$STLDLDIR/$MP10S"
+			wgetGui "$WMP10URL/$MP10S" "$STLDLDIR/$MP10S"
 		else
 			writelog "SKIP" "${FUNCNAME[0]} - Found '$MP10S' in '$STLDLDIR' - nothing to download"
 		fi
@@ -7401,7 +7440,8 @@ function downloadCheatEngine {
 	CESET="$1"
 	writelog "INFO" "${FUNCNAME[0]} - Downloading '$CESET' into '$CEDLDIR'"
 	notiShow "$(strFix "$NOTY_DLCE" "$CESET")"
-	"$WGET" -q "$CHEATENGINEURL/download/$CHEATENGINEVERSION/$CESET" -O "$CEDLDIR/$CESET"
+#	"$WGET" -q "$CHEATENGINEURL/download/$CHEATENGINEVERSION/$CESET" -O "$CEDLDIR/$CESET"
+	wgetGui "$CHEATENGINEURL/download/$CHEATENGINEVERSION/$CESET" "$CEDLDIR/$CESET"
 }
 
 function installCheatEngine {
@@ -7615,7 +7655,8 @@ function installVortex {
 			if [ ! -f "$VORTEXDLDIR/$VORTEXSETUP" ];then
 				writelog "INFO" "${FUNCNAME[0]} - Downloading $VORTEXSETUP to $VORTEXDLDIR from $VORTEXURL$VORTEXVERSION/$VORTEXSETUP"
 				if [ -n "$VORTEXURL" ]; then
-					"$WGET" "$VORTEXURL$VORTEXVERSION/$VORTEXSETUP" -O "$VORTEXDLDIR/$VORTEXSETUP"
+					# "$WGET" "$VORTEXURL$VORTEXVERSION/$VORTEXSETUP" -O "$VORTEXDLDIR/$VORTEXSETUP"
+					wgetGui "$VORTEXURL$VORTEXVERSION/$VORTEXSETUP" "$VORTEXDLDIR/$VORTEXSETUP"
 				fi
 
 				if [ -f "$VORTEXDLDIR/$VORTEXSETUP" ];then
@@ -8938,7 +8979,8 @@ function dlWine {
 	if [ ! -f "$DSTDL" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Downloading '$WURL' to '$WINEDLDIR'" "E"
 		notiShow "$(strFix "$NOTY_DLCUSTOMPROTON" "$WURL")"
-		"$WGET" -q "$WURL" -O "$DSTDL"
+		# "$WGET" -q "$WURL" -O "$DSTDL"
+		wgetGui "$WURL" "$DSTDL"
 		notiShow "$(strFix "$NOTY_DLCUSTOMPROTON2" "$WURL")"
 	else
 		writelog "INFO" "${FUNCNAME[0]} - File '$DSTDL' already exists - nothing to download" "E"
@@ -10072,7 +10114,8 @@ function dlX64Dbg {
 
 		if [ ! -f "$DLDST/$X64ZIP" ]; then
 			notiShow "$(strFix "$NOTY_DLCUSTOMPROTON" "$X64ZIP")"
-			"$WGET" -q "${X64DBGURL//tag/download}/$X64ZIP" -O "$DLDST/$X64ZIP"
+			# "$WGET" -q "${X64DBGURL//tag/download}/$X64ZIP" -O "$DLDST/$X64ZIP"
+			wgetGui "${X64DBGURL//tag/download}/$X64ZIP" "$DLDST/$X64ZIP"
 			notiShow "$(strFix "$NOTY_DLCUSTOMPROTON2" "$X64ZIP")"
 		fi
 	
