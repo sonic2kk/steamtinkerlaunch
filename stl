@@ -5,7 +5,7 @@
 
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v4.0-next3"
+PROGVERS="v4.0-next4"
 PROGCMD="${0##*/}"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -1355,6 +1355,7 @@ function setDefaultCfgValues {
 		if [ -z "$DXVK_LOG_PATH" ]		; then	DXVK_LOG_PATH="$STLDXVKLOGDIR"; fi
 		if [ -z "$PROTON_LOG" ]			; then	PROTON_LOG="0"; fi
 		if [ -z "$PROTON_LOG_DIR" ]		; then	PROTON_LOG_DIR="$STLPROTONIDLOGDIR"; fi
+		if [ -z "$USEWINEDEBUGPROTON" ]	; then	USEWINEDEBUGPROTON="0"; fi
 		if [ -z "$WINE_LOG_DIR" ]		; then	WINE_LOG_DIR="$STLWINELOGDIR"; fi
 		if [ -z "$PROTON_DEBUG_DIR" ]	; then	PROTON_DEBUG_DIR="/tmp"; fi
 		if [ -z "$PROTON_USE_WINED3D" ]	; then	PROTON_USE_WINED3D="0"; fi
@@ -1364,6 +1365,7 @@ function setDefaultCfgValues {
 		if [ -z "$PROTON_NO_FSYNC" ]	; then	PROTON_NO_FSYNC="0"; fi
 		if [ -z "$PROTON_FORCE_LARGE_ADDRESS_AWARE" ]; then	PROTON_FORCE_LARGE_ADDRESS_AWARE="1"; fi
 		if [ -z "$PROTON_DUMP_DEBUG_COMMANDS" ]	; then	PROTON_DUMP_DEBUG_COMMANDS="0"; fi
+		if [ -z "$CLEANPROTONTEMP" ]	; then	CLEANPROTONTEMP="0"; fi
 		if [ -z "$WINE_FULLSCREEN_INTEGER_SCALING" ]; then	WINE_FULLSCREEN_INTEGER_SCALING="0"; fi
 		if [ -z "$STLWINEDEBUG" ]		; then	STLWINEDEBUG="-all"; fi
 		if [ -z "$USERSTART" ]			; then	USERSTART="$("$WHICH" echo 2>/dev/null)"; fi
@@ -1842,6 +1844,8 @@ function saveCfg {
 			echo "PROTON_LOG=\"$PROTON_LOG\""
 			echo "## $DESC_PROTON_LOG_DIR"
 			echo "PROTON_LOG_DIR=\"$PROTON_LOG_DIR\""
+			echo "## $DESC_USEWINEDEBUGPROTON"
+			echo "USEWINEDEBUGPROTON=\"$USEWINEDEBUGPROTON\""
 			echo "## $DESC_PROTON_DUMP_DEBUG_COMMANDS"
 			echo "PROTON_DUMP_DEBUG_COMMANDS=\"$PROTON_DUMP_DEBUG_COMMANDS\""
 			echo "## $DESC_PROTON_DEBUG_DIR"
@@ -1859,6 +1863,8 @@ function saveCfg {
 			echo "## $DESC_PROTON_FORCE_LARGE_ADDRESS_AWARE"
 			echo "PROTON_FORCE_LARGE_ADDRESS_AWARE=\"$PROTON_FORCE_LARGE_ADDRESS_AWARE\""
 			echo "## $DESC_WINE_FULLSCREEN_INTEGER_SCALING"
+			echo "## $DESC_CLEANPROTONTEMP"
+			echo "CLEANPROTONTEMP=\"$CLEANPROTONTEMP\""
 			echo "WINE_FULLSCREEN_INTEGER_SCALING=\"$WINE_FULLSCREEN_INTEGER_SCALING\""
 			echo "## $DESC_STLWINEDEBUG"
 			echo "STLWINEDEBUG=\"$STLWINEDEBUG\""
@@ -1939,6 +1945,11 @@ function setNewProtVars {
 
 			writelog "SKIP" "${FUNCNAME[0]} - Using Steam Proton '$FIRSTUSEPROTON' instead of $PROGCMD Proton '$USEPROTON' because OVERRIDEPROTON is disabled"
 			notiShow "$(strFix "$NOTY_SETNEWPROTVARS" "$FIRSTUSEPROTON")"
+		fi
+
+		if [ "$USEWINEDEBUGPROTON" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Using '$STLWINEDEBUG' as Proton 'WINEDEBUG' parameters, because 'USEWINEDEBUGPROTON' is enabled"
+			export WINEDEBUG=\"$STLWINEDEBUG\"
 		fi
 	fi
 }
@@ -3011,6 +3022,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_PROTONCHECK!$DESC_PROTONCHECK ('PROTONCHECK')":CB "${PROTONCHECK/#-/ -}!disabled!ask_before_menu!ask_before_game!auto_download!auto_download_and_use!only_notify" `#CAT_Proton` `#MENU_GAME` \
 --field="     $GUI_PROTON_LOG!$DESC_PROTON_LOG $HOME/steam-$AID.log ('PROTON_LOG')":CHK "${PROTON_LOG/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_PROTON_LOG_DIR!$DESC_PROTON_LOG_DIR ('PROTON_LOG_DIR')":DIR "${PROTON_LOG_DIR/#-/ -}" `#CAT_Proton` `#SUB_Directories` `#MENU_GAME` \
+--field="     $GUI_USEWINEDEBUGPROTON!$DESC_USEWINEDEBUGPROTON ('USEWINEDEBUGPROTON')":CHK "${USEWINEDEBUGPROTON/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_PROTON_NO_D3D10!$DESC_PROTON_NO_D3D10 ('PROTON_NO_D3D10')":CHK "${PROTON_NO_D3D10/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_PROTON_NO_D3D11!$DESC_PROTON_NO_D3D11 ('PROTON_NO_D3D11')":CHK "${PROTON_NO_D3D11/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_PROTON_NO_ESYNC!$DESC_PROTON_NO_ESYNC ('PROTON_NO_ESYNC')":CHK "${PROTON_NO_ESYNC/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
@@ -3027,6 +3039,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_CUSTPROTEXTDIR!$DESC_CUSTPROTEXTDIR ('CUSTPROTEXTDIR')":DIR "${CUSTPROTEXTDIR/#-/ -}" `#CAT_Proton` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_BACKUPSTEAMUSER!$DESC_BACKUPSTEAMUSER ('BACKUPSTEAMUSER')":CHK "${BACKUPSTEAMUSER/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_RUN_X64DBG!$DESC_RUN_X64DBG ('RUN_X64DBG')":CHK "${RUN_X64DBG/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_CLEANPROTONTEMP!$DESC_CLEANPROTONTEMP ('CLEANPROTONTEMP')":CHK "${CLEANPROTONTEMP/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="$(spanFont "$GUI_OPTSSHADER" "H")":LBL "SKIP" `#CAT_Shader` `#HEAD_Shader` `#MENU_GAME` `#MENU_GLOBAL`  \
 --field="     $GUI_USERESHADE!$DESC_USERESHADE ('USERESHADE')":CHK "${USERESHADE/#-/ -}" `#CAT_Shader` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_DOWNLOAD_RESHADE!$DESC_DOWNLOAD_RESHADE ('DOWNLOAD_RESHADE')":CHK "${DOWNLOAD_RESHADE/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#SUB_Checkbox` `#MENU_GLOBAL` \
@@ -9996,6 +10009,18 @@ function delWinetricksTemps {
 	find "/tmp" -maxdepth 1 -type d -regextype posix-extended -regex '^.*winetricks.[A-Z,a-z,0-9]{8}' -exec rmdir {} \;	2>/dev/null
 }
 
+function cleanSUTemp {
+	if [ "$ISGAME" -eq 2 ] && [ "$CLEANPROTONTEMP" -eq 1 ]; then
+		PFXSUTEMP="$GPFX/$DRCU/$STUS/Temp"
+		if [ -d "$PFXSUTEMP" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Cleaning up Temp directory '$PFXSUTEMP'"
+			rm -rf "${PFXSUTEMP:?}" 
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - Temp directory '$PFXSUTEMP' exists, but is empty"
+		fi
+	fi
+}
+
 function backupSteamUser {
 	if [ "$BACKUPSTEAMUSER" -eq 1 ]; then
 		BAID="$1"
@@ -10323,6 +10348,7 @@ function openMainMenu {
 
 #STARTCLOSESTL ###
 function closeSTL {
+	cleanSUTemp
 	backupSteamUser "$AID"
 
 	if [ "$PROTON_LOG" -eq 1 ]; then
