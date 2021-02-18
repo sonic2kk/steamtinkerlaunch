@@ -5,7 +5,7 @@
 
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v4.0-next2"
+PROGVERS="v4.0-next3"
 PROGCMD="${0##*/}"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -68,6 +68,8 @@ CLOSETMP="$STLSHM/${PROGCMD}-closing.tmp"
 TEMPLOG="$STLSHM/${PROGCMD}.log"
 GWIDFILE="$STLSHM/${PROGCMD}-sbsgwid"
 PIDLOCK="$STLSHM/pid.lock"
+VRINITLOCK="$STLSHM/vrinit.lock"
+VRINITRESULT="$STLSHM/vrinit.conf"
 TEMPGPIDFILE="$STLSHM/gamepid.txt"
 STLSETENTRIES="$STLSHM/setentries.txt"
 STLRAWENTRIES="$STLSHM/rawentries.txt"
@@ -114,6 +116,7 @@ LOGDIRTI="$LOGDIR/title"
 STLPROTONLOGDIR="$BASELOGDIR/proton"														# proton logfile dir
 STLPROTONIDLOGDIR="$STLPROTONLOGDIR/id"														# proton id logfile dir
 STLPROTONTILOGDIR="$STLPROTONLOGDIR/title"													# proton title logfile dir
+STLDXVKLOGDIR="$BASELOGDIR/dxvk"
 STLWINELOGDIR="$BASELOGDIR/wine"															# wine logfile dir
 STLPVLOGDIR="$BASELOGDIR/pv"																# pressure vessel logfile dir
 STLGAMEDIR="$STLCFGDIR/gamecfgs"															# default basedir for game the gamespecific configs
@@ -247,6 +250,7 @@ PROCU="proton/custom"
 CTVDF="compatibilitytool.vdf"
 SCV="sharedconfig.vdf"
 SRSCV="7/remote/$SCV"
+LCV="localconfig.vdf"
 LASTRUN="$LOGDIR/lastrun.txt"																# some variables from the last run which might be reused
 RS_D3D47_DEST="d3dcompiler_47.dll"
 RS_DX_DEST="dxgi.dll"
@@ -304,6 +308,8 @@ function setSteamPaths {
 
 	mkdir -p "$SROOT/$CTD" 2>/dev/null
 	setSteamPath "STEAMCOMPATOOLS" "$CTD"
+	STEAMUSERID="$(find "$SUSDA" -maxdepth 1 -type d -name "[1-9]*")"
+	FLCV="$STEAMUSERID/config/$LCV"
 }
 
 function getGamePic {
@@ -423,6 +429,11 @@ function getDataForAllGamesinSharedConfig {
 	while read -r CATAID; do
 		getGameData "$CATAID"
 	done <<< "$(getParsableGameList | cut -d '+' -f1 | sed "s:\"::g" | grep "[0-9]" | sort -n)"
+}
+
+function getAllOwnedGames {
+	# currently unused
+	gawk '/Licenses/,//{f=1;next} /\}/{f=0} f' "$FLCV" | gawk '{print $1;}' | sed "s:[^0-9]*::g" | gawk 'NF'
 }
 
 function getActiveSteamCategories {
@@ -655,6 +666,10 @@ function setGameVars {
 #		EFD="${GP//$GE/}"																		# the absolute directory where the game exe lives - for optional custom program # dirname fails at least with 206420
 		EFD="$(dirname "$GP")"
 
+	fi
+
+	if [ -z "$GAMEEXE" ]; then
+		GAMEEXE="$GE"
 	fi
 
 	# common
@@ -1337,6 +1352,7 @@ function setDefaultCfgValues {
 		if [ -z "$USENETMON" ]			; then	USENETMON="0"; fi
 		if [ -z "$DXVK_HUD" ]			; then	DXVK_HUD="0"; fi
 		if [ -z "$DXVK_LOG_LEVEL" ]		; then	DXVK_LOG_LEVEL="$NON"; fi
+		if [ -z "$DXVK_LOG_PATH" ]		; then	DXVK_LOG_PATH="$STLDXVKLOGDIR"; fi
 		if [ -z "$PROTON_LOG" ]			; then	PROTON_LOG="0"; fi
 		if [ -z "$PROTON_LOG_DIR" ]		; then	PROTON_LOG_DIR="$STLPROTONIDLOGDIR"; fi
 		if [ -z "$WINE_LOG_DIR" ]		; then	WINE_LOG_DIR="$STLWINELOGDIR"; fi
@@ -1814,6 +1830,8 @@ function saveCfg {
 			echo "DXVK_HUD=\"$DXVK_HUD\""
 			echo "## $DESC_DXVK_LOG_LEVEL"
 			echo "DXVK_LOG_LEVEL=\"$DXVK_LOG_LEVEL\""
+			echo "## $DESC_DXVK_LOG_PATH"
+			echo "DXVK_LOG_PATH=\"$DXVK_LOG_PATH\""
 			echo "## $DESC_STRACERUN"
 			echo "STRACERUN=\"$STRACERUN\""
 			echo "## $DESC_STRACEOPTS"
@@ -2577,6 +2595,14 @@ function EditorDialog {
 		CfgFiles+=("$STLPROTONIDLOGDIR/steam-${AID}.log")
 	fi
 
+	if [ -f "$STLDXVKLOGDIR/${GAMEEXE}_d3d11.log" ]; then
+		CfgFiles+=("$STLDXVKLOGDIR/${GAMEEXE}_d3d11.log")
+	fi
+
+	if [ -f "$STLDXVKLOGDIR/${GAMEEXE}_dxgi.log" ]; then
+		CfgFiles+=("$STLDXVKLOGDIR/${GAMEEXE}_dxgi.log")
+	fi
+
 	writelog "INFO" "${FUNCNAME[0]} - Found ${#CfgFiles[@]} available Config Files - opening Checklist"
 
 	TITLE="${PROGNAME}-Editor"
@@ -2995,6 +3021,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_PROTON_FORCE_LARGE_ADDRESS_AWARE!$DESC_PROTON_FORCE_LARGE_ADDRESS_AWARE ('PROTON_FORCE_LARGE_ADDRESS_AWARE')":CHK "${PROTON_FORCE_LARGE_ADDRESS_AWARE/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_DXVK_HUD!$DESC_DXVK_HUD $DXVKHUDLIST ('DXVK_HUD')":CBE "${DXVK_HUD/#-/ -}!$DXVKHUDLIST" `#CAT_Proton` `#SUB_Dxvk` `#MENU_GAME` \
 --field="     $GUI_DXVK_LOG_LEVEL!$DESC_DXVK_LOG_LEVEL ('DXVK_LOG_LEVEL')":CB "${DXVK_LOG_LEVEL/#-/ -}!none!error!warn!info!debug" `#CAT_Proton` `#SUB_Dxvk` `#MENU_GAME` \
+--field="     $GUI_DXVK_LOG_PATH!$DESC_DXVK_LOG_PATH ('DXVK_LOG_PATH')":DIR "${DXVK_LOG_PATH/#-/ -}" `#CAT_Proton` `#SUB_Directories` `#MENU_GAME` \
 --field="     $GUI_RECOMMENDPROTON!$DESC_RECOMMENDPROTON ('RECOMMENDPROTON')":CHK "${RECOMMENDPROTON/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_CUSTPROTDLDIR!$DESC_CUSTPROTDLDIR ('CUSTPROTDLDIR')":DIR "${CUSTPROTDLDIR/#-/ -}" `#CAT_Proton` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_CUSTPROTEXTDIR!$DESC_CUSTPROTEXTDIR ('CUSTPROTEXTDIR')":DIR "${CUSTPROTEXTDIR/#-/ -}" `#CAT_Proton` `#SUB_Directories` `#MENU_GLOBAL` \
@@ -3538,8 +3565,6 @@ function openExtraSelection {
 function openGuiSettings {
 	prepareMenu "$@"
 
-	foundLogs
-
 	if [ "$USEGAMEPICS" -eq 1 ] && [ "$USEGAMEPICINMENU" -eq 1 ] ; then
 		setShowPic
 	fi
@@ -3548,7 +3573,7 @@ function openGuiSettings {
 	loadCfg "$STLGUICFG" X
 	updateWinRes "$TITLE" "$STLGUICFG" "GUISETWIDTH" "GUISETHEIGHT" &
 
-	SETHEAD="$(spanFont "${PROGNAME} (${PROGCMD}) - ${PROGVERS} \n \n$GN ($AID)" "H") \n <span font=\"italic\">(${#CfgFiles[@]} $GUI_EDITABLECFGS)\n(${#GameTxtFiles[@]} $GUI_EDITABLEGAMECFGS)\n$FOSLOG\n$FOPLOG</span>"
+	SETHEAD="$(spanFont "${PROGNAME} (${PROGCMD}) - ${PROGVERS} \n \n$GN ($AID)" "H") \n <span font=\"italic\">(${#CfgFiles[@]} $GUI_EDITABLECFGS)\n(${#GameTxtFiles[@]} $GUI_EDITABLEGAMECFGS)</span>"
 	
 	 "$YAD" --image "$SHOWPIC" --image-on-top --center --window-icon="$STLICON" --form --center "$WINDECO" \
     --title="$TITLE" \
@@ -3606,21 +3631,7 @@ function clickInfo {
 	writelog "INFO" "$1 - exiting '$4' and opening '$5'"
 }
 
-function foundLogs {
-	FOSLOG=""
-	FOPLOG=""
-	if [ -f "$LOGFILE" ]; then
-		FOSLOG="($PROGNAME $GUI_LOGFOUND)"
-	fi
-
-	if [ -f "$STLPROTONIDLOGDIR/steam-${AID}.log" ]; then
-		FOPLOG="(Proton $GUI_LOGFOUND)"
-	fi	
-}
-
 function openSettings {
-	foundLogs
-
 	prepareMenu "$@"
 
 	if [ "$USEGAMEPICS" -eq 1 ] && [ "$USEGAMEPICINMENU" -eq 1 ] ; then
@@ -3631,7 +3642,7 @@ function openSettings {
 	loadCfg "$STLGUICFG" X
 	updateWinRes "$TITLE" "$STLGUICFG" "SETWIDTH" "SETHEIGHT" &
 
-	SETHEAD="$(spanFont "${PROGNAME} (${PROGCMD}) - ${PROGVERS} \n \n$GN ($AID)" "H") \n <span font=\"italic\">(${#CfgFiles[@]} $GUI_EDITABLECFGS)\n(${#GameTxtFiles[@]} $GUI_EDITABLEGAMECFGS)\n$FOSLOG\n$FOPLOG</span>"
+	SETHEAD="$(spanFont "${PROGNAME} (${PROGCMD}) - ${PROGVERS} \n \n$GN ($AID)" "H") \n <span font=\"italic\">(${#CfgFiles[@]} $GUI_EDITABLECFGS)\n(${#GameTxtFiles[@]} $GUI_EDITABLEGAMECFGS)\n</span>"
 
 	loadCfg "$CUMETA/$AID.conf" X
 	loadCfg "$GEMETA/$AID.conf" X
@@ -4315,7 +4326,7 @@ function initSteamVR {
 				writelog "INFO" "${FUNCNAME[0]} - Vrcompositor not running, so starting SteamVR now:"
 				if ! "$STEAM" "${STEAMVRARGS[@]}" 2>/dev/null >/dev/null ; then
 					writelog "SKIP" "${FUNCNAME[0]} - Starting SteamVR FAILED - skipping SBS-VR"
-					export RUNSBSVR=0
+					echo "RUNSBSVR=\"0\"" > "$VRINITLOCK"
 					checkDepth3DUse
 				else
 					writelog "INFO" "${FUNCNAME[0]} - Started SteamVR"
@@ -4340,7 +4351,7 @@ function initSteamVR {
 					done
 				else
 					writelog "SKIP" "${FUNCNAME[0]} - Vrstartup found, but we didn't start SteamVR before! - skipping SBS-VR - just in case"
-					export RUNSBSVR=0
+					echo "RUNSBSVR=\"0\"" > "$VRINITLOCK"
 					checkDepth3DUse
 				fi
 			fi
@@ -4370,7 +4381,7 @@ function initSteamVR {
 					if [[ "$COUNTER" -ge "$MAXWAIT" ]]; then
 						writelog "SKIP" "${FUNCNAME[0]} - ERROR - timeout waiting for SteamVR - exit"
 						"$PKILL" -f "$VRVIDEOPLAYER"
-						RUNSBSVR=0
+						echo "RUNSBSVR=\"0\"" > "$VRINITLOCK"
 						checkDepth3DUse
 						exit 1
 					fi
@@ -4397,7 +4408,7 @@ function initSteamVR {
 				
 			else
 				writelog "SKIP" "${FUNCNAME[0]} - SteamVR start failed - vrcompositor still not running - skipping SBS-VR!"
-				export RUNSBSVR=0
+				echo "RUNSBSVR=\"0\"" > "$VRINITLOCK"
 				checkDepth3DUse
 			fi
 		fi
@@ -4877,12 +4888,30 @@ function waitForGameWindowXid {
 
 function initSBSVR {
 	if [ "$RUNSBSVR" -eq 1 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Checking if VR is available"
+		touch "$VRINITLOCK"
 		checkHMDPresent
 		initSteamVR
+		mv "$VRINITLOCK" "$VRINITRESULT"
 	fi
 }
 
 function startSBSVR {
+	MAXWAIT=20
+	COUNTER=0
+	writelog "INFO" "${FUNCNAME[0]} - Waiting for parallel process to detect VR HMD presence"
+
+	while [ -f "$VRINITLOCK" ]; do
+		if [ -f "$CLOSETMP" ] || [[ "$COUNTER" -ge "$MAXWAIT" ]]; then
+			break
+		fi
+		COUNTER=$((COUNTER+1))
+		sleep 1
+	done
+	
+	loadCfg "$VRINITRESULT"
+	rm "$VRINITRESULT"
+	
 	if [ "$RUNSBSVR" -eq 1 ]; then
 		if [ -f "$SBSTWEAKCFG" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Loading SBS configfile '$SBSTWEAKCFG' to get current values"
@@ -4893,6 +4922,8 @@ function startSBSVR {
 		waitForGameWindowXid
 		SBSinitVRVideoPlayer
 		SBSstopVRVideoPlayer
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - VR mode was cancelled, because the parallel process could not initialize VR"
 	fi
 }
 
@@ -4935,6 +4966,7 @@ function checkHMDPresent {
 			else
 				writelog "SKIP" "${FUNCNAME[0]} - No $SVR hardware found using '$LSUSB' - cancelling the SteamVR start"
 				RUNSBSVR=0
+				echo "RUNSBSVR=\"0\"" > "$VRINITLOCK"
 				checkDepth3DUse
 			fi
 		else
@@ -5648,8 +5680,6 @@ function askSettings {
 				LAUNCHMENU="openSettings"
 			fi
 
-			foundLogs
-
 			TWINFO1=""
 			TWINFO2=""
 				
@@ -5664,8 +5694,6 @@ function askSettings {
 			--text="$(spanFont "$GN ($AID) - $REQQEST" "H")" \
 			--field="<span font=\"italic\">(${#CfgFiles[@]} $GUI_EDITABLECFGS)</span>":LBL \
 			--field="<span font=\"italic\">(${#GameTxtFiles[@]} $GUI_EDITABLEGAMECFGS)</span>":LBL \
-			--field="<span font=\"italic\">$FOSLOG</span>":LBL \
-			--field="<span font=\"italic\">$FOPLOG</span>":LBL \
 			--field="$TWINFO1":LBL \
 			--field="$TWINFO2":LBL \
 			--button="$REQBUT":0  \
@@ -5707,6 +5735,7 @@ function createProjectDirs {
 	mkProjDir "$LOGDIRTI" 1
 	mkProjDir "$STLPROTONIDLOGDIR" 1
 	mkProjDir "$STLPROTONTILOGDIR" 1
+	mkProjDir "$STLDXVKLOGDIR" 1
 	mkProjDir "$STLWINELOGDIR" 1
 	mkProjDir "$STLPVLOGDIR" 1
 	mkProjDir "$STLGAMEDIRID" 1
