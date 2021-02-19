@@ -1211,6 +1211,12 @@ Also see [Shader Management](#Shader-Management)
 #### Shader-Management
 **stl** has a built in shader management with following features:
 - Downloader/Updater of several Shader repositories *(if important/good repos are missing feel free to open an issue)*
+  Currently following repositories are implemented:
+	- [AstrayFX](https://github.com/BlueSkyDefender/AstrayFX)
+	- [Crosire](https://github.com/crosire/reshade-shaders)
+	- [Depth3D](https://github.com/BlueSkyDefender/Depth3D)
+	- [Fubax](https://github.com/Fubaxiusz/fubax-shaders)
+	- [Fubax-dev](https://github.com/Fubaxiusz/fubax-shaders-dev)
 - Shader Selection Menu
   - all available Shaders are automatically listed
   - all Shaders already installed in the current game directory are checked
