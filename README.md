@@ -1351,8 +1351,7 @@ With enabled option `STEAMAPPIDFILE` a `steam_appid.txt` is automatically create
 When disabled an existing `steam_appid.txt` will be automatically removed from the game directory.
 If the `steam_appid.txt` file is shipped with the game though, the file remains untouched
 and the option `STEAMAPPIDFILE` will be set automatically set to 1.
-
-* **[Steamappid](#SteamAppID.txt)** Automatically create/delete a 'steam_appid.txt' file in the game directory
+A `steam_appid.txt` can have several advantages. One is, that a game can be played **DRM free** *(see [pcgamingwiki](https://www.pcgamingwiki.com/wiki/List_of_games_that_support_Steam_Cloud_save_game_cloud_syncing))*
 
 
 ## Game Launch Speed
