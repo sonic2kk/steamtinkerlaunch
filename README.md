@@ -1346,6 +1346,15 @@ A required [registry](#Registry) entry will be applied automatically before the 
 Be aware that the debugger can have problems with [custom Proton builds](#Custom-Proton-List)
 *(at least it hung when testing with Proton-GE)*!
 
+#### SteamAppID.txt
+With enabled option `STEAMAPPIDFILE` a `steam_appid.txt` is automatically created in the game directory.
+When disabled an existing `steam_appid.txt` will be automatically removed from the game directory.
+If the `steam_appid.txt` file is shipped with the game though, the file remains untouched
+and the option `STEAMAPPIDFILE` will be set automatically set to 1.
+
+* **[Steamappid](#SteamAppID.txt)** Automatically create/delete a 'steam_appid.txt' file in the game directory
+
+
 ## Game Launch Speed
 **stl** has pretty much to check, but when everything is configured, several option-checks can be disabled (per game)
 to speed up the actual game start process.

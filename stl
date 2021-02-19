@@ -5,7 +5,7 @@
 
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v4.0-next4"
+PROGVERS="v4.0-next5"
 PROGCMD="${0##*/}"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -252,6 +252,7 @@ SCV="sharedconfig.vdf"
 SRSCV="7/remote/$SCV"
 LCV="localconfig.vdf"
 LASTRUN="$LOGDIR/lastrun.txt"																# some variables from the last run which might be reused
+SAIT="steam_appid.txt"
 RS_D3D47_DEST="d3dcompiler_47.dll"
 RS_DX_DEST="dxgi.dll"
 RS_D9_DEST="d3d9.dll"
@@ -1342,6 +1343,7 @@ function setDefaultCfgValues {
 		if [ -z "$WAITFORTHISPID" ]		; then	WAITFORTHISPID="$NON"; fi
 		if [ -z "$WAITEDITOR" ]			; then	WAITEDITOR="2"; fi
 		if [ -z "$OPENEDITORURL" ]		; then	OPENEDITORURL="0"; fi
+		if [ -z "$STEAMAPPIDFILE" ]		; then	STEAMAPPIDFILE="0"; fi
 		if [ -z "$ATVALIDATE" ]			; then	ATVALIDATE="0"; fi
 		if [ -z "$ATADOPT" ]			; then	ATADOPT="0"; fi
 		if [ -z "$IGNOREAUTOTWEAKS" ]	; then	IGNOREAUTOTWEAKS="1"; fi
@@ -1818,6 +1820,8 @@ function saveCfg {
 			echo "WAITEDITOR=\"$WAITEDITOR\""
 			echo "## $DESC_OPENEDITORURL"
 			echo "OPENEDITORURL=\"$OPENEDITORURL\""
+			echo "## $DESC_STEAMAPPIDFILE"
+			echo "STEAMAPPIDFILE=\"$STEAMAPPIDFILE\""
 			echo "## $DESC_ATVALIDATE"
 			echo "ATVALIDATE=\"$ATVALIDATE\""
 			echo "## $DESC_ATADOPT"
@@ -3012,6 +3016,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_LOGLEVEL!$DESC_LOGLEVEL ('LOGLEVEL')":CB "${LOGLEVEL/#-/ -}!0!1!2" `#CAT_Misc` `#MENU_GLOBAL` \
 --field="     $GUI_RESETLOG!$DESC_RESETLOG ('RESETLOG')":CHK "${RESETLOG/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_OPENEDITORURL!$DESC_OPENEDITORURL ('OPENEDITORURL')":CHK "${OPENEDITORURL/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_STEAMAPPIDFILE!$DESC_STEAMAPPIDFILE ('STEAMAPPIDFILE')":CHK "${STEAMAPPIDFILE/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_SKIPINTDEPCHECK!$DESC_SKIPINTDEPCHECK ('SKIPINTDEPCHECK')":CHK "${SKIPINTDEPCHECK/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="$(spanFont "$GUI_OPTSPROTON" "H")":LBL "SKIP" `#CAT_Proton` `#HEAD_Proton` `#MENU_GAME` `#MENU_GLOBAL`  \
 --field="     $GUI_OVERRIDEPROTON!$(strFix "$DESC_OVERRIDEPROTON" "$PROGCMD") ('OVERRIDEPROTON')":CHK "${OVERRIDEPROTON/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
@@ -4910,33 +4915,36 @@ function initSBSVR {
 }
 
 function startSBSVR {
-	MAXWAIT=20
-	COUNTER=0
-	writelog "INFO" "${FUNCNAME[0]} - Waiting for parallel process to detect VR HMD presence"
-
-	while [ -f "$VRINITLOCK" ]; do
-		if [ -f "$CLOSETMP" ] || [[ "$COUNTER" -ge "$MAXWAIT" ]]; then
-			break
-		fi
-		COUNTER=$((COUNTER+1))
-		sleep 1
-	done
-	
-	loadCfg "$VRINITRESULT"
-	rm "$VRINITRESULT"
-	
 	if [ "$RUNSBSVR" -eq 1 ]; then
-		if [ -f "$SBSTWEAKCFG" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Loading SBS configfile '$SBSTWEAKCFG' to get current values"
-			loadCfg "$SBSTWEAKCFG"
+		MAXWAIT=20
+		COUNTER=0
+		
+		writelog "INFO" "${FUNCNAME[0]} - Waiting for parallel process to detect VR HMD presence"
+
+		while [ -f "$VRINITLOCK" ]; do
+			if [ -f "$CLOSETMP" ] || [[ "$COUNTER" -ge "$MAXWAIT" ]]; then
+				break
+			fi
+			COUNTER=$((COUNTER+1))
+			sleep 1
+		done
+		
+		loadCfg "$VRINITRESULT"
+		rm "$VRINITRESULT"
+		
+		if [ "$RUNSBSVR" -eq 1 ]; then
+			if [ -f "$SBSTWEAKCFG" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Loading SBS configfile '$SBSTWEAKCFG' to get current values"
+				loadCfg "$SBSTWEAKCFG"
+			fi
+			writelog "INFO" "${FUNCNAME[0]} - Preparing VR launch for '$AID'"
+			waitForGameWindowName
+			waitForGameWindowXid
+			SBSinitVRVideoPlayer
+			SBSstopVRVideoPlayer
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - VR mode was cancelled, because the parallel process could not initialize VR"
 		fi
-		writelog "INFO" "${FUNCNAME[0]} - Preparing VR launch for '$AID'"
-		waitForGameWindowName
-		waitForGameWindowXid
-		SBSinitVRVideoPlayer
-		SBSstopVRVideoPlayer
-	else
-		writelog "SKIP" "${FUNCNAME[0]} - VR mode was cancelled, because the parallel process could not initialize VR"
 	fi
 }
 
@@ -7596,6 +7604,48 @@ function checkCheatEngineLaunch {
 	fi
 }
 
+function checkSteamAppIDFile {
+	GSAIT="$EFD/$SAIT"
+	CSAIT="$EFD/check-$SAIT"
+
+	if [ ! -f "$CSAIT" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Creating new control file '$CSAIT'"
+		if [ ! -f "$GSAIT" ]; then
+			echo "OWNSAIT=\"0\"" > "$CSAIT"
+		else
+			echo "OWNSAIT=\"1\"" > "$CSAIT"
+		fi
+	fi
+
+	if [ "$STEAMAPPIDFILE" -eq 1 ]; then	
+		if [ ! -f "$GSAIT" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Creating '$GSAIT' because STEAMAPPIDFILE is enabled"
+			echo "$AID" > "$GSAIT"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - STEAMAPPIDFILE is enabled and '$GSAIT' already exists - nothing to do"
+		fi
+	else
+		if [ ! -f "$GSAIT" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - STEAMAPPIDFILE is disabled and there's no '$GSAIT' - nothing to do"
+		else
+			if [ ! -f "$CSAIT" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Removing '$GSAIT' because STEAMAPPIDFILE is disabled"
+				rm "$GSAIT" 2>/dev/null	
+			else
+				loadCfg "$CSAIT" X
+				if [ "$OWNSAIT" -eq 1 ]; then
+					writelog "INFO" "${FUNCNAME[0]} - OWNSAIT is '$OWNSAIT', means the game ships an own '$SAIT'. Leaving untouched and enabling STEAMAPPIDFILE"
+					updateConfigEntry "STEAMAPPIDFILE" "1" "$STLGAMECFG"
+					STEAMAPPIDFILE=1				
+				else
+					writelog "INFO" "${FUNCNAME[0]} - Removing '$GSAIT' because the game doesn't own it and STEAMAPPIDFILE is disabled"
+					rm "$GSAIT" 2>/dev/null	
+				fi
+			fi
+		fi
+	fi
+}
+
 function checkPulse {
 	if [ "$CHANGE_PULSE_LATENCY" -eq 1 ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Setting PULSE_LATENCY_MSEC to '$STL_PULSE_LATENCY_MSEC'"
@@ -8777,6 +8827,9 @@ function prepareLaunch {
 	# set pulse latency if CHANGE_PULSE_LATENCY is 1
 	checkPulse
 
+	# create/remove steam_appid.txt
+	checkSteamAppIDFile
+	
 	# GAME START
 	launchSteamGame
 
