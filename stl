@@ -5,7 +5,7 @@
 
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v4.0-next6"
+PROGVERS="v4.0-next7"
 PROGCMD="${0##*/}"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -33,6 +33,8 @@ GAMEMODERUN="gamemoderun"
 GAMESCOPE="gamescope"
 NYRNA="nyrna"
 STEAM="steam"
+RECO="resetcollections"
+STERECO="$STEAM ${STEAM}://${RECO}"
 STRACE="strace"
 WINECFG="winecfg"
 WICO="wineconsole"
@@ -44,7 +46,8 @@ LSUSB="lsusb"
 JQ="jq"
 CONVERT="convert"
 RSYNC="rsync"
-
+OSSL="openssl"
+HAVEOSSL=1
 CHECKHMD=1 # will be set to 0 if $LSUSB is not found. Then the hmd presence check is skipped
 LU="lutris"
 PF="protonfixes"
@@ -249,6 +252,7 @@ DBW="dist/bin/wine"
 PROCU="proton/custom"
 CTVDF="compatibilitytool.vdf"
 SCV="sharedconfig.vdf"
+SCVDF="shortcuts.vdf"
 SRSCV="7/remote/$SCV"
 LCV="localconfig.vdf"
 LASTRUN="$LOGDIR/lastrun.txt"																# some variables from the last run which might be reused
@@ -273,6 +277,7 @@ HEADLINEFONT="larger"
 FONTSIZES="!xx-small!x-small!small!smaller!medium!large!larger!!x-large!xx-large!"
 HAVEINNO="1"
 SREG="system.reg"
+NSGA="non-steam game"
 
 # make SC happy:
 GUI_GAMCON=""
@@ -395,12 +400,15 @@ function getGameData {
 }
 
 function getParsableGameList {
+	if [ -z "$SUSDA" ]; then
+		setSteamPaths
+	fi
 	if [ -d "$SUSDA" ]; then
 		STEAMUSERID="$(find "$SUSDA" -maxdepth 1 -type d -name "[1-9]*")"
 		SC="$STEAMUSERID/$SRSCV"
 		APPI="Apps"
 		APPO="StartMenuShortcutCheck"
-		gawk "/$APPI/,/$APPO/" "$SC" | grep -v "$APPI\|$APPO" | gawk '{printf "%s+",$0} END {print ""}' |  sed 's/"[0-9][0-9]/\n&/g'
+		gawk "/$APPI/,/$APPO/" "$SC" | grep -v "$APPI\|$APPO" | gawk '{printf "%s+",$0} END {print ""}' | sed 's/"[0-9][0-9]/\n&/g'
 	else
 		writelog "SKIP" "${FUNCNAME[0]} - '$SUSDA' not found - this should not happen! - skipping"
 	fi
@@ -438,7 +446,7 @@ function getAllOwnedGames {
 }
 
 function getActiveSteamCategories {
-	getParsableGameList | grep "\"installed\"" | grep "\"tags\"" | gawk -F '"tags"+' '{print $NF}' | sed  's/\t/\n/g' | grep -v "^\"[0-9]\"\|^+\|^{+\|^}+" | sed "s:\"+$::g" | sed "s:^\"::g" | sort -u | sed '/^[[:space:]]*$/d'
+	getParsableGameList | grep "\"tags\"" | gawk -F '{+' '{print $NF}' | sed 's/\"/'$'\\\n/g' | sort -u | grep -i "^[a-z]"
 }
 
 function createCategoryMenus {
@@ -1041,6 +1049,7 @@ function calculateDefaultResolutions {
 	LAUNCHERSCALE=30
 	FAVSELSCALE=20
 	CATSELSCALE=20
+	SCATSELSCALE=20
 	FAVMENSCALE=60
 	CATMENSCALE=60
 	GUISETSCALE=20
@@ -1049,6 +1058,7 @@ function calculateDefaultResolutions {
 	WINSELSCALE=15
 	ASKVTXREQSCALE=15
 	MMSCALE=20
+	NSGREQSCALE=20
 	
 	# Calculated initial gui sizes:
 	DEFSETWIDTH=$(( SCREENWIDTH * SETSCALE / 100 ));
@@ -1096,6 +1106,9 @@ function calculateDefaultResolutions {
 	DEFCATSELWIDTH=$(( SCREENWIDTH * CATSELSCALE / 100 ));
 	DEFCATSELHEIGHT=$(( SCREENHEIGHT * CATSELSCALE / 100 ));
 
+	DEFSCATSELWIDTH=$(( SCREENWIDTH * SCATSELSCALE / 100 ));
+	DEFSCATSELHEIGHT=$(( SCREENHEIGHT * SCATSELSCALE / 100 ));
+
 	DEFFAVMENWIDTH=$(( SCREENWIDTH * FAVMENSCALE / 100 ));
 	DEFFAVMENHEIGHT=$(( SCREENHEIGHT * FAVMENSCALE / 100 ));
 
@@ -1123,6 +1136,9 @@ function calculateDefaultResolutions {
 	DEFMMWIDTH=$(( SCREENWIDTH * MMSCALE / 100 ));
 	DEFMMHEIGHT=$(( SCREENHEIGHT * MMSCALE / 100 ));
 
+	DEFNSGREQWIDTH=$(( SCREENWIDTH * NSGREQSCALE / 100 ));
+	DEFNSGREQHEIGHT=$(( SCREENHEIGHT * NSGREQSCALE / 100 ));
+	
 }
 
 function setDefaultCfgValues {
@@ -1195,6 +1211,8 @@ function setDefaultCfgValues {
 		if [ -z "$FAVSELHEIGHT" ]		; then	FAVSELHEIGHT="$DEFFAVSELHEIGHT"; fi
 		if [ -z "$CATSELWIDTH" ]		; then	CATSELWIDTH="$DEFCATSELWIDTH"; fi
 		if [ -z "$CATSELHEIGHT" ]		; then	CATSELHEIGHT="$DEFCATSELHEIGHT"; fi
+		if [ -z "$SCATSELWIDTH" ]		; then	SCATSELWIDTH="$DEFSCATSELWIDTH"; fi
+		if [ -z "$SCATSELHEIGHT" ]		; then	SCATSELHEIGHT="$DEFSCATSELHEIGHT"; fi
 		if [ -z "$FAVMENWIDTH" ]		; then	FAVMENWIDTH="$DEFFAVMENWIDTH"; fi
 		if [ -z "$FAVMENHEIGHT" ]		; then	FAVMENHEIGHT="$DEFFAVMENHEIGHT"; fi
 		if [ -z "$CATMENWIDTH" ]		; then	CATMENWIDTH="$DEFCATMENWIDTH"; fi
@@ -1211,6 +1229,8 @@ function setDefaultCfgValues {
 		if [ -z "$ASKVTXREQHEIGHT" ]	; then	ASKVTXREQHEIGHT="$DEFASKVTXREQHEIGHT"; fi
 		if [ -z "$MMWIDTH" ]			; then	MMWIDTH="$DEFMMWIDTH"; fi
 		if [ -z "$MMHEIGHT" ]			; then	MMHEIGHT="$DEFMMHEIGHT"; fi
+		if [ -z "$NSGREQWIDTH" ]		; then	NSGREQWIDTH="$DEFNSGREQWIDTH"; fi
+		if [ -z "$NSGREQHEIGHT" ]		; then	NSGREQHEIGHT="$DEFNSGREQHEIGHT"; fi
 	}
 
 	function setDefaultCfgValuesglobal {
@@ -1283,6 +1303,7 @@ function setDefaultCfgValues {
 		if [ -z "$VORTEXVERSION" ]		; then	VORTEXVERSION="1.3.22"; fi
 		if [ -z "$DISABLE_AUTOSTAGES" ]	; then	DISABLE_AUTOSTAGES="0"; fi
 		if [ -z "$CHEATENGINEVERSION" ]	; then	CHEATENGINEVERSION="7.2"; fi
+		if [ -z "$NOSTEAMSTLDEF" ]		; then	NOSTEAMSTLDEF="0"; fi
 	}
 
 	function setDefaultCfgValuesdefault_template {
@@ -1512,6 +1533,9 @@ function saveCfg {
 			echo "## Category Selection:"
 			echo "CATSELWIDTH=\"$CATSELWIDTH\""
 			echo "CATSELHEIGHT=\"$CATSELHEIGHT\""
+			echo "## Steam Category Selection:"
+			echo "SCATSELWIDTH=\"$SCATSELWIDTH\""
+			echo "SCATSELHEIGHT=\"$SCATSELHEIGHT\""
 			echo "## Favorites Menu:"
 			echo "FAVMENWIDTH=\"$FAVMENWIDTH\""
 			echo "FAVMENHEIGHT=\"$FAVMENHEIGHT\""
@@ -1536,6 +1560,9 @@ function saveCfg {
 			echo "## Main Menu:"
 			echo "MMWIDTH=\"$MMWIDTH\""
 			echo "MMHEIGHT=\"$MMHEIGHT\""
+			echo "## '$NSGA' Gui:"
+			echo "NSGREQWIDTH=\"$NSGREQWIDTH\""
+			echo "NSGREQHEIGHT=\"$NSGREQHEIGHT\""
 			} >> "$1"
 			#ENDsaveCfggui
 		fi
@@ -1690,6 +1717,8 @@ function saveCfg {
 			echo "DISABLE_AUTOSTAGES=\"$DISABLE_AUTOSTAGES\""
 			echo "## $DESC_CHEATENGINEVERSION"
 			echo "CHEATENGINEVERSION=\"$CHEATENGINEVERSION\""
+			echo "## $DESC_NOSTEAMSTLDEF"
+			echo "NOSTEAMSTLDEF=\"$NOSTEAMSTLDEF\""
 			} >> "$1"
 			#ENDsaveCfgglobal
 		fi
@@ -2199,6 +2228,9 @@ function setShowPic {
 			if [ ! -f "$STLGHEADD/$AID.jpg" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Using '$SHOWPIC' as fallback picture, because '$STLGHEADD/$AID.jpg' doesn't exist"
 			elif [ ! -s "$STLGHEADD/$AID.jpg" ]; then
+				if [ -z "$SUSDA" ]; then
+					setSteamPaths
+				fi
 				STEAMUSERID="$(find "$SUSDA" -maxdepth 1 -type d -name "[1-9]*")"
 				CUSTPIC="$STEAMUSERID/config/grid/${AID}_hero.png"
 				if [ -f "$CUSTPIC" ]; then
@@ -2777,7 +2809,7 @@ function TrayIconExports {
 	export -f TrayShaderMenu
 	export -f TrayVR
 	export -f TrayPickWin
-
+	export -f function TraySRC
 }
 #ENDIEX
 
@@ -2833,6 +2865,11 @@ function openTrayIcon {
 			"$PROGCMD" "pw" "$AID" "$GN"
 		}	
 
+
+		function TraySRC {
+			writelog "INFO" "${FUNCNAME[0]} - TrayIcon: Executing command '$STEAM ${STEAM}://${RECO}'"
+			"$PROGCMD" "src"
+		}
 		TrayIconExports
 		
 		# actually open the actual trayIcon	
@@ -2841,7 +2878,8 @@ function openTrayIcon {
 		|$TRAY_PAUSE,bash -c PauseGame \
 		|$TRAY_SHADER,bash -c TrayShaderMenu \
 		|$TRAY_VR,bash -c TrayVR \
-		|$TRAY_PICKWINDOW,bash -c TrayPickWin" \
+		|$TRAY_PICKWINDOW,bash -c TrayPickWin \
+		|$TRAY_SRC,bash -c TraySRC" \
 		--text="$TRAY_TOOLTIP" >/dev/null 2>/dev/null &
 		YADTRAYPID="$!"
 	fi
@@ -3021,6 +3059,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_OPENEDITORURL!$DESC_OPENEDITORURL ('OPENEDITORURL')":CHK "${OPENEDITORURL/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_STEAMAPPIDFILE!$DESC_STEAMAPPIDFILE ('STEAMAPPIDFILE')":CHK "${STEAMAPPIDFILE/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_SKIPINTDEPCHECK!$DESC_SKIPINTDEPCHECK ('SKIPINTDEPCHECK')":CHK "${SKIPINTDEPCHECK/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GLOBAL` \
+--field="     $GUI_NOSTEAMSTLDEF!$DESC_NOSTEAMSTLDEF ('NOSTEAMSTLDEF')":CHK "${NOSTEAMSTLDEF/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="$(spanFont "$GUI_OPTSPROTON" "H")":LBL "SKIP" `#CAT_Proton` `#HEAD_Proton` `#MENU_GAME` `#MENU_GLOBAL`  \
 --field="     $GUI_OVERRIDEPROTON!$(strFix "$DESC_OVERRIDEPROTON" "$PROGCMD") ('OVERRIDEPROTON')":CHK "${OVERRIDEPROTON/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_USEPROTON!$DESC_USEPROTON ('USEPROTON')":CB "${USEPROTON/#-/ -}!$PROTYADLIST" `#CAT_Proton` `#MENU_GAME` \
@@ -3552,7 +3591,8 @@ function openExtraSelection {
 	--button="$BUT_BACK":0 \
 	--button="$BUT_GUISET_DCP":1 \
 	--button="$BUT_GUISET_DW":2 \
-	--button="$BUT_GUISET_UPSHADER":3
+	--button="$BUT_GUISET_UPSHADER":3 \
+	--button="$BUT_GUISET_ADDNSGA":4 \
 
 	case $? in
 	0)  {
@@ -3578,6 +3618,11 @@ function openExtraSelection {
 			else
 				GameShaderDialog "last" "${FUNCNAME[0]}"
 			fi
+		}
+	;;
+	4) 	{
+			clickInfo "${FUNCNAME[0]}" "$?" "$BUT_GUISET_ADDNSGA" "$EXTSEL" "Add '$NSGA' GUI"
+			addNonSteamGameGui "${FUNCNAME[0]}"
 		}
 	;;
 	esac 
@@ -3620,7 +3665,6 @@ function openGuiSettings {
 		}
 	;;
 	2) 	{
-
 			clickInfo "${FUNCNAME[0]}" "$?" "$BUT_GUISET_BLOCKCAT" "$GSETMENU" "$BLOCKCATMENU"
 			setGuiBlockSelection "$AID" "${FUNCNAME[0]}"
 		}
@@ -4002,7 +4046,6 @@ function openMenu {
 	ARGHEIGHT="${11}"
 	ARGTITLE="${12}"
 	ARGSPAT="${13}"
-
 	 
 	if [ "$ARGPCMD" == "$NON" ]; then
 		if [ "$PROTONCHECK" == "disabled" ] || [ "$PROTONCHECK" == "ask_before_menu" ] || [ "$PROTONCHECK" == "only_notify" ]; then
@@ -5298,7 +5341,7 @@ function GameShaderDialog {
 		setShowPic
 
 		SHADFILES="$(while read -r f; do if [ ! -f "$SHADDESTDIR/${f##*/}" ]; then 	echo FALSE ; echo "$f"; else echo TRUE ; echo "$f" ;fi ; done <<< "$(printf "%s\n" "${ShaderFiles[@]}")" | \
-		"$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center "$WINDECO" --list --checklist --column=Edit --column=ConfigFile --separator=" " --print-column="2" \
+		"$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center "$WINDECO" --list --checklist --column=Add --column=Shader --separator=" " --print-column="2" \
 		--text="$(spanFont "$(strFix "$GUI_SHADERDIALOG" "$SHADDESTDIR")" "H")" --title="$TITLE" --geometry="$SHADREQWIDTH"x"$SHADREQHEIGHT"+0+0)"
 		case $? in
 			0)  {
@@ -6080,6 +6123,9 @@ function updateConfigEntry {
 # autoapply configuration settings based on the steam categories the game is in:
 function autoCategorySettings {
 	if [ "$CHECKCATEGORIES" -eq 1 ]; then
+		if [ -z "$SUSDA" ]; then
+			setSteamPaths
+		fi
 		if [ -d "$SUSDA" ]; then
 			STEAMUSERID="$(find "$SUSDA" -maxdepth 1 -type d -name "[1-9]*")"
 			SC="$STEAMUSERID/$SRSCV"
@@ -9757,6 +9803,20 @@ function howto {
 	echo "    addcustomproton|acp <path>       Adds local custom Proton to"
 	echo "                                       the internal list from dialog"
 	echo "                                       or directly from <path>"
+	echo "    addnonsteamgame|ansg <args>      Add a $NSGA to Steam"
+	echo "                                       opens gui without args"
+	echo "      <args>:                          for cli min arg is'-ep'"
+	echo "      -an=|--appname=	                 App Name - optional"
+	echo "      -ep=|--exepath=                  Full gamepath required"
+	echo "      -sd=|--startdir=                 Start Dir - optional"
+	echo "      -ip=|--iconpath=                 Icon Path - optional"
+	echo "      -lo=|--launchoptions             Game Launch Options - optional"
+	echo "      -hd=|--hide=                     Hide Game - optional*"
+	echo "      -adc=|--allowdesktopconf=        Allow Desktop Conf - optional"
+	echo "      -ao=|--allowoverlay=             Allow Overlay - optional"
+	echo "      -vr=|--openvr=                   OpenVR - optional*"
+	echo "      -t=|--tags=                      Tags - quoted, comma-separated"
+	echo "      -stllo|--stllaunchoption         Use 'stl %command%' as Launch Option"
 	echo "    autotweaks|at ('dl') <platform>  Import all fixes as $PROGCMD-tweak"
     echo "                                       from <platform>. Valid platforms:"
     echo "                                       $AUTOTWEAKPLATFORMS"
@@ -9798,6 +9858,7 @@ function howto {
 	echo "    set RUN_REPLAY all 1               Set RUN_REPLAY for all games to 1"
 	echo "    settings <value>                 Opens the $SETMENU"
 	echo "                                       (for 'SteamAppID' or 'last')"
+	echo "    src                              Shortcut '$STERECO'"
 	echo "    update <value>                   Updates <value>:"
     echo "           git                         Will update $PROGCMD git repo"
     echo "                                       in 'GLDLSTLDIR'"
@@ -9847,6 +9908,21 @@ function commandline {
 		else
 			howto
 		fi
+	elif  [ "$1" == "addnonsteamgame" ] || [ "$1" == "ansg" ] ; then
+		if [ -z "$2" ];then
+			addNonSteamGameGui "$NON"
+		else
+			if grep -q "ep=\|--exepath=" <<< "$*"; then
+				if grep -q "gui" <<< "$*"; then
+					addNonSteamGameGui "$@"
+				else
+					addNonSteamGame "$@"
+				fi
+			else
+				writelog "INFO" "${FUNCNAME[0]} - Command line parameters insufficent - starting the Gui" E
+				addNonSteamGameGui "$NON"
+			fi
+		fi
 	elif  [ "$1" == "backup" ]; then
 		if [ "$2" == "all" ]; then
 			backupSteamUserGate "$2"
@@ -9893,43 +9969,45 @@ function commandline {
 		if [ -n "$2" ]; then
 				ENTLIST="$(sed -n "/#STARTsaveCfgdefault_template/,/#ENDsaveCfgdefault_template/p;/#ENDsaveCfgdefault_template/q" "$0" | grep "echo" | grep "=" | cut -d '"' -f2 | cut -d '=' -f1 | sed 's/^#//')"
 				if ! grep "$2" <<< "$ENTLIST" >/dev/null; then
-					echo "$2 is no valid entry - valid are:"
-					echo "-----------------------"
-					echo "$ENTLIST"
-					echo "-----------------------"
+					writelog "INFO" "${FUNCNAME[0]} - '$2' is no valid entry - valid are:" E
+					writelog "INFO" "${FUNCNAME[0]} ------------------------" E
+					writelog "INFO" "${FUNCNAME[0]} - $ENTLIST" E
+					writelog "INFO" "${FUNCNAME[0]} ------------------------" E
 					exit
 				fi
 			if [ -n "$3" ]; then
 				if [ -z "$4" ]; then
-					echo "argument 4 is missing - exit"
+					writelog "INFO" "${FUNCNAME[0]} - argument 4 is missing - exit" E
 					exit
 				else
 					if [ "$3" == "all" ]; then
-						echo "arg3 is all - updating all config files in $STLGAMEDIR:"
+						writelog "INFO" "${FUNCNAME[0]} - arg3 is all - updating all config files in '$STLGAMEDIR':" E
 						while read -r file; do
-							echo "updating entry $2 to value $4 in config $file"
+							writelog "INFO" "${FUNCNAME[0]} - updating entry '$2' to value '$4' in config $file" E
 							updateConfigEntry "$2" "$4" "$file"
 						done <<< "$(find "$STLGAMEDIR" -name "*.conf")"
 					else
 						if [ -f "$STLGAMEDIR/$3.conf" ]; then
-							echo "updating entry $2 to value $4 in config $STLGAMEDIR/$3.conf"
+							writelog "INFO" "${FUNCNAME[0]} - updating entry '$2' to value '$4' in config '$STLGAMEDIR/$3.conf'" E
 							updateConfigEntry "$2" "$4" "$STLGAMEDIR/$3.conf"
 							else
-							echo "config file $STLGAMEDIR/$3.conf does not exist - nothing to do - exit"
+							writelog "INFO" "${FUNCNAME[0]} - config file '$STLGAMEDIR/$3.conf' does not exist - nothing to do - exit" E
 							exit
 						fi
 					fi
 				fi
 			else
-				echo "arg3 is missing, you need to provide either the SteamAppId of the game or 'all' to batch update all game configs with the chosen entry!"
-				exit	
+				writelog "INFO" "${FUNCNAME[0]} - arg3 is missing, you need to provide either the SteamAppId of the game or 'all' to batch update all game configs with the chosen entry!" E
+				exit
 			fi
 		else
-			echo "arg2 is missing, you need to provide a valid config entry which should be updated!"
+			writelog "INFO" "${FUNCNAME[0]} - arg2 is missing, you need to provide a valid config entry which should be updated!" E
 			exit
 		fi
 	elif  [ "$1" == "settings" ]; then
 		startSettings "$2"
+	elif  [ "$1" == "src" ]; then
+			"$STEAM" "${STEAM}://${RECO}"
 	elif  [ "$1" == "update" ]; then
 		if [ -n "$2" ]; then
 			if [ "$2" == "$GIT" ]; then
@@ -9978,8 +10056,8 @@ function commandline {
 			elif [ "$2" == "stage" ]; then
 				addVortexStage "$3"
 			else	
-				echo "arg2 $2 is no valid command"
-				howto	
+				writelog "INFO" "${FUNCNAME[0]} - arg2 '$2' is no valid command" E
+				howto
 			fi
 		else
 			echo "need arg2"
@@ -9999,8 +10077,8 @@ function commandline {
 		fi
 	else
 		if ! grep -q "lang=\|run" <<< "$@" ; then
-			echo "-----------------------"
-			echo "arg1 $1 is no valid command"
+			writelog "INFO" "${FUNCNAME[0]} ------------------------" E
+			writelog "INFO" "${FUNCNAME[0]} - arg1 '$1' is no valid command" E
 			howto
 		fi
 	fi
@@ -10400,6 +10478,366 @@ function openMainMenu {
 		launchSel "${SELCO}" "$SELAID" "$SELTI"
 	else
 		writelog "SKIP" "${FUNCNAME[0]} - Could not find a valid Game ID '$SELAID'" "E"
+	fi
+}
+
+function retBool {
+	if [ "$1" == "TRUE" ]; then
+		echo "1"
+	else
+		echo "0"
+	fi	
+}
+
+function SteamCatSelect {
+	writelog "INFO" "${FUNCNAME[0]} - Steam Category Selection"
+
+	TITLE="${PROGNAME}-SteamCategorySelection"
+
+	loadCfg "$STLGUICFG" X
+	updateWinRes "$TITLE" "$STLGUICFG" "SCATSELWIDTH" "SCATSELHEIGHT" &
+	setShowPic
+	unset VALTAGS
+	mapfile -d "\n" -t -O "${#VALTAGS[@]}" VALTAGS <<< "$(getActiveSteamCategories)"
+	SCATSELOUT="$(while read -r f; do if [[ ! "${SCATSEL[*]}" =~ $f ]]; then 	echo FALSE ; echo "$f"; else echo TRUE ; echo "$f" ;fi ; done <<< "$(printf "%s\n" "${VALTAGS[@]}")" | \
+	"$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center $WINDECO --list --checklist --column=Choose --column=SteamCategory --separator="\n" --print-column="2" \
+	--text="$(spanFont "$GUI_STEAMCATSEL" "H")" --title="$TITLE" --button="$BUT_SEL":0 --button="$BUT_CAN":2 --geometry="$SCATSELWIDTH"x"$SCATSELHEIGHT"+0+0)"
+
+	case $? in
+		0)  {
+		writelog "INFO" "${FUNCNAME[0]} - Selected Select" E
+				if [ -n "$SCATSELOUT" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Selected following Categories2: '$(sort -u <<< "$SCATSELOUT" | sed '/^$/d' | tr '\n' ',')'" E
+					unset SCATSEL
+					mapfile -d "\n" -t -O "${#SCATSEL[@]}" SCATSEL <<< "$(sort -u <<< "$SCATSELOUT" | sed '/^$/d')"
+				fi
+			}
+		;;
+		2)  writelog "INFO" "${FUNCNAME[0]} - Selected CANCEL"
+		;;
+	esac
+
+	goBackToPrevFunction "${FUNCNAME[0]}" "$2"
+}
+
+function AutoMarkSCat {
+	writelog "INFO" "${FUNCNAME[0]} - Auto-marking specific Steam Categories" E
+
+	if ! grep -q "$DESC_NOST" <<< "$(printf "%s" "${SCATSEL[@]}" | tr '\n' ',')" && grep -q "$DESC_NOST" <<< "$(getActiveSteamCategories | tr '\n' ',')"; then
+		writelog "INFO" "${FUNCNAME[0]} - Marking '$DESC_NOST' as Category" E
+		mapfile -d "\n" -t -O "${#SCATSEL[@]}" SCATSEL <<< "$DESC_NOST"
+	fi
+	
+	function maybeLater {
+		if [ -f "$AUTOADDSCATLIST" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Marking everything found in '$AUTOADDSCATLIST' as Steam Category" E
+			while read -r line; do
+				mapfile -d "\n" -t -O "${#SCATSEL[@]}" SCATSEL <<< "$line"
+			done < "$AUTOADDSCATLIST"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - No file '$AUTOADDSCATLIST' containing Steam Categories found for adding" E
+		fi
+	}
+}
+
+function addNonSteamGameGui {
+	checkDep "HAVEOSSL" "$OSSL"
+
+	if [ -z "$HAVEOSSL" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - '$OSSL' could not be found, can't generate a random AppID without it" E
+	else
+		writelog "INFO" "${FUNCNAME[0]} - Starting the Gui for adding a $NSGA to Steam" "E"
+
+		# defaults
+		if [ -n "$1" ]; then
+			for i in "$@"
+			do
+			case $i in
+				-ep=*|--exepath=*)
+				NOSTGEXEPATH="${i#*=}";
+				shift
+				;;
+			esac
+			done
+
+			NOSTGAPPNAME="${NOSTGEXEPATH##*/}"
+			NOSTGSTDIR="${NOSTGEXEPATH%/*}"
+		fi
+		
+		if  grep -q "^NOSTEAMSTLDEF=\"1\"" "$STLDEFGLOBALCFG"; then
+			NOSTGICONPATH="$STLICON"
+		else
+			NOSTGICONPATH=""
+		fi
+		NOSTGHIDE=0
+		NOSTGADC=1
+		NOSTGAO=1
+		NOSTGVR=0
+		unset VALTAGS
+		mapfile -d "\n" -t -O "${#VALTAGS[@]}" VALTAGS <<< "$(getActiveSteamCategories | sed '/^$/d')"
+		VALIDTAGS="$(printf "%s" "${VALTAGS[@]}" | tr '\n' ',' | sed 's/,*$//g')"
+
+		AutoMarkSCat
+
+		if [[ -v SCATSEL[@] ]]; then
+			NOSTTAGS="$(printf "%s" "${SCATSEL[@]}" | tr '\n' ',' | sed 's/,*$//g')"
+		fi 
+
+		TITLE="${PROGNAME}-$NSGA"
+
+		loadCfg "$STLGUICFG" X
+		updateWinRes "$TITLE" "$STLGUICFG" "NSGREQWIDTH" "NSGREQHEIGHT" &
+
+		NSGSET="$("$YAD" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
+		--title="$TITLE" --separator="|" \
+		--geometry="$NSGREQWIDTH"x"$NSGREQHEIGHT"+0+0 \
+		--text="$(spanFont "$GUI_ADDNSG" "H")\n<span font=\"italic\">$(strFix "$GUI_WARNNSG1" "$STERECO")\n$(strFix "$GUI_WARNNSG2" "$STERECO"))</span>" \
+		--field=" ":LBL " " \
+		--field="     $GUI_NOSTGAPPNAME!$DESC_NOSTGAPPNAME ('NOSTGAPPNAME')" "${NOSTGAPPNAME/#-/ -}" \
+		--field="     $GUI_NOSTGEXEPATH!$DESC_NOSTGEXEPATH ('NOSTGEXEPATH')":FL "${NOSTGEXEPATH/#-/ -}" \
+		--field="     $GUI_NOSTGSTDIR!$DESC_NOSTGSTDIR ('NOSTGSTDIR')":DIR "${NOSTGSTDIR/#-/ -}" \
+		--field="     $GUI_NOSTGICONPATH!$DESC_NOSTGICONPATH ('NOSTGICONPATH')":FL "${NOSTGICONPATH/#-/ -}" \
+		--field="     $GUI_NOSTGLAOP!$DESC_NOSTGLAOP ('NOSTGLAOP')" "${NOSTGLAOP/#-/ -}" \
+		--field="     $GUI_NOSTGHIDE!$DESC_NOSTGHIDE ('NOSTGHIDE')":CHK "${NOSTGHIDE/#-/ -}" \
+		--field="     $GUI_NOSTGADC!$DESC_NOSTGADC ('NOSTGADC')":CHK "${NOSTGADC/#-/ -}" \
+		--field="     $GUI_NOSTGAO!$DESC_NOSTGAO ('NOSTGAO')":CHK "${NOSTGAO/#-/ -}" \
+		--field="     $GUI_NOSTGVR!$DESC_NOSTGVR ('NOSTGVR')":CHK "${NOSTGVR/#-/ -}" \
+		--field="     $GUI_NOSTTAGS!$DESC_NOSTTAGS ('NOSTTAGS')":CBE "${NOSTTAGS/#-/ -}!$VALIDTAGS" \
+		--button="$BUT_CAN":0 --button="$BUT_TAGS":2 --button="$BUT_CREATE":4 )"
+		case $? in
+			0)  writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_CAN'" E
+			;;
+			2)  writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_TAGS" E
+				SteamCatSelect "$NON" "${FUNCNAME[0]}"
+			;;
+			4)  writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_CREATE'" E
+				if [ -n "$NSGSET" ]; then
+					mapfile -d "|" -t -O "${#NSGSETARR[@]}" NSGSETARR < <(printf '%s' "$NSGSET")
+					NOSTGAPPNAME="${NSGSETARR[1]}"
+					NOSTGEXEPATH="${NSGSETARR[2]}"
+					NOSTGSTDIR="${NSGSETARR[3]}"
+					NOSTGICONPATH="${NSGSETARR[4]}"
+					NOSTGLAOP="${NSGSETARR[5]}"
+					NOSTGHIDE="$(retBool "${NSGSETARR[6]}")"
+					NOSTGADC="$(retBool "${NSGSETARR[7]}")"
+					NOSTGAO="$(retBool "${NSGSETARR[8]}")"
+					NOSTGVR="$(retBool "${NSGSETARR[9]}")"
+					NOSTTAGS="${NSGSETARR[10]}"
+					writelog "INFO" "${FUNCNAME[0]} - Launching command: addNonSteamGame -an=\"$NOSTGAPPNAME\" -ep=\"$NOSTGEXEPATH\" -sd=\"$NOSTGSTDIR\" -ip=\"$NOSTGICONPATH\" -lo=\"$NOSTGLAOP\" -hd=\"$NOSTGHIDE\" -adc=\"$NOSTGADC\" -ao=\"$NOSTGAO\" -vr=\"$NOSTGVR\" -t=\"$NOSTTAGS\"" E
+					addNonSteamGame	-an="$NOSTGAPPNAME" -ep="$NOSTGEXEPATH" -sd="$NOSTGSTDIR" -ip="$NOSTGICONPATH" -lo="$NOSTGLAOP" -hd="$NOSTGHIDE" -adc="$NOSTGADC" -ao="$NOSTGAO" -vr="$NOSTGVR" -t="$NOSTTAGS"
+				fi
+			;;
+		esac
+	fi
+
+	if grep -q "openExtraSelection" <<< "$@"; then
+		goBackToPrevFunction "${FUNCNAME[0]}" "openExtraSelection"
+	fi
+}
+
+function addNonSteamGame {
+	checkDep "HAVEOSSL" "$OSSL"
+
+	if [ -z "$HAVEOSSL" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - '$OSSL' could not be found, can't generate a random AppID without it" E
+	else
+		if [ -z "$SUSDA" ]; then
+			setSteamPaths
+		fi
+		STEAMUSERID="$(find "$SUSDA" -maxdepth 1 -type d -name "[1-9]*")"
+		SCPATH="$STEAMUSERID/config/$SCVDF"
+
+		function getCRC {
+			echo -n "$1" | gzip -c | tail -c 8 | od -An -N 4 -tx4
+		}
+
+		function dec2hex {
+			 printf '%x\n' "$1"
+		}
+
+		function hex2dec {
+			printf "%d\n" "0x${1#0x}"
+		}
+
+		function splitTags {
+			mapfile -d "," -t -O "${#TAGARR[@]}" TAGARR < <(printf '%s' "$1")
+			for i in "${!TAGARR[@]}"; do
+				if grep -q "${TAGARR[$i]}" <<< "$(getActiveSteamCategories)"; then
+					printf '\x01%s\x00%s\x00' "$i" "${TAGARR[i]}"
+				fi
+			done
+		}
+
+		NOSTHIDE=0
+		NOSTADC=1
+		NOSTAO=1
+		NOSTVR=0
+		NOSTSTLLO=0
+
+		for i in "$@"; do
+			case $i in
+				-an=*|--appname=*)
+				NOSTAPPNAME="${i#*=}"
+				shift
+				;;
+				-ep=*|--exepath=*)
+				QEP="${i#*=}"; NOSTEXEPATH="\"$QEP\""
+				shift
+				;;
+				-sd=*|--startdir=*)
+				QSD="${i#*=}"; NOSTSTDIR="\"$QSD\""
+				shift
+				;;
+				-ip=*|--iconpath=*)
+				NOSTICONPATH="${i#*=}"
+				shift
+				;;
+				-lo=*|--launchoptions=*)
+				NOSTLAOP="${i#*=}"
+				shift
+				;;
+				-hd=*|--hide=*)
+				NOSTHIDE="${i#*=}"
+				shift
+				;;
+				-adc=*|--allowdesktopconf=*)
+				NOSTADC="${i#*=}"
+				shift
+				;;
+				-ao=*|--allowoverlay=*)
+				NOSTAO="${i#*=}"
+				shift
+				;;
+				-vr=*|--openvr=*)
+				NOSTVR="${i#*=}"
+				shift
+				;;
+				-t=*|--tags=*)
+				NOSTTAGS="${i#*=}"
+				shift
+				;;
+				-stllo=*|--stllaunchoption=*)
+				NOSTSTLLO="${i#*=}"
+				shift
+				;;
+				*)
+				;;
+			esac
+		done
+
+		if [ -n "${NOSTEXEPATH}" ]; then
+		
+			if [ -z "${NOSTAPPNAME}" ]; then
+				NOSTAPPNAME="${QEP##*/}"
+			fi
+
+			if [ -z "${NOSTSTDIR}" ]; then
+				QSD="$(dirname "$QEP")"; NOSTSTDIR="\"$QSD\""
+			fi
+
+			if [ "$NOSTSTLLO" -eq 1 ]; then
+				NOSTGICONPATH="$STLICON"
+			fi
+
+			# looks like the appid used here is randomly generated or at least not created from CRC
+			# (like the shortcutnames found in screenshots.vdf - see commented out lines)
+			# NOSTCRC="$(getCRC "${NOSTEXEPATH}${NOSTAPPNAME}")"
+			# NOSTSCNHEX="${NOSTCRC}02000000"
+			# echo "NOSTSCNHEX = ${NOSTSCNHEX}"
+
+			NOSTAIDRHX="$("$OSSL" rand -hex 4)"
+			NOSTAID="$(hex2dec "$NOSTAIDRHX")"
+			NOSTAIDHX="\x$(awk '{$1=$1}1' FPAT='.{2}' OFS="\\\x" <<< "$NOSTAIDRHX")"
+
+			writelog "INFO" "${FUNCNAME[0]} - === Adding new $NSGA ===" E
+			writelog "INFO" "${FUNCNAME[0]} - AppID: '${NOSTAID}'" E
+			writelog "INFO" "${FUNCNAME[0]} - App Name: '${NOSTAPPNAME}'" E
+			writelog "INFO" "${FUNCNAME[0]} - Exe Path: '${NOSTEXEPATH}'" E
+			writelog "INFO" "${FUNCNAME[0]} - Start Dir: '${NOSTSTDIR}'" E
+			writelog "INFO" "${FUNCNAME[0]} - Icon Path: '${NOSTICONPATH}'" E
+			writelog "INFO" "${FUNCNAME[0]} - Launch options: '${NOSTLAOP}'" E
+			writelog "INFO" "${FUNCNAME[0]} - Is Hidden: '${NOSTHIDE}'" E
+			writelog "INFO" "${FUNCNAME[0]} - Allow Desktop Config: '${NOSTADC}'" E
+			writelog "INFO" "${FUNCNAME[0]} - Allow Overlay: '${NOSTAO}'" E
+			writelog "INFO" "${FUNCNAME[0]} - OpenVR: '${NOSTVR}'" E
+			writelog "INFO" "${FUNCNAME[0]} - Tags: '${NOSTTAGS}'" E
+
+			if [ -f "$SCPATH" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - The file '$SCPATH' already exists, creating a backup, then removing the 2 closing backslashes at the end"
+				cp "$SCPATH" "${SCPATH//.vdf}_${PROGNAME}_backup.vdf" 2>/dev/null
+				truncate -s-2 "$SCPATH"
+				OLDSET="$(grep -aPo '\x00[0-9]\x00\x02appid' "$SCPATH" | tail -n1 | tr -dc '0-9')"
+				NEWSET=$((OLDSET + 1))
+				writelog "INFO" "${FUNCNAME[0]} - Last set in file has ID '$OLDSET', so continuing with '$OLDSET'"
+			else
+				writelog "INFO" "${FUNCNAME[0]} - Creating new $SCPATH"
+				printf '\x00%s\x00' "shortcuts" > "$SCPATH"
+				NEWSET=0
+			fi
+
+			writelog "INFO" "${FUNCNAME[0]} - Adding new set '$NEWSET'"
+
+			{
+			printf '\x00%s\x00' "$NEWSET"
+			printf '\x02%s\x00%b' "appid" "$NOSTAIDHX"
+			printf '\x01%s\x00%s\x00' "appname" "$NOSTAPPNAME"
+			printf '\x01%s\x00%s\x00' "Exe" "$NOSTEXEPATH"
+			printf '\x01%s\x00%s\x00' "StartDir" "$NOSTSTDIR"
+
+			if [ -n "$NOSTICONPATH" ]; then
+				printf '\x01%s\x00%s\x00' "icon" "$NOSTICONPATH"
+			else
+				printf '\x01%s\x00\x00' "icon"
+			fi
+
+			printf '\x01%s\x00\x00' "ShortcutPath"
+
+			if [ -n "$NOSTLAOP" ]; then
+				printf '\x01%s\x00%s\x00' "LaunchOptions" "$NOSTLAOP"
+			else
+				printf '\x01%s\x00\x00' "LaunchOptions"
+			fi
+			
+			if [ "$NOSTHIDE" -eq 1 ];then
+				printf '\x02%s\x00\x01\x00\x00\x00' "IsHidden"
+			else
+				printf '\x02%s\x00\x00\x00\x00\x00' "IsHidden"
+			fi
+
+			if [ "$NOSTADC" -eq 1 ];then
+				printf '\x02%s\x00\x01\x00\x00\x00' "AllowDesktopConfig"
+			else
+				printf '\x02%s\x00\x00\x00\x00\x00' "AllowDesktopConfig"
+			fi
+
+			if [ "$NOSTAO" -eq 1 ];then
+				printf '\x02%s\x00\x01\x00\x00\x00' "AllowOverlay"
+			else
+				printf '\x02%s\x00\x00\x00\x00\x00' "AllowOverlay"
+			fi
+
+			if [ "$NOSTVR" -eq 1 ];then
+				printf '\x02%s\x00\x01\x00\x00\x00' "openvr"
+			else
+				printf '\x02%s\x00\x00\x00\x00\x00' "openvr"
+			fi
+
+			printf '\x02%s\x00\x00\x00\x00\x00' "Devkit"
+			printf '\x01%s\x00\x00' "DevkitGameID"
+
+			printf '\x02%s\x00\x00\x00\x00\x00' "LastPlayTime"
+			printf '\x00%s\x00' "tags"
+			splitTags "$NOSTTAGS"
+			printf '\x08'
+			printf '\x08'
+
+			#file end:
+			printf '\x08'
+			printf '\x08'
+			} >> "$SCPATH"
+			
+			writelog "INFO" "${FUNCNAME[0]} - Finished adding new $NSGA"
+		fi
 	fi
 }
 

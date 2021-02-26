@@ -142,6 +142,7 @@ or just to browse through the latest version**
 * **[Backup Support](#Backup-Support)** optionally automatic backup of 'steamuser' files of the 'steamuser' files per Proton game
 * **[Metadata Support](#Metadata-Support)** Collect as much as possible gamedata to make further automations easier and faster
 * **[X64dbg](#X64dbg-Support)** optionally start the selected game automatically with the *(auto-installed)* debugger x64dbg
+* **[Add Non-Steam Game](#Add-Non-Steam-Game)** Add Non-Steam games either via command line or via Gui
 
 ## Requirements
 *(no special order)*
@@ -340,6 +341,7 @@ Middle Click Closes The Menu.
 - "Shader Menu" *(opens [Shader Management](#Shader-Management) for the currently running Game - Shaders can be added/removed on the fly here)*
 - "Open running game in VR" *(opens the running game in [SBS-VR](#Side-by-Side-VR). If the current game window is unknown it can be picked)*
 - "Pick Window Name" *(the name of the picked window will be stored as `GAMEWINDOW` in the [Metadata](#Metadata-Support))*
+- "Steam Reset Collections" *(just a shortcut for the steam command `steam://resetcollections` - mostly for [Adding a Non-Steam Game](#Add-Non-Steam-Game))*
 
 #
 ### Configuration Locations
@@ -1357,6 +1359,38 @@ If the `steam_appid.txt` file is shipped with the game though, the file remains 
 and the option `STEAMAPPIDFILE` will be set automatically set to 1.
 A `steam_appid.txt` can have several advantages. One is, that a game can be played **DRM free** *(see [pcgamingwiki](https://www.pcgamingwiki.com/wiki/List_of_games_that_support_Steam_Cloud_save_game_cloud_syncing))*
 
+#### Add Non-Steam Game
+Adding a Non-Steam Game to Steam using **stl** is very easy.
+This can be done either completely via [Command Line](#Command-Line) or via Gui.
+
+The Gui can either be started via commandline using the `addnonsteamgame` *(ansg)* parameter without any further arguments
+or with the additional `-ep=|--exepath=` parameter **plus** a `gui` parameter
+or from the main [Settings Menu](#Settings-Menu) under [Extra Buttons Menu](#Extra-Buttons).
+
+For [Command Line](#Command-Line) only mode the following options followed by the `addnonsteamgame` *(ansg)* parameter are accepted:
+-	`-an=|--appname=`				(App Name - *optional*)
+-	`-ep=|--exepath=`				(Full gamepath **required!**)
+-	`-sd=|--startdir=`				(Start Dir - *optional*)
+-	`-ip=|--iconpath=`				(Icon Path - *optional*)
+-	`-lo=|--launchoptions`			(Game Launch Options - *optional*)
+-	`-hd=|--hide=`					(Hide Game - *optional*, default disabled)
+-	`-adc=|--allowdesktopconf=`		(Allow Desktop Conf - *optional*,?, default disabled)
+-	`-ao=|--allowoverlay=`			(Allow Overlay - *optional*, default disabled)
+-	`-vr=|--openvr=`				(OpenVR - *optional*, default disabled)
+-	`-t=|--tags=`					(Tags - comma-separated, default empty)
+
+
+A working example for a bare minimum command line is:
+`stl ansg -ep=/media/B4-1/GOG/Pirates\!/start.sh`
+*(the game will be added with Title start.sh to the Games Library as no `-an` was provided, as `-sd` the game directory will be used automatically)*
+
+***NOTICE: Steam needs to be restarted to make a newly added Game available.
+When Tags are selected for the new game the command `steam steam://resetcollections`
+must be run and confirmed afterwards in the Steam Client to active them.
+(or alternatively with 'stl src' or directly within the stl [Tray Icon](#Tray-Icon) menu**
+
+If the [Steam Category](#Steam-Categories) 'Non-Steam' exists *(at least one regular game needs to have this category else it can't be found currently)*,
+the checkbox for the corresponding tag is auto-enabled.
 
 ## Game Launch Speed
 **stl** has pretty much to check, but when everything is configured, several option-checks can be disabled (per game)
