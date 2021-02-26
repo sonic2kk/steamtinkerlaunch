@@ -185,6 +185,7 @@ Programs needed for optional external features *(no special order)*:
 - jq *(used to extract game names from the steam api and for receiving the Lutris wine list)*
 - convert from imagemagick *(currently only used to scale a custom installed game header picture)*
 - rsync *(for backup support)*
+- openssl *(currently only used to generate a random hex string for [Non-Steam Game](#Add-Non-Steam-Game) `appid`)*
 
 ## Configuration
 All configuration files are self-contained documented and always growing, so not every option is documented in here.
