@@ -450,7 +450,7 @@ The same function also checks if a script with the same name  *(".sh" suffix exp
 When found it is executed before the game with the following 3 commandline parameters
  1) SteamAppID
  2) Game directory
- 3) Game wineprefix
+ 3) Game `WINEPREFIX`
 
 *(of course the script should not block the actual game start, and it is up to the user what is actually executed in the script)*
 
@@ -831,7 +831,7 @@ Of course the user is responsbile for what is executed here and needs take care 
 Both scripts make use of following commandline arguments:
 - SteamAppID as argument1
 - the absolute path to the game exe as argument2
-- and the WINEPREFIX of the game as argument 3
+- and the `WINEPREFIX` of the game as argument 3
 
 #### Winetricks
 [Winetricks](https://wiki.winehq.org/Winetricks)
@@ -937,9 +937,9 @@ Vortex can be used without any **stl** configuration and will work ootb without 
 There are 3 different ways to start Vortex:
 
 ###### Start Vortex using Steam Category
-Just create a "Vortex" [Steam Category](#Steam-Categories) and add your (Vortex compatible) game to it and start the game regularly.
-Vortex will start, with the selected game preconfigured and ready to mod
-and when you exit Vortex the selected game will start normally (with your mods).
+Just create a "Vortex" [Steam Category](#Steam-Categories) and add your *(Vortex compatible)* game to it and start the game regularly.
+Vortex will start, with the selected game preconfigured and ready to mod.
+When you exit Vortex the selected game will start normally *(with your mods)*.
 
 ###### Start Vortex using commandline:
 see [Command Line](#Command-Line)
@@ -951,12 +951,22 @@ The `VORTEXMODE` option in the [Game Config](#Menu-Config) *(f.e. via [Game Menu
 - "quickstart": Vortex will be started but some checks are skipped
 - "editormode": Vortex will be started in quickstart mode, but the selected game won't start after Vortex is closed
 
+##### Vortex Gui
+A Vortex Gui, where one can en-/disable Vortex for all supported and installed Games can be opened
+using `the stl vortex games` [Command Line](#Command-Line).
+It is not possible from here to disable Vortex for Games which have it enabled via [Steam Category](#Steam-Categories).
+In that case simply remove it regularly from the Steam Category using the Steam Client.
+
 ##### stl Vortex gif
 ![stl Vortex in action](https://github.com/frostworx/repo-assets/blob/master/gifs/stl-vortex.gif)
 
 **Installation**
-If Vortex is not yet installed, it will be installed on the first launch, so the first launch will need some time
-*(mostly depends on dotnets mind of its own... maybe 5 minutes - see [Additional Vortex Notes](#Additional-Vortex-Notes))*.
+**An initial Vortex installation from scratch can take a very long time, depending on the current wine/dotnet situation -
+see [Additional Vortex Notes](#Additional-Vortex-Notes) and/or [Winetricks](#Winetricks)
+It is also not unlikely, that it will fail to properly exit the dotnet installation, although it is functional.
+In that case it might help to simply start the vortex install process (or the first game launch with vortex) again, to get a functional Vortex installation.**
+
+If Vortex is not yet installed yet, it will be installed on the first launch of a game configured to use it.
 
 Alternatively you can also install it via [Command Line](#Command-Line) *(see below)*.
 If using proton-wine for `VORTEXWINE` (which is default if it is not configured) the `WINEPREFIX` user is "steamuser" *(as always with proton wine)*.
@@ -965,6 +975,9 @@ When you switch to a wine version which doesn't patch the username to "steamuser
 
 **Currently it [is recommended](#Additional-Vortex-Notes) to use an older wine/proton version with Vortex.**
 **When the default wine for Vortex is unconfigured stl tries to autodetect an old Proton4 wine and use that (when found)**
+
+The Vortex Version to be installed is the latest stable by default, but alternatively the `USEVORTEXPRERELEASE` flag
+can be set in the [Global Config](#Global-Config) to use the latest pre-release instead.
 
 **Functionality**:
 Some settings are preconfigured, to make this working without any user configuration, but of course all of the settings can be as well configured if you want.

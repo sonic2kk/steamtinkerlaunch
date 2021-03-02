@@ -5,7 +5,7 @@
 
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v4.0-next7"
+PROGVERS="v4.0-next8"
 PROGCMD="${0##*/}"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -102,6 +102,9 @@ FAVOMENU="Favorite Menu"
 BLOCKCATMENU="Block Category Menu"
 CATSORTREQ="Category Sort Requester"
 GUIOPTIONS="Gui Options"
+LOSE="Local Settings"
+APDA="Application Data"
+LSAD="$LOSE/$APDA"
 
 ### default vars ###
 
@@ -136,7 +139,8 @@ GEMETA="$METADIR/id/general"
 CUMETA="$METADIR/id/custom"
 TIGEMETA="$METADIR/title/general"
 TICUMETA="$METADIR/title/custom"
-DRCU="drive_c/users"
+DRC="drive_c"
+DRCU="$DRC/users"
 STUS="steamuser"
 SUBADIR="$STLBACKDIR/$STUS"
 SUBADIRID="$SUBADIR/id"
@@ -278,6 +282,8 @@ FONTSIZES="!xx-small!x-small!small!smaller!medium!large!larger!!x-large!xx-large
 HAVEINNO="1"
 SREG="system.reg"
 NSGA="non-steam game"
+BTVP="drive_c/Program Files/Black Tree Gaming Ltd/Vortex"
+RABP="resources/app.asar.unpacked/bundledPlugins"
 
 # make SC happy:
 GUI_GAMCON=""
@@ -332,9 +338,9 @@ function getGameName {
 	if [ -n "$GN" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Using 'GN' as Game Name: '$GN'"
 		GNRAW="$GN"
-	elif [ -f "$STLGAMEDIR/$1.conf" ]; then
-		GNRAW="$(grep "#GAMENAME" "$STLGAMEDIR/$1.conf" | cut -d '=' -f2)"
-		writelog "INFO" "${FUNCNAME[0]} - Found Game Name '$GNRAW' in '$STLGAMEDIR/$1.conf'"
+	elif [ -f "$STLGAMEDIRID/$1.conf" ]; then
+		GNRAW="$(grep "#GAMENAME" "$STLGAMEDIRID/$1.conf" | cut -d '=' -f2)"
+		writelog "INFO" "${FUNCNAME[0]} - Found Game Name '$GNRAW' in '$STLGAMEDIRID/$1.conf'"
 	elif grep -q "_${1}\." <<< "$(listAppManifests)" ; then
 		APPMA="$(grep "_${1}\." <<< "$(listAppManifests)")"
 		if [ -n "$APPMA" ]; then
@@ -1059,7 +1065,9 @@ function calculateDefaultResolutions {
 	ASKVTXREQSCALE=15
 	MMSCALE=20
 	NSGREQSCALE=20
-	
+	VOIGSCALE=20
+	VOSYSCALE=20
+
 	# Calculated initial gui sizes:
 	DEFSETWIDTH=$(( SCREENWIDTH * SETSCALE / 100 ));
 	DEFSETHEIGHT=$(( SCREENHEIGHT * SETSCALE / 100 ));
@@ -1139,6 +1147,11 @@ function calculateDefaultResolutions {
 	DEFNSGREQWIDTH=$(( SCREENWIDTH * NSGREQSCALE / 100 ));
 	DEFNSGREQHEIGHT=$(( SCREENHEIGHT * NSGREQSCALE / 100 ));
 	
+	DEFVOIGWIDTH=$(( SCREENWIDTH * VOIGSCALE / 100 ));
+	DEFVOIGHEIGHT=$(( SCREENHEIGHT * VOIGSCALE / 100 ));
+
+	DEFVOSYWIDTH=$(( SCREENWIDTH * VOSYSCALE / 100 ));
+	DEFVOSYHEIGHT=$(( SCREENHEIGHT * VOSYSCALE / 100 ));
 }
 
 function setDefaultCfgValues {
@@ -1153,7 +1166,7 @@ function setDefaultCfgValues {
 		if [ -z "$DL_D3D47_32" ]		; then	DL_D3D47_32="http://dege.freeweb.hu/dgVoodoo2/D3DCompiler_47.zip"; fi
 		if [ -z "$RESHADEDLURL" ]		; then	RESHADEDLURL="https://reshade.me/downloads"; fi
 		if [ -z "$EDITORURL" ]			; then	EDITORURL="https://www.pcgamingwiki.com/api/appid.php?appid=AID"; fi
-		if [ -z "$VORTEXURL" ]			; then	VORTEXURL="https://github.com/Nexus-Mods/Vortex/releases/download/v"; fi
+		if [ -z "$VORTEXRELURL" ]		; then	VORTEXRELURL="https://github.com/Nexus-Mods/Vortex/releases"; fi
 		if [ -z "$DXVKURL" ]			; then	DXVKURL="https://github.com/doitsujin/dxvk"; fi
 		if [ -z "$XLIVEURL" ]			; then	XLIVEURL="https://github.com/ThirteenAG/Ultimate-ASI-Loader/releases/download/v4.52/Ultimate-ASI-Loader.zip"; fi
 		if [ -z "$PFDURL" ]				; then	PFDURL="https://github.com/simons-public/$PF.git"; fi
@@ -1231,6 +1244,10 @@ function setDefaultCfgValues {
 		if [ -z "$MMHEIGHT" ]			; then	MMHEIGHT="$DEFMMHEIGHT"; fi
 		if [ -z "$NSGREQWIDTH" ]		; then	NSGREQWIDTH="$DEFNSGREQWIDTH"; fi
 		if [ -z "$NSGREQHEIGHT" ]		; then	NSGREQHEIGHT="$DEFNSGREQHEIGHT"; fi
+		if [ -z "$VOIGWIDTH" ]			; then	VOIGWIDTH="$DEFVOIGWIDTH"; fi
+		if [ -z "$VOIGHEIGHT" ]			; then	VOIGHEIGHT="$DEFVOIGHEIGHT"; fi
+		if [ -z "$VOSYWIDTH" ]			; then	VOSYWIDTH="$DEFVOSYWIDTH"; fi
+		if [ -z "$VOSYHEIGHT" ]			; then	VOSYHEIGHT="$DEFVOSYHEIGHT"; fi
 	}
 
 	function setDefaultCfgValuesglobal {
@@ -1300,10 +1317,11 @@ function setDefaultCfgValues {
 		if [ -z "$VORTEX_DXVK_LOG_PATH" ]	; then	VORTEX_DXVK_LOG_PATH="$NON"; fi
 		if [ -z "$VORTEXDOWNLOADPATH" ]	; then	VORTEXDOWNLOADPATH="$STLVORTEXDIR/downloads"; fi
 		if [ -z "$VORTEXINSTALL" ]		; then	VORTEXINSTALL="1"; fi
-		if [ -z "$VORTEXVERSION" ]		; then	VORTEXVERSION="1.3.22"; fi
+		if [ -z "$USEVORTEXPRERELEASE" ]	; then	USEVORTEXPRERELEASE="0"; fi
 		if [ -z "$DISABLE_AUTOSTAGES" ]	; then	DISABLE_AUTOSTAGES="0"; fi
 		if [ -z "$CHEATENGINEVERSION" ]	; then	CHEATENGINEVERSION="7.2"; fi
 		if [ -z "$NOSTEAMSTLDEF" ]		; then	NOSTEAMSTLDEF="0"; fi
+		if [ -z "$USEWGETGUI" ]			; then	USEWGETGUI="0"; fi
 	}
 
 	function setDefaultCfgValuesdefault_template {
@@ -1442,7 +1460,7 @@ function saveCfg {
 			echo "## Editor URL"
 			echo "EDITORURL=\"$EDITORURL\""
 			echo "## Vortex DL URL"
-			echo "VORTEXURL=\"$VORTEXURL\""
+			echo "VORTEXRELURL=\"$VORTEXRELURL\""
 			echo "## Xlive DL URL"
 			echo "XLIVEURL=\"$XLIVEURL\""
 			echo "## Steam Asset URL"
@@ -1563,6 +1581,12 @@ function saveCfg {
 			echo "## '$NSGA' Gui:"
 			echo "NSGREQWIDTH=\"$NSGREQWIDTH\""
 			echo "NSGREQHEIGHT=\"$NSGREQHEIGHT\""
+			echo "## Vortex Games Gui:"
+			echo "VOIGWIDTH=\"$VOIGWIDTH\""
+			echo "VOIGHEIGHT=\"$VOIGHEIGHT\""
+			echo "## Vortex Symlink Gui:"
+			echo "VOSYWIDTH=\"$VOSYWIDTH\""
+			echo "VOSYHEIGHT=\"$VOSYHEIGHT\""
 			} >> "$1"
 			#ENDsaveCfggui
 		fi
@@ -1711,14 +1735,16 @@ function saveCfg {
 			echo "VORTEXDOWNLOADPATH=\"$VORTEXDOWNLOADPATH\""
 			echo "## $DESC_VORTEXINSTALL"
 			echo "VORTEXINSTALL=\"$VORTEXINSTALL\""
-			echo "## $DESC_VORTEXVERSION"
-			echo "VORTEXVERSION=\"$VORTEXVERSION\""
+			echo "## $DESC_USEVORTEXPRERELEASE"
+			echo "USEVORTEXPRERELEASE=\"$USEVORTEXPRERELEASE\""
 			echo "## $(strFix "$DESC_DISABLE_AUTOSTAGES" "$PROGNAME")"
 			echo "DISABLE_AUTOSTAGES=\"$DISABLE_AUTOSTAGES\""
 			echo "## $DESC_CHEATENGINEVERSION"
 			echo "CHEATENGINEVERSION=\"$CHEATENGINEVERSION\""
 			echo "## $DESC_NOSTEAMSTLDEF"
 			echo "NOSTEAMSTLDEF=\"$NOSTEAMSTLDEF\""
+			echo "## $DESC_USEWGETGUI"
+			echo "USEWGETGUI=\"$USEWGETGUI\""
 			} >> "$1"
 			#ENDsaveCfgglobal
 		fi
@@ -2043,21 +2069,28 @@ function wgetGui {
 	SRCURL="$1"
 	DESTDIR="$2"
 	
-	TITLE="Download"
-	DLFILE="${1##*/}"
-	DLTEXT="$(strFix "$GUI_DLTO" "$DLFILE" "${DESTDIR//$DLFILE}")"
-	
-	writelog "INFO" "${FUNCNAME[0]} - $DLTEXT"
+	if [ "$USEWGETGUI" -eq 1 ];then
+		writelog "INFO" "${FUNCNAME[0]} - Downloading '$SRCURL' via Gui, as 'USEWGETGUI' is enabled"
 
-	"$WGET" -q --show-progress "$SRCURL" -O "$DESTDIR" 2>&1 | sed -u -e "s:\.::g;s:%.*$::g;s:.*K::g;s:^[[:space:]]*::g" | \
-	"$YAD" --window-icon="$STLICON" --center --on-top "$WINDECO" ---title="$TITLE" --progress --auto-close --text="$(spanFont "$DLTEXT" "H")"
-	case $? in
-		0)  {
-				writelog "INFO" "${FUNCNAME[0]} - Clicked Close or Download failed - deleting the unfinished download"
-				rm "${DESTDIR//$DLFILE}/$DLFILE" 2>/dev/null
-			}
-		;;
-	esac
+		TITLE="Download"
+		DLFILE="${1##*/}"
+		DLTEXT="$(strFix "$GUI_DLTO" "$DLFILE" "${DESTDIR//$DLFILE}")"
+		
+		writelog "INFO" "${FUNCNAME[0]} - $DLTEXT"
+
+		"$WGET" -q --show-progress "$SRCURL" -O "$DESTDIR" 2>&1 | sed -u -e "s:\.::g;s:%.*$::g;s:.*K::g;s:^[[:space:]]*::g" | \
+		"$YAD" --window-icon="$STLICON" --center --on-top "$WINDECO" ---title="$TITLE" --progress --auto-close --text="$(spanFont "$DLTEXT" "H")"
+		case $? in
+			0)  {
+					writelog "INFO" "${FUNCNAME[0]} - Clicked Close or Download failed - deleting the unfinished download"
+					rm "${DESTDIR//$DLFILE}/$DLFILE" 2>/dev/null
+				}
+			;;
+		esac
+	else
+		writelog "INFO" "${FUNCNAME[0]} - Downloading '$SRCURL' via command line, as 'USEWGETGUI' is disabled"
+		"$WGET" -q "$SRCURL" -O "$DESTDIR"
+	fi
 }
 
 function dlCustomProton {
@@ -2809,7 +2842,7 @@ function TrayIconExports {
 	export -f TrayShaderMenu
 	export -f TrayVR
 	export -f TrayPickWin
-	export -f function TraySRC
+	export -f TraySRC
 }
 #ENDIEX
 
@@ -3060,6 +3093,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_STEAMAPPIDFILE!$DESC_STEAMAPPIDFILE ('STEAMAPPIDFILE')":CHK "${STEAMAPPIDFILE/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_SKIPINTDEPCHECK!$DESC_SKIPINTDEPCHECK ('SKIPINTDEPCHECK')":CHK "${SKIPINTDEPCHECK/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_NOSTEAMSTLDEF!$DESC_NOSTEAMSTLDEF ('NOSTEAMSTLDEF')":CHK "${NOSTEAMSTLDEF/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GLOBAL` \
+--field="     $GUI_USEWGETGUI!$DESC_USEWGETGUI ('USEWGETGUI')":CHK "${USEWGETGUI/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="$(spanFont "$GUI_OPTSPROTON" "H")":LBL "SKIP" `#CAT_Proton` `#HEAD_Proton` `#MENU_GAME` `#MENU_GLOBAL`  \
 --field="     $GUI_OVERRIDEPROTON!$(strFix "$DESC_OVERRIDEPROTON" "$PROGCMD") ('OVERRIDEPROTON')":CHK "${OVERRIDEPROTON/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_USEPROTON!$DESC_USEPROTON ('USEPROTON')":CB "${USEPROTON/#-/ -}!$PROTYADLIST" `#CAT_Proton` `#MENU_GAME` \
@@ -3166,7 +3200,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_DL_D3D47_32!$DESC_DL_D3D47_32 ('DL_D3D47_32')" "${DL_D3D47_32/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="     $GUI_RESHADEDLURL!$DESC_RESHADEDLURL ('RESHADEDLURL')" "${RESHADEDLURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="     $GUI_EDITORURL!$DESC_EDITORURL ('EDITORURL')" "${EDITORURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
---field="     $GUI_VORTEXURL!$DESC_VORTEXURL ('VORTEXURL')" "${VORTEXURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
+--field="     $GUI_VORTEXRELURL!$DESC_VORTEXRELURL ('VORTEXRELURL')" "${VORTEXRELURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="     $GUI_DXVKURL!$DESC_DXVKURL ('DXVKURL')" "${DXVKURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="     $GUI_XLIVEURL!$DESC_XLIVEURL ('XLIVEURL')" "${XLIVEURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="     $GUI_PFDURL!$DESC_PFDURL ('PFDURL')" "${PFDURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
@@ -3193,7 +3227,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_VORTEXINSTALL!$DESC_VORTEXINSTALL ('VORTEXINSTALL')":CHK "${VORTEXINSTALL/#-/ -}" `#CAT_Vortex` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_VORTEXMODE!$DESC_VORTEXMODE ('VORTEXMODE')":CB "${VORTEXMODE/#-/ -}!disabled!normal!quickstart!editormode" `#CAT_Vortex` `#MENU_GAME` \
 --field="     $GUI_WAITVORTEX!$DESC_WAITVORTEX ('WAITVORTEX')":NUM "${WAITVORTEX/#-/ -}" `#CAT_Vortex` `#MENU_GAME` \
---field="     $GUI_VORTEXVERSION!$DESC_VORTEXVERSION ('VORTEXVERSION')" "${VORTEXVERSION/#-/ -}" `#CAT_Vortex``#MENU_GLOBAL`  \
+--field="     $GUI_USEVORTEXPRERELEASE!$DESCUSEVORTEXPRERELEASE ('USEVORTEXPRERELEASE')":CHK "${USEVORTEXPRERELEASE/#-/ -}" `#CAT_Vortex` `#SUB_Checkbox` `#MENU_GLOBAL`  \
 --field="     $GUI_VORTEXDOWNLOADPATH!$DESC_VORTEXDOWNLOADPATH ('VORTEXDOWNLOADPATH')":DIR "${VORTEXDOWNLOADPATH/#-/ -}" `#CAT_Vortex` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_VORTEXPREFIX!$DESC_VORTEXPREFIX ('VORTEXPREFIX')":DIR "${VORTEXPREFIX/#-/ -}" `#CAT_Vortex` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_VORTEXWINE!$DESC_VORTEXWINE ('VORTEXWINE')":FL "${VORTEXWINE/#-/ -}" `#CAT_Vortex` `#MENU_GLOBAL` \
@@ -4171,7 +4205,7 @@ LOGONE="404,ERROR,SKIP,WARN,CREATE"
 		LOGLEVEL=2
 	fi
 	
-	if [ "$AID" == "$PLACEHOLDERAID" ]; then
+	if [ "$AID" == "$PLACEHOLDERAID" ] || [ -z "$AID" ]; then
 		LOGFILE="$TEMPLOG"
 	fi
 
@@ -4232,10 +4266,10 @@ function loadCfg {
 
 function extWine64Run {
 	if [ "$USEWINE" -eq 0 ]; then
-		writelog "INFO" "${FUNCNAME[0]} - Command in Proton prefix is: WINE=\"$RUNWINE\" WINEARCH=win64 WINEDEBUG=\"$STLWINEDEBUG\" WINEPREFIX=\"$GPFX\" $*"
+		writelog "INFO" "${FUNCNAME[0]} - Command in Proton WINEPREFIX is: WINE=\"$RUNWINE\" WINEARCH=win64 WINEDEBUG=\"$STLWINEDEBUG\" WINEPREFIX=\"$GPFX\" $*"
 		WINE="$RUNWINE" WINEARCH=win64 WINEDEBUG="$STLWINEDEBUG" WINEPREFIX="$GPFX" "$@"
 	else
-		writelog "INFO" "${FUNCNAME[0]} - Command in Wine prefix is: WINE=\"$RUNWINE\" WINEARCH=\"$RUNWINEARCH\" WINEDEBUG=\"$STLWINEDEBUG\" WINEPREFIX=\"$GWFX\" $*"
+		writelog "INFO" "${FUNCNAME[0]} - Command in Wine WINEPREFIX is: WINE=\"$RUNWINE\" WINEARCH=\"$RUNWINEARCH\" WINEDEBUG=\"$STLWINEDEBUG\" WINEPREFIX=\"$GWFX\" $*"
 		WINE="$RUNWINE" WINEARCH="$RUNWINEARCH" WINEDEBUG="$STLWINEDEBUG" WINEPREFIX="$GWFX" "$@"
 	fi
 }
@@ -6080,6 +6114,7 @@ function updateConfigEntry {
 	CFGCAT="$1"
 	CFGVALUE="$2"
 	CFGFILE="$3"
+
 	if [ -z "$3" ]; then
 		writelog "SKIP" "${FUNCNAME[0]} - Expected 3 arguments - only got $*"
 	else
@@ -7798,42 +7833,57 @@ function setVortexDLMime {
 	fi
 }
 
+function getLatestVortVer {
+	VSET="vortex-setup"
+
+	if [ "$USEVORTEXPRERELEASE" -eq 1 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Search for latest Vortex Pre-Release" "E"
+		VORTEXSETUP="$("$WGET" -q  "${VORTEXRELURL}" -O - | grep -m1 "$VSET" | grep -oE "${VSET}[^\"]+")"
+	else
+		writelog "INFO" "${FUNCNAME[0]} - Search for latest Vortex stable Release" "E"
+		VORTEXSETUP="$("$WGET" -q  "${VORTEXRELURL}/latest" -O - | grep -m1 "$VSET" | grep -oE "${VSET}[^\"]+")"
+	fi
+}
+
 function installVortex {
 	writelog "INFO" "${FUNCNAME[0]} - VORTEXINSTALL is set to 1 - trying to install Vortex into VORTEXPREFIX $VORTEXPREFIX"
 	
 	if [ -d "$VORTEXINSTDIR" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - '$VORTEXINSTDIR' already exists - skipping the Vortex installation" "E"
 	else
-		if [ -n "$VORTEXVERSION" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Installing VORTEXVERSION $VORTEXVERSION"
-			VORTEXSETUP="vortex-setup-$VORTEXVERSION.exe"
+		getLatestVortVer
+
+		if [ -n "$VORTEXSETUP" ]; then
 			VORTEXDLDIR="$STLDLDIR/Vortex"
+			VSPATH="$VORTEXDLDIR/$VORTEXSETUP"
 
 			# download:
 			if [ ! -d "$VORTEXDLDIR" ]; then
 				mkdir -p "$VORTEXDLDIR" 2>/dev/null
 			fi
-			
-			if [ ! -f "$VORTEXDLDIR/$VORTEXSETUP" ];then
-				writelog "INFO" "${FUNCNAME[0]} - Downloading $VORTEXSETUP to $VORTEXDLDIR from $VORTEXURL$VORTEXVERSION/$VORTEXSETUP"
-				if [ -n "$VORTEXURL" ]; then
-					# "$WGET" "$VORTEXURL$VORTEXVERSION/$VORTEXSETUP" -O "$VORTEXDLDIR/$VORTEXSETUP"
-					wgetGui "$VORTEXURL$VORTEXVERSION/$VORTEXSETUP" "$VORTEXDLDIR/$VORTEXSETUP"
-				fi
 
-				if [ -f "$VORTEXDLDIR/$VORTEXSETUP" ];then
-					writelog "INFO" "${FUNCNAME[0]} - Download succeeded - continuing installation"
+			if [ ! -f "$VSPATH" ];then
+				VVRAW="$(grep -oP "${VSET}-\K[^X]+" <<< "$VORTEXSETUP")"
+				VORTEXVERSION="${VVRAW%.exe}"
+				DLURL="$VORTEXRELURL/download/v$VORTEXVERSION/$VORTEXSETUP"
+				writelog "INFO" "${FUNCNAME[0]} - Downloading $VORTEXSETUP to $VORTEXDLDIR from '$DLURL'" E
+				wgetGui "$DLURL" "$VSPATH"
+
+				if [ -f "$VSPATH" ];then
+					writelog "INFO" "${FUNCNAME[0]} - Download succeeded - continuing installation" E
 				else
-					return
+					writelog "ERROR" "${FUNCNAME[0]} - Download failed!" E
 				fi
-			fi
+			fi	
 
 			# install:
-			writelog "INFO" "${FUNCNAME[0]} - Installing Vortex installation into WINEPREFIX '${VORTEXPREFIX//\"/}' with command '$VORTEXWINE $VORTEXDLDIR/$VORTEXSETUP'"
-			wineVortexRun "$VORTEXWINE" "$VORTEXDLDIR/$VORTEXSETUP" /S
-			writelog "INFO" "${FUNCNAME[0]} - Vortex installation succeeded"
+			if [ -f "$VSPATH" ];then
+				writelog "INFO" "${FUNCNAME[0]} - Installing Vortex installation into WINEPREFIX '${VORTEXPREFIX//\"/}' with command '$VORTEXWINE $VSPATH'" E
+				wineVortexRun "$VORTEXWINE" "$VSPATH" /S
+				writelog "INFO" "${FUNCNAME[0]} - Vortex installation succeeded"
+			fi
 		else
-			writelog "SKIP" "${FUNCNAME[0]} - No VORTEXVERSION defined - nothing to download - skipping"
+			writelog "SKIP" "${FUNCNAME[0]} - No VORTEXSETUP defined - nothing to download - skipping"
 		fi
 	fi
 }
@@ -7841,7 +7891,18 @@ function installVortex {
 function linkVortex {
 	LNSRC="$1"
 	LNDST="$2"
-	
+#	LNDST="${2%/*}"
+	writelog "INFO" "${FUNCNAME[0]} - LNSRC='$LNSRC': Should point into Game WINEPREFIX"
+	writelog "INFO" "${FUNCNAME[0]} - LNDST='$LNDST': Should point into Vortex WINEPREFIX"
+
+	if grep -q -i "vortex" <<< "$LNSRC"; then
+		writelog "WARN" "${FUNCNAME[0]} - Symlink Source '$LNSRC' seems to be in the Vortex WINEPREFIX which probably is an error!"
+	fi
+
+	if ! grep -q -i "vortex" <<< "$LNDST"; then
+		writelog "WARN" "${FUNCNAME[0]} - Symlink Destination '$LNDST' seems not to be in the Vortex WINEPREFIX which probably is an error!"
+	fi
+
 	if readlink "$LNDST" >/dev/null ; then
 		writelog "INFO" "${FUNCNAME[0]} - Symlink $LNDST already exists"
 		if [ "$(readlink "$LNDST")" == "$LNSRC" ]; then
@@ -7853,8 +7914,13 @@ function linkVortex {
 		fi
 	else
 		if [ -d "$LNDST" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - $LNDST is a real directory - renaming it to $LNDST-$(date +%y-%m-%d)"
-			mv "$LNDST" "$LNDST-$(date +%y-%m-%d)"
+			if [ "$( find "$LNDST" -type l | wc -l)" -eq 0 ]; then
+				writelog "INFO" "${FUNCNAME[0]} - $LNDST is a real directory - renaming it to $LNDST-$(date +%y-%m-%d)"
+				mv "$LNDST" "${LNDST}-$(date +%y-%m-%d)"
+			else
+				writelog "WARN" "${FUNCNAME[0]} - $LNDST is a real directory, but contains symlinks, which is a sign that it is an important Vortex directory"
+				writelog "WARN" "${FUNCNAME[0]} - Leaving it untouched, but next Symlink Step might fail"
+			fi
 		fi
 		writelog "INFO" "${FUNCNAME[0]} - Symlink from '$LNSRC' to '$LNDST' does not exist yet - creating it now"
 		ln -s "$LNSRC" "$LNDST"
@@ -7872,10 +7938,164 @@ function getVortexStage {
 	fi 	
 }
 
+function getInstalledGamesWithVortexSupport {
+	getVortexSupported
+	mapfile -t -O "${#INSTGAMES[@]}" INSTGAMES <<< "$(getInstalledGamesFromCategory "installed")"
+	mapfile -t -O "${#INSTVGAMES[@]}" INSTVGAMES <<< "$(comm -12 <(printf "%s\n" "${VOSTIDS[@]}" | sort -u) <(printf "%s\n" "${INSTGAMES[@]}" | sort -u))"
+	if [ -n "$1" ]; then
+		printf "%s\n" "${INSTVGAMES[@]}"
+	fi
+}
+
+function getGameSteamCategories {
+	SCGAME="$1"
+
+	if [ -z "$SUSDA" ]; then
+		setSteamPaths
+	fi
+	if [ -d "$SUSDA" ]; then
+		STEAMUSERID="$(find "$SUSDA" -maxdepth 1 -type d -name "[1-9]*")"
+		SC="$STEAMUSERID/$SRSCV"
+
+		if [ ! -f "$SC" ]; then
+			writelog "SKIP" "${FUNCNAME[0]} - File '${SC##*/}' not found in steam userid dir - skipping"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - File '${SC##*/}' found in steam userid dir - searching categories for game '$SCGAME'"
+
+			while read -r SCAT; do
+				mapfile -t -O "${#GSCATS[@]}" GSCATS <<< "$SCAT"
+			done <<< "$(sed -n "/\"$SCGAME\"/,/}/p;" "$SC" | sed -n "/\"tags\"/,/}/p" | sed -n "/{/,/}/p" | grep -v '{\|}' | gawk '{print $2}' | sed "s:\"::g")"
+			if [ -n "$2" ]; then
+				OUT1="$(printf "%s," "${GSCATS[@]}")"
+				printf "%s\n" "${OUT1%*,}"
+			fi
+		fi
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - '$SUSDA' not found - this should not happen! - skipping"
+	fi
+}
+
+function VortexGamesDialog {
+		writelog "INFO" "${FUNCNAME[0]} - Opening Vortex Dialog for en/disabling Vortex for installed games"
+
+		getInstalledGamesWithVortexSupport
+
+		TITLE="${PROGNAME}-Vortex Toggle"
+
+		loadCfg "$STLGUICFG" X
+		updateWinRes "$TITLE" "$STLGUICFG" "VOIGWIDTH" "VOIGHEIGHT" &
+		setShowPic
+		VGNLIST="$STLSHM/VGNLIST.txt"
+		VGNSCLIST="$STLSHM/VGNSCLIST.txt"
+
+		VINGAMES="$(while read -r f; do
+			loadCfg "$GEMETA/$f.conf" X
+			if [ -z "$GAMENAME" ]; then
+				GNAM="$NON"
+			else
+				GNAM="$GAMENAME"
+				echo "$f;$GAMENAME" >> "$VGNLIST"
+			fi
+
+			if [ ! -f "$STLGAMEDIRID/${f}.conf" ]; then
+				writelog "SKIP" "${FUNCNAME[0]} - Game config '$STLGAMEDIRID/${f}.conf' not found, so creating a minimal one from '$STLDEFGAMECFG'"
+				grep -v "config Version" "$STLDEFGAMECFG" >> "$STLGAMEDIRID/${f}.conf"
+			fi
+
+			if grep -q "Vortex" <<< "$(getGameSteamCategories "$f" "X")"; then
+				echo TRUE
+				echo "$f"
+				echo "$GNAM"
+				echo "$GUI_Y"
+				echo "$f" >> "$VGNSCLIST"
+			else
+				if grep -q "^VORTEXMODE=\"disabled\"" "$STLGAMEDIRID/${f}.conf" || ! grep -q "^VORTEXMODE=" "$STLGAMEDIRID/${f}.conf"; then
+					echo FALSE
+					echo "$f"
+					echo "$GNAM"
+					echo "$GUI_N"
+				else
+					echo TRUE
+					echo "$f"
+					echo "$GNAM"
+					echo "$GUI_N"
+				fi
+			fi
+		done <<< "$(printf "%s\n" "${INSTVGAMES[@]}")" | \
+		"$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center "$WINDECO" --list --checklist --column="Use Vortex" --column="Game ID" --column="Game Title" --column "Vortex Steam Category" --separator=";" --print-column="2" \
+		--text="$(spanFont "$GUI_VINFO" "H")\n<span font=\"italic\">($GUI_VINFO1)</span>" --title="$TITLE" --geometry="$VOIGWIDTH"x"$VOIGHEIGHT"+0+0)"
+		case $? in
+			0)
+				while read -r checkvgame; do
+					VGNAM="$(grep "^$checkvgame" "$VGNLIST" | gawk -F ';' '{print $2}')"
+					GVCFG="$STLGAMEDIRID/${checkvgame}.conf"
+
+					if ! grep -q "$checkvgame" <<< "${VINGAMES[@]}"; then
+						writelog "INFO" "${FUNCNAME[0]} - Disabling Vortex for '$VGNAM' in '$GVCFG', if not already disabled"
+						touch "$FUPDATE"
+						updateConfigEntry "VORTEXMODE" "disabled" "$GVCFG"
+						if grep -q "$checkvgame" "$VGNSCLIST"; then
+							writelog "WARN" "${FUNCNAME[0]} - To really disable Vortex for '$VGNAM', the game needs to be removed from the Vortex Steam Category manually" E
+						fi
+					else
+						writelog "INFO" "${FUNCNAME[0]} - Enabling Vortex for '$VGNAM' if not already enabled"
+						touch "$FUPDATE"
+						updateConfigEntry "VORTEXMODE" "normal" "$GVCFG"
+					fi
+				
+				done <<< "$(printf "%s\n" "${INSTVGAMES[@]//\"/}")"			
+				
+			;;
+			1)  writelog "INFO" "${FUNCNAME[0]} - Selected CANCEL" "E"
+			;;
+		esac
+
+		rm "$VGNLIST" "$VGNSCLIST" 2>/dev/null
+}
+
+function VortexSymDialog {
+		VPDRC="$VORTEXPREFIX/$DRC"
+		if [ -d "$VPDRC" ]; then		
+			TITLE="${PROGNAME}-Vortex Symlinks"
+
+			loadCfg "$STLGUICFG" X
+			updateWinRes "$TITLE" "$STLGUICFG" "VOSYWIDTH" "VOSYHEIGHT" &
+			setShowPic
+
+			cd "$VPDRC" || return
+			find . -type l -printf '%p\n%l\n' | "$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center "$WINDECO" --list --column="Symlink in '${VPDRC}/'" --column="Points to Game WinePrefix" --print-column="3" \
+			--text="$(spanFont "$GUI_VOSY" "H")\n" --title="$TITLE" --geometry="$VOSYWIDTH"x"$VOSYHEIGHT"+0+0
+			cd - || return
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - Directory '$VPDRC' not found " E
+		fi
+}
+
+function getVortexSupported {
+	function  gVSIDs {
+		SDIR="$1"
+		if [ -d "$SDIR" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Searching for SteamIDs in '$SDIR'"
+			mapfile -t -O "${#VOSTIDS[@]}" VOSTIDS <<< "$(grep -iR "STEAM_ID =\|steamAppId:" "$SDIR" | grep -v "module.exports" | grep -oP "'\K[^']+" | grep "[0-9]" | sort -u)"
+		fi
+	}
+
+	VORTEXINSTDIR="${VORTEXPREFIX//\"/}/$BTVP"
+	VGPDIR="$VORTEXINSTDIR/$RABP"
+	VUPDIR="$VORTEXPREFIX/$DRCU/$STUS/$APDA/Vortex/plugins"
+
+	gVSIDs "$VGPDIR"
+	gVSIDs "$VUPDIR"
+	
+	if [ -n "$1" ]; then
+		printf "%s\n" "${VOSTIDS[@]}" | sort -n
+	fi
+}
+
 function setupGameVortex {
 
 	if [ -d "$VORTEXINSTDIR" ]; then
-		VBP="$VORTEXINSTDIR/resources/app.asar.unpacked/bundledPlugins"
+		VBP="$VORTEXINSTDIR/$RABP"
 		writelog "INFO" "${FUNCNAME[0]} - Trying to find the Nexus GameID for the game '$GN ($AID)' in Vortex Install dir $VORTEXINSTDIR"
 
 		SEARCH="$AID"
@@ -7883,8 +8103,16 @@ function setupGameVortex {
 			SEARCH="22300"
 		fi
 
+		NEXUSGAMEBETA=0
 		NEXUSGAMEFILE="$(grep -r -i "$SEARCH" "$VBP"/game-*/index.js | grep -i "steamAppId\|STEAM_ID" | grep -oE '^[^\:]+' | sort -u | head -n1)"
-
+		if [ -z "$NEXUSGAMEFILE" ]; then
+			USVOPLU="${VORTEXPREFIX//\"/}/$DRCU/$STUS/$APDA/Vortex/plugins"
+			writelog "INFO" "${FUNCNAME[0]} - No NEXUSGAMEFILE found in Vortex install dir - trying to find it in the Vortex user data '$USVOPLU'"
+			NEXUSGAMEFILE="$(grep -R -i "$SEARCH" "$USVOPLU"/*/index.js | grep -i "steamAppId\|STEAM_ID\|STEAM_APP_ID" | grep -oE '^[^\:]+' | sort -u | head -n1)"
+			if [ -n "$NEXUSGAMEFILE" ]; then
+				NEXUSGAMEBETA=1
+			fi
+		fi
 		if [ -n "$NEXUSGAMEFILE" ]; then
 			if [ -f "$NEXUSGAMEFILE" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Found NEXUSGAMEFILE $NEXUSGAMEFILE for the game '$GN ($AID)'"
@@ -7894,8 +8122,9 @@ function setupGameVortex {
 				else
 					NEXUSGAMEID="$(gawk -F 'game-' '{print $2}' <<< "$(basename "$(gawk -F '/index.js' '{print $1}' <<< "$NEXUSGAMEFILE")")")"
 					if [ -n "$NEXUSGAMEID" ]; then
-						writelog "INFO" "${FUNCNAME[0]} - Autodetected Nexus GameID '$NEXUSGAMEID' - adding it to the game config '$STLGAMECFG'"
+						writelog "INFO" "${FUNCNAME[0]} - Autodetected Nexus GameID '$NEXUSGAMEID' - adding it to the game config '$STLGAMECFG' and generic Meta Config '$GEMETA/$AID.conf'"
 						updateConfigEntry "NEXUSGAMEID" "$NEXUSGAMEID" "$STLGAMECFG"
+						updateConfigEntry "NEXUSGAMEID" "$NEXUSGAMEID" "$GEMETA/$AID.conf"
 						writelog "INFO" "${FUNCNAME[0]} - Cut the Nexus GameID '$NEXUSGAMEID' for the game '$GN ($AID)' out of the filename '$NEXUSGAMEFILE'"
 					fi
 				fi
@@ -7910,9 +8139,8 @@ function setupGameVortex {
 		writelog "ERROR" "${FUNCNAME[0]} - Vortex Install dir '$VORTEXINSTDIR' not found - this shouldn't happen"
 	fi
 
-
 	# configure Game Specific Vortex Settings:
-	if [ -n "$NEXUSGAMEID" ]; then
+	if [ -n "$NEXUSGAMEID" ] || [ "$NEXUSGAMEBETA" -eq 1 ]; then
 
 		# configure Vortex Download Dir:
 		if [ -z "$VORTEXDOWNLOADPATH" ]; then
@@ -7946,17 +8174,19 @@ function setupGameVortex {
 		# autodiscover our "manual added" game
 		GDNP="C:\\\Program Files (x86)\\\Steam\\\steamapps\\\common\\\\$GN"
 		
-		cd "$VORTEXINSTDIR" || return
-		wineVortexRun "$VORTEXWINE" "$VORTEXEXE" --set settings.gameMode.discovered."$NEXUSGAMEID".hidden=false
-		wineVortexRun "$VORTEXWINE" "$VORTEXEXE" --set settings.gameMode.discovered."$NEXUSGAMEID".path=true
-		wineVortexRun "$VORTEXWINE" "$VORTEXEXE" --set settings.gameMode.discovered."$NEXUSGAMEID".path=\""$GDNP"\"
-		wineVortexRun "$VORTEXWINE" "$VORTEXEXE" --set settings.mods.activator."$NEXUSGAMEID"=true
-		wineVortexRun "$VORTEXWINE" "$VORTEXEXE" --set settings.mods.activator."$NEXUSGAMEID"=\"hardlink_activator\"
-		cd - || return
-
+		if [ -n "$NEXUSGAMEID" ]; then
+			cd "$VORTEXINSTDIR" || return
+			wineVortexRun "$VORTEXWINE" "$VORTEXEXE" --set settings.gameMode.discovered."$NEXUSGAMEID".hidden=false
+			wineVortexRun "$VORTEXWINE" "$VORTEXEXE" --set settings.gameMode.discovered."$NEXUSGAMEID".path=true
+			wineVortexRun "$VORTEXWINE" "$VORTEXEXE" --set settings.gameMode.discovered."$NEXUSGAMEID".path=\""$GDNP"\"
+			wineVortexRun "$VORTEXWINE" "$VORTEXEXE" --set settings.mods.activator."$NEXUSGAMEID"=true
+			wineVortexRun "$VORTEXWINE" "$VORTEXEXE" --set settings.mods.activator."$NEXUSGAMEID"=\"hardlink_activator\"
+			cd - || return
+		fi
+		
 		if [ -f "$NEXUSGAMEFILE" ]; then
 			if grep -q -E 'getPath.*documents' "$NEXUSGAMEFILE"; then
-				writelog "INFO" "${FUNCNAME[0]} - Found Modpath in $NEXUSGAMEFILE - creating it in 'prefix'"
+				writelog "INFO" "${FUNCNAME[0]} - Found Modpath in $NEXUSGAMEFILE - creating it in 'WINEPREFIX'"
 				# LOAD_ORDER_FILENAME exclude for witcher3
 				GMODPATH="$(grep -E 'getPath.*documents' "$NEXUSGAMEFILE" | grep -v "LOAD_ORDER_FILENAME\|()" | gawk -F ')\, ' '{print $NF}' | gawk -F ')' '{print $1}' | sed "s:, :\/:g" | sed "s:'::g")"
 				if [ -n "$SteamUserMyDocs" ] && [ -n "$GMODPATH" ]; then
@@ -8018,7 +8248,7 @@ function setupGameVortex {
 				VORTEXMODE="disabled"
 			fi
 
-			if [ -n "$VORTEXSTAGING" ]; then
+			if [ -n "$VORTEXSTAGING" ] && [ -n "$NEXUSGAMEID" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - VORTEXSTAGING set to '$VORTEXSTAGING' - configuring '$NEXUSGAMEID' installPath"
 				VGSGM="$VORTEXSTAGING/$NEXUSGAMEID/mods"
 
@@ -8092,11 +8322,11 @@ function setupGameVortex {
 				fi
 			fi
 
-			# create custom paths in prefix so symlinks can already be created
+			# create custom paths in WINEPREFIX so symlinks can already be created
 			customVortexGameSettings
 		fi
 	else
-		writelog "SKIP" "${FUNCNAME[0]} - NEXUSGAMEID is empty - skipping automatic adding game '$GN ($AID)' to Vortex"
+		writelog "SKIP" "${FUNCNAME[0]} - NEXUSGAMEID is empty and no Beta extensiopn found - skipping automatic adding game '$GN ($AID)' to Vortex"
 	fi
 }
 
@@ -8110,7 +8340,7 @@ function precustomVortexGameDirs {
 			writelog "INFO" "${FUNCNAME[0]} - Created dir '$CDIR'"
 		fi
 
-		CADGDIR="$SteamUserDir/Local Settings/Application Data/$2"
+		CADGDIR="$SteamUserDir/$LSAD/$2"
 		if [ ! -d "$CADGDIR" ]; then
 			mkdir -p "$CADGDIR" 2>/dev/null
 			writelog "INFO" "${FUNCNAME[0]} - Created dir '$CADGDIR'"
@@ -8132,7 +8362,7 @@ function customVortexGameSettings {
 
 	# Fallout3 symlink:
 	if [ "$AID" == "22370" ]; then
-		FOGDIR="$SteamUserDir/Local Settings/Application Data/Fallout3goty"
+		FOGDIR="$SteamUserDir/$LSAD/Fallout3goty"
 		if [ ! -d "$FOGDIR" ]; then
 			mkdir -p "$FOGDIR" 2>/dev/null
 		fi
@@ -8395,7 +8625,7 @@ function initVortexStuff {
 			fi
 		fi
 
-		VORTEXINSTDIR="${VORTEXPREFIX//\"/}/drive_c/Program Files/Black Tree Gaming Ltd/Vortex"
+		VORTEXINSTDIR="${VORTEXPREFIX//\"/}/$BTVP"
 		VORTEXEXE="$VORTEXINSTDIR/Vortex.exe"
 	fi
 }
@@ -8423,7 +8653,7 @@ function checkVortex {
 	if [ "$VORTEXMODE" == "disabled" ]; then
 		writelog "SKIP" "${FUNCNAME[0]} -  Vortex is disabled"
 	elif [ "$VORTEXMODE" == "normal" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - Default VORTEX mode '$VORTEX' is set"
+		writelog "INFO" "${FUNCNAME[0]} - Default VORTEX mode '$VORTEXMODE' is set"
 		writelog "INFO" "${FUNCNAME[0]} -VORTEXWINE is $VORTEXWINE"
 
 		# checking WINEPREFIX for Vortex:
@@ -8448,7 +8678,7 @@ function checkVortex {
 					fi
 					MyDocs="My Documents"
 					MyDocsMyGames="$MyDocs/My Games"
-					LocalSetAppData="Local Settings/Application Data"
+					LocalSetAppData="$LSAD"
 					
 					if [ -d "${VORTEXPREFIX//\"/}/$DRCU/$STUS" ];then
 						writelog "INFO" "${FUNCNAME[0]} - Vortex is running with Proton wine - configuring for user '$STUS'"
@@ -8497,22 +8727,31 @@ function checkVortex {
 
 						# My Documents:
 						while read -r dir; do
-							writelog "INFO" "${FUNCNAME[0]} - Creating symlink from '$dir' to '$UserMyDocs'"
-							linkVortex "$dir" "$UserMyDocs/${dir##*/}"
+							if [ -d "$dir" ]; then
+								writelog "INFO" "${FUNCNAME[0]} - Creating symlink from '$dir' to UserMyDocs '$UserMyDocs'"
+								linkVortex "$dir" "$UserMyDocs/${dir##*/}"
+							fi
 						done <<< "$(find "$SteamUserMyDocs" -mindepth 1 -maxdepth 1 -type d | grep -v 'Music$\|Templates$\|Downloads$\|Pictures$\|Games$\|Videos$')"
 
 						# My Games:
 						SteamUserMyDocsMyGames="$SteamUserDir/$MyDocsMyGames"
-						while read -r dir; do
-							writelog "INFO" "${FUNCNAME[0]} - Creating symlink 'from' $dir to '$UserMyDocsMyGames'"
-							linkVortex "$dir" "$UserMyDocsMyGames/${dir##*/}"
-						done <<< "$(find "$SteamUserMyDocsMyGames" -mindepth 1 -maxdepth 1 -type d)"
-
+						
+						if [ -d  "$SteamUserMyDocsMyGames" ]; then
+							while read -r dir; do
+								if [ -d "$dir" ]; then
+									writelog "INFO" "${FUNCNAME[0]} - Creating symlink 'from' $dir to UserMyDocsMyGames '$UserMyDocsMyGames'"
+									linkVortex "$dir" "$UserMyDocsMyGames/${dir##*/}"
+								fi
+							done <<< "$(find "$SteamUserMyDocsMyGames" -mindepth 1 -maxdepth 1 -type d)"
+						fi
+						
 						# Application Data:
 						SteamUserLocalSetAppData="$SteamUserDir/$LocalSetAppData"
 						while read -r dir; do
-							writelog "INFO" "${FUNCNAME[0]} - Creating symlink from '$dir' to '$UserLocalSetAppData'"
-							linkVortex "$dir" "$UserLocalSetAppData/${dir##*/}"
+							if [ -d "$dir" ]; then
+								writelog "INFO" "${FUNCNAME[0]} - Creating symlink from '$dir' to UserLocalSetAppData '$UserLocalSetAppData'"
+								linkVortex "$dir" "$UserLocalSetAppData/${dir##*/}"
+							fi
 						done <<< "$(find "$SteamUserLocalSetAppData" -mindepth 1 -maxdepth 1 -type d | grep -v 'Microsoft\|openvr')"			
 
 						# registry:
@@ -9337,9 +9576,9 @@ function setWineVars {
 			RUNWINEARCH=win64
 		fi
 
-		writelog "INFO" "${FUNCNAME[0]} - Game binary '${CHARCH##*/}' is $(getArch "$CHARCH")-bit so creating '$RUNWINEARCH' wineprefix"
+		writelog "INFO" "${FUNCNAME[0]} - Game binary '${CHARCH##*/}' is $(getArch "$CHARCH")-bit so creating '$RUNWINEARCH' WINEPREFIX"
 		GWFX="${GPFX//pfx/wfx}"
-		writelog "INFO" "${FUNCNAME[0]} - Using wineprefix '$GWFX'"
+		writelog "INFO" "${FUNCNAME[0]} - Using WINEPREFIX '$GWFX'"
 	fi
 }
 
@@ -9874,6 +10113,12 @@ function howto {
 	echo "           reshade <version>           (re)-download ReShade (version)"
 	echo "    vortex <value>                   Vortex commandline options"
 	echo "           install                     Installs vortex"
+	echo "           supported <X>                List all Vortex-supported Steam Game IDs"
+	echo "                                       (offline - Vortex needs to be installed)"
+	echo "                                       Show installed Games with Vortex support"
+	echo "                                       with parameter 'X'"
+	echo "           games                       Gui to en/disable Vortex for supported game"
+	echo "           symlinks                    Gui showing symlinks in the Vortex WINEPREFIX"
 	echo "           start                       Starts vortex"
 	echo "           getset                      Show config of installed vortex"
 	echo "           stage <path>                Add vortex stage via dialog"
@@ -9981,17 +10226,17 @@ function commandline {
 					exit
 				else
 					if [ "$3" == "all" ]; then
-						writelog "INFO" "${FUNCNAME[0]} - arg3 is all - updating all config files in '$STLGAMEDIR':" E
+						writelog "INFO" "${FUNCNAME[0]} - arg3 is all - updating all config files in '$STLGAMEDIRID':" E
 						while read -r file; do
 							writelog "INFO" "${FUNCNAME[0]} - updating entry '$2' to value '$4' in config $file" E
 							updateConfigEntry "$2" "$4" "$file"
-						done <<< "$(find "$STLGAMEDIR" -name "*.conf")"
+						done <<< "$(find "$STLGAMEDIRID" -name "*.conf")"
 					else
-						if [ -f "$STLGAMEDIR/$3.conf" ]; then
-							writelog "INFO" "${FUNCNAME[0]} - updating entry '$2' to value '$4' in config '$STLGAMEDIR/$3.conf'" E
-							updateConfigEntry "$2" "$4" "$STLGAMEDIR/$3.conf"
+						if [ -f "$STLGAMEDIRID/$3.conf" ]; then
+							writelog "INFO" "${FUNCNAME[0]} - updating entry '$2' to value '$4' in config '$STLGAMEDIRID/$3.conf'" E
+							updateConfigEntry "$2" "$4" "$STLGAMEDIRID/$3.conf"
 							else
-							writelog "INFO" "${FUNCNAME[0]} - config file '$STLGAMEDIR/$3.conf' does not exist - nothing to do - exit" E
+							writelog "INFO" "${FUNCNAME[0]} - config file '$STLGAMEDIRID/$3.conf' does not exist - nothing to do - exit" E
 							exit
 						fi
 					fi
@@ -10055,6 +10300,20 @@ function commandline {
 				startVortex "$2"
 			elif [ "$2" == "stage" ]; then
 				addVortexStage "$3"
+			elif [ "$2" == "supported" ]; then
+				if [ -n "$3" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Installed Games With Vortex Support" E
+					getInstalledGamesWithVortexSupport X
+				else
+					writelog "INFO" "${FUNCNAME[0]} - Games With Vortex Support" E
+					getVortexSupported X
+				fi
+			elif [ "$2" == "games" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Opening Gui for en/disabling Vortex for installed unsupported games" E
+				VortexGamesDialog
+			elif [ "$2" == "symlinks" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Opening Gui showing Symlinks in the Vortex WINEPREFIX" E
+				VortexSymDialog
 			else	
 				writelog "INFO" "${FUNCNAME[0]} - arg2 '$2' is no valid command" E
 				howto
