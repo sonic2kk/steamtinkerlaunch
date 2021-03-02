@@ -44,6 +44,9 @@ All programs used as custom Compatibility Tool *(of course including **stl**)* a
 
 *(It doesn't make any sense, but a game also works, when stl is set both as Launch Option and as Steam Compatibility Tool)*
 
+##### Footnote
+Of course you're using this tool at your own risk and you're responsible which 3rd party programs you launch with it.
+
 ### Game specific use
 When starting a game a small [Wait requester](#Wait-Requester) will pop up.
 If within a short waiting period *(default 2 seconds)* the spacebar is pressed the [Settings Menu](#Settings-Menu) will open where everything can be configured comfortably.
