@@ -447,9 +447,8 @@ function getDataForAllGamesinSharedConfig {
 }
 
 function getAllOwnedGames {
-	# currently unused
+# shellcheck disable=SC2016
 	sed -n '/"Apps"/,${p;/"LastPlayedTimesSyncTime"/q}' "$FLCV" | grep "{" -B1 | grep "[0-9]" | tr -cd '[[:digit:]]\n' | sort -n
-
 }
 
 function getActiveSteamCategories {
@@ -9689,16 +9688,23 @@ function launchSteamGame {
 
 			# start with gamemoderun:
 			if [ "$USEGAMEMODERUN" -eq 1 ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Starting native game '$GN ($AID)' with '$GAMEMODERUN' - ${GAMESTARTCMD[*]}"
-				notiShow "$(strFix "$NOTY_STARTNATGAMO" "$GN" "$AID")"
-				writelog "INFO" "${FUNCNAME[0]} - Full start command is '$GAMEMODERUN ${GAMESTARTCMD[*]}'"
-				startGame "$GAMEMODERUN" "${GAMESTARTCMD[@]}"
+				if [ "$USEGAMESCOPE" -eq 1 ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Starting native game '$GN ($AID)' with '$GAMEMODERUN' and '$GAMESCOPE'"
+					notiShow "$(strFix "$NOTY_STARTNATGAMOSC" "$GN" "$AID")"
+					gameArgs "$GAMESCOPE_ARGS"
+					writelog "INFO" "${FUNCNAME[0]} - Full start command is '$GAMEMODERUN $GAMESCOPE ${GAMEARGSARR[*]} ${GAMESTARTCMD[*]}'"
+					startGame "$GAMEMODERUN" "$GAMESCOPE" "${GAMEARGSARR[@]}" "${GAMESTARTCMD[@]}"
+				else
+					writelog "INFO" "${FUNCNAME[0]} - Starting native game '$GN ($AID)' with '$GAMEMODERUN' - ${GAMESTARTCMD[*]}"
+					notiShow "$(strFix "$NOTY_STARTNATGAMO" "$GN" "$AID")"
+					writelog "INFO" "${FUNCNAME[0]} - Full start command is '$GAMEMODERUN ${GAMESTARTCMD[*]}'"
+					startGame "$GAMEMODERUN" "${GAMESTARTCMD[@]}"	
+				fi
 			# start with gamescope:
 			elif [ "$USEGAMESCOPE" -eq 1 ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Starting native game '$GN ($AID)' with $GAMESCOPE arguments '$GAMESCOPE_ARGS'"
 				notiShow "$(strFix "$NOTY_STARTNATGAMSCO" "$GN" "$AID")"
 				gameArgs "$GAMESCOPE_ARGS"
-#				mapfile -t -O "${#RUNGAMESCOPE_ARGS[@]}" RUNGAMESCOPE_ARGS <<< "$GAMESCOPE_ARGS"
 				writelog "INFO" "${FUNCNAME[0]} - Full start command is '$GAMESCOPE ${GAMEARGSARR[*]} ${GAMESTARTCMD[*]}'"
 				startGame "$GAMESCOPE" "${GAMEARGSARR[@]}" "${GAMESTARTCMD[@]}"
 
@@ -9730,12 +9736,15 @@ function launchSteamGame {
 			# start with gamemoderun:
 			if [ "$USEGAMEMODERUN" -eq 1 ]; then
 				if [ "$USEGAMESCOPE" -eq 1 ]; then
-					writelog "SKIP" "${FUNCNAME[0]} - Skipping '$GAMESCOPE' as '$GAMEMODERUN' is enabled as well"
+					gameArgs "$GAMESCOPE_ARGS"
+					notiShow "$(strFix "$NOTY_STARTPROTGAMOSC" "$RUNWINEVERSION" "$GN" "$AID")"
+					startWineGame "$GAMEMODERUN" "$GAMESCOPE" "${GAMEARGSARR[@]}"
+					writelog "INFO" "${FUNCNAME[0]} - Started game $GN with '$("$RUNWINE" --version)' using '$GAMEMODERUN' and '$GAMESCOPE' with PID '$WINEPID'"
+				else
+					notiShow "$(strFix "$NOTY_STARTPROTGAMO" "$RUNWINEVERSION" "$GN" "$AID")"
+					startWineGame "$GAMEMODERUN"
+					writelog "INFO" "${FUNCNAME[0]} - Started game $GN with '$("$RUNWINE" --version)' using '$GAMEMODERUN' with PID '$WINEPID'"
 				fi
-
-				notiShow "$(strFix "$NOTY_STARTPROTGAMO" "$RUNWINEVERSION" "$GN" "$AID")"
-				startWineGame "$GAMEMODERUN"
-				writelog "INFO" "${FUNCNAME[0]} - Started game $GN with '$("$RUNWINE" --version)' using '$GAMEMODERUN' with PID '$WINEPID'"
 			# start with gamescope:
 			elif [ "$USEGAMESCOPE" -eq 1 ]; then
 				gameArgs "$GAMESCOPE_ARGS"
@@ -9820,28 +9829,28 @@ function launchSteamGame {
 			# set the definitive used versions, which are also stored into writeLastRun
 			PROTONVERSION="$(setProtonPathVersion "$RUNPROTON")"
 
-			# start with gamemoderun:
+			# start with x64dbg:
 			if [ "$RUN_X64DBG" -eq 1 ]; then
 				checkX64dbgLaunch "${GAMESTARTCMD[@]}"
 			# start with gamemoderun:
 			elif [ "$USEGAMEMODERUN" -eq 1 ]; then
 				if [ "$USEGAMESCOPE" -eq 1 ]; then
-					writelog "SKIP" "${FUNCNAME[0]} - Skipping '$GAMESCOPE' as '$GAMEMODERUN' is enabled as well"
+					writelog "INFO" "${FUNCNAME[0]} - Starting '$GN ($AID)' with Proton: '$PROTONVERSION' with '$GAMEMODERUN' and '$GAMESCOPE'"
+					gameArgs "$GAMESCOPE_ARGS"
+					notiShow "$(strFix "$NOTY_STARTPROTGAMOSC" "$PROTONVERSION" "$GN" "$AID")"
+					writelog "INFO" "${FUNCNAME[0]} - Full start command is '$GAMEMODERUN $GAMESCOPE ${GAMEARGSARR[*]} ${GAMESTARTCMD[*]}'"
+					startGame "$GAMEMODERUN" "$GAMESCOPE" "${GAMEARGSARR[@]}" "${GAMESTARTCMD[@]}"		
+				else
+					writelog "INFO" "${FUNCNAME[0]} - Starting '$GN ($AID)' with Proton: '$PROTONVERSION' with '$GAMEMODERUN'"
+					notiShow "$(strFix "$NOTY_STARTPROTGAMO" "$PROTONVERSION" "$GN" "$AID")"
+					writelog "INFO" "${FUNCNAME[0]} - Full start command is '$GAMEMODERUN ${GAMESTARTCMD[*]}'"
+					startGame "$GAMEMODERUN" "${GAMESTARTCMD[@]}"
 				fi
-				writelog "INFO" "${FUNCNAME[0]} - Starting '$GN ($AID)' with Proton: '$PROTONVERSION' with '$GAMEMODERUN'"
-				notiShow "$(strFix "$NOTY_STARTPROTGAMO" "$PROTONVERSION" "$GN" "$AID")"
-
-				writelog "INFO" "${FUNCNAME[0]} - Full start command is '$GAMEMODERUN ${GAMESTARTCMD[*]}'"
-
-				startGame "$GAMEMODERUN" "${GAMESTARTCMD[@]}"
-		
 			# start with gamescope:
 			elif [ "$USEGAMESCOPE" -eq 1 ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Starting '$GN ($AID)' with Proton: '$PROTONVERSION' with $GAMESCOPE arguments '$GAMESCOPE_ARGS'"
 				notiShow "$(strFix "$NOTY_STARTPROTGAMSCO" "$PROTONVERSION" "$GN" "$AID")"
 				gameArgs "$GAMESCOPE_ARGS"
-	#			mapfile -t -O "${#RUNGAMESCOPE_ARGS[@]}" RUNGAMESCOPE_ARGS <<< "$GAMESCOPE_ARGS"
-
 				writelog "INFO" "${FUNCNAME[0]} - Full start command is '$GAMESCOPE ${GAMEARGSARR[*]} ${GAMESTARTCMD[*]}'"
 				startGame "$GAMESCOPE" "${GAMEARGSARR[@]}" "${GAMESTARTCMD[@]}"		
 			# regular start:
