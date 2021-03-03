@@ -16,7 +16,7 @@ By using a versatile configuration structure it is both easy to set up and flexi
 *(Non-Steam games added to Steam are supported as well)*
 
 There are two ways to use **stl** with steam.
-Either as [Launch Option](#Launch-Option) or as [Steam Compatibility Tool](#Steam-Compatibility-Tool)
+Either as [Launch Option](#Steam-Launch-Option) or as [Steam Compatibility Tool](#Steam-Compatibility-Tool)
 
 #### Steam Launch Option
 To use **stl** as Steam Launch Option just add it to your Steam Game Launch Option command line like this:
@@ -26,6 +26,8 @@ To use **stl** as Steam Launch Option just add it to your Steam Game Launch Opti
 ![stl starter](https://github.com/frostworx/repo-assets/blob/master/gifs/stl-command.gif)
 
 *A little script which automatically does this for every game in the Steam library can be found [here](https://gist.github.com/frostworx/36bd76e705a0c87af523fa57cfeebaf8)*
+
+**To use stl with a linux native game this option needs to be selected, as Steam automatically downloads the windows build, when using a "Steam Compatibility Tool"!** 
 
 #### Steam Compatibility Tool
 **stl** can also be used as Steam Compatibility Tool, simply by using the **stl** built-in [Command Line](#Command-Line) options:
@@ -38,7 +40,9 @@ If `add` is selected and stl is started from a different path than before, the s
 
 *(as usual, when a Steam Compatibility Tool was added, Steam needs to be restarted to make the added Tool available)*
 
-All programs used as custom Compatibility Tool *(of course including **stl**)* are started without the [Steam Linux Runtime](#Steam-Linux-Runtime)!
+**All programs used as custom Compatibility Tool *(of course including stl)* are started without the [Steam Linux Runtime](#Steam-Linux-Runtime)!**
+
+**For every game using any Compatibility Tool, Steam downloads the Windows version, so if you want to use stl with a linux game, use the [Launch Option](#Steam-Launch-Option)!**
 
 ![stl steam compat](https://github.com/frostworx/repo-assets/blob/master/gifs/stl-steam-compat.gif)
 
@@ -755,7 +759,7 @@ simply duplicate one of the existing ones and translate all variables inside)*
 #### Steam Linux Runtime
 Introduced with proton 5.13-1 the Steam Linux Runtime is autostarted and part of the game command line parameters.
 
-When **stl** is used as [Launch Option](#Launch-Option)
+When **stl** is used as [Launch Option](#Steam-Launch-Option)
 both the Steam Linux Runtime and the [Proton Version](#Proton Selection) show up in the Steam Game launch command and therefore can be read by **stl**.
 In that case the Steam Linux Runtime can be disabled per game in the [Game Config](#Menu-Config) *(f.e. via [Game Menu](#Game-Menu))*
 and if one *(or more)* of above confliciting tools are enabled **stl** warns that it is incompatible with the Steam Linux Runtime *(for now)*.
@@ -1269,7 +1273,7 @@ The Possibilities Are Endless...
 
 #### Pressure Vessel
 Pressure Vessel is *(currently)* only active when not using a [Steam Compatibility Tool](#Steam-Compatibility-Tool).
-So if you want to use any of the variables via **stl**, it must be set as [Launch Option](#Launch-Option) and not as [Steam Compatibility Tool](#Steam-Compatibility-Tool).
+So if you want to use any of the variables via **stl**, it must be set as [Launch Option](#Steam-Launch-Option) and not as [Steam Compatibility Tool](#Steam-Compatibility-Tool).
 
 All Pressure Vessel *(PV)* options are in a separate PressureVessel category and therefore available in the [Category Menu](#Category-Menu).
 *(Currently)* Only one of the available options can be used *(until there are enough to know which can be combined)* in order of below appearance *(first wins)*
@@ -1416,7 +1420,7 @@ Here are some examples which improve the start notably *(all settings can be con
 - set `WAITEDITOR` to `0` [Wait requester](#Wait-Requester)
 - set `CHECKCATEGORIES` to `0` if the Game has no [Steam Category](#Steam-Categories) Tweak anyway
 - set `SAVESETSIZE` to `0` when all windows have their optimal [size](#Gui-Window-Size)
-- *(IMHO)* games start much faster when **stl** is configured as [Steam Compatibility Tool](#Steam-Compatibility-Tool) instead of [Launch Option](#Launch-Option).
+- *(IMHO)* games start much faster when **stl** is configured as [Steam Compatibility Tool](#Steam-Compatibility-Tool) instead of [Launch Option](#Steam-Launch-Option).
   The reason is probably simply that the Steam Linux Runtime isn't loaded when using a [Steam Compatibility Tool](#Steam-Compatibility-Tool).
 
 ## Command Line
