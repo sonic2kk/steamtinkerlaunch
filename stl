@@ -3225,7 +3225,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_SBSVRVK!$DESC_SBSVRVK ('SBSVRVK')":CHK "${SBSVRVK/#-/ -}" `#CAT_VR` `#SUB_Checkbox` `#MENU_GAME` \
 --field="$(spanFont "$GUI_OPTSVORTEX" "H")":LBL "SKIP" `#CAT_Vortex` `#HEAD_Vortex` `#MENU_GAME` `#MENU_GLOBAL`  \
 --field="     $GUI_VORTEXINSTALL!$DESC_VORTEXINSTALL ('VORTEXINSTALL')":CHK "${VORTEXINSTALL/#-/ -}" `#CAT_Vortex` `#SUB_Checkbox` `#MENU_GLOBAL` \
---field="     $GUI_VORTEXMODE!$DESC_VORTEXMODE ('VORTEXMODE')":CB "${VORTEXMODE/#-/ -}!disabled!normal!quickstart!editormode" `#CAT_Vortex` `#MENU_GAME` \
+--field="     $GUI_VORTEXMODE!$DESC_VORTEXMODE ('VORTEXMODE')":CB "${VORTEXMODE/#-/ -}!disabled!normal!editormode" `#CAT_Vortex` `#MENU_GAME` \
 --field="     $GUI_WAITVORTEX!$DESC_WAITVORTEX ('WAITVORTEX')":NUM "${WAITVORTEX/#-/ -}" `#CAT_Vortex` `#MENU_GAME` \
 --field="     $GUI_USEVORTEXPRERELEASE!$DESCUSEVORTEXPRERELEASE ('USEVORTEXPRERELEASE')":CHK "${USEVORTEXPRERELEASE/#-/ -}" `#CAT_Vortex` `#SUB_Checkbox` `#MENU_GLOBAL`  \
 --field="     $GUI_VORTEXDOWNLOADPATH!$DESC_VORTEXDOWNLOADPATH ('VORTEXDOWNLOADPATH')":DIR "${VORTEXDOWNLOADPATH/#-/ -}" `#CAT_Vortex` `#SUB_Directories` `#MENU_GLOBAL` \
@@ -8403,14 +8403,15 @@ function startVortex {
 
 		cleanVortex
 
-		if [ "$VORTEXMODE" == "quickstart" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Vortex exited - Vortex is in editor only mode '$VORTEX' so leaving and going back to steam now" "X"
+		if [ "$VORTEXMODE" == "editormode" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Vortex exited - Vortex is in editor only mode '$VORTEXMODE' so leaving and going back to steam now" "X"
+			closeSTL " ######### STOP EARLY '$PROGNAME $PROGVERS' #########"
 			exit
 		else
 			writelog "INFO" "${FUNCNAME[0]} - Vortex exited - starting game now"
 		fi
 	else
-		writelog "ERROR" "${FUNCNAME[0]} - VORTEXEXE $VORTEXEXE not found! - exit"
+		writelog "ERROR" "${FUNCNAME[0]} - VORTEXEXE '$VORTEXEXE' not found! - exit"
 		exit
 	fi
 }
@@ -8577,7 +8578,8 @@ function askVortex {
 			--geometry="$ASKVTXREQWIDTH"x"$ASKVTXREQHEIGHT"+0+0 \
 			--text="$(spanFont "$GN ($AID) - $GUI_ASKVORTEX" "H")" \
 			--button="$BUT_VORTEX":0  \
-			--button="$BUT_CAN":1  \
+			--button="$BUT_ONLYVORT":2 \
+			--button="$BUT_CAN":4  \
 			--timeout="$WAITVORTEX" \
 			--timeout-indicator=top
 
@@ -8586,7 +8588,12 @@ function askVortex {
 						writelog "INFO" "${FUNCNAME[0]} - Selected to Start Vortex, so not disabling it"
 					}
 				;;
-				1)  {
+				2)  {
+						writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_ONLYVORT' - Only starting Vortex without the game"
+						VORTEXMODE="editormode"
+					}
+				;;
+				4)  {
 						writelog "INFO" "${FUNCNAME[0]} - Selected CANCEL - Not starting Vortex"
 						VORTEXMODE="disabled"
 					}
@@ -8605,7 +8612,7 @@ function askVortex {
 
 
 function initVortexStuff {
-	if [ "$VORTEXMODE" == "normal" ] || [ "$VORTEXMODE" == "quickstart" ] || [ "$VORTEXMODE" == "editormode" ]; then
+	if [ "$VORTEXMODE" == "normal" ] || [ "$VORTEXMODE" == "editormode" ]; then
 		if [ -z "$VORTEXWINE" ] || [ ! -f "$VORTEXWINE" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - No wine binary configured in variable VORTEXWINE or file in variable VORTEXWINE '$VORTEXWINE' not found - autodetecting wine"
 			PROT4PATH="$(printProtonArr | grep "proton-4" | sort -nr | tail -n1 | cut -d ';' -f2)"
@@ -8790,11 +8797,8 @@ function checkVortex {
 		else
 			writelog "SKIP" "${FUNCNAME[0]} - But VORTEXPREFIX is not defined - skipping"
 		fi
-	elif [ "$VORTEXMODE" == "quickstart" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Quick VORTEX mode '$VORTEX' is set"
-			startVortex
 	elif [ "$VORTEXMODE" == "editormode" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Editor only VORTEX mode '$VORTEX' is set"
+			writelog "INFO" "${FUNCNAME[0]} - Editor only VORTEX mode '$VORTEXMODE' is set"
 			startVortex
 	fi
 	fi
@@ -10309,10 +10313,10 @@ function commandline {
 			if [ "$2" == "install" ]; then
 				installVortexFull				
 			elif [ "$2" == "start" ]; then
-				VORTEXMODE="quickstart"
+				VORTEXMODE="normal"
 				startVortex
 			elif [ "$2" == "getset" ]; then
-				VORTEXMODE="quickstart"
+				VORTEXMODE="normal"
 				startVortex "$2"
 			elif [ "$2" == "stage" ]; then
 				addVortexStage "$3"

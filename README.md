@@ -955,8 +955,7 @@ see [Command Line](#Command-Line)
 The `VORTEXMODE` option in the [Game Config](#Menu-Config) *(f.e. via [Game Menu](#Game-Menu))* has the following modes:
 - "disabled": Vortex won't be used
 - "normal": Vortex will be started regularly
-- "quickstart": Vortex will be started but some checks are skipped
-- "editormode": Vortex will be started in quickstart mode, but the selected game won't start after Vortex is closed
+- "editormode": Vortex will be started, but the selected game won't start after Vortex is closed
 
 ##### Vortex Gui
 A Vortex Gui, where one can en-/disable Vortex for all supported and installed Games can be opened
