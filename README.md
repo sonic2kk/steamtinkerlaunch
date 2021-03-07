@@ -150,6 +150,7 @@ or just to browse through the latest version**
 * **[Metadata Support](#Metadata-Support)** Collect as much as possible gamedata to make further automations easier and faster
 * **[X64dbg](#X64dbg-Support)** optionally start the selected game automatically with the *(auto-installed)* debugger x64dbg
 * **[Add Non-Steam Game](#Add-Non-Steam-Game)** Add Non-Steam games either via command line or via Gui
+* **[SteamGridDB Support](#SteamGridDB)** Add custom grids from SteamGridDB manually or automatically for one or all installed games
 
 ## Requirements
 *(no special order)*
@@ -1412,6 +1413,35 @@ must be run and confirmed afterwards in the Steam Client to active them.
 If the [Steam Category](#Steam-Categories) 'Non-Steam' exists *(at least one regular game needs to have this category else it can't be found currently)*,
 the checkbox for the corresponding tag is auto-enabled.
 
+#### SteamGridDB
+To use the integration of the mighty [SteamGridDB](https://www.steamgriddb.com) an individual Api key has to be created.
+This is free and can be done [here](https://www.steamgriddb.com/api/v2#section/Authentication)
+The key has to be entered into the `SteamGridDB Api Key` (SGDBAPIKEY) field in the [Global Config](#Global-Config) or directly in the SteamGridDB [Category Menu](#Category-Menu).
+
+In the same Menus the general Grid Download behaviour can be configured.
+
+![gui steamgriddb](https://github.com/frostworx/repo-assets/blob/master/pics/stl-steamgriddb.jpg)
+
+Both all query Parameters of the [SteamGridDB Api](https://www.steamgriddb.com/api/v2#operation/getGridsByPlatformId) like Styles, Dimensions, Types, NSFW, Humor are available
+and also some **stl** specific options can be set:
+- Checkbox: Choose to **"Download Grid to Steam"**
+  - if checked the downloads are stored directly into the Steam dir `~/.steam/steam/userdata/$STEAMUSERID/config/grid/`
+  - if not checked, the downloads wil be stored into `STLDLDIR/steamgriddb` for manual review
+- Dropdown Menu: What to do with an **"Existing Grid File"**
+  - replace
+  - skip
+  - backup (into backup subdirectory of the download directory)
+- Dropdown Menu: **"Auto Download Grid"**  *(automatically download grid for the started game)*
+  - none
+  - after_game
+  - before_game
+  - no_meta (only trigger the download if no generic meta file for the game exists yet)
+ 
+To download Grids, besides above automatic method the [Command Line](#Command-Line) can be used.
+`stl update grid <SteamAppID>`
+With a SteamAppID as parameter only the grid for that single game will be downloaded, without Grids for all **installed games** will be pulled at once.
+
+ 
 ## Game Launch Speed
 **stl** has pretty much to check, but when everything is configured, several option-checks can be disabled (per game)
 to speed up the actual game start process.
