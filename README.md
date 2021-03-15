@@ -77,55 +77,21 @@ It might be a good idea to start with configuring everything in the [Settings Me
 **For a complete list of features, please see [the wiki](https://github.com/podiki/steamtinkerlaunch/wiki). For the most recent changes, see [the release page](https://github.com/frostworx/steamtinkerlaunch/releases)
 or just to browse through the latest version**
 
-*(no special order)*
+*(main categories)*
 
-* **[[ENV Variables]]** can be easily set for every single game (f.e `PROTON`* , `DXVK`* , `MANGOHUD`, `RADV_PERFTEST`, `WINE`...)
-* **[[Custom Program]]** launch custom programs before or instead of the game itself *(also windows exes)*
-* **[[winetricks]]** start winetricks before game launch *(gui or silent)*
-* **[[Winecfg]]** start winecfg before game launch
-* **[[GameMode]]** start/stop gamemoderun per game
-* **[[Notifier]]** start/stop notify message per game
-* **[[Strace]]** for easily debugging a game
-* **[[Editor Hotkey|Editor]]** for editing the gameconfig
-* **[[Editor URL|Editor]]** automatically open a defined URL for the launched game with the editor
-* **[[ReShade]]** automatic installation and configuration
-* **[[Depth3D]]** automatic shader installation
-* **[[vkBasalt]]** basic vkBasalt configuration
-* **[[Side by Side VR]]** automatically play regular games in side-by-side mode in VR!
-* **[[Tweaks]]** community mini configfiles (so-called [Tweakfiles](#Tweakfiles)) to automatically start problematic games ootb - can also start custom [Tweak Commands](#Tweak-Commands)
-* **[[Auto Tweaks]]** support for automatic import of game configs from several other platforms
-* **[[Nyrna]]** start/stop ReplaySorcery per game
-* **[[ReplaySorcery]]** start/stop ReplaySorcery per game
-* **[[NetMon]]** basic network monitoring
-* **[[Boxtron]]** support via steam `DOSBox` category
-* **[[Roberta]]** support via steam `ScummVM` category
-* **[[Luxtorpeda]]** support via steam `Luxtorpeda` category
-* **[[Vortex Mod Manager|Vortex]]** via steam `Vortex` category see [Video of usage](#stl-Vortex-gif)
-* **[[GFWL/xlive|GFWL]]** automatic support for games using GFWL
-* **[[WMP10]]** automatic support for WMP10 installation
-* **[[self maintaining configs|Configuration Locations]]** optional automatic cloning of this repo as replacement for missing system wide installation
-* **[[GameConqueror]]** automatically open gameconqueror (scanmem gui) with the game exe on game launch
-* **[[Custom User Start/Stop scripts|Start Stop Scripts]]** optional start custom scripts when game starts/ends
-* **[[GameScope]]** start/stop gamescope per game
-* **[[Settings Menu]]** easy configuration for almost all settings with the built-in modular Settings Menu
-* **[[Native Games]]** support native Linux games
-* **[[Steam Compatibility Tool]]** can be used as [Steam Launch Option](#Steam-Launch-Option) and as [Steam Compatibility Tool](#Steam-Compatibility-Tool)
-* **[[Proton Selection]]** switch between Proton-Versions, automatically download custom Proton builds...
-* **[[Multi Language Support]]** Multi-Language Support
-* **[[Steam Linux Runtime]]** the Steam Linux Runtime can be disabled optionally
-* **[[Game Launcher]]** built in game launcher mode
-* **[[Game Pictures|Game Launcher]]** uses Game Pictures
-* **[[Desktop Files|Game Launcher]]** automatic creation of *(stl-internal)* desktop files
-* **[[Shader Management]]** Download/Update/Install/Enable/Disable Shaders
-* **[[Custom Proton Autoupdate]]** optionally Download/Install/Enable version bumps of Custom Proton version per game
-* **[[ReShade Presets|ReShade]]** Select ReShade Presets
-* **[[Cheat Engine]]** automatic CheatEngine download, install, autostart per game and autostop on game exit
-* **[[Pressure Vessel]]** Some Pressure Vessel options
-* **[[Wine Support]]** Download and use custom Wine archives instead of Proton
-* **[[Backup Support]]** optionally automatic backup of 'steamuser' files of the 'steamuser' files per Proton game
-* **[[Metadata Support]]** Collect as much as possible gamedata to make further automations easier and faster
-* **[[X64dbg Support]]** optionally start the selected game automatically with the *(auto-installed)* debugger x64dbg
-* **[[Add Non Steam Game]]** Add Non-Steam games either via command line or via Gui
+* [GUI Options](https://github.com/podiki/steamtinkerlaunch/wiki/Settings-Menu#GUI-Options)
+* Misc
+* [PressureVessel](https://github.com/podiki/steamtinkerlaunch/wiki/Pressure-Vessel): Some Pressure Vessel options
+* [Proton](https://github.com/podiki/steamtinkerlaunch/wiki/Proton-Selection): switch between Proton-Versions, automatically download custom Proton builds...
+* Shader Management: Download/Update/Install/Enable/Disable Shaders with support for [ReShade](https://github.com/podiki/steamtinkerlaunch/wiki/ReShade) and [Depth3D](https://github.com/podiki/steamtinkerlaunch/wiki/Depth3D)
+* Stl
+* Tools
+* [Tweaks](https://github.com/podiki/steamtinkerlaunch/wiki/Tweaks): community mini configfiles (so-called [Tweakfiles](https://github.com/podiki/steamtinkerlaunch/wiki/Tweaks#Tweakfiles)) to automatically start problematic games OOTB - can also start custom [Tweak Commands](https://github.com/podiki/steamtinkerlaunch/wiki/Tweaks#Tweak-Commands)
+* Urls
+* [Vortex](https://github.com/podiki/steamtinkerlaunch/wiki/Vortex)
+* VR: [Side by Side VR](https://github.com/podiki/steamtinkerlaunch/wiki/Side-by-Side-VR): automatically play regular games in side-by-side mode in VR!
+* [Wine](https://github.com/podiki/steamtinkerlaunch/wiki/Wine-Support): Download and use custom Wine archives instead of Proton
+
 
 ## Requirements
 *(no special order)*
