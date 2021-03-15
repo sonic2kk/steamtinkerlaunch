@@ -6,7 +6,7 @@ which allows customizing and start tools and options for games quickly on the fl
 
 By using a versatile configuration structure it is both easy to set up and flexible.
 
-<li><a href="https://liberapay.com/frostworx"><img alt="Liberapay receives" src="http://img.shields.io/liberapay/receives/frostworx.svg?logo=liberapay"></a></li>
+![receives](https://img.shields.io/liberapay/receives/frostworx.svg?logo=liberapay)
 
 ## How to use
 
@@ -60,9 +60,7 @@ Feel free to contribute to the project - there are many possibilities to do so:
 - add translations
 - add your tinkered tweaks
 - find out how cool it is and tell others :)
-- help to improve/shorten this monstrous README *(especially if English is your mother language)*
-- sponsor this project
-
+- help to improve this README and the wiki *(especially if English is your mother language)*
 
 Got and idea or suggestions, but don't want to open an issue?
 Visit [/r/SteamTinkerLaunch/](https://www.reddit.com/r/SteamTinkerLaunch)
@@ -79,15 +77,14 @@ or just to browse through the latest version**
 
 *(main categories)*
 
+* External Tools: All external 3rd party programs (like [Boxtron](https://github.com/podiki/steamtinkerlaunch/wiki/Boxtron), [Luxtorpeda](https://github.com/podiki/steamtinkerlaunch/wiki/Luxtorpeda), [MangoHud](https://github.com/podiki/steamtinkerlaunch/wiki/MangoHud), [vkBasalt](https://github.com/podiki/steamtinkerlaunch/wiki/vkBasalt), etc.) which can be enabled for game launch can be found here, including their corresponding options.
 * [GUI Options](https://github.com/podiki/steamtinkerlaunch/wiki/Settings-Menu#GUI-Options)
-* Misc
+* Misc: All configuration options which can't be put into a generic category usually can be found here.
 * [PressureVessel](https://github.com/podiki/steamtinkerlaunch/wiki/Pressure-Vessel): Some Pressure Vessel options
 * [Proton](https://github.com/podiki/steamtinkerlaunch/wiki/Proton-Selection): switch between Proton-Versions, automatically download custom Proton builds...
-* Shader Management: Download/Update/Install/Enable/Disable Shaders with support for [ReShade](https://github.com/podiki/steamtinkerlaunch/wiki/ReShade) and [Depth3D](https://github.com/podiki/steamtinkerlaunch/wiki/Depth3D)
-* Stl
-* Tools
+* [Shader Management](https://github.com/podiki/steamtinkerlaunch/wiki/Shader-Management): Download/Update/Install/Enable/Disable Shaders with support for [ReShade](https://github.com/podiki/steamtinkerlaunch/wiki/ReShade) and [Depth3D](https://github.com/podiki/steamtinkerlaunch/wiki/Depth3D)
+* Stl: Stl has multiple [configuration](https://github.com/podiki/steamtinkerlaunch/wiki/Configuration-Locations) options.
 * [Tweaks](https://github.com/podiki/steamtinkerlaunch/wiki/Tweaks): community mini configfiles (so-called [Tweakfiles](https://github.com/podiki/steamtinkerlaunch/wiki/Tweaks#Tweakfiles)) to automatically start problematic games OOTB - can also start custom [Tweak Commands](https://github.com/podiki/steamtinkerlaunch/wiki/Tweaks#Tweak-Commands)
-* Urls
 * [Vortex](https://github.com/podiki/steamtinkerlaunch/wiki/Vortex)
 * VR: [Side by Side VR](https://github.com/podiki/steamtinkerlaunch/wiki/Side-by-Side-VR): automatically play regular games in side-by-side mode in VR!
 * [Wine](https://github.com/podiki/steamtinkerlaunch/wiki/Wine-Support): Download and use custom Wine archives instead of Proton
