@@ -60,7 +60,6 @@ Feel free to contribute to the project - there are many possibilities to do so:
 - add translations
 - add your tinkered tweaks
 - find out how cool it is and tell others :)
-- help to improve this README and the wiki *(especially if English is your mother language)*
 
 Got and idea or suggestions, but don't want to open an issue?
 Visit [/r/SteamTinkerLaunch/](https://www.reddit.com/r/SteamTinkerLaunch)
@@ -88,7 +87,6 @@ or just to browse through the latest version**
 * [Vortex](https://github.com/frostworx/steamtinkerlaunch/wiki/Vortex)
 * VR: [Side by Side VR](https://github.com/frostworx/steamtinkerlaunch/wiki/Side-by-Side-VR): automatically play regular games in side-by-side mode in VR!
 * [Wine](https://github.com/frostworx/steamtinkerlaunch/wiki/Wine-Support): Download and use custom Wine archives instead of Proton
-
 
 ## Requirements
 *(no special order)*

@@ -5,7 +5,7 @@
 
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v4.0-next8"
+PROGVERS="v4.0"
 PROGCMD="${0##*/}"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -169,6 +169,8 @@ GHURL="https://github.com"
 DXVKHUDLIST="devinfo,fps,frametimes,submissions,drawcalls,pipelines,memory,gpuload,version,api,compiler,samplers,full,1"
 SOMEPOPULARWINEPAKS="corefonts dotnet35sp1 dotnet472 d3dcompiler_43 msxml3 quartz vcrun2010 wmp10 xact"
 SOMEWINEDEBUGOPTIONS="-all,+timestamp,+pid,+tid,+seh,+debugstr,+loaddll,+mscoree,+steam,+vrclient,+vulkan"
+SGDBDIMOPTS="460x215,920x430,600x900,342x482,660x930"
+SGDBSTYOPTS="alternate,blurred,white_logo,material,no_logo"
 
 STLGAMES="$STLCFGDIR/games"
 STLGDESKD="$STLGAMES/desktop"
@@ -321,7 +323,8 @@ function setSteamPaths {
 	mkdir -p "$SROOT/$CTD" 2>/dev/null
 	setSteamPath "STEAMCOMPATOOLS" "$CTD"
 	STEAMUSERID="$(find "$SUSDA" -maxdepth 1 -type d -name "[1-9]*")"
-	FLCV="$STEAMUSERID/config/$LCV"
+	SUIC="$STEAMUSERID/config"
+	FLCV="$SUIC/$LCV"
 }
 
 function getGamePic {
@@ -438,6 +441,75 @@ function getGameDataForInstalledGames {
 	while read -r CATAID; do
 		getGameData "$CATAID"
 	done <  <(getInstalledGamesFromCategory "installed")
+}
+
+function checkSGDbApi {
+	if [ -z "$SGDBAPIKEY" ] || [ "$SGDBAPIKEY" == "$NON" ]; then
+		writelog "SKIP" "${FUNCNAME[0]} - No SteamGrid Api Key found - Get one at '${STEAMGRIDDBAPI}'" E
+		writelog "SKIP" "${FUNCNAME[0]} - and save it in the Global Config ('SGDBAPIKEY')" E
+		return 1
+	else
+		return 0
+	fi	
+}
+
+function getGrid {
+	if checkSGDbApi; then
+
+		URLSTR="$("$WGET" --header="Authorization: Bearer $SGDBAPIKEY" -q "${STEAMGRIDDBAPI}/${1}?styles=${SGDBSTYLES}&dimensions=${SGDBDIMS}&types=${SGDBTYPES}&nsfw=${SGDBNSFW}&humor=${SGDBHUMOR}" -O - | "$JQ" -r '.data' | "$JQ" '.[0].url')"
+
+		GRIDDLURL="${URLSTR//\"}"
+		if grep -q "^https" <<< "$GRIDDLURL"; then
+			DLSRC="${GRIDDLURL//\"}"
+
+			if [ "$SGDBDLTOSTEAM" -eq 1 ]; then
+				if [ -z "$SUSDA" ]; then
+					setSteamPaths
+				fi
+
+				if [ -d "$SUIC" ]; then
+					GRIDDLDIR="${SUIC}/grid"
+				fi
+			else
+				GRIDDLDIR="$STLDLDIR/steamgriddb"
+			fi
+
+			mkdir -p "$GRIDDLDIR" 2>/dev/null
+	
+			DLDST="$GRIDDLDIR/${1}p.${GRIDDLURL##*.}"
+			STARTDL=1
+			
+			if [ -f "$DLDST" ]; then
+				if [ "$SGDBHASFILE" == "skip" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Download of existing file is set to '$SGDBHASFILE' - doing nothing" "E"
+					STARTDL=0
+				elif [ "$SGDBHASFILE" == "backup" ]; then
+					BACKDIR="${GRIDDLDIR}/backup"
+					mkdir -p "$BACKDIR" 2>/dev/null
+					writelog "INFO" "${FUNCNAME[0]} - Backup existing file into '$BACKDIR', because SGDBHASFILE is set to '$SGDBHASFILE'" "E"
+					mv "$DLDST" "$BACKDIR"
+				elif [ "$SGDBHASFILE" == "replace" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Replacing existing file '$DLDST', because SGDBHASFILE is set to '$SGDBHASFILE'" "E"
+					rm "$DLDST" 2>/dev/null
+				fi
+			fi
+			
+			if [ "$STARTDL" -eq 1 ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Downloading '$DLSRC' to '$DLDST'" "E"
+				"$WGET" -q "$DLSRC" -O "$DLDST"
+			fi
+		else
+			writelog "INFO" "${FUNCNAME[0]} - No grid found to download for '$1' - maybe loosen filters?" "E"
+		fi
+	fi
+}
+
+function getGridsForInstalledGames {
+	if checkSGDbApi; then
+		while read -r CATAID; do
+			getGrid "$CATAID"
+		done <  <(getInstalledGamesFromCategory "installed")
+	fi
 }
 
 function getDataForAllGamesinSharedConfig {
@@ -1180,6 +1252,7 @@ function setDefaultCfgValues {
 		if [ -z "$WINETRICKSURL" ]		; then	WINETRICKSURL="https://github.com/Winetricks/winetricks"; fi
 		if [ -z "$CHEATENGINEURL" ]		; then	CHEATENGINEURL="https://github.com/cheat-engine/cheat-engine/releases";fi
 		if [ -z "$X64DBGURL" ]			; then	X64DBGURL="https://github.com/x64dbg/x64dbg/releases/tag/snapshot";fi
+		if [ -z "$STEAMGRIDDBAPI" ]		; then	STEAMGRIDDBAPI="https://www.steamgriddb.com/api/v2/grids/steam";fi
 	}
 
 	function setDefaultCfgValuesgui {
@@ -1322,6 +1395,15 @@ function setDefaultCfgValues {
 		if [ -z "$CHEATENGINEVERSION" ]	; then	CHEATENGINEVERSION="7.2"; fi
 		if [ -z "$NOSTEAMSTLDEF" ]		; then	NOSTEAMSTLDEF="0"; fi
 		if [ -z "$USEWGETGUI" ]			; then	USEWGETGUI="0"; fi
+		if [ -z "$SGDBAPIKEY" ]			; then	SGDBAPIKEY="$NON"; fi
+		if [ -z "$SGDBSTYLES" ]			; then	SGDBSTYLES="$SGDBSTYOPTS"; fi
+		if [ -z "$SGDBDIMS" ]			; then	SGDBDIMS="$SGDBDIMOPTS"; fi
+		if [ -z "$SGDBTYPES" ]			; then	SGDBTYPES="animated,static"; fi
+		if [ -z "$SGDBNSFW" ]			; then	SGDBNSFW="any"; fi
+		if [ -z "$SGDBHUMOR" ]			; then	SGDBHUMOR="any"; fi
+		if [ -z "$SGDBDLTOSTEAM" ]		; then	SGDBDLTOSTEAM="0"; fi
+		if [ -z "$SGDBHASFILE" ]		; then	SGDBHASFILE="skip"; fi
+		if [ -z "$SGDBAUTODL" ]			; then	SGDBAUTODL="$NON"; fi
 	}
 
 	function setDefaultCfgValuesdefault_template {
@@ -1481,6 +1563,8 @@ function saveCfg {
 			echo "CHEATENGINEURL=\"$CHEATENGINEURL\""
 			echo "## x64dbg URL"
 			echo "X64DBGURL=\"$X64DBGURL\""
+			echo "## SteamGridDB Api URL"
+			echo "STEAMGRIDDBAPI=\"$STEAMGRIDDBAPI\""
 			} >> "$1"
 			#ENDsaveCfgurl
 		fi
@@ -1745,6 +1829,24 @@ function saveCfg {
 			echo "NOSTEAMSTLDEF=\"$NOSTEAMSTLDEF\""
 			echo "## $DESC_USEWGETGUI"
 			echo "USEWGETGUI=\"$USEWGETGUI\""
+			echo "## $DESC_SGDBAPIKEY"
+			echo "SGDBAPIKEY=\"$SGDBAPIKEY\""
+			echo "## $DESC_SGDBSTYLES"
+			echo "SGDBSTYLES=\"$SGDBSTYLES\""
+			echo "## $DESC_SGDBDIMS"
+			echo "SGDBDIMS=\"$SGDBDIMS\""
+			echo "## $DESC_SGDBTYPES"
+			echo "SGDBTYPES=\"$SGDBTYPES\""
+			echo "## $DESC_SGDBNSFW"
+			echo "SGDBNSFW=\"$SGDBNSFW\""
+			echo "## $DESC_SGDBHUMOR"
+			echo "SGDBHUMOR=\"$SGDBHUMOR\""
+			echo "## $DESC_SGDBDLTOSTEAM"
+			echo "SGDBDLTOSTEAM=\"$SGDBDLTOSTEAM\""
+			echo "## $DESC_SGDBHASFILE"
+			echo "SGDBHASFILE=\"$SGDBHASFILE\""
+			echo "## $DESC_SGDBAUTODL"
+			echo "SGDBAUTODL=\"$SGDBAUTODL\""
 			} >> "$1"
 			#ENDsaveCfgglobal
 		fi
@@ -3077,6 +3179,16 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_USEGAMEPICINMENU!$DESC_USEGAMEPICINMENU ('USEGAMEPICINMENU')":CHK "${USEGAMEPICINMENU/#-/ -}" `#CAT_Gui` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_USEGAMEPICS!$DESC_USEGAMEPICS ('USEGAMEPICS')":CHK "${USEGAMEPICS/#-/ -}" `#CAT_Gui` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_CHECKCATEGORIES!$DESC_CHECKCATEGORIES ('CHECKCATEGORIES')":CHK "${CHECKCATEGORIES/#-/ -}" `#CAT_Gui` `#SUB_Checkbox` `#MENU_GAME` \
+--field="$(spanFont "$GUI_OPTSGRID" "H")":LBL "SKIP" `#CAT_SteamGridDB` `#HEAD_SteamGridDB` `#MENU_GLOBAL` \
+--field="     $GUI_SGDBDLTOSTEAM!$DESC_SGDBDLTOSTEAM ('SGDBDLTOSTEAM')":CHK "${SGDBDLTOSTEAM/#-/ -}" `#CAT_SteamGridDB` `#SUB_Checkbox` `#MENU_GLOBAL` \
+--field="     $GUI_SGDBAPIKEY!$DESC_SGDBAPIKEY ('SGDBAPIKEY')":CBE "${SGDBAPIKEY/#-/ -}" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
+--field="     $GUI_SGDBHASFILE!$DESC_SGDBHASFILE ('SGDBHASFILE')":CB "${SGDBHASFILE/#-/ -}!skip!backup!replace" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
+--field="     $GUI_SGDBAUTODL!$DESC_SGDBAUTODL ('SGDBAUTODL')":CB "${SGDBAUTODL/#-/ -}!$NON!after_game!before_game!no_meta" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
+--field="     $GUI_SGDBSTYLES!$DESC_SGDBSTYLES ('SGDBSTYLES')":CBE "${SGDBSTYLES/#-/ -}!${SGDBSTYOPTS//,/\!}" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
+--field="     $GUI_SGDBDIMS!$DESC_SGDBDIMS ('SGDBDIMS')":CBE "${SGDBDIMS/#-/ -}!${SGDBDIMOPTS//,/\!}" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
+--field="     $GUI_SGDBTYPES!$DESC_SGDBTYPES ('SGDBTYPES')":CBE "${SGDBTYPES/#-/ -}!animated!static!animated,static!static,animated" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
+--field="     $GUI_SGDBNSFW!$DESC_SGDBNSFW ('SGDBNSFW')":CBE "${SGDBNSFW/#-/ -}!any!false!true" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
+--field="     $GUI_SGDBHUMOR!$DESC_SGDBHUMOR ('SGDBHUMOR')":CBE "${SGDBHUMOR/#-/ -}!any!false!true" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
 --field="$(spanFont "$GUI_OPTSMISC" "H")":LBL "SKIP" `#CAT_Misc` `#HEAD_Misc` `#MENU_GAME` `#MENU_GLOBAL`  \
 --field="     $GUI_CUSTOMCMDMODE!$DESC_CUSTOMCMDMODE ('CUSTOMCMDMODE')":CB "${CUSTOMCMDMODE/#-/ -}!disabled!always!once" `#CAT_Misc` `#MENU_GAME` \
 --field="     $GUI_CUSTOMCMD!$DESC_CUSTOMCMD $GUI_ECHOPLAC ('CUSTOMCMD')":FL "${CUSTOMCMD/#-/ -}" `#CAT_Misc` `#MENU_GAME` \
@@ -3214,6 +3326,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_WINETRICKSURL!$DESC_WINETRICKSURL ('WINETRICKSURL')" "${WINETRICKSURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="     $GUI_CHEATENGINEURL!$DESC_CHEATENGINEURL ('CHEATENGINEURL')" "${CHEATENGINEURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="     $GUI_X64DBGURL!$DESC_X64DBGURL ('X64DBGURL')" "${X64DBGURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
+--field="     $GUI_STEAMGRIDDBAPI!$DESC_STEAMGRIDDBAPI ('STEAMGRIDDBAPI')" "${STEAMGRIDDBAPI/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="$(spanFont "$GUI_OPTSVR" "H")":LBL "SKIP" `#CAT_VR` `#HEAD_VR` `#MENU_GAME` `#MENU_GLOBAL`  \
 --field="     $GUI_SBSVRRS!$DESC_SBSVRRS ('SBSVRRS')":CHK "${SBSVRRS/#-/ -}" `#CAT_VR` `#SUB_Checkbox` `#SUB_ReShade` `#MENU_GAME` \
 --field="     $GUI_RUNSBSVR!$DESC_RUNSBSVR ('RUNSBSVR')":CHK "${RUNSBSVR/#-/ -}" `#CAT_VR` `#SUB_Checkbox` `#MENU_GAME` \
@@ -8867,7 +8980,11 @@ function checkIntDeps {
 		fi	
 
 		MINYAD="7.2"
-		YADVER="$("$YAD" --version | cut -d ' ' -f1)"
+		if ! grep -q "\-\-help-about" <<< "$("$YAD" --help)"; then
+			YADVER="$("$YAD" --version | cut -d ' ' -f1)"
+		else
+			YADVER="9.0"
+		fi
 		
 		if [ "$(printf '%s\n' "$MINYAD" "$YADVER" | sort -V | head -n1)" != "$MINYAD" ]; then 
 			writelog "ERROR" "${FUNCNAME[0]} - Yad version '$("$YAD" --version | cut -d ' ' -f1)' is too old. You need to update to at least '$MINYAD'" "E"!
@@ -9124,6 +9241,12 @@ function prepareLaunch {
 
 	# create/remove steam_appid.txt
 	checkSteamAppIDFile
+
+	# Automatic Grid Update Check before_game
+	if [ "$SGDBAUTODL" == "after_game" ] ; then
+		writelog "INFO" "${FUNCNAME[0]} - Automatic Grid Update Check '$SGDBAUTODL'"
+		getGrid "$AID"
+	fi
 	
 	# GAME START
 	launchSteamGame
@@ -10120,6 +10243,7 @@ function howto {
 	echo "           gamedata <SteamAppID>       Updates missing desktopfiles"
 	echo "                                       and pictures of installed games"
 	echo "                                       or only from <SteamAppID>"
+	echo "           grid <SteamAppID>         Update Steam Grid for installed game(s)"
 	echo "           allgamedata                 The same as above for"
 	echo "                                       all games in $SCV"
 	echo "           shaders <shadername>        all enabled shaders or <shadername>"
@@ -10134,7 +10258,7 @@ function howto {
 	echo "                                       Show installed Games with Vortex support"
 	echo "                                       with parameter 'X'"
 	echo "           games                       Gui to en/disable Vortex for supported game"
-	echo "           symlinks                    Gui showing symlinks in the Vortex WINEPREFIX"
+	echo "           symlinks                    Gui showing Vortex symlinks"
 	echo "           start                       Starts vortex"
 	echo "           getset                      Show config of installed vortex"
 	echo "           stage <path>                Add vortex stage via dialog"
@@ -10285,6 +10409,12 @@ function commandline {
 					echo getGameData "$3"
 					getGameData "$3"
 				fi
+			elif [ "$2" == "grid" ]; then
+				if [ -z "$3" ]; then
+					getGridsForInstalledGames
+				else
+					getGrid "$3"
+				fi
 			elif [ "$2" == "allgamedata" ]; then
 				getDataForAllGamesinSharedConfig
 			elif [ "$2" == "shaders" ]; then
@@ -10392,6 +10522,10 @@ function storeMetaData {
 	mkProjDir "$TICUMETA" 1
 
 	if [ ! -f "$GEMETA/$MAID.conf" ]; then
+		if [ "$SGDBAUTODL" == "no_meta" ] ; then
+			writelog "INFO" "${FUNCNAME[0]} - Automatic Grid Update Check '$SGDBAUTODL'"
+			getGrid "$MAID"
+		fi
 		touch "$GEMETA/$MAID.conf"
 	fi
 	
@@ -11124,6 +11258,11 @@ function addNonSteamGame {
 function closeSTL {
 	cleanSUTemp
 	backupSteamUser "$AID"
+
+	if [ "$SGDBAUTODL" == "after_game" ] ; then
+		writelog "INFO" "${FUNCNAME[0]} - Automatic Grid Update Check '$SGDBAUTODL'"
+		getGrid "$AID"
+	fi
 
 	if [ "$PROTON_LOG" -eq 1 ]; then
 		createSymLink "${FUNCNAME[0]}" "$STLPROTONIDLOGDIR/steam-${AID}.log" "$STLPROTONTILOGDIR//steam-${GN/$LGS /}.log"
