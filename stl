@@ -5,7 +5,7 @@
 
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v4.1next1"
+PROGVERS="v4.1next2"
 PROGCMD="${0##*/}"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -1392,6 +1392,7 @@ function setDefaultCfgValues {
 		if [ -z "$USEVORTEXPRERELEASE" ]	; then	USEVORTEXPRERELEASE="0"; fi
 		if [ -z "$DISABLE_AUTOSTAGES" ]	; then	DISABLE_AUTOSTAGES="0"; fi
 		if [ -z "$CHEATENGINEVERSION" ]	; then	CHEATENGINEVERSION="7.2"; fi
+		if [ -z "$CHEATENGINEMD5SUM" ]	; then	CHEATENGINEMD5SUM="8ce5de1b284bc9f865865902fea09489"; fi
 		if [ -z "$NOSTEAMSTLDEF" ]		; then	NOSTEAMSTLDEF="0"; fi
 		if [ -z "$USEWGETGUI" ]			; then	USEWGETGUI="0"; fi
 		if [ -z "$SGDBAPIKEY" ]			; then	SGDBAPIKEY="$NON"; fi
@@ -1822,6 +1823,8 @@ function saveCfg {
 			echo "DISABLE_AUTOSTAGES=\"$DISABLE_AUTOSTAGES\""
 			echo "## $DESC_CHEATENGINEVERSION"
 			echo "CHEATENGINEVERSION=\"$CHEATENGINEVERSION\""
+			echo "## $DESC_CHEATENGINEMD5SUM"
+			echo "CHEATENGINEMD5SUM=\"$CHEATENGINEMD5SUM\""
 			echo "## $DESC_NOSTEAMSTLDEF"
 			echo "NOSTEAMSTLDEF=\"$NOSTEAMSTLDEF\""
 			echo "## $DESC_USEWGETGUI"
@@ -3293,6 +3296,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_USERSTART!$DESC_USERSTART $GUI_ECHOPLAC ('USERSTART')":FL "${USERSTART/#-/ -}" `#CAT_Tools` `#MENU_GAME` \
 --field="     $GUI_USERSTOP!$DESC_USERSTOP $GUI_ECHOPLAC ('USERSTOP')":FL "${USERSTOP/#-/ -}" `#CAT_Tools` `#MENU_GAME` \
 --field="     $GUI_CHEATENGINEVERSION!$DESC_CHEATENGINEVERSION ('CHEATENGINEVERSION')" "${CHEATENGINEVERSION/#-/ -}" `#CAT_Tools``#MENU_GLOBAL`  \
+--field="     $GUI_CHEATENGINEMD5SUM!$DESC_CHEATENGINEMD5SUM ('CHEATENGINEMD5SUM')" "${CHEATENGINEMD5SUM/#-/ -}" `#CAT_Tools``#MENU_GLOBAL`  \
 --field="$(spanFont "$GUI_OPTSTWEAK" "H")":LBL "SKIP" `#CAT_Tweaks` `#HEAD_Tweaks` `#MENU_GAME` `#MENU_GLOBAL`  \
 --field="     $GUI_IGNOREAUTOTWEAKS!$DESC_IGNOREAUTOTWEAKS ('IGNOREAUTOTWEAKS')":CHK "${IGNOREAUTOTWEAKS/#-/ -}" `#CAT_Tweaks` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_CREATETWEAKS!$DESC_CREATETWEAKS ('CREATETWEAKS')":CHK "${CREATETWEAKS/#-/ -}" `#CAT_Tweaks` `#SUB_Checkbox` `#MENU_GLOBAL` \
@@ -7710,15 +7714,33 @@ function downloadCheatEngine {
 
 function installCheatEngine {
 	CESET="${CE// /}${CHEATENGINEVERSION//./}.exe"
+	STARTCE=1
 
 	if [ ! -f "$CEDLDIR/$CESET" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - '$CE' Installer '$CEDLDIR/$CESET' does not exist - trying to download"
 		downloadCheatEngine "$CESET"
 	fi
 
-	if [ ! -f "$CEDLDIR/$CESET" ]; then
-		writelog "SKIP" "${FUNCNAME[0]} - Downloading '$CEDLDIR/$CESET' failed - can't install - skipping"
-	else
+	if [ -f "$CEDLDIR/$CESET" ]; then
+		CURMD5="$(md5sum "$CEDLDIR/$CESET")"
+		if [ "${CURMD5%% *}" == "$CHEATENGINEMD5SUM" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - md5sum of installed '$CEDLDIR/$CESET' is correct: '${CURMD5%% *}'"
+		else
+			writelog "WARN" "${FUNCNAME[0]} - md5sum of installed '$CEDLDIR/$CESET' is wrong: '${CURMD5%% *}' - trying download again!"
+			rm "$CEDLDIR/$CESET"
+			downloadCheatEngine "$CESET"
+			CURMD5="$(md5sum "$CEDLDIR/$CESET")"
+			if [ "${CURMD5%% *}" == "$CHEATENGINEMD5SUM" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - New Download was successful - continuing"
+			else
+				writelog "SKIP" "${FUNCNAME[0]} - New Download failed - skipping CheatEngine"
+				notiShow "$(strFix "$NOTY_CHEATENGINEMD5SUM" "${CURMD5%% *}" "$CHEATENGINEMD5SUM")"
+				STARTCE=0
+			fi
+		fi
+	fi
+
+	if [ -f "$CEDLDIR/$CESET" ] && [ "$STARTCE" -eq 1 ]; then
 			CEDIR="$STLCEDIR/${CE} $CHEATENGINEVERSION"
 			CEEXE="$CEDIR/${CE}.exe"
 
@@ -7748,6 +7770,8 @@ function installCheatEngine {
 		else
 			writelog "SKIP" "${FUNCNAME[0]} - Neither '$INNOEXTRACT' nor '$RUNWINE' could be found - can't install '$CESET' - skipping"
 		fi
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - Downloading '$CEDLDIR/$CESET' failed - can't install - skipping"	
 	fi
 }
 
