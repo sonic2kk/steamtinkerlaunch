@@ -5,7 +5,7 @@
 
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v4.1next2"
+PROGVERS="v4.1next3"
 PROGCMD="${0##*/}"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -134,6 +134,7 @@ STLDLDIR="$STLCFGDIR/downloads"																# the directory holding optional 
 STLBACKDIR="$STLCFGDIR/backup"
 BACKEX="$STLBACKDIR/exclude"
 HIDEDIR="$STLCFGDIR/hide"
+STLCOMPDAT="$STLCFGDIR/compatdata"
 METADIR="$STLCFGDIR/meta"
 GEMETA="$METADIR/id/general"
 CUMETA="$METADIR/id/custom"
@@ -730,6 +731,25 @@ function setGlobalAIDCfgs {
 		GLOBALSBSTWEAKCFG="$GLOBALSBSTWEAKDIR/$AID.conf"
 		GLOBALTWEAKCFG="$GLOBALUSERTWEAKDIR/$AID.conf" #X
 		AIDREG="$GLOBALREGDIR/$AID.reg"
+	fi
+}
+
+function setCompatDataTitle {
+	if [ "$STORECOMPDATTITLE" -eq 1 ] && [ -n "$STEAM_COMPAT_DATA_PATH" ]; then
+		mkProjDir "$STLCOMPDAT" 1
+		COMPDATTITLE="$STLCOMPDAT/${GN/$LGS /}"
+		if readlink "$COMPDATTITLE" >/dev/null ; then
+			writelog "INFO" "${FUNCNAME[0]} - Symlink $COMPDATTITLE already exists"
+			if [ "$(readlink "$COMPDATTITLE")" == "$STEAM_COMPAT_DATA_PATH" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Symlink $COMPDATTITLE already points to the correct directory $STEAM_COMPAT_DATA_PATH"
+			else
+				writelog "INFO" "${FUNCNAME[0]} - Symlink $COMPDATTITLE points to $(readlink "$COMPDATTITLE") which is not the correct directory $STEAM_COMPAT_DATA_PATH - renewing!"
+				rm "$COMPDATTITLE"
+				createSymLink "${FUNCNAME[0]}" "$STEAM_COMPAT_DATA_PATH" "$COMPDATTITLE"
+			fi
+		else
+			createSymLink "${FUNCNAME[0]}" "$STEAM_COMPAT_DATA_PATH" "$COMPDATTITLE"
+		fi
 	fi
 }
 
@@ -1404,6 +1424,7 @@ function setDefaultCfgValues {
 		if [ -z "$SGDBDLTOSTEAM" ]		; then	SGDBDLTOSTEAM="0"; fi
 		if [ -z "$SGDBHASFILE" ]		; then	SGDBHASFILE="skip"; fi
 		if [ -z "$SGDBAUTODL" ]			; then	SGDBAUTODL="$NON"; fi
+		if [ -z "$STORECOMPDATTITLE" ]	; then	STORECOMPDATTITLE="1"; fi
 	}
 
 	function setDefaultCfgValuesdefault_template {
@@ -1847,6 +1868,8 @@ function saveCfg {
 			echo "SGDBHASFILE=\"$SGDBHASFILE\""
 			echo "## $DESC_SGDBAUTODL"
 			echo "SGDBAUTODL=\"$SGDBAUTODL\""
+			echo "## $DESC_STORECOMPDATTITLE"
+			echo "STORECOMPDATTITLE=\"$STORECOMPDATTITLE\""
 			} >> "$1"
 			#ENDsaveCfgglobal
 		fi
@@ -3206,6 +3229,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_SKIPINTDEPCHECK!$DESC_SKIPINTDEPCHECK ('SKIPINTDEPCHECK')":CHK "${SKIPINTDEPCHECK/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_NOSTEAMSTLDEF!$DESC_NOSTEAMSTLDEF ('NOSTEAMSTLDEF')":CHK "${NOSTEAMSTLDEF/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_USEWGETGUI!$DESC_USEWGETGUI ('USEWGETGUI')":CHK "${USEWGETGUI/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GLOBAL` \
+--field="     $GUI_STORECOMPDATTITLE!$DESC_STORECOMPDATTITLE ('STORECOMPDATTITLE')":CHK "${STORECOMPDATTITLE/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="$(spanFont "$GUI_OPTSPROTON" "H")":LBL "SKIP" `#CAT_Proton` `#HEAD_Proton` `#MENU_GAME` `#MENU_GLOBAL`  \
 --field="     $GUI_OVERRIDEPROTON!$(strFix "$DESC_OVERRIDEPROTON" "$PROGCMD") ('OVERRIDEPROTON')":CHK "${OVERRIDEPROTON/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_USEPROTON!$DESC_USEPROTON ('USEPROTON')":CB "${USEPROTON/#-/ -}!$PROTYADLIST" `#CAT_Proton` `#MENU_GAME` \
@@ -9263,6 +9287,9 @@ function prepareLaunch {
 		writelog "INFO" "${FUNCNAME[0]} - Automatic Grid Update Check '$SGDBAUTODL'"
 		getGrid "$AID"
 	fi
+	
+	# Create GameTitle Symlink in STLCOMPDAT if enabled
+	setCompatDataTitle
 	
 	# GAME START
 	launchSteamGame
