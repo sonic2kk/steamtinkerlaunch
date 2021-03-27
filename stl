@@ -5,7 +5,7 @@
 
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v4.1next3"
+PROGVERS="v4.1next4"
 PROGCMD="${0##*/}"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -47,6 +47,8 @@ JQ="jq"
 CONVERT="convert"
 RSYNC="rsync"
 OSSL="openssl"
+CONTY="conty.sh"
+
 HAVEOSSL=1
 CHECKHMD=1 # will be set to 0 if $LSUSB is not found. Then the hmd presence check is skipped
 LU="lutris"
@@ -105,6 +107,7 @@ GUIOPTIONS="Gui Options"
 LOSE="Local Settings"
 APDA="Application Data"
 LSAD="$LOSE/$APDA"
+RUNCONTY="$NON"
 
 ### default vars ###
 
@@ -160,6 +163,7 @@ TWEAKCMDDIR="$TWEAKDIR/cmd"																	# dir for scriptfiles used by tweakf
 SBSTWEAKDIR="$TWEAKDIR/sbs"																	# directory for optional config overrides for easier side-by-side VR gaming
 ATDLDIR="$STLDLDIR/autotweak"																# main autotweak download dir
 CEDLDIR="$STLDLDIR/cheatengine"
+CONTYDLDIR="$STLDLDIR/conty"
 X64DBGDLDIR="$STLDLDIR/$X64D"
 STLCEDIR="$STLCFGDIR/cheatengine"
 STLVORTEXDIR="$STLCFGDIR/vortex"															# stl vortex dir
@@ -1159,6 +1163,7 @@ function calculateDefaultResolutions {
 	NSGREQSCALE=20
 	VOIGSCALE=20
 	VOSYSCALE=20
+	ASKCONTYREQSCALE=15
 
 	# Calculated initial gui sizes:
 	DEFSETWIDTH=$(( SCREENWIDTH * SETSCALE / 100 ));
@@ -1244,6 +1249,9 @@ function calculateDefaultResolutions {
 
 	DEFVOSYWIDTH=$(( SCREENWIDTH * VOSYSCALE / 100 ));
 	DEFVOSYHEIGHT=$(( SCREENHEIGHT * VOSYSCALE / 100 ));
+
+	DEFASKCONTYREQWIDTH=$(( SCREENWIDTH * ASKCONTYREQSCALE / 100 ));
+	DEFASKCONTYREQHEIGHT=$(( SCREENHEIGHT * ASKCONTYREQSCALE / 100 ));
 }
 
 function setDefaultCfgValues {
@@ -1272,6 +1280,7 @@ function setDefaultCfgValues {
 		if [ -z "$CHEATENGINEURL" ]		; then	CHEATENGINEURL="https://github.com/cheat-engine/cheat-engine/releases";fi
 		if [ -z "$X64DBGURL" ]			; then	X64DBGURL="https://github.com/x64dbg/x64dbg/releases/tag/snapshot";fi
 		if [ -z "$STEAMGRIDDBAPI" ]		; then	STEAMGRIDDBAPI="https://www.steamgriddb.com/api/v2/grids/steam";fi
+		if [ -z "$CONTYRELURL" ]		; then	CONTYRELURL="https://github.com/Kron4ek/Conty/releases"; fi
 	}
 
 	function setDefaultCfgValuesgui {
@@ -1340,6 +1349,8 @@ function setDefaultCfgValues {
 		if [ -z "$VOIGHEIGHT" ]			; then	VOIGHEIGHT="$DEFVOIGHEIGHT"; fi
 		if [ -z "$VOSYWIDTH" ]			; then	VOSYWIDTH="$DEFVOSYWIDTH"; fi
 		if [ -z "$VOSYHEIGHT" ]			; then	VOSYHEIGHT="$DEFVOSYHEIGHT"; fi
+		if [ -z "$ASKCONTYREQWIDTH" ]	; then	ASKCONTYREQWIDTH="$DEFASKCONTYREQWIDTH"; fi
+		if [ -z "$ASKCONTYREQHEIGHT" ]	; then	ASKCONTYREQHEIGHT="$DEFASKCONTYREQHEIGHT"; fi
 	}
 
 	function setDefaultCfgValuesglobal {
@@ -1425,6 +1436,7 @@ function setDefaultCfgValues {
 		if [ -z "$SGDBHASFILE" ]		; then	SGDBHASFILE="skip"; fi
 		if [ -z "$SGDBAUTODL" ]			; then	SGDBAUTODL="$NON"; fi
 		if [ -z "$STORECOMPDATTITLE" ]	; then	STORECOMPDATTITLE="1"; fi
+		if [ -z "$CUSTCONTY" ]			; then	CUSTCONTY="$NON"; fi
 	}
 
 	function setDefaultCfgValuesdefault_template {
@@ -1518,6 +1530,8 @@ function setDefaultCfgValues {
 		if [ -z "$STL_PV_VERBOSE" ]		; then	STL_PV_VERBOSE="0"; fi
 		if [ -z "$STL_PV_SHELL" ]		; then	STL_PV_SHELL="$NON"; fi
 		if [ -z "$STL_PV_TERMINAL" ]	; then	STL_PV_TERMINAL="$NON"; fi
+		if [ -z "$AUTOCONTY" ]			; then	AUTOCONTY="0"; fi
+		if [ -z "$USECONTY" ]			; then	USECONTY="0"; fi
 	}
 	
 	"${FUNCNAME[0]}$1"
@@ -1584,6 +1598,8 @@ function saveCfg {
 			echo "X64DBGURL=\"$X64DBGURL\""
 			echo "## SteamGridDB Api URL"
 			echo "STEAMGRIDDBAPI=\"$STEAMGRIDDBAPI\""
+			echo "## Conty DL URL"
+			echo "CONTYRELURL=\"$CONTYRELURL\""
 			} >> "$1"
 			#ENDsaveCfgurl
 		fi
@@ -1690,6 +1706,9 @@ function saveCfg {
 			echo "## Vortex Symlink Gui:"
 			echo "VOSYWIDTH=\"$VOSYWIDTH\""
 			echo "VOSYHEIGHT=\"$VOSYHEIGHT\""
+			echo "## Ask Conty Requester:"
+			echo "ASKCONTYREQWIDTH=\"$ASKCONTYREQWIDTH\""
+			echo "ASKCONTYREQHEIGHT=\"$ASKCONTYREQHEIGHT\""
 			} >> "$1"
 			#ENDsaveCfggui
 		fi
@@ -1870,6 +1889,8 @@ function saveCfg {
 			echo "SGDBAUTODL=\"$SGDBAUTODL\""
 			echo "## $DESC_STORECOMPDATTITLE"
 			echo "STORECOMPDATTITLE=\"$STORECOMPDATTITLE\""
+			echo "## $DESC_CUSTCONTY"
+			echo "CUSTCONTY=\"$CUSTCONTY\""
 			} >> "$1"
 			#ENDsaveCfgglobal
 		fi
@@ -2067,6 +2088,10 @@ function saveCfg {
 			echo "STL_PV_SHELL=\"$STL_PV_SHELL\""
 			echo "## $DESC_STL_PV_TERMINAL"
 			echo "STL_PV_TERMINAL=\"$STL_PV_TERMINAL\""
+			echo "## $DESC_AUTOCONTY"
+			echo "AUTOCONTY=\"$AUTOCONTY\""
+			echo "## $DESC_USECONTY"
+			echo "USECONTY=\"$USECONTY\""
 			} >> "$1"
 			#ENDsaveCfgdefault_template
 		fi
@@ -2214,6 +2239,7 @@ function wgetGui {
 		esac
 	else
 		writelog "INFO" "${FUNCNAME[0]} - Downloading '$SRCURL' via command line, as 'USEWGETGUI' is disabled"
+		writelog "INFO" "${FUNCNAME[0]} - Download Command is '$WGET -q $SRCURL -O $DESTDIR'"
 		"$WGET" -q "$SRCURL" -O "$DESTDIR"
 	fi
 }
@@ -3321,6 +3347,9 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_USERSTOP!$DESC_USERSTOP $GUI_ECHOPLAC ('USERSTOP')":FL "${USERSTOP/#-/ -}" `#CAT_Tools` `#MENU_GAME` \
 --field="     $GUI_CHEATENGINEVERSION!$DESC_CHEATENGINEVERSION ('CHEATENGINEVERSION')" "${CHEATENGINEVERSION/#-/ -}" `#CAT_Tools``#MENU_GLOBAL`  \
 --field="     $GUI_CHEATENGINEMD5SUM!$DESC_CHEATENGINEMD5SUM ('CHEATENGINEMD5SUM')" "${CHEATENGINEMD5SUM/#-/ -}" `#CAT_Tools``#MENU_GLOBAL`  \
+--field="     $GUI_AUTOCONTY!$DESC_AUTOCONTY ('AUTOCONTY')":CHK "${AUTOCONTY/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_USECONTY!$DESC_USECONTY ('USECONTY')":CHK "${USECONTY/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_CUSTCONTY!$DESC_CUSTCONTY ('CUSTCONTY')":FL "${CUSTCONTY/#-/ -}" `#CAT_Tools` `#MENU_GLOBAL` \
 --field="$(spanFont "$GUI_OPTSTWEAK" "H")":LBL "SKIP" `#CAT_Tweaks` `#HEAD_Tweaks` `#MENU_GAME` `#MENU_GLOBAL`  \
 --field="     $GUI_IGNOREAUTOTWEAKS!$DESC_IGNOREAUTOTWEAKS ('IGNOREAUTOTWEAKS')":CHK "${IGNOREAUTOTWEAKS/#-/ -}" `#CAT_Tweaks` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_CREATETWEAKS!$DESC_CREATETWEAKS ('CREATETWEAKS')":CHK "${CREATETWEAKS/#-/ -}" `#CAT_Tweaks` `#SUB_Checkbox` `#MENU_GLOBAL` \
@@ -3351,6 +3380,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_CHEATENGINEURL!$DESC_CHEATENGINEURL ('CHEATENGINEURL')" "${CHEATENGINEURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="     $GUI_X64DBGURL!$DESC_X64DBGURL ('X64DBGURL')" "${X64DBGURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="     $GUI_STEAMGRIDDBAPI!$DESC_STEAMGRIDDBAPI ('STEAMGRIDDBAPI')" "${STEAMGRIDDBAPI/#-/ -}" `#CAT_Urls` `#MENU_URL` \
+--field="     $GUI_CONTYRELURL!$DESC_CONTYRELURL ('CONTYRELURL')" "${CONTYRELURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="$(spanFont "$GUI_OPTSVR" "H")":LBL "SKIP" `#CAT_VR` `#HEAD_VR` `#MENU_GAME` `#MENU_GLOBAL`  \
 --field="     $GUI_SBSVRRS!$DESC_SBSVRRS ('SBSVRRS')":CHK "${SBSVRRS/#-/ -}" `#CAT_VR` `#SUB_Checkbox` `#SUB_ReShade` `#MENU_GAME` \
 --field="     $GUI_RUNSBSVR!$DESC_RUNSBSVR ('RUNSBSVR')":CHK "${RUNSBSVR/#-/ -}" `#CAT_VR` `#SUB_Checkbox` `#MENU_GAME` \
@@ -9450,6 +9480,118 @@ function wantProton {
 	fi	
 }
 
+function askConty {
+		writelog "INFO" "${FUNCNAME[0]} - Opening Ask Conty Requester"
+
+		TITLE="${PROGNAME}-SelectConty"
+
+		loadCfg "$STLGUICFG" X
+		updateWinRes "$TITLE" "$STLGUICFG" "ASKCONTYREQWIDTH" "ASKCONTYREQHEIGHT" &
+		setShowPic
+
+		"$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
+		--title="$TITLE" \
+		--geometry="$ASKCONTYREQWIDTH"x"$ASKCONTYREQHEIGHT"+0+0 \
+		--text="$(spanFont "$GN ($AID) - $GUI_ASKCONTY" "H")" \
+		--button="$BUT_DLCONTY":0  \
+		--button="$BUT_SELCONTY":2 \
+		--button="$SKIPCONTY":4
+
+		case $? in
+			0)  {
+					writelog "INFO" "${FUNCNAME[0]} - Selected to download Conty"
+					mkProjDir "$CONTYDLDIR" 1
+					CONTYDLVERS="$("$WGET" -q "$CONTYRELURL" -O - | grep -m1 "download.*.$CONTY" | grep -oP 'releases\K[^"]+')"
+
+					if grep -q "$CONTY" <<< "$CONTYDLVERS"; then
+						writelog "INFO" "${FUNCNAME[0]} - Downloading '$CONTYRELURL/$CONTYDLVERS' to '$CONTYDLDIR'"
+						notiShow "$(strFix "$NOTY_DLCONTY" "$CONTYRELURL/$CONTYDLVERS")"
+						wgetGui "$CONTYRELURL/$CONTYDLVERS" "$CONTYDLDIR/$CONTY"
+						if [ -f "$CONTYDLDIR/$CONTY" ]; then
+							chmod +x "$CONTYDLDIR/$CONTY"
+							export RUNCONTY="$CONTYDLDIR/$CONTY"
+						fi
+						writelog "INFO" "${FUNCNAME[0]} - Setting RUNCONTY to '$CONTYDLDIR/$CONTY'"
+						export RUNCONTY="$CONTYDLDIR/$CONTY'"
+					else
+						writelog "SKIP" "${FUNCNAME[0]} - Failed to download Conty - skipping"
+						export RUNCONTY="$NON"
+					fi
+				}
+			;;
+			2)  {
+					writelog "INFO" "${FUNCNAME[0]} - Selected to pick local Conty executable"
+					PICKCONT="$("$YAD" --file)"
+
+					if [ -f "$PICKCONT" ]; then
+						writelog "INFO" "${FUNCNAME[0]} - Picked '$PICKCONT' as Conty executable"
+						export RUNCONTY="$PICKCONT"
+						touch "$FUPDATE"
+						updateConfigEntry "CUSTCONTY" "$PICKCONT" "$STLDEFGLOBALCFG"
+						CUSTCONTY="$PICKCONT"
+					else
+						writelog "SKIP" "${FUNCNAME[0]} - No Conty executable selected - skipping"
+						export RUNCONTY="$NON"
+					fi
+				}
+			;;
+			4)  {
+					writelog "SKIP" "${FUNCNAME[0]} - Selected CANCEL - Not using Conty"
+					export RUNCONTY="$NON"
+				}
+			;;
+		esac
+}
+
+function findConty {
+	if [ -n "$CUSTCONTY" ] && [ "$CUSTCONTY" != "$NON" ] && [ -x "$CUSTCONTY" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Using custom Conty '$CUSTCONTY'"
+		export RUNCONTY="$CUSTCONTY"
+	elif [ -x "$CONTYDLDIR/$CONTY" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Using downloaded Conty '$CONTYDLDIR/$CONTY'"
+		export RUNCONTY="$CONTYDLDIR/$CONTY"
+	elif  [ -x "$(command -v "$("$WHICH" "$CONTY" 2>/dev/null)" 2>/dev/null)" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Using Conty in 'PATH' '$("$WHICH" "$CONTY")'"
+		RUNCONTY="$("$WHICH" "$CONTY")"
+		export RUNCONTY
+	else
+		writelog "INFO" "${FUNCNAME[0]} - No Conty found - Opening requester"
+		askConty
+		if [ "$RUNCONTY" != "$NON" ]; then
+			"${FUNCNAME[0]}"
+		fi
+	fi
+}
+
+function checkConty {
+	if [ "$AUTOCONTY" -eq 1 ]; then
+		if [ "$(getArch "$GP")" == "32" ]; then
+			CONTYMODE=1
+		else
+			CONTYMODE=0
+		fi
+	elif [ "$USECONTY" -eq 1 ]; then
+		CONTYMODE=2
+	else
+		CONTYMODE=0
+	fi
+	
+	if [ "$CONTYMODE" -ge 1 ]; then
+		findConty
+			
+		if [ -x "$RUNCONTY" ] && [ "$RUNCONTY" != "$NON" ]; then
+			if [ "$CONTYMODE" -eq 1 ]; then
+				writelog "INFO" "${FUNCNAME[0]} - '$GP' is 32bit - Starting it using Conty executable '$RUNCONTY'"
+			else
+				writelog "INFO" "${FUNCNAME[0]} - Starting '$GP' using Conty executable '$RUNCONTY', because 'USECONTY' is enabled"
+			fi
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - No Conty executable found 'RUNCONTY' is '$RUNCONTY' - continuing regularly"
+			CONTYMODE=0
+		fi
+	fi
+}
+
 function startGame {
 
 	#kind of works, but should be optimized:
@@ -9461,22 +9603,31 @@ function startGame {
 	touch "$PIDLOCK"
 	startSBSVR &
 
-	writelog "INFO" "${FUNCNAME[0]} - ## GAMESTART with command '$*'"
-	restoreOrgVars # restore original LC_ and friends for the game
+	checkConty
 
-	if [ "$USESLR" -eq 1 ] && [ "$STL_PV_VERBOSE" -eq 1 ]; then
-		# logged gamestart
-		PRESSURE_VESSEL_VERBOSE="$STL_PV_VERBOSE" "$@"  2>&1 | tee "$STLPVLOGDIR/pressure-vessel-${AID}.log"
-		# start PV shell "instead"
-	elif [ "$USESLR" -eq 1 ] && [ "$STL_PV_SHELL" != "$NON" ]; then
-		PRESSURE_VESSEL_SHELL="$STL_PV_SHELL" "$@"
-	elif [ "$USESLR" -eq 1 ] && [ "$STL_PV_TERMINAL" != "$NON" ]; then
-		PRESSURE_VESSEL_TERMINAL="$STL_PV_TERMINAL" "$@"
+	if [ -x "$RUNCONTY" ] && [ "$RUNCONTY" != "$NON" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - ## Starting game using Conty executable '$RUNCONTY'"
+		writelog "INFO" "${FUNCNAME[0]} - ## GAMESTART with command '$RUNCONTY $*'"
+
+		# maybe also strip ${RUNSLR[@]}" from "$@"? TODO?
+		"$RUNCONTY" "$@"
 	else
-		# regular gamestart - COMMENTDEBUG:
-		"$@"
-	fi
+		writelog "INFO" "${FUNCNAME[0]} - ## GAMESTART with command '$*'"
+		restoreOrgVars # restore original LC_ and friends for the game
 
+		if [ "$USESLR" -eq 1 ] && [ "$STL_PV_VERBOSE" -eq 1 ]; then
+			# logged gamestart
+			PRESSURE_VESSEL_VERBOSE="$STL_PV_VERBOSE" "$@"  2>&1 | tee "$STLPVLOGDIR/pressure-vessel-${AID}.log"
+			# start PV shell "instead"
+		elif [ "$USESLR" -eq 1 ] && [ "$STL_PV_SHELL" != "$NON" ]; then
+			PRESSURE_VESSEL_SHELL="$STL_PV_SHELL" "$@"
+		elif [ "$USESLR" -eq 1 ] && [ "$STL_PV_TERMINAL" != "$NON" ]; then
+			PRESSURE_VESSEL_TERMINAL="$STL_PV_TERMINAL" "$@"
+		else
+			# regular gamestart - COMMENTDEBUG:
+			"$@"
+		fi
+	fi
 	emptyVars "O" "X" # clear original variables again (mostly for a continous log (date))
 
 	writelog "INFO" "${FUNCNAME[0]} - ## GAMESTOP (or forked?)"
