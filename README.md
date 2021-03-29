@@ -16,6 +16,8 @@ By using a versatile configuration structure it is both easy to set up and flexi
 There are two ways to use **stl** with steam.
 Either as [Launch Option](#Steam-Launch-Option) or as [Steam Compatibility Tool](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam-Compatibility-Tool)
 
+*(of course you're using this tool at your own risk and you're responsible which 3rd party programs you launch with it)*
+
 #### Steam Launch Option
 To use **stl** as Steam Launch Option just add it to your Steam Game Launch Option command line like this:
 
