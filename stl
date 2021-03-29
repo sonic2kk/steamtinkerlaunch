@@ -1437,6 +1437,7 @@ function setDefaultCfgValues {
 		if [ -z "$SGDBAUTODL" ]			; then	SGDBAUTODL="$NON"; fi
 		if [ -z "$STORECOMPDATTITLE" ]	; then	STORECOMPDATTITLE="1"; fi
 		if [ -z "$CUSTCONTY" ]			; then	CUSTCONTY="$NON"; fi
+		if [ -z "$UPDATECONTY" ]		; then	UPDATECONTY="1"; fi
 	}
 
 	function setDefaultCfgValuesdefault_template {
@@ -1891,6 +1892,8 @@ function saveCfg {
 			echo "STORECOMPDATTITLE=\"$STORECOMPDATTITLE\""
 			echo "## $DESC_CUSTCONTY"
 			echo "CUSTCONTY=\"$CUSTCONTY\""
+			echo "## $DESC_UPDATECONTY"
+			echo "UPDATECONTY=\"$UPDATECONTY\""
 			} >> "$1"
 			#ENDsaveCfgglobal
 		fi
@@ -3350,6 +3353,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_AUTOCONTY!$DESC_AUTOCONTY ('AUTOCONTY')":CHK "${AUTOCONTY/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_USECONTY!$DESC_USECONTY ('USECONTY')":CHK "${USECONTY/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_CUSTCONTY!$DESC_CUSTCONTY ('CUSTCONTY')":FL "${CUSTCONTY/#-/ -}" `#CAT_Tools` `#MENU_GLOBAL` \
+--field="     $GUI_UPDATECONTY!$DESC_UPDATECONTY ('UPDATECONTY')":CHK "${UPDATECONTY/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="$(spanFont "$GUI_OPTSTWEAK" "H")":LBL "SKIP" `#CAT_Tweaks` `#HEAD_Tweaks` `#MENU_GAME` `#MENU_GLOBAL`  \
 --field="     $GUI_IGNOREAUTOTWEAKS!$DESC_IGNOREAUTOTWEAKS ('IGNOREAUTOTWEAKS')":CHK "${IGNOREAUTOTWEAKS/#-/ -}" `#CAT_Tweaks` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_CREATETWEAKS!$DESC_CREATETWEAKS ('CREATETWEAKS')":CHK "${CREATETWEAKS/#-/ -}" `#CAT_Tweaks` `#SUB_Checkbox` `#MENU_GLOBAL` \
@@ -9050,24 +9054,24 @@ function checkIntDeps {
 
 
 		if  [ -x "$(command -v "$("$WHICH" "awk" 2>/dev/null)" 2>/dev/null)" ] && [ ! -x "$(command -v "$("$WHICH" "$AWK" 2>/dev/null)" 2>/dev/null)" ]; then
-			writelog "WARN" "${FUNCNAME[0]} - Binary awk was found, but not '$AWK'. As awk can also be a different binary with different parameters 'gawk' is used for '$AWK'" "E"!
+			writelog "WARN" "${FUNCNAME[0]} - Binary awk was found, but not '$AWK'. As awk can also be a different binary with different parameters 'gawk' is used for '$AWK'" "E"
 		fi	
 
 		MINYAD="7.2"
 		YADVER="$("$YAD" --version | cut -d ' ' -f1)"
 		
 		if [ "$(printf '%s\n' "$MINYAD" "$YADVER" | sort -V | head -n1)" != "$MINYAD" ]; then 
-			writelog "ERROR" "${FUNCNAME[0]} - Yad version '$("$YAD" --version | cut -d ' ' -f1)' is too old. You need to update to at least '$MINYAD'" "E"!
+			writelog "ERROR" "${FUNCNAME[0]} - Yad version '$("$YAD" --version | cut -d ' ' -f1)' is too old. You need to update to at least '$MINYAD'" "E"
 			notiShow "$(strFix "$NOTY_NOTFOUND2" "$("$YAD" --version | cut -d ' ' -f1)" "$MINYAD")"
 			exit
 		fi	
 
 		if [ "$DEPSMISSING" -eq 1 ]; then
-			writelog "ERROR" "${FUNCNAME[0]} - Above programs need to be installed to use '$PROGCMD'" "E"!
-			writelog "ERROR" "${FUNCNAME[0]} The dependency check can be disabled with enabling 'SKIPINTDEPCHECK' - exiting now" "E"!
+			writelog "ERROR" "${FUNCNAME[0]} - Above programs need to be installed to use '$PROGCMD'" "E"
+			writelog "ERROR" "${FUNCNAME[0]} The dependency check can be disabled with enabling 'SKIPINTDEPCHECK' - exiting now" "E"
 			exit
 		else
-			writelog "INFO" "${FUNCNAME[0]} - Dependency check for internally used programs was successful" "E"!
+			writelog "INFO" "${FUNCNAME[0]} - Dependency check for internally used programs was successful" "E"
 		fi
 	fi
 }
@@ -9480,6 +9484,59 @@ function wantProton {
 	fi	
 }
 
+function dlConty {
+	mkProjDir "$CONTYDLDIR" 1
+	CONTYDLVERS="$("$WGET" -q "$CONTYRELURL" -O - | grep -m1 "download.*.$CONTY" | grep -oP 'releases\K[^"]+')"
+
+	if grep -q "$CONTY" <<< "$CONTYDLVERS"; then
+		writelog "INFO" "${FUNCNAME[0]} - Downloading '$CONTYRELURL/$CONTYDLVERS' to '$CONTYDLDIR'"
+		notiShow "$(strFix "$NOTY_DLCONTY" "$CONTYRELURL/$CONTYDLVERS")"
+		wgetGui "$CONTYRELURL/$CONTYDLVERS" "$CONTYDLDIR/$CONTY"
+		if [ -f "$CONTYDLDIR/$CONTY" ]; then
+			DLSHA="$(sha256sum "$CONTYDLDIR/$CONTY" | cut -d ' ' -f1)"
+			if "$WGET" -q "$CONTYRELURL" -O - | grep -q "$DLSHA"; then
+				writelog "INFO" "${FUNCNAME[0]} - The sha256 checksum of the downloaded file is correct: '$DLSHA' - continuing"
+				chmod +x "$CONTYDLDIR/$CONTY"
+				export RUNCONTY="$CONTYDLDIR/$CONTY"
+				CONTYVERS="$(cut -d '/' -f3 <<< "$CONTYDLVERS")";
+				if grep -q "[0-9]" <<< "$CONTYVERS"; then
+					writelog "INFO" "${FUNCNAME[0]} - Updating Conty version to '$CONTYVERS' in '$CONTYDLDIR/version.txt'"
+					echo "$CONTYVERS" > "$CONTYDLDIR/version.txt"
+				else
+					writelog "SKIP" "${FUNCNAME[0]} - No version found in Url - not writing '$CONTYDLDIR/version.txt'"
+				fi
+			else
+				writelog "ERROR" "${FUNCNAME[0]} - The sha256 checksum of the downloaded file is wrong: '$DLSHA' - removing the download"
+				rm "$CONTYDLDIR/$CONTY"
+			fi
+		fi
+		writelog "INFO" "${FUNCNAME[0]} - Setting RUNCONTY to '$CONTYDLDIR/$CONTY'"
+		export RUNCONTY="$CONTYDLDIR/$CONTY'"
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - Failed to download Conty - skipping"
+		export RUNCONTY="$NON"
+	fi	
+}
+
+function updateConty {
+	if [ "$UPDATECONTY" -eq 1 ]; then
+		if [ ! -f "$CONTYDLDIR/version.txt" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - No Conty version file found in - so simply downloading latest release"
+			dlConty
+		else
+			LATESTCONTY="$("$WGET" -q "$CONTYRELURL" -O - | grep -m1 "download.*.$CONTY" | grep -oP 'releases\K[^"]+' | cut -d '/' -f3)"
+			DLVERS="$(cat "$CONTYDLDIR/version.txt")"
+			if [ "$(printf '%s\n' "$DLVERS" "$LATESTCONTY" | sort -V | head -n1)" != "$LATESTCONTY" ]; then 
+				writelog "INFO" "${FUNCNAME[0]} - $(strFix "$NOTY_UPDATECONTY" "$LATESTCONTY" "$DLVERS")"
+				notiShow "$(strFix "$NOTY_UPDATECONTY" "$LATESTCONTY" "$DLVERS")"
+				dlConty
+			else
+				writelog "INFO" "${FUNCNAME[0]} - Conty already at newest version '$DLVERS'"
+			fi
+		fi
+	fi
+}
+
 function askConty {
 		writelog "INFO" "${FUNCNAME[0]} - Opening Ask Conty Requester"
 
@@ -9500,23 +9557,7 @@ function askConty {
 		case $? in
 			0)  {
 					writelog "INFO" "${FUNCNAME[0]} - Selected to download Conty"
-					mkProjDir "$CONTYDLDIR" 1
-					CONTYDLVERS="$("$WGET" -q "$CONTYRELURL" -O - | grep -m1 "download.*.$CONTY" | grep -oP 'releases\K[^"]+')"
-
-					if grep -q "$CONTY" <<< "$CONTYDLVERS"; then
-						writelog "INFO" "${FUNCNAME[0]} - Downloading '$CONTYRELURL/$CONTYDLVERS' to '$CONTYDLDIR'"
-						notiShow "$(strFix "$NOTY_DLCONTY" "$CONTYRELURL/$CONTYDLVERS")"
-						wgetGui "$CONTYRELURL/$CONTYDLVERS" "$CONTYDLDIR/$CONTY"
-						if [ -f "$CONTYDLDIR/$CONTY" ]; then
-							chmod +x "$CONTYDLDIR/$CONTY"
-							export RUNCONTY="$CONTYDLDIR/$CONTY"
-						fi
-						writelog "INFO" "${FUNCNAME[0]} - Setting RUNCONTY to '$CONTYDLDIR/$CONTY'"
-						export RUNCONTY="$CONTYDLDIR/$CONTY'"
-					else
-						writelog "SKIP" "${FUNCNAME[0]} - Failed to download Conty - skipping"
-						export RUNCONTY="$NON"
-					fi
+					dlConty
 				}
 			;;
 			2)  {
@@ -9549,6 +9590,7 @@ function findConty {
 		export RUNCONTY="$CUSTCONTY"
 	elif [ -x "$CONTYDLDIR/$CONTY" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Using downloaded Conty '$CONTYDLDIR/$CONTY'"
+		updateConty
 		export RUNCONTY="$CONTYDLDIR/$CONTY"
 	elif  [ -x "$(command -v "$("$WHICH" "$CONTY" 2>/dev/null)" 2>/dev/null)" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Using Conty in 'PATH' '$("$WHICH" "$CONTY")'"
@@ -11732,4 +11774,8 @@ function main {
 	fi
 }
 
-main "$@"
+if [ "$EUID" = 0 ]; then
+	writelog "INFO" "${FUNCNAME[0]} - '$PROGCMD' is not meant to be run as root - Exiting" "E"
+else
+	main "$@"
+fi
