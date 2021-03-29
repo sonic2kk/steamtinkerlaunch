@@ -128,6 +128,7 @@ STLPROTONTILOGDIR="$STLPROTONLOGDIR/title"													# proton title logfile di
 STLDXVKLOGDIR="$BASELOGDIR/dxvk"
 STLWINELOGDIR="$BASELOGDIR/wine"															# wine logfile dir
 STLPVLOGDIR="$BASELOGDIR/pv"																# pressure vessel logfile dir
+PLAYTIMELOGDIR="$BASELOGDIR/playtime"
 STLGAMEDIR="$STLCFGDIR/gamecfgs"															# default basedir for game the gamespecific configs
 STLGAMEDIRID="$STLGAMEDIR/id"
 STLGAMEDIRTI="$STLGAMEDIR/title"
@@ -1438,6 +1439,7 @@ function setDefaultCfgValues {
 		if [ -z "$STORECOMPDATTITLE" ]	; then	STORECOMPDATTITLE="1"; fi
 		if [ -z "$CUSTCONTY" ]			; then	CUSTCONTY="$NON"; fi
 		if [ -z "$UPDATECONTY" ]		; then	UPDATECONTY="1"; fi
+		if [ -z "$LOGPLAYTIME" ]		; then	LOGPLAYTIME="1"; fi
 	}
 
 	function setDefaultCfgValuesdefault_template {
@@ -1894,6 +1896,8 @@ function saveCfg {
 			echo "CUSTCONTY=\"$CUSTCONTY\""
 			echo "## $DESC_UPDATECONTY"
 			echo "UPDATECONTY=\"$UPDATECONTY\""
+			echo "## $DESC_LOGPLAYTIME"
+			echo "LOGPLAYTIME=\"$LOGPLAYTIME\""
 			} >> "$1"
 			#ENDsaveCfgglobal
 		fi
@@ -3354,6 +3358,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_USECONTY!$DESC_USECONTY ('USECONTY')":CHK "${USECONTY/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_CUSTCONTY!$DESC_CUSTCONTY ('CUSTCONTY')":FL "${CUSTCONTY/#-/ -}" `#CAT_Tools` `#MENU_GLOBAL` \
 --field="     $GUI_UPDATECONTY!$DESC_UPDATECONTY ('UPDATECONTY')":CHK "${UPDATECONTY/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GLOBAL` \
+--field="     $GUI_LOGPLAYTIME!$DESC_LOGPLAYTIME ('LOGPLAYTIME')":CHK "${LOGPLAYTIME/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="$(spanFont "$GUI_OPTSTWEAK" "H")":LBL "SKIP" `#CAT_Tweaks` `#HEAD_Tweaks` `#MENU_GAME` `#MENU_GLOBAL`  \
 --field="     $GUI_IGNOREAUTOTWEAKS!$DESC_IGNOREAUTOTWEAKS ('IGNOREAUTOTWEAKS')":CHK "${IGNOREAUTOTWEAKS/#-/ -}" `#CAT_Tweaks` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_CREATETWEAKS!$DESC_CREATETWEAKS ('CREATETWEAKS')":CHK "${CREATETWEAKS/#-/ -}" `#CAT_Tweaks` `#SUB_Checkbox` `#MENU_GLOBAL` \
@@ -7426,6 +7431,7 @@ function checkCustomLaunch {
 				if [ "$ONLY_CUSTOMCMD" -eq 1 ]; then
 					writelog "INFO" "${FUNCNAME[0]} - ONLY_CUSTOMCMD is set to 1 means only custom program '$CUSTOMCMD' is supposed to start - exiting here"
 					duration=$SECONDS
+					logPlayTime "$duration"
 					writelog "INFO" "${FUNCNAME[0]} - ## CUSTOMCMD STOPPED after '$duration' seconds playtime"
 					closeSTL " ######### STOP EARLY $PROGNAME $PROGVERS #########"
 					exit
@@ -9640,6 +9646,13 @@ function checkConty {
 	fi
 }
 
+function logPlayTime {
+	if [ "$LOGPLAYTIME" -eq 1 ] && [ -n "$GN" ] ; then
+		mkProjDir "$PLAYTIMELOGDIR" 1
+		echo "$(date): $1" >> "$PLAYTIMELOGDIR/${GN/$LGS /}.log"
+	fi
+}
+
 function startGame {
 
 	#kind of works, but should be optimized:
@@ -9680,6 +9693,7 @@ function startGame {
 	emptyVars "O" "X" # clear original variables again (mostly for a continous log (date))
 
 	duration=$SECONDS
+	logPlayTime "$duration"
 	writelog "INFO" "${FUNCNAME[0]} - ## GAMESTOP (or forked?) after '$duration' seconds playtime"
 }
 
