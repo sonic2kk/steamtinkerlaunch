@@ -5,7 +5,7 @@
 
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v4.1next4"
+PROGVERS="v4.1next5"
 PROGCMD="${0##*/}"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -130,6 +130,7 @@ STLWINELOGDIR="$BASELOGDIR/wine"															# wine logfile dir
 STLPVLOGDIR="$BASELOGDIR/pv"																# pressure vessel logfile dir
 PLAYTIMELOGDIR="$BASELOGDIR/playtime"
 STLGAMEDIR="$STLCFGDIR/gamecfgs"															# default basedir for game the gamespecific configs
+STLGUIDIR="$STLCFGDIR/guicfgs"
 STLGAMEDIRID="$STLGAMEDIR/id"
 STLGAMEDIRTI="$STLGAMEDIR/title"
 STLCATEGORYDIR="$STLCFGDIR/categories"														# the directory holding config files with preconfigured settings for games in specific steamcategories
@@ -590,6 +591,26 @@ function createCategoriesList {
 	CATLIST="$(listCAT | sort -u | tr '\n' '!' | sed "s:^!::" | sed "s:!$::")"
 } 
 
+function pollWinRes {
+	TITLE="$1"
+	POLLWIDTH="$2"
+	POLLHEIGHT="$3"
+
+	if [ "$USEGENGUICFG" -eq 1 ]; then
+		GAMEGUICFG="$STLGUICFG"
+	else
+		GAMEGUICFG="$STLGUIDIR/${AID}.cfg"
+
+		if [ ! -f "$GAMEGUICFG" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Creating '$GAMEGUICFG' using '$STLGUICFG' as template"
+			mkProjDir "$STLGUIDIR" 1
+			cp "$STLGUICFG" "$GAMEGUICFG"
+		fi
+	fi
+	loadCfg "$GAMEGUICFG" X
+	updateWinRes "$TITLE" "$GAMEGUICFG" "$POLLWIDTH" "$POLLHEIGHT" &
+}
+
 function openGameLauncher {
 	function GLgui {
 		"$YAD" --icons  --window-icon="$STLICON" --read-dir="$DFDIR/$1" "$WINDECO" --title="$TITLE" --single-click --keep-icon-size --center --compact --sort-by-name --geometry="$LAUNCHERWIDTH"x"$LAUNCHERHEIGHT"+0+0
@@ -618,8 +639,7 @@ function openGameLauncher {
 	fi
 
 	TITLE="${PROGNAME}-Launcher"
-	loadCfg "$STLGUICFG" X
-	updateWinRes "$TITLE" "$STLGUICFG" "LAUNCHERWIDTH" "LAUNCHERHEIGHT" &
+	pollWinRes "$TITLE" "LAUNCHERWIDTH" "LAUNCHERHEIGHT"
 
 	if [ -z "$1" ] || [ "$1" == "auto" ] || [ "$1" == "update" ]; then
 		GLgui "installed"
@@ -1406,6 +1426,7 @@ function setDefaultCfgValues {
 		if [ -z "$USETRAYICON" ]		; then	USETRAYICON="1"; fi
 		if [ -z "$USEGAMEPICS" ]		; then	USEGAMEPICS="1"; fi
 		if [ -z "$USEGAMEPICINMENU" ]	; then	USEGAMEPICINMENU="1"; fi
+		if [ -z "$USEGENGUICFG" ]		; then	USEGENGUICFG="0"; fi
 		if [ -z "$DLGAMEDATA" ]			; then	DLGAMEDATA="1"; fi
 		if [ -z "$DLWINETRICKS" ]		; then	DLWINETRICKS="1"; fi
 		if [ -z "$AUTOLASTPROTON" ]		; then	AUTOLASTPROTON="1"; fi
@@ -1842,6 +1863,8 @@ function saveCfg {
 			echo "USEGAMEPICS=\"$USEGAMEPICS\""
 			echo "## $DESC_USEGAMEPICINMENU"
 			echo "USEGAMEPICINMENU=\"$USEGAMEPICINMENU\""
+			echo "## $DESC_USEGENGUICFG"
+			echo "USEGENGUICFG=\"$USEGENGUICFG\""
 			echo "## $DESC_DLGAMEDATA"
 			echo "DLGAMEDATA=\"$DLGAMEDATA\""
 			echo "## $DESC_DLWINETRICKS"
@@ -2348,10 +2371,9 @@ function dlCustomProtonGUI {
 	writelog "INFO" "${FUNCNAME[0]} - Opening dialog to choose a download"
 
 	DLPROTLIST="$(printf "!%s\n" "${ProtonDLDispList[@]//\"/}" | tr -d '\n' | sed "s:^!::" | sed "s:!$::")"
-	TITLE="${PROGNAME}-DownloadCustomProton"
 
-	loadCfg "$STLGUICFG" X
-	updateWinRes "$TITLE" "$STLGUICFG" "CUSTPROTREQWIDTH" "CUSTPROTREQHEIGHT" &
+	TITLE="${PROGNAME}-DownloadCustomProton"
+	pollWinRes "$TITLE" "CUSTPROTREQWIDTH" "CUSTPROTREQHEIGHT"
 
 	if [ -z "$DLPROTON" ]; then
 		DLPROTON="${ProtonDLDispList[0]}"
@@ -2559,9 +2581,7 @@ function addCustomProton {
 		fi
 
 		TITLE="${PROGNAME}-AddCustomProton"
-
-		loadCfg "$STLGUICFG" X
-		updateWinRes "$TITLE" "$STLGUICFG" "CUSTPROTREQWIDTH" "CUSTPROTREQHEIGHT" &
+		pollWinRes "$TITLE" "CUSTPROTREQWIDTH" "CUSTPROTREQHEIGHT"
 
 		NEWCUSTPROT="$("$YAD" --window-icon="$STLICON" --form --center --on-top $WINDECO \
 		--title="$TITLE" \
@@ -2624,7 +2644,7 @@ function saveMenuEntries {
 			
 			if [ -n "$VAR" ] && [ -n "$WRITEVAL" ] && [ -n "$SAVECFG" ]; then
 				updateConfigEntry "$VAR" "$WRITEVAL" "$SAVECFG"
-# recently added headlines would trigger this warning, so commenting it out for now
+# already commented out for a while without any problems - now it is 03/21 - remove later
 #			else
 #				writelog "SKIP" "${FUNCNAME[0]} - At least one value is invalid: VAR='$VAR'; WRITEVAL='$WRITEVAL'; SAVECFG='$SAVECFG' - skipping"
 			fi
@@ -2847,9 +2867,8 @@ function EditorDialog {
 	writelog "INFO" "${FUNCNAME[0]} - Found ${#CfgFiles[@]} available Config Files - opening Checklist"
 
 	TITLE="${PROGNAME}-Editor"
+	pollWinRes "$TITLE" "EDREQWIDTH" "EDREQHEIGHT"
 
-	loadCfg "$STLGUICFG" X
-	updateWinRes "$TITLE" "$STLGUICFG" "EDREQWIDTH" "EDREQHEIGHT" &
 	setShowPic
 
 	EDFILES="$(while read -r f; do	echo "FALSE"; echo "$f"; done <<< "$(printf "%s\n" "${CfgFiles[@]}" | sort -u)" | \
@@ -3227,6 +3246,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_LINESPERCOLUMN!$DESC_LINESPERCOLUMN ('LINESPERCOLUMN')":NUM "${LINESPERCOLUMN/#-/ -}" `#CAT_Gui` `#MENU_GLOBAL` \
 --field="     $GUI_SAVESETSIZE!$DESC_SAVESETSIZE ('SAVESETSIZE')":CHK "${SAVESETSIZE/#-/ -}" `#CAT_Gui` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_TOGGLEWINDOWS!$DESC_TOGGLEWINDOWS ('TOGGLEWINDOWS')":CHK "${TOGGLEWINDOWS/#-/ -}" `#CAT_Gui` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_USEGENGUICFG!$DESC_USEGENGUICFG ('USEGENGUICFG')":CHK "${USEGENGUICFG/#-/ -}" `#CAT_Gui` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_USETRAYICON!$DESC_USETRAYICON ('USETRAYICON')":CHK "${USETRAYICON/#-/ -}" `#CAT_Gui` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_USENOTIFIER!$DESC_USENOTIFIER ('USENOTIFIER')":CHK "${USENOTIFIER/#-/ -}" `#CAT_Gui` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_HEADLINEFONT!$DESC_HEADLINEFONT ('HEADLINEFONT')":CB "${HEADLINEFONT/#-/ -}$FONTSIZES" `#CAT_Gui` `#MENU_GLOBAL` \
@@ -3566,8 +3586,8 @@ function openCustMenu {
 	createDropdownLists
 
 	TITLE="${PROGNAME}-${MYCAT}"
-	loadCfg "$STLGUICFG" X
-	updateWinRes "$TITLE" "$STLGUICFG" "$MYWI" "$MYHE" &
+	pollWinRes "$TITLE" "$MYWI" "$MYHE"
+
 	setShowPic
 	cp "$SHOWPIC" "$FAVPIC"
 
@@ -3682,9 +3702,8 @@ function setGuiSortOrder {
 
 function setGuiFavoritesSelection {
 	TITLE="${PROGNAME}-FavoritesSelection"
+	pollWinRes "$TITLE" "FAVSELWIDTH" "FAVSELHEIGHT"
 
-	loadCfg "$STLGUICFG" X
-	updateWinRes "$TITLE" "$STLGUICFG" "FAVSELWIDTH" "FAVSELHEIGHT" &
 	setShowPic
 
 	FAVENTRIES="$(favoritesMenuEntries | \
@@ -3715,9 +3734,7 @@ function setGuiFavoritesSelection {
 
 function setGuiBlockSelection {
 	TITLE="${PROGNAME}-EntryBlockSelection"
-
-	loadCfg "$STLGUICFG" X
-	updateWinRes "$TITLE" "$STLGUICFG" "BLOCKSELWIDTH" "BLOCKSELHEIGHT" &
+	pollWinRes "$TITLE" "BLOCKSELWIDTH" "BLOCKSELHEIGHT"
 
 	BLENTRIES="$(createBlockYadList | \
 	"$YAD" --window-icon="$STLICON" --center --list --checklist \
@@ -3747,9 +3764,8 @@ function setGuiBlockSelection {
 
 function setGuiCategoryMenuSel {
 	TITLE="${PROGNAME}-CategorySelection"
+	pollWinRes "$TITLE" "CATSELWIDTH" "CATSELHEIGHT"
 
-	loadCfg "$STLGUICFG" X
-	updateWinRes "$TITLE" "$STLGUICFG" "CATSELWIDTH" "CATSELHEIGHT" &
 	setShowPic
 	
 	if [ -z "$CURCAT" ]; then
@@ -3789,8 +3805,7 @@ function openExtraSelection {
 	fi
 	
 	TITLE="${PROGNAME}-ExtraSelection"
-	loadCfg "$STLGUICFG" X
-	updateWinRes "$TITLE" "$STLGUICFG" "EXTSELWIDTH" "EXTSELHEIGHT" &
+	pollWinRes "$TITLE" "EXTSELWIDTH" "EXTSELHEIGHT"
 
 	SETHEAD="$(spanFont "${PROGNAME} (${PROGCMD}) - ${PROGVERS} \n \n$GN ($AID)" "H") \n <span font=\"italic\">$GUI_EXTRA</span>"
 
@@ -3847,8 +3862,7 @@ function openGuiSettings {
 	fi
 	
 	TITLE="${PROGNAME}-GuiSettings"
-	loadCfg "$STLGUICFG" X
-	updateWinRes "$TITLE" "$STLGUICFG" "GUISETWIDTH" "GUISETHEIGHT" &
+	pollWinRes "$TITLE" "GUISETWIDTH" "GUISETHEIGHT"
 
 	SETHEAD="$(spanFont "${PROGNAME} (${PROGCMD}) - ${PROGVERS} \n \n$GN ($AID)" "H") \n <span font=\"italic\">(${#CfgFiles[@]} $GUI_EDITABLECFGS)\n(${#GameTxtFiles[@]} $GUI_EDITABLEGAMECFGS)</span>"
 	
@@ -3907,6 +3921,12 @@ function clickInfo {
 	writelog "INFO" "$1 - exiting '$4' and opening '$5'"
 }
 
+function getLaPl {
+	if [ -f "$PLAYTIMELOGDIR/${GN/$LGS /}.log" ]; then
+		echo "last played: $(tail -n1 "$PLAYTIMELOGDIR/${GN/$LGS /}.log")"
+	fi	
+}
+
 function openSettings {
 	prepareMenu "$@"
 
@@ -3915,10 +3935,11 @@ function openSettings {
 	fi
 	
 	TITLE="${PROGNAME}-MenuSelection"
-	loadCfg "$STLGUICFG" X
-	updateWinRes "$TITLE" "$STLGUICFG" "SETWIDTH" "SETHEIGHT" &
+	pollWinRes "$TITLE" "SETWIDTH" "SETHEIGHT"
 
-	SETHEAD="$(spanFont "${PROGNAME} (${PROGCMD}) - ${PROGVERS} \n \n$GN ($AID)" "H") \n <span font=\"italic\">(${#CfgFiles[@]} $GUI_EDITABLECFGS)\n(${#GameTxtFiles[@]} $GUI_EDITABLEGAMECFGS)\n</span>"
+	LAPL="$(getLaPl)"
+
+	SETHEAD="$(spanFont "${PROGNAME} (${PROGCMD}) - ${PROGVERS} \n \n$GN ($AID)" "H")\n<span font=\"italic\">$LAPL\n(${#CfgFiles[@]} $GUI_EDITABLECFGS)\n(${#GameTxtFiles[@]} $GUI_EDITABLEGAMECFGS)\n</span>"
 
 	loadCfg "$CUMETA/$AID.conf" X
 	loadCfg "$GEMETA/$AID.conf" X
@@ -4078,8 +4099,7 @@ function checkEntryBlocklist {
 
 function askSort {
 	TITLE="${PROGNAME}-AskSort"
-
-	loadCfg "$STLGUICFG" X
+	pollWinRes "$TITLE" "$ASKSETREQWIDTH" "$ASKSETREQHEIGHT"
 
 	"$YAD" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
 		--title="$TITLE" \
@@ -4280,8 +4300,7 @@ function openMenu {
 	loadCfg "$ARGLOADCFG" X
 
 	TITLE="${PROGNAME}-$ARGFUNC"
-	loadCfg "$STLGUICFG" X
-	updateWinRes "$TITLE" "$STLGUICFG" "$ARGWIDTH" "$ARGHEIGHT" &
+	pollWinRes "$TITLE" "$ARGWIDTH" "$ARGHEIGHT"
 				
 	writelog "INFO" "${FUNCNAME[0]} - Starting  createMenu \"$ARGMENU\" \"$ARGFUNC\" \"$ARGPIC\" \"$UNUSED\" \"$ARGCOLS\" \"${!ARGWIDTH}\" \"${!ARGHEIGHT}\" \"$ARGTITLE\" \"$ARGPCMD\" \"$ARGSPAT\""
 	createMenu "$ARGSPLIT" "$ARGMENU" "$ARGFUNC" "$ARGPIC" "$UNUSED" "$ARGCOLS" "${!ARGWIDTH}" "${!ARGHEIGHT}" "$ARGTITLE" "$ARGPCMD" "$ARGSPAT"
@@ -5545,9 +5564,8 @@ function GameShaderDialog {
 		writelog "INFO" "${FUNCNAME[0]} - Found ${#ShaderFiles[@]} available Shader Files - opening Selection"
 
 		TITLE="${PROGNAME}-Shader"
+		pollWinRes "$TITLE" "SHADREQWIDTH" "SHADREQWIDTH"
 
-		loadCfg "$STLGUICFG" X
-		updateWinRes "$TITLE" "$STLGUICFG" "SHADREQWIDTH" "SHADREQWIDTH" &
 		setShowPic
 
 		SHADFILES="$(while read -r f; do if [ ! -f "$SHADDESTDIR/${f##*/}" ]; then 	echo FALSE ; echo "$f"; else echo TRUE ; echo "$f" ;fi ; done <<< "$(printf "%s\n" "${ShaderFiles[@]}")" | \
@@ -5935,9 +5953,8 @@ function askSettings {
 			getAvailableCfgs
 
 			TITLE="${PROGNAME}-OpenSettings"
+			pollWinRes "$TITLE" "ASKSETREQWIDTH" "ASKSETREQHEIGHT"
 
-			loadCfg "$STLGUICFG" X
-			updateWinRes "$TITLE" "$STLGUICFG" "ASKSETREQWIDTH" "ASKSETREQHEIGHT" &
 			setShowPic
 
 			if [ "$STARTMENU" == "Editor" ]; then
@@ -5966,10 +5983,13 @@ function askSettings {
 				TWINFO2="<span font=\"italic\">($GUI_SHOULDWORK)</span>"
 			fi
 
+			LAPL="$(getLaPl)"
+
 			"$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
 			--title="$TITLE" \
 			--geometry="$ASKSETREQWIDTH"x"$ASKSETREQHEIGHT"+0+0 \
 			--text="$(spanFont "$GN ($AID) - $REQQEST" "H")" \
+			--field="<span font=\"italic\">$LAPL</span>":LBL \
 			--field="<span font=\"italic\">(${#CfgFiles[@]} $GUI_EDITABLECFGS)</span>":LBL \
 			--field="<span font=\"italic\">(${#GameTxtFiles[@]} $GUI_EDITABLEGAMECFGS)</span>":LBL \
 			--field="$TWINFO1":LBL \
@@ -6063,7 +6083,7 @@ function updateConfigFile {
 		else
 			OLDVERS="$(grep "config Version" "$CFGFILE" | gawk -F ': ' '{print $2}')"
 			
-			if [ "$CFGFILE" == "$STLGUICFG" ]; then
+			if [ "$CFGFILE" == "$STLGUICFG" ] || grep -q "$STLGUIDIR" <<< "$CFGFILE" ; then
 				calculateDefaultResolutions
 			fi
 			
@@ -7029,9 +7049,7 @@ function guiLoadCfg {
 	GUICFG="$1"
 
 	TITLE="${PROGNAME}-AskLoadTweak"
-
-	loadCfg "$STLGUICFG" X
-	updateWinRes "$TITLE" "$STLGUICFG" "ALTREQWIDTH" "ALTREQHEIGHT" &
+	pollWinRes "$TITLE" "ALTREQWIDTH" "ALTREQHEIGHT"
 
 	writelog "INFO" "${FUNCNAME[0]} - Requester asking if '$GUICFG' should be loaded"
 	"$YAD" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
@@ -7066,8 +7084,7 @@ function validateATCfg {
 	if [ "$ATVALIDATE" -ge 1 ]; then
 
 		TITLE="${PROGNAME}-AskEditTweak"
-		loadCfg "$STLGUICFG" X
-		updateWinRes "$TITLE" "$STLGUICFG" "AETREQWIDTH" "AETREQHEIGHT" &
+		pollWinRes "$TITLE" "AETREQWIDTH" "AETREQHEIGHT"
 
 		writelog "INFO" "${FUNCNAME[0]} - Gui asking if '$VALCFG' should be edited as ATVALIDATE is '$ATVALIDATE', autoloaded, skipped or ignored"
 		
@@ -7120,9 +7137,7 @@ function AdoptAutoTweak {
 
 function AskAdoptAutoTweak {
 	TITLE="${PROGNAME}-ConvertAutoTweak"
-
-	loadCfg "$STLGUICFG" X
-	updateWinRes "$TITLE" "$STLGUICFG" "CATREQWIDTH" "CATREQHEIGHT" &
+	pollWinRes "$TITLE" "CATREQWIDTH" "CATREQHEIGHT"
 
 	"$YAD" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
 	--title="$TITLE" \
@@ -7202,9 +7217,7 @@ function launchCustomProg {
 		writelog "INFO" "${FUNCNAME[0]} - CUSTOMCMD variable is empty - opening file requester"
 
 		TITLE="${PROGNAME}-OpenCustomProgram"
-
-		loadCfg "$STLGUICFG" X
-		updateWinRes "$TITLE" "$STLGUICFG" "CUSTPROGREQWIDTH" "CUSTPROGREQHEIGHT" &
+		pollWinRes "$TITLE" "CUSTPROGREQWIDTH" "CUSTPROGREQHEIGHT"
 
 		ZCUST="$("$YAD" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
 		--title="$TITLE" \
@@ -7264,9 +7277,7 @@ function launchCustomProg {
 				writelog "INFO" "${FUNCNAME[0]} - CUSTOMCMD file '$CUSTOMCMD' not found - opening file requester"
 			
 				TITLE="${PROGNAME}-OpenCustomProgram"
-
-				loadCfg "$STLGUICFG" X
-				updateWinRes "$TITLE" "$STLGUICFG" "CUSTPROGREQWIDTH" "CUSTPROGREQHEIGHT" &
+				pollWinRes "$TITLE" "CUSTPROGREQWIDTH" "CUSTPROGREQHEIGHT"
 				
 				ZCUST="$("$YAD" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
 				--title="$TITLE" \
@@ -7953,9 +7964,7 @@ function addVortexStage {
 
 	if [ -z "$1" ]; then
 		TITLE="${PROGNAME}-AddVortexStage"
-
-		loadCfg "$STLGUICFG" X
-		updateWinRes "$TITLE" "$STLGUICFG" "AVSREQWIDTH" "AVSREQHEIGHT" &
+		pollWinRes "$TITLE" "AVSREQWIDTH" "AVSREQHEIGHT"
 
 		NEWVS="$("$YAD" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
 		--file --directory \
@@ -8184,9 +8193,8 @@ function VortexGamesDialog {
 		getInstalledGamesWithVortexSupport
 
 		TITLE="${PROGNAME}-Vortex Toggle"
+		pollWinRes "$TITLE" "VOIGWIDTH" "VOIGHEIGHT"
 
-		loadCfg "$STLGUICFG" X
-		updateWinRes "$TITLE" "$STLGUICFG" "VOIGWIDTH" "VOIGHEIGHT" &
 		setShowPic
 		VGNLIST="$STLSHM/VGNLIST.txt"
 		VGNSCLIST="$STLSHM/VGNSCLIST.txt"
@@ -8260,9 +8268,8 @@ function VortexSymDialog {
 		VPDRC="$VORTEXPREFIX/$DRC"
 		if [ -d "$VPDRC" ]; then		
 			TITLE="${PROGNAME}-Vortex Symlinks"
+			pollWinRes "$TITLE" "VOSYWIDTH" "VOSYHEIGHT"
 
-			loadCfg "$STLGUICFG" X
-			updateWinRes "$TITLE" "$STLGUICFG" "VOSYWIDTH" "VOSYHEIGHT" &
 			setShowPic
 
 			cd "$VPDRC" || return
@@ -8771,9 +8778,8 @@ function askVortex {
 			writelog "INFO" "${FUNCNAME[0]} - Opening Vortex Requester with timeout '$WAITVORTEX'"
 
 			TITLE="${PROGNAME}-OpenVortex"
+			pollWinRes "$TITLE" "ASKVTXREQWIDTH" "ASKVTXREQHEIGHT"
 
-			loadCfg "$STLGUICFG" X
-			updateWinRes "$TITLE" "$STLGUICFG" "ASKVTXREQWIDTH" "ASKVTXREQHEIGHT" &
 			setShowPic
 
 			"$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
@@ -9553,9 +9559,8 @@ function askConty {
 		writelog "INFO" "${FUNCNAME[0]} - Opening Ask Conty Requester"
 
 		TITLE="${PROGNAME}-SelectConty"
+		pollWinRes "$TITLE" "ASKCONTYREQWIDTH" "ASKCONTYREQHEIGHT"
 
-		loadCfg "$STLGUICFG" X
-		updateWinRes "$TITLE" "$STLGUICFG" "ASKCONTYREQWIDTH" "ASKCONTYREQHEIGHT" &
 		setShowPic
 
 		"$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
@@ -9649,7 +9654,8 @@ function checkConty {
 function logPlayTime {
 	if [ "$LOGPLAYTIME" -eq 1 ] && [ -n "$GN" ] ; then
 		mkProjDir "$PLAYTIMELOGDIR" 1
-		echo "$(date): $1" >> "$PLAYTIMELOGDIR/${GN/$LGS /}.log"
+		# different date formats?
+		echo "$(date +%d.%m.%Y): $1 sec" >> "$PLAYTIMELOGDIR/${GN/$LGS /}.log"
 	fi
 }
 
@@ -9728,10 +9734,9 @@ function dlWineGUI {
 	writelog "INFO" "${FUNCNAME[0]} - Opening dialog to choose a download"
 
 	DLWINELIST="$(printf "!%s\n" "${WineDLDispList[@]//\"/}" | tr -d '\n' | sed "s:^!::" | sed "s:!$::")"
-	TITLE="${PROGNAME}-DownloadWine"
 
-	loadCfg "$STLGUICFG" X
-	updateWinRes "$TITLE" "$STLGUICFG" "WINEREQWIDTH" "WINEREQHEIGHT" &
+	TITLE="${PROGNAME}-DownloadWine"
+	pollWinRes "$TITLE" "WINEREQWIDTH" "WINEREQHEIGHT"
 
 	if [ -z "$DLWINE" ]; then
 		DLWINE="${WineDLDispList[0]}"
@@ -9816,8 +9821,7 @@ function WineSelection {
 	fi
 	
 	TITLE="${PROGNAME}-ChooseWine"
-	loadCfg "$STLGUICFG" X
-	updateWinRes "$TITLE" "$STLGUICFG" "WINSELWIDTH" "WINSELHEIGHT" &
+	pollWinRes "$TITLE" "WINSELWIDTH" "WINSELHEIGHT"
 
 	writelog "INFO" "${FUNCNAME[0]} - Opening Wine Selection"
 
@@ -11123,10 +11127,9 @@ function openMainMenu {
 	fi
 
 #	SELACT="Settings"
-	TITLE="${PROGNAME}-MainMenu"
 
-	loadCfg "$STLGUICFG" X
-	updateWinRes "$TITLE" "$STLGUICFG" "MMWIDTH" "MMHEIGHT" &
+	TITLE="${PROGNAME}-MainMenu"
+	pollWinRes "$TITLE" "MMWIDTH" "MMHEIGHT"
 
 	writelog "INFO" "${FUNCNAME[0]} - Opening Main Menu"
 
@@ -11169,9 +11172,8 @@ function SteamCatSelect {
 	writelog "INFO" "${FUNCNAME[0]} - Steam Category Selection"
 
 	TITLE="${PROGNAME}-SteamCategorySelection"
+	pollWinRes "$TITLE" "SCATSELWIDTH" "SCATSELHEIGHT"
 
-	loadCfg "$STLGUICFG" X
-	updateWinRes "$TITLE" "$STLGUICFG" "SCATSELWIDTH" "SCATSELHEIGHT" &
 	setShowPic
 	unset VALTAGS
 	mapfile -d "\n" -t -O "${#VALTAGS[@]}" VALTAGS <<< "$(getActiveSteamCategories)"
@@ -11260,9 +11262,7 @@ function addNonSteamGameGui {
 		fi 
 
 		TITLE="${PROGNAME}-$NSGA"
-
-		loadCfg "$STLGUICFG" X
-		updateWinRes "$TITLE" "$STLGUICFG" "NSGREQWIDTH" "NSGREQHEIGHT" &
+		pollWinRes "$TITLE" "NSGREQWIDTH" "NSGREQHEIGHT"
 
 		NSGSET="$("$YAD" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
 		--title="$TITLE" --separator="|" \
