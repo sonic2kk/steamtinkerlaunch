@@ -106,6 +106,7 @@ Programs required for a full internal functionality:
 - xwininfo
 - [Yad](https://github.com/v1cont/yad) All GUI elements like [Settings Menu](https://github.com/frostworx/steamtinkerlaunch/wiki/Settings-Menu), [Tray Icon](https://github.com/frostworx/steamtinkerlaunch/wiki/Tray-Icon), the [Editor Dialog](https://github.com/frostworx/steamtinkerlaunch/wiki/Settings-Menu#editor-dialog)
   and all other windows use yad. **A new enough version *(>=7.2; see [here](https://github.com/frostworx/steamtinkerlaunch/issues/98))* is required**
+  **Instead of a global/system wide installation, stl also supports easy to use [custom solutions](https://github.com/frostworx/steamtinkerlaunch/wiki/Custom-Yad)**
    
 Programs needed for optional external features *(no special order)*:
 - [strace](https://github.com/frostworx/steamtinkerlaunch/wiki/Strace)

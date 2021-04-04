@@ -9076,8 +9076,63 @@ function checkExtDeps {
 	checkDep "BACKUPSTEAMUSER" "$RSYNC"
 }
 
+function setYadBin {
+	if [ -f "$1" ]; then
+		YADFILE="$1"
+	elif [ "$1" == "conty" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Using conty as yad binary" "E"
+		if [ ! -f "$CONTYDLDIR/$CONTY" ]; then
+			USEWGETGUI=0 dlConty
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Found Conty binary in '$CONTYDLDIR/$CONTY'" "E"
+		fi
+
+		if [ -f "$CONTYDLDIR/$CONTY" ]; then
+			if [ "$(readlink "$CONTYDLDIR/$YAD")" == "$CONTYDLDIR/$CONTY" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Symlink '$CONTYDLDIR/$YAD' already points to '$CONTYDLDIR/$CONTY'" "E"
+			else
+				writelog "INFO" "${FUNCNAME[0]} - Creating symlink '$CONTYDLDIR/$YAD' pointing to '$CONTYDLDIR/$CONTY'" "E"
+				ln -s "$CONTYDLDIR/$CONTY" "$CONTYDLDIR/$YAD"
+			fi
+			if [ "$(readlink "$CONTYDLDIR/$YAD")" == "$CONTYDLDIR/$CONTY" ]; then
+				YADFILE="$CONTYDLDIR/$YAD"
+			fi
+		fi
+
+	elif [ "$1" == "ai" ] ||  [ "$1" == "appimage" ]; then
+		YAI="$STLDLDIR/Yad-313ada9-x86_64.AppImage"
+		if [ -f "$YAI" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Found Yad AppImage under '$YAI'" "E"
+		else
+			YAZ="yad-appimage.zip"
+			YAIURL="$PROJECTPAGE/files/5451226/$YAZ"
+			writelog "INFO" "${FUNCNAME[0]} - Downloading AppImage from '$YAIURL'" "E"
+			"$WGET" -q "$YAIURL" -O "$STLDLDIR/$YAZ"
+			"$UNZIP" -q "$STLDLDIR/$YAZ" -d "$STLDLDIR"
+			rm "$STLDLDIR/$YAZ" 2>/dev/null
+		fi
+		if [ -f "$YAI" ]; then
+			YADFILE="$YAI"
+		fi
+	else
+		writelog "ERROR" "${FUNCNAME[0]} - '$1' is no valid option" "E"
+	fi
+	
+	if [ -n "$YADFILE" ]; then
+		MINYAD="7.2"
+		YADVER="$("$YADFILE" --version | tail -n1 | cut -d ' ' -f1)"
+		if [ "$(printf '%s\n' "$MINYAD" "$YADVER" | sort -V | head -n1)" != "$MINYAD" ] || grep -qi "[A-Z]" <<< "$YADVER" ; then
+			writelog "ERROR" "${FUNCNAME[0]} - Version for '$YADFILE' is invalid. You need to at least version '$MINYAD'" "E"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - configuring yad binary to '$YADFILE'" "E"
+			updateConfigEntry "YAD" "$YADFILE" "$STLDEFGLOBALCFG"
+		fi
+	fi
+}
+
 function checkIntDeps {
-	if [ "$SKIPINTDEPCHECK" -eq 1 ]; then
+
+	if [ "$SKIPINTDEPCHECK" -eq 1 ] || [ "$1" == "yad" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Skipping dependency check for internally used programs" "E"
 	else
 		DEPSMISSING=0
@@ -9102,11 +9157,11 @@ function checkIntDeps {
 		fi	
 
 		MINYAD="7.2"
-		YADVER="$("$YAD" --version | cut -d ' ' -f1)"
+		YADVER="$("$YAD" --version | tail -n1 | cut -d ' ' -f1)"
 		
 		if [ "$(printf '%s\n' "$MINYAD" "$YADVER" | sort -V | head -n1)" != "$MINYAD" ]; then 
-			writelog "ERROR" "${FUNCNAME[0]} - Yad version '$("$YAD" --version | cut -d ' ' -f1)' is too old. You need to update to at least '$MINYAD'" "E"
-			notiShow "$(strFix "$NOTY_NOTFOUND2" "$("$YAD" --version | cut -d ' ' -f1)" "$MINYAD")"
+			writelog "ERROR" "${FUNCNAME[0]} - Yad version '$YADVER' is too old. You need to update to at least '$MINYAD'" "E"
+			notiShow "$(strFix "$NOTY_NOTFOUND2" "$YADVER" "$MINYAD")"
 			exit
 		fi	
 
@@ -9114,8 +9169,8 @@ function checkIntDeps {
 			writelog "ERROR" "${FUNCNAME[0]} - Above programs need to be installed to use '$PROGCMD'" "E"
 			writelog "ERROR" "${FUNCNAME[0]} The dependency check can be disabled with enabling 'SKIPINTDEPCHECK' - exiting now" "E"
 			exit
-		else
-			writelog "INFO" "${FUNCNAME[0]} - Dependency check for internally used programs was successful" "E"
+#		else
+#			writelog "INFO" "${FUNCNAME[0]} - Dependency check for internally used programs was successful" "E"
 		fi
 	fi
 }
@@ -10601,6 +10656,12 @@ function howto {
 	echo "    vr <windowname> <SteamAppID> <s> Start SBS-VR mode for <windowname>"
 	echo "                                       and game <SteamAppID>"
 	echo "                                       's'ave windowname for the game"
+	echo "    yad <yad binary>                 Configure the used Yad binary"
+	echo "                                       <yad binary> can be either"
+	echo "                                       <absolute/path>"
+	echo "                                       <conty>"
+	echo "                                       <ai> or <appimage>"
+	echo "                                       (see Wiki for details)"
 }
 
 function commandline {
@@ -10817,6 +10878,14 @@ function commandline {
 			fi
 			checkSBSVRLaunch "$2" 
 		else
+			howto
+		fi
+	elif  [ "$1" == "yad" ]; then
+		if [ -n "$2" ]; then
+			setYadBin "$2"
+		else
+			writelog "INFO" "${FUNCNAME[0]} ------------------------" E
+			writelog "INFO" "${FUNCNAME[0]} - arg2 '$2' needs to be a valid yad parameter" E
 			howto
 		fi
 	else
@@ -11834,7 +11903,7 @@ function main {
 
 	writelog "INFO" "emptyVars - Emptied some original Variables as they slowdown several system calls when started from steam"
 	createDefaultCfgs "$@"
-	checkIntDeps
+	checkIntDeps "$@"
 
 	if [ -z "$1" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - No arguments provided. See '$PROGCMD --help' for possible command line parameters" "E"
