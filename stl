@@ -143,6 +143,10 @@ STLCOMPDAT="$STLCFGDIR/compatdata"
 METADIR="$STLCFGDIR/meta"
 GEMETA="$METADIR/id/general"
 CUMETA="$METADIR/id/custom"
+EVMETAID="$METADIR/eval/id"
+EVMETATITLE="$METADIR/eval/title"
+EVALSC="evaluatorscript"
+ISCRI="iscriptevaluator"
 TIGEMETA="$METADIR/title/general"
 TICUMETA="$METADIR/title/custom"
 DRC="drive_c"
@@ -194,14 +198,20 @@ NOGAMES=",70_2260196511,228980,858280,961940,1054830,1070560,1113280,1245040,139
 #PROTON513="1420170"
 
 function setAID {
-# shellcheck disable=SC2154		# SteamAppId comes from Steam
-	if [ -z "$SteamAppId" ];then
-		AID="$PLACEHOLDERAID"
-	else
-		if [ "$SteamAppId" -eq "0" ]; then
-			AID="${STEAM_COMPAT_DATA_PATH##*/}"
+	if [ -n "$STEAM_COMPAT_APP_ID" ]; then
+		AID="$STEAM_COMPAT_APP_ID"
+	fi
+
+	if [ -z "$AID" ];then
+		# shellcheck disable=SC2154		# SteamAppId comes from Steam
+		if [ -z "$SteamAppId" ];then
+			AID="$PLACEHOLDERAID"
 		else
-			AID="$SteamAppId"
+			if [ "$SteamAppId" -eq "0" ]; then
+				AID="${STEAM_COMPAT_DATA_PATH##*/}"
+			else
+				AID="$SteamAppId"
+			fi
 		fi
 	fi
 }
@@ -219,7 +229,6 @@ STLDEFGLOBALCFG="$STLCFGDIR/global.conf"													# global config
 STLDEFGAMECFG="$STLCFGDIR/default_template.conf"											# the default config template used to create new per game configs - will be auto created if not found
 
 function setAIDCfgs {
-STLOLDGAMECFG="$STLGAMEDIR/$AID.conf"														# for migrating into $STLGAMEDIRID - will be removed later - TODO
 STLGAMECFG="$STLGAMEDIRID/$AID.conf"														# the game specific config file which is used by the launched game - created from $STLDEFGAMECFG if not found
 TWEAKCFG="$USERTWEAKDIR/$AID.conf"															# the game specific shareable config tweak overrides
 SBSTWEAKCFG="$SBSTWEAKDIR/$AID.conf"														# the game specific shareable config sbs tweak overrides
@@ -262,6 +271,8 @@ SYSSTEAMCOMPATOOLS="$USS/$CTD"
 SLR="SteamLinuxRuntime"
 STERU="steam-runtime"
 DBW="dist/bin/wine"
+STLPROTDIR="$STLCFGDIR/proton"
+STLEARLYPROTCONF="$STLPROTDIR/earlyproton.conf"
 PROCU="proton/custom"
 CTVDF="compatibilitytool.vdf"
 SCV="sharedconfig.vdf"
@@ -784,7 +795,6 @@ function setGameVars {
 		GPFX="$STEAM_COMPAT_DATA_PATH/pfx"														# currently used WINEPREFIX
 		GP="$(printf "%s\n" "$@" | grep -v "proton\|$SLR" | grep -m1 "$SAC")"					# the absolute game path of the windows game exe
 		GE="$(gawk -F '.exe' '{print $1}' <<< "${GP##*/}")"										# just the windows game exe name
-		EFD="$(dirname "$GP")"																	# the absolute directory where the game exe lives - for optional custom program
 	else
 	# linux game
 		GPRAW="$(printf "%s\n" "$@" | grep -m1 "$SAC")"											# the absolute game path of the game exe
@@ -795,9 +805,6 @@ function setGameVars {
 		fi
 		
 		GE="${GP##*/}"																			# the game executable
-#		EFD="${GP//$GE/}"																		# the absolute directory where the game exe lives - for optional custom program # dirname fails at least with 206420
-		EFD="$(dirname "$GP")"
-
 	fi
 
 	if [ -z "$GAMEEXE" ]; then
@@ -805,6 +812,12 @@ function setGameVars {
 	fi
 
 	# common
+	if [ -n "$STEAM_COMPAT_INSTALL_PATH" ]; then
+		EFD="$STEAM_COMPAT_INSTALL_PATH"
+	else
+		EFD="$(dirname "$GP")"
+	fi
+
 	GFD="$(gawk -F 'common' '{print $1}' <<< "$EFD")common/$(gawk -F 'common' '{print $NF}' <<< "$EFD" | cut -d'/' -f2)" # f.e. used for vortex symlinks
 	GN="$(grep -oE 'common/[^\/]+' <<< "$EFD" | gawk -F 'common/' '{print $NF}')"				# THIS is hopefully the proper game name
 
@@ -6157,7 +6170,7 @@ function linkGameCfg {
 }
 
 # create game configs:
-function createGameCfgOrg {	
+function createGameCfg {	
 
 	if [ -f "$STLGAMECFG" ]; then
 		# add missing config entries in the default global config:
@@ -6185,24 +6198,6 @@ function createGameCfgOrg {
 
 	linkGameCfg
 }
-
-# for migrating into $STLGAMEDIRID - will be removed later - TODO
-function createGameCfg {	
-	if [ -f "$STLOLDGAMECFG" ]; then
-		if [ -f "$STLGAMECFG" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Found old gameconfig '$STLOLDGAMECFG' but also a new one '$STLGAMECFG', so just deleting the old one"
-			rm "$STLOLDGAMECFG" 2>/dev/null
-		else
-			writelog "INFO" "${FUNCNAME[0]} - Found an old gameconfig under '$STLOLDGAMECFG' - Moving it to '$STLGAMECFG'"
-			mv "$STLOLDGAMECFG" "$STLGAMECFG"
-		fi
-	fi
-	createGameCfgOrg
-
-# updating new default PROTON_LOG path
-	updateConfigEntry "PROTON_LOG_DIR" "$STLPROTONIDLOGDIR" "$STLGAMECFG"
-	updateConfigEntry "PROTON_LOG_DIR" "$STLPROTONIDLOGDIR" "$STLDEFGAMECFG"
-}	
 
 # override game configs with a tweak config if available:
 function checkTweakLaunch {
@@ -9479,7 +9474,6 @@ function fixProtonVersionMismatch {
 		getAvailableProtonVersions "up"
 	fi
 
-	# TODO? better MIMAPROTSHORT
 	MIMAPROTSHORT="^${MIMAPROT%-*}"
 	NEWMINORPROT="$(grep "$MIMAPROTSHORT" "$PROTONCSV" | cut -d ';' -f1 | sort -nr | head -n1)"
 
@@ -9495,17 +9489,23 @@ function fixProtonVersionMismatch {
 		fi
 	fi
 
-	if [ -f "$NEWMINORRUN" ]; then
-		switchProton  "$NEWMINORPROT"
-		notiShow "$(strFix "$NOTY_WANTPROTON2" "$NEWMINORPROT" "$MIMAPROT")"
-	elif [ "$AUTOLASTPROTON" -eq 1 ]; then
-		writelog "INFO" "${FUNCNAME[0]} - Automatically selecting newest official one"
-		setNOP
+	if [ -n "$2" ]; then
+		if [ -f "$NEWMINORRUN" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - found '$NEWMINORRUN'"
+			echo "$NEWMINORRUN"
+		fi
 	else
-		writelog "INFO" "${FUNCNAME[0]} - Asking for one"
-		needNewProton
+		if [ -f "$NEWMINORRUN" ]; then
+			switchProton  "$NEWMINORPROT"
+			notiShow "$(strFix "$NOTY_WANTPROTON2" "$NEWMINORPROT" "$MIMAPROT")"
+		elif [ "$AUTOLASTPROTON" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Automatically selecting newest official one"
+			setNOP
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Asking for one"
+			needNewProton
+		fi
 	fi
-
 }
 
 function checkProtonBump {
@@ -10954,6 +10954,7 @@ function storeMetaData {
 
 	createSymLink "${FUNCNAME[0]}" "$GEMETA/$MAID.conf" "$TIGEMETA/${MGNA}.conf" X
 	createSymLink "${FUNCNAME[0]}" "$CUMETA/$MAID.conf" "$TICUMETA/${MGNA}.conf" X
+	createSymLink "${FUNCNAME[0]}" "$EVMETAID/${EVALSC}_${MAID}.vdf" "$EVMETATITLE/${EVALSC}_${MGNA}.vdf"
 }
 
 function delMenuTemps {
@@ -11873,10 +11874,218 @@ function restoreOrgVars {
 	PATH="$ORG_PATH"
 }
 
+function rmOldLog {
+	# restart $LOGFILE only if older than 3 minutes # TODO minutes configurable?
+	if [ -f "$LOGFILE" ]; then
+		if test "$(find "$LOGFILE" -not -newermt '-3 minutes')"; then
+			rm "$LOGFILE" 2>/dev/null
+		fi
+	fi	
+}
+
+function checkFirstTimeRun {
+	ISCRILOG="$STLSHM/${PROGCMD}-${ISCRI}-${STEAM_COMPAT_APP_ID}.log"
+	GECUST="get-current-step"
+	RUNEVALTMP="$STLSHM/runeval.txt"
+	GPFX="$STEAM_COMPAT_DATA_PATH/pfx"
+	ISCEXE="$STEAM_COMPAT_CLIENT_INSTALL_PATH/legacycompat/iscriptevaluator.exe"
+	EVALPROTCONF="$STLSHM/evalprot-${STEAM_COMPAT_APP_ID}.conf"
+	
+	function waitForEvaluatorscript {
+		mkProjDir "$EVMETAID" 1
+		mkProjDir "$EVMETATITLE" 1
+
+		ISCRILOG="$2"
+		EVALVDF="$STEAM_COMPAT_CLIENT_INSTALL_PATH/legacycompat/$1"
+		while [ ! -f "$EVALVDF" ]; do 
+			sleep 0.1
+		done
+		cp "$EVALVDF" "$EVMETAID"
+		writelog "INFO" " Copied '$EVALVDF' to '$EVMETAID/$1'" "E" | tee -a "$ISCRILOG"
+	}
+	
+	function findEarlyProt {
+		if [ -n "$2" ]; then
+			ISCRILOG="$2"
+			writelog "INFO" "Trying to get a proton version from '$1'" "E" | tee -a "$ISCRILOG"
+			if grep -q "^USEPROTON" "$1"; then
+				CONFPROTRAW="$(grep "^USEPROTON" "$1" | cut -d '=' -f2)"
+				CONFPROT="${CONFPROTRAW//\"}"
+				PROTONCSV="$STLSHM/ProtonCSV.txt"
+				if [ -z "$SUSDA" ]; then
+					setSteamPaths
+				fi
+				
+				createProtonList
+				
+				if [ -f "$PROTONCSV" ]; then
+					writelog "INFO" "Searching '$CONFPROT' in '$PROTONCSV'" "E" | tee -a "$ISCRILOG"
+
+					if grep -q "^${CONFPROT}" "$PROTONCSV"; then
+						writelog "INFO" "Found '$CONFPROT' in '$PROTONCSV'" "E" | tee -a "$ISCRILOG"
+						EARLYPROT="$(grep "^${CONFPROT}" "$PROTONCSV" | cut -d ';' -f2)"
+						export EARLYPROT
+					else
+						writelog "INFO" "'$CONFPROT' not found in '$PROTONCSV'" "E" | tee -a "$ISCRILOG"
+						# if configured USEPROTON proton binary was not found, try to find a minor version bump instead:
+						TESTEARLYPROT="$(fixProtonVersionMismatch "$CONFPROT" "X")"
+						if [ -f "$TESTEARLYPROT" ]; then
+							writelog "INFO" "Found a minor version mismatch binary for '$CONFPROT':'$TESTEARLYPROT'" "E" | tee -a "$ISCRILOG"
+							EARLYPROT="$TESTEARLYPROT"
+							export EARLYPROT
+						else
+							writelog "SKIP" "Found '$TESTEARLYPROT' does not exist" "E" | tee -a "$ISCRILOG"
+						fi
+					fi
+				else
+					writelog "ERROR" "Could not create '$PROTONCSV'" "E" | tee -a "$ISCRILOG"
+				fi
+			else
+				writelog "SKIP" "No USEPROTON entry found in '$1'" "E" | tee -a "$ISCRILOG"
+			fi
+		fi	
+	}
+
+	if [ -z "$RUNEVAL" ]; then
+		RUNEVAL=0
+	fi
+
+	mkProjDir "$STLSHM" 1
+	rmOldLog
+
+	if [ -f "$(find "$LOGFILE" -not -newermt '-5 seconds')" ]; then
+		if ! grep -q "$ISCRI" <<< "$(tail -n1 "$LOGFILE")"; then
+			writelog "START" "######### '$ISCRI' #########" "E" | tee -a "$ISCRILOG"
+		fi
+	fi
+	# skip iscriptevaluator completely if a SKIP file exists for $STEAM_COMPAT_APP_ID
+	if [ -f "$EVMETAID/SKIP-${EVALSC}_${STEAM_COMPAT_APP_ID}.vdf" ]; then
+		writelog "SKIP" "Skipping '$ISCRI' line '$*' because '$EVMETAID/SKIP-${EVALSC}_${STEAM_COMPAT_APP_ID}.vdf' exists" "E" | tee -a "$ISCRILOG"
+	else
+		# filter evaluatorscript command
+		if grep -q "$EVALSC" <<< "$@"; then
+			# shellcheck disable=SC1003
+			EVSC="$(awk -F 'legacycompat\\\' '{print $NF}' <<< "$@")"
+		fi
+		# check force evaluatorscript run file
+		if [ -f "$RUNEVALTMP" ] && grep -q "$STEAM_COMPAT_APP_ID" "$RUNEVALTMP"; then
+			RUNEVAL=1
+			rm "$RUNEVALTMP"
+		fi
+
+		# check if evaluatorscript should be started:
+		if [ "$RUNEVAL" -eq 1 ] || [ ! -d "$GPFX" ] || [ ! -f "$EVMETAID/$EVSC" ]; then
+
+			# get a proton version for the install process:
+			if grep -q "$EVALSC" <<< "$@"; then
+				# first check if the game has a stl config and use the corresponding proton version:
+				if [ -z "$EARLYPROT" ] && [ ! -f "$EVALPROTCONF" ] && [ -f "$STLGAMEDIRID/$STEAM_COMPAT_APP_ID.conf" ]; then
+					findEarlyProt "$STLGAMEDIRID/$STEAM_COMPAT_APP_ID.conf" "$ISCRILOG"
+				fi
+				# as fallback check if the game template stl config has a usable proton version:
+				if [ -z "$EARLYPROT" ] && [ ! -f "$EVALPROTCONF" ] && [ -f "$STLDEFGAMECFG" ]; then
+					findEarlyProt "$STLDEFGAMECFG" "$ISCRILOG"
+				fi
+
+				# if everything else failed, check for a "static proton version" just for the base install - either from file or from system variable:
+				if [ -z "$EARLYPROT" ] && [ ! -f "$EVALPROTCONF" ] && [ -f "$STLEARLYPROTCONF" ]; then
+					writelog "INFO" "Trying to get a proton version from '$STLEARLYPROTCONF'" "E" | tee -a "$ISCRILOG"
+					source "$STLEARLYPROTCONF"
+				fi
+
+				# write found protonversion into temp config, so below GECUST runs can use it as well:
+				if [ -n "$EARLYPROT" ]; then
+					writelog "INFO" "Writing 'EARLYPROT=$EARLYPROT' into '$EVALPROTCONF'" "E" | tee -a "$ISCRILOG"
+					echo "EARLYPROT=\"$EARLYPROT\"" > "$EVALPROTCONF"
+					echo "TEVSC=\"$EVMETAID/$EVSC\"" >> "$EVALPROTCONF"
+				fi			
+			fi
+
+			# reload proton version from above EVALSC run:
+			TEVSC="$NON"
+			if [ -z "$EARLYPROT" ] && [ -f "$EVALPROTCONF" ]; then
+				source "$EVALPROTCONF"
+				#writelog "INFO" "Reusing '$EARLYPROT' from '$EVALPROTCONF' for command '$*'" "E" | tee -a "$ISCRILOG"
+			fi
+			
+			# only continue with proton being available:
+			if [ -n "$EARLYPROT" ] && [ -f "$EARLYPROT" ]; then
+					# filter evaluatorscript command
+					if grep -q "$EVALSC" <<< "$@"; then
+						mapfile -d " " -t -O "${#RUNISCCMD[@]}" RUNISCCMD < <(printf '%s' "$(awk -F 'run ' '{print $NF}' <<< "$*")")
+						# no evaluatorscript for the started game yet in the metadata - so starting the collector:
+						if [ -n "$EVSC" ] && [ ! -f "$EVMETAID/$EVSC" ]; then
+							waitForEvaluatorscript "$EVSC" "$ISCRILOG" &
+							writelog "INFO" "'$EVALSC' START - '$EARLYPROT run ${RUNISCCMD[*]}'" "E" | tee -a "$ISCRILOG"
+							"$EARLYPROT" run "${RUNISCCMD[@]}"
+							while [ ! -f "$EVMETAID/$EVSC" ]; do 
+								sleep 0.1
+							done
+						fi
+
+						# have a previously saved evaluatorscript in metadata to work with:
+						if [ -f "$EVMETAID/$EVSC" ]; then
+							STESHA="$STEAM_COMPAT_CLIENT_INSTALL_PATH/$SAC/Steamworks Shared"
+							if [ ! -d "$STESHA" ]; then
+								writelog "ERROR" "'$STESHA' not found" "E" | tee -a "$ISCRILOG"
+							# have a Steamworks Shared directory which is the steam storage dir for all redist dependency files:
+							else
+								if [ ! -f "$EVSC" ]; then
+									# creating a temporary copy of the evaluatorscript in $STEAM_COMPAT_CLIENT_INSTALL_PAT:
+									writelog "INFO" "Copying '$EVMETAID/$EVSC' to '$STEAM_COMPAT_CLIENT_INSTALL_PATH'" "E" | tee -a "$ISCRILOG"
+									cp "$EVMETAID/$EVSC" "$EVSC"
+									# inserting the windows path variant of the Steamworks Shared directory $STESHA as foreign_install_path into the evaluatorscript:
+									FIP="${STESHA//\//\\\\}"
+									FIP2="Z:${FIP//\\/\\\\}";
+									writelog "INFO" "Patching foreign_install_path '$FIP' into '$EVSC'" "E" | tee -a "$ISCRILOG"
+									# maybe finetune the sed command later to only match foreign_install_path lines - doesn't seem to be needed though (currently)
+									sed "s|\"\"|\"$FIP2\"|g" -i "$EVSC"
+								fi
+								# finally call iscriptevaluator via proton with the modified evaluatorscript as parameter:
+								writelog "INFO" "'$EVALSC' - START - '$EARLYPROT run $ISCEXE $EVSC'" "E" | tee -a "$ISCRILOG"
+								"$EARLYPROT" run "$ISCEXE" "$EVSC"
+								# remove the temporary modified evaluatorscript
+								rm "$EVSC" 2>/dev/null						
+								writelog "INFO" "'$EVALSC' - STOP  - '$EARLYPROT run $ISCEXE $EVSC'" "E" | tee -a "$ISCRILOG"
+							fi
+						else
+							writelog "INFO" "'$EVALSC' - SKIP  - '$EVMETAID/$EVSC' not found" "E" | tee -a "$ISCRILOG"
+						fi
+					# filter get-current-step command - this only updates the steam install gui process.
+					elif grep -q "$GECUST" <<< "$@"; then
+						"$EARLYPROT" "$@" | tee -a "$ISCRILOG"
+						echo "" >> "$ISCRILOG"
+						STINFO="$(date +%H:%M:%S) $NICEPROGNAME running"
+						if [ -f "$TEVSC" ]; then
+							# shellcheck disable=SC1003
+							while read -r COMRED; do
+								if "$PGREP" -a "" | grep "Steamworks Shared" | grep -v "runasadmin" | grep "${COMRED//\"}" >/dev/null ; then
+										writelog "INFO" "Installation of '${COMRED//\"}' running" "E" >> "$ISCRILOG"
+									STINFO="$(date +%H:%M:%S) $NICEPROGNAME sees ${COMRED//\"}"
+									break
+								fi
+							done <<< "$(grep "process 1" "$TEVSC" | awk -F'\\' '{print $NF}')"
+						fi
+						printf '\n%s\n' "$STINFO"	# heh, hello Steam Gui
+					# should not happen, but better log it anyway just in case:
+					else
+						writelog "SKIP" "Skipping '$ISCRI' command '$*' - Exiting" "E" | tee -a "$ISCRILOG"
+					fi
+			else
+				if ! grep -q "$GECUST" <<< "$@"; then
+					writelog "SKIP" "No usable Proton version found - ignoring '$ISCRI' command '$*' - Exiting" "E" | tee -a "$ISCRILOG"
+				fi
+			fi
+		else
+			writelog "SKIP" "Skipping '$ISCRI' command '$*' - Exiting" "E" | tee -a "$ISCRILOG"
+		fi
+	fi
+}
+
 function getCurrentCommandline {
-	ISCRI="iscriptevaluator" #	LECO="legacycompat"
+	# filter iscriptevaluator commands
 	if grep -q "$ISCRI" <<< "$@"; then
-		echo "$(date) - Skipping $ISCRI command '$*' - Exiting" >> "/tmp/${PROGCMD}-${ISCRI}.log"
+		checkFirstTimeRun "$@"
 		exit
 	else
 		mkdir -p "$MTEMP" 2>/dev/null
@@ -11894,7 +12103,7 @@ function main {
 	emptyVars "O"
 
 	if [ -f "$STLDEFGLOBALCFG" ] && grep -q "^RESETLOG=\"1\"" "$STLDEFGLOBALCFG"; then
-		rm "$LOGFILE" 2>/dev/null
+		rmOldLog
 		writelog "START" "######### Initializing Game Launch $AID #########"
 		writelog "INFO" "Starting with a clean log"
 	else
