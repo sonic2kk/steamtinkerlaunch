@@ -12034,7 +12034,6 @@ function checkFirstTimeRun {
 				source "$EVALPROTCONF"
 				#writelog "INFO" "Reusing '$EARLYPROT' from '$EVALPROTCONF' for command '$*'" "E" | tee -a "$ISCRILOG"
 			fi
-			
 			# only continue with proton being available:
 			if [ -n "$EARLYPROT" ] && [ -f "$EARLYPROT" ]; then
 					# filter evaluatorscript command
@@ -12061,12 +12060,37 @@ function checkFirstTimeRun {
 									# creating a temporary copy of the evaluatorscript in $STEAM_COMPAT_CLIENT_INSTALL_PAT:
 									writelog "INFO" "Copying '$EVMETAID/$EVSC' to '$STEAM_COMPAT_CLIENT_INSTALL_PATH'" "E" | tee -a "$ISCRILOG"
 									cp "$EVMETAID/$EVSC" "$EVSC"
-									# inserting the windows path variant of the Steamworks Shared directory $STESHA as foreign_install_path into the evaluatorscript:
-									FIP="${STESHA//\//\\\\}"
-									FIP2="Z:${FIP//\\/\\\\}";
-									writelog "INFO" "Patching foreign_install_path '$FIP' into '$EVSC'" "E" | tee -a "$ISCRILOG"
-									# maybe finetune the sed command later to only match foreign_install_path lines - doesn't seem to be needed though (currently)
-									sed "s|\"\"|\"$FIP2\"|g" -i "$EVSC"
+									
+									# Modifying the EVSC copy by adding matching installerfile source paths:		
+									FOINPA="foreign_install_path"
+									INPRO1="process 1"
+									
+									# weird but working way to determine and set the correct path for the corresponding install package
+									while read -r FIPFOUND; do
+										INSTFILERAW="$(gawk -F '%INSTALLDIR%' '{print $NF}' <<< "$FIPFOUND")"
+										INSTFILE1="${INSTFILERAW//\\//}"
+										INSTFILE2="${INSTFILE1//\"/}"
+										INSTFILE="${INSTFILE2##/}"
+										unset ABSFIP ZABSFIPRAW ZABSFIP
+										
+										if [ -f "${STESHA}/${INSTFILE}" ]; then
+											ABSFIP="${STESHA}"
+											writelog "INFO" "Source package found under '${STESHA}/${INSTFILE}' - using '$ABSFIP' as '$FOINPA'" "E" | tee -a "$ISCRILOG"
+										elif [ -f "${STEAM_COMPAT_INSTALL_PATH}/${INSTFILE}" ]; then
+											ABSFIP="${STEAM_COMPAT_INSTALL_PATH}"
+											writelog "INFO" "Source package found under '${STEAM_COMPAT_INSTALL_PATH}/${INSTFILE}' - using '$ABSFIP' for '$FOINPA'" "E" | tee -a "$ISCRILOG"
+										else
+											writelog "INFO" "Source package '${INSTFILE}' neither found in '$STESHA' nor in '$STEAM_COMPAT_INSTALL_PATH'" "E" | tee -a "$ISCRILOG"
+										fi
+								
+										# inserting the windows path variant '$ZABSFIP' of '$ABSFIP' as '$FOINPA' into the temp. evaluatorscript '$EVSC':
+										if [ -d "$ABSFIP" ]; then
+											ZABSFIPRAW="${ABSFIP//\//\\\\}"
+											ZABSFIP="Z:${ZABSFIPRAW//\\/\\\\}";
+											writelog "INFO" "Patching '$FOINPA' '$ZABSFIP' into '$EVSC'" "E" | tee -a "$ISCRILOG"
+											sed "0,/\"foreign_install_path\"		\"\"/s//\"foreign_install_path\"		\"$ZABSFIP\"/" -i "$EVSC"
+										fi
+									done <<< "$(tac "$EVSC" | grep "$FOINPA\|$INPRO1" | grep -A1 "$FOINPA" | tac | grep -v "$FOINPA\|--")"
 								fi
 								# finally call iscriptevaluator via proton with the modified evaluatorscript as parameter:
 								writelog "INFO" "'$EVALSC' - START - '$EARLYPROT run $ISCEXE $EVSC'" "E" | tee -a "$ISCRILOG"
