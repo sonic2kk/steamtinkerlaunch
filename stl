@@ -4903,6 +4903,26 @@ function pickGameWindowNameMeta {
 	fi
 }
 
+function getIDFromTitle {
+	if [ -z "$1" ]; then
+		echo "A Game Title (part of it might be enough) is required as argument"
+	else
+		grep -Rh -B1 "^GAMENAME=.*.$1" "$GEMETA" | head -n1  | grep -o -E '[0-9]+'
+	fi	
+}
+
+function getTitleFromID {
+	if [ -z "$1" ]; then
+		echo "A Game ID is required as argument"
+	else
+		if [ -f "$GEMETA/${1}.conf" ]; then
+			grep "^GAMENAME" "$GEMETA/${1}.conf" | cut -d '=' -f2
+		else
+			echo "No Title found for '$1'"
+		fi
+	fi
+}
+
 function getGameWindowName {
 	if [ -n "$GAMEWINDOW" ] && [ "$GAMEWINDOW" != "$NON" ]; then
 		writelog "SKIP" "${FUNCNAME[0]} - Already have the gamewindow name: '$GAMEWINDOW' - skipping"
@@ -10605,6 +10625,9 @@ function howto {
 	echo "                                       (for 'SteamAppID' or 'last')"
 	echo "    fav <value>                      Opens the favorite menu"
 	echo "                                       (for 'SteamAppID' or 'last')"
+	echo "    getid|gi <gametitle>             Print the SteamAppId for <gametitle>"
+	echo "    gettitle|gt <gameid>             Print the Game Title for <gameid>"
+	echo "                                       (both need to be known by '$PROGCMD')"
 	echo "    lang=<option>                    Mostly to get translated configs"
 	echo "                                       on inital setup. <option> can be"
 	echo "                                       a language file name without suffix"
@@ -10711,14 +10734,6 @@ function commandline {
 			FUSEID "$2"
 			backupSteamUserGate "$USEID"
 		fi
-	elif  [ "$1" == "list" ]; then
-		if [ "$2" == "owned" ]; then
-			getAllOwnedGames
-		fi
-	elif  [ "$1" == "menu" ]; then
-		openMainMenu "$2" "$3"
-	elif  [ "$1" == "meta" ]; then
-		createMetaData "yes"
 	elif  [ "$1" == "block" ]; then
 		FUSEID "$2"
 		setGuiBlockSelection "$USEID"
@@ -10744,10 +10759,22 @@ function commandline {
 		openTrayIcon
 		favoritesMenu "$USEID"
 		cleanYadLeftOvers
+	elif  [ "$1" == "getid" ] || [ "$1" == "gi" ]; then
+		getIDFromTitle "$2"
+	elif  [ "$1" == "gettitle" ] || [ "$1" == "gt" ]; then
+		getTitleFromID "$2"
 	elif  [ "$1" == "help" ] || [ "$1" == "--help" ]; then
 		howto
 	elif  [ "$1" == "launcher" ]; then
 		openGameLauncher "$2" "$3"
+	elif  [ "$1" == "list" ]; then
+		if [ "$2" == "owned" ]; then
+			getAllOwnedGames
+		fi
+	elif  [ "$1" == "menu" ]; then
+		openMainMenu "$2" "$3"
+	elif  [ "$1" == "meta" ]; then
+		createMetaData "yes"
 	elif  [ "$1" == "pickwin" ] || [ "$1" == "pw" ]; then
 		pickGameWindowNameMeta "$2" "$3"
 	elif [ "$1" == "set" ]; then
@@ -11565,7 +11592,7 @@ function addNonSteamGame {
 
 			NOSTAIDRHX="$("$OSSL" rand -hex 4)"
 			NOSTAID="$(hex2dec "$NOSTAIDRHX")"
-			NOSTAIDHX="\x$(awk '{$1=$1}1' FPAT='.{2}' OFS="\\\x" <<< "$NOSTAIDRHX")"
+			NOSTAIDHX="\x$(gawk '{$1=$1}1' FPAT='.{2}' OFS="\\\x" <<< "$NOSTAIDRHX")"
 
 			writelog "INFO" "${FUNCNAME[0]} - === Adding new $NSGA ===" E
 			writelog "INFO" "${FUNCNAME[0]} - AppID: '${NOSTAID}'" E
@@ -11964,7 +11991,7 @@ function checkFirstTimeRun {
 		# filter evaluatorscript command
 		if grep -q "$EVALSC" <<< "$@"; then
 			# shellcheck disable=SC1003
-			EVSC="$(awk -F 'legacycompat\\\' '{print $NF}' <<< "$@")"
+			EVSC="$(gawk -F 'legacycompat\\\' '{print $NF}' <<< "$@")"
 		fi
 		# check force evaluatorscript run file
 		if [ -f "$RUNEVALTMP" ] && grep -q "$STEAM_COMPAT_APP_ID" "$RUNEVALTMP"; then
@@ -12011,7 +12038,7 @@ function checkFirstTimeRun {
 			if [ -n "$EARLYPROT" ] && [ -f "$EARLYPROT" ]; then
 					# filter evaluatorscript command
 					if grep -q "$EVALSC" <<< "$@"; then
-						mapfile -d " " -t -O "${#RUNISCCMD[@]}" RUNISCCMD < <(printf '%s' "$(awk -F 'run ' '{print $NF}' <<< "$*")")
+						mapfile -d " " -t -O "${#RUNISCCMD[@]}" RUNISCCMD < <(printf '%s' "$(gawk -F 'run ' '{print $NF}' <<< "$*")")
 						# no evaluatorscript for the started game yet in the metadata - so starting the collector:
 						if [ -n "$EVSC" ] && [ ! -f "$EVMETAID/$EVSC" ]; then
 							waitForEvaluatorscript "$EVSC" "$ISCRILOG" &
@@ -12063,7 +12090,7 @@ function checkFirstTimeRun {
 									STINFO="$(date +%H:%M:%S) $NICEPROGNAME sees ${COMRED//\"}"
 									break
 								fi
-							done <<< "$(grep "process 1" "$TEVSC" | awk -F'\\' '{print $NF}')"
+							done <<< "$(grep "process 1" "$TEVSC" | gawk -F'\\' '{print $NF}')"
 						fi
 						printf '\n%s\n' "$STINFO"	# heh, hello Steam Gui
 					# should not happen, but better log it anyway just in case:
