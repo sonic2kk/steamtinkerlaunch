@@ -4924,6 +4924,72 @@ function getTitleFromID {
 	fi
 }
 
+function getCompatData {
+	if [ -z "$1" ]; then
+		echo "A Game ID or Game Title is required as argument"
+	else
+		if [ -d "$STLCOMPDAT" ]; then
+			unset FCOMPDAT
+			if [ "$1" -eq "$1" ] 2>/dev/null; then
+				while read -r "complink"; do
+				TEST="$(readlink "$complink" | grep "/$1$")"
+				if [ -d "$TEST" ]; then
+					FCOMPDAT="${complink##*/}: $TEST"
+				fi
+				done <<< "$(find "$STLCOMPDAT")"
+			else
+				TEST="$(find "$STLCOMPDAT" -name "*${1}*" | head -n1)"
+				if [ -n "$TEST" ]; then
+					FCOMPDAT="${TEST##*/}: $(readlink "$TEST")"
+				fi
+			fi
+
+			if [ -n "$FCOMPDAT" ]; then
+				echo "$FCOMPDAT"
+			else
+				echo "No compdata dir found for '$1'"
+			fi
+		else
+			echo "No compdata dir found for '$1'"
+		fi
+	fi
+}
+
+function getGameDir {
+	if [ -z "$1" ]; then
+		echo "A Game ID or Game Title is required as argument"
+	else
+			unset FGDIR
+			if [ "$1" -eq "$1" ] 2>/dev/null; then
+				if [ -d "$CUMETA" ]; then
+					TEST="$(find "$CUMETA" | grep "$1")"
+					if [ -f "$TEST" ]; then
+						source "$TEST"
+						FGDIR="$(basename "${TEST//.conf/}"): $GAMEDIR"
+					fi
+				else
+					echo "No Game Dir found for '$1'"
+				fi
+			else
+				if [ -d "$TICUMETA" ]; then
+					TEST="$(find "$TICUMETA" | grep "$1")"
+					if [ -f "$TEST" ]; then
+						source "$TEST"
+						FGDIR="$(basename "${TEST//.conf/}"): $GAMEDIR"
+					fi
+				else
+					echo "No Game Dir found for '$1'"
+				fi
+			fi
+
+			if [ -n "$FGDIR" ]; then
+				echo "$FGDIR"
+			else
+				echo "No Game Dir found for '$1'"
+			fi
+	fi
+}
+
 function getGameWindowName {
 	if [ -n "$GAMEWINDOW" ] && [ "$GAMEWINDOW" != "$NON" ]; then
 		writelog "SKIP" "${FUNCNAME[0]} - Already have the gamewindow name: '$GAMEWINDOW' - skipping"
@@ -10628,6 +10694,8 @@ function howto {
 	echo "                                       (for 'SteamAppID' or 'last')"
 	echo "    getid|gi <gametitle>             Print the SteamAppId for <gametitle>"
 	echo "    gettitle|gt <gameid>             Print the Game Title for <gameid>"
+	echo "    getcompatdata|gc <gameid/title>  Print the Game compatdata path"
+	echo "    getgamedir|gg <gameid/title>     Print the Game dir"
 	echo "                                       (both need to be known by '$PROGCMD')"
 	echo "    lang=<option>                    Mostly to get translated configs"
 	echo "                                       on inital setup. <option> can be"
@@ -10764,6 +10832,10 @@ function commandline {
 		getIDFromTitle "$2"
 	elif  [ "$1" == "gettitle" ] || [ "$1" == "gt" ]; then
 		getTitleFromID "$2"
+	elif  [ "$1" == "getcompatdata" ] || [ "$1" == "gc" ]; then
+		getCompatData "$2"
+	elif  [ "$1" == "getgamedir" ] || [ "$1" == "gg" ]; then
+		getGameDir "$2"
 	elif  [ "$1" == "help" ] || [ "$1" == "--help" ]; then
 		howto
 	elif  [ "$1" == "launcher" ]; then
