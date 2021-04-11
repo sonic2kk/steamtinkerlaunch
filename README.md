@@ -15,6 +15,7 @@ By using a versatile configuration structure it is both easy to set up and flexi
 
 There are two ways to use **stl** with steam.
 Either as [Launch Option](#Steam-Launch-Option) or as [Steam Compatibility Tool](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam-Compatibility-Tool)
+*(simply enabling it as global default [Steam Compatibility Tool](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam-Compatibility-Tool) seems to work fine as well)*
 
 *(of course you're using this tool at your own risk and you're responsible which 3rd party programs you launch with it)*
 
@@ -43,13 +44,7 @@ If you are on Arch Linux you can install stl from [AUR](https://aur.archlinux.or
 
 ### Manual Installation:
 If **stl** is not in your package management yet, just `make install`
-
-Alternatively copy `stl` wherever you want (f.e. `/usr/local/bin/`) and make it executable:
-`chmod +x stl`
-
-When copying manually the enclosed directories *(containing optional configuration files)*
-should be dropped into `/usr/share/stl/` *(preferred location)*.
-Else they are automatically pulled from git *(default if `/usr/share/stl/` does not exist)*.
+*(or copy everything manually if you date)*
 
 ## Community
 Feel free to contribute to the project - there are many possibilities to do so:
@@ -72,20 +67,20 @@ It might be a good idea to start with configuring everything in the [Settings Me
 ## Features
 
 **For a complete list of features, please see [the wiki](https://github.com/frostworx/steamtinkerlaunch/wiki). For the most recent changes, see [the release page](https://github.com/frostworx/steamtinkerlaunch/releases)
-or just to browse through the latest version**
+For current development changes, you can also check [this Changelog issue](https://github.com/frostworx/steamtinkerlaunch/issues/177)**
+
 
 *(main categories)*
 
-* External Tools: All external 3rd party programs (like [Boxtron](https://github.com/frostworx/steamtinkerlaunch/wiki/Boxtron), [Luxtorpeda](https://github.com/frostworx/steamtinkerlaunch/wiki/Luxtorpeda), [MangoHud](https://github.com/frostworx/steamtinkerlaunch/wiki/MangoHud), [vkBasalt](https://github.com/frostworx/steamtinkerlaunch/wiki/vkBasalt), etc.) which can be enabled for game launch can be found here, including their corresponding options.
+* [External Tools](https://github.com/frostworx/steamtinkerlaunch/wiki#external-tools): All external 3rd party programs (like [Boxtron](https://github.com/frostworx/steamtinkerlaunch/wiki/Boxtron), [Luxtorpeda](https://github.com/frostworx/steamtinkerlaunch/wiki/Luxtorpeda), [MangoHud](https://github.com/frostworx/steamtinkerlaunch/wiki/MangoHud), [vkBasalt](https://github.com/frostworx/steamtinkerlaunch/wiki/vkBasalt), etc.) which can be enabled for game launch can be found here, including their corresponding options.
 * [GUI Options](https://github.com/frostworx/steamtinkerlaunch/wiki/Settings-Menu#GUI-Options)
-* Misc: All configuration options which can't be put into a generic category usually can be found here.
-* [PressureVessel](https://github.com/frostworx/steamtinkerlaunch/wiki/Pressure-Vessel): Some Pressure Vessel options
+* [Misc](https://github.com/frostworx/steamtinkerlaunch/wiki#misc): All configuration options which can't be put into a generic category usually can be found here.
 * [Proton](https://github.com/frostworx/steamtinkerlaunch/wiki/Proton-Selection): switch between Proton-Versions, automatically download custom Proton builds...
 * [Shader Management](https://github.com/frostworx/steamtinkerlaunch/wiki/Shader-Management): Download/Update/Install/Enable/Disable Shaders with support for [ReShade](https://github.com/frostworx/steamtinkerlaunch/wiki/ReShade) and [Depth3D](https://github.com/frostworx/steamtinkerlaunch/wiki/Depth3D)
-* Stl: Stl has multiple [configuration](https://github.com/frostworx/steamtinkerlaunch/wiki/Configuration-Locations) options.
+* [Stl](https://github.com/frostworx/steamtinkerlaunch/wiki#stl): Stl has multiple [configuration](https://github.com/frostworx/steamtinkerlaunch/wiki/Configuration-Locations) options.
 * [Tweaks](https://github.com/frostworx/steamtinkerlaunch/wiki/Tweaks): community mini configfiles (so-called [Tweakfiles](https://github.com/frostworx/steamtinkerlaunch/wiki/Tweaks#Tweakfiles)) to automatically start problematic games OOTB - can also start custom [Tweak Commands](https://github.com/frostworx/steamtinkerlaunch/wiki/Tweaks#Tweak-Commands)
 * [Vortex](https://github.com/frostworx/steamtinkerlaunch/wiki/Vortex)
-* VR: [Side by Side VR](https://github.com/frostworx/steamtinkerlaunch/wiki/Side-by-Side-VR): automatically play regular games in side-by-side mode in VR!
+* [VR](https://github.com/frostworx/steamtinkerlaunch/wiki#vr): [Side by Side VR](https://github.com/frostworx/steamtinkerlaunch/wiki/Side-by-Side-VR): automatically play regular games in side-by-side mode in VR!
 * [Wine](https://github.com/frostworx/steamtinkerlaunch/wiki/Wine-Support): Download and use custom Wine archives instead of Proton
 
 ## Requirements
