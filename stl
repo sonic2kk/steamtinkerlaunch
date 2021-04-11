@@ -5,7 +5,7 @@
 
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v4.1next6"
+PROGVERS="v4.1next7"
 PROGCMD="${0##*/}"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -1577,6 +1577,7 @@ function setDefaultCfgValues {
 		if [ -z "$AUTOCONTY" ]			; then	AUTOCONTY="0"; fi
 		if [ -z "$USECONTY" ]			; then	USECONTY="0"; fi
 		if [ -z "$CRASHGUESS" ]			; then	CRASHGUESS="60"; fi
+		if [ -z "$ONLYWICO" ]			; then	ONLYWICO="0"; fi
 	}
 	
 	"${FUNCNAME[0]}$1"
@@ -2148,6 +2149,8 @@ function saveCfg {
 			echo "USECONTY=\"$USECONTY\""
 			echo "## $DESC_CRASHGUESS"
 			echo "CRASHGUESS=\"$CRASHGUESS\""
+			echo "## $DESC_ONLYWICO"
+			echo "ONLYWICO=\"$ONLYWICO\""
 			} >> "$1"
 			#ENDsaveCfgdefault_template
 		fi
@@ -3476,6 +3479,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_WINEDLDIR!$DESC_WINEDLDIR ('WINEDLDIR')":DIR "${WINEDLDIR/#-/ -}" `#CAT_Wine` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_WINEEXTDIR!$DESC_WINEEXTDIR ('WINEEXTDIR')":DIR "${WINEEXTDIR/#-/ -}" `#CAT_Wine` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_WINE_LOG_DIR!$DESC_WINE_LOG_DIR ('WINE_LOG_DIR')":DIR "${WINE_LOG_DIR/#-/ -}" `#CAT_Wine` `#SUB_Directories` `#MENU_GAME` \
+--field="     $GUI_ONLYWICO!$DESC_ONLYWICO ('ONLYWICO')":CHK "${ONLYWICO/#-/ -}" `#CAT_Wine` `#SUB_Checkbox` `#MENU_GAME` \
 --field="$(spanFont "$GUI_OPTSPV" "H")":LBL "SKIP" `#CAT_PressureVessel` `#HEAD_PressureVessel` `#MENU_GAME` `#MENU_GLOBAL`  \
 --field="     $GUI_STL_PV_VERBOSE!$DESC_STL_PV_VERBOSE ('STL_PV_VERBOSE')":CHK "${STL_PV_VERBOSE/#-/ -}" `#CAT_PressureVessel` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_STL_PV_SHELL!$DESC_STL_PV_SHELL ('STL_PV_SHELL')":CB "${STL_PV_SHELL/#-/ -}!none!after!fail!instead" `#CAT_PressureVessel` `#SUB_Checkbox` `#MENU_GAME` \
@@ -7322,6 +7326,10 @@ function autoGenTweak {
 }
 
 function launchCustomProg {
+	if [ -n "$1" ]; then
+		CUSTOMCMD="$WICO"
+	fi
+	
 	if [ -z "$CUSTOMCMD" ] || [ "$CUSTOMCMD" == "$("$WHICH" echo 2>/dev/null)" ]; then
 
 		writelog "INFO" "${FUNCNAME[0]} - CUSTOMCMD variable is empty - opening file requester"
@@ -7362,8 +7370,11 @@ function launchCustomProg {
 	fi	
 	
 	CHCUSTDIR=0
-	
-	if  [ -x "$(command -v "$CUSTOMCMD" 2>/dev/null)" ]; then
+	if [ -n "$1" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Using '$WICO' as custom command"
+		LACO="$WICO"
+		CUSTCOM="$WICO"
+	elif  [ -x "$(command -v "$CUSTOMCMD" 2>/dev/null)" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - '$CUSTOMCMD' found"
 		LACO="$CUSTOMCMD"
 		CUSTCOM="$("$WHICH" "$CUSTOMCMD" 2>/dev/null)"
@@ -7455,12 +7466,20 @@ function launchCustomProg {
 				mapfile -d " " -t -O "${#RUNCUSTOMCMD_ARGS[@]}" RUNCUSTOMCMD_ARGS < <(printf '%s' "$CUSTOMCMD_ARGS")
 			fi
 
-			writelog "INFO" "${FUNCNAME[0]} - '$CUSTCOM' doesn't seem to be a MS Windows exe - regular start (without further analysing)"
-			if [ "$FORK_CUSTOMCMD" -eq 1 ]; then	
-				writelog "INFO" "${FUNCNAME[0]} - FORK_CUSTOMCMD is set to 1 -  forking the custom program in background and continue"
-				"$LACO" "${RUNCUSTOMCMD_ARGS[@]}" &
+			if [ -n "$1" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Starting only the '$WICO' with command: '$LACO'"
+				"$LACO"
+				writelog "STOP" "######### CLEANUP #########"
+				closeSTL "######### DONE - $PROGNAME $PROGVERS #########"
+				exit
 			else
-				"$LACO" "${RUNCUSTOMCMD_ARGS[@]}"
+				writelog "INFO" "${FUNCNAME[0]} - '$CUSTCOM' doesn't seem to be a MS Windows exe - regular start (without further analysing)"
+				if [ "$FORK_CUSTOMCMD" -eq 1 ]; then	
+					writelog "INFO" "${FUNCNAME[0]} - FORK_CUSTOMCMD is set to 1 -  forking the custom program in background and continue"
+					"$LACO" "${RUNCUSTOMCMD_ARGS[@]}" &
+				else
+					"$LACO" "${RUNCUSTOMCMD_ARGS[@]}"
+				fi
 			fi
 		fi
 		if [ "$CHCUSTDIR" -eq 1 ]; then
@@ -7530,37 +7549,43 @@ function checkCustomLaunch {
 			cd "$EFD" || return
 		fi
 	else
-		# start a custom program:
-		if [ -n "$CUSTOMCMDMODE" ] ; then
-			if [ "$CUSTOMCMDMODE" != "disabled" ] ; then
-				writelog "INFO" "${FUNCNAME[0]} - CUSTOMCMDMODE is set to '$CUSTOMCMDMODE' - trying to start custom program '$CUSTOMCMD'"
-			# fork in background and continue
-				if [ "$ONLY_CUSTOMCMD" -eq 1 ]; then
-					SECONDS=0
-				fi
+		if [ "$ONLYWICO" -eq 1 ]; then
+			# only start $WICO 
+			writelog "INFO" "${FUNCNAME[0]} - 'ONLYWICO' is enabled - starting only $WICO"
+			launchCustomProg "ONLYWICO"
+		else
+			# start a custom program:
+			if [ -n "$CUSTOMCMDMODE" ] ; then
+				if [ "$CUSTOMCMDMODE" != "disabled" ] ; then
+					writelog "INFO" "${FUNCNAME[0]} - CUSTOMCMDMODE is set to '$CUSTOMCMDMODE' - trying to start custom program '$CUSTOMCMD'"
+				# fork in background and continue
+					if [ "$ONLY_CUSTOMCMD" -eq 1 ]; then
+						SECONDS=0
+					fi
 
-				if [ "$FORK_CUSTOMCMD" -eq 1 ]; then
-					writelog "INFO" "${FUNCNAME[0]} - FORK_CUSTOMCMD is set to 1 -  forking the custom program in background and continue"
-					launchCustomProg
-			# or wait
+					if [ "$FORK_CUSTOMCMD" -eq 1 ]; then
+						writelog "INFO" "${FUNCNAME[0]} - FORK_CUSTOMCMD is set to 1 -  forking the custom program in background and continue"
+						launchCustomProg
+				# or wait
+					else
+						writelog "INFO" "${FUNCNAME[0]} - FORK_CUSTOMCMD is set to 0 - starting the custom program regularly"
+						launchCustomProg
+					fi
+
+
+					if [ "$ONLY_CUSTOMCMD" -eq 1 ]; then
+						writelog "INFO" "${FUNCNAME[0]} - ONLY_CUSTOMCMD is set to 1 means only custom program '$CUSTOMCMD' is supposed to start - exiting here"
+						duration=$SECONDS
+						logPlayTime "$duration"
+						writelog "INFO" "${FUNCNAME[0]} - ## CUSTOMCMD STOPPED after '$duration' seconds playtime"
+						checkPlayTime "$duration"
+						closeSTL " ######### STOP EARLY $PROGNAME $PROGVERS #########"
+						exit
+					fi
 				else
-					writelog "INFO" "${FUNCNAME[0]} - FORK_CUSTOMCMD is set to 0 - starting the custom program regularly"
-					launchCustomProg
-				fi
-
-
-				if [ "$ONLY_CUSTOMCMD" -eq 1 ]; then
-					writelog "INFO" "${FUNCNAME[0]} - ONLY_CUSTOMCMD is set to 1 means only custom program '$CUSTOMCMD' is supposed to start - exiting here"
-					duration=$SECONDS
-					logPlayTime "$duration"
-					writelog "INFO" "${FUNCNAME[0]} - ## CUSTOMCMD STOPPED after '$duration' seconds playtime"
-					checkPlayTime "$duration"
-					closeSTL " ######### STOP EARLY $PROGNAME $PROGVERS #########"
-					exit
-				fi
-			else
-				if [ -n "$CUSTOMCMD" ] && [ "$CUSTOMCMD" != "$("$WHICH" echo 2>/dev/null)" ]; then
-					writelog "SKIP" "${FUNCNAME[0]} - CUSTOMCMDMODE is '$CUSTOMCMDMODE' therefore skipping the custom program '$CUSTOMCMD'"
+					if [ -n "$CUSTOMCMD" ] && [ "$CUSTOMCMD" != "$("$WHICH" echo 2>/dev/null)" ]; then
+						writelog "SKIP" "${FUNCNAME[0]} - CUSTOMCMDMODE is '$CUSTOMCMDMODE' therefore skipping the custom program '$CUSTOMCMD'"
+					fi
 				fi
 			fi
 		fi
