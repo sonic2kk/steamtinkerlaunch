@@ -80,6 +80,7 @@ STLSETENTRIES="$STLSHM/setentries.txt"
 STLRAWENTRIES="$STLSHM/rawentries.txt"
 STLNOBLOCKENTRIES="$STLSHM/noblockentries.txt"
 STLCATSORTENTRIES="$STLSHM/catsortentries.txt"
+UPWINTMPL="$STLSHM/upwintmpl.txt"
 STLMINWIN="$STLSHM/minwin.txt"
 STLMENUVALBLOCKCFG="$STLSHM/$MENUBLOCK"
 VARSIN="${STLSHM}/vars-in.txt"
@@ -108,6 +109,8 @@ LOSE="Local Settings"
 APDA="Application Data"
 LSAD="$LOSE/$APDA"
 RUNCONTY="$NON"
+WINX="800"
+WINY="600"
 
 ### default vars ###
 
@@ -131,6 +134,7 @@ STLPVLOGDIR="$BASELOGDIR/pv"																# pressure vessel logfile dir
 PLAYTIMELOGDIR="$BASELOGDIR/playtime"
 STLGAMEDIR="$STLCFGDIR/gamecfgs"															# default basedir for game the gamespecific configs
 STLGUIDIR="$STLCFGDIR/guicfgs"
+STLTEMPLATEGUIDIR="$STLGUIDIR/template"
 STLGAMEDIRID="$STLGAMEDIR/id"
 STLGAMEDIRTI="$STLGAMEDIR/title"
 STLCATEGORYDIR="$STLCFGDIR/categories"														# the directory holding config files with preconfigured settings for games in specific steamcategories
@@ -241,7 +245,7 @@ CUSTOMPROTONLIST="$STLCFGDIR/protonlist.txt"												# plain textfile with ad
 VORTEXSTAGELIST="$STLVORTEXDIR/stages.txt"													# plain textfile with Vortex Stage directories - one per Steam Library partition
 EXGLOB="$BACKEX/exclude-global.txt"
 #ENDEDITORCFGLIST
-STLGUICFG="$STLCFGDIR/gui.conf"																# gui config
+OLDSTLGUICFG="$STLCFGDIR/gui.conf"	# OLD gui config - will be removed later XXXXXXXXXXX
 
 # optional global config replacement dirs, which can be pulled using DLGLOBAL:
 GLDLSTLDIR="$STLDLDIR/$PROGNAME"
@@ -603,29 +607,173 @@ function createCategoriesList {
 	CATLIST="$(listCAT | sort -u | tr '\n' '!' | sed "s:^!::" | sed "s:!$::")"
 } 
 
-function pollWinRes {
-	TITLE="$1"
-	POLLWIDTH="$2"
-	POLLHEIGHT="$3"
-
-	if [ "$USEGENGUICFG" -eq 1 ]; then
-		GAMEGUICFG="$STLGUICFG"
+function createTemplGui {
+	if [ -n "$5" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Creating '$5 with: 'WINX=$1;WINY=$2;POSX=$3;POSY=$4"
+	{
+		echo "WINX=\"$1\""
+		echo "WINY=\"$2\""
+		# unused:
+		echo "POSX=\"$3\""
+		echo "POSY=\"$4\""
+	} >> "$5"
 	else
-		GAMEGUICFG="$STLGUIDIR/${AID}.conf"
+		writelog "SKIP" "${FUNCNAME[0]} - Not enough args: '1=$1;2=$2;3=$3;4=$4;5=$5"
+	fi
+}
 
-		if [ ! -f "$GAMEGUICFG" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Creating '$GAMEGUICFG' using '$STLGUICFG' as template"
-			mkProjDir "$STLGUIDIR" 1
-			cp "$STLGUICFG" "$GAMEGUICFG"
+function createDefTemplGui {
+	function calculateDefaultResolutions {
+
+		SCREENRES="$("$XRANDR" --current | grep "\*" | gawk '{print $1}' | sort -gur | head -n1)"
+		writelog "INFO" "${FUNCNAME[0]} - '$XRANDR' found screenresolution '$SCREENRES'" "X"
+		SCREENWIDTH="${SCREENRES%x*}"
+		SCREENHEIGHT="${SCREENRES#*x}"
+
+		if [ -n "${SCREENWIDTH##*[!0-9]*}" ] && [ -n "${SCREENHEIGHT##*[!0-9]*}" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Found Screen Width '$SCREENWIDTH' and Screen Height '$SCREENHEIGHT'" "X"
+		else
+			writelog "WARN" "${FUNCNAME[0]} - '$SCREENRES' is invalid - calculating with fallback screenresolution for default values"
+			DUMMYSCREENWIDTH=1920
+			DUMMYSCREENHEIGHT=1080
+			writelog "WARN" "${FUNCNAME[0]} - Calculating with fallback screenresolution '${DUMMYSCREENWIDTH}x${DUMMYSCREENHEIGHT}' for default values"
+			SCREENWIDTH="$DUMMYSCREENWIDTH"
+			SCREENHEIGHT="$DUMMYSCREENHEIGHT"	
+		fi
+
+		# Scaling factors in percentage, used to calculate the initial gui sizes depending on the screen resolution:
+		SETSCALE=20
+
+		# Calculated initial gui sizes:
+		DEFWIDTH=$(( SCREENWIDTH * SETSCALE / 100 ));
+		DEFHEIGHT=$(( SCREENHEIGHT * SETSCALE / 100 ));
+	}
+	
+	calculateDefaultResolutions
+	writelog "INFO" "${FUNCNAME[0]} - Creating default Template '$1'"
+	createTemplGui "$DEFWIDTH" "$DEFHEIGHT" "0" "0" "$1"	
+}
+
+function migrateGuiConf {
+	TEMPLGUICFG="$STLTEMPLATEGUIDIR/${TITLE}.conf"
+	if [ ! -f "$TEMPLGUICFG" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Creating '$TEMPLGUICFG'"
+		# OLDSTLGUICFG will be removed later TODO
+		if [ -f "$OLDSTLGUICFG" ]; then
+			loadCfg "$OLDSTLGUICFG"
+			# shellcheck disable=SC2153
+			if [ "$TITLE" == "${PROGNAME}-Launcher" ]; then
+				createTemplGui "LAUNCHERWIDTH" "LAUNCHERHEIGHT" "0" "0" "$TEMPLGUICFG"
+			elif [ "$TITLE" == "${PROGNAME}-${LGATM}" ]; then
+				createTemplGui "$GLOBSETWIDTH" "$GLOBSETHEIGHT" "0" "0" "$TEMPLGUICFG"
+			elif [ "$TITLE" == "${PROGNAME}-${LGAM}" ]; then
+				createTemplGui "$GAMESETWIDTH" "$GAMESETHEIGHT" "0" "0" "$TEMPLGUICFG"
+			elif [ "$TITLE" == "${PROGNAME}-${LGATM}" ]; then
+				createTemplGui "$GAMEDEFSETWIDTH" "$GAMEDEFSETHEIGHT" "0" "0" "$TEMPLGUICFG"
+			elif [ "$TITLE" == "${PROGNAME}-Favorites" ]; then
+				createTemplGui "$FAVMENWIDTH" "$FAVMENHEIGHT" "0" "0" "$TEMPLGUICFG"
+			elif [ "$TITLE" == "${PROGNAME}-Gui" ]; then
+				createTemplGui "$CATMENWIDTH" "$CATMENHEIGHT" "0" "0" "$TEMPLGUICFG"
+			elif [ "$TITLE" == "${PROGNAME}-DownloadCustomProton" ]; then
+				createTemplGui "$CUSTPROTREQWIDTH" "$CUSTPROTREQHEIGHT" "0" "0" "$TEMPLGUICFG"
+			elif [ "$TITLE" == "${PROGNAME}-NewProtonAvailable" ]; then
+				createTemplGui "$CUSTPROTREQWIDTH" "$CUSTPROTREQHEIGHT" "0" "0" "$TEMPLGUICFG"
+			elif [ "$TITLE" == "${PROGNAME}-AddCustomProton" ]; then
+				createTemplGui "$CUSTPROTREQWIDTH" "$CUSTPROTREQHEIGHT" "0" "0" "$TEMPLGUICFG"
+			elif [ "$TITLE" == "${PROGNAME}-Editor" ]; then
+				createTemplGui "$EDREQWIDTH" "$EDREQHEIGHT" "0" "0" "$TEMPLGUICFG"
+			elif [ "$TITLE" == "${PROGNAME}-FavoritesSelection" ]; then
+				createTemplGui "$FAVSELWIDTH" "$FAVSELHEIGHT" "0" "0" "$TEMPLGUICFG"
+			elif [ "$TITLE" == "${PROGNAME}-EntryBlockSelection" ]; then
+				createTemplGui "$BLOCKSELWIDTH" "$BLOCKSELHEIGHT" "0" "0" "$TEMPLGUICFG"
+			elif [ "$TITLE" == "${PROGNAME}-CategorySelection" ]; then
+				createTemplGui "$CATSELWIDTH" "$CATSELHEIGHT" "0" "0" "$TEMPLGUICFG"
+			elif [ "$TITLE" == "${PROGNAME}-GuiSettings" ]; then
+				createTemplGui "$EXTSELWIDTH" "$EXTSELHEIGHT" "0" "0" "$TEMPLGUICFG"
+			elif [ "$TITLE" == "${PROGNAME}-GuiSettings" ]; then
+				createTemplGui "$GUISETWIDTH" "$GUISETHEIGHT" "0" "0" "$TEMPLGUICFG"
+			elif [ "$TITLE" == "${PROGNAME}-MenuSelection" ]; then
+				createTemplGui "$SETWIDTH" "$SETHEIGHT" "0" "0" "$TEMPLGUICFG"
+			elif [ "$TITLE" == "${PROGNAME}-AskSort" ]; then
+				createTemplGui "$ASKSETREQWIDTH" "$ASKSETREQHEIGHT" "0" "0" "$TEMPLGUICFG"
+			elif [ "$TITLE" == "${PROGNAME}-Shader" ]; then
+				createTemplGui "$SHADREQWIDTH" "$SHADREQWIDTH" "0" "0" "$TEMPLGUICFG"
+			elif [ "$TITLE" == "${PROGNAME}-OpenSettings" ]; then
+				createTemplGui "$ASKSETREQWIDTH" "$ASKSETREQHEIGHT" "0" "0" "$TEMPLGUICFG"
+			elif [ "$TITLE" == "${PROGNAME}-AskLoadTweak" ]; then
+				createTemplGui "$ALTREQWIDTH" "$ALTREQHEIGHT" "0" "0" "$TEMPLGUICFG"
+			elif [ "$TITLE" == "${PROGNAME}-AskEditTweak" ]; then
+				createTemplGui "$AETREQWIDTH" "$AETREQHEIGHT" "0" "0" "$TEMPLGUICFG"
+			elif [ "$TITLE" == "${PROGNAME}-ConvertAutoTweak" ]; then
+				createTemplGui "$CATREQWIDTH" "$CATREQHEIGHT" "0" "0" "$TEMPLGUICFG"
+			elif [ "$TITLE" == "${PROGNAME}-OpenCustomProgram" ]; then
+				createTemplGui "$CUSTPROGREQWIDTH" "$CUSTPROGREQHEIGHT" "0" "0" "$TEMPLGUICFG"
+			elif [ "$TITLE" == "${PROGNAME}-AddVortexStage" ]; then
+				createTemplGui "$AVSREQWIDTH" "$AVSREQHEIGHT" "0" "0" "$TEMPLGUICFG"
+			elif [ "$TITLE" == "${PROGNAME}-Vortex Toggle" ]; then
+				createTemplGui "$VOIGWIDTH" "$VOIGHEIGHT" "0" "0" "$TEMPLGUICFG"
+			elif [ "$TITLE" == "${PROGNAME}-Vortex Symlinks" ]; then
+				createTemplGui "$VOSYWIDTH" "$VOSYHEIGHT" "0" "0" "$TEMPLGUICFG"
+			elif [ "$TITLE" == "${PROGNAME}-OpenVortex" ]; then
+				createTemplGui "$ASKVTXREQWIDTH" "$ASKVTXREQHEIGHT" "0" "0" "$TEMPLGUICFG"
+			elif [ "$TITLE" == "${PROGNAME}-SelectConty" ]; then
+				createTemplGui "$ASKCONTYREQWIDTH" "$ASKCONTYREQHEIGHT" "0" "0" "$TEMPLGUICFG"
+			elif [ "$TITLE" == "${PROGNAME}-CrashGuess" ]; then
+				createTemplGui "$CGREQWIDTH" "$CGREQHEIGHT" "0" "0" "$TEMPLGUICFG"
+			elif [ "$TITLE" == "${PROGNAME}-DownloadWine" ]; then
+				createTemplGui "$WINEREQWIDTH" "$WINEREQHEIGHT" "0" "0" "$TEMPLGUICFG"
+			elif [ "$TITLE" == "${PROGNAME}-ChooseWine" ]; then
+				createTemplGui "$WINSELWIDTH" "$WINSELHEIGHT" "0" "0" "$TEMPLGUICFG"	
+			elif [ "$TITLE" == "${PROGNAME}-SelectedWine" ]; then
+				createTemplGui "$WINSELWIDTH" "$WINSELHEIGHT" "0" "0" "$TEMPLGUICFG"
+			elif [ "$TITLE" == "${PROGNAME}-MainMenu" ]; then
+				createTemplGui "$MMWIDTH" "$MMHEIGHT" "0" "0" "$TEMPLGUICFG"
+			elif [ "$TITLE" == "${PROGNAME}-SteamCategorySelection" ]; then
+				createTemplGui "$SCATSELWIDTH" "$SCATSELHEIGHT" "0" "0" "$TEMPLGUICFG"
+			else
+				createDefTemplGui "$TEMPLGUICFG"
+			fi
+		else
+			createDefTemplGui "$TEMPLGUICFG"
 		fi
 	fi
+}
+
+function pollWinRes {
+	TITLE="$1"
+
+	migrateGuiConf "$TITLE"
+
+	GAMEGUICFG="$STLGUIDIR/${AID}/${TITLE}.conf"
+
+	if [ "$USEGENGUICFG" -eq 1 ] || [ ! -f "$GAMEGUICFG" ]; then
+
+		TEMPLGUICFG="$STLTEMPLATEGUIDIR/${TITLE}.conf"
+		if [ ! -f "$TEMPLGUICFG" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Don't have a template yet for '$TEMPLGUICFG'"
+			createDefTemplGui "$TEMPLGUICFG"
+		fi
+		
+		if [ "$USEGENGUICFG" -eq 0 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Creating '$GAMEGUICFG' using '$TEMPLGUICFG' as template"
+			mkProjDir "$STLGUIDIR/${AID}" 1
+			cp "$TEMPLGUICFG" "$GAMEGUICFG"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Using global '$TEMPLGUICFG'"
+			GAMEGUICFG="$TEMPLGUICFG"
+			writelog "INFO" "${FUNCNAME[0]} - Using global '$GAMEGUICFG'"
+		fi
+	fi
+
+	writelog "INFO" "${FUNCNAME[0]} - Loading Config '$GAMEGUICFG'"
 	loadCfg "$GAMEGUICFG" X
-	updateWinRes "$TITLE" "$GAMEGUICFG" "$POLLWIDTH" "$POLLHEIGHT" &
+
+	updateWinRes "$TITLE" "$GAMEGUICFG" &
 }
 
 function openGameLauncher {
 	function GLgui {
-		"$YAD" --icons  --window-icon="$STLICON" --read-dir="$DFDIR/$1" "$WINDECO" --title="$TITLE" --single-click --keep-icon-size --center --compact --sort-by-name --geometry="$LAUNCHERWIDTH"x"$LAUNCHERHEIGHT"+0+0
+		"$YAD" --icons  --window-icon="$STLICON" --read-dir="$DFDIR/$1" "$WINDECO" --title="$TITLE" --single-click --keep-icon-size --center --compact --sort-by-name --geometry="$WINX"x"$WINY"+"$POSX"+"$POSY"
 	}
 
 	if grep -q "update"  <<< "$@"; then
@@ -651,7 +799,7 @@ function openGameLauncher {
 	fi
 
 	TITLE="${PROGNAME}-Launcher"
-	pollWinRes "$TITLE" "LAUNCHERWIDTH" "LAUNCHERHEIGHT"
+	pollWinRes "$TITLE"
 
 	if [ -z "$1" ] || [ "$1" == "auto" ] || [ "$1" == "update" ]; then
 		GLgui "installed"
@@ -662,7 +810,7 @@ function openGameLauncher {
 			--text="$(spanFont "$GUI_CHOOSECAT" "H")" \
 			--field="$GUI_CHOOSECATS":CB "installed!$CATLIST" \
 			--title="$TITLE" \
-			--geometry="$LAUNCHERWIDTH"x"$LAUNCHERHEIGHT"+0+0)"
+			--geometry="$WINX"x"$WINY"+"$POSX"+"$POSY")"
 			
 			if [ -n "${CATMENU//\'}" ]; then
 				GLgui "${CATMENU//\'}"
@@ -1147,152 +1295,6 @@ function getAvailableProtonVersions {
 	fi
 }
 
-function calculateDefaultResolutions {
-
-	function useFallBackResolution {
-		DUMMYSCREENWIDTH=1920
-		DUMMYSCREENHEIGHT=1080
-		writelog "WARN" "${FUNCNAME[0]} - Calculating with fallback screenresolution '${DUMMYSCREENWIDTH}x${DUMMYSCREENHEIGHT}' for default values"
-		SCREENWIDTH="$DUMMYSCREENWIDTH"
-		SCREENHEIGHT="$DUMMYSCREENHEIGHT"		
-	}
-
-	SCREENRES="$("$XRANDR" --current | grep "\*" | gawk '{print $1}' | sort -gur | head -n1)"
-	writelog "INFO" "${FUNCNAME[0]} - '$XRANDR' found screenresolution '$SCREENRES'" "X"
-	SCREENWIDTH="${SCREENRES%x*}"
-	SCREENHEIGHT="${SCREENRES#*x}"
-
-	if [ -n "${SCREENWIDTH##*[!0-9]*}" ] && [ -n "${SCREENHEIGHT##*[!0-9]*}" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - Found Screen Width '$SCREENWIDTH' and Screen Height '$SCREENHEIGHT'" "X"
-	else
-		writelog "WARN" "${FUNCNAME[0]} - '$SCREENRES' is invalid - calculating with fallback screenresolution for default values"
-		useFallBackResolution
-	fi
-
-	# Scaling factors in percentage, used to calculate the initial gui sizes depending on the screen resolution:
-	SETSCALE=20
-	MENSETSCALE=70
-	EDREQSCALE=30
-	SHADREQSCALE=20
-	ASKSETREQSCALE=15
-	AETREQSCALE=40
-	ALTREQSCALE=40
-	AVSREQSCALE=15
-	CATREQSCALE=30
-	CUSTPROGREQSCALE=30
-	CUSTPROTREQSCALE=15
-	WINEREQSCALE=15
-	SEREQSCALE=40
-	LAUNCHERSCALE=30
-	FAVSELSCALE=20
-	CATSELSCALE=20
-	SCATSELSCALE=20
-	FAVMENSCALE=60
-	CATMENSCALE=60
-	GUISETSCALE=20
-	BLOCKSELSCALE=20
-	EXTSELSCALE=20
-	WINSELSCALE=15
-	ASKVTXREQSCALE=15
-	MMSCALE=20
-	NSGREQSCALE=20
-	VOIGSCALE=20
-	VOSYSCALE=20
-	ASKCONTYREQSCALE=15
-	CGREQSCALE=15
-
-	# Calculated initial gui sizes:
-	DEFSETWIDTH=$(( SCREENWIDTH * SETSCALE / 100 ));
-	DEFSETHEIGHT=$(( SCREENHEIGHT * SETSCALE / 100 ));
-
-	DEFEDREQWIDTH=$(( SCREENWIDTH * EDREQSCALE / 100 ));
-	DEFEDREQHEIGHT=$(( SCREENHEIGHT * EDREQSCALE / 100 ));
-
-	DEFSHADREQWIDTH=$(( SCREENWIDTH * SHADREQSCALE / 100 ));
-	DEFSHADREQHEIGHT=$(( SCREENHEIGHT * SHADREQSCALE / 100 ));
-
-	DEFASKSETREQWIDTH=$(( SCREENWIDTH * ASKSETREQSCALE / 100 ));
-	DEFASKSETREQHEIGHT=$(( SCREENHEIGHT * ASKSETREQSCALE / 100 ));
-		
-	DEFAETREQWIDTH=$(( SCREENWIDTH * AETREQSCALE / 100 ));
-	DEFAETREQHEIGHT=$(( SCREENHEIGHT * AETREQSCALE / 100 ));
-
-	DEFALTREQWIDTH=$(( SCREENWIDTH * ALTREQSCALE / 100 ));
-	DEFALTREQHEIGHT=$(( SCREENHEIGHT * ALTREQSCALE / 100 ));
-
-	DEFCATREQWIDTH=$(( SCREENWIDTH * CATREQSCALE / 100 ));
-	DEFCATREQHEIGHT=$(( SCREENHEIGHT * CATREQSCALE / 100 ));
-
-	DEFCUSTPROGREQWIDTH=$(( SCREENWIDTH * CUSTPROGREQSCALE / 100 ));
-	DEFCUSTPROGREQHEIGHT=$(( SCREENHEIGHT * CUSTPROGREQSCALE / 100 ));
-
-	DEFCUSTPROTREQWIDTH=$(( SCREENWIDTH * CUSTPROTREQSCALE / 100 ));
-	DEFCUSTPROTREQHEIGHT=$(( SCREENHEIGHT * CUSTPROTREQSCALE / 100 ));
-
-	DEFWINEREQWIDTH=$(( SCREENWIDTH * WINEREQSCALE / 100 ));
-	DEFWINEREQHEIGHT=$(( SCREENHEIGHT * WINEREQSCALE / 100 ));
-
-	DEFAVSREQWIDTH=$(( SCREENWIDTH * AVSREQSCALE / 100 ));
-	DEFAVSREQHEIGHT=$(( SCREENHEIGHT * AVSREQSCALE / 100 ));
-	
-	DEFSEREQWIDTH=$(( SCREENWIDTH * SEREQSCALE / 100 ));
-	DEFSEREQHEIGHT=$(( SCREENHEIGHT * SEREQSCALE / 100 ));
-
-	DEFLAUNCHERWIDTH=$(( SCREENWIDTH * LAUNCHERSCALE / 100 ));
-	DEFLAUNCHERHEIGHT=$(( SCREENHEIGHT * LAUNCHERSCALE / 100 ));
-	
-	DEFFAVSELWIDTH=$(( SCREENWIDTH * FAVSELSCALE / 100 ));
-	DEFFAVSELHEIGHT=$(( SCREENHEIGHT * FAVSELSCALE / 100 ));
-	
-	DEFCATSELWIDTH=$(( SCREENWIDTH * CATSELSCALE / 100 ));
-	DEFCATSELHEIGHT=$(( SCREENHEIGHT * CATSELSCALE / 100 ));
-
-	DEFSCATSELWIDTH=$(( SCREENWIDTH * SCATSELSCALE / 100 ));
-	DEFSCATSELHEIGHT=$(( SCREENHEIGHT * SCATSELSCALE / 100 ));
-
-	DEFFAVMENWIDTH=$(( SCREENWIDTH * FAVMENSCALE / 100 ));
-	DEFFAVMENHEIGHT=$(( SCREENHEIGHT * FAVMENSCALE / 100 ));
-
-	DEFCATMENWIDTH=$(( SCREENWIDTH * CATMENSCALE / 100 ));
-	DEFCATMENHEIGHT=$(( SCREENHEIGHT * CATMENSCALE / 100 ));
-	
-	DEFMENSETWIDTH=$(( SCREENWIDTH * MENSETSCALE / 100 ));
-	DEFMENSETHEIGHT=$(( SCREENHEIGHT * MENSETSCALE / 100 ));
-
-	DEFGUISETWIDTH=$(( SCREENWIDTH * GUISETSCALE / 100 ));
-	DEFGUISETHEIGHT=$(( SCREENHEIGHT * GUISETSCALE / 100 ));
-
-	DEFBLOCKSELWIDTH=$(( SCREENWIDTH * BLOCKSELSCALE / 100 ));
-	DEFBLOCKSELHEIGHT=$(( SCREENHEIGHT * BLOCKSELSCALE / 100 ));
-	
-	DEFEXTSELWIDTH=$(( SCREENWIDTH * EXTSELSCALE / 100 ));
-	DEFEXTSELHEIGHT=$(( SCREENHEIGHT * EXTSELSCALE / 100 ));
-
-	DEFWINSELWIDTH=$(( SCREENWIDTH * WINSELSCALE / 100 ));
-	DEFWINSELHEIGHT=$(( SCREENHEIGHT * WINSELSCALE / 100 ));
-
-	DEFASKVTXREQWIDTH=$(( SCREENWIDTH * ASKVTXREQSCALE / 100 ));
-	DEFASKVTXREQHEIGHT=$(( SCREENHEIGHT * ASKVTXREQSCALE / 100 ));
-
-	DEFMMWIDTH=$(( SCREENWIDTH * MMSCALE / 100 ));
-	DEFMMHEIGHT=$(( SCREENHEIGHT * MMSCALE / 100 ));
-
-	DEFNSGREQWIDTH=$(( SCREENWIDTH * NSGREQSCALE / 100 ));
-	DEFNSGREQHEIGHT=$(( SCREENHEIGHT * NSGREQSCALE / 100 ));
-	
-	DEFVOIGWIDTH=$(( SCREENWIDTH * VOIGSCALE / 100 ));
-	DEFVOIGHEIGHT=$(( SCREENHEIGHT * VOIGSCALE / 100 ));
-
-	DEFVOSYWIDTH=$(( SCREENWIDTH * VOSYSCALE / 100 ));
-	DEFVOSYHEIGHT=$(( SCREENHEIGHT * VOSYSCALE / 100 ));
-
-	DEFASKCONTYREQWIDTH=$(( SCREENWIDTH * ASKCONTYREQSCALE / 100 ));
-	DEFASKCONTYREQHEIGHT=$(( SCREENHEIGHT * ASKCONTYREQSCALE / 100 ));
-
-	DEFCGREQWIDTH=$(( SCREENWIDTH * CGREQSCALE / 100 ));
-	DEFCGREQHEIGHT=$(( SCREENHEIGHT * CGREQSCALE / 100 ));
-}
-
 function setDefaultCfgValues {
 
 	function setDefaultCfgValuesurl {
@@ -1320,78 +1322,6 @@ function setDefaultCfgValues {
 		if [ -z "$X64DBGURL" ]			; then	X64DBGURL="https://github.com/x64dbg/x64dbg/releases/tag/snapshot";fi
 		if [ -z "$STEAMGRIDDBAPI" ]		; then	STEAMGRIDDBAPI="https://www.steamgriddb.com/api/v2/grids/steam";fi
 		if [ -z "$CONTYRELURL" ]		; then	CONTYRELURL="https://github.com/Kron4ek/Conty/releases"; fi
-	}
-
-	function setDefaultCfgValuesgui {
-	
-		if [ ! -f "$STLGUICFG" ]		; then
-			calculateDefaultResolutions
-		fi
-
-		if [ -z "$SETWIDTH" ]			; then	SETWIDTH="$DEFSETWIDTH"; fi
-		if [ -z "$SETHEIGHT" ]			; then	SETHEIGHT="$DEFSETHEIGHT"; fi
-		if [ -z "$GLOBSETWIDTH" ]		; then	GLOBSETWIDTH="$DEFMENSETWIDTH"; fi
-		if [ -z "$GLOBSETHEIGHT" ]		; then	GLOBSETHEIGHT="$DEFMENSETHEIGHT"; fi
-		if [ -z "$GAMESETWIDTH" ]		; then	GAMESETWIDTH="$DEFMENSETWIDTH"; fi
-		if [ -z "$GAMESETHEIGHT" ]		; then	GAMESETHEIGHT="$DEFMENSETHEIGHT"; fi
-		if [ -z "$GAMEDEFSETWIDTH" ]	; then	GAMEDEFSETWIDTH="$DEFMENSETWIDTH"; fi
-		if [ -z "$GAMEDEFSETHEIGHT" ]	; then	GAMEDEFSETHEIGHT="$DEFMENSETHEIGHT"; fi
-		if [ -z "$EDREQWIDTH" ]			; then	EDREQWIDTH="$DEFEDREQWIDTH"; fi
-		if [ -z "$EDREQHEIGHT" ]		; then	EDREQHEIGHT="$DEFEDREQHEIGHT"; fi
-		if [ -z "$SHADREQWIDTH" ]		; then	SHADREQWIDTH="$DEFSHADREQWIDTH"; fi
-		if [ -z "$SHADREQHEIGHT" ]		; then	SHADREQHEIGHT="$DEFSHADREQHEIGHT"; fi
-		if [ -z "$ASKSETREQWIDTH" ]		; then	ASKSETREQWIDTH="$DEFASKSETREQWIDTH"; fi
-		if [ -z "$ASKSETREQHEIGHT" ]	; then	ASKSETREQHEIGHT="$DEFASKSETREQHEIGHT"; fi
-		if [ -z "$AETREQWIDTH" ]		; then	AETREQWIDTH="$DEFAETREQWIDTH"; fi
-		if [ -z "$AETREQHEIGHT" ]		; then	AETREQHEIGHT="$DEFAETREQHEIGHT"; fi
-		if [ -z "$ALTREQWIDTH" ]		; then	ALTREQWIDTH="$DEFALTREQWIDTH"; fi
-		if [ -z "$ALTREQHEIGHT" ]		; then	ALTREQHEIGHT="$DEFALTREQHEIGHT"; fi
-		if [ -z "$AVSREQWIDTH" ]		; then	AVSREQWIDTH="$DEFAVSREQWIDTH"; fi
-		if [ -z "$AVSREQHEIGHT" ]		; then	AVSREQHEIGHT="$DEFAVSREQHEIGHT"; fi
-		if [ -z "$CATREQWIDTH" ]		; then	CATREQWIDTH="$DEFCATREQWIDTH"; fi
-		if [ -z "$CATREQHEIGHT" ]		; then	CATREQHEIGHT="$DEFCATREQHEIGHT"; fi
-		if [ -z "$CUSTPROGREQWIDTH" ]	; then	CUSTPROGREQWIDTH="$DEFCUSTPROGREQWIDTH"; fi
-		if [ -z "$CUSTPROGREQHEIGHT" ]	; then	CUSTPROGREQHEIGHT="$DEFCUSTPROGREQHEIGHT"; fi
-		if [ -z "$CUSTPROTREQWIDTH" ]	; then	CUSTPROTREQWIDTH="$DEFCUSTPROTREQWIDTH"; fi
-		if [ -z "$CUSTPROTREQHEIGHT" ]	; then	CUSTPROTREQHEIGHT="$DEFCUSTPROTREQHEIGHT"; fi
-		if [ -z "$WINEREQWIDTH" ]		; then	WINEREQWIDTH="$DEFWINEREQWIDTH"; fi
-		if [ -z "$WINEREQHEIGHT" ]		; then	WINEREQHEIGHT="$DEFWINEREQHEIGHT"; fi
-		if [ -z "$SEREQWIDTH" ]			; then	SEREQWIDTH="$DEFSEREQWIDTH"; fi
-		if [ -z "$SEREQHEIGHT" ]		; then	SEREQHEIGHT="$DEFSEREQHEIGHT"; fi
-		if [ -z "$LAUNCHERWIDTH" ]		; then	LAUNCHERWIDTH="$DEFLAUNCHERWIDTH"; fi
-		if [ -z "$LAUNCHERHEIGHT" ]		; then	LAUNCHERHEIGHT="$DEFLAUNCHERHEIGHT"; fi
-		if [ -z "$FAVSELWIDTH" ]		; then	FAVSELWIDTH="$DEFFAVSELWIDTH"; fi
-		if [ -z "$FAVSELHEIGHT" ]		; then	FAVSELHEIGHT="$DEFFAVSELHEIGHT"; fi
-		if [ -z "$CATSELWIDTH" ]		; then	CATSELWIDTH="$DEFCATSELWIDTH"; fi
-		if [ -z "$CATSELHEIGHT" ]		; then	CATSELHEIGHT="$DEFCATSELHEIGHT"; fi
-		if [ -z "$SCATSELWIDTH" ]		; then	SCATSELWIDTH="$DEFSCATSELWIDTH"; fi
-		if [ -z "$SCATSELHEIGHT" ]		; then	SCATSELHEIGHT="$DEFSCATSELHEIGHT"; fi
-		if [ -z "$FAVMENWIDTH" ]		; then	FAVMENWIDTH="$DEFFAVMENWIDTH"; fi
-		if [ -z "$FAVMENHEIGHT" ]		; then	FAVMENHEIGHT="$DEFFAVMENHEIGHT"; fi
-		if [ -z "$CATMENWIDTH" ]		; then	CATMENWIDTH="$DEFCATMENWIDTH"; fi
-		if [ -z "$CATMENHEIGHT" ]		; then	CATMENHEIGHT="$DEFCATMENHEIGHT"; fi
-		if [ -z "$GUISETWIDTH" ]		; then	GUISETWIDTH="$DEFGUISETWIDTH"; fi
-		if [ -z "$GUISETHEIGHT" ]		; then	GUISETHEIGHT="$DEFGUISETHEIGHT"; fi
-		if [ -z "$BLOCKSELWIDTH" ]		; then	BLOCKSELWIDTH="$DEFBLOCKSELWIDTH"; fi
-		if [ -z "$BLOCKSELHEIGHT" ]		; then	BLOCKSELHEIGHT="$DEFBLOCKSELHEIGHT"; fi
-		if [ -z "$EXTSELWIDTH" ]		; then	EXTSELWIDTH="$DEFEXTSELWIDTH"; fi
-		if [ -z "$EXTSELHEIGHT" ]		; then	EXTSELHEIGHT="$DEFEXTSELHEIGHT"; fi
-		if [ -z "$WINSELWIDTH" ]		; then	WINSELWIDTH="$DEFWINSELWIDTH"; fi
-		if [ -z "$WINSELHEIGHT" ]		; then	WINSELHEIGHT="$DEFWINSELHEIGHT"; fi
-		if [ -z "$ASKVTXREQWIDTH" ]		; then	ASKVTXREQWIDTH="$DEFASKVTXREQWIDTH"; fi
-		if [ -z "$ASKVTXREQHEIGHT" ]	; then	ASKVTXREQHEIGHT="$DEFASKVTXREQHEIGHT"; fi
-		if [ -z "$MMWIDTH" ]			; then	MMWIDTH="$DEFMMWIDTH"; fi
-		if [ -z "$MMHEIGHT" ]			; then	MMHEIGHT="$DEFMMHEIGHT"; fi
-		if [ -z "$NSGREQWIDTH" ]		; then	NSGREQWIDTH="$DEFNSGREQWIDTH"; fi
-		if [ -z "$NSGREQHEIGHT" ]		; then	NSGREQHEIGHT="$DEFNSGREQHEIGHT"; fi
-		if [ -z "$VOIGWIDTH" ]			; then	VOIGWIDTH="$DEFVOIGWIDTH"; fi
-		if [ -z "$VOIGHEIGHT" ]			; then	VOIGHEIGHT="$DEFVOIGHEIGHT"; fi
-		if [ -z "$VOSYWIDTH" ]			; then	VOSYWIDTH="$DEFVOSYWIDTH"; fi
-		if [ -z "$VOSYHEIGHT" ]			; then	VOSYHEIGHT="$DEFVOSYHEIGHT"; fi
-		if [ -z "$ASKCONTYREQWIDTH" ]	; then	ASKCONTYREQWIDTH="$DEFASKCONTYREQWIDTH"; fi
-		if [ -z "$ASKCONTYREQHEIGHT" ]	; then	ASKCONTYREQHEIGHT="$DEFASKCONTYREQHEIGHT"; fi
-		if [ -z "$CGREQWIDTH" ]			; then	CGREQWIDTH="$DEFCGREQWIDTH"; fi
-		if [ -z "$CGREQHEIGHT" ]		; then	CGREQHEIGHT="$DEFCGREQHEIGHT"; fi
 	}
 
 	function setDefaultCfgValuesglobal {
@@ -1441,7 +1371,7 @@ function setDefaultCfgValues {
 		if [ -z "$SAVESETSIZE" ]		; then	SAVESETSIZE="1"; fi
 		if [ -z "$LINESPERCOLUMN" ]		; then	LINESPERCOLUMN="20"; fi
 		if [ -z "$STARTMENU" ]			; then	STARTMENU="Menu"; fi
-		if [ -z "$USEWINDECO" ]			; then	USEWINDECO="0"; fi
+		if [ -z "$USEWINDECO" ]			; then	USEWINDECO="1"; fi
 		if [ -z "$HEADLINEFONT" ]		; then	HEADLINEFONT="larger"; fi
 		if [ -z "$USETRAYICON" ]		; then	USETRAYICON="1"; fi
 		if [ -z "$USEGAMEPICS" ]		; then	USEGAMEPICS="1"; fi
@@ -1663,101 +1593,10 @@ function saveCfg {
 			echo "## config Version: $PROGVERS"
 			echo "##########################"
 			echo "## Settings Selection GUI:"
-			echo "SETWIDTH=\"$SETWIDTH\""
-			echo "SETHEIGHT=\"$SETHEIGHT\""
-			echo "## Global Settings GUI:"
-			echo "GLOBSETWIDTH=\"$GLOBSETWIDTH\""
-			echo "GLOBSETHEIGHT=\"$GLOBSETHEIGHT\""
-			echo "## Game Settings GUI:"
-			echo "GAMESETWIDTH=\"$GAMESETWIDTH\""
-			echo "GAMESETHEIGHT=\"$GAMESETHEIGHT\""
-			echo "## Game Default Settings GUI:"
-			echo "GAMEDEFSETWIDTH=\"$GAMEDEFSETWIDTH\""
-			echo "GAMEDEFSETHEIGHT=\"$GAMEDEFSETHEIGHT\""
-			echo "## Editor Requester:"
-			echo "EDREQWIDTH=\"$EDREQWIDTH\""
-			echo "EDREQHEIGHT=\"$EDREQHEIGHT\""
-			echo "## Shader Selection Requester:"
-			echo "SHADREQWIDTH=\"$SHADREQWIDTH\""
-			echo "SHADREQHEIGHT=\"$SHADREQHEIGHT\""
-			echo "## Ask Open Settings Requester:"
-			echo "ASKSETREQWIDTH=\"$ASKSETREQWIDTH\""
-			echo "ASKSETREQHEIGHT=\"$ASKSETREQHEIGHT\""
-			echo "## Edit Tweak Requester:"
-			echo "AETREQWIDTH=\"$AETREQWIDTH\""
-			echo "EDREQHEIGHT=\"$EDREQHEIGHT\""
-			echo "## Load Tweak Requester:"
-			echo "ALTREQWIDTH=\"$ALTREQWIDTH\""
-			echo "ALTREQHEIGHT=\"$ALTREQHEIGHT\""
-			echo "## Add Vortex Stage Requester:"
-			echo "AVSREQWIDTH=\"$AVSREQWIDTH\""
-			echo "AVSREQHEIGHT=\"$AVSREQHEIGHT\""
-			echo "## Convert Tweak Requester:"
-			echo "CATREQWIDTH=\"$CATREQWIDTH\""
-			echo "CATREQHEIGHT=\"$CATREQHEIGHT\""
-			echo "## Custom Program Requester:"
-			echo "CUSTPROGREQWIDTH=\"$CUSTPROGREQWIDTH\""
-			echo "CUSTPROGREQHEIGHT=\"$CUSTPROGREQHEIGHT\""
-			echo "## Custom Proton Requester:"
-			echo "CUSTPROTREQWIDTH=\"$CUSTPROTREQWIDTH\""
-			echo "CUSTPROTREQHEIGHT=\"$CUSTPROTREQHEIGHT\""
-			echo "## Wine DL Requester:"
-			echo "WINEREQWIDTH=\"$WINEREQWIDTH\""
-			echo "WINEREQHEIGHT=\"$WINEREQHEIGHT\""
-			echo "## Script Extender Requester:"
-			echo "SEREQWIDTH=\"$SEREQWIDTH\""
-			echo "SEREQHEIGHT=\"$SEREQHEIGHT\""
-			echo "## Game Launcher:"
-			echo "LAUNCHERWIDTH=\"$LAUNCHERWIDTH\""
-			echo "LAUNCHERHEIGHT=\"$LAUNCHERHEIGHT\""
-			echo "## Favorites Selection:"
-			echo "FAVSELWIDTH=\"$FAVSELWIDTH\""
-			echo "FAVSELHEIGHT=\"$FAVSELHEIGHT\""
-			echo "## Category Selection:"
-			echo "CATSELWIDTH=\"$CATSELWIDTH\""
-			echo "CATSELHEIGHT=\"$CATSELHEIGHT\""
-			echo "## Steam Category Selection:"
-			echo "SCATSELWIDTH=\"$SCATSELWIDTH\""
-			echo "SCATSELHEIGHT=\"$SCATSELHEIGHT\""
-			echo "## Favorites Menu:"
-			echo "FAVMENWIDTH=\"$FAVMENWIDTH\""
-			echo "FAVMENHEIGHT=\"$FAVMENHEIGHT\""
-			echo "## Category Menu:"
-			echo "CATMENWIDTH=\"$CATMENWIDTH\""
-			echo "CATMENHEIGHT=\"$CATMENHEIGHT\""
-			echo "## Gui Settings GUI:"
-			echo "GUISETWIDTH=\"$GUISETWIDTH\""
-			echo "GUISETHEIGHT=\"$GUISETHEIGHT\""
-			echo "## Block Selection:"
-			echo "BLOCKSELWIDTH=\"$BLOCKSELWIDTH\""
-			echo "BLOCKSELHEIGHT=\"$BLOCKSELHEIGHT\""
-			echo "## Extra Selection:"
-			echo "EXTSELWIDTH=\"$EXTSELWIDTH\""
-			echo "EXTSELHEIGHT=\"$EXTSELHEIGHT\""
-			echo "## Wine Selection:"
-			echo "WINSELWIDTH=\"$WINSELWIDTH\""
-			echo "WINSELHEIGHT=\"$WINSELHEIGHT\""
-			echo "## Ask Open Vortex Requester:"
-			echo "ASKVTXREQWIDTH=\"$ASKVTXREQWIDTH\""
-			echo "ASKVTXREQHEIGHT=\"$ASKVTXREQHEIGHT\""
-			echo "## Main Menu:"
-			echo "MMWIDTH=\"$MMWIDTH\""
-			echo "MMHEIGHT=\"$MMHEIGHT\""
-			echo "## '$NSGA' Gui:"
-			echo "NSGREQWIDTH=\"$NSGREQWIDTH\""
-			echo "NSGREQHEIGHT=\"$NSGREQHEIGHT\""
-			echo "## Vortex Games Gui:"
-			echo "VOIGWIDTH=\"$VOIGWIDTH\""
-			echo "VOIGHEIGHT=\"$VOIGHEIGHT\""
-			echo "## Vortex Symlink Gui:"
-			echo "VOSYWIDTH=\"$VOSYWIDTH\""
-			echo "VOSYHEIGHT=\"$VOSYHEIGHT\""
-			echo "## Ask Conty Requester:"
-			echo "ASKCONTYREQWIDTH=\"$ASKCONTYREQWIDTH\""
-			echo "ASKCONTYREQHEIGHT=\"$ASKCONTYREQHEIGHT\""
-			echo "## Crash Guess Requester:"
-			echo "CGREQWIDTH=\"$CGREQWIDTH\""
-			echo "CGREQHEIGHT=\"$CGREQHEIGHT\""
+			echo "WINX=\"$WINX\""
+			echo "WINY=\"$WINY\""
+			echo "POSX=\"$POSX\""
+			echo "POSY=\"$POSY\""		
 			} >> "$1"
 			#ENDsaveCfggui
 		fi
@@ -2255,14 +2094,15 @@ function setNOP {
 function needNewProton {
 	if [ "$(OVPROT)" -eq 1 ]; then
 		getAvailableProtonVersions "up"
-		TITLE="Proton Version"
+		TITLE="NeedNewProtonVersion"
+		pollWinRes "$TITLE"
 		writelog "INFO" "${FUNCNAME[0]} - No Proton Version was found - opening a requester to choose from one"
 		createProtonList
 		PICKPROTON="$("$YAD" --window-icon="$STLICON" --center $WINDECO --form --scroll --separator="\n" --quoted-output \
 		--text="$(spanFont "$GUI_NEEDNEWPROTON" "H")" \
 		--field="$GUI_NEEDNEWPROTON2":CB "${USEPROTON/#-/ -}!$PROTYADLIST" \
 		--title="$TITLE" \
-		--geometry="$ASKSETREQWIDTH"x"$ASKSETREQHEIGHT"+0+0)"
+		--geometry="$WINX"x"$WINY"+"$POSX"+"$POSY")"
 
 		if [ -n "$PICKPROTON" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Selected Proton Version $PICKPROTON"
@@ -2282,13 +2122,15 @@ function wgetGui {
 		writelog "INFO" "${FUNCNAME[0]} - Downloading '$SRCURL' via Gui, as 'USEWGETGUI' is enabled"
 
 		TITLE="Download"
+		pollWinRes "$TITLE"
+
 		DLFILE="${1##*/}"
 		DLTEXT="$(strFix "$GUI_DLTO" "$DLFILE" "${DESTDIR//$DLFILE}")"
 		
 		writelog "INFO" "${FUNCNAME[0]} - $DLTEXT"
 
 		"$WGET" -q --show-progress "$SRCURL" -O "$DESTDIR" 2>&1 | sed -u -e "s:\.::g;s:%.*$::g;s:.*K::g;s:^[[:space:]]*::g" | \
-		"$YAD" --window-icon="$STLICON" --center --on-top "$WINDECO" ---title="$TITLE" --progress --auto-close --text="$(spanFont "$DLTEXT" "H")"
+		"$YAD" --window-icon="$STLICON" --center --on-top "$WINDECO" ---title="$TITLE" --progress --auto-close --text="$(spanFont "$DLTEXT" "H")" --geometry="$WINX"x"$WINY"+"$POSX"+"$POSY"
 		case $? in
 			0)  {
 					writelog "INFO" "${FUNCNAME[0]} - Clicked Close or Download failed - deleting the unfinished download"
@@ -2402,7 +2244,7 @@ function dlCustomProtonGUI {
 	DLPROTLIST="$(printf "!%s\n" "${ProtonDLDispList[@]//\"/}" | tr -d '\n' | sed "s:^!::" | sed "s:!$::")"
 
 	TITLE="${PROGNAME}-DownloadCustomProton"
-	pollWinRes "$TITLE" "CUSTPROTREQWIDTH" "CUSTPROTREQHEIGHT"
+	pollWinRes "$TITLE"
 
 	if [ -z "$DLPROTON" ]; then
 		DLPROTON="${ProtonDLDispList[0]}"
@@ -2410,7 +2252,7 @@ function dlCustomProtonGUI {
 
 	DLDISPCUSTPROT="$("$YAD" --window-icon="$STLICON" --form --center --on-top $WINDECO \
 	--title="$TITLE" \
-	--geometry="$CUSTPROTREQWIDTH"x"$CUSTPROTREQHEIGHT"+0+0 \
+	--geometry="$WINX"x"$WINY"+"$POSX"+"$POSY" \
 	--text="$(spanFont "$GUI_DLCUSTPROTTEXT" "H")" \
 	--field=" ":LBL " " \
 	--field="$GUI_DLCUSTPROTTEXT2!$GUI_DLCUSTPROTTEXT":CBE "${DLPROTON/#-/ -}!$DLPROTLIST" \
@@ -2505,9 +2347,11 @@ function dlCustomProtonAsk {
 	setShowPic
 
 	TITLE="${PROGNAME}-NewProtonAvailable"
+	pollWinRes "$TITLE"
+	
 	"$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --scroll --center "$WINDECO" \
     --title="$TITLE" \
-	--geometry="$CUSTPROTREQWIDTH"x"$CUSTPROTREQHEIGHT"+0+0 \
+	--geometry="$WINX"x"$WINY"+"$POSX"+"$POSY" \
 	--text="$(spanFont "$(strFix "$NOTY_NEWPROTON" "$NEWESTPROT" "$CURPROTON")\n$(strFix "$GUI_DLCUSTPROTASK" "$NEWESTPROT")" "H")" \
 	--button="$ASKPROTBUTC":0 \
 	--button="$ASKPROTBUTD":1 \
@@ -2610,11 +2454,11 @@ function addCustomProton {
 		fi
 
 		TITLE="${PROGNAME}-AddCustomProton"
-		pollWinRes "$TITLE" "CUSTPROTREQWIDTH" "CUSTPROTREQHEIGHT"
+		pollWinRes "$TITLE"
 
 		NEWCUSTPROT="$("$YAD" --window-icon="$STLICON" --form --center --on-top $WINDECO \
 		--title="$TITLE" \
-		--geometry="$CUSTPROTREQWIDTH"x"$CUSTPROTREQHEIGHT"+0+0 \
+		--geometry="$WINX"x"$WINY"+"$POSX"+"$POSY" \
 		--text="$(spanFont "$GUI_ADDCUSTOMBINARY" "H")" \
 		--field=" ":LBL " " \
 		--field="$GUI_PROTONVERSIONNAME!$DESC_PROTONVERSIONNAME" "Proton-" \
@@ -2673,9 +2517,6 @@ function saveMenuEntries {
 			
 			if [ -n "$VAR" ] && [ -n "$WRITEVAL" ] && [ -n "$SAVECFG" ]; then
 				updateConfigEntry "$VAR" "$WRITEVAL" "$SAVECFG"
-# already commented out for a while without any problems - now it is 03/21 - remove later
-#			else
-#				writelog "SKIP" "${FUNCNAME[0]} - At least one value is invalid: VAR='$VAR'; WRITEVAL='$WRITEVAL'; SAVECFG='$SAVECFG' - skipping"
 			fi
 		fi
 	done
@@ -2683,17 +2524,23 @@ function saveMenuEntries {
 }
 
 function saveNewRes {
-	if [ "$SAVESETSIZE" -eq 1 ] ; then
+	if [ "$SAVESETSIZE" -eq 1 ] && [ -n "$3" ]; then
 		SNEWW="$1"
 		SNEWH="$2"
 		CFG="$3"
-		ORGW="$4"
-		ORGH="$5"
 
-		updateConfigEntry "$ORGW" "$SNEWW" "$CFG"
-		updateConfigEntry "$ORGH" "$SNEWH" "$CFG"
-		writelog "INFO" "${FUNCNAME[0]} - Reloading new '$CFG'"
-		loadCfg "$CFG" X
+		updateConfigEntry "WINX" "$SNEWW" "$CFG"
+		updateConfigEntry "WINY" "$SNEWH" "$CFG"
+		writelog "INFO" "${FUNCNAME[0]} - Saved new resolution '${SNEWW}x${SNEWH}' in '$CFG'"
+	fi
+}
+
+function updateThisWinTemplate {
+	if [ -f "$UPWINTMPL" ] && [ -f "$2" ]; then
+		cp "$2" "$STLTEMPLATEGUIDIR/${1}.conf"
+		rm "$UPWINTMPL"
+		writelog "INFO" "${FUNCNAME[0]} - Updated Window Template for '$1' with '$2'"
+		notiShow "$(strFix "$NOTY_TEMPLUP" "$1")"
 	fi
 }
 
@@ -2705,11 +2552,13 @@ function updateWinRes {
 	if [ "$SAVESETSIZE" -eq 1 ] ; then
 		WNAM="$1"
 		CFG="$2"
-		ORGW="$3"
-		ORGH="$4"
-		
-		NEWW="${!ORGW}"
-		NEWH="${!ORGH}"
+
+		writelog "INFO" "${FUNCNAME[0]} - Starting Resolution Poll for '$GAMEGUICFG' with initial resolution ${WINX}x${WINY}"
+
+		ORGW="${WINX}"
+		ORGH="${WINY}"	
+		NEWW="${WINX}"
+		NEWH="${WINY}"
 
 		MAXWAIT=3
 		COUNTER=0
@@ -2743,7 +2592,7 @@ function updateWinRes {
 				TNEWH1="${SRES#*x}"
 				TNEWH="${TNEWH1%%-*}"
 
-				if [ "$TNEWW" -ne "${!ORGW}" ] || [ "$TNEWH" -ne "${!ORGH}" ]; then
+				if [ "$TNEWW" -ne "$ORGW" ] || [ "$TNEWH" -ne "$ORGH" ]; then
 					if [ "$TNEWW" != "$PREVW" ] || [ "$TNEWH" != "$PREVH" ]; then
 						if [ -n "${TNEWW##*[!0-9]*}" ] && [ -n "${TNEWH##*[!0-9]*}" ]; then
 							NEWW="$TNEWW"
@@ -2756,12 +2605,15 @@ function updateWinRes {
 				fi
 				sleep 1
 			else
-				if [ "$NEWW" -ne "${!ORGW}" ] || [ "$NEWH" -ne "${!ORGH}" ]; then
+				if [ "$NEWW" -ne "$ORGW" ] || [ "$NEWH" -ne "$ORGH" ]; then
 					writelog "INFO" "${FUNCNAME[0]} - The Window '$WNAM' was closed - saving the last seen resolution '${NEWW}x${NEWH}'"
-					saveNewRes "$NEWW" "$NEWH" "$CFG" "$ORGW" "$ORGH"
+					saveNewRes "$NEWW" "$NEWH" "$CFG"
 				else
 					writelog "INFO" "${FUNCNAME[0]} - The Window '$WNAM' was closed - the resolution didn't change - nothing to do"
 				fi
+
+				updateThisWinTemplate "$TITLE" "$CFG"
+
 				return
 			fi
 		done
@@ -2850,7 +2702,8 @@ function getAvailableCfgs {
 function confirmReq {
 	QUESTION="$1"
 	TITLE="Question"
-	"$YAD" --window-icon="$STLICON" --center --on-top "$WINDECO" ---title="$TITLE" --text="$(spanFont "$QUESTION" "H")"
+	pollWinRes "$TITLE"
+	"$YAD" --window-icon="$STLICON" --center --on-top "$WINDECO" ---title="$TITLE" --text="$(spanFont "$QUESTION" "H")" --geometry="$WINX"x"$WINY"+"$POSX"+"$POSY"
 	echo "$?"
 }
 
@@ -2896,13 +2749,13 @@ function EditorDialog {
 	writelog "INFO" "${FUNCNAME[0]} - Found ${#CfgFiles[@]} available Config Files - opening Checklist"
 
 	TITLE="${PROGNAME}-Editor"
-	pollWinRes "$TITLE" "EDREQWIDTH" "EDREQHEIGHT"
+	pollWinRes "$TITLE"
 
 	setShowPic
 
 	EDFILES="$(while read -r f; do	echo "FALSE"; echo "$f"; done <<< "$(printf "%s\n" "${CfgFiles[@]}" | sort -u)" | \
 	"$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center $WINDECO --list --checklist --column=Edit --column=ConfigFile --separator="\n" --print-column="2" \
-	--text="$(spanFont "$(strFix "$GUI_EDITORDIALOG" "$GN" "$AID")" "H")" --title="$TITLE" --button="$BUT_EDIT":0 --button="$BUT_HIDE":2 --button="$BUT_OD":4 --button="$BUT_DEL":6 --button="$BUT_CAN":8 --geometry="$EDREQWIDTH"x"$EDREQHEIGHT"+0+0)"
+	--text="$(spanFont "$(strFix "$GUI_EDITORDIALOG" "$GN" "$AID")" "H")" --title="$TITLE" --button="$BUT_EDIT":0 --button="$BUT_HIDE":2 --button="$BUT_OD":4 --button="$BUT_DEL":6 --button="$BUT_CAN":8 --geometry="$WINX"x"$WINY"+"$POSX"+"$POSY")"
 	case $? in
 		0)  {
 				if [ -n "$EDFILES" ]; then
@@ -3030,6 +2883,7 @@ function TrayIconExports {
 	export -f PauseGame
 	export EFD="$EFD"
 	export GAMEWINDOW="$GAMEWINDOW"
+	export UPWINTMPL="$UPWINTMPL"
 
 	if [ -n "$(GETALTEXEPATH)" ]; then
 		TSHADDESTDIR="$(GETALTEXEPATH)"
@@ -3049,6 +2903,7 @@ function TrayIconExports {
 	export -f TrayVR
 	export -f TrayPickWin
 	export -f TraySRC
+	export -f TrayUWT
 }
 #ENDIEX
 
@@ -3109,6 +2964,12 @@ function openTrayIcon {
 			writelog "INFO" "${FUNCNAME[0]} - TrayIcon: Executing command '$STEAM ${STEAM}://${RECO}'"
 			"$PROGCMD" "src"
 		}
+
+		function TrayUWT {
+			writelog "INFO" "${FUNCNAME[0]} - TrayIcon: Triggering Window Template Update"
+			touch "$UPWINTMPL"
+		}
+
 		TrayIconExports
 		
 		# actually open the actual trayIcon	
@@ -3118,7 +2979,8 @@ function openTrayIcon {
 		|$TRAY_SHADER,bash -c TrayShaderMenu \
 		|$TRAY_VR,bash -c TrayVR \
 		|$TRAY_PICKWINDOW,bash -c TrayPickWin \
-		|$TRAY_SRC,bash -c TraySRC" \
+		|$TRAY_SRC,bash -c TraySRC \
+		|$TRAY_UWT,bash -c TrayUWT" \
 		--text="$TRAY_TOOLTIP" >/dev/null 2>/dev/null &
 		YADTRAYPID="$!"
 	fi
@@ -3204,7 +3066,7 @@ function favoritesMenu {
 
 	if [ -f "${FAVMENU}-${TMPL}" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Found an autoconfigured favorites menu template '${FAVMENU}-${TMPL}' - using it directly"
-		openCustMenu "$1" "$BACKFUNC" "Favorites" "$FAVMENU" "${!FAVMENWIDTH@}" "${!FAVMENHEIGHT@}" "$LFM"
+		openCustMenu "$1" "$BACKFUNC" "Favorites" "$FAVMENU" "$LFM"
 	else
 		if [ ! -f "$STLFAVMENUCFG" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - No Favorites defined yet - opening Favorites Selection"
@@ -3231,7 +3093,7 @@ function favoritesMenu {
 			rm "$TEMPF" 2>/dev/null
 
 			writelog "INFO" "${FUNCNAME[0]} - Found '$(wc -l < "${FAVMENU}-${TMPL}")' selected Favorites - opening the Menu now"
-			openCustMenu "$1" "$BACKFUNC" "Favorites" "$FAVMENU" "${!FAVMENWIDTH@}" "${!FAVMENHEIGHT@}" "$LFM"
+			openCustMenu "$1" "$BACKFUNC" "Favorites" "$FAVMENU" "$LFM"
 		else
 			writelog "SKIP" "${FUNCNAME[0]} - Still no Favorites defined - skipping"
 		fi
@@ -3538,7 +3400,7 @@ function openGameMenu {
 		FUNC="$2"
 	fi
 	PARGUI="${FUNCNAME[0]}"
-	openMenu "$AID" "$FUNC" "$STLGAMECFG" "0" "$GAMEMENU" "$LGAM" "$SHOWPIC" "EMPTY" "EMPTY" "${!GAMESETWIDTH@}" "${!GAMESETHEIGHT@}" "$(strFix "$GUI_SETHEAD1" "$GN" "$AID")" "MENU_GAME"
+	openMenu "$AID" "$FUNC" "$STLGAMECFG" "0" "$GAMEMENU" "$LGAM" "$SHOWPIC" "EMPTY" "EMPTY" "$(strFix "$GUI_SETHEAD1" "$GN" "$AID")" "MENU_GAME"
 }
 
 function openGameDefaultMenu {
@@ -3549,7 +3411,7 @@ function openGameDefaultMenu {
 		FUNC="$2"
 	fi
 	PARGUI="${FUNCNAME[0]}"
-	openMenu "$AID" "$FUNC" "$STLDEFGAMECFG" "0" "$GAMETEMPMENU" "$LGATM" "$NOICON" "EMPTY" "EMPTY" "${!GAMEDEFSETWIDTH@}" "${!GAMEDEFSETHEIGHT@}" "$GUI_SETHEAD2" "MENU_GAME"
+	openMenu "$AID" "$FUNC" "$STLDEFGAMECFG" "0" "$GAMETEMPMENU" "$LGATM" "$NOICON" "EMPTY" "EMPTY" "$GUI_SETHEAD2" "MENU_GAME"
 }
 
 function openAGlobalMenu {
@@ -3564,7 +3426,7 @@ function openAGlobalMenu {
 	fi
 
 	PARGUI="${FUNCNAME[0]}"
-	openMenu "$AID" "$2" "$STLDEFGLOBALCFG" "$ARGSPLIT" "$MYMENU" "$LGLM" "$NOICON" "EMPTY" "EMPTY" "${!GLOBSETWIDTH@}" "${!GLOBSETHEIGHT@}" "$MYTEXT" "MENU_GLOBAL"
+	openMenu "$AID" "$2" "$STLDEFGLOBALCFG" "$ARGSPLIT" "$MYMENU" "$LGLM" "$NOICON" "EMPTY" "EMPTY" "$MYTEXT" "MENU_GLOBAL"
 }
 
 function ColCalc {
@@ -3598,9 +3460,7 @@ function startWineGame {
 function openCustMenu {
 	MYCAT="$3"
 	MYMENU="$4"
-	MYWI="$5"
-	MYHE="$6"
-	MYFUNC="$7"
+	MYFUNC="$5"
 
 	prepareMenu "$@"
 
@@ -3617,7 +3477,7 @@ function openCustMenu {
 	createDropdownLists
 
 	TITLE="${PROGNAME}-${MYCAT}"
-	pollWinRes "$TITLE" "$MYWI" "$MYHE"
+	pollWinRes "$TITLE"
 
 	setShowPic
 	cp "$SHOWPIC" "$FAVPIC"
@@ -3655,7 +3515,7 @@ function openCustMenu {
 	# shellcheck disable=SC2028 # doesn't like the newline seperator, but it is valid
 	{
 		echo "function $MYFUNC {"
-		echo "\"$YAD\" --columns=\"$MYCOLS\" --text=\"$(spanFont "$MYTEXT" "H")\" --geometry=${!MYWI}x${!MYHE}+0+0 \\"
+		echo "\"$YAD\" --columns=\"$MYCOLS\" --text=\"$(spanFont "$MYTEXT" "H")\" --geometry=${WINX}x${WINY}+${POSX}+${POSY} \\"
 		echo "--title=\"$TITLE\" --image \"$FAVPIC\" --image-on-top --window-icon=\"$STLICON\" --center $WINDECO --form --separator=\"\\n\" --quoted-output \\"
 		echo "--button=\"$BUT0\":0 --button=\"$BUT1\":1 --button=\"$BUT2\":2 --button=\"$BUT3\":3 --button=\"$BUT4\":4 --button=\"$BUT6\":6 --button=\"$BUT7\":7 \\"
 		cat "$MYTMPL"
@@ -3733,14 +3593,14 @@ function setGuiSortOrder {
 
 function setGuiFavoritesSelection {
 	TITLE="${PROGNAME}-FavoritesSelection"
-	pollWinRes "$TITLE" "FAVSELWIDTH" "FAVSELHEIGHT"
+	pollWinRes "$TITLE"
 
 	setShowPic
 
 	FAVENTRIES="$(favoritesMenuEntries | \
 	"$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center $WINDECO --list --checklist \
 	--column="$GUI_ADD" --column="$GUI_DESC" --column="$GUI_VAR" --column=LongDesc  --separator="\n" --print-column="3" --tooltip-column 4 --hide-column 4 \
-	--text="$(spanFont "$GUI_FAVORITESSEL" "H")" --title="$TITLE" --geometry="$FAVSELWIDTH"x"$FAVSELHEIGHT"+0+0)"
+	--text="$(spanFont "$GUI_FAVORITESSEL" "H")" --title="$TITLE" --geometry="$WINX"x"$WINY"+"$POSX"+"$POSY")"
 	case $? in
 		0)  {
 				if [ -n "$FAVENTRIES" ]; then
@@ -3765,12 +3625,12 @@ function setGuiFavoritesSelection {
 
 function setGuiBlockSelection {
 	TITLE="${PROGNAME}-EntryBlockSelection"
-	pollWinRes "$TITLE" "BLOCKSELWIDTH" "BLOCKSELHEIGHT"
+	pollWinRes "$TITLE"
 
 	BLENTRIES="$(createBlockYadList | \
 	"$YAD" --window-icon="$STLICON" --center --list --checklist \
 	--column="$GUI_ADD" --column="$GUI_DESC" --separator=" " --print-column="2" \
-	--text="$(spanFont "$GUI_BLOCKSEL" "H")" --title="$TITLE" --geometry="$BLOCKSELWIDTH"x"$BLOCKSELHEIGHT"+0+0)"
+	--text="$(spanFont "$GUI_BLOCKSEL" "H")" --title="$TITLE" --geometry="$WINX"x"$WINY"+"$POSX"+"$POSY")"
 	case $? in
 		0)  {
 				writelog "INFO" "${FUNCNAME[0]} - Updating '$STLMENUBLOCKCFG' with selected blocks"
@@ -3795,7 +3655,7 @@ function setGuiBlockSelection {
 
 function setGuiCategoryMenuSel {
 	TITLE="${PROGNAME}-CategorySelection"
-	pollWinRes "$TITLE" "CATSELWIDTH" "CATSELHEIGHT"
+	pollWinRes "$TITLE"
 
 	setShowPic
 	
@@ -3807,13 +3667,13 @@ function setGuiCategoryMenuSel {
 	SELECTCAT="$("$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center $WINDECO --form --separator="\n" \
 	--text="$(spanFont "$(strFix "$GUI_CATSEL" "$PROGNAME")" "H")" \
 	--title="$TITLE" \
-	--geometry="$CATSELWIDTH"x"$CATSELHEIGHT"+0+0 \
+	--geometry="$WINX"x"$WINY"+"$POSX"+"$POSY" \
 	--field="     $GUI_CAT!$GUI_CATSEL":CB "$CURCAT!$CATDD")"
 	case $? in
 		0)  {	
 				CURCAT="$SELECTCAT"
 				writelog "INFO" "${FUNCNAME[0]} - Selected '$SELECTCAT' - Opening Category Menu"
-				openCustMenu "$AID" "${FUNCNAME[0]}" "$SELECTCAT" "$MTEMP/$SELECTCAT" "${!CATMENWIDTH@}" "${!CATMENHEIGHT@}" "$LCM"
+				openCustMenu "$AID" "${FUNCNAME[0]}" "$SELECTCAT" "$MTEMP/$SELECTCAT" "$LCM"
 			}
 		;;
 		1)  {
@@ -3836,13 +3696,13 @@ function openExtraSelection {
 	fi
 	
 	TITLE="${PROGNAME}-ExtraSelection"
-	pollWinRes "$TITLE" "EXTSELWIDTH" "EXTSELHEIGHT"
+	pollWinRes "$TITLE"
 
 	SETHEAD="$(spanFont "${PROGNAME} (${PROGCMD}) - ${PROGVERS} \n \n$GN ($AID)" "H") \n <span font=\"italic\">$GUI_EXTRA</span>"
 
 	 "$YAD" --image "$SHOWPIC" --image-on-top --center --window-icon="$STLICON" --form --center "$WINDECO" \
     --title="$TITLE" \
-	--geometry="$EXTSELWIDTH"x"$EXTSELHEIGHT"+0+0 \
+	--geometry="$WINX"x"$WINY"+"$POSX"+"$POSY" \
     --text="$SETHEAD" \
 	--button="$BUT_BACK":0 \
 	--button="$BUT_GUISET_DCP":1 \
@@ -3893,13 +3753,13 @@ function openGuiSettings {
 	fi
 	
 	TITLE="${PROGNAME}-GuiSettings"
-	pollWinRes "$TITLE" "GUISETWIDTH" "GUISETHEIGHT"
+	pollWinRes "$TITLE"
 
 	SETHEAD="$(spanFont "${PROGNAME} (${PROGCMD}) - ${PROGVERS} \n \n$GN ($AID)" "H") \n <span font=\"italic\">(${#CfgFiles[@]} $GUI_EDITABLECFGS)\n(${#GameTxtFiles[@]} $GUI_EDITABLEGAMECFGS)</span>"
 	
 	 "$YAD" --image "$SHOWPIC" --image-on-top --center --window-icon="$STLICON" --form --center "$WINDECO" \
     --title="$TITLE" \
-	--geometry="$GUISETWIDTH"x"$GUISETHEIGHT"+0+0 \
+	--geometry="$WINX"x"$WINY"+"$POSX"+"$POSY" \
     --text="$SETHEAD" \
 	--button="$BUT_BACK":0 \
 	--button="$BUT_GUISET_FAVSEL":1 \
@@ -3936,7 +3796,7 @@ function openGuiSettings {
 	;;
 	4) 	{
 			clickInfo "${FUNCNAME[0]}" "$?" "$BUT_GUISET_GUIOPTS" "$GSETMENU" "$GUIOPTIONS"
-			openCustMenu "$AID" "${FUNCNAME[0]}" "Gui" "$MTEMP/Gui" "${!CATMENWIDTH@}" "${!CATMENHEIGHT@}" "$LCM"
+			openCustMenu "$AID" "${FUNCNAME[0]}" "Gui" "$MTEMP/Gui" "$LCM"
 		}
 	;;
 	5) 	{
@@ -3966,7 +3826,8 @@ function openSettings {
 	fi
 	
 	TITLE="${PROGNAME}-MenuSelection"
-	pollWinRes "$TITLE" "SETWIDTH" "SETHEIGHT"
+	pollWinRes "$TITLE"
+	writelog "INFO" "${FUNCNAME[0]} - Loaded resolution from config: ${WINX}x${WINY}_${POSX}-${POSY}"
 
 	LAPL="$(getLaPl)"
 
@@ -3993,7 +3854,7 @@ function openSettings {
 
 	 "$YAD" --image "$SHOWPIC" --image-on-top --center --window-icon="$STLICON" --form --center "$WINDECO" \
     --title="$TITLE" \
-	--geometry="$SETWIDTH"x"$SETHEIGHT"+0+0 \
+	--geometry="$WINX"x"$WINY"+"$POSX"+"$POSY" \
     --text="$SETHEAD" \
 	--button="$BUT_EXIT":0 \
 	--button="$BUT_GUISET":1 \
@@ -4130,11 +3991,11 @@ function checkEntryBlocklist {
 
 function askSort {
 	TITLE="${PROGNAME}-AskSort"
-	pollWinRes "$TITLE" "$ASKSETREQWIDTH" "$ASKSETREQHEIGHT"
+	pollWinRes "$TITLE"
 
 	"$YAD" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
 		--title="$TITLE" \
-		--geometry="$ASKSETREQWIDTH"x"$ASKSETREQHEIGHT"+0+0 \
+		--geometry="$WINX"x"$WINY"+"$POSX"+"$POSY" \
 		--text="$(spanFont "$GUI_ASKSORT" "H")" \
 		--field=" :LBL" \
 		--field="<b>$GUI_ASKSORTLONG</b>:LBL" >/dev/null
@@ -4245,11 +4106,9 @@ function createMenu {
 	ARGPIC="$4"
 	UNUSED="$5"
 	ARGCOLS="$6"
-	ARGWIDTH="$7"
-	ARGHEIGHT="$8"
-	ARGTITLE="$9"
-	ARGPCMD="${10}"
-	ARGSPAT="${11}"
+	ARGTITLE="$7"
+	ARGPCMD="$8"
+	ARGSPAT="$9"
 
 	NEEDARG="11"
 
@@ -4283,7 +4142,7 @@ function createMenu {
 	# shellcheck disable=SC2028 # doesn't like the newline seperator, but it is valid
 	{
 		echo "function $ARGFUNC {"
-		echo "\"$YAD\" --columns=\"$MYCOLS\" --text=\"$(spanFont "$ARGTITLE" "H")\" --geometry=${ARGWIDTH}x${ARGHEIGHT}+0+0 \\"
+		echo "\"$YAD\" --columns=\"$MYCOLS\" --text=\"$(spanFont "$ARGTITLE" "H")\" --geometry=${WINX}x${WINY}+${POSX}+${POSY} \\"
 		echo "--title=\"$TITLE\" --image \"$ARGPIC\" --image-on-top --window-icon=\"$STLICON\" --center \"$WINDECO\" --form --separator=\"\\n\" --quoted-output \\"
 		echo "--button=\"$QBUT0\":0 --button=\"$BUT_GUISET\":1 --button=\"$BUT_SET\":2 --button=\"$BUT_RELOAD\":3 --button=\"$BUT_SAVERELOAD\":4 --button=\"$BUT_SAVEPLAY\":6 --button=\"$BUT_PLAY\":7 \\"
 		cat "$MYTMPL"
@@ -4303,10 +4162,8 @@ function openMenu {
 	ARGPIC="$7"
 	UNUSED="$8"
 	ARGCOLS="$9"
-	ARGWIDTH="${10}"
-	ARGHEIGHT="${11}"
-	ARGTITLE="${12}"
-	ARGSPAT="${13}"
+	ARGTITLE="${10}"
+	ARGSPAT="${11}"
 	 
 	if [ "$ARGPCMD" == "$NON" ]; then
 		if [ "$PROTONCHECK" == "disabled" ] || [ "$PROTONCHECK" == "ask_before_menu" ] || [ "$PROTONCHECK" == "only_notify" ]; then
@@ -4331,10 +4188,10 @@ function openMenu {
 	loadCfg "$ARGLOADCFG" X
 
 	TITLE="${PROGNAME}-$ARGFUNC"
-	pollWinRes "$TITLE" "$ARGWIDTH" "$ARGHEIGHT"
-				
-	writelog "INFO" "${FUNCNAME[0]} - Starting  createMenu \"$ARGMENU\" \"$ARGFUNC\" \"$ARGPIC\" \"$UNUSED\" \"$ARGCOLS\" \"${!ARGWIDTH}\" \"${!ARGHEIGHT}\" \"$ARGTITLE\" \"$ARGPCMD\" \"$ARGSPAT\""
-	createMenu "$ARGSPLIT" "$ARGMENU" "$ARGFUNC" "$ARGPIC" "$UNUSED" "$ARGCOLS" "${!ARGWIDTH}" "${!ARGHEIGHT}" "$ARGTITLE" "$ARGPCMD" "$ARGSPAT"
+	pollWinRes "$TITLE"
+	
+	writelog "INFO" "${FUNCNAME[0]} - Starting  createMenu \"$ARGMENU\" \"$ARGFUNC\" \"$ARGPIC\" \"$UNUSED\" \"$ARGCOLS\" \"$ARGTITLE\" \"$ARGPCMD\" \"$ARGSPAT\""
+	createMenu "$ARGSPLIT" "$ARGMENU" "$ARGFUNC" "$ARGPIC" "$UNUSED" "$ARGCOLS" "$ARGTITLE" "$ARGPCMD" "$ARGSPAT"
 
 	source "$ARGMENU"
 	writelog "INFO" "${FUNCNAME[0]} - Currently used tempfile is '$MKCFG'"
@@ -5687,13 +5544,13 @@ function GameShaderDialog {
 		writelog "INFO" "${FUNCNAME[0]} - Found ${#ShaderFiles[@]} available Shader Files - opening Selection"
 
 		TITLE="${PROGNAME}-Shader"
-		pollWinRes "$TITLE" "SHADREQWIDTH" "SHADREQWIDTH"
+		pollWinRes "$TITLE"
 
 		setShowPic
 
 		SHADFILES="$(while read -r f; do if [ ! -f "$SHADDESTDIR/${f##*/}" ]; then 	echo FALSE ; echo "$f"; else echo TRUE ; echo "$f" ;fi ; done <<< "$(printf "%s\n" "${ShaderFiles[@]}")" | \
 		"$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center "$WINDECO" --list --checklist --column=Add --column=Shader --separator=" " --print-column="2" \
-		--text="$(spanFont "$(strFix "$GUI_SHADERDIALOG" "$SHADDESTDIR")" "H")" --title="$TITLE" --geometry="$SHADREQWIDTH"x"$SHADREQHEIGHT"+0+0)"
+		--text="$(spanFont "$(strFix "$GUI_SHADERDIALOG" "$SHADDESTDIR")" "H")" --title="$TITLE" --geometry="$WINX"x"$WINY"+"$POSX"+"$POSY")"
 		case $? in
 			0)  {
 					while read -r upshad; do
@@ -6076,7 +5933,7 @@ function askSettings {
 			getAvailableCfgs
 
 			TITLE="${PROGNAME}-OpenSettings"
-			pollWinRes "$TITLE" "ASKSETREQWIDTH" "ASKSETREQHEIGHT"
+			pollWinRes "$TITLE"
 
 			setShowPic
 
@@ -6110,7 +5967,7 @@ function askSettings {
 
 			"$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
 			--title="$TITLE" \
-			--geometry="$ASKSETREQWIDTH"x"$ASKSETREQHEIGHT"+0+0 \
+			--geometry="$WINX"x"$WINY"+"$POSX"+"$POSY" \
 			--text="$(spanFont "$GN ($AID) - $REQQEST" "H")" \
 			--field="<span font=\"italic\">$LAPL</span>":LBL \
 			--field="<span font=\"italic\">(${#CfgFiles[@]} $GUI_EDITABLECFGS)</span>":LBL \
@@ -6184,6 +6041,7 @@ function createProjectDirs {
 	mkProjDir "$STLRSPRESETDIR" 1
 	mkProjDir "$CEDLDIR" 1
 	mkProjDir "$HIDEDIR" 1
+	mkProjDir "$STLTEMPLATEGUIDIR" 1
 }
 
 # add missing config entries to configfile $1 using seperator $2:
@@ -6205,12 +6063,7 @@ function updateConfigFile {
 			writelog "SKIP" "${FUNCNAME[0]} - Config file '$CFGFILE' already at version '$PROGVERS'"
 		else
 			OLDVERS="$(grep "config Version" "$CFGFILE" | gawk -F ': ' '{print $2}')"
-			
-			if [ "$CFGFILE" == "$STLGUICFG" ] || grep -q "$STLGUIDIR" <<< "$CFGFILE" ; then
-				writelog "INFO" "${FUNCNAME[0]} - Updating Default Resolutions in '$CFGFILE'"
-				calculateDefaultResolutions
-			fi
-			
+
 			if [ -n "$OLDVERS" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Updating '$CFGFILE' from '$OLDVERS' to '$PROGVERS'"
 				sed "s/config Version: $OLDVERS/config Version: $PROGVERS/" -i "$CFGFILE"
@@ -6228,7 +6081,7 @@ function updateConfigFile {
 					writelog "UPDATE" "${FUNCNAME[0]} - Entry '$LCAT' is missing in '$CFGFILE' - adding it now!"
 					if grep -q "\\$" <<< "$LVAL"; then
 
-						if grep -q "WIDTH$\|HEIGHT$" <<< "$LVAL"; then
+						if grep -q "WINX$\|WINY\|POSX\|POSY$" <<< "$LVAL"; then
 							VARNAM=${LVAL//\$/DEF}
 						else
 							VARNAM=${LVAL//\$/}
@@ -6381,15 +6234,6 @@ function createDefaultCfgs {
 
 	saveCfg "$STLDEFGLOBALCFG" X
 	loadCfg "$STLDEFGLOBALCFG" X
-
-	saveCfg "$STLGUICFG" X
-
-	if [ "$USEGENGUICFG" -eq 0 ]; then
-		GAMEGUICFG="$STLGUIDIR/${AID}.conf"
-		if [ -f "$GAMEGUICFG" ]; then
-			updateConfigFile "$GAMEGUICFG" "saveCfggui"
-		fi
-	fi
 
 	saveCfg "$STLURLCFG" X
 	loadCfg "$STLURLCFG" X
@@ -7163,12 +7007,12 @@ function guiLoadCfg {
 	GUICFG="$1"
 
 	TITLE="${PROGNAME}-AskLoadTweak"
-	pollWinRes "$TITLE" "ALTREQWIDTH" "ALTREQHEIGHT"
+	pollWinRes "$TITLE"
 
 	writelog "INFO" "${FUNCNAME[0]} - Requester asking if '$GUICFG' should be loaded"
 	"$YAD" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
 	--title="$TITLE" \
-	--geometry="$ALTREQWIDTH"x"$ALTREQHEIGHT"+0+0 \
+	--geometry="$WINX"x"$WINY"+"$POSX"+"$POSY" \
 	--field="$GUI_LOADATCFG '$VALCFG'?":LBL \
 	--field="<span font=\"italic\">($GUI_SKIPLOADATFOR '$GN ($AID)')</span>":LBL \
 	--button="$BUT_SKIP":0  \
@@ -7198,13 +7042,13 @@ function validateATCfg {
 	if [ "$ATVALIDATE" -ge 1 ]; then
 
 		TITLE="${PROGNAME}-AskEditTweak"
-		pollWinRes "$TITLE" "AETREQWIDTH" "AETREQHEIGHT"
+		pollWinRes "$TITLE"
 
 		writelog "INFO" "${FUNCNAME[0]} - Gui asking if '$VALCFG' should be edited as ATVALIDATE is '$ATVALIDATE', autoloaded, skipped or ignored"
 		
 		"$YAD" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
 		--title="$TITLE" \
-		--geometry="$AETREQWIDTH"x"$AETREQHEIGHT"+0+0 \
+		--geometry="$WINX"x"$WINY"+"$POSX"+"$POSY" \
 		--field="$GUI_FOUNDATCFG '$VALCFG'":LBL \
 		--field="<span font=\"italic\">($GUI_EDIT/$GUI_SKIPLOADATFOR '$GN ($AID)')</span>":LBL \
 		--button="$BUT_EDIT":0  \
@@ -7251,11 +7095,11 @@ function AdoptAutoTweak {
 
 function AskAdoptAutoTweak {
 	TITLE="${PROGNAME}-ConvertAutoTweak"
-	pollWinRes "$TITLE" "CATREQWIDTH" "CATREQHEIGHT"
+	pollWinRes "$TITLE"
 
 	"$YAD" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
 	--title="$TITLE" \
-	--geometry="$CATREQWIDTH"x"$CATREQHEIGHT"+0+0 \
+	--geometry="$WINX"x"$WINY"+"$POSX"+"$POSY" \
 	--text="$(spanFont "$GN ($AID) - $GUI_ASKCOBERTAT" "H")" \
 	--field=" ":LBL " " \
 	--field="$(strFix "$GUI_ADOPTANDSKIP" "$GN" "$AID")":LBL \
@@ -7335,11 +7179,11 @@ function launchCustomProg {
 		writelog "INFO" "${FUNCNAME[0]} - CUSTOMCMD variable is empty - opening file requester"
 
 		TITLE="${PROGNAME}-OpenCustomProgram"
-		pollWinRes "$TITLE" "CUSTPROGREQWIDTH" "CUSTPROGREQHEIGHT"
+		pollWinRes "$TITLE"
 
 		ZCUST="$("$YAD" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
 		--title="$TITLE" \
-		--geometry="$CUSTPROGREQWIDTH"x"$CUSTPROGREQHEIGHT"+0+0 \
+		--geometry="$WINX"x"$WINY"+"$POSX"+"$POSY" \
 		--text="$(spanFont "$GN ($AID) - $GUI_SELECTCUSTOMEXE" "H")" \
 		--field=" ":LBL " " \
 		--field="$GUI_SELECTEXE":FL)"
@@ -7398,11 +7242,11 @@ function launchCustomProg {
 				writelog "INFO" "${FUNCNAME[0]} - CUSTOMCMD file '$CUSTOMCMD' not found - opening file requester"
 			
 				TITLE="${PROGNAME}-OpenCustomProgram"
-				pollWinRes "$TITLE" "CUSTPROGREQWIDTH" "CUSTPROGREQHEIGHT"
+				pollWinRes "$TITLE"
 				
 				ZCUST="$("$YAD" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
 				--title="$TITLE" \
-				--geometry="$CUSTPROGREQWIDTH"x"$CUSTPROGREQHEIGHT"+0+0 \
+				--geometry="$WINX"x"$WINY"+"$POSX"+"$POSY" \
 				--text="$(spanFont "$GN ($AID) - $GUI_SELECTCUSTOMEXE" "H")" \
 				--field=" ":LBL " " \
 				--field="$GUI_SELECTEXE":FL)"		
@@ -7672,7 +7516,10 @@ function installWinetricksPaks {
 				if [ "$(printf '%s\n' "$WTWINEVER" "$LASTGOOD" | sort -V | head -n1)" != "$WTWINEVER" ]; then 
 					writelog "ERROR" "${FUNCNAME[0]} - Wine Version '$WTWINEVER' can't install $FAILPAK reliable" "E"
 					TITLE="${PROGNAME}-WrongWine"
+					pollWinRes "$TITLE"
+					
 					"$YAD" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
+					--geometry="$WINX"x"$WINY"+"$POSX"+"$POSY" \
 					--title="$TITLE" --button=OK:1 \
 					--text="$(spanFont "$GUI_WARN" "H")" \
 					--field=" :LBL" \
@@ -8100,12 +7947,12 @@ function addVortexStage {
 
 	if [ -z "$1" ]; then
 		TITLE="${PROGNAME}-AddVortexStage"
-		pollWinRes "$TITLE" "AVSREQWIDTH" "AVSREQHEIGHT"
+		pollWinRes "$TITLE"
 
 		NEWVS="$("$YAD" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
 		--file --directory \
 		--title="$TITLE" \
-		--geometry="$AVSREQWIDTH"x"$AVSREQHEIGHT"+0+0 \
+		--geometry="$WINX"x"$WINY"+"$POSX"+"$POSY" \
 		--text="$(spanFont "$GUI_SELECTVORTEXDIR" "H")" )"
 	else
 		if [ -d "$1" ]; then
@@ -8329,7 +8176,7 @@ function VortexGamesDialog {
 		getInstalledGamesWithVortexSupport
 
 		TITLE="${PROGNAME}-Vortex Toggle"
-		pollWinRes "$TITLE" "VOIGWIDTH" "VOIGHEIGHT"
+		pollWinRes "$TITLE"
 
 		setShowPic
 		VGNLIST="$STLSHM/VGNLIST.txt"
@@ -8370,7 +8217,7 @@ function VortexGamesDialog {
 			fi
 		done <<< "$(printf "%s\n" "${INSTVGAMES[@]}")" | \
 		"$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center "$WINDECO" --list --checklist --column="Use Vortex" --column="Game ID" --column="Game Title" --column "Vortex Steam Category" --separator=";" --print-column="2" \
-		--text="$(spanFont "$GUI_VINFO" "H")\n<span font=\"italic\">($GUI_VINFO1)</span>" --title="$TITLE" --geometry="$VOIGWIDTH"x"$VOIGHEIGHT"+0+0)"
+		--text="$(spanFont "$GUI_VINFO" "H")\n<span font=\"italic\">($GUI_VINFO1)</span>" --title="$TITLE" --geometry="$WINX"x"$WINY"+"$POSX"+"$POSY")"
 		case $? in
 			0)
 				while read -r checkvgame; do
@@ -8404,13 +8251,13 @@ function VortexSymDialog {
 		VPDRC="$VORTEXPREFIX/$DRC"
 		if [ -d "$VPDRC" ]; then		
 			TITLE="${PROGNAME}-Vortex Symlinks"
-			pollWinRes "$TITLE" "VOSYWIDTH" "VOSYHEIGHT"
+			pollWinRes "$TITLE"
 
 			setShowPic
 
 			cd "$VPDRC" || return
 			find . -type l -printf '%p\n%l\n' | "$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center "$WINDECO" --list --column="Symlink in '${VPDRC}/'" --column="Points to Game WinePrefix" --print-column="3" \
-			--text="$(spanFont "$GUI_VOSY" "H")\n" --title="$TITLE" --geometry="$VOSYWIDTH"x"$VOSYHEIGHT"+0+0
+			--text="$(spanFont "$GUI_VOSY" "H")\n" --title="$TITLE" --geometry="$WINX"x"$WINY"+"$POSX"+"$POSY"
 			cd - || return
 		else
 			writelog "SKIP" "${FUNCNAME[0]} - Directory '$VPDRC' not found " E
@@ -8821,10 +8668,13 @@ function setVortexSELaunch {
 				writelog "SKIP" "${FUNCNAME[0]} - Special exe '$2' for '$GN ($AID)' not found in gamedir '$EFD' - starting normal exe"
 		else
 			writelog "INFO" "${FUNCNAME[0]} - Found special exe '$2' for '$GN ($AID)' in gamedir '$EFD'"
+			TITLE="ScriptExtenderRequester"
+			pollWinRes "$TITLE"
 
 			"$YAD" --window-icon="$STLICON"  --center "$WINDECO" \
 			--title="$TITLE" \
 			--text="$GUI_SEBINFOUND '$EFD/$2'" \
+			--geometry="$WINX"x"$WINY"+"$POSX"+"$POSY" \
 			--button="${GE^^}":0 \
 			--button="$BUT_SAVERUN ${GE^^}":1 \
 			--button="${2^^}":2 \
@@ -8911,13 +8761,13 @@ function askVortex {
 			writelog "INFO" "${FUNCNAME[0]} - Opening Vortex Requester with timeout '$WAITVORTEX'"
 
 			TITLE="${PROGNAME}-OpenVortex"
-			pollWinRes "$TITLE" "ASKVTXREQWIDTH" "ASKVTXREQHEIGHT"
+			pollWinRes "$TITLE"
 
 			setShowPic
 
 			"$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
 			--title="$TITLE" \
-			--geometry="$ASKVTXREQWIDTH"x"$ASKVTXREQHEIGHT"+0+0 \
+			--geometry="$WINX"x"$WINY"+"$POSX"+"$POSY" \
 			--text="$(spanFont "$GN ($AID) - $GUI_ASKVORTEX" "H")" \
 			--button="$BUT_VORTEX":0  \
 			--button="$BUT_ONLYVORT":2 \
@@ -9761,13 +9611,13 @@ function askConty {
 		writelog "INFO" "${FUNCNAME[0]} - Opening Ask Conty Requester"
 
 		TITLE="${PROGNAME}-SelectConty"
-		pollWinRes "$TITLE" "ASKCONTYREQWIDTH" "ASKCONTYREQHEIGHT"
+		pollWinRes "$TITLE"
 
 		setShowPic
 
 		"$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
 		--title="$TITLE" \
-		--geometry="$ASKCONTYREQWIDTH"x"$ASKCONTYREQHEIGHT"+0+0 \
+		--geometry="$WINX"x"$WINY"+"$POSX"+"$POSY" \
 		--text="$(spanFont "$GN ($AID) - $GUI_ASKCONTY" "H")" \
 		--button="$BUT_DLCONTY":0  \
 		--button="$BUT_SELCONTY":2 \
@@ -9866,13 +9716,13 @@ function checkPlayTime {
 		writelog "INFO" "${FUNCNAME[0]} - The game stopped after '$1' seconds - opening CrashGuess Requester"
 
 		TITLE="${PROGNAME}-CrashGuess"
-		pollWinRes "$TITLE" "CGREQWIDTH" "CGREQHEIGHT"
+		pollWinRes "$TITLE"
 
 		setShowPic
 
 		"$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
 		--title="$TITLE" \
-		--geometry="$CGREQWIDTH"x"$CGREQHEIGHT"+0+0 \
+		--geometry="$WINX"x"$WINY"+"$POSX"+"$POSY" \
 		--text="$(spanFont "$GN ($AID) $(strFix "$GUI_ASKCRASHGUESS" "$1")" "H")" \
 		--button="$BUT_RETRYCG":0  \
 		--button="$BUT_SKIPCG":2 \
@@ -9975,7 +9825,7 @@ function dlWineGUI {
 	DLWINELIST="$(printf "!%s\n" "${WineDLDispList[@]//\"/}" | tr -d '\n' | sed "s:^!::" | sed "s:!$::")"
 
 	TITLE="${PROGNAME}-DownloadWine"
-	pollWinRes "$TITLE" "WINEREQWIDTH" "WINEREQHEIGHT"
+	pollWinRes "$TITLE"
 
 	if [ -z "$DLWINE" ]; then
 		DLWINE="${WineDLDispList[0]}"
@@ -9983,7 +9833,7 @@ function dlWineGUI {
 
 	DLDISPWINE="$("$YAD" --window-icon="$STLICON" --form --center --on-top $WINDECO \
 	--title="$TITLE" \
-	--geometry="$WINEREQWIDTH"x"$WINEREQHEIGHT"+0+0 \
+	--geometry="$WINX"x"$WINY"+"$POSX"+"$POSY" \
 	--text="$(spanFont "$GUI_DLWINETEXT" "H")" \
 	--field=" ":LBL " " \
 	--field="$GUI_DLWINETEXT2!$GUI_DLWINETEXT":CBE "${DLWINE/#-/ -}!$DLWINELIST" \
@@ -10060,13 +9910,13 @@ function WineSelection {
 	fi
 	
 	TITLE="${PROGNAME}-ChooseWine"
-	pollWinRes "$TITLE" "WINSELWIDTH" "WINSELHEIGHT"
+	pollWinRes "$TITLE"
 
 	writelog "INFO" "${FUNCNAME[0]} - Opening Wine Selection"
 
 	 "$YAD" --image "$SHOWPIC" --image-on-top --center --window-icon="$STLICON" --form --center "$WINDECO" \
     --title="$TITLE" \
-	--geometry="$WINSELWIDTH"x"$WINSELHEIGHT"+0+0 \
+	--geometry="$WINX"x"$WINY"+"$POSX"+"$POSY" \
     --text="$(spanFont "$GUI_SELWINE" "H")" \
 	--button="$BUT_DLDWINE":0 \
 	--button="$BUT_SELWINE":2
@@ -10083,8 +9933,10 @@ function WineSelection {
 	2) 	{
 			writelog "INFO" "${FUNCNAME[0]} - Selected Ready Wine"
 			createWineList
+			TITLE="${PROGNAME}-SelectedWine"
+			pollWinRes "$TITLE"
 			WINSEL="$("$YAD" --window-icon="$STLICON" --form --center --on-top $WINDECO \
-			--geometry="$WINSELWIDTH"x"$WINSELHEIGHT"+0+0 \
+			--title="$TITLE" --geometry="$WINX"x"$WINY"+"$POSX"+"$POSY" \
 			--text="$(spanFont "$GUI_SELIWINE" "H")" \
 			--field=" ":LBL " " \
 			--field="     $GUI_WINEVERSION!$DESC_WINEVERSION ('WINEVERSION')":CBE "${WINEVERSION/#-/ -}!$WINEYADLIST"
@@ -11397,7 +11249,7 @@ function openMainMenu {
 #	SELACT="Settings"
 
 	TITLE="${PROGNAME}-MainMenu"
-	pollWinRes "$TITLE" "MMWIDTH" "MMHEIGHT"
+	pollWinRes "$TITLE"
 
 	writelog "INFO" "${FUNCNAME[0]} - Opening Main Menu"
 
@@ -11408,7 +11260,7 @@ function openMainMenu {
 		--text="$(spanFont "$GAMEHEAD" "H")" \
 		--field="${GUI_OPENSET}:":CB "${SELGAME}!$STIYADLIST" \
 		--title="$TITLE" \
-		--geometry="$MMWIDTH"x"$MMHEIGHT"+0+0)"
+		--geometry="$WINX"x"$WINY"+"$POSX"+"$POSY")"
 
 #	SELCO="$(head -n1 <<< "${SELCMD//\'/}")"
 	SELCO="Settings"
@@ -11440,14 +11292,14 @@ function SteamCatSelect {
 	writelog "INFO" "${FUNCNAME[0]} - Steam Category Selection"
 
 	TITLE="${PROGNAME}-SteamCategorySelection"
-	pollWinRes "$TITLE" "SCATSELWIDTH" "SCATSELHEIGHT"
+	pollWinRes "$TITLE"
 
 	setShowPic
 	unset VALTAGS
 	mapfile -d "\n" -t -O "${#VALTAGS[@]}" VALTAGS <<< "$(getActiveSteamCategories)"
 	SCATSELOUT="$(while read -r f; do if [[ ! "${SCATSEL[*]}" =~ $f ]]; then 	echo FALSE ; echo "$f"; else echo TRUE ; echo "$f" ;fi ; done <<< "$(printf "%s\n" "${VALTAGS[@]}")" | \
 	"$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center $WINDECO --list --checklist --column=Choose --column=SteamCategory --separator="\n" --print-column="2" \
-	--text="$(spanFont "$GUI_STEAMCATSEL" "H")" --title="$TITLE" --button="$BUT_SEL":0 --button="$BUT_CAN":2 --geometry="$SCATSELWIDTH"x"$SCATSELHEIGHT"+0+0)"
+	--text="$(spanFont "$GUI_STEAMCATSEL" "H")" --title="$TITLE" --button="$BUT_SEL":0 --button="$BUT_CAN":2 --geometry="$WINX"x"$WINY"+"$POSX"+"$POSY")"
 
 	case $? in
 		0)  {
@@ -11530,11 +11382,11 @@ function addNonSteamGameGui {
 		fi 
 
 		TITLE="${PROGNAME}-$NSGA"
-		pollWinRes "$TITLE" "NSGREQWIDTH" "NSGREQHEIGHT"
+		pollWinRes "$TITLE"
 
 		NSGSET="$("$YAD" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
 		--title="$TITLE" --separator="|" \
-		--geometry="$NSGREQWIDTH"x"$NSGREQHEIGHT"+0+0 \
+		--geometry="$WINX"x"$WINY"+"$POSX"+"$POSY" \
 		--text="$(spanFont "$GUI_ADDNSG" "H")\n<span font=\"italic\">$(strFix "$GUI_WARNNSG1" "$STERECO")\n$(strFix "$GUI_WARNNSG2" "$STERECO"))</span>" \
 		--field=" ":LBL " " \
 		--field="     $GUI_NOSTGAPPNAME!$DESC_NOSTGAPPNAME ('NOSTGAPPNAME')" "${NOSTGAPPNAME/#-/ -}" \
@@ -11873,7 +11725,8 @@ function closeSTL {
 
 	notiShow "$(strFix "$NOTY_STLSTOP" "$GN" "$AID" "$PROGNAME")"
 	writelog "STOP" "#########  ${FUNCNAME[0]} $PROGNAME $PROGVERS #########"
-	rm "$CLOSETMP"
+	rm "$CLOSETMP" 2>/dev/null
+	rm "$UPWINTMPL" 2>/dev/null
 
 	# only useful for win games:
 	if [ "$ISGAME" -eq 2 ] && [ "$USEWINE" -eq 0 ]; then
