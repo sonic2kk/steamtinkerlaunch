@@ -5,7 +5,7 @@
 
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v4.1next7"
+PROGVERS="v5.0next1"
 PROGCMD="${0##*/}"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -148,9 +148,15 @@ METADIR="$STLCFGDIR/meta"
 GEMETA="$METADIR/id/general"
 CUMETA="$METADIR/id/custom"
 EVMETAID="$METADIR/eval/id"
+EVMETASKIPID="$EVMETAID/skip"
+EVMETACUSTOMID="$EVMETAID/custom"
+EVMETAADDONID="$EVMETAID/addon"
 EVMETATITLE="$METADIR/eval/title"
 EVALSC="evaluatorscript"
+GECUST="get-current-step"
 ISCRI="iscriptevaluator"
+FOINPA="foreign_install_path"
+FRSTATE="$STLSHM/firuState.txt"
 TIGEMETA="$METADIR/title/general"
 TICUMETA="$METADIR/title/custom"
 DRC="drive_c"
@@ -247,19 +253,6 @@ EXGLOB="$BACKEX/exclude-global.txt"
 #ENDEDITORCFGLIST
 OLDSTLGUICFG="$STLCFGDIR/gui.conf"	# OLD gui config - will be removed later XXXXXXXXXXX
 
-# optional global config replacement dirs, which can be pulled using DLGLOBAL:
-GLDLSTLDIR="$STLDLDIR/$PROGNAME"
-GLDLSTLTXT="${GLDLSTLDIR}.txt"
-GLDLTWEAKDIR="$GLDLSTLDIR/tweaks"
-GLDLUSERTWEAKDIR="$GLDLTWEAKDIR/user"
-GLDLSBSTWEAKDIR="$GLDLTWEAKDIR/sbs"
-GLDLTWEAKCMDDIR="$GLDLTWEAKDIR/cmd"
-GLDLCATEGORYDIR="$GLDLSTLDIR/categories"
-GLDLRSPDIR="$GLDLSTLDIR/$RSP"
-GLDLMISCDIR="$GLDLSTLDIR/misc"
-GLDLREGDIR="$GLDLSTLDIR/regs"
-GLDLSTLLANGDIR="$GLDLSTLDIR/lang"
-
 STLLANGDIR="$STLCFGDIR/lang"
 STLDEFLANG="english"
 
@@ -342,6 +335,10 @@ function setSteamPaths {
 	setSteamPath "DEFSTEAMAPPS" "$SA"
 	setSteamPath "DEFSTEAMAPPSCOMMON" "$SAC"
 	setSteamPath "CFGVDF" "config/config.vdf"
+
+	if [ -z "$STEAM_COMPAT_CLIENT_INSTALL_PATH" ]; then
+		export STEAM_COMPAT_CLIENT_INSTALL_PATH="$SROOT"
+	fi
 
 	mkdir -p "$SROOT/$CTD" 2>/dev/null
 	setSteamPath "STEAMCOMPATOOLS" "$CTD"
@@ -593,12 +590,6 @@ function listAppManifests {
 }
 
 function createCategoriesList {
-	if [ "$(USEDLGLOBAL)" -ge 1 ]; then
-		GRSPDIR="$GLDLRSPDIR"
-	else
-		GRSPDIR="$GLOBALRSPRESETDIR"
-	fi
-
 	function listCAT {
 		while read -r CATMENU; do
 			echo "${CATMENU##*/}"
@@ -908,15 +899,9 @@ function linkLog {
 }
 
 function setGlobalAIDCfgs {
-	if [ "$(USEDLGLOBAL)" -ge 1 ]; then
-		GLOBALSBSTWEAKCFG="$GLDLSBSTWEAKDIR/$AID.conf"
-		GLOBALTWEAKCFG="$GLDLUSERTWEAKDIR/$AID.conf"
-		AIDREG="$GLDLREGDIR/$AID.reg"
-	else
-		GLOBALSBSTWEAKCFG="$GLOBALSBSTWEAKDIR/$AID.conf"
-		GLOBALTWEAKCFG="$GLOBALUSERTWEAKDIR/$AID.conf" #X
-		AIDREG="$GLOBALREGDIR/$AID.reg"
-	fi
+	GLOBALSBSTWEAKCFG="$GLOBALSBSTWEAKDIR/$AID.conf"
+	GLOBALTWEAKCFG="$GLOBALUSERTWEAKDIR/$AID.conf" #X
+	AIDREG="$GLOBALREGDIR/$AID.reg"
 }
 
 function setCompatDataTitle {
@@ -1024,12 +1009,6 @@ function prepareGUI {
 }
 
 function createLanguageList {
-	if [ "$(USEDLGLOBAL)" -ge 1 ]; then
-		GLOBLANG="$GLDLSTLLANGDIR"
-	else
-		GLOBLANG="$GLOBALSTLLANGDIR"
-	fi
-
 	function listLANG {
 		while read -r RSPF; do
 			echo "${RSPF##*/}"
@@ -1037,27 +1016,18 @@ function createLanguageList {
 
 		while read -r RSPF; do
 			basename "${RSPF//.txt/}"
-		done <<< "$(find "$GLOBLANG" -name "*.txt")"
+		done <<< "$(find "$GLOBALSTLLANGDIR" -name "*.txt")"
 	}
 	LANGYADLIST="$(listLANG | sort -u | tr '\n' '!' | sed "s:^!::" | sed "s:!$::")"
-}
-
-function gitPullStl {
-	writelog "INFO" "${FUNCNAME[0]} - Updating '$GLDLSTLDIR' from '$PROJECTPAGE'" "E"
-	gitUpdate "$GLDLSTLDIR" "$PROJECTPAGE"
 }
 
 function loadLangFile {
 	if [ -n "$1" ]; then
 		LANGFILENAME="$1"
-		if [ "$(USEDLGLOBAL)" -ge 1 ]; then
-			GLOBLANG="$GLDLSTLLANGDIR"
+		if [ -z "$GLOBALSTLLANGDIR" ]; then
+			GLOBLANG="$SYSTEMSTLCFGDIR/lang/"
 		else
-			if [ -z "$GLOBALSTLLANGDIR" ]; then
-				GLOBLANG="$SYSTEMSTLCFGDIR/lang/"
-			else
-				GLOBLANG="$GLOBALSTLLANGDIR"
-			fi
+			GLOBLANG="$GLOBALSTLLANGDIR"
 		fi
 
 		if [ -f "$LANGFILENAME" ]; then
@@ -1082,9 +1052,7 @@ function loadLangFile {
 					writelog "INFO" "${FUNCNAME[0]} - Loading system wide $LAFI"
 					source "$LAFI"
 				else
-					writelog "ERROR" "${FUNCNAME[0]} - Language file '$LAFI' missing - downloading ' $PROJECTPAGE' and trying again" "E"
-					gitPullStl
-					${FUNCNAME[0]}
+					writelog "ERROR" "${FUNCNAME[0]} - Language file '$LAFI' missing" "E"
 				fi
 			fi
 		fi
@@ -1325,7 +1293,6 @@ function setDefaultCfgValues {
 	}
 
 	function setDefaultCfgValuesglobal {
-		if [ -z "$DLGLOBAL" ]			; then	DLGLOBAL="1"; fi
 		if [ -z "$STLLANG" ]			; then	STLLANG="$STLDEFLANG"; fi
 		if [ -z "$SKIPINTDEPCHECK" ]	; then	SKIPINTDEPCHECK="0"; fi
 		if [ -z "$AUTOTWEAKS" ]			; then	AUTOTWEAKS="$AUTOTWEAKPLATFORMS"; fi
@@ -1351,6 +1318,7 @@ function setDefaultCfgValues {
 		if [ -z "$GLOBALTWEAKCMDDIR" ]	; then	GLOBALTWEAKCMDDIR="$SYSTEMSTLCFGDIR/tweaks/cmd"; fi
 		if [ -z "$GLOBALCATEGORYDIR" ]	; then	GLOBALCATEGORYDIR="$SYSTEMSTLCFGDIR/categories"; fi
 		if [ -z "$GLOBALMISCDIR" ]		; then	GLOBALMISCDIR="$SYSTEMSTLCFGDIR/misc"; fi
+		if [ -z "$GLOBALEVALDIR" ]		; then	GLOBALEVALDIR="$SYSTEMSTLCFGDIR/eval"; fi
 		if [ -z "$GLOBALSTLLANGDIR" ]	; then	GLOBALSTLLANGDIR="$SYSTEMSTLCFGDIR/lang"; fi
 		if [ -z "$GLOBALRSPRESETDIR" ]	; then	GLOBALRSPRESETDIR="$SYSTEMSTLCFGDIR/$RSP"; fi
 		if [ -z "$BOXTRONCMD" ]			; then	BOXTRONCMD="/usr/share/boxtron/run-dosbox"; fi
@@ -1613,8 +1581,6 @@ function saveCfg {
 			{
 			echo "## config Version: $PROGVERS"
 			echo "##########################"
-			echo "## $(strFix "$DESC_DLGLOBAL" "$PROGCMD" "$PROJECTPAGE")"
-			echo "DLGLOBAL=\"$DLGLOBAL\""
 			echo "## $DESC_STLLANG"
 			echo "STLLANG=\"$STLLANG\""
 			echo "## $DESC_SKIPINTDEPCHECK"
@@ -1679,6 +1645,8 @@ function saveCfg {
 			echo "GLOBALRSPRESETDIR=\"$GLOBALRSPRESETDIR\""
 			echo "## $DESC_GLOBALMISCDIR"
 			echo "GLOBALMISCDIR=\"$GLOBALMISCDIR\""
+			echo "## $DESC_GLOBALEVALDIR"
+			echo "GLOBALEVALDIR=\"$GLOBALEVALDIR\""
 			echo "## $DESC_GLOBALSTLLANGDIR"
 			echo "GLOBALSTLLANGDIR=\"$GLOBALSTLLANGDIR\""
 			echo "## $DESC_BOXTRONCMD"
@@ -1999,8 +1967,12 @@ function saveCfg {
 	"${FUNCNAME[0]}$SCFG" "$1" "$SCFG" "$2"
 }
 
-function notiShow {
-	if [ "$USENOTIFIER" -eq 1 ]; then
+function notiShow { 
+	if [ -n "$2" ]; then
+		NOTY="$("$WHICH" notify-send 2>/dev/null)"
+	fi
+	
+	if [ "$USENOTIFIER" -eq 1 ] || [ -n "$2" ]; then
 		if  [ ! -x "$(command -v "$("$WHICH" "$NOTY" 2>/dev/null)" 2>/dev/null)" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Warning - '$NOTY' not found - disabling notifier"
 			USENOTIFIER=0
@@ -3010,16 +2982,13 @@ function favoritesMenuEntries {
 		unset FavSel
 		mapfile -t -O "${#FavSel[@]}" FavSel < "$STLFAVMENUCFG"
 	else
-		if [ "$(USEDLGLOBAL)" -ge 1 ]; then
-			GLDLFAVMENUCFG="$GLDLMISCDIR/$FACO"
-		else
-			GLDLFAVMENUCFG="$GLOBALMISCDIR/$FACO"
-		fi
-		if [ -f "$GLDLFAVMENUCFG" ]; then
+		FAVMENUCFG="$GLOBALMISCDIR/$FACO"
+
+		if [ -f "$FAVMENUCFG" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Using global favorites preset for preselecting some entries"
-			mapfile -t -O "${#FavSel[@]}" FavSel < "$GLDLFAVMENUCFG"
+			mapfile -t -O "${#FavSel[@]}" FavSel < "$FAVMENUCFG"
 		else
-			writelog "INFO" "${FUNCNAME[0]} - Global favorites preset '$GLDLFAVMENUCFG' not found - starting with zero preselection"
+			writelog "INFO" "${FUNCNAME[0]} - Global favorites preset '$FAVMENUCFG' not found - starting with zero preselection"
 			declare -a FavSel
 		fi
 	fi
@@ -3165,7 +3134,6 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_GAMEARGS!$DESC_GAMEARGS ('GAMEARGS')" "${GAMEARGS/#-/ -}" `#CAT_Misc` `#MENU_GAME` \
 --field="     $GUI_CHANGE_PULSE_LATENCY!$DESC_CHANGE_PULSE_LATENCY ('CHANGE_PULSE_LATENCY')":CHK "${CHANGE_PULSE_LATENCY/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_STL_PULSE_LATENCY_MSEC!$DESC_STL_PULSE_LATENCY_MSEC ('STL_PULSE_LATENCY_MSEC')":NUM "${STL_PULSE_LATENCY_MSEC/#-/ -}" `#CAT_Misc` `#MENU_GAME` \
---field="     $GUI_DLGLOBAL $PROGCMD!$(strFix "$DESC_DLGLOBAL" "$PROGCMD" "$PROJECTPAGE") ('DLGLOBAL')":CHK "${DLGLOBAL/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_LOGLEVEL!$DESC_LOGLEVEL ('LOGLEVEL')":CB "${LOGLEVEL/#-/ -}!0!1!2" `#CAT_Misc` `#MENU_GLOBAL` \
 --field="     $GUI_RESETLOG!$DESC_RESETLOG ('RESETLOG')":CHK "${RESETLOG/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_OPENEDITORURL!$DESC_OPENEDITORURL ('OPENEDITORURL')":CHK "${OPENEDITORURL/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
@@ -3237,7 +3205,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_USEGAMEMODERUN!$DESC_USEGAMEMODERUN ('USEGAMEMODERUN')":CHK "${USEGAMEMODERUN/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_MANGOHUD!$DESC_MANGOHUD ('MANGOHUD')":CHK "${MANGOHUD/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_USEGAMESCOPE!$DESC_USEGAMESCOPE ('USEGAMESCOPE')":CHK "${USEGAMESCOPE/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
---field="     $GUI_GAMESCOPE_ARGS!$DESC_GAMESCOPE_ARGS ('GAMESCOPE_ARGS')" "${GAMESCOPE_ARGS/#-/ -}" `#CAT_Tools` `#MENU_GAME` \
+--field="     $GUI_GAMESCOPE_ARGS!$DESC_GAMESCOPE_ARGS ('GAMESCOPE_ARGS')":CBE "${GAMESCOPE_ARGS/#-/ -}!-W 1920 -H 1080 -n --!-w 1280 -h 720 -W 2560 -H 1440 -n --!-r 30 --!-w 1920 -h 1080 -W 3840 -H 2160 -b --" `#CAT_Tools` `#MENU_GAME` \
 --field="     $GUI_RUN_NYRNA!$DESC_RUN_NYRNA ('RUN_NYRNA')":CHK "${RUN_NYRNA/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_RUN_REPLAY!$DESC_RUN_REPLAY ('RUN_REPLAY')":CHK "${RUN_REPLAY/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_RUN_GAMCON!$DESC_RUN_GAMCON ('RUN_GAMCON')":CHK "${RUN_GAMCON/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
@@ -3344,8 +3312,8 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_ONLYWICO!$DESC_ONLYWICO ('ONLYWICO')":CHK "${ONLYWICO/#-/ -}" `#CAT_Wine` `#SUB_Checkbox` `#MENU_GAME` \
 --field="$(spanFont "$GUI_OPTSPV" "H")":LBL "SKIP" `#CAT_PressureVessel` `#HEAD_PressureVessel` `#MENU_GAME` `#MENU_GLOBAL`  \
 --field="     $GUI_STL_PV_VERBOSE!$DESC_STL_PV_VERBOSE ('STL_PV_VERBOSE')":CHK "${STL_PV_VERBOSE/#-/ -}" `#CAT_PressureVessel` `#SUB_Checkbox` `#MENU_GAME` \
---field="     $GUI_STL_PV_SHELL!$DESC_STL_PV_SHELL ('STL_PV_SHELL')":CB "${STL_PV_SHELL/#-/ -}!none!after!fail!instead" `#CAT_PressureVessel` `#SUB_Checkbox` `#MENU_GAME` \
---field="     $GUI_STL_PV_TERMINAL!$DESC_STL_PV_TERMINAL ('STL_PV_TERMINAL')":CB "${STL_PV_TERMINAL/#-/ -}!none!auto!tty!xterm" `#CAT_PressureVessel` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_STL_PV_SHELL!$DESC_STL_PV_SHELL ('STL_PV_SHELL')":CB "${STL_PV_SHELL/#-/ -}!none!after!fail!instead" `#CAT_PressureVessel` `#MENU_GAME` \
+--field="     $GUI_STL_PV_TERMINAL!$DESC_STL_PV_TERMINAL ('STL_PV_TERMINAL')":CB "${STL_PV_TERMINAL/#-/ -}!none!auto!tty!xterm" `#CAT_PressureVessel` `#MENU_GAME` \
 
 #ENDSETENTRIES
 }
@@ -3498,7 +3466,7 @@ function openCustMenu {
 	BUT4="$BUT_SAVERELOAD"
 	BUT6="$BUT_SAVEPLAY"
 	BUT7="$BUT_PLAY"
-
+	
 	MYTMPL="${MYMENU}-${TMPL}"
 
 	if [ "$MYCAT" == "Favorites" ]; then
@@ -3709,7 +3677,8 @@ function openExtraSelection {
 	--button="$BUT_GUISET_DW":2 \
 	--button="$BUT_GUISET_UPSHADER":3 \
 	--button="$BUT_GUISET_ADDNSGA":4 \
-
+	--button="$BUT_GUISET_RECREATEPFX":5 \
+	--button="$BUT_GUISET_CREATEEVALSC":6
 	case $? in
 	0)  {
 			clickInfo "${FUNCNAME[0]}" "$?" "$BUT_BACK" "$EXTSEL" "$GSETMENU"
@@ -3739,6 +3708,16 @@ function openExtraSelection {
 	4) 	{
 			clickInfo "${FUNCNAME[0]}" "$?" "$BUT_GUISET_ADDNSGA" "$EXTSEL" "Add '$NSGA' GUI"
 			addNonSteamGameGui "${FUNCNAME[0]}"
+		}
+	;;
+	5) 	{
+			clickInfo "${FUNCNAME[0]}" "$?" "$BUT_GUISET_RECREATEPFX" "ReCreate compdata and WINEPREFIX"
+			reCreateCompdata "$AID" "${FUNCNAME[0]}"
+		}
+	;;
+	6) 	{
+			clickInfo "${FUNCNAME[0]}" "$?" "$BUT_GUISET_CREATEEVALSC" "Create or edit evaluator/First Run Install Script"
+			CreateCustomEvaluatorScript "$AID" "c"
 		}
 	;;
 	esac 
@@ -4110,7 +4089,7 @@ function createMenu {
 	ARGPCMD="$8"
 	ARGSPAT="$9"
 
-	NEEDARG="11"
+	NEEDARG="9"
 
 	MYTMPL="${ARGMENU}-${TMPL}"
 
@@ -4251,27 +4230,6 @@ function openMenu {
 		}
 	;;
 	esac
-}
-
-function USEDLGLOBAL {
-	if [ -z "$DLGLOBAL" ]; then
-		if [ -d "$SYSTEMSTLCFGDIR" ]; then
-			DLGLOBAL=0
-		else
-			DLGLOBAL=1
-		fi
-	fi
-
-	if	[ "$DLGLOBAL" -eq 0 ]; then
-		writelog "INFO" "${FUNCNAME[0]} - DLGLOBAL is disabled in the config"
-		echo "$DLGLOBAL"
-	elif [ "$DLGLOBAL" -eq 1 ] && [ -d "$SYSTEMSTLCFGDIR" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - DLGLOBAL is disabled because '$SYSTEMSTLCFGDIR' exists"
-		echo 0
-	else
-		writelog "INFO" "${FUNCNAME[0]} - DLGLOBAL is enabled - using '$GLDLSTLDIR' as global directory"
-		echo "$DLGLOBAL"
-	fi
 }
 
 function writelog {
@@ -4795,13 +4753,13 @@ function getCompatData {
 				while read -r "complink"; do
 				TEST="$(readlink "$complink" | grep "/$1$")"
 				if [ -d "$TEST" ]; then
-					FCOMPDAT="${complink##*/}: $TEST"
+					FCOMPDAT="${complink##*/};$TEST"
 				fi
 				done <<< "$(find "$STLCOMPDAT")"
 			else
 				TEST="$(find "$STLCOMPDAT" -iname "*${1}*" | head -n1)"
 				if [ -n "$TEST" ]; then
-					FCOMPDAT="${TEST##*/}: $(readlink "$TEST")"
+					FCOMPDAT="${TEST##*/};$(readlink "$TEST")"
 				fi
 			fi
 
@@ -4826,7 +4784,7 @@ function getGameDir {
 					TEST="$(find "$CUMETA" | grep "$1")"
 					if [ -f "$TEST" ]; then
 						source "$TEST"
-						FGDIR="$(basename "${TEST//.conf/}"): $GAMEDIR"
+						FGDIR="$(basename "${TEST//.conf/}");$GAMEDIR"
 					fi
 				else
 					echo "No Game Dir found for '$1'"
@@ -4836,7 +4794,7 @@ function getGameDir {
 					TEST="$(find "$TICUMETA" | grep "$1")"
 					if [ -f "$TEST" ]; then
 						source "$TEST"
-						FGDIR="$(basename "${TEST//.conf/}"): $GAMEDIR"
+						FGDIR="$(basename "${TEST//.conf/}");$GAMEDIR"
 					fi
 				else
 					echo "No Game Dir found for '$1'"
@@ -5296,7 +5254,7 @@ function checkSBSVRLaunch {
 function RSiniToGameDir {
 	DESTINIABS="$1"
 	DESTINI="${1##*/}"
-	GSRSINI="$GRSPDIR/$RESHADEPRESET/$DESTINI"
+	GSRSINI="$GLOBALRSPRESETDIR/$RESHADEPRESET/$DESTINI"
 	USRSINI="$STLRSPRESETDIR/$RESHADEPRESET/$DESTINI"
 
 	if [ ! -f "$DESTINIABS" ]; then
@@ -5324,12 +5282,6 @@ function presetReShade {
 		writelog "INFO" "${FUNCNAME[0]} - RESHADEPRESET is set to '$RESHADEPRESET'"
 		DRSINI="$1/$RSINI"
 		DRSPINI="$1/$RSPINI"
-		
-		if [ "$(USEDLGLOBAL)" -ge 1 ]; then
-			GRSPDIR="$GLDLRSPDIR"
-		else
-			GRSPDIR="$GLOBALRSPRESETDIR"
-		fi
 
 		RSiniToGameDir "$DRSINI"
 		RSiniToGameDir "$DRSPINI"
@@ -5339,16 +5291,11 @@ function presetReShade {
 }
 
 function createReShadePresetList {
-	if [ "$(USEDLGLOBAL)" -ge 1 ]; then
-		GRSPDIR="$GLDLRSPDIR"
-	else
-		GRSPDIR="$GLOBALRSPRESETDIR"
-	fi
 
 	function listRSP {
 		while read -r RSPF; do
 			echo "${RSPF##*/}"
-		done <<< "$(find "$GRSPDIR" -mindepth 1 -maxdepth 1 -type d)"
+		done <<< "$(find "$GLOBALRSPRESETDIR" -mindepth 1 -maxdepth 1 -type d)"
 
 		while read -r RSPF; do
 			echo "${RSPF##*/}"
@@ -6171,9 +6118,6 @@ function checkTweakLaunch {
 		elif [ -f "$GLOBALTWEAKCMDDIR/$TWEAKCMD" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Found TWEAKCMD '$TWEAKCMD' in '$GLOBALTWEAKCMDDIR'"
 			RUNTWEAK="$GLOBALTWEAKCMDDIR/$TWEAKCMD"
-		elif [ "$(USEDLGLOBAL)" -ge 1 ] && [ -f "$GLDLTWEAKCMDDIR/$TWEAKCMD" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Found TWEAKCMD '$TWEAKCMD' in '$GLDLTWEAKCMDDIR'"
-			RUNTWEAK="$GLDLTWEAKCMDDIR/$TWEAKCMD"
 		elif [ -f "$GFD/$TWEAKCMD" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Found TWEAKCMD '$TWEAKCMD' in '$GFD'"
 			RUNTWEAK="$GFD/$TWEAKCMD"
@@ -6252,16 +6196,6 @@ function createDefaultCfgs {
 	updateMenuSortFile
 }
 
-function checkSTLDLGlobal {
-	if [ "$(USEDLGLOBAL)" -ge 1 ]; then
-		MAXAGE=1440
-		if [ ! -f "$GLDLSTLTXT" ] || [ ! -d "$SYSTEMSTLCFGDIR" ] || test "$(find "$GLDLSTLTXT" -mmin +"$MAXAGE")"; then
-			gitPullStl
-			date > "$GLDLSTLTXT"
-		fi
-	fi
-}
-
 # updates or creates option $1 with value $2 in configfile $3:
 function updateConfigEntry {
 
@@ -6325,13 +6259,8 @@ function autoCategorySettings {
 				writelog "INFO" "${FUNCNAME[0]} - File '${SC##*/}' found in steam userid dir - searching categories for game '$AID'"
 
 				while read -r SCAT; do
-					if [ "$(USEDLGLOBAL)" -ge 1 ]; then
-						GLOBALSCATCONF="$GLDLCATEGORYDIR/$SCAT.conf"
-						GLOBALSCATCMD="$GLDLTWEAKCMDDIR/$SCAT.sh"
-					else
-						GLOBALSCATCONF="$GLOBALCATEGORYDIR/$SCAT.conf"
-						GLOBALSCATCMD="$GLOBALTWEAKCMDDIR/$SCAT.sh"
-					fi
+					GLOBALSCATCONF="$GLOBALCATEGORYDIR/$SCAT.conf"
+					GLOBALSCATCMD="$GLOBALTWEAKCMDDIR/$SCAT.sh"
 
 					if [ -f "$GLOBALSCATCONF" ]; then
 						writelog "INFO" "${FUNCNAME[0]} - Config '$GLOBALSCATCONF' found - loading its settings"
@@ -7655,11 +7584,7 @@ function customRegs {
 	else
 		if [ "$REGEDIT" -ne 0 ]; then
 		
-			if [ "$(USEDLGLOBAL)" -ge 1 ];then
-				AIDREG="$GLDLREGDIR/$REGEDIT"
-			else
-				AIDREG="$GLOBALREGDIR/$REGEDIT"
-			fi
+			AIDREG="$GLOBALREGDIR/$REGEDIT"
 
 			if [ -f "$AIDREG" ]; then
 				regEdit "$AIDREG"
@@ -9143,8 +9068,6 @@ function prepareLaunch {
 	writelog "START" "######### Game Launch: $GN ($AID) #########"
 
 	createDefaultCfgs "${ORGGCMD[@]}"
-
-	checkSTLDLGlobal
  
 	getGameData "$AID"
 
@@ -9361,9 +9284,9 @@ function prepareLaunch {
 	checkSteamAppIDFile
 
 	# Automatic Grid Update Check before_game
-	if [ "$SGDBAUTODL" == "after_game" ] ; then
+	if [ "$SGDBAUTODL" == "before_game" ] ; then
 		writelog "INFO" "${FUNCNAME[0]} - Automatic Grid Update Check '$SGDBAUTODL'"
-		getGrid "$AID"
+		getGrid "$AID" &
 	fi
 	
 	# Create GameTitle Symlink in STLCOMPDAT if enabled
@@ -9691,39 +9614,76 @@ function logPlayTime {
 }
 
 function checkPlayTime {
-	if [ -n "$CRASHGUESS" ] && [ "$1" -lt "$CRASHGUESS" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - The game stopped after '$1' seconds - opening CrashGuess Requester"
+	WASSTESTA="$STLSHM/SteamStart_${AID}.txt"
+	if [ ! -f "$WASSTESTA" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - The game was not started via '$PROGCMD' directly from Steam - skipping Crash Requester"
+	else
+		if [ -n "$CRASHGUESS" ] && [ "$1" -lt "$CRASHGUESS" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - The game stopped after '$1' seconds - opening CrashGuess Requester"
 
-		TITLE="${PROGNAME}-CrashGuess"
-		pollWinRes "$TITLE"
+			TITLE="${PROGNAME}-CrashGuess"
+			pollWinRes "$TITLE"
 
-		setShowPic
+			setShowPic
+			HUTXT="helpurls.txt"
 
-		"$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
-		--title="$TITLE" \
-		--geometry="$WINX"x"$WINY"+"$POSX"+"$POSY" \
-		--text="$(spanFont "$GN ($AID) $(strFix "$GUI_ASKCRASHGUESS" "$1")" "H")" \
-		--button="$BUT_RETRYCG":0  \
-		--button="$BUT_SKIPCG":2 \
-		--button="$BUT_NO":4
+			HELPURLLIST="$GLOBALMISCDIR/$HUTXT"
+			
+			if [ -f "$STLCFGDIR/$HUTXT" ]; then
+				HELPURLLIST="$STLCFGDIR/$HUTXT"
+			fi
 
-		case $? in
-			0)  {
-					writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_RETRYCG' so opening settings"
-					prepareLaunch X
-				}
-			;;
-			2)  {
-					writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_SKIPCG' - Setting CRASHGUESS to 0 for $GN ($AID)"
-					updateConfigEntry "CRASHGUESS" "0" "$STLGAMECFG"
-				}
-			;;
-			4)  {
-					writelog "SKIP" "${FUNCNAME[0]} - Selected '$BUT_NO' - Exiting regularly"
-				}
-			;;
-		esac
+
+			DHU="defhelpurl"
+			DEFHELPURL="$(grep "$DHU" "$HELPURLLIST" | cut -d ';' -f2)"
+			HUYLIST="$(while read -r line; do cut -d ';' -f1 <<<"$line"; done <<< "$(grep -v "$DHU" "$HELPURLLIST")" | tr '\n' '!')"
+
+			WANTHELPURL="$("$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
+			--title="$TITLE" --separator="\n" \
+			--geometry="$WINX"x"$WINY"+"$POSX"+"$POSY" \
+			--text="$(spanFont "$GN ($AID) $(strFix "$GUI_ASKCRASHGUESS" "$1")" "H")" \
+			--field="$GUI_OPENHELPURL!$DESC_OPENHELPURL ":CB "${DEFHELPURL}!${HUYLIST}${NON}" \
+			--button="$BUT_RETRYCG":0  \
+			--button="$BUT_SKIPCG":2 \
+			--button="$BUT_NO":4)"
+			case $? in
+				0)  {
+						if [ "$WANTHELPURL" != "$NON" ]; then
+							HELPURL="$(grep "$WANTHELPURL" "$HELPURLLIST" | grep -v "$DHU" | cut -d ';' -f2)"
+							writelog "INFO" "${FUNCNAME[0]} - Searching Help Url for '$WANTHELPURL' with command: 'grep \"$WANTHELPURL\" \"$HELPURLLIST\" | grep -v \"$DHU\" | cut -d ';' -f2'"
+
+							if [ -n "$HELPURL" ]; then
+								HELPURLNQ="${HELPURL//\"}"
+								writelog "INFO" "${FUNCNAME[0]} - Selected to open '${HELPURLNQ//AID/$AID}' with '$BROWSER'"
+								if ! "$PGREP" -f "$BROWSER" >/dev/null; then
+									touch "$STLSHM/KillBrowser-$AID.txt"
+								fi
+							
+								"$BROWSER" "${HELPURLNQ//AID/$AID}" & 
+							fi
+						fi
+						writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_RETRYCG' so opening settings"
+						prepareLaunch X
+					}
+				;;
+				2)  {
+						writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_SKIPCG' - Setting CRASHGUESS to 0 for $GN ($AID)"
+						updateConfigEntry "CRASHGUESS" "0" "$STLGAMECFG"
+					}
+				;;
+				4)  {
+						writelog "SKIP" "${FUNCNAME[0]} - Selected '$BUT_NO' - Exiting regularly"
+						if [ -f "$STLSHM/KillBrowser-$AID.txt" ]; then
+							writelog "INFO" "${FUNCNAME[0]} - '$BROWSER' instance was created, so closing it now, to exit the game session"
+							"$PKILL" -f "$BROWSER"
+							rm "$STLSHM/KillBrowser-$AID.txt"
+						fi
+					}
+				;;
+			esac
+		fi
 	fi
+	rm "$WASSTESTA" 2>/dev/null
 }
 
 function startGame {
@@ -10538,6 +10498,10 @@ function howto {
 	echo "    compat <cmd>                     Will (add|del|get) $PROGCMD as" 
 	echo "                                       Steam compatibility tool"
 	echo "                                       under 'STEAMCOMPATOOLS'"
+	echo "    createcompdata|ccd <gameid><gui> (re-)create compdata for <gameid>"
+	echo "                                       open <gui> to configure custom programs"
+	echo "    createfirstinstall|cfi <gameid>  Open gui to create a Steam First Time Setup" 
+	echo "    <a|c|r|file> (see wiki)            file for game <gameid>"
 	echo "    dlcustomproton|dcp <url>         Download/install custom Proton"
 	echo "                                       from filerequester or"
 	echo "                                       directly from <url>"
@@ -10577,8 +10541,6 @@ function howto {
 	echo "                                       (for 'SteamAppID' or 'last')"
 	echo "    src                              Shortcut '$STERECO'"
 	echo "    update <value>                   Updates <value>:"
-    echo "           git                         Will update $PROGCMD git repo"
-    echo "                                       in 'GLDLSTLDIR'"
 	echo "           gamedata <SteamAppID>       Updates missing desktopfiles"
 	echo "                                       and pictures of installed games"
 	echo "                                       or only from <SteamAppID>"
@@ -10673,6 +10635,10 @@ function commandline {
 		else
 			CompatTool "get"
 		fi
+	elif  [ "$1" == "createcompdata" ] || [ "$1" == "ccd" ]; then
+		reCreateCompdata "$@"
+	elif  [ "$1" == "createfirstinstall" ] || [ "$1" == "cfi" ]; then
+		CreateCustomEvaluatorScript  "$2" "$3"
 	elif  [ "$1" == "dlcustomproton" ] || [ "$1" == "dcp" ]; then
 		dlCustomProtonGate "$2"
 	elif  [ "$1" == "dlwine" ] || [ "$1" == "dw" ]; then
@@ -10752,10 +10718,7 @@ function commandline {
 			"$STEAM" "${STEAM}://${RECO}"
 	elif  [ "$1" == "update" ]; then
 		if [ -n "$2" ]; then
-			if [ "$2" == "$GIT" ]; then
-				gitPullStl
-				date > "$GLDLSTLTXT"
-			elif [ "$2" == "gamedata" ]; then
+			if [ "$2" == "gamedata" ]; then
 				if [ -z "$3" ]; then
 					getGameDataForInstalledGames
 				else
@@ -11841,10 +11804,336 @@ function rmOldLog {
 	fi	
 }
 
+function CreateCustomEvaluatorScript {
+	# create temporary '$TEVALSC'
+	function createTempEvals {
+
+		# first the correct install order:
+		OCNT=0
+
+		echo "\"$EVALSC\"" > "$TEVALSC"
+		echo "{" >> "$TEVALSC"
+		while read -r ordline; do
+			if grep -q "$ordline" <<< "$EVALSCFILES"; then
+				echo "	\"$OCNT\"" >> "$TEVALSC"
+				cat "${GLOBALEVALDIR}/packages/$ordline" >> "$TEVALSC"
+				OCNT=$((OCNT+1))
+			fi
+		done < "$GLOBEVPACKORDER"
+
+		# then append those packages which are not in the order list:
+		while read -r wantevascs; do
+			if ! grep -q "$wantevascs" "$GLOBEVPACKORDER"; then
+				echo "	\"$OCNT\"" >> "$TEVALSC"
+				cat "${GLOBALEVALDIR}/packages/$wantevascs" >> "$TEVALSC"
+				OCNT=$((OCNT+1))
+			fi
+		done <<< "$EVALSCFILES"
+		echo "}" >> "$TEVALSC"
+		writelog "INFO" "Created temporary '$TEVALSC'" "E"
+	}
+
+	mkProjDir "$EVMETACUSTOMID" 1
+	mkProjDir "$EVMETAADDONID" 1
+	
+	writelog "INFO" "Starting Gui for Creating a custom '$EVALSC'" "E"
+	TITLE="${PROGNAME}-CreateCustomEvaluatorScript"
+	pollWinRes "$TITLE"
+	setShowPic
+
+	EUNID="$1"
+
+	REVALSC="$EVMETAID/${EVALSC}_${EUNID}.vdf"
+	CEVALSC="$EVMETACUSTOMID/${EVALSC}_${EUNID}.vdf"
+	AEVALSC="$EVMETAADDONID/${EVALSC}_${EUNID}.vdf"
+	TEVALSC="${STLSHM}/${EVALSC}_${EUNID}_temp.vdf"
+
+	GLOBEVPACKS="${GLOBALEVALDIR}/packages"
+	GLOBEVPACKORDER="${GLOBALEVALDIR}/order.txt"
+	TEVALSCSEL="$NON"
+
+	if [ -n "$2" ]; then
+		if [ "$2" == "addon" ] || [ "$2" == "a" ];then
+			OEVALSC="$AEVALSC"
+			TEVALSCSEL="Addon"
+		elif [ "$2" == "custom" ] || [ "$2" == "c" ];then
+			OEVALSC="$CEVALSC"
+			TEVALSCSEL="Custom"
+		elif [ "$2" == "regular" ] || [ "$2" == "r" ];then
+			OEVALSC="$REVALSC"
+			TEVALSCSEL="Original"
+		else
+			TEVALSCSEL="$NON"
+			if touch "$2" 2>/dev/null; then
+				DESCEVALSC="$2"
+			else
+				writelog "SKIP" "Skipping invalid parameter '$2'" "E"
+			fi		
+		fi
+	fi
+
+	if [ -f "$REVALSC" ]; then
+		FOUNDEVALSC="Original"
+	fi
+	
+	if [ -f "$CEVALSC" ]; then
+		if [ -n "$FOUNDEVALSC" ]; then
+			FOUNDEVALSC="${FOUNDEVALSC}, Custom"
+		else
+			FOUNDEVALSC="Custom"
+		fi
+	fi
+	
+	if [ -f "$AEVALSC" ]; then
+		if [ -n "$FOUNDEVALSC" ]; then
+			FOUNDEVALSC="${FOUNDEVALSC}, Addon"
+		else
+			FOUNDEVALSC="Addon"
+		fi
+	fi
+
+	if [ -f "$OEVALSC" ]; then
+		writelog "INFO" "Pre-Selection is based on packages enabled in '$OEVALSC'" "E"
+	else
+		TEVALSCSEL="$NON"
+	fi
+
+	if [ -f "$DESCEVALSC" ];then
+		BUT1="$BUT_SFEVALSC"
+		BUT2="$BUT_SFEVALSC"
+	else
+		BUT1="$BUT_SAEVALSC"
+		BUT2="$BUT_SCEVALSC"
+	fi
+
+
+	GUITEXT1="$(strFix "$GUI_FOUNDEVALSC" "$FOUNDEVALSC")"
+	GUITEXT2="$(strFix "$GUI_TEVALSCSEL" "$TEVALSCSEL")"
+	GUITEXT3="$(strFix "$GUI_ADDEVALSC" "$SHADDESTDIR")"
+
+	EVALSCFILES="$(
+	while read -r EPACK; do
+		if [ -f "$OEVALSC" ]; then
+			PACKPROC="$(grep "process 1" "$EPACK")"
+			if [ -n "$PACKPROC" ]; then
+				writelog "INFO" "Searching in '$PACKPROC' '$OEVALSC'"
+				if grep -Fq "$PACKPROC" "$OEVALSC"; then
+					echo TRUE ; echo "${EPACK##*/}"
+				else
+					echo FALSE ; echo "${EPACK##*/}"
+				fi
+			else
+				echo FALSE ; echo "${EPACK##*/}"
+			fi
+		else
+			echo FALSE ; echo "${EPACK##*/}"
+		fi
+	done <<< "$(find "${GLOBEVPACKS}" -type f)" | \
+		"$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center "$WINDECO" \
+		--list --checklist --column=Add --column=Script --separator="" --print-column="2" \
+		--text="${GUITEXT1}\n$GUITEXT2\n$GUITEXT3" \
+		--title="$TITLE" \
+		--button="$BUT1":2 --button="$BUT2":4 --button="$BUT_ONLYINSTALL":6 --button="$BUT_CAN":8 \
+		--geometry="$WINX"x"$WINY"+"$POSX"+"$POSY"
+	)"
+	case $? in
+		2) 	{
+				createTempEvals
+				if [ -f "$DESCEVALSC" ];then
+					writelog "INFO" "${FUNCNAME[0]} - Saving file as command line name '$DESCEVALSC'" "E"
+					mv "$DESCEVALSC" "${DESCEVALSC}_back"
+					mv "$TEVALSC" "$DESCEVALSC"
+				else
+					writelog "INFO" "${FUNCNAME[0]} - Selected Saving as Addon '$EVALSC': '$AEVALSC'" "E"
+					if [ -f "$AEVALSC" ]; then
+						mv "$AEVALSC" "${AEVALSC//.vdf/_back.vdf}"
+					fi
+					mv "$TEVALSC" "$AEVALSC"
+				fi
+			}
+		;;
+		4)	{
+				createTempEvals
+				if [ -f "$DESCEVALSC" ];then
+					writelog "INFO" "${FUNCNAME[0]} - Saving file as command line name '$DESCEVALSC'" "E"
+					mv "$DESCEVALSC" "${DESCEVALSC}_back"
+					mv "$TEVALSC" "$DESCEVALSC"
+				else
+					writelog "INFO" "${FUNCNAME[0]} - Selected Saving as Custom '$EVALSC': '$CEVALSC'" "E"
+					if [ -f "$CEVALSC" ]; then
+						mv "$CEVALSC" "${CEVALSC//.vdf/_back.vdf}"
+					fi
+					mv "$TEVALSC" "$CEVALSC"
+				fi
+			}
+		;;
+		6)	{
+				writelog "INFO" "${FUNCNAME[0]} - Selected to only install the packages without saving" "E"
+				createTempEvals
+				writelog "INFO" "${FUNCNAME[0]} - Starting Install via command: reCreateCompdata \"$EUNID\" \"${FUNCNAME[0]}\" \"$TEVALSC\"" "E"
+				reCreateCompdata "$EUNID" "${FUNCNAME[0]}" "$TEVALSC"
+			}
+		;;
+		8)	{
+				writelog "INFO" "${FUNCNAME[0]} - Selected CANCEL" "E"
+			}
+		;;
+	esac
+
+exit
+	if [ -n "$2" ];	then "$2";	fi
+}
+
+function reCreateCompdata {
+	function runEvalsc {
+		unset LEV
+		mapfile -d " " -t -O "${#LEV[@]}" LEV <<< "run ${ISCEXE} legacycompat\\${EVALSC}_${1}.vdf"
+		rm "$EVALISRUN" 2>/dev/null
+		touch "$EVALISRUN"
+		checkFirstTimeRun "${LEV[@]}" >/dev/null 2>/dev/null
+		rm "$EVALISRUN"	"$FRSTATE" "${FRSTATE}-prev" 2>/dev/null
+		notiShow "$(strFix "$NOTY_FRDONE" "$1")" "X"
+		writelog "INFO" "$(strFix "$NOTY_FRDONE" "$1")" "E"
+	}
+	
+	function getCurStep {
+		unset GCS
+		mapfile -d " " -t -O "${#GCS[@]}" GCS <<< "run ${ISCEXE} --${GECUST} ${1}"
+		checkFirstTimeRun "${GCS[@]}" >/dev/null 2>/dev/null
+		PRFRSTATE="${FRSTATE}-prev"
+
+		if [ -f "$FRSTATE" ]; then
+			if ! cmp --silent -- "$FRSTATE" "$PRFRSTATE"; then
+				cp "$FRSTATE" "$PRFRSTATE"
+				notiShow "$(strFix "$NOTY_FRSTATE" "$(cat "$FRSTATE")")" "X"
+				writelog "INFO" "$(strFix "$NOTY_FRSTATE" "$(cat "$FRSTATE")")" "E"
+			fi
+		fi
+	}
+
+	WANTGUI=0
+	if [ "$1" == "ccd" ] || [ "$1" == "createcompdata" ]; then
+		writelog "INFO" "Started from command-line" "E"
+		EUNID="$2"
+		if [ -n "$3" ]; then
+			WANTGUI=1
+		fi
+	else
+		writelog "INFO" "Started from gui" "E"
+		EUNID="$1"
+		WANTGUI=1
+		BACKFUNC="$2"
+	fi
+
+	ISCEXE="$STEAM_COMPAT_CLIENT_INSTALL_PATH/legacycompat/iscriptevaluator.exe"
+	
+	if [ -n "$EUNID" ]; then
+		SRCORIGEVSC="$EVMETAID/${EVALSC}_${EUNID}.vdf"
+		SRCCUSTEVSC="$EVMETACUSTOMID/${EVALSC}_${EUNID}.vdf"
+
+		if [ ! -f "$ISCEXE" ]; then
+			writelog "ERROR" "'$ISCEXE' not found" "E"
+		else
+			HAVEEVSC=1
+			
+			if [ ! -f "$SRCORIGEVSC" ] && [ ! -f "$SRCCUSTEVSC" ]; then
+				if [ "$WANTGUI" -eq 0 ]; then
+					writelog "ERROR" "Neither '$SRCORIGEVSC' nor '$SRCCUSTEVSC' found (see wiki if the reason for not being able to continue is unknown)" "E"
+					writelog "ERROR" "Alternatively start the same command with an additional 'gui' parameter, to create a '$SRCCUSTEVSC' via gui" "E"
+					HAVEEVSC=0
+				else
+					writelog "INFO" "Requester to create a custom Install file via Gui" "E"
+					CreateCustomEvaluatorScript "$EUNID" "c"
+					if [ -f "$SRCCUSTEVSC" ]; then
+						HAVEEVSC=1
+					else
+						HAVEEVSC=0
+					fi
+				fi
+			else
+				HAVEEVSC=1
+			fi
+			
+			if [ "$HAVEEVSC" -eq 1 ]; then
+				if [ -f "$CUMETA/${EUNID}.conf" ]; then
+					writelog "INFO" "Loading Metadata '$CUMETA/${EUNID}.conf'" "E"
+					loadCfg "$CUMETA/${EUNID}.conf"
+				fi
+
+				if [ -n "$WINEPREFIX" ]; then
+					DESTCODA="${WINEPREFIX%/*}"
+				elif [ -n "$STEAM_COMPAT_DATA_PATH" ]; then
+					DESTCODA="$STEAM_COMPAT_DATA_PATH"
+				elif [ -n "$GPFX" ]; then
+					DESTCODA="${GPFX%/*}"
+				else
+					getCompatData "${EUNID}" >/dev/null
+					DESTCODA="$(cut -d ';' -f2 <<< "$FCOMPDAT")"
+				fi
+
+				if [ -n "$DESTCODA" ]; then
+					export STEAM_COMPAT_DATA_PATH="$DESTCODA"
+					writelog "INFO" "Destination compdata is '$STEAM_COMPAT_DATA_PATH'" "E"
+
+					if [ -z "$STEAM_COMPAT_INSTALL_PATH" ]; then
+						if [ -n "$GAMEDIR" ]; then
+							export STEAM_COMPAT_INSTALL_PATH="$GAMEDIR"
+						elif [ -n "$EFD" ]; then
+							export STEAM_COMPAT_INSTALL_PATH="$EFD"
+						else
+							writelog "INFO" "STEAM_COMPAT_INSTALL_PATH (game dir) is unknown - setting it at least to '${STLDLDIR}'" "E"
+							export STEAM_COMPAT_INSTALL_PATH="$STLDLDIR"
+						fi
+					fi
+
+					if [ -d "$DESTCODA" ]; then
+						if [ -d "${DESTCODA}_${PROGCMD}" ]; then
+							writelog "INFO" "Removing previous backup compdata backup '${DESTCODA}_${PROGCMD}'" "E"
+							rm -rf "${DESTCODA}_${PROGCMD}" 2>/dev/null
+						fi
+						writelog "INFO" "Moving existing compdata to '${DESTCODA}_${PROGCMD}'" "E"
+						mv "$DESTCODA" "${DESTCODA}_${PROGCMD}"
+					fi
+					
+					if [ -z "$STEAM_COMPAT_APP_ID" ];then
+						export STEAM_COMPAT_APP_ID="${EUNID}"
+					fi
+
+					mkdir -p "$DESTCODA" 2>/dev/null
+					EVALISRUN="$STLSHM/evalisrun.txt"
+					
+					cd "$STEAM_COMPAT_CLIENT_INSTALL_PATH" >/dev/null || return
+					
+					writelog "INFO" "Launching First Run Installer" "E"
+
+					runEvalsc "${EUNID}" &
+
+					while [ ! -f "$EVALISRUN" ];do
+						sleep 0.1
+					done
+					
+					while [ -f "$EVALISRUN" ];do
+						getCurStep "${EUNID}"
+						sleep 1
+					done
+					
+					cd - >/dev/null || return
+				else
+					writelog "SKIP" "No destination compdata determined" "E"
+				fi
+			fi
+
+			if [ -n "$BACKFUNC" ]; then
+				"$BACKFUNC" "$AID" "${FUNCNAME[0]}"
+			fi
+		fi
+	else
+		writelog "SKIP" "Need SteamAppId as argument" "E"
+	fi
+}
+
 function checkFirstTimeRun {
 	ISCRILOG="$STLSHM/${PROGCMD}-${ISCRI}-${STEAM_COMPAT_APP_ID}.log"
-	GECUST="get-current-step"
-	RUNEVALTMP="$STLSHM/runeval.txt"
 	GPFX="$STEAM_COMPAT_DATA_PATH/pfx"
 	ISCEXE="$STEAM_COMPAT_CLIENT_INSTALL_PATH/legacycompat/iscriptevaluator.exe"
 	EVALPROTCONF="$STLSHM/evalprot-${STEAM_COMPAT_APP_ID}.conf"
@@ -11855,6 +12144,7 @@ function checkFirstTimeRun {
 
 		ISCRILOG="$2"
 		EVALVDF="$STEAM_COMPAT_CLIENT_INSTALL_PATH/legacycompat/$1"
+		writelog "INFO" " Waiting for '$EVALVDF' to appear" "E" | tee -a "$ISCRILOG"
 		while [ ! -f "$EVALVDF" ]; do 
 			sleep 0.1
 		done
@@ -11903,36 +12193,97 @@ function checkFirstTimeRun {
 			fi
 		fi	
 	}
+	function createModifiedEvalsc {
+		STESHA="$STEAM_COMPAT_CLIENT_INSTALL_PATH/$SAC/Steamworks Shared"
+		if [ ! -d "$STESHA" ]; then
+			writelog "WARN" "'$STESHA' not found - packages expected there won't be found" "E" | tee -a "$ISCRILOG"
+		fi
+	
+		SOURCEEVALSC="$1"
+		DSTEVALSC="$2"
+		
+		if [ ! -f "$DSTEVALSC" ]; then
+			# creating a temporary copy of the evaluatorscript in $STEAM_COMPAT_CLIENT_INSTALL_PATH:
+			writelog "INFO" "Copying '$SOURCEEVALSC' to '$STEAM_COMPAT_CLIENT_INSTALL_PATH'" "E" | tee -a "$ISCRILOG"
+			cp "$SOURCEEVALSC" "$DSTEVALSC"
+			
+			# Modifying the EVSC copy by adding matching installerfile source paths:
+			INPRO1="process 1"
+			
+			# weird but working way to determine and set the correct path for the corresponding install package
+			while read -r FIPFOUND; do
+				if grep -q "%INSTALLDIR%" <<< "$FIPFOUND"; then
+					INSTFILERAW="$(gawk -F '%INSTALLDIR%' '{print $NF}' <<< "$FIPFOUND")"
+				else
+					INSTFILERAW="$(cut -f3 <<< "$FIPFOUND")" # enough?
+				fi
 
-	if [ -z "$RUNEVAL" ]; then
-		RUNEVAL=0
-	fi
+				INSTFILE1="${INSTFILERAW//\\//}"
+				INSTFILE2="${INSTFILE1//\"/}"
+				INSTFILE="${INSTFILE2##/}"
+
+				unset ABSFIP ZABSFIPRAW ZABSFIP
+				
+				if grep -q "msiexec" <<< "$FIPFOUND"; then # weak, but probably enough
+					ABSFIP="${STESHA}"
+					writelog "INFO" "Found msiexec as '$INPRO1' command - assuming '$ABSFIP' is '$FOINPA'" "E" | tee -a "$ISCRILOG"
+				elif [ -f "${STESHA}/${INSTFILE}" ]; then
+					ABSFIP="${STESHA}"
+					writelog "INFO" "Source package found under '${STESHA}/${INSTFILE}' - using '$ABSFIP' as '$FOINPA'" "E" | tee -a "$ISCRILOG"
+				elif [ -f "${STEAM_COMPAT_INSTALL_PATH}/${INSTFILE}" ]; then
+					ABSFIP="${STEAM_COMPAT_INSTALL_PATH}"
+					writelog "INFO" "Source package found under '${STEAM_COMPAT_INSTALL_PATH}/${INSTFILE}' - using '$ABSFIP' for '$FOINPA'" "E" | tee -a "$ISCRILOG"
+				elif [ -f "${STLDLDIR}/${INSTFILE}" ]; then
+					ABSFIP="${STLDLDIR}"
+					writelog "INFO" "Source package found under '${STLDLDIR}/${INSTFILE}' - using '$ABSFIP' for '$FOINPA'" "E" | tee -a "$ISCRILOG"		
+				else
+					writelog "INFO" "Source package ${INSTFILE} neither found in '$STESHA' nor in '$STEAM_COMPAT_INSTALL_PATH' nor in '$STLDLDIR'}" "E" | tee -a "$ISCRILOG"
+				fi
+		
+				# inserting the windows path variant '$ZABSFIP' of '$ABSFIP' as '$FOINPA' into the temp. evaluatorscript '$EVSC':
+				if [ -d "$ABSFIP" ]; then
+					ZABSFIPRAW="${ABSFIP//\//\\\\}"
+					ZABSFIP="Z:${ZABSFIPRAW//\\/\\\\}";
+					writelog "INFO" "Patching '$FOINPA' '$ZABSFIP' into '$EVSC'" "E" | tee -a "$ISCRILOG"
+#					sed "0,/\"foreign_install_path\"		\"\"/s//\"foreign_install_path\"		\"$ZABSFIP\"/" -i "$DSTEVALSC"
+					sed "0,/\"$FOINPA\"		\"\"/s//\"$FOINPA\"		\"$ZABSFIP\"/" -i "$DSTEVALSC"
+				fi
+			done <<< "$(tac "$DSTEVALSC" | grep "$FOINPA\|$INPRO1" | grep -A1 "$FOINPA" | tac | grep -v "$FOINPA\|--")"
+		else
+			writelog "SKIP" "'$DSTEVALSC' already exists" "E" | tee -a "$ISCRILOG"
+		fi
+	}
+
+	function runEvacInstall {
+		# finally call iscriptevaluator via proton with the modified evaluatorscript as parameter:
+		writelog "INFO" "'$EVALSC' - START - '$EARLYPROT run $ISCEXE $EVSC'" "E" | tee -a "$ISCRILOG"
+		"$EARLYPROT" run "$ISCEXE" "$EVSC"
+		# move the temporary modified evaluatorscript into '$STMSHM'
+		mv "$DSTEVSC" "$STLSHM/${DSTEVSC##*/}_$RANDOM"
+	}
 
 	rmOldLog
-
+	if [ -n "$STEAM_RUNTIME_LIBRARY_PATH" ]; then
+		touch "$STLSHM/SteamStart_${STEAM_COMPAT_APP_ID}.txt"
+	fi
+	
 	if [ -f "$(find "$LOGFILE" -not -newermt '-5 seconds')" ]; then
 		if ! grep -q "$ISCRI" <<< "$(tail -n1 "$LOGFILE")"; then
 			writelog "START" "######### '$ISCRI' #########" "E" | tee -a "$ISCRILOG"
 		fi
 	fi
 	# skip iscriptevaluator completely if a SKIP file exists for $STEAM_COMPAT_APP_ID
-	if [ -f "$EVMETAID/SKIP-${EVALSC}_${STEAM_COMPAT_APP_ID}.vdf" ]; then
-		writelog "SKIP" "Skipping '$ISCRI' line '$*' because '$EVMETAID/SKIP-${EVALSC}_${STEAM_COMPAT_APP_ID}.vdf' exists" "E" | tee -a "$ISCRILOG"
+	if [ -f "$EVMETASKIPID/${EVALSC}_${STEAM_COMPAT_APP_ID}.vdf" ]; then
+		writelog "SKIP" "Skipping '$ISCRI' line '$*' because '$EVMETASKIPID/${EVALSC}_${STEAM_COMPAT_APP_ID}.vdf' exists" "E" | tee -a "$ISCRILOG"
 	else
 		# filter evaluatorscript command
 		if grep -q "$EVALSC" <<< "$@"; then
 			# shellcheck disable=SC1003
 			EVSC="$(gawk -F 'legacycompat\\\' '{print $NF}' <<< "$@")"
 		fi
-		# check force evaluatorscript run file
-		if [ -f "$RUNEVALTMP" ] && grep -q "$STEAM_COMPAT_APP_ID" "$RUNEVALTMP"; then
-			RUNEVAL=1
-			rm "$RUNEVALTMP"
-		fi
 
 		# check if evaluatorscript should be started:
-		if [ "$RUNEVAL" -eq 1 ] || [ ! -d "$GPFX" ] || [ ! -f "$EVMETAID/$EVSC" ]; then
-
+		if [ ! -d "$GPFX" ] || [ ! -f "$EVMETAID/$EVSC" ]; then
 			# get a proton version for the install process:
 			if grep -q "$EVALSC" <<< "$@"; then
 				# first check if the game has a stl config and use the corresponding proton version:
@@ -11954,7 +12305,7 @@ function checkFirstTimeRun {
 				if [ -n "$EARLYPROT" ]; then
 					writelog "INFO" "Writing 'EARLYPROT=$EARLYPROT' into '$EVALPROTCONF'" "E" | tee -a "$ISCRILOG"
 					echo "EARLYPROT=\"$EARLYPROT\"" > "$EVALPROTCONF"
-					echo "TEVSC=\"$EVMETAID/$EVSC\"" >> "$EVALPROTCONF"
+					echo "TEVSC=\"$EVSC\"" >> "$EVALPROTCONF"
 				fi			
 			fi
 
@@ -11970,71 +12321,80 @@ function checkFirstTimeRun {
 					if grep -q "$EVALSC" <<< "$@"; then
 						mapfile -d " " -t -O "${#RUNISCCMD[@]}" RUNISCCMD < <(printf '%s' "$(gawk -F 'run ' '{print $NF}' <<< "$*")")
 						# no evaluatorscript for the started game yet in the metadata - so starting the collector:
-						if [ -n "$EVSC" ] && [ ! -f "$EVMETAID/$EVSC" ]; then
+						
+						SRCCUSTEVSC="$EVMETACUSTOMID/$EVSC"
+						SRCORIGEVSC="$EVMETAID/$EVSC"
+						
+						TEVALSC="${STLSHM}/${EVALSC}_${STEAM_COMPAT_APP_ID}_temp.vdf"
+						if [ -f "$TEVALSC" ]; then
+							SRCEVSC="$TEVALSC"
+							writelog "INFO" "Using '$SRCEVSC' as source" "E" | tee -a "$ISCRILOG"
+						fi
+						
+						if [ -z "$SRCEVSC" ]; then
+							if [ ! -f "$SRCORIGEVSC" ] && [ ! -f "$SRCCUSTEVSC" ]; then
+								SRCEVSC="$SRCORIGEVSC"
+								writelog "INFO" "Both the copy '$SRCORIGEVSC' of the original and a custom '$SRCCUSTEVSC' are missing - trying to get the original by using '$SRCEVSC'" "E" | tee -a "$ISCRILOG"
+							elif [ -f "$SRCORIGEVSC" ] && [ ! -f "$SRCCUSTEVSC" ]; then
+								SRCEVSC="$SRCORIGEVSC"
+								writelog "INFO" "Using '$SRCEVSC' as source" "E" | tee -a "$ISCRILOG"
+							elif [ -f "$SRCORIGEVSC" ] && [ -f "$SRCCUSTEVSC" ]; then
+								SRCEVSC="$SRCCUSTEVSC"
+								writelog "INFO" "Using custom '$SRCCUSTEVSC' as source, as it overrides the original '$SRCORIGEVSC' which also does exist" "E" | tee -a "$ISCRILOG"
+							elif [ ! -f "$SRCORIGEVSC" ] && [ -f "$SRCCUSTEVSC" ]; then
+								SRCEVSC="$SRCCUSTEVSC"
+								writelog "INFO" "Using custom '$SRCCUSTEVSC' as source, and the original '$SRCORIGEVSC' does not exist" "E" | tee -a "$ISCRILOG"
+							fi
+						fi
+						
+						if [ -n "$EVSC" ] && [ ! -f "$SRCEVSC" ] && [ "$SRCEVSC" == "$SRCORIGEVSC" ]; then
 							waitForEvaluatorscript "$EVSC" "$ISCRILOG" &
 							writelog "INFO" "'$EVALSC' START - '$EARLYPROT run ${RUNISCCMD[*]}'" "E" | tee -a "$ISCRILOG"
 							"$EARLYPROT" run "${RUNISCCMD[@]}"
-							while [ ! -f "$EVMETAID/$EVSC" ]; do 
+							while [ ! -f "$SRCEVSC" ]; do 
 								sleep 0.1
 							done
 						fi
 
-						# have a previously saved evaluatorscript in metadata to work with:
-						if [ -f "$EVMETAID/$EVSC" ]; then
-							STESHA="$STEAM_COMPAT_CLIENT_INSTALL_PATH/$SAC/Steamworks Shared"
-							if [ ! -d "$STESHA" ]; then
-								writelog "ERROR" "'$STESHA' not found" "E" | tee -a "$ISCRILOG"
-							# have a Steamworks Shared directory which is the steam storage dir for all redist dependency files:
+						# have a evaluatorscript to work with:
+						if [ -f "$SRCEVSC" ]; then
+							if ! grep "$FOINPA" "$SRCEVSC" ; then
+								writelog "SKIP" "Skipping '$SRCEVSC' because it doesn't contain any packages" "E" | tee -a "$ISCRILOG"
 							else
-								if [ ! -f "$EVSC" ]; then
-									# creating a temporary copy of the evaluatorscript in $STEAM_COMPAT_CLIENT_INSTALL_PAT:
-									writelog "INFO" "Copying '$EVMETAID/$EVSC' to '$STEAM_COMPAT_CLIENT_INSTALL_PATH'" "E" | tee -a "$ISCRILOG"
-									cp "$EVMETAID/$EVSC" "$EVSC"
-									
-									# Modifying the EVSC copy by adding matching installerfile source paths:		
-									FOINPA="foreign_install_path"
-									INPRO1="process 1"
-									
-									# weird but working way to determine and set the correct path for the corresponding install package
-									while read -r FIPFOUND; do
-										INSTFILERAW="$(gawk -F '%INSTALLDIR%' '{print $NF}' <<< "$FIPFOUND")"
-										INSTFILE1="${INSTFILERAW//\\//}"
-										INSTFILE2="${INSTFILE1//\"/}"
-										INSTFILE="${INSTFILE2##/}"
-										unset ABSFIP ZABSFIPRAW ZABSFIP
-										
-										if [ -f "${STESHA}/${INSTFILE}" ]; then
-											ABSFIP="${STESHA}"
-											writelog "INFO" "Source package found under '${STESHA}/${INSTFILE}' - using '$ABSFIP' as '$FOINPA'" "E" | tee -a "$ISCRILOG"
-										elif [ -f "${STEAM_COMPAT_INSTALL_PATH}/${INSTFILE}" ]; then
-											ABSFIP="${STEAM_COMPAT_INSTALL_PATH}"
-											writelog "INFO" "Source package found under '${STEAM_COMPAT_INSTALL_PATH}/${INSTFILE}' - using '$ABSFIP' for '$FOINPA'" "E" | tee -a "$ISCRILOG"
-										else
-											writelog "INFO" "Source package '${INSTFILE}' neither found in '$STESHA' nor in '$STEAM_COMPAT_INSTALL_PATH'" "E" | tee -a "$ISCRILOG"
-										fi
-								
-										# inserting the windows path variant '$ZABSFIP' of '$ABSFIP' as '$FOINPA' into the temp. evaluatorscript '$EVSC':
-										if [ -d "$ABSFIP" ]; then
-											ZABSFIPRAW="${ABSFIP//\//\\\\}"
-											ZABSFIP="Z:${ZABSFIPRAW//\\/\\\\}";
-											writelog "INFO" "Patching '$FOINPA' '$ZABSFIP' into '$EVSC'" "E" | tee -a "$ISCRILOG"
-											sed "0,/\"foreign_install_path\"		\"\"/s//\"foreign_install_path\"		\"$ZABSFIP\"/" -i "$EVSC"
-										fi
-									done <<< "$(tac "$EVSC" | grep "$FOINPA\|$INPRO1" | grep -A1 "$FOINPA" | tac | grep -v "$FOINPA\|--")"
+								DSTEVSC="$STEAM_COMPAT_CLIENT_INSTALL_PATH/$EVSC"
+								createModifiedEvalsc "$SRCEVSC" "$DSTEVSC"
+								if grep -q "$EVMETACUSTOMID" <<< "$SRCEVSC" ; then
+									notiShow "$(strFix "$NOTY_FRSTART" "Custom")" "X"
+								elif grep -q "$STLSHM" <<< "$SRCEVSC" ; then
+									notiShow "$(strFix "$NOTY_FRSTART" "Live")" "X"			
+								else
+									notiShow "$(strFix "$NOTY_FRSTART" "Regular")" "X"
 								fi
-								# finally call iscriptevaluator via proton with the modified evaluatorscript as parameter:
-								writelog "INFO" "'$EVALSC' - START - '$EARLYPROT run $ISCEXE $EVSC'" "E" | tee -a "$ISCRILOG"
-								"$EARLYPROT" run "$ISCEXE" "$EVSC"
-								# remove the temporary modified evaluatorscript
-								rm "$EVSC" 2>/dev/null						
-								writelog "INFO" "'$EVALSC' - STOP  - '$EARLYPROT run $ISCEXE $EVSC'" "E" | tee -a "$ISCRILOG"
+								runEvacInstall
 							fi
+							
+							SRCADDONEVSC="$EVMETAADDONID/$EVSC"
+							if [ -f "$SRCADDONEVSC" ]; then
+								writelog "INFO" "Found additional install script in '$SRCADDONEVSC'" "E" | tee -a "$ISCRILOG"
+								
+								DSTEVSC="$STEAM_COMPAT_CLIENT_INSTALL_PATH/$EVSC"
+								createModifiedEvalsc "$SRCADDONEVSC" "$DSTEVSC"
+								notiShow "$(strFix "$NOTY_FRSTART" "Addon")" "X"
+								runEvacInstall
+							fi
+				
+							if [ "$SRCEVSC" == "$TEVALSC" ]; then
+								rm "$TEVALSC" 2>/dev/null
+								writelog "INFO" "Removed temporary '$TEVALSC'" "E" | tee -a "$ISCRILOG"
+							fi
+
+							writelog "INFO" "'$EVALSC' - STOP  - '$EARLYPROT run $ISCEXE $EVSC'" "E" | tee -a "$ISCRILOG"
 						else
-							writelog "INFO" "'$EVALSC' - SKIP  - '$EVMETAID/$EVSC' not found" "E" | tee -a "$ISCRILOG"
+							writelog "INFO" "'$EVALSC' - SKIP  - '$SRCEVSC' not found" "E" | tee -a "$ISCRILOG"
 						fi
 					# filter get-current-step command - this only updates the steam install gui process.
 					elif grep -q "$GECUST" <<< "$@"; then
-						"$EARLYPROT" "$@" | tee -a "$ISCRILOG"
+						"$EARLYPROT" "$@" | tee "$FRSTATE" | tee -a "$ISCRILOG"
 						echo "" >> "$ISCRILOG"
 						STINFO="$(date +%H:%M:%S) $NICEPROGNAME running"
 						if [ -f "$TEVSC" ]; then
@@ -12079,6 +12439,7 @@ function main {
 	mkProjDir "$MTEMP" 1
 	setAID
 	setAIDCfgs
+	loadLangFile "$STLDEFLANG"
 	getCurrentCommandline "$@"
 	saveOrgVars
 	emptyVars "O"
