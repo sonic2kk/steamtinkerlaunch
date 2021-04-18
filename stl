@@ -5,7 +5,7 @@
 
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v5.0next1"
+PROGVERS="v5.0next2"
 PROGCMD="${0##*/}"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -616,7 +616,7 @@ function createTemplGui {
 function createDefTemplGui {
 	function calculateDefaultResolutions {
 
-		SCREENRES="$("$XRANDR" --current | grep "\*" | gawk '{print $1}' | sort -gur | head -n1)"
+		SCREENRES="$(getScreenRes)"
 		writelog "INFO" "${FUNCNAME[0]} - '$XRANDR' found screenresolution '$SCREENRES'" "X"
 		SCREENWIDTH="${SCREENRES%x*}"
 		SCREENHEIGHT="${SCREENRES#*x}"
@@ -1476,6 +1476,7 @@ function setDefaultCfgValues {
 		if [ -z "$USECONTY" ]			; then	USECONTY="0"; fi
 		if [ -z "$CRASHGUESS" ]			; then	CRASHGUESS="60"; fi
 		if [ -z "$ONLYWICO" ]			; then	ONLYWICO="0"; fi
+		if [ -z "$GAMESCREENRES" ]		; then	GAMESCREENRES="$NON"; fi
 	}
 	
 	"${FUNCNAME[0]}$1"
@@ -1958,6 +1959,8 @@ function saveCfg {
 			echo "CRASHGUESS=\"$CRASHGUESS\""
 			echo "## $DESC_ONLYWICO"
 			echo "ONLYWICO=\"$ONLYWICO\""
+			echo "## $DESC_GAMESCREENRES"
+			echo "GAMESCREENRES=\"$GAMESCREENRES\""
 			} >> "$1"
 			#ENDsaveCfgdefault_template
 		fi
@@ -3239,6 +3242,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_USECONTY!$DESC_USECONTY ('USECONTY')":CHK "${USECONTY/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_CUSTCONTY!$DESC_CUSTCONTY ('CUSTCONTY')":FL "${CUSTCONTY/#-/ -}" `#CAT_Tools` `#MENU_GLOBAL` \
 --field="     $GUI_UPDATECONTY!$DESC_UPDATECONTY ('UPDATECONTY')":CHK "${UPDATECONTY/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GLOBAL` \
+--field="     $GUI_GAMESCREENRES!$DESC_GAMESCREENRES ('GAMESCREENRES')":CBE "${GAMESCREENRES/#-/ -}!$(printf "%s\n" "$("$XRANDR" --current | grep "[0-9]x" | gawk '{print $1}' | grep "^[0-9]" | tr '\n' '!')")$NON" `#CAT_Tools` `#MENU_GAME` \
 --field="$(spanFont "$GUI_OPTSTWEAK" "H")":LBL "SKIP" `#CAT_Tweaks` `#HEAD_Tweaks` `#MENU_GAME` `#MENU_GLOBAL`  \
 --field="     $GUI_IGNOREAUTOTWEAKS!$DESC_IGNOREAUTOTWEAKS ('IGNOREAUTOTWEAKS')":CHK "${IGNOREAUTOTWEAKS/#-/ -}" `#CAT_Tweaks` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_CREATETWEAKS!$DESC_CREATETWEAKS ('CREATETWEAKS')":CHK "${CREATETWEAKS/#-/ -}" `#CAT_Tweaks` `#SUB_Checkbox` `#MENU_GLOBAL` \
@@ -5802,6 +5806,25 @@ function getUsedVars {
 	done <"$1"
 }
 
+function getScreenRes {
+	"$XRANDR" --current | grep "\*" | gawk '{print $1}' | sort -gur | head -n1
+}
+
+function setNewRes {
+	SCREENRES="$(getScreenRes)"
+	if [ "$GAMESCREENRES" != "$NON" ] && [ "$GAMESCREENRES" != "$SCREENRES" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Setting screen resolution to '$GAMESCREENRES' using '$XRANDR'" "X"
+		"$XRANDR" -s "$GAMESCREENRES"
+	fi
+}
+
+function setPrevRes {
+	if [ "$GAMESCREENRES" != "$NON" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Returning to previous screen resolution via '$XRANDR -s 0'" "X"
+		"$XRANDR" -s 0
+	fi
+}
+
 function customUserScriptStart {
 	if [ -n "$USERSTART" ] && [ "$USERSTART" != "$("$WHICH" echo 2>/dev/null)" ]; then
 		if [ -x "$USERSTART" ]; then
@@ -7351,7 +7374,6 @@ function checkCustomLaunch {
 						duration=$SECONDS
 						logPlayTime "$duration"
 						writelog "INFO" "${FUNCNAME[0]} - ## CUSTOMCMD STOPPED after '$duration' seconds playtime"
-						checkPlayTime "$duration"
 						closeSTL " ######### STOP EARLY $PROGNAME $PROGVERS #########"
 						exit
 					fi
@@ -9256,6 +9278,9 @@ function prepareLaunch {
 		checkVortexSELaunch "$SELAUNCH"
 	fi
 	
+	# set other screen resolution
+	setNewRes
+	
 	# start custom user script
 	customUserScriptStart
 	
@@ -9617,6 +9642,8 @@ function checkPlayTime {
 	WASSTESTA="$STLSHM/SteamStart_${AID}.txt"
 	if [ ! -f "$WASSTESTA" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - The game was not started via '$PROGCMD' directly from Steam - skipping Crash Requester"
+	elif [ -z "$1" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - The game was not even started"
 	else
 		if [ -n "$CRASHGUESS" ] && [ "$1" -lt "$CRASHGUESS" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - The game stopped after '$1' seconds - opening CrashGuess Requester"
@@ -9681,6 +9708,8 @@ function checkPlayTime {
 					}
 				;;
 			esac
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Playtime '$1' was longer than CRASHGUESS '$CRASHGUESS', not opening the requester"
 		fi
 	fi
 	rm "$WASSTESTA" 2>/dev/null
@@ -9728,7 +9757,6 @@ function startGame {
 	duration=$SECONDS
 	logPlayTime "$duration"
 	writelog "INFO" "${FUNCNAME[0]} - ## GAMESTOP (or forked?) after '$duration' seconds playtime"
-	checkPlayTime "$duration"
 }
 
 function gameArgs {
@@ -11581,6 +11609,13 @@ function addNonSteamGame {
 
 #STARTCLOSESTL ###
 function closeSTL {
+
+	setPrevRes
+	customUserScriptStop	# USERSTOP
+
+
+	checkPlayTime "$duration"
+
 	cleanSUTemp
 	backupSteamUser "$AID"
 
@@ -11660,8 +11695,6 @@ function closeSTL {
 	fi
 
 	togWindows windowraise	# TOGGLEWINDOWS
-
-	customUserScriptStop	# USERSTOP
 
 	cleanYadLeftOvers
 
