@@ -5,7 +5,7 @@
 
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v5.0next2"
+PROGVERS="v5.0next3"
 PROGCMD="${0##*/}"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -244,7 +244,7 @@ TWEAKCFG="$USERTWEAKDIR/$AID.conf"															# the game specific shareable c
 SBSTWEAKCFG="$SBSTWEAKDIR/$AID.conf"														# the game specific shareable config sbs tweak overrides
 LOGFILE="$LOGDIRID/$AID.log"																	
 PFTWEAKCFG="$PFTWEAKDIR/$AID.conf"
-LUTWEAKCFG="$LUTWEAKDIR/$AID.conf"	
+LUTWEAKCFG="$LUTWEAKDIR/$AID.conf"
 }
 STLURLCFG="$STLCFGDIR/url.conf"																# url config
 CUSTOMPROTONLIST="$STLCFGDIR/protonlist.txt"												# plain textfile with additional user proton versions
@@ -1273,7 +1273,6 @@ function setDefaultCfgValues {
 		if [ -z "$DL_D3D47_64" ]		; then	DL_D3D47_64="https://lutris.net/files/tools/dll/d3dcompiler_47.dll"; fi
 		if [ -z "$DL_D3D47_32" ]		; then	DL_D3D47_32="http://dege.freeweb.hu/dgVoodoo2/D3DCompiler_47.zip"; fi
 		if [ -z "$RESHADEDLURL" ]		; then	RESHADEDLURL="https://reshade.me/downloads"; fi
-		if [ -z "$EDITORURL" ]			; then	EDITORURL="https://www.pcgamingwiki.com/api/appid.php?appid=AID"; fi
 		if [ -z "$VORTEXRELURL" ]		; then	VORTEXRELURL="https://github.com/Nexus-Mods/Vortex/releases"; fi
 		if [ -z "$DXVKURL" ]			; then	DXVKURL="https://github.com/doitsujin/dxvk"; fi
 		if [ -z "$XLIVEURL" ]			; then	XLIVEURL="https://github.com/ThirteenAG/Ultimate-ASI-Loader/releases/download/v4.52/Ultimate-ASI-Loader.zip"; fi
@@ -1439,7 +1438,7 @@ function setDefaultCfgValues {
 		if [ -z "$MINVRWINH" ] 			; then	MINVRWINH="640"; fi
 		if [ -z "$WAITFORTHISPID" ]		; then	WAITFORTHISPID="$NON"; fi
 		if [ -z "$WAITEDITOR" ]			; then	WAITEDITOR="2"; fi
-		if [ -z "$OPENEDITORURL" ]		; then	OPENEDITORURL="0"; fi
+		if [ -z "$HELPURL" ]			; then	HELPURL="$NON"; fi
 		if [ -z "$STEAMAPPIDFILE" ]		; then	STEAMAPPIDFILE="0"; fi
 		if [ -z "$ATVALIDATE" ]			; then	ATVALIDATE="0"; fi
 		if [ -z "$ATADOPT" ]			; then	ATADOPT="0"; fi
@@ -1517,8 +1516,6 @@ function saveCfg {
 			echo "RESHADEDLURL=\"$RESHADEDLURL\""
 			echo "## Protonfixes Project URL"
 			echo "PFDURL=\"$PFDURL\""
-			echo "## Editor URL"
-			echo "EDITORURL=\"$EDITORURL\""
 			echo "## Vortex DL URL"
 			echo "VORTEXRELURL=\"$VORTEXRELURL\""
 			echo "## Xlive DL URL"
@@ -1885,8 +1882,6 @@ function saveCfg {
 			echo "WAITFORTHISPID=\"$WAITFORTHISPID\""
 			echo "## $DESC_WAITEDITOR"
 			echo "WAITEDITOR=\"$WAITEDITOR\""
-			echo "## $DESC_OPENEDITORURL"
-			echo "OPENEDITORURL=\"$OPENEDITORURL\""
 			echo "## $DESC_STEAMAPPIDFILE"
 			echo "STEAMAPPIDFILE=\"$STEAMAPPIDFILE\""
 			echo "## $DESC_ATVALIDATE"
@@ -1961,6 +1956,8 @@ function saveCfg {
 			echo "ONLYWICO=\"$ONLYWICO\""
 			echo "## $DESC_GAMESCREENRES"
 			echo "GAMESCREENRES=\"$GAMESCREENRES\""
+			echo "## Default Help URL"
+			echo "HELPURL=\"$HELPURL\""
 			} >> "$1"
 			#ENDsaveCfgdefault_template
 		fi
@@ -2737,17 +2734,9 @@ function EditorDialog {
 	case $? in
 		0)  {
 				if [ -n "$EDFILES" ]; then
-					if [ "$OPENEDITORURL" -eq 1 ]; then
-						writelog "INFO" "${FUNCNAME[0]} - OPENEDITORURL is set to 1 - also opening the url '$EDITORURL' in the browser"
-						if [ -x "$(command -v "$BROWSER" 2>/dev/null)" ]; then
-							# if we open a new BROWSER instance here, we're going to kill it when the game launches, else the game won't "exit" in steam 
-							if "$PGREP" -f "$BROWSER" >/dev/null; then
-								KILLBROWSER=0
-							else
-								KILLBROWSER=1
-							fi		
-							"$BROWSER" "${EDITORURL//AID/$AID}" & 
-						fi
+					if [ -n "$HELPURL" ] && [ "$HELPURL" != "$NON" ]; then 
+						writelog "INFO" "${FUNCNAME[0]} - Opening the url '$HELPURL' in the browser"
+						checkHelpUrl "$HELPURL"
 					fi
 	
 					writelog "INFO" "${FUNCNAME[0]} - Opening Editor '$STLEDITOR' with selected Config Files"
@@ -3142,7 +3131,6 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_STL_PULSE_LATENCY_MSEC!$DESC_STL_PULSE_LATENCY_MSEC ('STL_PULSE_LATENCY_MSEC')":NUM "${STL_PULSE_LATENCY_MSEC/#-/ -}" `#CAT_Misc` `#MENU_GAME` \
 --field="     $GUI_LOGLEVEL!$DESC_LOGLEVEL ('LOGLEVEL')":CB "${LOGLEVEL/#-/ -}!0!1!2" `#CAT_Misc` `#MENU_GLOBAL` \
 --field="     $GUI_RESETLOG!$DESC_RESETLOG ('RESETLOG')":CHK "${RESETLOG/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GLOBAL` \
---field="     $GUI_OPENEDITORURL!$DESC_OPENEDITORURL ('OPENEDITORURL')":CHK "${OPENEDITORURL/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_STEAMAPPIDFILE!$DESC_STEAMAPPIDFILE ('STEAMAPPIDFILE')":CHK "${STEAMAPPIDFILE/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_SKIPINTDEPCHECK!$DESC_SKIPINTDEPCHECK ('SKIPINTDEPCHECK')":CHK "${SKIPINTDEPCHECK/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_NOSTEAMSTLDEF!$DESC_NOSTEAMSTLDEF ('NOSTEAMSTLDEF')":CHK "${NOSTEAMSTLDEF/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GLOBAL` \
@@ -3150,6 +3138,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_STORECOMPDATTITLE!$DESC_STORECOMPDATTITLE ('STORECOMPDATTITLE')":CHK "${STORECOMPDATTITLE/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_LOGPLAYTIME!$DESC_LOGPLAYTIME ('LOGPLAYTIME')":CHK "${LOGPLAYTIME/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_CRASHGUESS!$DESC_CRASHGUESS ('CRASHGUESS')":NUM "${CRASHGUESS/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_HELPURL!$DESC_HELPURL ('HELPURL')":CB "${HELPURL}!${HUYLIST}${NON}" `#CAT_Misc` `#MENU_GAME` \
 --field="$(spanFont "$GUI_OPTSPROTON" "H")":LBL "SKIP" `#CAT_Proton` `#HEAD_Proton` `#MENU_GAME` `#MENU_GLOBAL`  \
 --field="     $GUI_OVERRIDEPROTON!$(strFix "$DESC_OVERRIDEPROTON" "$PROGCMD") ('OVERRIDEPROTON')":CHK "${OVERRIDEPROTON/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_USEPROTON!$DESC_USEPROTON ('USEPROTON')":CB "${USEPROTON/#-/ -}!$PROTYADLIST" `#CAT_Proton` `#MENU_GAME` \
@@ -3260,7 +3249,6 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_DL_D3D47_64!$DESC_DL_D3D47_64 ('DL_D3D47_64')" "${DL_D3D47_64/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="     $GUI_DL_D3D47_32!$DESC_DL_D3D47_32 ('DL_D3D47_32')" "${DL_D3D47_32/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="     $GUI_RESHADEDLURL!$DESC_RESHADEDLURL ('RESHADEDLURL')" "${RESHADEDLURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
---field="     $GUI_EDITORURL!$DESC_EDITORURL ('EDITORURL')" "${EDITORURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="     $GUI_VORTEXRELURL!$DESC_VORTEXRELURL ('VORTEXRELURL')" "${VORTEXRELURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="     $GUI_DXVKURL!$DESC_DXVKURL ('DXVKURL')" "${DXVKURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="     $GUI_XLIVEURL!$DESC_XLIVEURL ('XLIVEURL')" "${XLIVEURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
@@ -3811,6 +3799,7 @@ function openSettings {
 		setShowPic
 	fi
 	
+	setHuyList
 	TITLE="${PROGNAME}-MenuSelection"
 	pollWinRes "$TITLE"
 	writelog "INFO" "${FUNCNAME[0]} - Loaded resolution from config: ${WINX}x${WINY}_${POSX}-${POSY}"
@@ -3873,6 +3862,7 @@ function openSettings {
 	;;
 	3) 	{
 			clickInfo "${FUNCNAME[0]}" "$?" "$BUT_GM" "$SETMENU" "$GAMMENU"
+			checkHelpUrl "$HELPURL"
 			openGameMenu "$AID" "${FUNCNAME[0]}"
 		}
 	;;
@@ -9644,6 +9634,42 @@ function logPlayTime {
 	fi
 }
 
+function setHuyList {
+	HUTXT="helpurls.txt"
+
+	HELPURLLIST="$GLOBALMISCDIR/$HUTXT"
+	
+	if [ -f "$STLCFGDIR/$HUTXT" ]; then
+		HELPURLLIST="$STLCFGDIR/$HUTXT"
+	fi
+
+	DHU="defhelpurl"
+	
+	if [ -z "$HELPURL" ] || [ "$HELPURL" == "$NON" ]; then 
+		HELPURL="$(grep "$DHU" "$HELPURLLIST" | cut -d ';' -f2)"
+	fi
+	HUYLIST="$(while read -r line; do cut -d ';' -f1 <<<"$line"; done <<< "$(grep -v "$DHU" "$HELPURLLIST")" | tr '\n' '!')"	
+	export HUYLIST
+}
+
+function checkHelpUrl {
+	WANTHELPURL="$1"
+	if  [ -n "$WANTHELPURL" ] && [ "$WANTHELPURL" != "$NON" ]; then
+		HELPURL="$(grep "$WANTHELPURL" "$HELPURLLIST" | grep -v "$DHU" | cut -d ';' -f2)"
+		writelog "INFO" "${FUNCNAME[0]} - Searching Help Url for '$WANTHELPURL' with command: 'grep \"$WANTHELPURL\" \"$HELPURLLIST\" | grep -v \"$DHU\" | cut -d ';' -f2'"
+
+		if [ -n "$HELPURL" ]; then
+			HELPURLNQ="${HELPURL//\"}"
+			writelog "INFO" "${FUNCNAME[0]} - Selected to open '${HELPURLNQ//AID/$AID}' with '$BROWSER'"
+			if ! "$PGREP" -f "$BROWSER" >/dev/null; then
+				touch "$STLSHM/KillBrowser-$AID.txt"
+			fi
+		
+			"$BROWSER" "${HELPURLNQ//AID/$AID}" & 
+		fi
+	fi
+}
+
 function checkPlayTime {
 	WASSTESTA="$STLSHM/SteamStart_${AID}.txt"
 	if [ ! -f "$WASSTESTA" ]; then
@@ -9658,43 +9684,20 @@ function checkPlayTime {
 			pollWinRes "$TITLE"
 
 			setShowPic
-			HUTXT="helpurls.txt"
 
-			HELPURLLIST="$GLOBALMISCDIR/$HUTXT"
-			
-			if [ -f "$STLCFGDIR/$HUTXT" ]; then
-				HELPURLLIST="$STLCFGDIR/$HUTXT"
-			fi
-
-
-			DHU="defhelpurl"
-			DEFHELPURL="$(grep "$DHU" "$HELPURLLIST" | cut -d ';' -f2)"
-			HUYLIST="$(while read -r line; do cut -d ';' -f1 <<<"$line"; done <<< "$(grep -v "$DHU" "$HELPURLLIST")" | tr '\n' '!')"
+			setHuyList
 
 			WANTHELPURL="$("$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
 			--title="$TITLE" --separator="\n" \
 			--geometry="$WINX"x"$WINY"+"$POSX"+"$POSY" \
 			--text="$(spanFont "$GN ($AID) $(strFix "$GUI_ASKCRASHGUESS" "$1")" "H")" \
-			--field="$GUI_OPENHELPURL!$DESC_OPENHELPURL ":CB "${DEFHELPURL}!${HUYLIST}${NON}" \
+			--field="$GUI_HELPURL!$DESC_HELPURL ":CB "${HELPURL}!${HUYLIST}${NON}" \
 			--button="$BUT_RETRYCG":0  \
 			--button="$BUT_SKIPCG":2 \
 			--button="$BUT_NO":4)"
 			case $? in
 				0)  {
-						if [ "$WANTHELPURL" != "$NON" ]; then
-							HELPURL="$(grep "$WANTHELPURL" "$HELPURLLIST" | grep -v "$DHU" | cut -d ';' -f2)"
-							writelog "INFO" "${FUNCNAME[0]} - Searching Help Url for '$WANTHELPURL' with command: 'grep \"$WANTHELPURL\" \"$HELPURLLIST\" | grep -v \"$DHU\" | cut -d ';' -f2'"
-
-							if [ -n "$HELPURL" ]; then
-								HELPURLNQ="${HELPURL//\"}"
-								writelog "INFO" "${FUNCNAME[0]} - Selected to open '${HELPURLNQ//AID/$AID}' with '$BROWSER'"
-								if ! "$PGREP" -f "$BROWSER" >/dev/null; then
-									touch "$STLSHM/KillBrowser-$AID.txt"
-								fi
-							
-								"$BROWSER" "${HELPURLNQ//AID/$AID}" & 
-							fi
-						fi
+						checkHelpUrl "$WANTHELPURL"
 						writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_RETRYCG' so opening settings"
 						prepareLaunch X
 					}
@@ -11835,8 +11838,9 @@ function restoreOrgVars {
 
 function rmOldLog {
 	# restart $LOGFILE only if older than 3 minutes # TODO minutes configurable?
+	setAIDCfgs
 	if [ -f "$LOGFILE" ]; then
-		if test "$(find "$LOGFILE" -not -newermt '-3 minutes')"; then
+		if test "$(find "$LOGFILE" -mmin -3)"; then
 			rm "$LOGFILE" 2>/dev/null
 		fi
 	fi	
