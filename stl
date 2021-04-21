@@ -89,6 +89,7 @@ NON="none"
 TMPL="template"
 WARCH="-x86_64"
 DLWINEVERSION="$NON"
+GAMENAME="$NON"
 EARLYUSEWINE=0
 FAVMENU="$MTEMP/favmenu"
 GAMEMENU="$MTEMP/gamemenu"
@@ -122,8 +123,14 @@ fi
 
 SYSTEMSTLCFGDIR="/usr/share/$PROGCMD"														# systemwide config dir
 BASELOGDIR="$STLCFGDIR/logs"																# base logfile dir
-LOGDIR="$BASELOGDIR/$PROGCMD"																# default stllogfile dir
+DEFLOGDIR="$BASELOGDIR/$PROGCMD"															# default stllogfile dir
+
+if [ -z "$LOGDIR" ]; then
+	LOGDIR="$DEFLOGDIR"
+fi
+
 LOGDIRID="$LOGDIR/id"
+
 LOGDIRTI="$LOGDIR/title"
 STLPROTONLOGDIR="$BASELOGDIR/proton"														# proton logfile dir
 STLPROTONIDLOGDIR="$STLPROTONLOGDIR/id"														# proton id logfile dir
@@ -404,7 +411,7 @@ function writeDesktopFile {
 	else
 		getGameName "$1"
 	
-		if [ -n "$GAMENAME" ]; then
+		if [ -n "$GAMENAME" ] && [ "$GAMENAME" != "$NON" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Creating $STLGDESKD/$1.desktop" "E"
 
 			{
@@ -1296,7 +1303,7 @@ function setDefaultCfgValues {
 		if [ -z "$SKIPINTDEPCHECK" ]	; then	SKIPINTDEPCHECK="0"; fi
 		if [ -z "$AUTOTWEAKS" ]			; then	AUTOTWEAKS="$AUTOTWEAKPLATFORMS"; fi
 		if [ -z "$STRACEDIR" ]			; then	STRACEDIR="$LOGDIR"; fi
-		if [ -z "$LOGDIR" ]				; then	LOGDIR="$LOGDIR"; fi
+		if [ -z "$LOGDIR" ]				; then	LOGDIR="$DEFLOGDIR"; fi
 		if [ -z "$LOGLEVEL" ]			; then	LOGLEVEL="2"; fi
 		if [ -z "$RESETLOG" ]			; then	RESETLOG="1"; fi
 		if [ -z "$STLEDITOR" ]			; then	STLEDITOR="$("$WHICH" geany 2>/dev/null)"; fi
@@ -2897,7 +2904,7 @@ function openTrayIcon {
 			GAMESTATE="$(ps -q "$GAMEPID" -o state --no-headers)"
 			GAMESIG="-STOP"
 
-			if [ "x$GAMESTATE" = "xT" ] ; then
+			if [ "$GAMESTATE" = "T" ] ; then
 				GAMESIG="-CONT"
 			fi
 
@@ -6086,7 +6093,7 @@ function createGameCfg {
 		updateConfigFile "$STLGAMECFG" "saveCfgdefault_template"
 	else
 		getGameName "$AID"
-		if [ -n "$GAMENAME" ]; then
+		if [ -n "$GAMENAME" ] && [ "$GAMENAME" != "$NON" ]; then
 		{
 		echo "## config Version: $PROGVERS"
 		echo "##########################"
@@ -8118,11 +8125,11 @@ function VortexGamesDialog {
 
 		VINGAMES="$(while read -r f; do
 			loadCfg "$GEMETA/$f.conf" X
-			if [ -z "$GAMENAME" ]; then
-				GNAM="$NON"
-			else
+			if [ "$GAMENAME" != "$NON" ]; then
 				GNAM="$GAMENAME"
 				echo "$f;$GAMENAME" >> "$VGNLIST"
+			else
+				GNAM="$NON"
 			fi
 
 			if [ ! -f "$STLGAMEDIRID/${f}.conf" ]; then
@@ -8740,17 +8747,9 @@ function askVortex {
 function initVortexStuff {
 	if [ "$VORTEXMODE" == "normal" ] || [ "$VORTEXMODE" == "editormode" ]; then
 		if [ -z "$VORTEXWINE" ] || [ ! -f "$VORTEXWINE" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - No wine binary configured in variable VORTEXWINE or file in variable VORTEXWINE '$VORTEXWINE' not found - autodetecting wine"
-			PROT4PATH="$(printProtonArr | grep "proton-4" | sort -nr | tail -n1 | cut -d ';' -f2)"
-			if [ -f "$PROT4PATH" ]; then
-				PROT4VERS="$(basename "$(dirname "$PROT4PATH")")"
-				writelog "INFO" "${FUNCNAME[0]} - Found old '$PROT4VERS' - using the associated wine as 'VORTEXWINE'" "E" 
-				NEWVORTEXWINE="$(dirname "$PROT4PATH")/$DBW"
-				writelog "INFO" "${FUNCNAME[0]} - Updating VORTEXWINE in '$STLDEFGLOBALCFG' to '$NEWVORTEXWINE'" "E" 
-				updateConfigEntry "VORTEXWINE" "$NEWVORTEXWINE" "$STLDEFGLOBALCFG"
-				VORTEXWINE="$NEWVORTEXWINE"
-			elif [ -n "$RUNWINE" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Using RUNWINE '$RUNWINE' as VORTEXWINE"
+			writelog "INFO" "${FUNCNAME[0]} - No wine binary configured in variable VORTEXWINE or file in variable '$VORTEXWINE' not found"
+			if [ -n "$RUNWINE" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Using RUNWINE '$RUNWINE' as VORTEXWINE instead"
 				VORTEXWINE="${RUNWINE//\"/}"
 			else
 				writelog "SKIP" "${FUNCNAME[0]} - Can't find a usable wine binary for VORTEXWINE - skipping"
@@ -10950,7 +10949,7 @@ function backupSteamUser {
 			BACKTI="${GN/$LGS /}"
 		else
 			getGameName "$BAID"
-			if [ -n "$GAMENAME" ]; then
+			if [ -n "$GAMENAME" ] && [ "$GAMENAME" != "$NON" ]; then
 				BACKTI="$GAMENAME"
 			fi
 		fi
@@ -11023,9 +11022,6 @@ function backupSteamUser {
 			fi
 		fi
 	fi
-
-	BACKTI=""
-	GAMENAME=""
 }
 
 function backupSteamUserGate {
@@ -11871,7 +11867,11 @@ function CreateCustomEvaluatorScript {
 		while read -r ordline; do
 			if grep -q "$ordline" <<< "$EVALSCFILES"; then
 				echo "	\"$OCNT\"" >> "$TEVALSC"
-				cat "${GLOBALEVALDIR}/packages/$ordline" >> "$TEVALSC"
+				if [ -f "${GLOBSTLEVPACKS}/$ordline" ]; then
+					cat "${GLOBSTLEVPACKS}/$ordline" >> "$TEVALSC"
+				else
+					cat "${GLOBEVPACKS}/$ordline" >> "$TEVALSC"
+				fi				
 				OCNT=$((OCNT+1))
 			fi
 		done < "$GLOBEVPACKORDER"
@@ -11880,7 +11880,11 @@ function CreateCustomEvaluatorScript {
 		while read -r wantevascs; do
 			if ! grep -q "$wantevascs" "$GLOBEVPACKORDER"; then
 				echo "	\"$OCNT\"" >> "$TEVALSC"
-				cat "${GLOBALEVALDIR}/packages/$wantevascs" >> "$TEVALSC"
+				if [ -f "${GLOBSTLEVPACKS}/$wantevascs" ]; then
+					cat "${GLOBSTLEVPACKS}/$wantevascs" >> "$TEVALSC"
+				else
+					cat "${GLOBEVPACKS}/$wantevascs" >> "$TEVALSC"
+				fi
 				OCNT=$((OCNT+1))
 			fi
 		done <<< "$EVALSCFILES"
@@ -11904,6 +11908,8 @@ function CreateCustomEvaluatorScript {
 	TEVALSC="${STLSHM}/${EVALSC}_${EUNID}_temp.vdf"
 
 	GLOBEVPACKS="${GLOBALEVALDIR}/packages"
+	GLOBSTLEVPACKS="${GLOBALEVALDIR}/stlpackages"
+
 	GLOBEVPACKORDER="${GLOBALEVALDIR}/order.txt"
 	TEVALSCSEL="$NON"
 
