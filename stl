@@ -5,7 +5,7 @@
 
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v6.8-rc1"
+PROGVERS="v6.8-rc2"
 PROGCMD="${0##*/}"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 
@@ -64,6 +64,7 @@ NOICON="$STLSHM/empty.png"
 FAVPIC="$STLSHM/fav.jpg"
 DFDIR="$STLSHM/desktopfiles"
 CLOSETMP="$STLSHM/${PROGCMD}-closing.tmp"
+KILLSWITCH="$STLSHM/KillSwitch"
 TEMPLOG="$STLSHM/${PROGCMD}.log"
 WINRESLOG="$STLSHM/winres.log"
 GWIDFILE="$STLSHM/${PROGCMD}-sbsgwid"
@@ -186,6 +187,9 @@ SGDBSTYOPTS="alternate,blurred,white_logo,material,no_logo"
 STLGAMES="$STLCFGDIR/games"
 STLGDESKD="$STLGAMES/desktop"
 STLGHEADD="$STLGAMES/header"
+STLGSAD="$STLGAMES/standalone"
+STLGSAPD="$STLGSAD/titles"
+STLGSACD="$STLGSAD/compatdata"
 
 #STLGSCPTD="$STLGAMES/scripts"
 NOGAMES=",70_2260196511,228980,858280,961940,1054830,1070560,1113280,1245040,1391110,1420170,"
@@ -2800,8 +2804,7 @@ function TrayIconExports {
 	export AID="$AID"
 
 	export GPFX="$GPFX"
-	export KPFX="$GPFX"
-
+	export KILLSWITCH="$KILLSWITCH"
 	export -f killProtonGame
 	export -f PauseGame
 	export EFD="$EFD"
@@ -2814,12 +2817,19 @@ function TrayIconExports {
 		TSHADDESTDIR="$EFD"
 	fi
 
+	KPFX="$GPFX"
 	if [ "$USEWINE" -eq 1 ]; then
 		setWineVars
 		KPFX="$GWFX"
 	fi
 
 	export RUNWINESERVER="${RUNWINE}server"
+
+	if [ -n "$KPFX" ]; then
+		echo "WINEPREFIX=\"$KPFX\" \"$RUNWINESERVER\" -k" > "$KILLSWITCH"
+		echo "touch $CLOSETMP" >> "$KILLSWITCH"
+		chmod +x "$KILLSWITCH"
+	fi
 
 	export SHADDESTDIR="$TSHADDESTDIR"
 	export -f TrayShaderMenu
@@ -2843,8 +2853,7 @@ function openTrayIcon {
 
 		# functions for the trayIcon Menu
 		function killProtonGame {
-			WINEPREFIX="$KPFX" "$RUNWINESERVER" -k
-			touch "$CLOSETMP"
+			"$KILLSWITCH"
 		}
 
 		function PauseGame {
@@ -6323,6 +6332,170 @@ function GameScopeGui {
 
 }
 
+function StandaloneProtonGame {
+	function SapRun {
+		if [ "$SAPRUN" == "TRUE" ]; then
+			RUNSAPPROTON="$(PROTPATH "$SAPPROTON")"
+			if [ ! -f "$RUNSAPPROTON" ]; then
+				RUNSAPPROTON="$(fixProtonVersionMismatch "$SAPPROTON" X)"
+			fi
+
+			if [ ! -f "$RUNSAPPROTON" ]; then
+				writelog "SKIP" "${FUNCNAME[0]} - No executable for selected Proton '$SAPPROTON' found" E
+			elif [ ! -f "$SAPEXE" ]; then
+				writelog "SKIP" "${FUNCNAME[0]} - No executable found" E
+			elif [ ! -d "$SAP_COMPAT_DATA_PATH" ]; then
+				writelog "SKIP" "${FUNCNAME[0]} - No compdata dir found" E
+			else
+				if [ -z "$SAPARGS" ]; then
+					RUNSAPARGS=""
+				else
+					mapfile -d " " -t -O "${#RUNSAPARGS[@]}" RUNSAPARGS < <(printf '%s' "$SAPARGS")
+				fi
+				
+				writelog "INFO" "${FUNCNAME[0]} - Starting '$SAPEXE' with '$SAPPROTON' with STEAM_COMPAT_DATA_PATH '$SAP_COMPAT_DATA_PATH'" E
+				STEAM_COMPAT_DATA_PATH="$SAP_COMPAT_DATA_PATH" "$RUNSAPPROTON" run "$SAPEXE" "${RUNSAPARGS[@]}"
+			fi
+		fi
+	}
+
+	function SapGui {
+		TITLE="${PROGNAME}-StandaloneProtonGame"
+		pollWinRes "$TITLE"
+
+		SAPGAMELIST="$(find "$STLGSAPD" -type f  -exec basename {} .conf \; | tr '\n' '!')"
+
+		if [ -z "$SAP_COMPAT_DATA_PATH" ]; then
+			SAP_COMPAT_DATA_PATH="$STLGSACD/${PROGCMD}-$((10000 + RANDOM % 10000))"
+			mkProjDir "$SAP_COMPAT_DATA_PATH" 1
+			IN_SAP_COMPAT_DATA_PATH="$SAP_COMPAT_DATA_PATH"
+		fi
+
+		PROTPARTS="$("$YAD" --window-icon="$STLICON" --form --center --on-top $WINDECO \
+		--title="$TITLE" \
+		--text="$(spanFont "$GUI_SAPTEXT" "H")" \
+		--field=" ":LBL " " --separator="|" \
+		--field="$GUI_SAPGAME!$DESC_SAPGAME":CBE "${SAPGAME}!$SAPGAMELIST" \
+		--field="$GUI_SAPPROTON!$DESC_SAPPROTON":CB "${SAPPROTON//\"}!$PROTYADLIST" \
+		--field="$GUI_SAP_COMPAT_DATA_PATH!$DESC_SAP_COMPAT_DATA_PATH":DIR "${SAP_COMPAT_DATA_PATH//\"}" \
+		--field="$GUI_SAPEXE!$DESC_SAPEXE":FL "${SAPEXE//\"}" \
+		--field="$GUI_SAPARGS!$DESC_SAPARGS" "${SAPARGS//\"}"\
+		--field="$GUI_SAPRUN!$DESC_SAPRUN":CHK "$SAPRUN" \
+		--button="$BUT_CAN:0" --button="$BUT_LOAD:2" --button="$BUT_RUN:4" "$GEOM"
+		)"
+		case $? in
+			0)	{
+					writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_CAN' - Exiting"
+					if [ -d "$IN_SAP_COMPAT_DATA_PATH" ]; then
+						rmdir "$IN_SAP_COMPAT_DATA_PATH"
+					fi
+				}
+			;;
+			2)	{
+					writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_LOAD'"
+					mapfile -d "|" -t -O "${#SAPARR[@]}" SAPARR < <(printf '%s' "$PROTPARTS")
+					SAPGAME="${SAPARR[1]}"
+					writelog "INFO" "Loading '${STLGSAPD}/${SAPGAME}.conf' and starting the gui ${FUNCNAME[0]}" "E"
+					loadCfg "${STLGSAPD}/${SAPGAME}.conf"
+
+					if [ "$IN_SAP_COMPAT_DATA_PATH" != "$SAP_COMPAT_DATA_PATH" ]; then
+						if [ -d "$IN_SAP_COMPAT_DATA_PATH" ]; then
+							writelog "INFO" "${FUNCNAME[0]} - User chose an own COMPAT_DATA_PATH, removing autocreated '$IN_SAP_COMPAT_DATA_PATH'" E
+							rmdir "$IN_SAP_COMPAT_DATA_PATH"
+						fi
+					fi
+
+					"${FUNCNAME[0]}"
+				}
+			;;
+			4)	{
+					writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_RUN' - Exiting"
+					unset SAPARR
+					mapfile -d "|" -t -O "${#SAPARR[@]}" SAPARR < <(printf '%s' "$PROTPARTS")
+					SAPGAME="${SAPARR[1]}"
+					SAPPROTON="${SAPARR[2]}"
+					SAP_COMPAT_DATA_PATH="${SAPARR[3]}"
+					SAPEXE="${SAPARR[4]}"
+					SAPARGS="${SAPARR[5]}"
+					SAPRUN="${SAPARR[6]}"
+					
+					if [ "$IN_SAP_COMPAT_DATA_PATH" != "$SAP_COMPAT_DATA_PATH" ]; then
+						if [ -d "$IN_SAP_COMPAT_DATA_PATH" ]; then
+							writelog "INFO" "${FUNCNAME[0]} - User chose an own COMPAT_DATA_PATH, removing autocreated '$IN_SAP_COMPAT_DATA_PATH'" E
+							rmdir "$IN_SAP_COMPAT_DATA_PATH"
+						fi
+					fi
+
+					if [ -n "$SAPGAME" ];then
+						SAPCFG="${STLGSAPD}/${SAPGAME}.conf"
+				
+						touch "$FUPDATE" "$SAPCFG"
+						updateConfigEntry "SAPGAME" "$SAPGAME" "$SAPCFG"
+
+						if [ -n "$SAPPROTON" ];then
+							touch "$FUPDATE"
+							updateConfigEntry "SAPPROTON" "$SAPPROTON" "$SAPCFG"
+						fi
+
+						if [ -n "$SAP_COMPAT_DATA_PATH" ];then
+							touch "$FUPDATE"
+							updateConfigEntry "SAP_COMPAT_DATA_PATH" "$SAP_COMPAT_DATA_PATH" "$SAPCFG"
+						fi
+
+						if [ -n "$SAPEXE" ];then
+							touch "$FUPDATE"
+							updateConfigEntry "SAPEXE" "$SAPEXE" "$SAPCFG"
+						fi
+
+						if [ -n "$SAPARGS" ];then
+							touch "$FUPDATE"
+							updateConfigEntry "SAPARGS" "$SAPARGS" "$SAPCFG"
+						fi
+
+						if [ -n "$SAPRUN" ];then
+							touch "$FUPDATE"
+							updateConfigEntry "SAPARGS" "$SAPARGS" "$SAPCFG"
+						fi
+					fi
+					SapRun
+				}
+			;;
+		esac
+	}
+
+	createProtonList X
+
+	mkProjDir "$STLGSAPD" 1
+	SAPGUI=1
+	SAPRUN="TRUE"
+
+	if [ -n "$1" ] && [ -z "$2" ] && [ -f "${STLGSAPD}/${1}.conf" ]; then
+		writelog "INFO" "Loading '${STLGSAPD}/${1}.conf' silently" "E"
+		loadCfg "${STLGSAPD}/${1}.conf"
+		SAPGUI=0
+		SapRun
+	elif [ -n "$1" ] && [ ! -f "${STLGSAPD}/${1}.conf" ]; then
+		if [ "$1" == "list" ]; then
+			find "$STLGSAPD" -type f  -exec basename {} .conf \;
+			SAPGUI=0
+			SAPRUN="FALSE"
+		else
+			writelog "INFO" "Using '$1' as game title" "E"
+			SAPGAME="$1"
+		fi
+	elif [ -n "$1" ] && [ -n "$2" ] && [ -f "${STLGSAPD}/${1}.conf" ]; then
+		writelog "INFO" "Loading '${STLGSAPD}/${1}.conf' and starting the gui" "E"
+		loadCfg "${STLGSAPD}/${1}.conf"
+		SAPGUI=1
+	elif [ -z "$1" ]; then
+		writelog "INFO" "Only starting plain gui" "E"
+	fi
+
+	if [ "$SAPGUI" -eq 1 ]; then
+		SapGui
+	fi
+}
+
 function OneTimeRunGui {
 	if [ -n "$1" ]; then
 		AID="$1"
@@ -8040,7 +8213,7 @@ function setupGameVortex {
 			CONFSTAGE=""
 
 			if [ -f "$VORTEXSTAGELIST" ]; then
-				CONFSTAGE="$(grep "$GAMEMP" "$VORTEXSTAGELIST")"
+				CONFSTAGE="$(grep "${GAMEMP}/" "$VORTEXSTAGELIST")"
 			fi
 
 			if [ -n "$CONFSTAGE" ]; then
@@ -8868,7 +9041,7 @@ function setLinGameVals {
 
 function prepareLaunch {
 	rm "$CLOSETMP" 2>/dev/null
-
+	rm "$KILLSWITCH" 2>/dev/null
 	linkLog
 
 	createProjectDirs
@@ -10475,6 +10648,9 @@ function howto {
 	echo "                                       Can be combined with auto"
 	echo "    meta                             Generates/Updates metadata"
 	echo "                                       for all installed games"
+ 	echo "    proton|p <title> <X>             Start and/or create <title> with proton"
+	echo "                                       without using steam."
+	echo "                                       Optional <X> opens gui"
 	echo "    set <var> <for> <value>          Change configuration settings"
 	echo "                                       Example:"
 	echo "    set RUN_REPLAY all 1               Set RUN_REPLAY for all games to 1"
@@ -10629,6 +10805,8 @@ function commandline {
 		getProtonDBRating "$2"
 	elif  [ "$1" == "pickwin" ] || [ "$1" == "pw" ]; then
 		pickGameWindowNameMeta "$2" "$3"
+	elif  [ "$1" == "proton" ] || [ "$1" == "p" ]; then
+		StandaloneProtonGame "$2" "$3"
 	elif [ "$1" == "set" ]; then
 		if [ -n "$2" ]; then
 				ENTLIST="$(sed -n "/#STARTsaveCfgdefault_template/,/#ENDsaveCfgdefault_template/p;/#ENDsaveCfgdefault_template/q" "$0" | grep "echo" | grep "=" | cut -d '"' -f2 | cut -d '=' -f1 | sed 's/^#//')"
@@ -11538,6 +11716,7 @@ function closeSTL {
 	writelog "STOP" "#########  ${FUNCNAME[0]} $PROGNAME $PROGVERS #########"
 	rm "$CLOSETMP" 2>/dev/null
 	rm "$UPWINTMPL" 2>/dev/null
+	rm "$KILLSWITCH" 2>/dev/null
 
 	# only useful for win games:
 	if [ "$ISGAME" -eq 2 ] && [ "$USEWINE" -eq 0 ]; then
