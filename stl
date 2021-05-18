@@ -5583,7 +5583,23 @@ function getUsedVars {
 }
 
 function getScreenRes {
-	FOUNDRES="$("$XRANDR" --current | grep "\*" | gawk '{print $1}' | sort -gur | head -n1)"
+	function resList {
+		"$XRANDR" --current | grep "\*" | gawk '{print $1}' | sort -gur
+	}
+
+	MONCNT="$("$XRANDR" --listactivemonitors | grep -c -v "^Monitors")"
+	if [ "$MONCNT" -eq 1 ] || [ "$MONCNT" -gt 2 ]; then
+		FOUNDRES="$(resList | head -n1)"
+	else
+		XCUT="$("$XRANDR" --listactivemonitors | grep -Eo "\+[1-9][[:digit:]]*\+" | grep -Eo "[[:digit:]]*")"
+		MPOS="$("$XDO" getmouselocation --shell | head -n1 | cut -d '=' -f2)"
+		if [ "$MPOS" -gt "$XCUT" ]; then
+			FOUNDRES="$(resList | tail -n1)"
+		else
+			FOUNDRES="$(resList | head -n1)"
+		fi
+	fi
+
 	if grep -q "[0-9]x[0-9]" <<< "$FOUNDRES"; then
 		writelog "INFO" "${FUNCNAME[0]} - Detected screen resolution '$FOUNDRES'" "X"
 		echo "$FOUNDRES"
@@ -7371,7 +7387,7 @@ function customRegs {
 				echo "[HKEY_CURRENT_USER\Software\Wine\Explorer]"
 				echo "\"Desktop\"=\"Default\""
 				echo "[HKEY_CURRENT_USER\Software\Wine\Explorer\Desktops]"
-				echo "\"Default\"=\"$(xrandr | grep "\*" | gawk '{print $1}')\""
+				echo "\"Default\"=\"$(getScreenRes)\""
 				} >> "$TEMPREG"
 
 				regEdit "$TEMPREG"
