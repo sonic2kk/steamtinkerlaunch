@@ -8008,98 +8008,98 @@ function getGameSteamCategories {
 }
 
 function VortexGamesDialog {
-		writelog "INFO" "${FUNCNAME[0]} - Opening Vortex Dialog for en/disabling Vortex for installed games"
+	writelog "INFO" "${FUNCNAME[0]} - Opening Vortex Dialog for en/disabling Vortex for installed games"
 
-		getInstalledGamesWithVortexSupport
+	getInstalledGamesWithVortexSupport
 
-		TITLE="${PROGNAME}-Vortex Toggle"
-		pollWinRes "$TITLE"
+	TITLE="${PROGNAME}-Vortex Toggle"
+	pollWinRes "$TITLE"
 
-		setShowPic
-		VGNLIST="$STLSHM/VGNLIST.txt"
-		VGNSCLIST="$STLSHM/VGNSCLIST.txt"
+	setShowPic
+	VGNLIST="$STLSHM/VGNLIST.txt"
+	VGNSCLIST="$STLSHM/VGNSCLIST.txt"
 
-		VINGAMES="$(while read -r f; do
-			loadCfg "$GEMETA/$f.conf" X
-			if [ "$GAMENAME" != "$NON" ]; then
-				GNAM="$GAMENAME"
-				echo "$f;$GAMENAME" >> "$VGNLIST"
+	VINGAMES="$(while read -r f; do
+		loadCfg "$GEMETA/$f.conf" X
+		if [ "$GAMENAME" != "$NON" ]; then
+			GNAM="$GAMENAME"
+			echo "$f;$GAMENAME" >> "$VGNLIST"
+		else
+			GNAM="$NON"
+		fi
+
+		if [ ! -f "$STLGAMEDIRID/${f}.conf" ]; then
+			writelog "SKIP" "${FUNCNAME[0]} - Game config '$STLGAMEDIRID/${f}.conf' not found, so creating a minimal one from '$STLDEFGAMECFG'"
+			grep -v "config Version" "$STLDEFGAMECFG" >> "$STLGAMEDIRID/${f}.conf"
+		fi
+
+		if grep -q "Vortex" <<< "$(getGameSteamCategories "$f" "X")"; then
+			echo TRUE
+			echo "$f"
+			echo "$GNAM"
+			echo "$GUI_Y"
+			echo "$f" >> "$VGNSCLIST"
+		else
+			if grep -q "^USEVORTEX=\"0\"" "$STLGAMEDIRID/${f}.conf" || ! grep -q "^USEVORTEX=" "$STLGAMEDIRID/${f}.conf"; then
+				echo FALSE
+				echo "$f"
+				echo "$GNAM"
+				echo "$GUI_N"
 			else
-				GNAM="$NON"
-			fi
-
-			if [ ! -f "$STLGAMEDIRID/${f}.conf" ]; then
-				writelog "SKIP" "${FUNCNAME[0]} - Game config '$STLGAMEDIRID/${f}.conf' not found, so creating a minimal one from '$STLDEFGAMECFG'"
-				grep -v "config Version" "$STLDEFGAMECFG" >> "$STLGAMEDIRID/${f}.conf"
-			fi
-
-			if grep -q "Vortex" <<< "$(getGameSteamCategories "$f" "X")"; then
 				echo TRUE
 				echo "$f"
 				echo "$GNAM"
-				echo "$GUI_Y"
-				echo "$f" >> "$VGNSCLIST"
-			else
-				if grep -q "^USEVORTEX=\"0\"" "$STLGAMEDIRID/${f}.conf" || ! grep -q "^USEVORTEX=" "$STLGAMEDIRID/${f}.conf"; then
-					echo FALSE
-					echo "$f"
-					echo "$GNAM"
-					echo "$GUI_N"
-				else
-					echo TRUE
-					echo "$f"
-					echo "$GNAM"
-					echo "$GUI_N"
-				fi
+				echo "$GUI_N"
 			fi
-		done <<< "$(printf "%s\n" "${INSTVGAMES[@]}")" | \
-		"$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center "$WINDECO" --list --checklist --column="Use Vortex" --column="Game ID" --column="Game Title" --column "Vortex Steam Category" --separator=";" --print-column="2" \
-		--text="$(spanFont "$GUI_VINFO" "H")\n<span font=\"italic\">($GUI_VINFO1)</span>" --title="$TITLE" "$GEOM")"
-		case $? in
-			0)
-				while read -r checkvgame; do
-					VGNAM="$(grep "^$checkvgame" "$VGNLIST" | gawk -F ';' '{print $2}')"
-					GVCFG="$STLGAMEDIRID/${checkvgame}.conf"
+		fi
+	done <<< "$(printf "%s\n" "${INSTVGAMES[@]}")" | \
+	"$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center "$WINDECO" --list --checklist --column="Use Vortex" --column="Game ID" --column="Game Title" --column "Vortex Steam Category" --separator=";" --print-column="2" \
+	--text="$(spanFont "$GUI_VINFO" "H")\n<span font=\"italic\">($GUI_VINFO1)</span>" --title="$TITLE" "$GEOM")"
+	case $? in
+		0)
+			while read -r checkvgame; do
+				VGNAM="$(grep "^$checkvgame" "$VGNLIST" | gawk -F ';' '{print $2}')"
+				GVCFG="$STLGAMEDIRID/${checkvgame}.conf"
 
-					if ! grep -q "$checkvgame" <<< "${VINGAMES[@]}"; then
-						writelog "INFO" "${FUNCNAME[0]} - Disabling Vortex for '$VGNAM' in '$GVCFG', if not already disabled"
-						touch "$FUPDATE"
-						updateConfigEntry "USEVORTEX" "0" "$GVCFG"
-						if grep -q "$checkvgame" "$VGNSCLIST" 2>/dev/null; then
-							writelog "WARN" "${FUNCNAME[0]} - To really disable Vortex for '$VGNAM', the game needs to be removed from the Vortex Steam Category manually" E
-						fi
-					else
-						writelog "INFO" "${FUNCNAME[0]} - Enabling Vortex for '$VGNAM' if not already enabled"
-						touch "$FUPDATE"
-						updateConfigEntry "USEVORTEX" "1" "$GVCFG"
+				if ! grep -q "$checkvgame" <<< "${VINGAMES[@]}"; then
+					writelog "INFO" "${FUNCNAME[0]} - Disabling Vortex for '$VGNAM' in '$GVCFG', if not already disabled"
+					touch "$FUPDATE"
+					updateConfigEntry "USEVORTEX" "0" "$GVCFG"
+					if grep -q "$checkvgame" "$VGNSCLIST" 2>/dev/null; then
+						writelog "WARN" "${FUNCNAME[0]} - To really disable Vortex for '$VGNAM', the game needs to be removed from the Vortex Steam Category manually" E
 					fi
-				
-				done <<< "$(printf "%s\n" "${INSTVGAMES[@]//\"/}")"			
-				
-			;;
-			1)  writelog "INFO" "${FUNCNAME[0]} - Selected CANCEL" "E"
-			;;
-		esac
+				else
+					writelog "INFO" "${FUNCNAME[0]} - Enabling Vortex for '$VGNAM' if not already enabled"
+					touch "$FUPDATE"
+					updateConfigEntry "USEVORTEX" "1" "$GVCFG"
+				fi
+			
+			done <<< "$(printf "%s\n" "${INSTVGAMES[@]//\"/}")"			
+			
+		;;
+		1)  writelog "INFO" "${FUNCNAME[0]} - Selected CANCEL" "E"
+		;;
+	esac
 
-		rm "$VGNLIST" "$VGNSCLIST" 2>/dev/null
+	rm "$VGNLIST" "$VGNSCLIST" 2>/dev/null
 }
 
 function VortexSymDialog {
-		VORTEXPFX="${VORTEXCOMPDATA//\"/}/pfx"
-		VPDRC="$VORTEXPFX/$DRC"
-		if [ -d "$VPDRC" ]; then		
-			TITLE="${PROGNAME}-Vortex Symlinks"
-			pollWinRes "$TITLE"
+	VORTEXPFX="${VORTEXCOMPDATA//\"/}/pfx"
+	VPDRC="$VORTEXPFX/$DRC"
+	if [ -d "$VPDRC" ]; then		
+		TITLE="${PROGNAME}-Vortex Symlinks"
+		pollWinRes "$TITLE"
 
-			setShowPic
+		setShowPic
 
-			cd "$VPDRC" || return
-			find . -type l -printf '%p\n%l\n' | "$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center "$WINDECO" --list --column="Symlink in '${VPDRC}/'" --column="Points to Game WinePrefix" --print-column="3" \
-			--text="$(spanFont "$GUI_VOSY" "H")\n" --title="$TITLE" "$GEOM"
-			cd - || return
-		else
-			writelog "SKIP" "${FUNCNAME[0]} - Directory '$VPDRC' not found " E
-		fi
+		cd "$VPDRC" || return
+		find . -type l -printf '%p\n%l\n' | "$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center "$WINDECO" --list --column="Symlink in '${VPDRC}/'" --column="Points to Game WinePrefix" --print-column="3" \
+		--text="$(spanFont "$GUI_VOSY" "H")\n" --title="$TITLE" "$GEOM"
+		cd - || return
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - Directory '$VPDRC' not found " E
+	fi
 }
 
 function getVortexSupported {
