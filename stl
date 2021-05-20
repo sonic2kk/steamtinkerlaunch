@@ -474,11 +474,7 @@ function getParsableGameList {
 }
 
 function getInstalledGamesFromCategory {
-	if [ -n "$1" ]; then
-		CAT="$1"
-	else
-		CAT="installed"
-	fi
+	CAT="$1"
 
 	if [ -n "$CAT" ]; then
 		while read -r CATAID; do
@@ -487,12 +483,19 @@ function getInstalledGamesFromCategory {
 	fi
 }
 
+function listInstalledGameIDs {
+#	getInstalledGamesFromCategory "installed"
+	while read -r APPMA; do
+		grep -Eo "[[:digit:]]*" <<< "${APPMA##*/}"
+	done <  <(listAppManifests)
+}
+
 function getGameDataForInstalledGames {
 	while read -r CATAID; do
 		if [ -n "$CATAID" ]; then
 			getGameData "$CATAID"
 		fi
-	done <  <(getInstalledGamesFromCategory "installed")
+	done <  <(listInstalledGameIDs)
 }
 
 function checkSGDbApi {
@@ -560,7 +563,7 @@ function getGridsForInstalledGames {
 	if checkSGDbApi; then
 		while read -r CATAID; do
 			getGrid "$CATAID"
-		done <  <(getInstalledGamesFromCategory "installed")
+		done <  <(listInstalledGameIDs)
 	fi
 }
 
@@ -603,9 +606,11 @@ function createCategoryMenus {
 
 function listAppManifests {
 	function findAppMa {
-		find "$1" -mindepth 1 -maxdepth 1 -type f -name "appmanifest_*.acf"
+		if [ -d "$1" ]; then
+			find "$1" -mindepth 1 -maxdepth 1 -type f -name "appmanifest_*.acf"
+		fi
 	}
-	
+
 	if [ -d "$DEFSTEAMAPPS" ]; then
 		findAppMa "$DEFSTEAMAPPS"
 	else
@@ -7982,7 +7987,7 @@ function getVortexStage {
 
 function getInstalledGamesWithVortexSupport {
 	getVortexSupported
-	mapfile -t -O "${#INSTGAMES[@]}" INSTGAMES <<< "$(getInstalledGamesFromCategory "installed")"
+	mapfile -t -O "${#INSTGAMES[@]}" INSTGAMES <<< "$(listInstalledGameIDs)"
 	mapfile -t -O "${#INSTVGAMES[@]}" INSTVGAMES <<< "$(comm -12 <(printf "%s\n" "${VOSTIDS[@]}" | sort -u) <(printf "%s\n" "${INSTGAMES[@]}" | sort -u))"
 	if [ -n "$1" ]; then
 		printf "%s\n" "${INSTVGAMES[@]}"
