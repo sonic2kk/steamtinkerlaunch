@@ -479,7 +479,7 @@ function getInstalledGamesFromCategory {
 	if [ -n "$CAT" ]; then
 		while read -r CATAID; do
 		echo "$CATAID"
-		done <<< "$(getParsableGameList | grep "\"installed\"" | grep "\"$CAT\"" | sed "s:\"::g" | sort -n | cut -d '+' -f1)"
+		done <<< "$(getParsableGameList | grep "\"$CAT\"" | sed "s:\"::g" | sort -n | cut -d '+' -f1)"
 	fi
 }
 
@@ -583,7 +583,8 @@ function getActiveSteamCategories {
 }
 
 function createCategoryMenus {
-	mkdir -p "$DFDIR" 2>/dev/null
+	DFIDIR="$DFDIR/installed"
+	mkdir -p "$DFIDIR" 2>/dev/null
 
 	if [ -n "$1" ] && [ "$1" == "update" ] && [ "$(find "$DFDIR" -name "*.desktop" | wc -l)" -gt 0 ]; then
 		find "$DFDIR" -name "*.desktop" -exec rm {} \;
@@ -598,6 +599,10 @@ function createCategoryMenus {
 					if [ ! -h "$DFCDIR/$CATGAME.desktop" ]; then
 						ln -s "$STLGDESKD/$CATGAME.desktop" "$DFCDIR"
 					fi
+
+					if [ ! -h "$DFIDIR/$CATGAME.desktop" ]; then
+						ln -s "$STLGDESKD/$CATGAME.desktop" "$DFIDIR"
+					fi	
 				fi
 			done <<< "$(getInstalledGamesFromCategory "$CAT")"
 		done < <(getActiveSteamCategories)
@@ -702,7 +707,12 @@ function pollWinRes {
 
 function openGameLauncher {
 	function GLgui {
-		"$YAD" --icons --window-icon="$STLICON" --read-dir="$DFDIR/$1" "$WINDECO" --title="$TITLE" --single-click --keep-icon-size --center --compact --sort-by-name "$GEOM"
+		LISTDIR="$DFDIR/$1"
+		if [ -d "$LISTDIR" ] && [ "$(find "$LISTDIR" -name "*.desktop" | wc -l)" -ge 1 ]; then
+			"$YAD" --icons --window-icon="$STLICON" --read-dir="$LISTDIR" "$WINDECO" --title="$TITLE" --single-click --keep-icon-size --center --compact --sort-by-name "$GEOM"
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - No games found in '$LISTDIR' or directory itself not found" "E"
+		fi
 	}
 
 	if grep -q "update"  <<< "$@"; then
