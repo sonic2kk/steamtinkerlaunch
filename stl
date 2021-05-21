@@ -6900,7 +6900,7 @@ function redirectSCDP {
 # so if I haven't missed something, only the actual proton game call, checkCustomLaunch and checkCheatEngineLaunch are affected,
 # because those rely on STEAM_COMPAT_DATA_PATH directly
 
-REDIRCOMPDATA=0
+REDIRCOMPDATA=1
 # 0=disabled, 1=set to $STEAM_COMPAT_DATA_PATH-$USEPROTON, 2= set to global $PROTONVERSION compdata
 # of course this will be a gameconfig option and not hardcoded here later
 
@@ -6912,8 +6912,23 @@ REDIRCOMPDATA=0
 		fi
 
 		if [ "$REDIRCOMPDATA" -eq 1 ]; then
-			COMPPROTVERS="$(setProtonPathVersion "$(PROTPATH "$USEPROTON")")"
-			writelog "INFO" "${FUNCNAME[0]} - Using '$STEAM_COMPAT_DATA_PATH' for '$TESTPROT' and checking against '$COMPPROTVERS'"
+			if [ -L "$STEAM_COMPAT_DATA_PATH" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - '$STEAM_COMPAT_DATA_PATH' is already a symbolic link - comparing versions"
+				SCDPPV="$(cat "$STEAM_COMPAT_DATA_PATH/version")"
+				if [ "$SCDPPV" == "$TESTPROT" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Already using correct symlink to compdata '$STEAM_COMPAT_DATA_PATH'"
+				else
+					writelog "INFO" "${FUNCNAME[0]} - Mismatch between '$SCDPPV' and '$TESTPROT' - do something XXXXXXXXXX"
+					# XXXX need to know here if $TESTPROT god a mismatch check earlier so $SCDPPV gets one too - maybe they match again then!
+				fi
+			elif [ -d "$STEAM_COMPAT_DATA_PATH" ]; then		
+				writelog "INFO" "${FUNCNAME[0]} - '$STEAM_COMPAT_DATA_PATH' is the original directory - do something XXXXXXXXXX"
+			else
+				writelog "SKIP" "${FUNCNAME[0]} - '$STEAM_COMPAT_DATA_PATH' is neither a directory nor a symbolic link - it might have to be created first TODO? #################"
+			fi
+		
+#			COMPPROTVERS="$(setProtonPathVersion "$(PROTPATH "$USEPROTON")")"
+#			writelog "INFO" "${FUNCNAME[0]} - Using '$STEAM_COMPAT_DATA_PATH' for '$TESTPROT' and checking against '$COMPPROTVERS'"
 # XXXXXXXXXXXXXXXXXXXXXX
 #		elif [ "$REDIRCOMPDATA" -eq 2 ]; then
 #			writelog "INFO" "${FUNCNAME[0]} - Using global 'STEAM_COMPAT_DATA_PATH'"
