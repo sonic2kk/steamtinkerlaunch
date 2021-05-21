@@ -200,7 +200,7 @@ NOGAMES=",70_2260196511,228980,858280,961940,1054830,1070560,1113280,1245040,139
 #PROTON50="1245040"
 #PROTON513="1420170"
 
-function setAID {
+function initAID {
 	if [ -n "$STEAM_COMPAT_APP_ID" ]; then
 		AID="$STEAM_COMPAT_APP_ID"
 	fi
@@ -216,6 +216,10 @@ function setAID {
 				AID="$SteamAppId"
 			fi
 		fi
+	fi
+
+	if [ -n "$STEAM_COMPAT_DATA_PATH" ]; then
+		OSCDP="$STEAM_COMPAT_DATA_PATH"
 	fi
 }
 
@@ -852,20 +856,20 @@ function setGlobalAIDCfgs {
 }
 
 function setCompatDataTitle {
-	if [ "$STORECOMPDATTITLE" -eq 1 ] && [ -n "$STEAM_COMPAT_DATA_PATH" ]; then
+	if [ "$STORECOMPDATTITLE" -eq 1 ] && [ -n "$OSCDP" ]; then
 		mkProjDir "$STLCOMPDAT" 1
 		COMPDATTITLE="$STLCOMPDAT/${GN/$LGS /}"
 		if readlink "$COMPDATTITLE" >/dev/null ; then
 			writelog "INFO" "${FUNCNAME[0]} - Symlink $COMPDATTITLE already exists"
-			if [ "$(readlink "$COMPDATTITLE")" == "$STEAM_COMPAT_DATA_PATH" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Symlink $COMPDATTITLE already points to the correct directory $STEAM_COMPAT_DATA_PATH"
+			if [ "$(readlink "$COMPDATTITLE")" == "$OSCDP" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Symlink '$COMPDATTITLE' already points to the correct directory '$OSCDP'"
 			else
-				writelog "INFO" "${FUNCNAME[0]} - Symlink $COMPDATTITLE points to $(readlink "$COMPDATTITLE") which is not the correct directory $STEAM_COMPAT_DATA_PATH - renewing!"
+				writelog "INFO" "${FUNCNAME[0]} - Symlink '$COMPDATTITLE' points to '$(readlink "$COMPDATTITLE")' which is not the correct directory '$OSCDP' - renewing!"
 				rm "$COMPDATTITLE"
-				createSymLink "${FUNCNAME[0]}" "$STEAM_COMPAT_DATA_PATH" "$COMPDATTITLE"
+				createSymLink "${FUNCNAME[0]}" "$OSCDP" "$COMPDATTITLE"
 			fi
 		else
-			createSymLink "${FUNCNAME[0]}" "$STEAM_COMPAT_DATA_PATH" "$COMPDATTITLE"
+			createSymLink "${FUNCNAME[0]}" "$OSCDP" "$COMPDATTITLE"
 		fi
 	fi
 }
@@ -6890,6 +6894,35 @@ function wmp10hack {
 	fi
 }
 
+function redirectSCDP {
+# redirecting the compatdata should happen before every direct proton call using it.
+# used GPFX (WINEPREFIX) should not be affected until it doesn't have problems with symlinks
+# so if I haven't missed something, only the actual proton game call, checkCustomLaunch and checkCheatEngineLaunch are affected,
+# because those rely on STEAM_COMPAT_DATA_PATH directly
+
+REDIRCOMPDATA=0
+# 0=disabled, 1=set to $STEAM_COMPAT_DATA_PATH-$USEPROTON, 2= set to global $PROTONVERSION compdata
+# of course this will be a gameconfig option and not hardcoded here later
+
+	if [ -n "$STEAM_COMPAT_DATA_PATH" ]; then # should be enough
+		if [ -n "$WANTPROTON" ] && [ "$WANTPROTON" != "$USEPROTON" ]; then
+			TESTPROT="$WANTPROTON"
+		else
+			TESTPROT="$USEPROTON"
+		fi
+
+		if [ "$REDIRCOMPDATA" -eq 1 ]; then
+			COMPPROTVERS="$(setProtonPathVersion "$(PROTPATH "$USEPROTON")")"
+			writelog "INFO" "${FUNCNAME[0]} - Using '$STEAM_COMPAT_DATA_PATH' for '$TESTPROT' and checking against '$COMPPROTVERS'"
+# XXXXXXXXXXXXXXXXXXXXXX
+#		elif [ "$REDIRCOMPDATA" -eq 2 ]; then
+#			writelog "INFO" "${FUNCNAME[0]} - Using global 'STEAM_COMPAT_DATA_PATH'"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Using regular compdata '$STEAM_COMPAT_DATA_PATH'"
+		fi
+	fi
+}
+
 function checkCustomLaunch {
 
 	if [ -n "$HACKWMP10" ] ; then
@@ -9271,6 +9304,9 @@ function prepareLaunch {
 	
 	# start custom user script
 	customUserScriptStart
+	
+	# redirect STEAM_COMPAT_DATA_PATH on request
+	redirectSCDP
 	
 	# start a custom program if USECUSTOMCMD is enabled
 	writelog "INFO" "${FUNCNAME[0]} - CheckCustomLaunch:"
@@ -11659,7 +11695,7 @@ function closeSTL {
 		"$PKILL" -f "$BROWSER"
 		rm "$STLSHM/KillBrowser-$AID.txt"
 	fi
-
+echo "OSCDP $OSCDP" >> "/tmp/XXXXXXXXXXXXXXXX"
 	cleanSUTemp
 	backupSteamUser "$AID"
 
@@ -12742,7 +12778,7 @@ function getCurrentCommandline {
 function main {
 
 	mkProjDir "$MTEMP" 1
-	setAID "$@"
+	initAID "$@"
 	setAIDCfgs
 	loadLangFile "$STLDEFLANG"
 	getCurrentCommandline "$@"
