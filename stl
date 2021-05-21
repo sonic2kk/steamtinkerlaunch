@@ -1331,7 +1331,6 @@ function setDefaultCfgValues {
 		if [ -z "$USEPROTON" ]			; then	USEPROTON="$(getDefaultProton)"; fi
 		if [ -z "$OVERRIDEPROTON" ]		; then	OVERRIDEPROTON="0"; fi
 		if [ -z "$PROTONCHECK" ]		; then	PROTONCHECK="disabled"; fi
-		if [ -z "$RECOMMENDPROTON" ]	; then	RECOMMENDPROTON="0"; fi
 		if [ -z "$USECUSTOMCMD" ]		; then	USECUSTOMCMD="0"; fi
 		if [ -z "$CUSTOMCMD" ]			; then	CUSTOMCMD="$("$WHICH" echo 2>/dev/null)"; fi
 		if [ -z "$CUSTOMCMD_ARGS" ]		; then	CUSTOMCMD_ARGS="$NON"; fi
@@ -1718,8 +1717,6 @@ function saveCfg {
 			echo "USEPROTON=\"$USEPROTON\""
 			echo "## $DESC_PROTONCHECK"
 			echo "PROTONCHECK=\"$PROTONCHECK\""
-			echo "## $DESC_RECOMMENDPROTON"
-			echo "RECOMMENDPROTON=\"$RECOMMENDPROTON\""
 			echo "## $DESC_USECUSTOMCMD"
 			echo "USECUSTOMCMD=\"$USECUSTOMCMD\""
 			echo "## $DESC_CUSTOMCMD"
@@ -3162,7 +3159,6 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_DXVK_HUD!$DESC_DXVK_HUD ('DXVK_HUD')":CBE "${DXVK_HUD/#-/ -}!0!1" `#CAT_Proton` `#SUB_Dxvk` `#MENU_GAME` \
 --field="     $GUI_DXVK_LOG_LEVEL!$DESC_DXVK_LOG_LEVEL ('DXVK_LOG_LEVEL')":CB "${DXVK_LOG_LEVEL/#-/ -}!none!error!warn!info!debug" `#CAT_Proton` `#SUB_Dxvk` `#MENU_GAME` \
 --field="     $GUI_DXVK_LOG_PATH!$DESC_DXVK_LOG_PATH ('DXVK_LOG_PATH')":DIR "${DXVK_LOG_PATH/#-/ -}" `#CAT_Proton` `#SUB_Directories` `#MENU_GAME` \
---field="     $GUI_RECOMMENDPROTON!$DESC_RECOMMENDPROTON ('RECOMMENDPROTON')":CHK "${RECOMMENDPROTON/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_CUSTPROTDLDIR!$DESC_CUSTPROTDLDIR ('CUSTPROTDLDIR')":DIR "${CUSTPROTDLDIR/#-/ -}" `#CAT_Proton` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_CUSTPROTEXTDIR!$DESC_CUSTPROTEXTDIR ('CUSTPROTEXTDIR')":DIR "${CUSTPROTEXTDIR/#-/ -}" `#CAT_Proton` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_BACKUPSTEAMUSER!$DESC_BACKUPSTEAMUSER ('BACKUPSTEAMUSER')":CHK "${BACKUPSTEAMUSER/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
@@ -3678,9 +3674,11 @@ function MainMenu {
 		SETHEAD="$SETHEAD \n ${GUI_SGE}: '$GAMEEXE'"
 	fi
 
-	"$YAD" --image "$SHOWPIC" --image-on-top --center --window-icon="$STLICON" --form --center "$WINDECO" --title="$TITLE" \
+	createProtonList X
+	WANTPROTON="$("$YAD" --image "$SHOWPIC" --image-on-top --center --window-icon="$STLICON" --form --center "$WINDECO" --title="$TITLE" \
     --text="$SETHEAD" \
 	--columns="$COLCOUNT" --f1-action="bash -c setColGui" --separator="" \
+	--field="$FBUT_GUISET_OTP":CB "${USEPROTON/#-/ -}!$PROTYADLIST" \
 	--field="$FBUT_GUISET_DCP":FBTN "$PROGCMD dcp" \
 	--field="$FBUT_GUISET_DW":FBTN "$PROGCMD dw" \
 	--field="$FBUT_GUISET_RECREATEPFX":FBTN "$PROGCMD ccd \"$AID\" \"s\"" \
@@ -3705,7 +3703,7 @@ function MainMenu {
 	--button="$BUT_FAV":12 \
 	--button="$BUT_EDITORMENU":14 \
 	--button="$BUT_PLAY":16 \
-	"$GEOM"
+	"$GEOM")"
 	case $? in
 	0)  {
 			clickInfo "${FUNCNAME[0]}" "$?" "$BUT_EXIT" "$SETMENU" "Exit"
@@ -9156,9 +9154,12 @@ function prepareLaunch {
 			checkStartMode
 		fi
 
+		if [ -n "$USEPROTON" ] && [ ! -f "$(PROTPATH "$USEPROTON")" ]; then
+			fixProtonVersionMismatch "$USEPROTON"
+		fi
+
 		# (re)initialize Proton dependant variables, when USEPROTON changed in a menu above
 		if [ -n "$USEPROTON" ] && [ "$USEPROTON" != "$FIRSTUSEPROTON" ] && [ "$ISGAME" -eq 2 ]; then
-
 			setNewProtVars "$(PROTPATH "$USEPROTON")"
 		fi
 
@@ -9323,10 +9324,10 @@ function prepareLaunch {
 		writelog "INFO" "${FUNCNAME[0]} - Automatic Grid Update Check '$SGDBAUTODL'"
 		getGrid "$AID" &
 	fi
-	
+
 	# Create GameTitle Symlink in STLCOMPDAT if enabled
 	setCompatDataTitle
-	
+
 	# GAME START
 	launchSteamGame
 
@@ -9512,7 +9513,7 @@ function checkProtonBump {
 	fi
 }
 
-function wantProton {
+function OneTimeProton {
 	if [ -n "$WANTPROTON" ] &&  [ -n "$USEPROTON" ]; then
 		if [ "$WANTPROTON" != "$USEPROTON" ]; then
 			if [ -z "$USEPROTON" ]; then
@@ -9520,21 +9521,16 @@ function wantProton {
 			else
 				DISPPROT="$USEPROTON"
 			fi
-			if [ "$RECOMMENDPROTON" -eq 1 ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Proton version '$WANTPROTON' recommended, but '$DISPPROT' is set"
-				notiShow "$(strFix "$NOTY_RECOMMENDPROTON" "$WANTPROTON" "$DISPPROT")"
-			else
-				writelog "INFO" "${FUNCNAME[0]} - Proton version '$WANTPROTON' required, but '$DISPPROT' is set"
-				notiShow "$(strFix "$NOTY_WANTPROTON" "$WANTPROTON" "$DISPPROT")"
+			writelog "INFO" "${FUNCNAME[0]} - One time Proton version '$WANTPROTON' selected, but '$DISPPROT' is set"
+			notiShow "$(strFix "$NOTY_WANTPROTON" "$WANTPROTON" "$DISPPROT")"
 
-				OVERRIDEPROTON=1
-			
-				if [ -f "$(PROTPATH "$WANTPROTON")" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - Proton version '$WANTPROTON' does exist - switching"
-					switchProton "$WANTPROTON"
-				else
-					fixProtonVersionMismatch "$WANTPROTON"
-				fi
+			OVERRIDEPROTON=1
+		
+			if [ -f "$(PROTPATH "$WANTPROTON")" ]; then
+				writelog "INFO" "${FUNCNAME[0]} -  One time Proton version '$WANTPROTON' does exist - switching"
+				switchProton "$WANTPROTON"
+			else
+				fixProtonVersionMismatch "$WANTPROTON"
 			fi
 		fi
 	fi	
@@ -10358,7 +10354,7 @@ function launchSteamGame {
 		# Proton:
 		else
 			# proton variants start here:
-			wantProton
+			OneTimeProton
 			
 			if [ "$(OVPROT)" -eq 0 ]; then
 				
