@@ -1,4 +1,3 @@
-
 <img align="left" width="64" height="64" src="https://github.com/frostworx/repo-assets/blob/master/pics/steamtinkerlaunch-logo_64px.png" alt="**SteamTinkerLaunch** (short **stl**) is a Linux wrapper tool for use with the Steam client">
 
 **Steam Tinker Launch** (short **stl**) is a Linux wrapper tool for use with the Steam client
@@ -9,11 +8,11 @@ By using a versatile configuration structure it is both easy to set up and flexi
 ## How to use
 
 ### General usage
-**stl works with linux native games and with games using proton!**
-*(Some features (f.e. [ReShade](https://github.com/frostworx/steamtinkerlaunch/wiki/ReShade)) are only available for games using proton)*
+**stl works with Linux native games and with games using Proton!**
+*(Some features (f.e. [ReShade](https://github.com/frostworx/steamtinkerlaunch/wiki/ReShade)) are only available for games using Proton)*
 *(Non-Steam games added to Steam are supported as well)*
 
-There are two ways to use **stl** with steam.
+There are two ways to use **stl** with Steam.
 Either as [Steam Launch Option](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam-Launch-Option) or as [Steam Compatibility Tool](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam-Compatibility-Tool)
 *(simply enabling it as global default [Steam Compatibility Tool](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam-Compatibility-Tool) works fine as well)*
 
@@ -79,14 +78,14 @@ For current development changes, you can also check [this Changelog issue](https
 * Multiple [Proton](https://github.com/frostworx/steamtinkerlaunch/wiki/Proton) options like
 	* [Backup Support](https://github.com/frostworx/steamtinkerlaunch/wiki/Backup-Support)
 	* [Download](https://github.com/frostworx/steamtinkerlaunch/wiki/Download-Custom-Proton) and [manage](https://github.com/frostworx/steamtinkerlaunch/wiki/Proton-Versions) [Custom Proton Builds](https://github.com/frostworx/steamtinkerlaunch/wiki/Custom-Proton-Autoupdate)
-	* [Dxvk Hud Options](https://github.com/frostworx/steamtinkerlaunch/wiki/Dxvk-Hud-Options)
+	* [DXVK Hud Options](https://github.com/frostworx/steamtinkerlaunch/wiki/Dxvk-Hud-Options)
 	* [ProtonDB-Rating](https://github.com/frostworx/steamtinkerlaunch/wiki/ProtonDB-Rating)
-	* [(Re-)Create Proton compdata and WINEPREFIX](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam-First-Time-Setup#Re-Create Compdata and Wineprefix)
+	* [(Re-)Create Proton compdata and WINEPREFIX](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam-First-Time-Setup#re-create-compatdata-and-wineprefix)
 	* [Steam First Time Setup packages](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam-First-Time-Setup): install [Regular](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam-First-Time-Setup#Regular-First-Time-Setup) or [Custom](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam-First-Time-Setup#Custom-First-Time-Setup) First-Time-Setups on the fly
 
 * [Shader](https://github.com/frostworx/steamtinkerlaunch/wiki/Shader) [ReShade](https://github.com/frostworx/steamtinkerlaunch/wiki/ReShade) [Management](https://github.com/frostworx/steamtinkerlaunch/wiki/Shader-Management)
 
-* multiple [Steam](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam) related options like
+* Multiple [Steam](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam) related options like
 	* [SteamGridDB Support](https://github.com/frostworx/steamtinkerlaunch/wiki/SteamGridDB)
 	* [Add Non Steam Game](https://github.com/frostworx/steamtinkerlaunch/wiki/Add-Non-Steam-Game) easily
 	* use [Steam Categories](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam-Categories) to enable functions for games on the fly
