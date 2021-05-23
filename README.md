@@ -80,7 +80,7 @@ For current development changes, you can also check [this Changelog issue](https
 	* [Download](https://github.com/frostworx/steamtinkerlaunch/wiki/Download-Custom-Proton) and [manage](https://github.com/frostworx/steamtinkerlaunch/wiki/Proton-Versions) [Custom Proton Builds](https://github.com/frostworx/steamtinkerlaunch/wiki/Custom-Proton-Autoupdate)
 	* [DXVK Hud Options](https://github.com/frostworx/steamtinkerlaunch/wiki/Dxvk-Hud-Options)
 	* [ProtonDB-Rating](https://github.com/frostworx/steamtinkerlaunch/wiki/ProtonDB-Rating)
-	* [(Re-)Create Proton compdata and WINEPREFIX](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam-First-Time-Setup#re-create-compatdata-and-wineprefix)
+	* [(Re-)Create Proton compatdata and WINEPREFIX](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam-First-Time-Setup#re-create-compatdata-and-wineprefix)
 	* [Steam First Time Setup packages](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam-First-Time-Setup): install [Regular](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam-First-Time-Setup#Regular-First-Time-Setup) or [Custom](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam-First-Time-Setup#Custom-First-Time-Setup) First-Time-Setups on the fly
 
 * [Shader](https://github.com/frostworx/steamtinkerlaunch/wiki/Shader) [ReShade](https://github.com/frostworx/steamtinkerlaunch/wiki/ReShade) [Management](https://github.com/frostworx/steamtinkerlaunch/wiki/Shader-Management)
