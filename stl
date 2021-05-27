@@ -8,6 +8,8 @@ NICEPROGNAME="Steam Tinker Launch"
 PROGVERS="v6.8.3"
 PROGCMD="${0##*/}"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
+PPW="$PROJECTPAGE/wiki"
+CURWIKI="$PPW"
 
 ### internal dependencies ###
 #STARTINTDEPS
@@ -98,7 +100,9 @@ LSAD="$LOSE/$APDA"
 RUNCONTY="$NON"
 WINX="800"
 WINY="600"
-
+F1ACTION="bash -c OpenWiki"
+F1ACTIONCG="bash -c setColGui"
+	
 ### default vars ###
 
 if [ -z "$XDG_CONFIG_HOME" ]; then
@@ -346,6 +350,32 @@ function setSteamPaths {
 	writelog "INFO" "${FUNCNAME[0]} - Found SteamUserId '$STEAMUSERID'"
 }
 
+function OpenWikiPage {
+	if [ -n "$1" ]; then
+		if grep -q "$PPW" <<< "$1"; then
+			WIKURL="$1"
+		else
+			WIKURL="$PPW/$1"
+		fi
+	else
+		if [ -n "$CURWIKI" ]; then
+			WIKURL="$CURWIKI"
+		fi
+	fi
+	
+	if [ -n "$WIKURL" ]; then
+		TITLE="${PROGNAME}-Wiki"
+		pollWinRes "$TITLE"
+		"$YAD" --window-icon="$STLICON" --title="$TITLE" --on-top --center "$WINDECO" --html --uri="$WIKURL" "$GEOM" >/dev/null 2>/dev/null	
+	fi
+}
+
+function OpenWiki {
+	$PROGCMD wiki "$CURWIKI"
+}
+
+export -f OpenWiki
+
 function setColGui {
 	HAVCOL=0
 	if grep -q "^COLCOUNT" "$CURGUICFG"; then
@@ -356,10 +386,12 @@ function setColGui {
 		CURCOL=1
 	fi
 
+	export CURWIKI="$PPW/Gui-Columns"
+
 	TITLE="${FUNCNAME[0]}"
 	WTR="${CURGUICFG##*/}"
 	WINTITLE="${WTR//.conf}"
-	SELCOL="$("$YAD" --center --form --separator="\n" --field="Columns in $WINTITLE":NUM "$CURCOL" --title="$TITLE" "$GEOM")"
+	SELCOL="$("$YAD" --f1-action="$F1ACTION" --center --form --separator="\n" --field="Columns in $WINTITLE":NUM "$CURCOL" --title="$TITLE" "$GEOM")"
 	
 	if [ "$SELCOL" -eq 0 ]; then
 		SELCOL=1
@@ -713,7 +745,7 @@ function openGameLauncher {
 	function GLgui {
 		LISTDIR="$DFDIR/$1"
 		if [ -d "$LISTDIR" ] && [ "$(find "$LISTDIR" -name "*.desktop" | wc -l)" -ge 1 ]; then
-			"$YAD" --icons --window-icon="$STLICON" --read-dir="$LISTDIR" "$WINDECO" --title="$TITLE" --single-click --keep-icon-size --center --compact --sort-by-name "$GEOM"
+			"$YAD" --f1-action="$F1ACTION" --icons --window-icon="$STLICON" --read-dir="$LISTDIR" "$WINDECO" --title="$TITLE" --single-click --keep-icon-size --center --compact --sort-by-name "$GEOM"
 		else
 			writelog "SKIP" "${FUNCNAME[0]} - No games found in '$LISTDIR' or directory itself not found" "E"
 		fi
@@ -741,6 +773,7 @@ function openGameLauncher {
 		fi
 	fi
 
+	export CURWIKI="$PPW/Game-Launcher"
 	TITLE="${PROGNAME}-Launcher"
 	pollWinRes "$TITLE" 
 
@@ -749,7 +782,7 @@ function openGameLauncher {
 	else
 		if [ "$1" == "menu" ]; then
 			createCategoriesList
-			CATMENU="$("$YAD" --window-icon="$STLICON" --center "$WINDECO" --form --scroll --separator="\n" --quoted-output \
+			CATMENU="$("$YAD" --f1-action="$F1ACTION" --window-icon="$STLICON" --center "$WINDECO" --form --scroll --separator="\n" --quoted-output \
 			--text="$(spanFont "$GUI_CHOOSECAT" "H")" \
 			--field="$GUI_CHOOSECATS":CB "installed!$CATLIST" \
 			--title="$TITLE" "$GEOM"
@@ -2003,12 +2036,13 @@ function setNOP {
 function needNewProton {
 	if [ "$(OVPROT)" -eq 1 ] || [ -n "$1" ]; then
 		getAvailableProtonVersions "up"
+		export CURWIKI="$PPW/Proton-Versions"
 		TITLE="${PROGNAME}-NeedNewProtonVersion"
 		pollWinRes "$TITLE"
 		writelog "INFO" "${FUNCNAME[0]} - No Proton Version was found - opening a requester to choose from one"
 		createProtonList "$1"
 		
-		PICKPROTON="$("$YAD" --window-icon="$STLICON" --center $WINDECO --form --scroll --separator="\n" --quoted-output \
+		PICKPROTON="$("$YAD" --f1-action="$F1ACTION" --window-icon="$STLICON" --center $WINDECO --form --scroll --separator="\n" --quoted-output \
 		--text="$(spanFont "$GUI_NEEDNEWPROTON" "H")" \
 		--field="$GUI_NEEDNEWPROTON2":CB "${USEPROTON/#-/ -}!$PROTYADLIST" \
 		--title="$TITLE" "$GEOM")"
@@ -2036,7 +2070,7 @@ function wgetGui {
 	
 	if [ "$USEWGETGUI" -eq 1 ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Downloading '$SRCURL' via Gui, as 'USEWGETGUI' is enabled"
-
+		export CURWIKI="$PPW/Downloads"
 		TITLE="Download"
 		pollWinRes "$TITLE"
 
@@ -2046,7 +2080,7 @@ function wgetGui {
 		writelog "INFO" "${FUNCNAME[0]} - $DLTEXT"
 
 		"$WGET" -q --show-progress "$SRCURL" -O "$DESTDIR" 2>&1 | sed -u -e "s:\.::g;s:%.*$::g;s:.*K::g;s:^[[:space:]]*::g" | \
-		"$YAD" --window-icon="$STLICON" --center --on-top "$WINDECO" --title="$TITLE" --progress --auto-close --text="$(spanFont "$DLTEXT" "H")" "$GEOM"
+		"$YAD" --f1-action="$F1ACTION" --window-icon="$STLICON" --center --on-top "$WINDECO" --title="$TITLE" --progress --auto-close --text="$(spanFont "$DLTEXT" "H")" "$GEOM"
 		case $? in
 			0)  {
 					writelog "INFO" "${FUNCNAME[0]} - Clicked Close or Download failed - deleting the unfinished download"
@@ -2172,7 +2206,7 @@ function dlCustomProtonGUI {
 	writelog "INFO" "${FUNCNAME[0]} - Opening dialog to choose a download"
 
 	DLPROTLIST="$(printf "!%s\n" "${ProtonDLDispList[@]//\"/}" | tr -d '\n' | sed "s:^!::" | sed "s:!$::")"
-
+	export CURWIKI="$PPW/Download-Custom-Proton"
 	TITLE="${PROGNAME}-DownloadCustomProton"
 	pollWinRes "$TITLE"
 
@@ -2180,7 +2214,7 @@ function dlCustomProtonGUI {
 		DLPROTON="${ProtonDLDispList[0]}"
 	fi
 
-	DLDISPCUSTPROT="$("$YAD" --window-icon="$STLICON" --form --center --on-top $WINDECO \
+	DLDISPCUSTPROT="$("$YAD" --f1-action="$F1ACTION" --window-icon="$STLICON" --form --center --on-top $WINDECO \
 	--title="$TITLE" \
 	--text="$(spanFont "$GUI_DLCUSTPROTTEXT" "H")" \
 	--field=" ":LBL " " --separator="" \
@@ -2270,11 +2304,11 @@ function dlCustomProtonAsk {
 	writelog "INFO" "${FUNCNAME[0]} - Asking if proton version '$NEWESTPROT' should be updated"
 
 	setShowPic
-
+	export CURWIKI="$PPW/Download-Custom-Proton"
 	TITLE="${PROGNAME}-NewProtonAvailable"
 	pollWinRes "$TITLE"
 	
-	"$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --scroll --center "$WINDECO" \
+	"$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --scroll --center "$WINDECO" \
     --title="$TITLE" \
 	--text="$(spanFont "$(strFix "$NOTY_NEWPROTON" "$NEWESTPROT" "$CURPROTON")\n$(strFix "$GUI_DLCUSTPROTASK" "$NEWESTPROT")" "H")" \
 	"$GEOM" \
@@ -2383,11 +2417,11 @@ function addCustomProton {
 			echo "################################################"
 			} > "$CUSTOMPROTONLIST"
 		fi
-
+		export CURWIKI="$PPW/Custom-Proton-Autoupdate"
 		TITLE="${PROGNAME}-AddCustomProton"
 		pollWinRes "$TITLE"
 
-		NEWCUSTPROT="$("$YAD" --window-icon="$STLICON" --form --center --on-top $WINDECO \
+		NEWCUSTPROT="$("$YAD" --f1-action="$F1ACTION" --window-icon="$STLICON" --form --center --on-top $WINDECO \
 		--title="$TITLE" \
 		--text="$(spanFont "$GUI_ADDCUSTOMBINARY" "H")" \
 		--field=" ":LBL " " \
@@ -2712,14 +2746,14 @@ function EditorDialog {
 	fi
 
 	writelog "INFO" "${FUNCNAME[0]} - Found ${#CfgFiles[@]} available Config Files - opening Checklist"
-
+	export CURWIKI="$PPW/Editor-Menu"
 	TITLE="${PROGNAME}-Editor"
 	pollWinRes "$TITLE"
 
 	setShowPic
 
 	EDFILES="$(while read -r f; do	echo "FALSE"; echo "$f"; done <<< "$(printf "%s\n" "${CfgFiles[@]}" | sort -u)" | \
-	"$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center $WINDECO --list --checklist --column=Edit --column=ConfigFile --separator="\n" --print-column="2" \
+	"$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center $WINDECO --list --checklist --column=Edit --column=ConfigFile --separator="\n" --print-column="2" \
 	--text="$(spanFont "$(strFix "$GUI_EDITORDIALOG" "$GN" "$AID")" "H")" --title="$TITLE" --button="$BUT_EDIT":0 --button="$BUT_HIDE":2 --button="$BUT_OD":4 --button="$BUT_DEL":6 --button="$BUT_CAN":8 "$GEOM")"
 	case $? in
 		0)  {
@@ -3447,7 +3481,7 @@ function openCustMenu {
 	# shellcheck disable=SC2028 # doesn't like the newline seperator, but it is valid
 	{
 		echo "function $MYFUNC {"
-		echo "\"$YAD\" --columns=\"$COLCOUNT\" --f1-action=\"bash -c setColGui\" --text=\"$(spanFont "$MYTEXT" "H")\" \\"
+		echo "\"$YAD\" --columns=\"$COLCOUNT\" --f1-action=\"$F1ACTIONCG\" --text=\"$(spanFont "$MYTEXT" "H")\" \\"
 		echo "--title=\"$TITLE\" --image \"$FAVPIC\" --image-on-top --window-icon=\"$STLICON\" --center $WINDECO --form --separator=\"\\n\" --quoted-output \\"
 		echo "--button=\"$BUT0\":0 --button=\"$BUT2\":2 --button=\"$BUT4\":4 --button=\"$BUT6\":6 --button=\"$BUT8\":8 --button=\"$BUT10\":10 $GEOM \\"
 		cat "$MYTMPL"
@@ -3515,11 +3549,11 @@ function setGuiSortOrder {
 		writelog "INFO" "${FUNCNAME[0]} - '$STLMENUSORTCFG' missing"
 		getCatsFromCode > "$STLMENUSORTCFG" 2>/dev/null
 	fi
-
+	export CURWIKI="$PPW/Gui-Sort-Order"
 	TITLE="${PROGNAME}-SortCategories"
 	pollWinRes "$TITLE"
 
-	NEWSORT="$("$YAD" --window-icon="$STLICON" --center --on-top "$WINDECO" \
+	NEWSORT="$("$YAD" --f1-action="$F1ACTION" --window-icon="$STLICON" --center --on-top "$WINDECO" \
 		--list --editable --column "Category" --separator="" --print-all \
 		--title="$TITLE" --text="$(spanFont "$GUI_SORTCAT" "H")" $GEOM < "$STLMENUSORTCFG")"
 	case $? in
@@ -3536,13 +3570,14 @@ function setGuiSortOrder {
 }
 
 function setGuiFavoritesSelection {
+	export CURWIKI="$PPW/Favorites-Menu"
 	TITLE="${PROGNAME}-FavoritesSelection"
 	pollWinRes "$TITLE"
 
 	setShowPic
 
 	FAVENTRIES="$(favoritesMenuEntries | \
-	"$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center $WINDECO --list --checklist \
+	"$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center $WINDECO --list --checklist \
 	--column="$GUI_ADD" --column="$GUI_DESC" --column="$GUI_VAR" --column=LongDesc  --separator="\n" --print-column="3" --tooltip-column 4 --hide-column 4 \
 	--text="$(spanFont "$GUI_FAVORITESSEL" "H")" --title="$TITLE" "$GEOM")"
 	case $? in
@@ -3568,11 +3603,12 @@ function setGuiFavoritesSelection {
 }
 
 function setGuiBlockSelection {
+	export CURWIKI="$PPW/Gui-Hide-Categories"
 	TITLE="${PROGNAME}-EntryBlockSelection"
 	pollWinRes "$TITLE"
 
 	BLENTRIES="$(createBlockYadList | \
-	"$YAD" --window-icon="$STLICON" --center --list --checklist \
+	"$YAD" --f1-action="$F1ACTION" --window-icon="$STLICON" --center --list --checklist \
 	--column="$GUI_HIDE" --column="$GUI_DESC" --separator=" " --print-column="2" \
 	--text="$(spanFont "$GUI_BLOCKSEL" "H")" --title="$TITLE" "$GEOM")"
 	case $? in
@@ -3597,6 +3633,7 @@ function setGuiBlockSelection {
 }
 
 function setGuiCategoryMenuSel {
+	export CURWIKI="$PPW/Category-Menus"
 	TITLE="${PROGNAME}-CategorySelection"
 	pollWinRes "$TITLE"
 
@@ -3604,7 +3641,7 @@ function setGuiCategoryMenuSel {
 	
 	CATDD="$(getCatsFromCode | tr '\n' '!'  | sed "s:^!::" | sed "s:!$::")"
 
-	SELECTCAT="$("$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center $WINDECO --form --separator="\n" \
+	SELECTCAT="$("$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center $WINDECO --form --separator="\n" \
 	--text="$(spanFont "$(strFix "$GUI_CATSEL" "$PROGNAME")" "H")" \
 	--title="$TITLE" --field=" $GUI_CAT!$GUI_CATSEL":CB "$CATDD" "$GEOM")"
 	case $? in
@@ -3639,7 +3676,7 @@ function MainMenu {
 	
 	setHuyList
 	setOPCustPath
-	
+	export CURWIKI="$PPW/Main-Menu"
 	TITLE="${PROGNAME}-MainMenu"
 	pollWinRes "$TITLE" 4
 
@@ -3674,9 +3711,9 @@ function MainMenu {
 	fi
 
 	createProtonList X
-	WANTPROTON="$("$YAD" --image "$SHOWPIC" --image-on-top --center --window-icon="$STLICON" --form --center "$WINDECO" --title="$TITLE" \
+	WANTPROTON="$("$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --center --window-icon="$STLICON" --form --center "$WINDECO" --title="$TITLE" \
     --text="$SETHEAD" \
-	--columns="$COLCOUNT" --f1-action="bash -c setColGui" --separator="" \
+	--columns="$COLCOUNT" --f1-action="$F1ACTIONCG" --separator="" \
 	--field="$FBUT_GUISET_OTP":CB "${USEPROTON/#-/ -}!$PROTYADLIST" \
 	--field="$FBUT_GUISET_DCP":FBTN "$PROGCMD dcp" \
 	--field="$FBUT_GUISET_DW":FBTN "$PROGCMD dw" \
@@ -3694,6 +3731,7 @@ function MainMenu {
 	--field="$FBUT_GUISET_OPURL!$TT_OPENURL":FBTN "$PROGCMD hu \"$AID\"" \
 	--field="$FBUT_GUISET_GASCO":FBTN "$PROGCMD gs \"$AID\"" \
 	--field="$FBUT_GUISET_VORTEX":FBTN "$PROGCMD vortex gui" \
+	--field="$FBUT_GUISET_WIKI":FBTN "$PROGCMD wiki" \
 	--button="$BUT_EXIT":0 \
 	--button="$BUT_GUISET_CATMENUSHORT":4 \
     --button="$BUT_GM":6 \
@@ -3924,7 +3962,7 @@ function createMenu {
 	# shellcheck disable=SC2028 # doesn't like the newline seperator, but it is valid
 	{
 		echo "function $ARGFUNC {"
-		echo "\"$YAD\" --columns=\"$COLCOUNT\" --f1-action=\"bash -c setColGui\" --text=\"$(spanFont "$ARGTITLE" "H")\" \\"
+		echo "\"$YAD\" --columns=\"$COLCOUNT\" --f1-action=\"$F1ACTIONCG\" --text=\"$(spanFont "$ARGTITLE" "H")\" \\"
 		echo "--title=\"$TITLE\" --image \"$ARGPIC\" --image-on-top --window-icon=\"$STLICON\" --center \"$WINDECO\" --form --separator=\"\\n\" --quoted-output \\"
 		echo "--button=\"$QBUT0\":0 --button=\"$BUT_MAINMENU\":2 --button=\"$BUT_RELOAD\":4 --button=\"$BUT_SAVERELOAD\":6 --button=\"$BUT_SAVEPLAY\":8 --button=\"$BUT_PLAY\":10 $GEOM \\"
 		cat "$MYTMPL"
@@ -5291,14 +5329,14 @@ function GameShaderDialog {
 
 		getAvailableShaders
 		writelog "INFO" "${FUNCNAME[0]} - Found ${#ShaderFiles[@]} available Shader Files - opening Selection"
-
+		export CURWIKI="$PPW/Shader-Management"
 		TITLE="${PROGNAME}-Shader"
 		pollWinRes "$TITLE"
 
 		setShowPic
 
 		SHADFILES="$(while read -r f; do if [ ! -f "$SHADDESTDIR/${f##*/}" ]; then 	echo FALSE ; echo "$f"; else echo TRUE ; echo "$f" ;fi ; done <<< "$(printf "%s\n" "${ShaderFiles[@]}")" | \
-		"$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center "$WINDECO" --list --checklist --column="$GUI_ADD" --column=Shader --separator=" " --print-column="2" \
+		"$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center "$WINDECO" --list --checklist --column="$GUI_ADD" --column=Shader --separator=" " --print-column="2" \
 		--text="$(spanFont "$(strFix "$GUI_SHADERDIALOG" "${SHADDESTDIR##*/}")" "H")" --title="$TITLE" "$GEOM")"
 		case $? in
 			0)  {
@@ -5727,7 +5765,7 @@ function askSettings {
 			writelog "INFO" "${FUNCNAME[0]} - Opening Requester with timeout '$WAITEDITOR'"
 
 			getAvailableCfgs
-
+			export CURWIKI="$PPW/Wait-Requester"
 			TITLE="${PROGNAME}-OpenSettings"
 			pollWinRes "$TITLE"
 
@@ -5759,7 +5797,7 @@ function askSettings {
 				PDBROUT="$(cat "$PDBRASINF")"
 			fi
 	
-			"$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
+			"$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
 			--title="$TITLE" \
 			--text="$(spanFont "$GN ($AID) - $REQQEST" "H")" \
 			--field="<span font=\"italic\">$PDBROUT</span>":LBL \
@@ -6230,7 +6268,7 @@ function GameScopeGui {
 		setAIDCfgs
 	fi
 	loadCfg "$STLGAMECFG"
-
+	export CURWIKI="$PPW/GameScope"
 	TITLE="${PROGNAME}-${FUNCNAME[0]}"
 	pollWinRes "$TITLE"
 	setShowPic
@@ -6300,7 +6338,7 @@ function GameScopeGui {
 		fi
 	fi
 
-	GASCOS="$("$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top $WINDECO \
+	GASCOS="$("$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top $WINDECO \
 			--title="$TITLE" --separator="|" \
 			--text="$(spanFont "$(strFix "$GUI_GASCOSET" "${GN/$LGS /} ($AID)")" "H")" \
 			--field="$GUI_GSINTRES!$DESC_GSINTRES ('GSINTRES')":CBE "${GSINTRES//\"}!$(printf "%s\n" "$("$XRANDR" --current | grep "[0-9]x" | gawk '{print $1}' | grep "^[0-9]" | tr '\n' '!')")" \
@@ -6404,6 +6442,7 @@ function StandaloneProtonGame {
 	}
 
 	function SapGui {
+		export CURWIKI="$PPW/Standalone-Proton"
 		TITLE="${PROGNAME}-StandaloneProtonGame"
 		pollWinRes "$TITLE"
 
@@ -6415,7 +6454,7 @@ function StandaloneProtonGame {
 			IN_SAP_COMPAT_DATA_PATH="$SAP_COMPAT_DATA_PATH"
 		fi
 
-		PROTPARTS="$("$YAD" --window-icon="$STLICON" --form --center --on-top $WINDECO \
+		PROTPARTS="$("$YAD" --f1-action="$F1ACTION" --window-icon="$STLICON" --form --center --on-top $WINDECO \
 		--title="$TITLE" \
 		--text="$(spanFont "$GUI_SAPTEXT" "H")" \
 		--field=" ":LBL " " --separator="|" \
@@ -6563,7 +6602,7 @@ function OneTimeRunGui {
 		writelog "ERROR" "STEAM_COMPAT_DATA_PATH could not be determined" "E"
 	else
 		createProtonList X
-
+		export CURWIKI="$PPW/One-Time-Run"
 		TITLE="${PROGNAME}-${FUNCNAME[0]}"
 		pollWinRes "$TITLE"
 		setShowPic
@@ -6571,7 +6610,7 @@ function OneTimeRunGui {
 			OTPROTON="$USEPROTON"
 		fi
 
-		OTCMDS="$("$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top $WINDECO \
+		OTCMDS="$("$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top $WINDECO \
 			--title="$TITLE" --separator="|" \
 			--text="$(spanFont "$GUI_ONETIMERUN" "H")" \
 			--field="$GUI_OTPROTON!$DESC_OTPROTON":CB "${OTPROTON//\"}!$PROTYADLIST" \
@@ -6650,11 +6689,11 @@ function launchCustomProg {
 	if [ -z "$CUSTOMCMD" ] || [ "$CUSTOMCMD" == "$("$WHICH" echo 2>/dev/null)" ]; then
 
 		writelog "INFO" "${FUNCNAME[0]} - CUSTOMCMD variable is empty - opening file requester"
-
+		export CURWIKI="$PPW/Custom-Program"
 		TITLE="${PROGNAME}-OpenCustomProgram"
 		pollWinRes "$TITLE"
 
-		ZCUST="$("$YAD" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
+		ZCUST="$("$YAD" --f1-action="$F1ACTION" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
 		--title="$TITLE" \
 		--text="$(spanFont "$GN ($AID) - $GUI_SELECTCUSTOMEXE" "H")" \
 		--field=" ":LBL " " \
@@ -6709,11 +6748,11 @@ function launchCustomProg {
 				CHCUSTDIR=1
 			else
 				writelog "INFO" "${FUNCNAME[0]} - CUSTOMCMD file '$CUSTOMCMD' not found - opening file requester"
-			
+				export CURWIKI="$PPW/Custom-Program"
 				TITLE="${PROGNAME}-OpenCustomProgram"
 				pollWinRes "$TITLE"
 				
-				ZCUST="$("$YAD" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
+				ZCUST="$("$YAD" --f1-action="$F1ACTION" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
 				--title="$TITLE" \
 				--text="$(spanFont "$GN ($AID) - $GUI_SELECTCUSTOMEXE" "H")" \
 				--field=" ":LBL " " \
@@ -6823,7 +6862,7 @@ function DxvkHudPick {
 		else
 			mapfile -d " " -t -O "${#CURDXH[@]}" CURDXH <<< "$(printf '%s\n' "$DXVK_HUD")"
 		fi
-
+		export CURWIKI="$PPW/Dxvk-Hud-Options"
 		TITLE="${PROGNAME}-DXVK-Hud-Options"
 		pollWinRes "$TITLE"
 
@@ -6838,7 +6877,7 @@ function DxvkHudPick {
 			fi
 			echo "$dxline"
 		done <<< "$(tr ',' '\n' <<< "$DXVKHUDLIST")"	 | \
-		"$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center "$WINDECO" --list --checklist --column="$GUI_ADD" --column="$GUI_DXH" --separator="" --print-column="2" \
+		"$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center "$WINDECO" --list --checklist --column="$GUI_ADD" --column="$GUI_DXH" --separator="" --print-column="2" \
 		--text="$(spanFont "$(strFix "$GUI_DXHDIALOG" "$GN ($AID)")" "H")" --title="$TITLE" "$GEOM")"
 
 		if [ -n "$DXHUDOPTS" ]; then
@@ -7306,7 +7345,7 @@ function SetWineDebugChannels {
 		setAIDCfgs
 	fi
 	loadCfg "$STLGAMECFG"
-
+	export CURWIKI="$PPW/Wine-Debug"
 	TITLE="${PROGNAME}-${FUNCNAME[0]}"
 	pollWinRes "$TITLE"
 	setShowPic	
@@ -7328,7 +7367,7 @@ function SetWineDebugChannels {
 		fi
 		echo "$wtch"
 	done < "$WDC" | \
-	"$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center "$WINDECO" --list --checklist --column="$GUI_MINUS":CHK --column="$GUI_PLUS":CHK --column="$GUI_WDCH" --separator=";" --print-all  \
+	"$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center "$WINDECO" --list --checklist --column="$GUI_MINUS":CHK --column="$GUI_PLUS":CHK --column="$GUI_WDCH" --separator=";" --print-all  \
 	--text="$(spanFont "$(strFix "$GUI_WDCDIALOG" "$GN ($AID)")" "H")" --title="$TITLE" --button="$BUT_CAN:0" --button="$BUT_SELECT:2" "$GEOM")"
 	case $? in
 		0)	{
@@ -7381,7 +7420,7 @@ function WinetricksPick {
 		mapfile -d " " -t -O "${#OTHERPAKS[@]}" OTHERPAKS <<< "${curpak%% *}"
 	fi
 	done <<< "$(printf "%s\n" "${CURWTPAKS[@]}")"
-
+	export CURWIKI="$PPW/Winetricks"
 	TITLE="${PROGNAME}-WinetricksPackageSelection-$WTPREF"
 	pollWinRes "$TITLE"
 
@@ -7405,7 +7444,7 @@ function WinetricksPick {
 		DESCR="${DESCR2//&/&amp}"
 		echo "${DESCR#"${DESCR%%[![:space:]]*}"}"
 	done <<< "$("$WINETRICKS" "$WTPREF" list)"	 | \
-	"$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center "$WINDECO" --list --checklist --column="$GUI_ADD" --column="$GUI_WTPACK" --column="$GUI_WTDESC" --separator="" --print-column="2" \
+	"$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center "$WINDECO" --list --checklist --column="$GUI_ADD" --column="$GUI_WTPACK" --column="$GUI_WTDESC" --separator="" --print-column="2" \
 	--text="$(spanFont "$(strFix "$GUI_WTPACKDIALOG" "$GN ($AID)")" "H")" --title="$TITLE" --button="$BUT_CAN:0" --button="$BUT_SELECT:2" "$GEOM")"
 	case $? in
 		0)	{
@@ -7459,7 +7498,7 @@ function chooseWinetricksPrefix {
 		ORGWINETRICKSPAKS="$WINETRICKSPAKS"
 		
 		writelog "INFO" "${FUNCNAME[0]} - Opening dialog to choose a winetricks prefix"
-
+		export CURWIKI="$PPW/Winetricks"
 		TITLE="${PROGNAME}-${FUNCNAME[0]}"
 		pollWinRes "$TITLE"
 		setShowPic
@@ -7481,7 +7520,7 @@ function chooseWinetricksPrefix {
 			WTPROTON="$USEPROTON"
 		fi
 
-		WTCATPFX="$("$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top $WINDECO \
+		WTCATPFX="$("$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top $WINDECO \
 		--title="$TITLE" --separator=";" \
 		--text="$(spanFont "$GUI_CHOOSEWTCATPFX" "H")" \
 		--field=" ":LBL " " \
@@ -7919,10 +7958,11 @@ function addVortexStage {
 	fi
 
 	if [ -z "$1" ]; then
+		export CURWIKI="$PPW/Vortex"
 		TITLE="${PROGNAME}-AddVortexStage"
 		pollWinRes "$TITLE"
 
-		NEWVS="$("$YAD" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
+		NEWVS="$("$YAD" --f1-action="$F1ACTION" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
 		--file --directory \
 		--title="$TITLE" \
 		--text="$(spanFont "$GUI_SELECTVORTEXDIR" "H")" "$GEOM")"
@@ -8220,7 +8260,7 @@ function VortexGamesDialog {
 	writelog "INFO" "${FUNCNAME[0]} - Opening Vortex Dialog for en/disabling Vortex for installed games"
 
 	getInstalledGamesWithVortexSupport
-
+	export CURWIKI="$PPW/Vortex"
 	TITLE="${PROGNAME}-Vortex Toggle"
 	pollWinRes "$TITLE"
 
@@ -8262,7 +8302,7 @@ function VortexGamesDialog {
 			fi
 		fi
 	done <<< "$(printf "%s\n" "${INSTVGAMES[@]}")" | \
-	"$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center "$WINDECO" --list --checklist --column="Use Vortex" --column="Game ID" --column="Game Title" --column "Vortex Steam Category" --separator=";" --print-column="2" \
+	"$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center "$WINDECO" --list --checklist --column="Use Vortex" --column="Game ID" --column="Game Title" --column "Vortex Steam Category" --separator=";" --print-column="2" \
 	--text="$(spanFont "$GUI_VINFO" "H")\n<span font=\"italic\">($GUI_VINFO1)</span>" --title="$TITLE" "$GEOM")"
 	case $? in
 		0)
@@ -8296,14 +8336,15 @@ function VortexGamesDialog {
 function VortexSymDialog {
 	VORTEXPFX="${VORTEXCOMPDATA//\"/}/pfx"
 	VPDRC="$VORTEXPFX/$DRC"
-	if [ -d "$VPDRC" ]; then		
+	if [ -d "$VPDRC" ]; then
+		export CURWIKI="$PPW/Vortex"	
 		TITLE="${PROGNAME}-Vortex Symlinks"
 		pollWinRes "$TITLE"
 
 		setShowPic
 
 		cd "$VPDRC" || return
-		find . -type l -printf '%p\n%l\n' | "$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center "$WINDECO" --list --column="Symlink in '${VPDRC}/'" --column="Points to Game WinePrefix" --print-column="3" \
+		find . -type l -printf '%p\n%l\n' | "$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center "$WINDECO" --list --column="Symlink in '${VPDRC}/'" --column="Points to Game WinePrefix" --print-column="3" \
 		--text="$(spanFont "$GUI_VOSY" "H")\n" --title="$TITLE" "$GEOM"
 		cd - || return
 	else
@@ -8715,10 +8756,11 @@ function setVortexSELaunch {
 				writelog "SKIP" "${FUNCNAME[0]} - Special exe '$2' for '$GN ($AID)' not found in gamedir '$EFD' - starting normal exe"
 		else
 			writelog "INFO" "${FUNCNAME[0]} - Found special exe '$2' for '$GN ($AID)' in gamedir '$EFD'"
+			export CURWIKI="$PPW/Vortex"
 			TITLE="ScriptExtenderRequester"
 			pollWinRes "$TITLE"
 
-			"$YAD" --window-icon="$STLICON"  --center "$WINDECO" \
+			"$YAD" --f1-action="$F1ACTION" --window-icon="$STLICON"  --center "$WINDECO" \
 			--title="$TITLE" \
 			--text="$GUI_SEBINFOUND '$EFD/$2'" \
 			--button="${GE^^}":0 \
@@ -8794,7 +8836,7 @@ function getInstVtxVers {
 }
 
 function VortexOptions {
-
+	export CURWIKI="$PPW/Vortex"
 	TITLE="${PROGNAME}-${FUNCNAME[0]}"
 	pollWinRes "$TITLE" 4
 	setShowPic
@@ -8830,8 +8872,8 @@ function VortexOptions {
 		TT_DL="$(printf '%s\n%s\n' "$TT_DL" "Newest setup online: ${VSO}")"
 	fi
 	
-	"$YAD" --image "$SHOWPIC" --image-on-top --center --window-icon="$STLICON" --form --center "$WINDECO" --title="$TITLE" \
-    --text="$VTXHEAD" --columns="$COLCOUNT" --f1-action="bash -c setColGui" --separator="" \
+	"$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --center --window-icon="$STLICON" --form --center "$WINDECO" --title="$TITLE" \
+    --text="$VTXHEAD" --columns="$COLCOUNT" --f1-action="$F1ACTIONCG" --separator="" \
 	--field="$FBUT_GUISET_VTXINST!$TT_CODA":FBTN "$PROGCMD $VTX install gui" \
 	--field="$FBUT_GUISET_VTXSTART":FBTN "$PROGCMD $VTX start" \
 	--field="$FBUT_GUISET_VTXSTAGE!$TT_STAGES":FBTN "$PROGCMD $VTX stage" \
@@ -8858,6 +8900,7 @@ function installVortex {
 }
 
 function installVortexGui {
+	export CURWIKI="$PPW/Vortex"
 	TITLE="${PROGNAME}-${FUNCNAME[0]}"
 	pollWinRes "$TITLE"
 	setShowPic
@@ -8884,7 +8927,7 @@ function installVortexGui {
 		GUI_VTXINST="$(printf '%s\n%s\n' "${GUI_VTXINST}" "Newest setup online: ${VSO}")"
 	fi
 	
-	VTXINSTARGS="$("$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top $WINDECO \
+	VTXINSTARGS="$("$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top $WINDECO \
 		--title="$TITLE" --separator="|" \
 		--text="$(spanFont "$GUI_VTXINST" "H")" \
 		--field="$GUI_USEVORTEXPROTON!$DESC_USEVORTEXPROTON ('USEVORTEXPROTON')":CB "$USEVORTEXPROTON!$PROTYADLIST" \
@@ -8919,13 +8962,13 @@ function askVortex {
 	if [ "$USEVORTEX" == "1" ]; then
 		if [ "$WAITVORTEX" -gt 0 ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Opening Vortex Requester with timeout '$WAITVORTEX'"
-
+			export CURWIKI="$PPW/Vortex"
 			TITLE="${PROGNAME}-OpenVortex"
 			pollWinRes "$TITLE"
 
 			setShowPic
 
-			"$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
+			"$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
 			--title="$TITLE" \
 			--text="$(spanFont "$GN ($AID) - $GUI_ASKVORTEX" "H")" \
 			--button="$BUT_VORTEX":0  \
@@ -9286,11 +9329,9 @@ function prepareLaunch {
 
 	saveCfg "$STLDEFGLOBALCFG" X
 	loadCfg "$STLDEFGLOBALCFG" X
-	
 	writelog "START" "######### Game Launch: $GN ($AID) #########"
 
 	createDefaultCfgs "${ORGGCMD[@]}"
- 
 	getGameData "$AID"
 
 	writelog "INFO" "${FUNCNAME[0]} - Game launch args '${ORGGCMD[*]}'"
@@ -9779,13 +9820,13 @@ function updateConty {
 
 function askConty {
 		writelog "INFO" "${FUNCNAME[0]} - Opening Ask Conty Requester"
-
+		export CURWIKI="$PPW/Conty"
 		TITLE="${PROGNAME}-SelectConty"
 		pollWinRes "$TITLE"
 
 		setShowPic
 
-		"$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
+		"$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
 		--title="$TITLE" \
 		--text="$(spanFont "$GN ($AID) - $GUI_ASKCONTY" "H")" \
 		--button="$BUT_DLCONTY":0  \
@@ -9922,12 +9963,13 @@ function HelpUrlMenu {
 		AID="$1"
 		setAIDCfgs
 	fi
+	export CURWIKI="$PPW/Help-Url"
 	TITLE="${PROGNAME}-${FUNCNAME[0]}"
 	pollWinRes "$TITLE"
 	setShowPic
 	setHuyList
 
-	WANTHELPURL="$("$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
+	WANTHELPURL="$("$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
 	--title="$TITLE" --separator="\n" \
 	--text="$(spanFont "$GN ($AID) $(strFix "$GUI_ASKOPURL" "$1")" "H")" \
 	--field="$GUI_HELPURL!$DESC_HELPURL ":CB "${HELPURL}!${HUYLIST}${NON}" \
@@ -9958,7 +10000,7 @@ function checkPlayTime {
 	else
 		if [ -n "$CRASHGUESS" ] && [ "$1" -lt "$CRASHGUESS" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - The game stopped after '$1' seconds - opening CrashGuess Requester"
-
+			export CURWIKI="$PPW/Crash-Guess"
 			TITLE="${PROGNAME}-CrashGuess"
 			pollWinRes "$TITLE"
 
@@ -9966,7 +10008,7 @@ function checkPlayTime {
 
 			setHuyList
 
-			WANTHELPURL="$("$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
+			WANTHELPURL="$("$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
 			--title="$TITLE" --separator="\n" \
 			--text="$(spanFont "$GN ($AID) $(strFix "$GUI_ASKCRASHGUESS" "$1")" "H")" \
 			--field="$GUI_HELPURL!$DESC_HELPURL ":CB "${HELPURL}!${HUYLIST}${NON}" \
@@ -10080,6 +10122,7 @@ function dlWineGUI {
 	writelog "INFO" "${FUNCNAME[0]} - Opening dialog to choose a download"
 
 	DLWINELIST="$(printf "!%s\n" "${WineDLDispList[@]//\"/}" | tr -d '\n' | sed "s:^!::" | sed "s:!$::")"
+	export CURWIKI="$PPW/Download-Custom-Wine"
 	TITLE="${PROGNAME}-DownloadWine"
 	pollWinRes "$TITLE"
 
@@ -10087,7 +10130,7 @@ function dlWineGUI {
 		DLWINE="${WineDLDispList[0]}"
 	fi
 
-	DLDISPWINE="$("$YAD" --window-icon="$STLICON" --form --center --on-top $WINDECO \
+	DLDISPWINE="$("$YAD" --f1-action="$F1ACTION" --window-icon="$STLICON" --form --center --on-top $WINDECO \
 	--title="$TITLE" \
 	--text="$(spanFont "$GUI_DLWINETEXT" "H")" \
 	--field=" ":LBL " " \
@@ -10110,10 +10153,11 @@ function dlWineGUI {
 
 # currently unused:
 function PickSpecificWine {
+	export CURWIKI="$PPW/Download-Custom-Wine"
 	TITLE="${PROGNAME}-${FUNCNAME[0]}"
 	pollWinRes "$TITLE"
 
-	SPECWINE="$("$YAD" --window-icon="$STLICON" --form --center --on-top $WINDECO \
+	SPECWINE="$("$YAD" --f1-action="$F1ACTION" --window-icon="$STLICON" --form --center --on-top $WINDECO \
 	--title="$TITLE" --separator="|" \
 	--text="$(spanFont "GUI_DLSPECWINE" "H")" \
 	--field=" ":LBL " " \
@@ -10222,13 +10266,13 @@ function extractWine {
 function WineSelection {
 
 	setShowPic
-	
+	export CURWIKI="$PPW/Wine-Support"
 	TITLE="${PROGNAME}-ChooseWine"
 	pollWinRes "$TITLE"
 
 	writelog "INFO" "${FUNCNAME[0]} - Opening Wine Selection"
 
-	 "$YAD" --image "$SHOWPIC" --image-on-top --center --window-icon="$STLICON" --form --center "$WINDECO" \
+	 "$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --center --window-icon="$STLICON" --form --center "$WINDECO" \
     --title="$TITLE"  \
     --text="$(spanFont "$GUI_SELWINE" "H")" \
 	--button="$BUT_DLDWINE":0 \
@@ -10248,9 +10292,10 @@ function WineSelection {
 	2) 	{
 			writelog "INFO" "${FUNCNAME[0]} - Selected Ready Wine"
 			createWineList
+			export CURWIKI="$PPW/Wine-Support"
 			TITLE="${PROGNAME}-SelectedWine"
 			pollWinRes "$TITLE"
-			WINSEL="$("$YAD" --window-icon="$STLICON" --form --center --on-top $WINDECO \
+			WINSEL="$("$YAD" --f1-action="$F1ACTION" --window-icon="$STLICON" --form --center --on-top $WINDECO \
 			--title="$TITLE" \
 			--text="$(spanFont "$GUI_SELIWINE" "H")" \
 			--field=" ":LBL " " \
@@ -10925,6 +10970,7 @@ function howto {
 	echo "    vr <windowname> <SteamAppID> <s> Start SBS-VR mode for <windowname>"
 	echo "                                       and game <SteamAppID>"
 	echo "                                       's'ave windowname for the game"
+	echo "    wiki <page>                      Opens the wiki <page> in yad"
 	echo "    yad <yad binary>                 Configure the used Yad binary"
 	echo "                                       <yad binary> can be either"
 	echo "                                       <absolute/path>"
@@ -11183,6 +11229,8 @@ function commandline {
 		else
 			howto
 		fi
+	elif  [ "$1" == "wiki" ]; then
+		OpenWikiPage "$2"
 	elif  [ "$1" == "winetricks" ] || [ "$1" == "wt" ]; then
 		FUSEID "$2"
 		chooseWinetricksPrefix "$USEID"
@@ -11513,7 +11561,7 @@ function retBool {
 
 function SteamCatSelect {
 	writelog "INFO" "${FUNCNAME[0]} - Steam Category Selection"
-
+	export CURWIKI="$PPW/Steam-Categories"
 	TITLE="${PROGNAME}-SteamCategorySelection"
 	pollWinRes "$TITLE"
 
@@ -11521,7 +11569,7 @@ function SteamCatSelect {
 	unset VALTAGS
 	mapfile -d "\n" -t -O "${#VALTAGS[@]}" VALTAGS <<< "$(getActiveSteamCategories)"
 	SCATSELOUT="$(while read -r f; do if [[ ! "${SCATSEL[*]}" =~ $f ]]; then 	echo FALSE ; echo "$f"; else echo TRUE ; echo "$f" ;fi ; done <<< "$(printf "%s\n" "${VALTAGS[@]}")" | \
-	"$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center $WINDECO --list --checklist --column=Choose --column=SteamCategory --separator="\n" --print-column="2" \
+	"$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center $WINDECO --list --checklist --column=Choose --column=SteamCategory --separator="\n" --print-column="2" \
 	--text="$(spanFont "$GUI_STEAMCATSEL" "H")" --title="$TITLE" --button="$BUT_SEL":0 --button="$BUT_CAN":2 "$GEOM")"
 
 	case $? in
@@ -11603,11 +11651,11 @@ function addNonSteamGameGui {
 		if [[ -v SCATSEL[@] ]]; then
 			NOSTTAGS="$(printf "%s" "${SCATSEL[@]}" | tr '\n' ',' | sed 's/,*$//g')"
 		fi 
-
+		export CURWIKI="$PPW/Add-Non-Steam-Game"
 		TITLE="${PROGNAME}-$NSGA"
 		pollWinRes "$TITLE"
 
-		NSGSET="$("$YAD" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
+		NSGSET="$("$YAD" --f1-action="$F1ACTION" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
 		--title="$TITLE" --separator="|" \
 		--text="$(spanFont "$GUI_ADDNSG" "H")\n<span font=\"italic\">$(strFix "$GUI_WARNNSG1" "$STERECO")\n$(strFix "$GUI_WARNNSG2" "$STERECO"))</span>" \
 		--field=" ":LBL " " \
@@ -12123,6 +12171,7 @@ function CreateCustomEvaluatorScript {
 	mkProjDir "$EVMETAADDONID" 1
 	
 	writelog "INFO" "Starting Gui for Creating a custom '$EVALSC'" "E"
+	export CURWIKI="$PPW/Steam-First-Time-Setup"
 	TITLE="${PROGNAME}-${FUNCNAME[0]}"
 	pollWinRes "$TITLE"
 	setShowPic
@@ -12196,7 +12245,7 @@ function CreateCustomEvaluatorScript {
 			echo FALSE ; echo "${EPACK##*/}"
 		fi
 	done <<< "$(find "${GLOBALEVALDIR}" \( -type f -and -path "*/$REVP/*" -or -path "*/$SEVP/*" \))" | \
-		"$YAD" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center "$WINDECO" \
+		"$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center "$WINDECO" \
 		--list --checklist --column="$GUI_ADD" --column=Script --separator="" --print-column="2" \
 		--text="${GUITEXT1}\n$GUITEXT2\n$GUITEXT3" \
 		--title="$TITLE" \
