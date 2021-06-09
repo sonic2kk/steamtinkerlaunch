@@ -52,6 +52,10 @@ When **stl** is started for the first time it will create its default [configura
 Almost everything can be configured with the built-in [Main Menu](https://github.com/frostworx/steamtinkerlaunch/wiki/Main-Menu), but optionally also with a graphical text editor.
 It might be a good idea to start with configuring everything in the [Main Menu](https://github.com/frostworx/steamtinkerlaunch/wiki/Main-Menu) to your needs
 
+**If you want to get an overview over the Steam Tinker Launch features, but the huge [wiki](https://github.com/frostworx/steamtinkerlaunch/wiki) is too overwhelming,
+you might want to read this excellent [Boiling Steam article](https://boilingsteam.com/supercharge-steam-with-steamtinkerlaunch-stl) by @podiki**
+
+
 ## Features
 **For a complete list of features, please see [the wiki](https://github.com/frostworx/steamtinkerlaunch/wiki). For the most recent changes, see [the release page](https://github.com/frostworx/steamtinkerlaunch/releases)
 For current development changes, you can also check [this Changelog issue](https://github.com/frostworx/steamtinkerlaunch/issues/177)**
