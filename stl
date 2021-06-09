@@ -5,7 +5,7 @@
 
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v6.8.5"
+PROGVERS="v6.8.6"
 PROGCMD="${0##*/}"
 PROJECTPAGE="https://github.com/frostworx/steamtinkerlaunch"
 PPW="$PROJECTPAGE/wiki"
@@ -186,6 +186,7 @@ GHURL="https://github.com"
 
 SOMEPOPULARWINEPAKS="dotnet4 quartz xact"
 SOMEWINEDEBUGOPTIONS="-all,+steam,+vrclient,+vulkan"
+SOMEWINEDLLOVERRIDES="dxgi=n,b;d3d9=n,b;d3dcompiler_47=n,b"
 SGDBDIMOPTS="460x215,920x430,600x900,342x482,660x930"
 SGDBSTYOPTS="alternate,blurred,white_logo,material,no_logo"
 
@@ -1439,6 +1440,7 @@ function setDefaultCfgValues {
 		if [ -z "$CLEANPROTONTEMP" ]	; then	CLEANPROTONTEMP="0"; fi
 		if [ -z "$WINE_FULLSCREEN_INTEGER_SCALING" ]; then	WINE_FULLSCREEN_INTEGER_SCALING="0"; fi
 		if [ -z "$STLWINEDEBUG" ]		; then	STLWINEDEBUG="-all"; fi
+		if [ -z "$STLWINEDLLOVERRIDES" ]			; then	STLWINEDLLOVERRIDES="$NON"; fi
 		if [ -z "$USERSTART" ]			; then	USERSTART="$("$WHICH" echo 2>/dev/null)"; fi
 		if [ -z "$USERSTOP" ]			; then	USERSTOP="$("$WHICH" echo 2>/dev/null)"; fi	
 		if [ -z "$STL_PV_VERBOSE" ]		; then	STL_PV_VERBOSE="0"; fi
@@ -1879,6 +1881,8 @@ function saveCfg {
 			echo "WINE_FULLSCREEN_INTEGER_SCALING=\"$WINE_FULLSCREEN_INTEGER_SCALING\""
 			echo "## $DESC_STLWINEDEBUG"
 			echo "STLWINEDEBUG=\"$STLWINEDEBUG\""
+			echo "## $DESC_STLWINEDLLOVERRIDES"
+			echo "STLWINEDLLOVERRIDES=\"$STLWINEDLLOVERRIDES\""
 			echo "## $DESC_WINE_LOG_DIR"
 			echo "WINE_LOG_DIR=\"$WINE_LOG_DIR\""
 			echo "## $DESC_USERSTART"
@@ -1986,6 +1990,11 @@ function setNewProtVars {
 		if [ "$USEWINEDEBUGPROTON" -eq 1 ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Using '$STLWINEDEBUG' as Proton 'WINEDEBUG' parameters, because 'USEWINEDEBUGPROTON' is enabled"
 			export WINEDEBUG=\"$STLWINEDEBUG\"
+		fi
+
+		if [ -n "$STLWINEDLLOVERRIDES" ] && [ "$STLWINEDLLOVERRIDES" != "$NON" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Using '$STLWINEDLLOVERRIDES' as 'WINEDLLOVERRIDES' parameter"
+			export WINEDLLOVERRIDES=\"$WINEDLLOVERRIDES;$STLWINEDLLOVERRIDES\"
 		fi
 	fi
 }
@@ -3298,6 +3307,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_VIRTUALDESKTOP!$DESC_VIRTUALDESKTOP ('VIRTUALDESKTOP')":CHK "${VIRTUALDESKTOP/#-/ -}" `#CAT_Wine` `#SUB_Checkbox` `#MENU_GAME`  \
 --field="     $GUI_USEWICO!$DESC_USEWICO ('USEWICO')":CHK "${USEWICO/#-/ -}" `#CAT_Wine` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_STLWINEDEBUG!$DESC_STLWINEDEBUG ('STLWINEDEBUG')":CBE "${STLWINEDEBUG/#-/ -}!$SOMEWINEDEBUGOPTIONS" `#CAT_Wine` `#MENU_GAME` \
+--field="     $GUI_STLWINEDLLOVERRIDES!$DESC_STLWINEDLLOVERRIDES ('STLWINEDLLOVERRIDES')":CBE "${STLWINEDLLOVERRIDES/#-/ -}!$SOMEWINEDLLOVERRIDES" `#CAT_Wine` `#MENU_GAME` \
 --field="     $GUI_WINE_FULLSCREEN_INTEGER_SCALING!$DESC_WINE_FULLSCREEN_INTEGER_SCALING ('WINE_FULLSCREEN_INTEGER_SCALING')":CHK "${WINE_FULLSCREEN_INTEGER_SCALING/#-/ -}" `#CAT_Wine` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_WINEDLDIR!$DESC_WINEDLDIR ('WINEDLDIR')":DIR "${WINEDLDIR/#-/ -}" `#CAT_Wine` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_WINEEXTDIR!$DESC_WINEEXTDIR ('WINEEXTDIR')":DIR "${WINEEXTDIR/#-/ -}" `#CAT_Wine` `#SUB_Directories` `#MENU_GLOBAL` \
@@ -9469,6 +9479,11 @@ function prepareLaunch {
 		if [ "$USEWINEDEBUGPROTON" -eq 1 ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Using '$STLWINEDEBUG' as Proton 'WINEDEBUG' parameters, because 'USEWINEDEBUGPROTON' is enabled"
 			export WINEDEBUG=\"$STLWINEDEBUG\"
+		fi
+
+		if [ -n "$STLWINEDLLOVERRIDES" ] && [ "$STLWINEDLLOVERRIDES" != "$NON" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Using '$STLWINEDLLOVERRIDES' as 'WINEDLLOVERRIDES' parameter"
+			export WINEDLLOVERRIDES=\"$WINEDLLOVERRIDES;$STLWINEDLLOVERRIDES\"
 		fi
 
 		if [ "$PROTONCHECK" == "ask_before_game" ] || [ "$PROTONCHECK" == "auto_download" ] || [ "$PROTONCHECK" == "auto_download_and_use" ]; then
