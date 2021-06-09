@@ -5342,7 +5342,7 @@ function getAvailableShaders {
 	unset BlockedShaderFiles
 	while read -r shadfx; do
 		BlockedShaderFiles+=("${shadfx//$STLSHADDIR\//}")
-	done <<< "$(find "$STLSHADDIR" -name "*.fx" -o -name "*.png" -o -name "*.fxh" | grep -Ff "$SHADERREPOBLOCKLIST")"
+	done <<< "$(find "$STLSHADDIR" -name "*.fx" -o -name "*.png" -o -name "*.fxh" -o -name "*.cfg" | grep -Ff "$SHADERREPOBLOCKLIST")"
 }
 
 function GameShaderDialog {
@@ -5460,12 +5460,27 @@ function GameShaderDialog {
 					while read -r blockshad; do
 						if [ -f "$SHADDESTDIR/${blockshad##*/}" ]; then
 							# chance to have a false positive here is very low, removing anyway only if found one matching file in the repos:
-							if [ "$(find "$STLSHADDIR" -name "*.fx" -o -name "*.png" -o -name "*.fxh" | grep -c "${blockshad##*/}")" -eq 1 ]; then
+							if [ "$(find "$STLSHADDIR" -name "*.fx" -o -name "*.png" -o -name "*.fxh" -o -name "*.cfg" | grep -c "${blockshad##*/}")" -eq 1 ]; then
 								writelog "INFO" "${FUNCNAME[0]} - Shader '$SHADDESTDIR/${blockshad##*/}' from blocked repo found - removing" "E"
 								rm "$SHADDESTDIR/${blockshad##*/}"
 							fi
 						fi
 					done <<< "$(printf "%s\n" "${BlockedShaderFiles[@]//\"/}")"
+					
+					if grep -qi "include*.*Reshade" "${SHADDESTDIR}"/*.fx ; then
+						writelog "INFO" "${FUNCNAME[0]} - Installing Reshade helper files"
+						RESHASHA="reshade-shaders/Shaders"
+
+						RFXHF="ReShade.fxh"
+						if [ ! -f "$SHADDESTDIR/$RFXHF" ]; then
+							cp "$STLSHADDIR/$RESHASHA/$RFXHF" "$SHADDESTDIR" 2>/dev/null
+						fi
+						
+						RUFXHF="ReShadeUI.fxh"
+						if [ ! -f "$SHADDESTDIR/$RUFXHF" ]; then
+							cp "$STLSHADDIR/$RESHASHA/$RUFXHF" "$SHADDESTDIR" 2>/dev/null
+						fi
+					fi
 				}
 			;;
 			1)  writelog "INFO" "${FUNCNAME[0]} - Selected CANCEL"
