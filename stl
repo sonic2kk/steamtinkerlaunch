@@ -7629,7 +7629,7 @@ function chooseWinetricksPrefix {
 		--field=" ":LBL " " \
 		--field="$GUI_WTCATPFX!$GUI_CHOOSEWTCATPFX":CB "dlls!apps!dlls!fonts" \
 		--field="$GUI_WTPROTON!$(strFix "$DESC_WTPROTON" "$BUT_INSTALL")":CB "${WTPROTON//\"}!$PROTYADLIST" \
-		--field="$GUI_WTPROTONSAVE!$DESC_WTPROTONSAVE":CHK "FALSE" \
+		--field="$GUI_WTPROTONSAVE!$(strFix "$DESC_WTPROTONSAVE" "$BUT_INSTALL")":CHK "FALSE" \
 		--field=" ":LBL " " \
 		--field="$(spanFont "$GUI_CURSELWTPACKS" "H")":LBL " " \
 		--field="$(WTPAKINSTLIST)":LBL " " \
@@ -12662,9 +12662,8 @@ function reCreateCompatdata {
 						fi
 					fi
 
+					RECRECODA=1
 					if [ -d "$DESTCODA" ]; then
-						RECRECODA=1
-
 						if [ "$3" == "s" ]; then
 							RCSEL="$(confirmReq "Ask_Recreate_Compatdata" "$(strFix "$GUI_RECRECODA" "$EUNID" "${EUNID}_${PROGCMD}")")"
 							if [ "$RCSEL" -eq 0 ]; then
@@ -12677,6 +12676,8 @@ function reCreateCompatdata {
 								RECRECODA=0
 							fi
 						fi
+
+
 						if [ "$RECRECODA" -eq 1 ]; then
 							if [ -d "${DESTCODA}_${PROGCMD}" ]; then
 								writelog "INFO" "Removing previous backup compatdata backup '${DESTCODA}_${PROGCMD}'" "E"
@@ -12687,29 +12688,31 @@ function reCreateCompatdata {
 						fi
 					fi
 
-					if [ -z "$STEAM_COMPAT_APP_ID" ]; then
-						export STEAM_COMPAT_APP_ID="${EUNID}"
+					if [ "$RECRECODA" -eq 1 ]; then
+						if [ -z "$STEAM_COMPAT_APP_ID" ]; then
+							export STEAM_COMPAT_APP_ID="${EUNID}"
+						fi
+
+						mkdir -p "$DESTCODA" 2>/dev/null
+						EVALISRUN="$STLSHM/evalisrun.txt"
+						
+						cd "$STEAM_COMPAT_CLIENT_INSTALL_PATH" >/dev/null || return
+						
+						writelog "INFO" "Launching First Run Installer" "E"
+
+						runEvalsc "${EUNID}" &
+
+						while [ ! -f "$EVALISRUN" ];do
+							sleep 0.1
+						done
+						
+						while [ -f "$EVALISRUN" ];do
+							getCurStep "${EUNID}"
+							sleep 1
+						done
+						
+						cd - >/dev/null || return
 					fi
-
-					mkdir -p "$DESTCODA" 2>/dev/null
-					EVALISRUN="$STLSHM/evalisrun.txt"
-					
-					cd "$STEAM_COMPAT_CLIENT_INSTALL_PATH" >/dev/null || return
-					
-					writelog "INFO" "Launching First Run Installer" "E"
-
-					runEvalsc "${EUNID}" &
-
-					while [ ! -f "$EVALISRUN" ];do
-						sleep 0.1
-					done
-					
-					while [ -f "$EVALISRUN" ];do
-						getCurStep "${EUNID}"
-						sleep 1
-					done
-					
-					cd - >/dev/null || return
 				else
 					writelog "SKIP" "No destination compatdata determined" "E"
 				fi
