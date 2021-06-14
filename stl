@@ -5,7 +5,7 @@
 
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v6.8.7"
+PROGVERS="v6.8.9"
 PROGCMD="${0##*/}"
 GHURL="https://github.com"
 PROJECTPAGE="$GHURL/frostworx/steamtinkerlaunch"
@@ -46,9 +46,11 @@ INNOEXTRACT="innoextract"
 LSUSB="lsusb"
 JQ="jq"
 CONVERT="convert"
+IDENTIFY="identify"
 RSYNC="rsync"
 OSSL="openssl"
 CONTY="conty.sh"
+APPINFO="appinfo-vdf"
 
 HAVEOSSL=1
 CHECKHMD=1 # will be set to 0 if $LSUSB is not found. Then the hmd presence check is skipped
@@ -193,8 +195,16 @@ SGDBSTYOPTS="alternate,blurred,white_logo,material,no_logo"
 
 STLGAMES="$STLCFGDIR/games"
 STLGDESKD="$STLGAMES/desktop"
+STLIDFD="$STLGAMES/desktopfiles"
+STLAPPINFODIR="$STLGAMES/${APPINFO%-vdf}"
+STLAPPINFOIDDIR="$STLAPPINFODIR/id"
+STLAIVDF="$STLAPPINFODIR/$APPINFO.txt"
 STLGHEADD="$STLGAMES/header"
 STLGSAD="$STLGAMES/standalone"
+STLGICONS="$STLGAMES/icons"
+STLGICO="$STLGICONS/ico"
+STLGZIP="$STLGICONS/zip"
+STLGPNG="$STLGICONS/png"
 STLGSAPD="$STLGSAD/titles"
 STLGSACD="$STLGSAD/compatdata"
 
@@ -463,24 +473,221 @@ function getGameName {
 }
 
 function writeDesktopFile {
-	if [ -f "$STLGDESKD/$1.desktop" ]; then
-		writelog "SKIP" "${FUNCNAME[0]} - $STLGDESKD/$1.desktop already exists"
+	DESTDTF="$2"
+	DESTPIC="$3"
+
+	if [ -f "$DESTDTF" ]; then
+		writelog "SKIP" "${FUNCNAME[0]} - $DESTDTF already exists"
 	else
 		getGameName "$1"
 	
 		if [ -n "$GAMENAME" ] && [ "$GAMENAME" != "$NON" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Creating $STLGDESKD/$1.desktop" "E"
+			writelog "INFO" "${FUNCNAME[0]} - Creating $DESTDTF" "E"
 
 			{
 				echo "[Desktop Entry]"
 				echo "Name=${GAMENAME//\"/}"
 				echo "Comment=$DF_COMMENT"
 				echo "Exec=steam steam://rungameid/$1"
-				echo "Icon=$STLGHEADD/$1.jpg"
+				echo "Icon=$DESTPIC"
 				echo "Terminal=false"
 				echo "Type=Application"
 				echo "Categories=Game;"
-			} >> "$STLGDESKD/$1.desktop"
+			} >> "$DESTDTF"
+		fi
+	fi
+}
+
+function createDesktopIconFile {
+	
+	if [ -z "$AID" ] || [ "$AID" == "$PLACEHOLDERAID" ]; then
+		if [ "$1" -eq "$1" ] 2>/dev/null; then
+			AID="$1"
+		else
+			AID="$(getIDFromTitle "$1")"
+		fi
+	fi
+
+	WANTGPNG="$STLGPNG/${AID}.png"
+	INTDTFILE="$STLIDFD/$AID.desktop"
+
+	if [ -f "$INTDTFILE" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Already have an internal desktop file - skipping"
+	else
+		if [ -n "$AID" ] && [ ! -f "$WANTGPNG" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Don't have a desktop icon yet - trying to create it"
+			getGameIcon
+		fi
+
+		# create desktop file internally for optionally using it on the desktop
+		if [ -f "$WANTGPNG" ] && [ ! -f "$INTDTFILE" ]; then
+			writeDesktopFile "$AID" "$INTDTFILE" "$WANTGPNG"
+		fi
+	fi
+
+	# set desktop file mode from command line:
+	if [ -f "$INTDTFILE" ] && [ "$CREATEDESKTOPICON" -eq 0 ] && [ -n "$2" ]; then
+		CREATEDESKTOPICON="$2"
+	fi
+
+	# copy the desktop file to the system
+	if [ -f "$INTDTFILE" ] && [ "$CREATEDESKTOPICON" -ne 0 ]; then
+		if [ "$CREATEDESKTOPICON" -eq "1" ] || [ "$CREATEDESKTOPICON" -eq "3" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Creating desktop icon for '$AID' on the desktop" "E"
+			cp "$INTDTFILE" "$HOME/Desktop/" 2>/dev/null
+		fi
+
+		if [ "$CREATEDESKTOPICON" -eq "2" ] || [ "$CREATEDESKTOPICON" -eq "3" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Creating desktop icon for '$AID' for the desktop application menu" "E"
+			cp "$INTDTFILE" "$HOME/.local/share/applications/" 2>/dev/null	
+		fi	
+	fi
+}
+
+function extractAppInfo {
+	MAXAGE=1440
+	if [ ! -f "$STLAIVDF" ] || test "$(find "$STLAIVDF" -mmin +"$MAXAGE")"; then
+		if  [ -x "$(command -v "$APPINFO" 2>/dev/null)" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Extracting data from '$AIVDF' to '$STLAIVDF' using '$APPINFO'"
+			"$APPINFO" print "$AIVDF" > "$STLAIVDF"
+		fi
+	fi
+}
+
+function getAppIDInfo {
+	SEARCHID="$1"
+	APPINFIDFILE="$STLAPPINFOIDDIR/${SEARCHID}.txt"
+	if [ ! -f "$APPINFIDFILE" ] && [ -f "$STLAIVDF" ]; then
+		sed -n "/^app_id: $SEARCHID$/,/^#/p" "$STLAIVDF" > "$APPINFIDFILE"
+	fi	
+	if [ -f "$APPINFIDFILE" ]; then
+		cat "$APPINFIDFILE"
+	fi
+}
+
+function getGameIcon {
+	function IcotoPng {
+		if  [ -x "$(command -v "$CONVERT" 2>/dev/null)" ]; then
+			if  [ -x "$(command -v "$IDENTIFY" 2>/dev/null)" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Determining largest ico in '$WANTGICO' using '$IDENTIFY'"
+				LICO="$("$IDENTIFY" "$WANTGICO" | sort -n -k3 | tail -n1 | grep -oP '\[\K[^\]]+')"
+			else
+				writelog "INFO" "${FUNCNAME[0]} - Command '$IDENTIFY' not found, using first ico in '$WANTGICO'"
+				LICO="0"
+			fi
+
+			if [ -z "$LICO" ] || [ "$LICO" -ne "$LICO" ] 2>/dev/null; then
+				writelog "INFO" "${FUNCNAME[0]} - No specific ico found using the first one in '$WANTGICO'"
+				LICO="0"		
+			fi
+
+			if [ "$LICO" -eq "$LICO" ] 2>/dev/null; then
+				writelog "INFO" "${FUNCNAME[0]} - Converting ico '$LICO' in '$WANTGICO' to '$WANTGPNG' using command: $CONVERT ${WANTGICO}[${LICO}] $WANTGPNG"
+				"$CONVERT" "${WANTGICO}[${LICO}]" "$WANTGPNG"
+			fi
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - Command '$CONVERT' not found, so converting '$WANTGICO' to '$WANTGPNG' is not possible - skipping"
+		fi	
+	}
+
+	function getIconData {
+		SEARCHICO="$1"
+
+		if  [ -x "$(command -v "$APPINFO" 2>/dev/null)" ]; then
+			extractAppInfo
+			if grep -q "$SEARCHICO" <<< "$(getAppIDInfo "$AID")"; then
+				grep "$SEARCHICO" <<< "$(getAppIDInfo "$AID")" | gawk -F ': ' '{print$2}' | grep -oP '"\K[^"]+' | head -n1
+			fi
+		else
+			writelog "WARN" "${FUNCNAME[0]} - Command '$APPINFO' not found - using basic, inacurate search command instead - feel free to fix/improve"
+			if [ -n "$GAMEEXE" ] && [ "$GAMEEXE" != "$NON" ]; then
+				SPAT="$GAMENAME"
+			else
+				writelog "SKIP" "${FUNCNAME[0]} - Don't have the current GAMEEXE $GAMEEXE - trying to get it from the '$PROGCMD' metadata" "E"
+				SPATRAW="$(getExeFromID "$AID")"
+				SPATW1="${SPATRAW//\"}"
+				SPAT="${SPATW1//.exe}.exe"
+			fi
+			strings "$AIVDF" | tac | sed -n  "/^$SPAT/,/^$SEARCHICO/p" | tail -n2 | head -n1
+		fi
+	}
+
+	function getIco {
+		WANTGICO="$STLGICO/${AID}.ico"
+		if [ -f "$WANTGICO" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Already have game ico '$WANTGICO'" "E"
+			IcotoPng
+		else
+			ICONAME="$(getIconData clienticon)"
+			if [ -n "$ICONAME" ]; then
+				ICOPATH="$ICODIR/${ICONAME}.ico"
+				if [ -f "$ICOPATH" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Found ico for '$AID' under '$ICOPATH'" "E"
+					cp "$ICOPATH" "$WANTGICO"
+					IcotoPng
+				else
+					writelog "SKIP" "${FUNCNAME[0]} - Absolute path for Steam ico '$ICONAME' not valid - skipping" "E"
+				fi
+			else
+				writelog "SKIP" "${FUNCNAME[0]} - Could not find the icon name for '$AID' in '$AIVDF' - skipping" "E"
+			fi
+		fi		
+	}
+	
+	function extractGZip {
+		BIGGESTPNG="$("$UNZIP" -l "$WANTGZIP" | grep "\.png" | sort -n | tail -n1 | gawk -F ':[0-9][0-9]   ' '{print $NF}')" # weak gawk might break here(?)
+		if [ -n "$BIGGESTPNG" ];then
+			writelog "INFO" "${FUNCNAME[0]} - Extracting biggest png file '$BIGGESTPNG' in archive '$WANTGZIP' to '$WANTGPNG'" "E"
+			writelog "INFO" "${FUNCNAME[0]} - $UNZIP -dqq ${WANTGPNG//.png} $WANTGZIP $BIGGESTPNG" "E"
+			"$UNZIP" -q -d "${WANTGPNG//.png}" "$WANTGZIP" "$BIGGESTPNG"
+			mv "${WANTGPNG//.png}/$BIGGESTPNG" "$WANTGPNG"
+			rm -rf "${WANTGPNG//.png}"
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - Could not determine the biggest png file in archive '$WANTGZIP'- skipping" "E"
+		fi
+	}
+
+	if [ -z "$AID" ]; then
+		writelog "SKIP" "${FUNCNAME[0]} - Don't have a Steam gameid - skipping" "E"
+	else
+		WANTGPNG="$STLGPNG/${AID}.png"
+		if [ -f "$WANTGPNG" ]; then
+			writelog "Info" "${FUNCNAME[0]} - Already have game icon png '$WANTGPNG' - nothing to to" "E"
+		else
+			AIVDF="$HSS/appcache/appinfo.vdf"
+			ICODIR="$HSS/steam/games"
+			
+			if [ ! -d "$ICODIR" ]; then
+				writelog "SKIP" "${FUNCNAME[0]} - Steam ico directory not found - skipping" "E"
+			else
+				if [ -f "$AIVDF" ]; then
+					WANTGZIP="$STLGZIP/${AID}.zip"
+					if [ -f "$WANTGZIP" ]; then
+						writelog "INFO" "${FUNCNAME[0]} - Already have game icon zip '$WANTGZIP' - extracting" "E"
+						extractGZip "$WANTGZIP" "$WANTGPNG"
+					else
+						writelog "INFO" "${FUNCNAME[0]} - Looking for icon hash in '$AIVDF'"
+						
+						LICONZIP="$(getIconData linuxclienticon)"
+						if [ -n "$LICONZIP" ]; then
+							LICONPATH="$ICODIR/${LICONZIP}.zip"
+							if [ -f "$LICONPATH" ]; then
+								writelog "INFO" "${FUNCNAME[0]} - Found icon zip for '$AID' under '$LICONPATH'" "E"
+								cp "$LICONPATH" "$WANTGZIP"
+								extractGZip "$WANTGZIP" "$WANTGPNG"
+							else
+								writelog "INFO" "${FUNCNAME[0]} - Absolute path for Steam icon zip '$LICONZIP' not valid - trying to find ico instead" "E"
+								getIco
+							fi
+						else
+							writelog "SKIP" "${FUNCNAME[0]} - Could not find the icon zip for '$AID' in '$AIVDF' - trying to find ico instead" "E"
+							getIco
+						fi
+					fi
+				else
+					writelog "SKIP" "${FUNCNAME[0]} - Could not find '$AIVDF' - skipping" "E"
+				fi
+			fi
 		fi
 	fi
 }
@@ -488,7 +695,7 @@ function writeDesktopFile {
 function getGameData {
 	if  ! grep -q ",${1}," <<< "$NOGAMES" ; then
 		getGamePic "$STLGHEADD/$1.jpg" "$STASSURL/$1/header.jpg"
-		writeDesktopFile "$1"
+		writeDesktopFile "$1" "$STLGDESKD/$1.desktop" "$STLGHEADD/$1.jpg"
 	fi
 }
 
@@ -931,7 +1138,7 @@ function setGameVars {
 	fi
 
 	if [ -z "$GAMEEXE" ]; then
-		GAMEEXE="$GE"
+		GAMEEXE="${*##*/}"	
 	fi
 
 	# common
@@ -1419,6 +1626,7 @@ function setDefaultCfgValues {
 		if [ -z "$WAITFORTHISPID" ]		; then	WAITFORTHISPID="$NON"; fi
 		if [ -z "$WAITEDITOR" ]			; then	WAITEDITOR="2"; fi
 		if [ -z "$HELPURL" ]			; then	HELPURL="$NON"; fi
+		if [ -z "$CREATEDESKTOPICON" ]	; then	CREATEDESKTOPICON="0"; fi
 		if [ -z "$STEAMAPPIDFILE" ]		; then	STEAMAPPIDFILE="0"; fi
 		if [ -z "$CHECKCATEGORIES" ]	; then	CHECKCATEGORIES="1"; fi
 		if [ -z "$BACKUPSTEAMUSER" ]	; then	BACKUPSTEAMUSER="0"; fi
@@ -1914,6 +2122,8 @@ function saveCfg {
 			echo "GAMESCREENRES=\"$GAMESCREENRES\""
 			echo "## Default Help URL"
 			echo "HELPURL=\"$HELPURL\""
+			echo "## Desktop Icon Mode"
+			echo "CREATEDESKTOPICON=\"$CREATEDESKTOPICON\""
 			} >> "$1"
 			#ENDsaveCfgdefault_template
 		fi
@@ -2301,7 +2511,7 @@ function setShowPic {
 						"$CONVERT" "$CUSTPIC" -resize "460x215!" "$STLGHEADD/$AID.jpg"
 						SHOWPIC="$STLGHEADD/$AID.jpg"
 					else
-						writelog "SKIP" "${FUNCNAME[0]} - Command '$CONVERT' not found, so scaling the custom game is not possible - skipping"
+						writelog "SKIP" "${FUNCNAME[0]} - Command '$CONVERT' not found, so scaling the custom game picture is not possible - skipping"
 					fi
 				else
 					writelog "INFO" "${FUNCNAME[0]} - Using '$SHOWPIC' as fallback picture, because '$STLGHEADD/$AID.jpg' has zero bytes"
@@ -2755,12 +2965,12 @@ function EditorDialog {
 		CfgFiles+=("$STLPROTONIDLOGDIR/steam-${AID}.log")
 	fi
 
-	if [ -f "$STLDXVKLOGDIR/${GAMEEXE}_d3d11.log" ]; then
-		CfgFiles+=("$STLDXVKLOGDIR/${GAMEEXE}_d3d11.log")
+	if [ -f "$STLDXVKLOGDIR/${GE}_d3d11.log" ]; then
+		CfgFiles+=("$STLDXVKLOGDIR/${GE}_d3d11.log")
 	fi
 
-	if [ -f "$STLDXVKLOGDIR/${GAMEEXE}_dxgi.log" ]; then
-		CfgFiles+=("$STLDXVKLOGDIR/${GAMEEXE}_dxgi.log")
+	if [ -f "$STLDXVKLOGDIR/${GE}_dxgi.log" ]; then
+		CfgFiles+=("$STLDXVKLOGDIR/${GE}_dxgi.log")
 	fi
 
 	writelog "INFO" "${FUNCNAME[0]} - Found ${#CfgFiles[@]} available Config Files - opening Checklist"
@@ -3187,6 +3397,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_LOGPLAYTIME!$DESC_LOGPLAYTIME ('LOGPLAYTIME')":CHK "${LOGPLAYTIME/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_CRASHGUESS!$DESC_CRASHGUESS ('CRASHGUESS')":NUM "${CRASHGUESS/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_HELPURL!$DESC_HELPURL ('HELPURL')":CB "${HELPURL}!${HUYLIST}${NON}" `#CAT_Misc` `#MENU_GAME` \
+--field="     $GUI_CREATEDESKTOPICON!$DESC_CREATEDESKTOPICON ('CREATEDESKTOPICON')":NUM "${CREATEDESKTOPICON}!0..3" `#CAT_Misc` `#MENU_GAME` \
 --field="     $GUI_GAMESCREENRES!$DESC_GAMESCREENRES ('GAMESCREENRES')":CBE "${GAMESCREENRES/#-/ -}!$(printf "%s\n" "$("$XRANDR" --current | grep "[0-9]x" | gawk '{print $1}' | grep "^[0-9]" | tr '\n' '!')")$NON" `#CAT_Misc` `#MENU_GAME` \
 --field="     $GUI_TOGSTEAMWEBHELPER!$DESC_TOGSTEAMWEBHELPER ('TOGSTEAMWEBHELPER')":CHK "${TOGSTEAMWEBHELPER/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_STL_PV_VERBOSE!$DESC_STL_PV_VERBOSE ('STL_PV_VERBOSE')":CHK "${STL_PV_VERBOSE/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
@@ -4597,6 +4808,18 @@ function getTitleFromID {
 	fi
 }
 
+function getExeFromID {
+	if [ -z "$1" ]; then
+		echo "A Game ID is required as argument"
+	else
+		if [ -f "$GEMETA/${1}.conf" ]; then
+			grep "^GAMEEXE" "$GEMETA/${1}.conf" | cut -d '=' -f2
+		else
+			echo "No Title found for '$1'"
+		fi
+	fi
+}
+
 function getCompatData {
 	if [ -z "$1" ]; then
 		echo "A Game ID or Game Title is required as argument"
@@ -4706,7 +4929,7 @@ function getGameWindowName {
 function getCfgHeader {
 	echo "#########"
 	echo "#GAMENAME=\"$GAMENAME\""
-	echo "#GAMEEXE=\"$GE\""
+	echo "#GAMEEXE=\"$GAMEEXE\""
 	echo "#GAMEID=\"$AID\""
 	echo "#PROTONVERSION=\"$PROTONVERSION\""
 	echo "#########"	
@@ -5998,7 +6221,12 @@ function createProjectDirs {
 	mkProjDir "$WINEEXTDIR" 1
 	mkProjDir "$STLGAMES" 1
 	mkProjDir "$STLGDESKD" 1
+	mkProjDir "$STLIDFD" 1
 	mkProjDir "$STLGHEADD" 1
+	mkProjDir "$STLGICO" 1
+	mkProjDir "$STLGZIP" 1
+	mkProjDir "$STLGPNG" 1
+	mkProjDir "$STLAPPINFOIDDIR" 1
 	mkProjDir "$STLRSPRESETDIR" 1
 	mkProjDir "$CEDLDIR" 1
 	mkProjDir "$HIDEDIR" 1
@@ -9494,6 +9722,8 @@ function prepareLaunch {
 	writelog "INFO" "${FUNCNAME[0]} - LoadCfg: $STLGAMECFG"
 	loadCfg "$STLGAMECFG"
 
+	createDesktopIconFile "$AID" "0"
+
 	# autoapply configuration settings based on the steam categories the game is in:
 	writelog "INFO" "${FUNCNAME[0]} - AutoCategorySettings:"
 	autoCategorySettings
@@ -10159,6 +10389,8 @@ function checkPlayTime {
 				0)  {
 						checkHelpUrl "$WANTHELPURL"
 						writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_RETRYCG' so opening settings"
+						duration=0
+						SECONDS=0
 						prepareLaunch X
 					}
 				;;
@@ -11036,8 +11268,15 @@ function howto {
 	echo "    compat <cmd>                     Will (add|del|get) $PROGCMD as" 
 	echo "                                       Steam compatibility tool"
 	echo "                                       under 'STEAMCOMPATOOLS'"
-	echo "    createcompatdata|ccd <gameid><gui> (re-)create compatdata for <gameid>"
+	echo "    createcompatdata|ccd <gameid><gui> (Re-)create compatdata for <gameid>"
 	echo "                                       open <gui> to configure custom programs"
+	echo "    createdesktopicon|cdi <game><id> Create desktop icon for <game>"
+	echo "                                       <game> is the gameid or"
+	echo "                                       with available meta game title"
+	echo "                                       0=only internally"
+	echo "                                       1=on the desktop"
+	echo "                                       2=for the application menu"
+	echo "                                       3=for desktop and application menu"
 	echo "    createfirstinstall|cfi <gameid>  Open gui to create a Steam First Time Setup" 
 	echo "    <a|c|r|file> (see wiki)            file for game <gameid>"
 	echo "    dlcustomproton|dcp <url|l>       Download/install custom Proton"
@@ -11052,6 +11291,7 @@ function howto {
 	echo "    fav <value>                      Opens the favorite menu"
 	echo "                                       (for 'SteamAppID' or 'last')"
 	echo "    (get commands only for games known by $PROGCMD:)"
+	echo "    getexe|ge <gameid>               Print the Game Exe for <gameid>"
 	echo "    getid|gi <gametitle>             Print the SteamAppId for <gametitle>"
 	echo "    gettitle|gt <gameid>             Print the Game Title for <gameid>"
 	echo "    getcompatdata|gc <gameid/title>  Print the Game compatdata path"
@@ -11161,6 +11401,18 @@ function commandline {
 	elif  [ "$1" == "createcompatdata" ] || [ "$1" == "ccd" ]; then
 		FUSEID "$2"
 		reCreateCompatdata "$1" "$USEID" "$3"
+	elif  [ "$1" == "createdesktopicon" ] || [ "$1" == "cdi" ]; then
+		if [ "$2" == "all" ]; then
+			extractAppInfo
+			if [ -f "$STLAIVDF" ]; then
+				while read -r CATAID; do
+					"$0" cdi "$CATAID" "$3"
+				done <<< "$(listInstalledGameIDs)"
+			fi
+		else
+			FUSEID "$2"
+			createDesktopIconFile "$USEID" "$3"
+		fi
 	elif  [ "$1" == "createfirstinstall" ] || [ "$1" == "cfi" ]; then
 		FUSEID "$2"
 		CreateCustomEvaluatorScript "$USEID"
@@ -11186,6 +11438,8 @@ function commandline {
 	elif  [ "$1" == "gamescope" ] || [ "$1" == "gs" ]; then
 		FUSEID "$2"
 		GameScopeGui "$USEID"	
+	elif  [ "$1" == "getexe" ] || [ "$1" == "ge" ]; then
+		getExeFromID "$2"
 	elif  [ "$1" == "getid" ] || [ "$1" == "gi" ]; then
 		getIDFromTitle "$2"
 	elif  [ "$1" == "gettitle" ] || [ "$1" == "gt" ]; then
@@ -11434,7 +11688,7 @@ function storeMetaData {
 	updateConfigEntry "GAMENAME" "$MGNA" "$GEMETA/$MAID.conf"
 
 	if [ -n "$GE" ]; then
-		updateConfigEntry "GAMEEXE" "$GE" "$GEMETA/$MAID.conf"
+		updateConfigEntry "GAMEEXE" "$GAMEEXE" "$GEMETA/$MAID.conf"
 	fi
 
 	if [ -n "$GP" ]; then
@@ -13196,6 +13450,7 @@ function main {
 				commandline "$@"
 			else
 				setGameVars "$@"
+
 				if grep -q "$WFEAR" <<< "${ORGGCMD[@]}"; then
 					ISGAME=2
 					prepareLaunch
