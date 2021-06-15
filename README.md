@@ -39,6 +39,7 @@ Several great people already mentioned **stl** on their platforms/channels.
 **Thanks a lot to you all!** 👍
 *(no specific order, list might be incomplete)*
 - **podiki** *(who also contributed to **stl**)* wrote a huge [Boiling Steam article](https://boilingsteam.com/supercharge-steam-with-steamtinkerlaunch-stl)
+- **ekianjo** made a [Q&A](https://boilingsteam.com/steam-tinker-launcher-making-tinkering-much-easier)
 - **Hex DSL** made a [youtube video](https://www.youtube.com/watch?v=rdXQRMwMfPE)
 - **tuxfoo**  made a [youtube video](https://www.youtube.com/watch?v=l1KjIANTIKs)
 - **Linux Game Cast** already mentioned **stl** in their [casts](https://www.youtube.com/watch?v=djuZdnE83fE&t=436s) [several](https://www.youtube.com/watch?v=yVsTMhx8E7c&t=983s) [times](https://www.youtube.com/watch?v=qhybhTGV3mA&t=1279s)
