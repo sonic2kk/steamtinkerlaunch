@@ -34,6 +34,15 @@ If you are on Arch Linux you can install stl from [AUR](https://aur.archlinux.or
 If **stl** is not in your package management yet, just `make install`
 *(or copy everything manually if you date)*
 
+## Press
+Several great people already mentioned **stl** on their platforms/channels.
+**Thanks a lot to you all!** 👍
+*(no specific order, list might be incomplete)*
+- **podiki** *(who also contributed to **stl**)* wrote a huge [Boiling Steam article](https://boilingsteam.com/supercharge-steam-with-steamtinkerlaunch-stl)
+- **Hex DSL** made a [youtube video](https://www.youtube.com/watch?v=rdXQRMwMfPE)
+- **tuxfoo**  made a [youtube video](https://www.youtube.com/watch?v=l1KjIANTIKs)
+- **Linux Game Cast** already mentioned **stl** in their [casts](https://www.youtube.com/watch?v=djuZdnE83fE&t=436s) [several](https://www.youtube.com/watch?v=yVsTMhx8E7c&t=983s) [times](https://www.youtube.com/watch?v=qhybhTGV3mA&t=1279s)
+
 ## Community
 Feel free to contribute to the project - there are many possibilities to do so:
 - implement new features
@@ -53,7 +62,7 @@ Almost everything can be configured with the built-in [Main Menu](https://github
 It might be a good idea to start with configuring everything in the [Main Menu](https://github.com/frostworx/steamtinkerlaunch/wiki/Main-Menu) to your needs
 
 **If you want to get an overview over the Steam Tinker Launch features, but the huge [wiki](https://github.com/frostworx/steamtinkerlaunch/wiki) is too overwhelming,
-you might want to read this excellent [Boiling Steam article](https://boilingsteam.com/supercharge-steam-with-steamtinkerlaunch-stl) by @podiki**
+you might want to check the [articles and videos](#Press) of many cool people!**
 
 
 ## Features
