@@ -31,7 +31,7 @@ If you are on Arch Linux you can install stl from [AUR](https://aur.archlinux.or
 [![Packaging status](https://repology.org/badge/vertical-allrepos/steamtinkerlaunch.svg)](https://repology.org/project/steamtinkerlaunch/versions)
 
 ### Manual Installation:
-If **stl** is not in your package management yet, just `make install`
+If **stl** is not in your package management yet, just `sudo make install`
 *(or copy everything manually if you date)*
 
 ## Press
