@@ -32,7 +32,6 @@ If you are on Arch Linux you can install stl from [AUR](https://aur.archlinux.or
 
 ### Manual Installation:
 If **stl** is not in your package management yet, just `sudo make install`
-*(or copy everything manually if you date)*
 
 ## Press
 Several great people already mentioned **stl** on their platforms/channels.
