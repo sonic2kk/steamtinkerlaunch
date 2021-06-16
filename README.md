@@ -35,8 +35,11 @@ If **stl** is not in your package management yet, just `sudo make install`
 
 ## Press
 Several great people already mentioned **stl** on their platforms/channels.
+
 **Thanks a lot to you all!** 👍
+
 *(no specific order, list might be incomplete)*
+
 - **podiki** *(who also contributed to **stl**)* wrote a huge [Boiling Steam article](https://boilingsteam.com/supercharge-steam-with-steamtinkerlaunch-stl)
 - **ekianjo** made a [Q&A](https://boilingsteam.com/steam-tinker-launcher-making-tinkering-much-easier)
 - **Hex DSL** made a [youtube video](https://www.youtube.com/watch?v=rdXQRMwMfPE)
