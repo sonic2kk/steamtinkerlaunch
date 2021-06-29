@@ -154,7 +154,6 @@ Programs needed for optional external features *(no special order)*:
 - [luxtorpeda-dev](https://github.com/luxtorpeda-dev/luxtorpeda) or [Luxtorpeda](https://github.com/dreamer/luxtorpeda) to optionally start supported games with a linux native binary
 - [GameConqueror/scanmem](https://github.com/frostworx/steamtinkerlaunch/wiki/GameConqueror) to optionally cheat
 - [GameScope](https://github.com/frostworx/steamtinkerlaunch/wiki/GameScope)
-- cabextract *(currently only used to extract the [WMP10](https://github.com/frostworx/steamtinkerlaunch/wiki/WMP10) setup exe)*
 - innoextract *(currently only used to extract the [Cheat Engine](https://github.com/frostworx/steamtinkerlaunch/wiki/Cheat-Engine) setup exe - with wine as fallback)*
 - lsusb *(for an optional [SBS-VR](https://github.com/frostworx/steamtinkerlaunch/wiki/Side-by-Side-VR) check if a VR HMD was found)*
 - jq *(used to extract game names from the steam api and for receiving the Lutris wine list)*

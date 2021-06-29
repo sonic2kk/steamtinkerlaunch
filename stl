@@ -5,7 +5,7 @@
 
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v6.10"
+PROGVERS="v6.11"
 PROGCMD="${0##*/}"
 GHURL="https://github.com"
 PROJECTPAGE="$GHURL/frostworx/steamtinkerlaunch"
@@ -41,7 +41,6 @@ WINECFG="winecfg"
 WICO="wineconsole"
 SYSWINETRICKS="winetricks"
 REPLAY="replay-sorcery"
-CABEXTRACT="cabextract"
 INNOEXTRACT="innoextract"
 LSUSB="lsusb"
 JQ="jq"
@@ -7287,56 +7286,6 @@ function DxvkHudPick {
 	fi
 }
 
-function wmp10toPFX {
-		while [ ! -d "$SWOW" ]; do 
-			writelog "WAIT" "${FUNCNAME[0]} - Waiting for directory '$SWOW' to appear"
-			sleep 1
-			if [ -f "$CLOSETMP" ]; then
-				writelog "WAIT" "${FUNCNAME[0]} - $PROGCMD is just closing - leaving loop"
-				break
-			fi
-		done
-
-		if [ -f "$STLDLDIR/$MP10S" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Extracting '$STLDLDIR/$MP10S' to '$SWOW'"
-			notiShow "$(strFix "$NOTY_WMP2" "$MP10S" "$SWOW")"
-			"$CABEXTRACT" -d "$SWOW" "$STLDLDIR/$MP10S" 2>/dev/null
-			writelog "INFO" "${FUNCNAME[0]} - Removing two wine dlls which come uppercase with '$MP10S'"
-			rm "${SWOW}/wmasf.dll" 2>/dev/null
-			rm "${SWOW}/wmvcore.dll" 2>/dev/null
-			writelog "INFO" "${FUNCNAME[0]} - '$MP10S' dlls have been successfully installed into '$SWOW'"
-		else
-			writelog "SKIP" "${FUNCNAME[0]} - Couldn't extract '$STLDLDIR/$MP10S' to '$SWOW'"
-		fi
-}
-
-function wmp10hack {
-	SWOW="$GPFX/drive_c/windows/syswow64"
-	# option for USEWINE probably not really required
-	if [ -f "${SWOW}/WMASF.DLL" ] && [ -f "${SWOW}/wmasf.dll" ]; then
-		rm "${SWOW}/wmasf.dll" 2>/dev/null
-	fi
-
-	if [ -f "${SWOW}/WMVCORE.DLL" ] && [ -f "${SWOW}/wmvcore.dll" ]; then
-		rm "${SWOW}/wmvcore.dll" 2>/dev/null
-	fi
-
-	if [ -f "$SWOW/wmpasf.dll" ]; then
-		writelog "SKIP" "${FUNCNAME[0]} - Looks like wmp10 was already copied into '$GPFX' - nothing to do"
-	else
-		MP10S="MP10Setup.exe"
-		MP10MD5="e57645c5ab34485d56d019aaa17c3150"
-		if [ ! -f "$STLDLDIR/$MP10S" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - No '$MP10S' found in '$STLDLDIR'"
-			confirmReq "Warn_Missing_File" "$(strFix "$GUI_NOMP10" "$MP10S" "$STLDLDIR" "$MP10MD5")"
-		else
-			writelog "SKIP" "${FUNCNAME[0]} - Found '$MP10S' in '$STLDLDIR' - nothing to download"
-		fi
-
-		wmp10toPFX &
-	fi
-}
-
 function symlinkSteamUser {
 
 	SteamUserDir="$GPFX/$DRCU/$STUS"
@@ -7614,49 +7563,41 @@ function redirectSCDP {
 }
 
 function checkCustomLaunch {
-
-	if [ -n "$HACKWMP10" ] ; then
-		if [ "$HACKWMP10" -eq 1 ] ; then
-			wmp10hack
-			cd "$EFD" || return
-		fi
+	if [ "$ONLYWICO" -eq 1 ]; then
+		# only start $WICO 
+		writelog "INFO" "${FUNCNAME[0]} - 'ONLYWICO' is enabled - starting only $WICO"
+		launchCustomProg "ONLYWICO"
 	else
-		if [ "$ONLYWICO" -eq 1 ]; then
-			# only start $WICO 
-			writelog "INFO" "${FUNCNAME[0]} - 'ONLYWICO' is enabled - starting only $WICO"
-			launchCustomProg "ONLYWICO"
-		else
-			# start a custom program:
-			if [ -n "$USECUSTOMCMD" ] ; then
-				if [ "$USECUSTOMCMD" -eq 1 ] ; then
-					writelog "INFO" "${FUNCNAME[0]} - USECUSTOMCMD is set to '$USECUSTOMCMD' - trying to start custom program '$CUSTOMCMD'"
-				# fork in background and continue
-					if [ "$ONLY_CUSTOMCMD" -eq 1 ]; then
-						SECONDS=0
-					fi
+		# start a custom program:
+		if [ -n "$USECUSTOMCMD" ] ; then
+			if [ "$USECUSTOMCMD" -eq 1 ] ; then
+				writelog "INFO" "${FUNCNAME[0]} - USECUSTOMCMD is set to '$USECUSTOMCMD' - trying to start custom program '$CUSTOMCMD'"
+			# fork in background and continue
+				if [ "$ONLY_CUSTOMCMD" -eq 1 ]; then
+					SECONDS=0
+				fi
 
-					if [ "$FORK_CUSTOMCMD" -eq 1 ]; then
-						writelog "INFO" "${FUNCNAME[0]} - FORK_CUSTOMCMD is set to 1 -  forking the custom program in background and continue"
-						launchCustomProg
-				# or wait
-					else
-						writelog "INFO" "${FUNCNAME[0]} - FORK_CUSTOMCMD is set to 0 - starting the custom program regularly"
-						launchCustomProg
-					fi
-
-
-					if [ "$ONLY_CUSTOMCMD" -eq 1 ]; then
-						writelog "INFO" "${FUNCNAME[0]} - ONLY_CUSTOMCMD is set to 1 means only custom program '$CUSTOMCMD' is supposed to start - exiting here"
-						duration=$SECONDS
-						logPlayTime "$duration"
-						writelog "INFO" "${FUNCNAME[0]} - ## CUSTOMCMD STOPPED after '$duration' seconds playtime"
-						closeSTL " ######### STOP EARLY $PROGNAME $PROGVERS #########"
-						exit
-					fi
+				if [ "$FORK_CUSTOMCMD" -eq 1 ]; then
+					writelog "INFO" "${FUNCNAME[0]} - FORK_CUSTOMCMD is set to 1 -  forking the custom program in background and continue"
+					launchCustomProg
+			# or wait
 				else
-					if [ -n "$CUSTOMCMD" ] && [ "$CUSTOMCMD" != "$("$WHICH" echo 2>/dev/null)" ]; then
-						writelog "SKIP" "${FUNCNAME[0]} - USECUSTOMCMD is '$USECUSTOMCMD' therefore skipping the custom program '$CUSTOMCMD'"
-					fi
+					writelog "INFO" "${FUNCNAME[0]} - FORK_CUSTOMCMD is set to 0 - starting the custom program regularly"
+					launchCustomProg
+				fi
+
+
+				if [ "$ONLY_CUSTOMCMD" -eq 1 ]; then
+					writelog "INFO" "${FUNCNAME[0]} - ONLY_CUSTOMCMD is set to 1 means only custom program '$CUSTOMCMD' is supposed to start - exiting here"
+					duration=$SECONDS
+					logPlayTime "$duration"
+					writelog "INFO" "${FUNCNAME[0]} - ## CUSTOMCMD STOPPED after '$duration' seconds playtime"
+					closeSTL " ######### STOP EARLY $PROGNAME $PROGVERS #########"
+					exit
+				fi
+			else
+				if [ -n "$CUSTOMCMD" ] && [ "$CUSTOMCMD" != "$("$WHICH" echo 2>/dev/null)" ]; then
+					writelog "SKIP" "${FUNCNAME[0]} - USECUSTOMCMD is '$USECUSTOMCMD' therefore skipping the custom program '$CUSTOMCMD'"
 				fi
 			fi
 		fi
@@ -9673,7 +9614,6 @@ function checkExtDeps {
 	checkDep "USENETMON" "$NETMON"
 	checkDep "USENOTIFIER" "$NOTY"
 	checkDep "RUN_WINECFG" "$WINECFG"
-	checkDep "HACKWMP10" "$CABEXTRACT"
 	checkDep "CHECKHMD" "$LSUSB"
 	checkDep "HAVEINNO" "$INNOEXTRACT"
 	checkDep "BACKUPSTEAMUSER" "$RSYNC"
