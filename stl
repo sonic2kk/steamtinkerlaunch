@@ -5,7 +5,7 @@
 
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v6.11"
+PROGVERS="v6.13"
 PROGCMD="${0##*/}"
 GHURL="https://github.com"
 PROJECTPAGE="$GHURL/frostworx/steamtinkerlaunch"
@@ -52,7 +52,7 @@ CONTY="conty.sh"
 APPINFO="appinfo-vdf"
 
 HAVEOSSL=1
-CHECKHMD=1 # will be set to 0 if $LSUSB is not found. Then the hmd presence check is skipped
+CHECKHMD=1
 X32D="x32dbg"
 X64D="x64dbg"
 FORCEOVERRIDEPROTON=0
@@ -73,7 +73,15 @@ WINRESLOG="$STLSHM/winres.log"
 GWIDFILE="$STLSHM/${PROGCMD}-sbsgwid"
 PIDLOCK="$STLSHM/pid.lock"
 VRINITLOCK="$STLSHM/vrinit.lock"
+IGCSINITLOCK="$STLSHM/igcsinit.lock"
 VRINITRESULT="$STLSHM/vrinit.conf"
+UUUPATCH="$PROGCMD-uuu-patch"
+UUUPATCHCOMMAND="$STLSHM/${UUUPATCH}.sh"
+GCD="GameCfgDiffers"
+OVFS="openvr_fsr"
+OVRMOD="openvr_mod.cfg"
+GWXTEMP="$STLSHM/gamewinXID.txt"
+TRAYCUSC="$STLSHM/customscript"
 TEMPGPIDFILE="$STLSHM/gamepid.txt"
 STLSETENTRIES="$STLSHM/setentries.txt"
 STLRAWENTRIES="$STLSHM/rawentries.txt"
@@ -150,10 +158,13 @@ EVMETASKIPID="$EVMETAID/skip"
 EVMETACUSTOMID="$EVMETAID/custom"
 EVMETAADDONID="$EVMETAID/addon"
 EVMETATITLE="$METADIR/eval/title"
+EVMETAOLD="$METADIR/eval/old"
 EVALSC="evaluatorscript"
 GECUST="get-current-step"
 ISCRI="iscriptevaluator"
-FOINPA="foreign_install_path"
+LIINPA="linux_install_path"
+STEWOS="Steamworks Shared"
+LECO="legacycompat"
 FRSTATE="$STLSHM/firuState.txt"
 TIGEMETA="$METADIR/title/general"
 TICUMETA="$METADIR/title/custom"
@@ -299,8 +310,9 @@ RS_D9_DEST="d3d9.dll"
 RSSU="ReShade_Setup"
 RSINI="ReShade.ini"
 RSPINI="ReShadePreset.ini"
+IGCS="IGCSInjector"
+UUU="UniversalUE4Unlocker"
 SD3DVR="SuperDepth3D_VR+"
-LGS="(last game started)"
 RSENABLED="ReShade-${PROGCMD}-enabled.txt"
 RSDISABLED="ReShade-${PROGCMD}-disabled.txt"
 LFM="launchFavMenu"
@@ -731,7 +743,6 @@ function getInstalledGamesFromCategory {
 }
 
 function listInstalledGameIDs {
-#	getInstalledGamesFromCategory "installed"
 	while read -r APPMA; do
 		grep -Eo "[[:digit:]]*" <<< "${APPMA##*/}"
 	done <  <(listAppManifests)
@@ -897,7 +908,7 @@ function pollWinRes {
 	POSY=0
 	unset COLCOUNT
 
-	SCREENRES="$(getScreenRes)"
+	SCREENRES="$(getScreenRes r)"
 
 	if [ -z "$SCREENRES" ]; then
 		SCREENRES="any"
@@ -1044,7 +1055,7 @@ function resetAID {
 						AID="${PREVAID//\"}"
 						PREVGAME="$(grep "^PREVGAME" "$LASTRUN" | cut -d '=' -f2)"
 						if [ -n "$PREVGAME" ]; then
-							GN="(last game started) ${PREVGAME//\"}"
+							GN="${PREVGAME//\"}"
 						fi
 					fi
 				else
@@ -1090,7 +1101,7 @@ function linkLog {
 	if [ -z "$GN" ]; then
 		writelog "SKIP" "${FUNCNAME[0]} - Skipping symlinking logfile - no valid game name found"
 	else
-		createSymLink "${FUNCNAME[0]}" "$LOGFILE" "${LOGDIRTI}/${GN/$LGS /}.log"
+		createSymLink "${FUNCNAME[0]}" "$LOGFILE" "$LOGDIRTI/$GN.log"
 	fi
 }
 
@@ -1103,7 +1114,7 @@ function setGlobalAIDCfgs {
 function setCompatDataTitle {
 	if [ "$STORECOMPDATTITLE" -eq 1 ] && [ -n "$OSCDP" ]; then
 		mkProjDir "$STLCOMPDAT" 1
-		COMPDATTITLE="$STLCOMPDAT/${GN/$LGS /}"
+		COMPDATTITLE="$STLCOMPDAT/$GN"
 		if readlink "$COMPDATTITLE" >/dev/null ; then
 			writelog "INFO" "${FUNCNAME[0]} - Symlink $COMPDATTITLE already exists"
 			if [ "$(readlink "$COMPDATTITLE")" == "$OSCDP" ]; then
@@ -1138,7 +1149,8 @@ function setGameVars {
 	fi
 
 	if [ -z "$GAMEEXE" ]; then
-		GAMEEXE="${*##*/}"	
+		GAMEEXE1="${*##*/}"
+		GAMEEXE="${GAMEEXE1//$WFEAR }"
 	fi
 
 	# common
@@ -1479,6 +1491,8 @@ function setDefaultCfgValues {
 		if [ -z "$CONTYRELURL" ]						; then	CONTYRELURL="$GHURL/Kron4ek/Conty/releases"; fi
 		if [ -z "$MO2DLURL" ]							; then	MO2DLURL="$GHURL/ModOrganizer2/modorganizer/releases"; fi
 		if [ -z "$CW_KRON4EK" ]							; then	CW_KRON4EK="$GHURL/Kron4ek/Wine-Builds/releases"; fi
+		if [ -z "$IGCSZIP" ]							; then	IGCSZIP="$GHURL/FransBouma/InjectableGenericCameraSystem/releases/download/IGCSInjector_102/IGCSInjector_v102.zip"; fi
+		if [ -z "$UUUURL" ]								; then	UUUURL="https://framedsc.github.io/GeneralGuides/universal_ue4_consoleunlocker.htm#downloading-the-uuu"; fi
 	}
 
 	function setDefaultCfgValuesglobal {
@@ -1580,20 +1594,28 @@ function setDefaultCfgValues {
 		if [ -z "$CUSTOMCMD_ARGS" ]						; then	CUSTOMCMD_ARGS="$NON"; fi
 		if [ -z "$ONLY_CUSTOMCMD" ]						; then	ONLY_CUSTOMCMD="0";	fi
 		if [ -z "$FORK_CUSTOMCMD" ]						; then	FORK_CUSTOMCMD="0";	fi
+		if [ -z "$INJECT_CUSTOMCMD" ]					; then	INJECT_CUSTOMCMD="0"; fi
+		if [ -z "$INJECTWAIT" ]							; then	INJECTWAIT="0";	fi
+		if [ -z "$USEIGCS" ]							; then	USEIGCS="0"; fi
+		if [ -z "$UUUSEIGCS" ]							; then	UUUSEIGCS="0"; fi
+		if [ -z "$IGCSWAIT" ]							; then	IGCSWAIT="0"; fi
+		if [ -z "$UUUSEPATCH" ]							; then	UUUSEPATCH="0"; fi
+		if [ -z "$UUUPATCHWAIT" ]						; then	UUUPATCHWAIT="0"; fi
+		if [ -z "$UUUSEVR" ]							; then	UUUSEVR="0"; fi
 		if [ -z "$GAMEARGS" ]							; then	GAMEARGS="$NON"; fi
 		if [ -z "$USEGAMEMODERUN" ]						; then	USEGAMEMODERUN="0";	fi
-		if [ -z "$USEGAMESCOPE" ]						; then	USEGAMESCOPE="0";	fi
-		if [ -z "$GAMESCOPE_ARGS" ]						; then	GAMESCOPE_ARGS="--";	fi
-		if [ -z "$TOGSTEAMWEBHELPER" ]					; then	TOGSTEAMWEBHELPER="0";	fi
+		if [ -z "$USEGAMESCOPE" ]						; then	USEGAMESCOPE="0"; fi
+		if [ -z "$GAMESCOPE_ARGS" ]						; then	GAMESCOPE_ARGS="--"; fi
+		if [ -z "$TOGSTEAMWEBHELPER" ]					; then	TOGSTEAMWEBHELPER="0"; fi
 		if [ -z "$MANGOHUD" ]							; then	MANGOHUD="0";	fi
 		if [ -z "$ENABLE_VKBASALT" ]					; then	ENABLE_VKBASALT="0"; fi
 		if [ -z "$RUN_NYRNA" ]							; then	RUN_NYRNA="0"; fi
 		if [ -z "$RUN_REPLAY" ]							; then	RUN_REPLAY="0";	fi
 		if [ -z "$RUN_GAMCON" ]							; then	RUN_GAMCON="0";	fi
-		if [ -z "$RUN_CHEATENGINE" ]					; then	RUN_CHEATENGINE="0";	fi
+		if [ -z "$RUN_CHEATENGINE" ]					; then	RUN_CHEATENGINE="0"; fi
 		if [ -z "$GAMCONWAITEXE" ]						; then	GAMCONWAITEXE="$("$WHICH" echo 2>/dev/null)"; fi
 		if [ -z "$RUN_X64DBG" ]							; then	RUN_X64DBG="0";	fi
-		if [ -z "$USEVORTEX" ]							; then	USEVORTEX="0";	fi
+		if [ -z "$USEVORTEX" ]							; then	USEVORTEX="0"; fi
 		if [ -z "$WAITVORTEX" ]							; then	WAITVORTEX="2"; fi
 		if [ -z "$CHANGE_PULSE_LATENCY" ] 				; then	CHANGE_PULSE_LATENCY="0"; fi
 		if [ -z "$STL_PULSE_LATENCY_MSEC" ]				; then	STL_PULSE_LATENCY_MSEC="60"; fi
@@ -1618,10 +1640,10 @@ function setDefaultCfgValues {
 		if [ -z "$CHOOSESHADERS" ]						; then	CHOOSESHADERS="0"; fi
 		if [ -z "$ALTEXEPATH" ]							; then	ALTEXEPATH="/tmp"; fi
 		if [ -z "$ARCHALTEXE" ]							; then	ARCHALTEXE="$("$WHICH" echo 2>/dev/null)"; fi
+		if [ -z "$USEOPENVRFSR" ]						; then	USEOPENVRFSR="0"; fi
 		if [ -z "$RUNSBSVR" ]							; then	RUNSBSVR="0"; fi
 		if [ -z "$VRVIDEOPLAYERARGS" ]					; then	VRVIDEOPLAYERARGS="--flat"; fi
 		if [ -z "$SBSZOOM" ]							; then	SBSZOOM="1.0"; fi
-		if [ -z "$SBSVRVK" ]							; then	SBSVRVK="0"; fi
 		if [ -z "$SBSVRRS" ]							; then	SBSVRRS="0"; fi
 		if [ -z "$MINVRWINH" ] 							; then	MINVRWINH="640"; fi
 		if [ -z "$WAITFORTHISPID" ]						; then	WAITFORTHISPID="$NON"; fi
@@ -1637,6 +1659,7 @@ function setDefaultCfgValues {
 		if [ -z "$STRACERUN" ]							; then	STRACERUN="0"; fi
 		if [ -z "$STRACEOPTS" ]							; then	STRACEOPTS="-f -t -e trace=file"; fi
 		if [ -z "$USENETMON" ]							; then	USENETMON="0"; fi
+		if [ -z "$BLOCKINTERNET" ]						; then	BLOCKINTERNET="0"; fi
 		if [ -z "$DXVK_HUD" ]							; then	DXVK_HUD="0"; fi
 		if [ -z "$DXVK_LOG_LEVEL" ]						; then	DXVK_LOG_LEVEL="$NON"; fi
 		if [ -z "$DXVK_LOG_PATH" ]						; then	DXVK_LOG_PATH="$STLDXVKLOGDIR"; fi
@@ -1654,6 +1677,8 @@ function setDefaultCfgValues {
 		if [ -z "$PROTON_DUMP_DEBUG_COMMANDS" ]			; then	PROTON_DUMP_DEBUG_COMMANDS="0"; fi
 		if [ -z "$CLEANPROTONTEMP" ]					; then	CLEANPROTONTEMP="0"; fi
 		if [ -z "$WINE_FULLSCREEN_INTEGER_SCALING" ]	; then	WINE_FULLSCREEN_INTEGER_SCALING="0"; fi
+		if [ -z "$WINE_FULLSCREEN_FSR" ]				; then	WINE_FULLSCREEN_FSR="0"; fi
+		if [ -z "$WINE_FULLSCREEN_FSR_STRENGTH" ]		; then	WINE_FULLSCREEN_FSR_STRENGTH="5"; fi
 		if [ -z "$STLWINEDEBUG" ]						; then	STLWINEDEBUG="-all"; fi
 		if [ -z "$STLWINEDLLOVERRIDES" ]				; then	STLWINEDLLOVERRIDES="$NON"; fi
 		if [ -z "$USERSTART" ]							; then	USERSTART="$("$WHICH" echo 2>/dev/null)"; fi
@@ -1964,6 +1989,22 @@ function saveCfg {
 			echo "ONLY_CUSTOMCMD=\"$ONLY_CUSTOMCMD\""
 			echo "## $DESC_FORK_CUSTOMCMD"
 			echo "FORK_CUSTOMCMD=\"$FORK_CUSTOMCMD\""
+			echo "## $DESC_INJECT_CUSTOMCMD"
+			echo "INJECT_CUSTOMCMD=\"$INJECT_CUSTOMCMD\""
+			echo "## $DESC_INJECTWAIT"
+			echo "INJECTWAIT=\"$INJECTWAIT\""
+			echo "## $DESC_USEIGCS"
+			echo "USEIGCS=\"$USEIGCS\""
+			echo "## $DESC_UUUSEIGCS"
+			echo "UUUSEIGCS=\"$UUUSEIGCS\""
+			echo "## $DESC_IGCSWAIT"
+			echo "IGCSWAIT=\"$IGCSWAIT\""
+			echo "## $DESC_UUUSEPATCH"
+			echo "UUUSEPATCH=\"$UUUSEPATCH\""
+			echo "## $DESC_UUUPATCHWAIT"
+			echo "UUUPATCHWAIT=\"$UUUPATCHWAIT\""
+			echo "## $DESC_UUUSEVR"
+			echo "UUUSEVR=\"$UUUSEVR\""
 			echo "## $DESC_GAMEARGS"
 			echo "GAMEARGS=\"$GAMEARGS\""
 			echo "## $DESC_USEGAMEMODERUN"
@@ -2040,14 +2081,14 @@ function saveCfg {
 			echo "ALTEXEPATH=\"$ALTEXEPATH\""
 			echo "## $DESC_ARCHALTEXE"
 			echo "ARCHALTEXE=\"$ARCHALTEXE\""
+			echo "## $DESC_USEOPENVRFSR"
+			echo "USEOPENVRFSR=\"$USEOPENVRFSR\""
 			echo "## $DESC_RUNSBSVR"
 			echo "RUNSBSVR=\"$RUNSBSVR\""
 			echo "## $DESC_VRVIDEOPLAYERARGS"
 			echo "VRVIDEOPLAYERARGS=\"$VRVIDEOPLAYERARGS\""
 			echo "## $DESC_SBSZOOM"
 			echo "SBSZOOM=\"$SBSZOOM\""
-			echo "## $DESC_SBSVRVK"
-			echo "SBSVRVK=\"$SBSVRVK\""
 			echo "## $DESC_SBSVRRS"
 			echo "SBSVRRS=\"$SBSVRRS\""
 			echo "## $DESC_MINVRWINH"
@@ -2080,6 +2121,8 @@ function saveCfg {
 			echo "STRACEOPTS=\"$STRACEOPTS\""
 			echo "## $DESC_USENETMON"
 			echo "USENETMON=\"$USENETMON\""
+			echo "## $DESC_BLOCKINTERNET"
+			echo "BLOCKINTERNET=\"$BLOCKINTERNET\""
 			echo "## $DESC_PROTON_LOG"
 			echo "PROTON_LOG=\"$PROTON_LOG\""
 			echo "## $DESC_PROTON_LOG_DIR"
@@ -2103,9 +2146,13 @@ function saveCfg {
 			echo "## $DESC_PROTON_FORCE_LARGE_ADDRESS_AWARE"
 			echo "PROTON_FORCE_LARGE_ADDRESS_AWARE=\"$PROTON_FORCE_LARGE_ADDRESS_AWARE\""
 			echo "## $DESC_WINE_FULLSCREEN_INTEGER_SCALING"
+			echo "WINE_FULLSCREEN_INTEGER_SCALING=\"$WINE_FULLSCREEN_INTEGER_SCALING\""
+			echo "## $DESC_WINE_FULLSCREEN_FSR"
+			echo "WINE_FULLSCREEN_FSR=\"$WINE_FULLSCREEN_FSR\""
+			echo "## $DESC_WINE_FULLSCREEN_FSR_STRENGTH"
+			echo "WINE_FULLSCREEN_FSR_STRENGTH=\"$WINE_FULLSCREEN_FSR_STRENGTH\""
 			echo "## $DESC_CLEANPROTONTEMP"
 			echo "CLEANPROTONTEMP=\"$CLEANPROTONTEMP\""
-			echo "WINE_FULLSCREEN_INTEGER_SCALING=\"$WINE_FULLSCREEN_INTEGER_SCALING\""
 			echo "## $DESC_STLWINEDEBUG"
 			echo "STLWINEDEBUG=\"$STLWINEDEBUG\""
 			echo "## $DESC_STLWINEDLLOVERRIDES"
@@ -2969,6 +3016,30 @@ function EditorDialog {
 		CfgFiles+=("$CEVALSC")
 	fi
 	
+	if [ "$UUUSEIGCS" -eq 1 ] || [ "$USEIGCS" -eq 1 ]; then
+		IGCSINI="$EFD/${IGCS}.ini"
+		if	 [ -f "$IGCSINI" ]; then
+			CfgFiles+=("$IGCSINI")
+		fi
+	fi
+	
+	if [ "$UUUSEPATCH" -eq 1 ] || [ "$UUUSEVR" -eq 1 ]; then
+		UUUPATCHFILE="$(find "$GAMEDIR" -name "$UUUPATCH")"
+		if	[ -f "$UUUPATCHFILE" ]; then
+			CfgFiles+=("$UUUPATCHFILE")
+		fi
+	fi
+	
+	if [ "$USEOPENVRFSR" -eq 1 ]; then
+		OVRFP="$EFD/${OVFS}-${PROGCMD}-enabled.txt"
+		if [ -f "$OVRFP" ]; then
+			OVRMODF="$EFD/$(grep "$OVRMOD" "$OVRFP")"
+			if [ -f "$OVRMODF" ]; then
+				CfgFiles+=("$OVRMODF")
+			fi
+		fi
+	fi
+	
 	if [ -f "$AEVALSC" ]; then
 		CfgFiles+=("$AEVALSC")
 	fi
@@ -2994,7 +3065,7 @@ function EditorDialog {
 
 	EDFILES="$(while read -r f; do	echo "FALSE"; echo "$f"; done <<< "$(printf "%s\n" "${CfgFiles[@]}" | sort -u)" | \
 	"$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center $WINDECO --list --checklist --column=Edit --column=ConfigFile --separator="\n" --print-column="2" \
-	--text="$(spanFont "$(strFix "$GUI_EDITORDIALOG" "$GN" "$AID")" "H")" --title="$TITLE" --button="$BUT_EDIT":0 --button="$BUT_HIDE":2 --button="$BUT_OD":4 --button="$BUT_DEL":6 --button="$BUT_CAN":8 "$GEOM")"
+	--text="$(spanFont "$(strFix "$GUI_EDITORDIALOG" "$SGNAID")" "H")" --title="$TITLE" --button="$BUT_EDIT":0 --button="$BUT_HIDE":2 --button="$BUT_OD":4 --button="$BUT_DEL":6 --button="$BUT_CAN":8 "$GEOM")"
 	case $? in
 		0)  {
 				if [ -n "$EDFILES" ]; then
@@ -3114,6 +3185,7 @@ function TrayIconExports {
 	export EFD="$EFD"
 	export GAMEWINDOW="$GAMEWINDOW"
 	export UPWINTMPL="$UPWINTMPL"
+	export TRAYCUSC="$TRAYCUSC"
 
 	if [ -n "$(GETALTEXEPATH)" ]; then
 		TSHADDESTDIR="$(GETALTEXEPATH)"
@@ -3141,6 +3213,7 @@ function TrayIconExports {
 	export -f TrayPickWin
 	export -f TraySRC
 	export -f TrayUWT
+	export -f TrayLCS
 }
 #ENDIEX
 
@@ -3206,6 +3279,11 @@ function openTrayIcon {
 			touch "$UPWINTMPL"
 		}
 
+		function TrayLCS {
+			writelog "INFO" "${FUNCNAME[0]} - TrayIcon: Triggering Launch custom script"
+			"$TRAYCUSC"
+		}
+		
 		TrayIconExports
 		
 		# actually open the actual trayIcon	
@@ -3216,7 +3294,8 @@ function openTrayIcon {
 		|$TRAY_VR,bash -c TrayVR \
 		|$TRAY_PICKWINDOW,bash -c TrayPickWin \
 		|$TRAY_SRC,bash -c TraySRC \
-		|$TRAY_UWT,bash -c TrayUWT" \
+		|$TRAY_UWT,bash -c TrayUWT \
+		|$TRAY_LCS,bash -c TrayLCS" \
 		--text="$TRAY_TOOLTIP" >/dev/null 2>/dev/null &
 		YADTRAYPID="$!"
 	fi
@@ -3394,6 +3473,13 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_CUSTOMCMD_ARGS!$DESC_CUSTOMCMD_ARGS ('CUSTOMCMD_ARGS')" "${CUSTOMCMD_ARGS/#-/ -}" `#CAT_Misc` `#MENU_GAME` \
 --field="     $GUI_FORK_CUSTOMCMD!$DESC_FORK_CUSTOMCMD ('FORK_CUSTOMCMD')":CHK "${FORK_CUSTOMCMD/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_ONLY_CUSTOMCMD!$DESC_ONLY_CUSTOMCMD ('ONLY_CUSTOMCMD')":CHK "${ONLY_CUSTOMCMD/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_INJECT_CUSTOMCMD!$DESC_INJECT_CUSTOMCMD ('INJECT_CUSTOMCMD')":CHK "${INJECT_CUSTOMCMD/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_INJECTWAIT!$DESC_INJECTWAIT ('INJECTWAIT')":NUM "${INJECTWAIT/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_USEIGCS!$DESC_USEIGCS ('USEIGCS')":CHK "${USEIGCS/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_UUUSEIGCS!$DESC_UUUSEIGCS ('UUUSEIGCS')":CHK "${UUUSEIGCS/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_IGCSWAIT!$DESC_IGCSWAIT ('IGCSWAIT')":NUM "${IGCSWAIT/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_UUUSEPATCH!$DESC_UUUSEPATCH ('UUUSEPATCH')":CHK "${UUUSEPATCH/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_UUUPATCHWAIT!$DESC_UUUPATCHWAIT ('UUUPATCHWAIT')":NUM "${UUUPATCHWAIT/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_USERSTART!$DESC_USERSTART $GUI_ECHOPLAC ('USERSTART')":FL "${USERSTART/#-/ -}" `#CAT_Misc` `#MENU_GAME` \
 --field="     $GUI_USERSTOP!$DESC_USERSTOP $GUI_ECHOPLAC ('USERSTOP')":FL "${USERSTOP/#-/ -}" `#CAT_Misc` `#MENU_GAME` \
 --field="     $GUI_GAMEARGS!$DESC_GAMEARGS ('GAMEARGS')" "${GAMEARGS/#-/ -}" `#CAT_Misc` `#MENU_GAME` \
@@ -3503,6 +3589,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_NETMON!$DESC_NETMON ('NETMON')":FL "${NETMON/#-/ -}" `#CAT_Tools` `#MENU_GLOBAL` \
 --field="     $GUI_NETOPTS!$DESC_NETOPTS ('NETOPTS')" "${NETOPTS/#-/ -}" `#CAT_Tools` `#MENU_GLOBAL` \
 --field="     $GUI_NETMONDIR!$DESC_NETMONDIR ('NETMONDIR')":DIR "${NETMONDIR/#-/ -}" `#CAT_Tools` `#SUB_Directories` `#MENU_GLOBAL` \
+--field="     $GUI_BLOCKINTERNET!$DESC_BLOCKINTERNET ('BLOCKINTERNET')":CHK "${BLOCKINTERNET/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_STRACERUN!$DESC_STRACERUN ('STRACERUN')":CHK "${STRACERUN/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_STRACEDIR!$DESC_STRACEDIR ('STRACEDIR')":DIR "${STRACEDIR/#-/ -}" `#CAT_Tools` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_STRACEOPTS!$DESC_STRACEOPTS ('STRACEOPTS')" "${STRACEOPTS/#-/ -}" `#CAT_Tools` `#MENU_GAME` \
@@ -3539,8 +3626,9 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_VRVIDEOPLAYER!$DESC_VRVIDEOPLAYER ('VRVIDEOPLAYER')":FL "${VRVIDEOPLAYER/#-/ -}" `#CAT_VR` `#MENU_GLOBAL` \
 --field="     $GUI_VRVIDEOPLAYERARGS!$DESC_VRVIDEOPLAYERARGS ('VRVIDEOPLAYERARGS')" "${VRVIDEOPLAYERARGS/#-/ -}" `#CAT_VR` `#MENU_GAME` \
 --field="     $GUI_WAITFORTHISPID!$DESC_WAITFORTHISPID ('WAITFORTHISPID')" "${WAITFORTHISPID/#-/ -}" `#CAT_VR` `#MENU_GAME` \
---field="     $GUI_SBSVRVK!$DESC_SBSVRVK ('SBSVRVK')":CHK "${SBSVRVK/#-/ -}" `#CAT_VR` `#SUB_Checkbox` `#MENU_GAME` \
---field="$(spanFont "$GUI_OPTSVORTEX" "H")":LBL "SKIP" `#CAT_Vortex` `#HEAD_Vortex` `#MENU_GAME` `#MENU_GLOBAL`  \
+--field="     $GUI_UUUSEVR!$DESC_UUUSEVR ('UUUSEVR')":CHK "${UUUSEVR/#-/ -}" `#CAT_VR` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_USEOPENVRFSR!$DESC_USEOPENVRFSR ('USEOPENVRFSR')":CHK "${USEOPENVRFSR/#-/ -}" `#CAT_VR` `#SUB_Checkbox` `#MENU_GAME` \
+--field="$(spanFont "$GUI_OPTSVORTEX" "H")":LBL "SKIP" `#CAT_Vortex` `#HEAD_Vortex` `#MENU_GAME` `#MENU_GLOBAL` \
 --field="     $GUI_VORTEXINSTALL!$DESC_VORTEXINSTALL ('VORTEXINSTALL')":CHK "${VORTEXINSTALL/#-/ -}" `#CAT_Vortex` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_USEVORTEX!$DESC_USEVORTEX ('USEVORTEX')":CHK "${USEVORTEX/#-/ -}" `#CAT_Vortex` `#MENU_GAME` \
 --field="     $GUI_WAITVORTEX!$DESC_WAITVORTEX ('WAITVORTEX')":NUM "${WAITVORTEX/#-/ -}" `#CAT_Vortex` `#MENU_GAME` \
@@ -3566,6 +3654,8 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_STLWINEDEBUG!$DESC_STLWINEDEBUG ('STLWINEDEBUG')":CBE "${STLWINEDEBUG/#-/ -}!$SOMEWINEDEBUGOPTIONS" `#CAT_Wine` `#MENU_GAME` \
 --field="     $GUI_STLWINEDLLOVERRIDES!$DESC_STLWINEDLLOVERRIDES ('STLWINEDLLOVERRIDES')":CBE "${STLWINEDLLOVERRIDES/#-/ -}!$SOMEWINEDLLOVERRIDES" `#CAT_Wine` `#MENU_GAME` \
 --field="     $GUI_WINE_FULLSCREEN_INTEGER_SCALING!$DESC_WINE_FULLSCREEN_INTEGER_SCALING ('WINE_FULLSCREEN_INTEGER_SCALING')":CHK "${WINE_FULLSCREEN_INTEGER_SCALING/#-/ -}" `#CAT_Wine` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_WINE_FULLSCREEN_FSR!$DESC_WINE_FULLSCREEN_FSR ('WINE_FULLSCREEN_FSR')":CHK "${WINE_FULLSCREEN_FSR/#-/ -}" `#CAT_Wine` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_WINE_FULLSCREEN_FSR_STRENGTH!$DESC_WINE_FULLSCREEN_FSR_STRENGTH ('WINE_FULLSCREEN_FSR_STRENGTH')":NUM "${WINE_FULLSCREEN_FSR_STRENGTH/#-/ -}!0..5" `#CAT_Wine` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_WINEDLDIR!$DESC_WINEDLDIR ('WINEDLDIR')":DIR "${WINEDLDIR/#-/ -}" `#CAT_Wine` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_WINEEXTDIR!$DESC_WINEEXTDIR ('WINEEXTDIR')":DIR "${WINEEXTDIR/#-/ -}" `#CAT_Wine` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_WINE_LOG_DIR!$DESC_WINE_LOG_DIR ('WINE_LOG_DIR')":DIR "${WINE_LOG_DIR/#-/ -}" `#CAT_Wine` `#SUB_Directories` `#MENU_GAME` \
@@ -3624,7 +3714,7 @@ function openGameMenu {
 		FUNC="$2"
 	fi
 	PARGUI="${FUNCNAME[0]}"
-	openMenu "$AID" "$FUNC" "$STLGAMECFG" "0" "$GAMEMENU" "$LGAM" "$SHOWPIC" "EMPTY" "EMPTY" "$(strFix "$GUI_SETHEAD1" "$GN" "$AID")" "MENU_GAME"
+	openMenu "$AID" "$FUNC" "$STLGAMECFG" "0" "$GAMEMENU" "$LGAM" "$SHOWPIC" "EMPTY" "EMPTY" "$(strFix "$GUI_SETHEAD1" "$SGNAID")" "MENU_GAME"
 }
 
 function openGameDefaultMenu {
@@ -3711,9 +3801,9 @@ function openCustMenu {
 	MYTMPL="${MYMENU}-${TMPL}"
 
 	if [ "$MYCAT" == "Favorites" ]; then
-		MYTEXT="$(strFix "$GUI_FAVORITESMENU" "$GN" "$AID")"
+		MYTEXT="$(strFix "$GUI_FAVORITESMENU" "$SGNAID")"
 	else
-		MYTEXT="$(strFix "$GUI_CATMENU" "$GN" "$AID" "$MYCAT")"
+		MYTEXT="$(strFix "$GUI_CATMENU" "$SGNAID" "$MYCAT")"
 		if [ ! -f "$MYTMPL" ]; then
 			grep "CAT_${MYCAT}" "$STLRAWENTRIES" > "$MYTMPL"
 		fi
@@ -3762,6 +3852,10 @@ function openCustMenu {
 			GOBACK=0
 			saveMenuEntries "$MYMENU"
 			if [ "$SAVESETSIZE" -eq 1 ] ; then	sleep 1;	fi
+			
+			if [ "$MYCAT" == "$GCD" ];then
+				setGameCfgDiffs
+			fi
 			"${FUNCNAME[0]}" "$@"
 		}
 	;;
@@ -3873,6 +3967,24 @@ function setGuiBlockSelection {
 	goBackToPrevFunction "${FUNCNAME[0]}" "$2"
 }
 
+function setGameCfgDiffs {
+	writelog "INFO" "${FUNCNAME[0]} - Getting changes between game config and default"
+	CHTEMP="$STLSHM/${AID}_cfgchanges.txt"
+	comm -13 <(grep -v "^#" "$STLDEFGAMECFG" | grep "=" | sort -u) <(grep -v "^#" "$STLGAMECFG" | grep "=" | sort -u) > "$CHTEMP"
+	rm "$MTEMP/$GCD" "$MTEMP/$GCD-${TMPL}" 2>/dev/null
+
+	while read -r change; do
+		GVAR="${change%=*}"
+		TVAL="$(grep "^${GVAR}=" "$STLDEFGAMECFG" | cut -d '=' -f2)"
+		TVALO="${TVAL//\"/}"
+		if [ -n "$TVAL" ];then
+			FRLI="$(sed -n "/^#STARTSETENTRIES/,/^#ENDSETENTRIES/p;/^#ENDSETENTRIES/q" "$0" | grep "'$GVAR'")"
+			FRL1="${FRLI//\')/\') - $GUI_TEMPVAL $TVALO}"
+			echo "$FRL1" >> "$MTEMP/$GCD-${TMPL}"
+		fi
+	done < "$CHTEMP"
+}
+
 function setGuiCategoryMenuSel {
 	export CURWIKI="$PPW/Category-Menus"
 	TITLE="${PROGNAME}-CategorySelection"
@@ -3880,13 +3992,17 @@ function setGuiCategoryMenuSel {
 
 	setShowPic
 	
-	CATDD="$(getCatsFromCode | tr '\n' '!'  | sed "s:^!::" | sed "s:!$::")"
+	CATDD="${GCD}!$(getCatsFromCode | tr '\n' '!'  | sed "s:^!::" | sed "s:!$::")"
 
 	SELECTCAT="$("$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center $WINDECO --form --separator="\n" \
 	--text="$(spanFont "$(strFix "$GUI_CATSEL" "$PROGNAME")" "H")" \
-	--title="$TITLE" --field=" $GUI_CAT!$GUI_CATSEL":CB "$CATDD" "$GEOM")"
+	--title="$TITLE" --field=" $GUI_CAT!$(strFix "$GUI_CATSEL" "$PROGNAME")":CB "$CATDD" "$GEOM")"
 	case $? in
-		0)  {	
+		0)  {
+				if [ "$SELECTCAT" == "$GCD" ]; then
+					setGameCfgDiffs
+				fi
+
 				writelog "INFO" "${FUNCNAME[0]} - Selected '$SELECTCAT' - Opening Category Menu"
 				openCustMenu "$AID" "${FUNCNAME[0]}" "$SELECTCAT" "$MTEMP/$SELECTCAT" "$LCM"
 			}
@@ -3905,9 +4021,18 @@ function clickInfo {
 }
 
 function getLaPl {
-	if [ -f "$PLAYTIMELOGDIR/${GN/$LGS /}.log" ]; then
-		echo "$GUI_LASTPLAYED $(tail -n1 "$PLAYTIMELOGDIR/${GN/$LGS /}.log")"
+	if [ -f "$PLAYTIMELOGDIR/$GN.log" ]; then
+		echo "$GUI_LASTPLAYED $(tail -n1 "$PLAYTIMELOGDIR/${GN}.log")"
 	fi	
+}
+
+function fixShowGnAid {
+	SGNAID="$GN ($AID)"
+	SGNAID="${SGNAID//&/+}"
+}
+
+function fixShow {
+	echo "${1//&/+}"
 }
 
 function MainMenu {
@@ -3920,10 +4045,10 @@ function MainMenu {
 	export CURWIKI="$PPW/Main-Menu"
 	TITLE="${PROGNAME}-MainMenu"
 	pollWinRes "$TITLE" 4
+	fixShowGnAid
 
 	LAPL="$(getLaPl)"
-
-	SETHEAD="$(spanFont "${PROGNAME} (${PROGCMD}) - ${PROGVERS} \n \n$GN ($AID)" "H")\n<span font=\"italic\">$LAPL\n(${#CfgFiles[@]} $GUI_EDITABLECFGS)\n($GUI_EDITABLEGAMECFGS)\n</span>"
+	SETHEAD="$(spanFont "${PROGNAME} (${PROGCMD}) - ${PROGVERS} \n \n$SGNAID" "H")\n<span font=\"italic\">$LAPL\n(${#CfgFiles[@]} $GUI_EDITABLECFGS)\n($GUI_EDITABLEGAMECFGS)\n</span>"
 
 	TT_OPENURL="Help Url Gui"
 	prepareProtonDBRating
@@ -3950,16 +4075,19 @@ function MainMenu {
 	fi
 
 	if [ -n "$GAMEDIR" ]; then
-		SETHEAD="$SETHEAD \n ${GUI_SGD}: '$GAMEDIR'"
+		SETHEAD="$SETHEAD \n ${GUI_SGD}: '$(fixShow "$GAMEDIR")'"
 	fi
 
 	if [ -n "$GAMEWINDOW" ] && [ "$GAMEWINDOW" != "$NON" ]; then
-		SETHEAD="$SETHEAD \n ${GUI_SGW}: '$GAMEWINDOW'"
+		SETHEAD="$SETHEAD \n ${GUI_SGW}: '$(fixShow "$GAMEWINDOW")'"
 	fi
 
 	if [ -n "$GAMEEXE" ]; then
 		SETHEAD="$SETHEAD \n ${GUI_SGE}: '$GAMEEXE'"
 	fi
+	
+	# filter html incompatible chars here
+	#SETHEAD="${SETHEAD//&/+}"
 	
 	createProtonList X
 	WANTPROTON="$("$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --center --window-icon="$STLICON" --form --center "$WINDECO" --title="$TITLE" \
@@ -4520,38 +4648,10 @@ function extProtonRun {
 	fi
 }
 
-function usevkBasalt {
-	SBSSHADERDIR="Depth3D/Shaders"
-	SBSSHADER="$SBSSHADERDIR/${SD3DVR}.fx"
-	if [ -n "$ENABLE_VKBASALT" ] ; then
-		if [ "$ENABLE_VKBASALT" -eq 1 ] ; then
-			writelog "INFO" "${FUNCNAME[0]} - VkBasalt enabled"
-			if [ ! -f "$VKBASALT_CONFIG_FILE" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Creating default VKBASALT_CONFIG_FILE '$VKBASALT_CONFIG_FILE'"
-				{
-				echo "effects = reshade"
-				echo "reshadeIncludePath = $STLCFGDIR/$SBSSHADERDIR"
-				echo "reshade = $STLCFGDIR/$SBSSHADER"
-				} >> "$VKBASALT_CONFIG_FILE"
-			else
-				writelog "SKIP" "${FUNCNAME[0]} - Default VKBASALT_CONFIG_FILE '$VKBASALT_CONFIG_FILE' already exists"
-			fi
-			
-			if [ ! -f "$STLCFGDIR/$SBSSHADER" ]; then
-				writelog "404" "${FUNCNAME[0]} - Depth3D shader '$STLCFGDIR/$SBSSHADER' not found - downloading"
-				dlShaders "depth3d"
-			else
-				writelog "INFO" "${FUNCNAME[0]} - Looks like Depth3D shader is ready at '$STLCFGDIR/$SBSSHADER'"
-			fi
-		fi
-	fi
-}
-
 function getWindowHeight {
 	WINID="$1"
 	"$XWININFO" -id "$WINID" -stats | gawk '$1=="-geometry" {print $2}' | cut -d '+' -f1 | cut -d 'x' -f2
 }
-
 
 function initSteamVR {
 	if [ "$RUNSBSVR" -eq 1 ]; then
@@ -4631,7 +4731,7 @@ function initSteamVR {
 					sleep 1
 				done
 			else
-				writelog "INFO" "${FUNCNAME[0]} -  we didn't start SteamVR before so no need to wait for vrcompositor"
+				writelog "INFO" "${FUNCNAME[0]} - we didn't start SteamVR before so no need to wait for vrcompositor"
 			fi
 
 			if "$PGREP" -a "vrcompositor" >/dev/null ; then
@@ -4656,6 +4756,72 @@ function initSteamVR {
 	fi
 }
 
+function checkOpenVRFSR {
+	OVRFSENA="${OVFS}-${PROGCMD}-enabled.txt"
+	OVRFP="$EFD/$OVRFSENA"
+	OVRA="openvr_api.dll"
+	OVRAO="openvr_api.orig.dll"
+
+	if [ "$USEOPENVRFSR" -eq 1 ]; then
+		OVRPATH="$(find "$EFD" -name "*$OVRA" | head -n1)"
+		if [ -f "$OVRPATH" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Found  '$OVRA' under '$OVRPATH'"
+			OVRASRC="$STLDLDIR/$OVFS/$OVRA"
+			if [ ! -f "$OVRASRC" ]; then
+				writelog "SKIP" "${FUNCNAME[0]} - No $OVFS source dll found under '$OVRASRC'"
+			else
+				OVRDIR="${OVRPATH%/*}"
+				writelog "INFO" "${FUNCNAME[0]} - Moving original '$OVRPATH' to $OVRDIR/$OVRAO"
+				mv "$OVRPATH" "$OVRDIR/$OVRAO"
+				writelog "INFO" "${FUNCNAME[0]} - Copying '$OVRASRC' to '$OVRPATH'"
+				cp "$OVRASRC" "$OVRPATH"
+				echo "${OVRPATH//$EFD/}" > "$OVRFP"
+				
+				OVRMODSRC="$STLDLDIR/$OVFS/$OVRMOD"
+				if [ -f "$OVRMODSRC" ]; then
+					if [ ! -f "$OVRFP" ]; then
+						writelog "WARN" "${FUNCNAME[0]} - No install 'log' found - should not happen here!"
+					else
+						OVRMODDST="${OVRPATH%/*}/$OVRMOD"
+						if [ -f "$OVRMODDST" ]; then
+							writelog "INFO" "${FUNCNAME[0]} - Moving '$OVRMODDST' to '${OVRMODDST}_old'"
+							mv "$OVRMODDST" "${OVRMODDST}_old"
+						fi
+						writelog "INFO" "${FUNCNAME[0]} - Copying '$OVRMODSRC' to '$OVRMODDST'"
+						cp "$OVRMODSRC" "$OVRMODDST"
+						echo "${OVRMODDST//$EFD/}" >> "$OVRFP"
+					fi
+				fi
+				
+				if [ -f "$OVRFP" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - '$OVFS' installation (hopefully) succeeded!"
+				fi
+			fi
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - USEOPENVRFSR is enabled, but no OVRA found in '$EFD'"
+		fi
+	else
+		if [ -f "$OVRFP" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Found old '$OVFS' installation in '$EFD' - Removing"
+			while read -r line; do
+				if grep -q "$OVRA" <<< "$line"; then
+					OVRAOP="$EFD/${line//$OVRA/$OVRAO}"
+				if [ -f "$OVRAOP" ]; then
+						writelog "INFO" "${FUNCNAME[0]} - Restoring original $OVRA from '$OVRAOP'"
+						mv "$OVRAOP" "$EFD/$line" 2>/dev/null
+					else
+						writelog "SKIP" "${FUNCNAME[0]} - No '$OVRAOP' found to restore"
+					fi
+				else
+					writelog "INFO" "${FUNCNAME[0]} - Removing '$EFD/$line'"
+					rm "$EDF/$line" 2>/dev/null
+				fi
+			done < "$OVRFP"
+			rm "$OVRFP" 2>/dev/null
+		fi
+	fi
+}
+
 function getGamePidFromFile {
 	if [ -z "$GAMEWINPID" ] &&  [ -f "$TEMPGPIDFILE" ]; then
 		loadCfg "$TEMPGPIDFILE"
@@ -4663,7 +4829,6 @@ function getGamePidFromFile {
 		writelog "INFO" "${FUNCNAME[0]} - Got GAMEWINPID '$GAMEWINPID' from temp file"
 	fi
 }
-
 
 function getGamePidFromWindowName {
 	if [ -n "$GAMEWINDOW" ] && [ "$GAMEWINDOW" != "$NON" ]; then
@@ -4680,31 +4845,31 @@ function getGamePidFromWindowName {
 }
 
 function GAMEPID {
-	if [ -n "$GAMEWINDOW" ] && [ "$GAMEWINDOW" != "$NON" ]; then
-		GWINPID="$("$XWININFO" -name "${GAMEWINDOW//\"/}" -wm | grep "Process id:" | gawk -F 'Process id: ' '{print $2}' | cut -d ' ' -f1)"
-		writelog "INFO" "${FUNCNAME[0]} - Found gamewindow PID $GWINPID"
-	fi
-	
-	if [ -z "$GWINPID" ]; then
-		if	[ "$USECUSTOMCMD" -eq 1 ] && [ "$ONLY_CUSTOMCMD" -eq 1 ]; then
-			"$PGREP" -a "$CUSTOMCMD" | cut -d ' ' -f1 | tail -n1
+	if	[ "$USECUSTOMCMD" -eq 1 ] && [ "$ONLY_CUSTOMCMD" -eq 1 ]; then
+#		"$PGREP" -a "$CUSTOMCMD" | cut -d ' ' -f1 | tail -n1
+		"$PGREP" -a  "" | grep "${CUSTOMCMD##*/}"  | grep "Z:" | grep "\.exe" | grep -v "CrashHandler" | cut -d ' ' -f1 | tail -n1
+	else
+		if [ -n "$WAITFORTHISPID" ] && [ "$WAITFORTHISPID" != "$NON" ]; then
+			GAMPI="$("$PIDOF" "$WAITFORTHISPID" | cut -d ' ' -f1)"
 		else
-			if [ -n "$WAITFORTHISPID" ] && [ "$WAITFORTHISPID" != "$NON" ]; then
-				GAMPI="$("$PIDOF" "$WAITFORTHISPID" | cut -d ' ' -f1)"
+			if [ -n "$GAMEWINDOW" ] && [ "$GAMEWINDOW" != "$NON" ]; then
+				GAMPI="$("$XWININFO" -name "${GAMEWINDOW//\"/}" -wm | grep "Process id:" | gawk -F 'Process id: ' '{print $2}' | cut -d ' ' -f1)"
+				writelog "INFO" "${FUNCNAME[0]} - Found gamewindow '$GAMEWINDOW' PID $GAMPI"
 			else
 				GAMPI="$("$PGREP" -a "" | grep "$GE" | grep "Z:" | grep "\.exe" | grep -v "CrashHandler"  | cut -d ' ' -f1 | tail -n1)"
 			fi
-			echo "$GAMPI"
 		fi
-	else
-		echo "$GWINPID"
+		echo "$GAMPI"
 	fi
 }
 
 function waitForGamePid {
 	if [ -n "$WAITFORTHISPID" ] && [ "$WAITFORTHISPID" != "$NON" ]; then
 		writelog "WAIT" "${FUNCNAME[0]} - Waiting for alternative process WAITFORTHISPID '$WAITFORTHISPID'"
+	elif [ "$USECUSTOMCMD" -eq 1 ] && [ "$ONLY_CUSTOMCMD" -eq 1 ]; then
+		writelog "WAIT" "${FUNCNAME[0]} - Waiting for custom process CUSTOMCMD '$CUSTOMCMD'"
 	fi
+
 	while [ -z "$(GAMEPID)" ]; do 
 		writelog "WAIT" "${FUNCNAME[0]} - Waiting for game process $(GAMEPID)"
 		sleep 1
@@ -4801,14 +4966,14 @@ function pickGameWindowNameMeta {
 	if [ -n "$2" ]; then
 		GN="$2"
 	fi
-	writelog "INFO" "${FUNCNAME[0]} - Picking 'GAMEWINDOW' for '$GN ($AID)'"
+	writelog "INFO" "${FUNCNAME[0]} - Picking 'GAMEWINDOW' for '$SGNAID'"
 
 	GAMEWINXID="$(printf 0x%x'\n' "$("$XDO" selectwindow)")"
 	GAMEWINDOW="$("$XDO" getwindowname "$GAMEWINXID")"
 	storeGameWindowNameMeta "$GAMEWINDOW"
 	if [ -n "$AID" ]; then
 		notiShow "$(strFix "$NOTY_PICKWINS" "$GAMEWINDOW" "$GN" "$AID")"
-		writelog "INFO" "${FUNCNAME[0]} - Picked 'GAMEWINDOW $GAMEWINDOW' for '$GN ($AID)'"
+		writelog "INFO" "${FUNCNAME[0]} - Picked 'GAMEWINDOW $GAMEWINDOW' for '$SGNAID'"
 	else
 		notiShow "$(strFix "$NOTY_PICKWINN" "$GAMEWINDOW")"
 	fi
@@ -5559,12 +5724,13 @@ function dlShaders {
 
 function ShaderRepoDialog {
 	createShaderRepoList
-
+	fixShowGnAid
 	export CURWIKI="$PPW/Shader-Repositories"
 	TITLE="${PROGNAME}-${FUNCNAME[0]}"
 	pollWinRes "$TITLE"
 
 	setShowPic
+
 	REPOPICKS="$(
 	while read -r SHADLINE; do
 		SHADURL="$(cut -d ';' -f1 <<< "$SHADLINE")"
@@ -5584,7 +5750,7 @@ function ShaderRepoDialog {
 		echo "$SHADDES"
 	done < "$SHADREPOLIST" | \
 	"$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center "$WINDECO" --list --checklist --column="$GUI_USE" --column="$GUI_URL" --column="$GUI_NAME" --column="$GUI_AUTH" --column="$GUI_DESC" --separator="" --print-column="3" \
-	--text="$(spanFont "$(strFix "$GUI_SHADREPDIALOG" "$GN ($AID)")" "H")" --title="$TITLE" --button="$BUT_CAN:0" --button="$BUT_SELECT:2" "$GEOM")"
+	--text="$(spanFont "$(strFix "$GUI_SHADREPDIALOG" "$SGNAID")" "H")" --title="$TITLE" --button="$BUT_CAN:0" --button="$BUT_SELECT:2" "$GEOM")"
 	case $? in
 		0)	{
 				writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_CAN' - Cancelling selection"
@@ -6027,36 +6193,63 @@ function getUsedVars {
 }
 
 function getScreenRes {
-	function resList {
-		"$XRANDR" --current | grep "\*" | gawk '{print $1}' | sort -gur
+	function widthList {
+		"$XRANDR" --verbose  | grep "\*" -A2 | grep -oP 'width\K[^start]+'
 	}
 
-	MONCNT="$("$XRANDR" --listactivemonitors | grep -c -v "^Monitors")"
-	if [ "$MONCNT" -eq 1 ] || [ "$MONCNT" -gt 2 ]; then
-		FOUNDRES="$(resList | head -n1)"
+	function heightList {
+		"$XRANDR" --verbose  | grep "\*" -A2 | grep -oP 'height\K[^start]+'	
+	}
+
+	function getRes {
+		if grep -q "^[0-9]*$" <<< "$FOUNDW" && grep -q "^[0-9]*$" <<< "$FOUNDH"; then
+			FOUNDRES="${FOUNDW}x${FOUNDH}"
+			writelog "INFO" "${FUNCNAME[0]} - Detected screen resolution '$FOUNDRES'" "X"
+			echo "$FOUNDRES"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Screen resolution for width '$FOUNDW' and height '$FOUNDH' is invalid" "X"
+		fi		
+	}
+
+	HCNT="$(wc -l <<< "$(widthList)")"
+	if [ "$HCNT" -eq 1 ] || [ "$HCNT" -gt 2 ]; then
+		FOUNDW="$(widthList | head -n1 | tr -dc '0-9')"
+		FOUNDH="$(heightList | head -n1 | tr -dc '0-9')"
 	else
 		XCUT="$("$XRANDR" --listactivemonitors | grep -Eo "\+[1-9][[:digit:]]*\+" | grep -Eo "[[:digit:]]*")"
 		MPOS="$("$XDO" getmouselocation --shell | head -n1 | cut -d '=' -f2)"
 		if [ "$MPOS" -gt "$XCUT" ]; then
-			FOUNDRES="$(resList | tail -n1)"
+			FOUNDW="$(widthList | tail -n1 | tr -dc '0-9')"
+			FOUNDH="$(heightList | tail -n1 | tr -dc '0-9')"
 		else
-			FOUNDRES="$(resList | head -n1)"
+			FOUNDW="$(widthList | head -n1 | tr -dc '0-9')"
+			FOUNDH="$(heightList | head -n1 | tr -dc '0-9')"
 		fi
 	fi
 
-	if grep -q "[0-9]x[0-9]" <<< "$FOUNDRES"; then
-		writelog "INFO" "${FUNCNAME[0]} - Detected screen resolution '$FOUNDRES'" "X"
-		echo "$FOUNDRES"
+	if [ "$1" == "w" ]; then
+		if grep -q "^[0-9]*$" <<< "$FOUNDW"; then
+			writelog "INFO" "${FUNCNAME[0]} - Found screen width '$FOUNDW'" "X"
+			echo "$FOUNDW"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Screen width '$FOUNDW' is invalid" "X"
+		fi
+	elif [ "$1" == "h" ]; then
+		if grep -q "^[0-9]*$" <<< "$FOUNDH"; then
+			writelog "INFO" "${FUNCNAME[0]} - Found screen height '$FOUNDH'" "X"
+			echo "$FOUNDH"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Screen height '$FOUNDH' is invalid" "X"
+		fi		
 	else
-		writelog "INFO" "${FUNCNAME[0]} - Could not determine screen resolution '$FOUNDRES'" "X"
+		getRes
 	fi
 }
 
 function setInitWinXY {
-	SCREENRES="$(getScreenRes)"
 
-	SCRW="${SCREENRES%x*}"
-	SCRH="$(sed "s:[^0-9.].*::" <<< "${SCREENRES#*x}")"
+	SCRW="$(getScreenRes w)"
+	SCRH="$(getScreenRes h)"
 	
 	WINX=$(( SCRW * 3 / 4))
 	WINY=$(( SCRH * 3 / 4))
@@ -6064,7 +6257,7 @@ function setInitWinXY {
 }
 
 function setNewRes {
-	SCREENRES="$(getScreenRes)"
+	SCREENRES="$(getScreenRes r)"
 	if [ "$GAMESCREENRES" != "$NON" ] && [ "$GAMESCREENRES" != "$SCREENRES" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Setting screen resolution to '$GAMESCREENRES' using '$XRANDR'" "X"
 		"$XRANDR" -s "$GAMESCREENRES"
@@ -6083,9 +6276,9 @@ function customUserScriptStart {
 		if [ -x "$USERSTART" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Starting custom user startscript '$USERSTART'"
 			if [ "$USEWINE" -eq 0 ]; then
-				"$USERSTART" "$AID" "$GP" "$GPFX" &
+				"$USERSTART" "1" "$AID" "$GP" "$GPFX" &
 			else
-				"$USERSTART" "$AID" "$GP" "$GWFX" &
+				"$USERSTART" "1" "$AID" "$GP" "$GWFX" &
 			fi
 		else
 			writelog "SKIP" "${FUNCNAME[0]} - Custom user startscript '$USERSTART' not found or not executable"
@@ -6098,9 +6291,9 @@ function customUserScriptStop {
 		if [ -x "$USERSTOP" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Starting custom user stopscript '$USERSTOP'"
 			if [ "$USEWINE" -eq 0 ]; then
-				"$USERSTOP" "$AID" "$GP" "$GPFX" &
+				"$USERSTOP" "0" "$AID" "$GP" "$GPFX" &
 			else
-				"$USERSTOP" "$AID" "$GP" "$GWFX" &
+				"$USERSTOP" "0" "$AID" "$GP" "$GWFX" &
 			fi
 		else
 			writelog "SKIP" "${FUNCNAME[0]} - Custom user stopscript '$USERSTOP' not found or not executable"
@@ -6147,6 +6340,7 @@ function askSettings {
 			writelog "INFO" "${FUNCNAME[0]} - Opening Requester with timeout '$WAITEDITOR'"
 
 			getAvailableCfgs
+			fixShowGnAid
 			export CURWIKI="$PPW/Wait-Requester"
 			TITLE="${PROGNAME}-OpenSettings"
 			pollWinRes "$TITLE"
@@ -6181,7 +6375,7 @@ function askSettings {
 	
 			"$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
 			--title="$TITLE" \
-			--text="$(spanFont "$GN ($AID) - $REQQEST" "H")" \
+			--text="$(spanFont "$SGNAID - $REQQEST" "H")" \
 			--field="<span font=\"italic\">$PDBROUT</span>":LBL \
 			--field="<span font=\"italic\">$LAPL</span>":LBL \
 			--field="<span font=\"italic\">(${#CfgFiles[@]} $GUI_EDITABLECFGS)</span>":LBL \
@@ -6324,7 +6518,7 @@ function linkGameCfg {
 	if [ -z "$GN" ]; then
 		writelog "SKIP" "${FUNCNAME[0]} - Skipping symlinking config - no valid game name found"
 	else
-		createSymLink "${FUNCNAME[0]}" "$STLGAMECFG" "${STLGAMEDIRTI}/${GN/$LGS /}.conf"
+		createSymLink "${FUNCNAME[0]}" "$STLGAMECFG" "${STLGAMEDIRTI}/${GN}.conf"
 	fi
 }
 
@@ -6346,15 +6540,12 @@ function createGameCfg {
 		getCfgHeader
 		echo "## set the default config file for DXVK_CONFIG_FILE which is used when found - defaults to config found in $STLDXVKDIR"
 		echo "#STLDXVKCFG=\"$STLDXVKDIR/$AID.conf\""
-		echo "## vkbasalt config file:"
-		echo "VKBASALT_CONFIG_FILE=\"$STLCFGDIR/vkBasalt.conf\""
 		grep -v "config Version" "$STLDEFGAMECFG"
 		} >> "$STLGAMECFG"
 		else
 			writelog "SKIP" "${FUNCNAME[0]} - No game name found for '$AID' - does the game exist?" "E"
 		fi
 	fi
-
 	linkGameCfg
 }
 
@@ -6627,7 +6818,7 @@ function checkXliveless {
 			XLDL="$STLDLDIR/xlive/"
 			mkdir -p "$XLDL" 2>/dev/null
 
-			writelog "INFO" "${FUNCNAME[0]} - Game '$GN ($AID)' needs '$XLIVEDLL' - checking"
+			writelog "INFO" "${FUNCNAME[0]} - Game '$SGNAID' needs '$XLIVEDLL' - checking"
 			if [ -f "$EFD/$XLIVEDLL" ]; then
 				writelog "SKIP" "${FUNCNAME[0]} - Found '$XLIVEDLL' in dir $EFD - nothing to do"
 			else
@@ -6727,7 +6918,7 @@ function GameScopeGui {
 
 	GASCOS="$("$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top $WINDECO \
 			--title="$TITLE" --separator="|" \
-			--text="$(spanFont "$(strFix "$GUI_GASCOSET" "${GN/$LGS /} ($AID)")" "H")" \
+			--text="$(spanFont "$(strFix "$GUI_GASCOSET" "$SGNAID")" "H")" \
 			--field="$GUI_GSINTRES!$DESC_GSINTRES ('GSINTRES')":CBE "${GSINTRES//\"}!$(printf "%s\n" "$("$XRANDR" --current | grep "[0-9]x" | gawk '{print $1}' | grep "^[0-9]" | tr '\n' '!')")" \
 			--field="$GUI_GSSHWRES!$DESC_GSSHWRES ('GSSHWRES')":CBE "${GSSHWRES//\"}!$(printf "%s\n" "$("$XRANDR" --current | grep "[0-9]x" | gawk '{print $1}' | grep "^[0-9]" | tr '\n' '!')")" \
 			--field="$GUI_GSFLR!$DESC_GSFLR ('GSFLR')":CBE "${GSFLR//\"}!30!60!90!120!$UL" \
@@ -6790,7 +6981,7 @@ function GameScopeGui {
 
 						GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --"
 			
-						writelog "INFO" "Saving configured GAMESCOPE_ARGS '$GAMESCOPE_ARGS' into '$STLGAMECFG'"
+						writelog "INFO" "${FUNCNAME[0]} - Saving configured GAMESCOPE_ARGS '$GAMESCOPE_ARGS' into '$STLGAMECFG'"
 						touch "$FUPDATE"
 						updateConfigEntry "GAMESCOPE_ARGS" "$GAMESCOPE_ARGS" "$STLGAMECFG"						
 						touch "$FUPDATE"
@@ -6940,7 +7131,7 @@ function StandaloneProtonGame {
 	SAPRUN="TRUE"
 
 	if [ -n "$1" ] && [ -z "$2" ] && [ -f "${STLGSAPD}/${1}.conf" ]; then
-		writelog "INFO" "Loading '${STLGSAPD}/${1}.conf' silently" "E"
+		writelog "INFO" "${FUNCNAME[0]} - Loading '${STLGSAPD}/${1}.conf' silently" "E"
 		loadCfg "${STLGSAPD}/${1}.conf"
 		SAPGUI=0
 		SapRun
@@ -6950,15 +7141,15 @@ function StandaloneProtonGame {
 			SAPGUI=0
 			SAPRUN="FALSE"
 		else
-			writelog "INFO" "Using '$1' as game title" "E"
+			writelog "INFO" "${FUNCNAME[0]} - Using '$1' as game title" "E"
 			SAPGAME="$1"
 		fi
 	elif [ -n "$1" ] && [ -n "$2" ] && [ -f "${STLGSAPD}/${1}.conf" ]; then
-		writelog "INFO" "Loading '${STLGSAPD}/${1}.conf' and starting the gui" "E"
+		writelog "INFO" "${FUNCNAME[0]} - Loading '${STLGSAPD}/${1}.conf' and starting the gui" "E"
 		loadCfg "${STLGSAPD}/${1}.conf"
 		SAPGUI=1
 	elif [ -z "$1" ]; then
-		writelog "INFO" "Only starting plain gui" "E"
+		writelog "INFO" "${FUNCNAME[0]} - Only starting plain gui" "E"
 	fi
 
 	if [ "$SAPGUI" -eq 1 ]; then
@@ -6976,17 +7167,17 @@ function OneTimeRunGui {
 	if [ -z "$STEAM_COMPAT_DATA_PATH" ]; then
 		METCFG="$CUMETA/${AID}.conf"
 		if [ -f "$METCFG" ]; then
-			writelog "INFO" "Loading Metadata '$METCFG'"
+			writelog "INFO" "${FUNCNAME[0]} - Loading Metadata '$METCFG'"
 			loadCfg "$METCFG"
 		fi
 		if [ -n "$WINEPREFIX" ]; then
 			STEAM_COMPAT_DATA_PATH="${WINEPREFIX%/*}"
-			writelog "INFO" "Found STEAM_COMPAT_DATA_PATH '$STEAM_COMPAT_DATA_PATH'"
+			writelog "INFO" "${FUNCNAME[0]} - Found STEAM_COMPAT_DATA_PATH '$STEAM_COMPAT_DATA_PATH'"
 		fi
 	fi
 
 	if [ -z "$STEAM_COMPAT_DATA_PATH" ]; then
-		writelog "ERROR" "STEAM_COMPAT_DATA_PATH could not be determined" "E"
+		writelog "ERROR" "${FUNCNAME[0]} - STEAM_COMPAT_DATA_PATH could not be determined" "E"
 	else
 		createProtonList X
 		export CURWIKI="$PPW/One-Time-Run"
@@ -7076,13 +7267,15 @@ function launchCustomProg {
 	if [ -z "$CUSTOMCMD" ] || [ "$CUSTOMCMD" == "$("$WHICH" echo 2>/dev/null)" ]; then
 
 		writelog "INFO" "${FUNCNAME[0]} - CUSTOMCMD variable is empty - opening file requester"
+		fixShowGnAid
+
 		export CURWIKI="$PPW/Custom-Program"
 		TITLE="${PROGNAME}-OpenCustomProgram"
 		pollWinRes "$TITLE"
 
 		ZCUST="$("$YAD" --f1-action="$F1ACTION" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
 		--title="$TITLE" \
-		--text="$(spanFont "$GN ($AID) - $GUI_SELECTCUSTOMEXE" "H")" \
+		--text="$(spanFont "$SGNAID - $GUI_SELECTCUSTOMEXE" "H")" \
 		--field=" ":LBL " " \
 		--field="$GUI_SELECTEXE":FL "${OPCUSTPATH/#-/ -}" "$GEOM")"
 
@@ -7135,13 +7328,14 @@ function launchCustomProg {
 				CHCUSTDIR=1
 			else
 				writelog "INFO" "${FUNCNAME[0]} - CUSTOMCMD file '$CUSTOMCMD' not found - opening file requester"
+				fixShowGnAid
 				export CURWIKI="$PPW/Custom-Program"
 				TITLE="${PROGNAME}-OpenCustomProgram"
 				pollWinRes "$TITLE"
 				
 				ZCUST="$("$YAD" --f1-action="$F1ACTION" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
 				--title="$TITLE" \
-				--text="$(spanFont "$GN ($AID) - $GUI_SELECTCUSTOMEXE" "H")" \
+				--text="$(spanFont "$SGNAID - $GUI_SELECTCUSTOMEXE" "H")" \
 				--field=" ":LBL " " \
 				--field="$GUI_SELECTEXE":FL "${OPCUSTPATH/#-/ -}" "$GEOM")"		
 				
@@ -7249,6 +7443,7 @@ function DxvkHudPick {
 		else
 			mapfile -d " " -t -O "${#CURDXH[@]}" CURDXH <<< "$(printf '%s\n' "$DXVK_HUD")"
 		fi
+		fixShowGnAid
 		export CURWIKI="$PPW/Dxvk-Hud-Options"
 		TITLE="${PROGNAME}-DXVK-Hud-Options"
 		pollWinRes "$TITLE"
@@ -7265,7 +7460,7 @@ function DxvkHudPick {
 			echo "$dxline"
 		done <<< "$(tr ',' '\n' <<< "$DXVKHUDLIST")"	 | \
 		"$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center "$WINDECO" --list --checklist --column="$GUI_ADD" --column="$GUI_DXH" --separator="" --print-column="2" \
-		--text="$(spanFont "$(strFix "$GUI_DXHDIALOG" "$GN ($AID)")" "H")" --title="$TITLE" "$GEOM")"
+		--text="$(spanFont "$(strFix "$GUI_DXHDIALOG" "$SGNAID")" "H")" --title="$TITLE" "$GEOM")"
 
 		if [ -n "$DXHUDOPTS" ]; then
 			unset DXVK_HUD
@@ -7562,6 +7757,322 @@ function redirectSCDP {
 	fi
 }
 
+function launchIGCS {
+	IGCSPROCESS="$(grep "^Process=" "$IGCSINI" | cut -d '=' -f2)"
+	writelog "INFO" "${FUNCNAME[0]} - Injecting '$IGCSDLL' into exe '${IGCSPROCESS%.*}' using '$IGCS'"
+	writelog "INFO" "${FUNCNAME[0]} - IGCSDST '$IGCSDST'"
+	rm "$IGCSINITLOCK" 2>/dev/null
+	extProtonRun "R" "$IGCSDST"
+}
+
+function injectIGCS {
+	writelog "INFO" "${FUNCNAME[0]} - Starting '$IGCS'"
+	waitForGamePid
+	writelog "INFO" "${FUNCNAME[0]} - Game is running, starting '$IGCS' in '$IGCSWAIT' seconds"
+	touch "$IGCSINITLOCK"
+	sleep "$IGCSWAIT"
+	launchIGCS
+}
+
+function postIGCS {
+	COUNTER=0
+
+	while [ ! -f "$IGCSINITLOCK" ]; do
+		writelog "INFO" "${FUNCNAME[0]} - Waiting for $IGCSINITLOCK to appear"
+		if [ -f "$CLOSETMP" ] || [[ "$COUNTER" -ge "$IGCSWAIT" ]]; then
+			break
+		fi
+		COUNTER=$((COUNTER+1))
+		sleep 1
+	done
+	
+	writelog "INFO" "${FUNCNAME[0]} - Waited '$COUNTER/$IGCSWAIT' seconds"
+
+	IGCSWAITLEFT=$((IGCSWAIT - COUNTER + 2))
+	writelog "INFO" "${FUNCNAME[0]} - Waiting (max $IGCSWAITLEFT more seconds) for $IGCS to initialize"
+	COUNTER=0
+	
+	while [ -f "$IGCSINITLOCK" ]; do
+		if [ -f "$CLOSETMP" ] || [[ "$COUNTER" -ge "$IGCSWAITLEFT" ]]; then
+			break
+		fi
+		COUNTER=$((COUNTER+1))
+		sleep 1
+	done
+
+	COUNTER=0
+	if [ -f "$IGCSINITLOCK" ]; then
+		writelog "SKIP" "${FUNCNAME[0]} - Lock file $IGCSINITLOCK still exists - giving up"
+	else
+		COUNTER=0
+		WAITWIN=3
+		writelog "INFO" "${FUNCNAME[0]} - $IGCS just started, now waiting a bit for its window"
+
+		IGCSWIN="$("$XDO" search --name "$IGCS")"
+		# use if $IGCS alone also matches games window:
+		# IGCSWIN="$("$XDO" search --name "$SA.*.$IGCS")" # =+ steamapps
+		while ! [ "$IGCSWIN" -eq "$IGCSWIN" ] 2>/dev/null; do
+			if [[ "$COUNTER" -ge "$WAITWIN" ]]; then
+				break
+			fi
+			COUNTER=$((COUNTER+1))
+			sleep 1
+		done
+
+		writelog "INFO" "${FUNCNAME[0]} - Closing '$IGCS' window '$IGCSWIN'"
+		"$XDO" windowactivate --sync "$IGCSWIN"	key "KP_Enter"
+
+		writelog "INFO" "${FUNCNAME[0]} - And minimize false-positive UUU warn window"
+		IGCSPROCESS="$(grep "^Process=" "$IGCSINI" | cut -d '=' -f2)"
+		"$XDO" windowminimize "$(xdotool search --name "${IGCSPROCESS%.*}")"
+
+		if [ -f "$GWXTEMP" ]; then
+			WIFO="$(cat "$GWXTEMP")"
+			writelog "INFO" "${FUNCNAME[0]} - Setting focus on window '$WIFO'"
+			"$XDO" windowactivate "$WIFO"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - No '$GWXTEMP' found"
+		fi
+	fi
+}
+	
+function selectIGCSdll {
+	fixShowGnAid
+	export CURWIKI="$PPW/$IGCS"
+	TITLE="${PROGNAME}-Select-IGCS-dll"
+	pollWinRes "$TITLE"
+	setShowPic
+	
+	PICKIGCSDLL="$("$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
+	--separator="" --title="$TITLE" \
+	--text="$(spanFont "$SGNAID - $GUI_SELECTIGCSDLL" "H")" \
+	--field=" ":LBL " " \
+	--field="$GUI_SELECTDLL":FL "${EFD}" --file-filter="$GUI_DLLFILES (*.dll)| *.dll" "$GEOM")"
+	if [ -f "$PICKIGCSDLL" ]; then
+		IGCSDLL="${PICKIGCSDLL##*/}"
+		if [ ! -f "$EFD/$IGCSDLL" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Copying selected dll '$PICKIGCSDLL' to '$EFD'"
+			cp "$PICKIGCSDLL" "$EFD"
+		fi
+		IGCSINI="$EFD/${IGCS}.ini"
+		writelog "INFO" "${FUNCNAME[0]} - Inserting '$IGCSDLL' into '$IGCSINI'"
+		sed "/^Dll=/d" -i "$IGCSINI"
+		echo "Dll=$IGCSDLL" >> "$IGCSINI"
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - No dll selected - skipping"
+	fi
+}
+
+function createUUUPatchCommand {
+	echo "$XDO windowactivate \"GAMEWINXID\" && sleep 1 && $XDO key \"grave\" && $XDO type \"exec $UUUPATCH\" && $XDO key \"KP_Enter\"" > "$UUUPATCHCOMMAND"
+	chmod +x "$UUUPATCHCOMMAND"
+}
+
+function getGameWXID {
+	if [ -n "$VRPGWINXIS" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Using found variable VRPGWINXIS '$VRPGWINXIS' as GAMEWINXID"
+		GAMEWINXID="$VRPGWINXIS"
+	fi
+
+	if [ -n "$GAMEWINXID" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Already have the windowid '$GAMEWINXID'"
+	else
+		GAMEWINPID="$(getGameWindowPID)"
+		writelog "INFO" "${FUNCNAME[0]} - Determining GAMEWINXID via GAMEWINPID '$GAMEWINPID'"
+		GAMEWINXID="$(getGameWinXIDFromPid "$GAMEWINPID")"
+ 	fi
+
+	if [ -n "$GAMEWINXID" ]; then
+		export VRPGWINXIS="$GAMEWINXID"
+	fi
+}
+
+function injectUUUPatch {
+	if [ "$(find "$EFD" -name "$UUUPATCH" | wc -l)" -ge 1 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - starting UUU patch command auto executing '$UUUPATCH'"
+		waitForGamePid
+		getGameWXID
+
+		if [ -n "$GAMEWINXID" ]; then
+			echo "$GAMEWINXID" > "$GWXTEMP"
+			
+			sed "s:GAMEWINXID:$GAMEWINXID:g" -i "$UUUPATCHCOMMAND"
+			writelog "INFO" "${FUNCNAME[0]} - starting patch command auto executing '$UUUPATCH'"
+			
+			if [ "$UUUPATCHWAIT" -ge 1 ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Game is running, starting UUU patch command '$UUUPATCHCOMMAND' in '$UUUPATCHWAIT' seconds"
+				if [ ! -f "$TRAYCUSC" ] || grep -q "$UUUPATCH" "$TRAYCUSC"; then
+					cp "$UUUPATCHCOMMAND" "$TRAYCUSC"
+				fi
+				sleep "$UUUPATCHWAIT"
+				"$UUUPATCHCOMMAND"
+			else
+				writelog "INFO" "${FUNCNAME[0]} - UUUPATCHWAIT is '$UUUPATCHWAIT', so placing the UUU patch command behind the TrayIcon command '$TRAY_LCS' for manual execution"
+				cp "$UUUPATCHCOMMAND" "$TRAYCUSC"
+			fi
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - game window id could not be found - can't start the UUU patch command"
+		fi
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - UE4 console script '$UUUPATCH' not found in game directory '$EFD'"
+	fi
+}
+
+function checkUUUPatchLaunch {
+	if [ "$UUUSEPATCH" -eq 1 ] || [ "$UUUSEVR" -eq 1 ]; then
+		createUUUPatchCommand	
+		injectUUUPatch &
+	fi
+}
+
+function prepareUEVRpatch {
+	if [ "$UUUSEVR" -eq 1 ]; then
+		UUUPATCHFILE="$1"
+
+		if [ ! -f "$UUUPATCHFILE" ]; then
+			if [ -f "$GLOBALMISCDIR/${UUUPATCH}-${AID}" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Copying game specific '$GLOBALMISCDIR/${UUUPATCH}-${AID}' to '$UUUPATCHFILE'"
+				cp "$GLOBALMISCDIR/$UUUPATCH-${AID}" "$UUUPATCHFILE"
+			elif [ -f "$GLOBALMISCDIR/${UUUPATCH}" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Copying generic '$GLOBALMISCDIR/${UUUPATCH}' to '$UUUPATCHFILE'"
+				cp "$GLOBALMISCDIR/$UUUPATCH" "$UUUPATCHFILE"
+			else
+				writelog "WARN" "${FUNCNAME[0]} - No source '$UUUPATCH' file found in '$GLOBALMISCDIR'"
+			fi
+		else
+			writelog "INFO" "${FUNCNAME[0]} - '$UUUPATCHFILE' already available"
+		fi
+	fi	
+}
+
+function checkIGCSInjector {
+
+	if [ "$UUUSEPATCH" -eq 1 ] || [ "$UUUSEVR" -eq 1 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Enabling '$UUU' with '$IGCS' as UUU patch mode is enabled"
+		UUUSEIGCS=1
+	fi
+
+	if [ "$UUUSEIGCS" -eq 1 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Using '$UUU' with '$IGCS' is enabled"
+		USEIGCS=1
+	fi
+	
+	if [ "$USEIGCS" -eq 1 ]; then
+		IGCSEXE="${IGCS}.exe"
+		IGCSDST="$EFD/$IGCSEXE"
+		if [ ! -f "$IGCSDST" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - '$IGCSDST' not found"
+			IGCSDL="$STLDLDIR/igcs/"
+			IGCSSRC="$IGCSDL/$IGCSEXE"
+			mkProjDir "$IGCSDL" 1
+
+			if [ ! -f "$IGCSSRC" ]; then
+				if [ ! -f "$IGCSDL/${IGCSZIP##*/}" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - '$IGCSDL/${IGCSZIP##*/}' not found - downloading automatically from '$IGCSZIP'"
+					"$WGET" "$IGCSZIP" -P "$IGCSDL"
+				fi
+				"$UNZIP" "$IGCSDL/${IGCSZIP##*/}" -d "$IGCSDL"
+			fi
+			
+			if [ -f "$IGCSSRC" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Copying '$IGCSSRC' to '$IGCSDST'"
+				cp "$IGCSSRC" "$IGCSDST"
+			fi
+		else
+			writelog "INFO" "${FUNCNAME[0]} - '$IGCSDST' found"
+		fi
+		
+		if [ -f "$IGCSDST" ]; then
+			IGCSINI="$EFD/${IGCS}.ini"
+			WSE="$(find "$EFD" -name "*-Win64-Shipping.exe" | head -n1)"
+
+			if [ -n "$WSE" ]; then
+				prepareUEVRpatch "${WSE%/*}/../$UUUPATCH"
+			fi
+			
+			if [ ! -f "$IGCSINI" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - '$IGCSINI' not found - creating it"
+				echo "[InjectionData]" > "$IGCSINI"
+				echo "Process=$GAMEEXE" >> "$IGCSINI"
+				if [ "$UUUSEIGCS" -eq 1 ]; then
+					writelog "INFO" "${FUNCNAME[0]} - WSE is '$WSE'"
+					
+					if [ -n "$WSE" ]; then
+						echo "Process=${WSE##*/}" >> "$IGCSINI"
+					else
+						echo "Process=$GAMEEXE" >> "$IGCSINI"
+					fi
+					writelog "INFO" "${FUNCNAME[0]} - Using '${UUU}.dll' as dll in '$IGCSINI'"
+					echo "Dll=${UUU}.dll" >> "$IGCSINI"
+				else
+					echo "Process=$GAMEEXE" >> "$IGCSINI"
+				fi
+			fi
+			
+			IGCSDLL="$(grep "^Dll=" "$IGCSINI" | cut -d '=' -f2)"
+			if [ "$UUUSEIGCS" -eq 1 ]; then
+				if [ "$IGCSDLL" != "${UUU}.dll" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Updating dll in '$IGCSINI' to '${UUU}.dll' because 'UUUSEIGCS' is enabled"
+					sed "/^Dll=/d" -i "$IGCSINI"
+					echo "Dll=${UUU}.dll" >> "$IGCSINI"
+				fi
+			fi
+
+			IGCSDLL="$(grep "^Dll=" "$IGCSINI" | cut -d '=' -f2)"
+			if [ ! -f "$EFD/$IGCSDLL" ]; then
+				if [ "$UUUSEIGCS" -eq 1 ]; then
+					UUUDL="$STLDLDIR/uuu"
+					UUUSRC="$UUUDL/$IGCSDLL"
+					mkProjDir "$UUUDL" 1	
+					writelog "INFO" "${FUNCNAME[0]} - 'UUUSEIGCS' is enabled, but '$EFD/$IGCSDLL' is not available - checking if '$UUUSRC' is available"
+					if [ ! -f "$UUUSRC" ]; then
+						writelog "WARN" "${FUNCNAME[0]} -'$UUUSRC' was not found - opening Info requester, because it needs to be downloaded manually from '$UUUURL' and extracted to '$UUUDL'"
+						export CURWIKI="$PPW/$UUU"
+						TITLE="${PROGNAME}-$UUU-Info"
+						pollWinRes "$TITLE"
+						setShowPic
+						XDGO="xdg-open"
+
+						"$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
+						--title="$TITLE" --text="$(spanFont "$(strFix "$GUI_UUUINFO1" "$UUU")" "H")" \
+						--field="Url: :RW" "$UUUURL" \
+						--field="$GUI_UUUINFO2:LBL" " " \
+						--field="$UUUDL":FBTN "$XDGO $UUUDL" "$GEOM"
+					fi
+					
+					if [ -f "$UUUSRC" ]; then
+						writelog "INFO" "${FUNCNAME[0]} - Copying '$UUUSRC' to '$EFD'"
+						cp "$UUUSRC" "$EFD"
+					else
+						writelog "SKIP" "${FUNCNAME[0]} -'$UUUSRC' could not be found - skipping"
+					fi
+				else
+					writelog "INFO" "${FUNCNAME[0]} - No valid dll found in '$IGCSINI' - Choose one"
+					selectIGCSdll
+				fi
+			fi
+
+			IGCSDLL="$(grep "^Dll=" "$IGCSINI" | cut -d '=' -f2)"
+			if [ -f "$EFD/$IGCSDLL" ]; then
+				injectIGCS &
+				postIGCS &
+			else
+				writelog "SKIP" "${FUNCNAME[0]} - Still no valid dll found in '$IGCSINI' - giving up"
+			fi
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - '$IGCSDST' not found and could not be created - skipping '$IGCS'"
+		fi
+	fi
+}
+
+function injectCustomProg {
+	writelog "INFO" "${FUNCNAME[0]} - 'Injecting' custom command - i.e. starting delayed"
+	waitForGamePid
+	writelog "INFO" "${FUNCNAME[0]} - Game is running, starting custom command in '$INJECTWAIT' seconds"
+	sleep "$INJECTWAIT"
+	launchCustomProg
+}
+
 function checkCustomLaunch {
 	if [ "$ONLYWICO" -eq 1 ]; then
 		# only start $WICO 
@@ -7572,28 +8083,33 @@ function checkCustomLaunch {
 		if [ -n "$USECUSTOMCMD" ] ; then
 			if [ "$USECUSTOMCMD" -eq 1 ] ; then
 				writelog "INFO" "${FUNCNAME[0]} - USECUSTOMCMD is set to '$USECUSTOMCMD' - trying to start custom program '$CUSTOMCMD'"
-			# fork in background and continue
-				if [ "$ONLY_CUSTOMCMD" -eq 1 ]; then
-					SECONDS=0
-				fi
-
-				if [ "$FORK_CUSTOMCMD" -eq 1 ]; then
-					writelog "INFO" "${FUNCNAME[0]} - FORK_CUSTOMCMD is set to 1 -  forking the custom program in background and continue"
-					launchCustomProg
-			# or wait
+			
+				if [ "$INJECT_CUSTOMCMD" -eq 1 ]; then
+					injectCustomProg &
 				else
-					writelog "INFO" "${FUNCNAME[0]} - FORK_CUSTOMCMD is set to 0 - starting the custom program regularly"
-					launchCustomProg
-				fi
+					# fork in background and continue
+					if [ "$ONLY_CUSTOMCMD" -eq 1 ]; then
+						SECONDS=0
+					fi
+
+					if [ "$FORK_CUSTOMCMD" -eq 1 ]; then
+						writelog "INFO" "${FUNCNAME[0]} - FORK_CUSTOMCMD is set to 1 -  forking the custom program in background and continue"
+						launchCustomProg
+					# or wait
+					else
+						writelog "INFO" "${FUNCNAME[0]} - FORK_CUSTOMCMD is set to 0 - starting the custom program regularly"
+						launchCustomProg
+					fi
 
 
-				if [ "$ONLY_CUSTOMCMD" -eq 1 ]; then
-					writelog "INFO" "${FUNCNAME[0]} - ONLY_CUSTOMCMD is set to 1 means only custom program '$CUSTOMCMD' is supposed to start - exiting here"
-					duration=$SECONDS
-					logPlayTime "$duration"
-					writelog "INFO" "${FUNCNAME[0]} - ## CUSTOMCMD STOPPED after '$duration' seconds playtime"
-					closeSTL " ######### STOP EARLY $PROGNAME $PROGVERS #########"
-					exit
+					if [ "$ONLY_CUSTOMCMD" -eq 1 ]; then
+						writelog "INFO" "${FUNCNAME[0]} - ONLY_CUSTOMCMD is set to 1 means only custom program '$CUSTOMCMD' is supposed to start - exiting here"
+						duration=$SECONDS
+						logPlayTime "$duration"
+						writelog "INFO" "${FUNCNAME[0]} - ## CUSTOMCMD STOPPED after '$duration' seconds playtime"
+						closeSTL " ######### STOP EARLY $PROGNAME $PROGVERS #########"
+						exit
+					fi
 				fi
 			else
 				if [ -n "$CUSTOMCMD" ] && [ "$CUSTOMCMD" != "$("$WHICH" echo 2>/dev/null)" ]; then
@@ -7663,23 +8179,20 @@ function togWindows {
 }
 
 function installWinetricksPaks {
-	
 	WTPAKS="$1"
 	WTWINE="$2"
 	WTRUN="$3"
-
-
 
 	if [ "$WTRUN" == "wineVortexRun" ]; then
 		WTPFX="$VORTEXPFX"
 	else
 		WTPFX="$GPFX"
 	fi
-	
+
 	if [ "$USEWINE" -eq 1 ]; then
 		 WTPFX="$GWFX"
 	fi
-	
+
 	if [ -n "$WTPAKS" ] && [ "$WTPAKS" != "$NON" ] && [ "$WTPAKS" != "0" ]; then
 		chooseWinetricks
 		mapfile -d " " -t -O "${#INSTPAKS[@]}" INSTPAKS < <(printf '%s' "$WTPAKS")
@@ -7769,6 +8282,7 @@ function SetWineDebugChannels {
 		setAIDCfgs
 	fi
 	loadCfg "$STLGAMECFG"
+	fixShowGnAid
 	export CURWIKI="$PPW/Wine-Debug"
 	TITLE="${PROGNAME}-${FUNCNAME[0]}"
 	pollWinRes "$TITLE"
@@ -7792,7 +8306,7 @@ function SetWineDebugChannels {
 		echo "$wtch"
 	done < "$WDC" | \
 	"$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center "$WINDECO" --list --checklist --column="$GUI_MINUS":CHK --column="$GUI_PLUS":CHK --column="$GUI_WDCH" --separator=";" --print-all  \
-	--text="$(spanFont "$(strFix "$GUI_WDCDIALOG" "$GN ($AID)")" "H")" --title="$TITLE" --button="$BUT_CAN:0" --button="$BUT_SELECT:2" "$GEOM")"
+	--text="$(spanFont "$(strFix "$GUI_WDCDIALOG" "$SGNAID")" "H")" --title="$TITLE" --button="$BUT_CAN:0" --button="$BUT_SELECT:2" "$GEOM")"
 	case $? in
 		0)	{
 				writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_CAN' - Cancelling selection"
@@ -7844,6 +8358,8 @@ function WinetricksPick {
 		mapfile -d " " -t -O "${#OTHERPAKS[@]}" OTHERPAKS <<< "${curpak%% *}"
 	fi
 	done <<< "$(printf "%s\n" "${CURWTPAKS[@]}")"
+
+	fixShowGnAid
 	export CURWIKI="$PPW/Winetricks"
 	TITLE="${PROGNAME}-WinetricksPackageSelection-$WTPREF"
 	pollWinRes "$TITLE"
@@ -7869,7 +8385,7 @@ function WinetricksPick {
 		echo "${DESCR#"${DESCR%%[![:space:]]*}"}"
 	done <<< "$("$WINETRICKS" "$WTPREF" list)"	 | \
 	"$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center "$WINDECO" --list --checklist --column="$GUI_ADD" --column="$GUI_WTPACK" --column="$GUI_WTDESC" --separator="" --print-column="2" \
-	--text="$(spanFont "$(strFix "$GUI_WTPACKDIALOG" "$GN ($AID)")" "H")" --title="$TITLE" --button="$BUT_CAN:0" --button="$BUT_SELECT:2" "$GEOM")"
+	--text="$(spanFont "$(strFix "$GUI_WTPACKDIALOG" "$SGNAID")" "H")" --title="$TITLE" --button="$BUT_CAN:0" --button="$BUT_SELECT:2" "$GEOM")"
 	case $? in
 		0)	{
 				writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_CAN' - Cancelling selection"
@@ -8053,7 +8569,7 @@ function customRegs {
 					echo "[HKEY_CURRENT_USER\Software\Wine\Explorer]"
 					echo "\"Desktop\"=\"Default\""
 					echo "[HKEY_CURRENT_USER\Software\Wine\Explorer\Desktops]"
-					echo "\"Default\"=\"$(getScreenRes)\""
+					echo "\"Default\"=\"$(getScreenRes r)\""
 					} >> "$TEMPREG"
 					if [ -f "$TEMPREG" ]; then
 						regEdit "$TEMPREG"
@@ -8804,7 +9320,7 @@ function setupGameVortex {
 
 	if [ -d "$VORTEXINSTDIR" ]; then
 		VBP="$VORTEXINSTDIR/$RABP"
-		writelog "INFO" "${FUNCNAME[0]} - Trying to find the Nexus GameID for the game '$GN ($AID)' in Vortex Install dir $VORTEXINSTDIR"
+		writelog "INFO" "${FUNCNAME[0]} - Trying to find the Nexus GameID for the game '$SGNAID' in Vortex Install dir $VORTEXINSTDIR"
 
 		SEARCH="$AID"
 		if [ "$AID" == "22370" ]; then # Fallout 3 German is not detected by vortex
@@ -8823,17 +9339,17 @@ function setupGameVortex {
 		fi
 		if [ -n "$NEXUSGAMEFILE" ]; then
 			if [ -f "$NEXUSGAMEFILE" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Found NEXUSGAMEFILE $NEXUSGAMEFILE for the game '$GN ($AID)'"
+				writelog "INFO" "${FUNCNAME[0]} - Found NEXUSGAMEFILE $NEXUSGAMEFILE for the game '$SGNAID'"
 
 				if [ -n "$NEXUSGAMEID" ] ; then
-					writelog "INFO" "${FUNCNAME[0]} - Found Nexus GameID '$NEXUSGAMEID' for the game '$GN ($AID)' in game config"
+					writelog "INFO" "${FUNCNAME[0]} - Found Nexus GameID '$NEXUSGAMEID' for the game '$SGNAID' in game config"
 				else
 					NEXUSGAMEID="$(gawk -F 'game-' '{print $2}' <<< "$(basename "$(gawk -F '/index.js' '{print $1}' <<< "$NEXUSGAMEFILE")")")"
 					if [ -n "$NEXUSGAMEID" ]; then
 						writelog "INFO" "${FUNCNAME[0]} - Autodetected Nexus GameID '$NEXUSGAMEID' - adding it to the game config '$STLGAMECFG' and generic Meta Config '$GEMETA/$AID.conf'"
 						updateConfigEntry "NEXUSGAMEID" "$NEXUSGAMEID" "$STLGAMECFG"
 						updateConfigEntry "NEXUSGAMEID" "$NEXUSGAMEID" "$GEMETA/$AID.conf"
-						writelog "INFO" "${FUNCNAME[0]} - Cut the Nexus GameID '$NEXUSGAMEID' for the game '$GN ($AID)' out of the filename '$NEXUSGAMEFILE'"
+						writelog "INFO" "${FUNCNAME[0]} - Cut the Nexus GameID '$NEXUSGAMEID' for the game '$SGNAID' out of the filename '$NEXUSGAMEFILE'"
 					fi
 				fi
 			else
@@ -8841,7 +9357,7 @@ function setupGameVortex {
 				return
 			fi
 		else
-			writelog "SKIP" "${FUNCNAME[0]} - Looks like the game '$GN ($AID)' is not supported in Vortex/Nexus, or autodetecting failed"
+			writelog "SKIP" "${FUNCNAME[0]} - Looks like the game '$SGNAID' is not supported in Vortex/Nexus, or autodetecting failed"
 		fi
 	else
 		writelog "ERROR" "${FUNCNAME[0]} - Vortex Install dir '$VORTEXINSTDIR' not found - this shouldn't happen"
@@ -9034,7 +9550,7 @@ function setupGameVortex {
 			customVortexGameSettings
 		fi
 	else
-		writelog "SKIP" "${FUNCNAME[0]} - NEXUSGAMEID is empty and no Beta extension found - skipping automatic adding game '$GN ($AID)' to Vortex"
+		writelog "SKIP" "${FUNCNAME[0]} - NEXUSGAMEID is empty and no Beta extension found - skipping automatic adding game '$SGNAID' to Vortex"
 	fi
 }
 
@@ -9140,7 +9656,7 @@ function checkVortexRegs {
 		INSTP="C:\\Program Files (x86)\\Steam\\steamapps\\common\\$GN"
 	fi
 
-	writelog "INFO" "${FUNCNAME[0]} - Checking RegKey '$REGKEY' and updating RegKey '$REG32KEY' in registry for game '$GN ($AID)' now"
+	writelog "INFO" "${FUNCNAME[0]} - Checking RegKey '$REGKEY' and updating RegKey '$REG32KEY' in registry for game '$SGNAID' now"
 
 	# check if registry path exists:
 	
@@ -9177,9 +9693,9 @@ function setVortexSELaunch {
 	if [ "$1" == "$AID" ]; then
 		SEEXE="$EFD/$2"
 		if [ ! -f "$SEEXE" ]; then
-				writelog "SKIP" "${FUNCNAME[0]} - Special exe '$2' for '$GN ($AID)' not found in gamedir '$EFD' - starting normal exe"
+				writelog "SKIP" "${FUNCNAME[0]} - Special exe '$2' for '$SGNAID' not found in gamedir '$EFD' - starting normal exe"
 		else
-			writelog "INFO" "${FUNCNAME[0]} - Found special exe '$2' for '$GN ($AID)' in gamedir '$EFD'"
+			writelog "INFO" "${FUNCNAME[0]} - Found special exe '$2' for '$SGNAID' in gamedir '$EFD'"
 			export CURWIKI="$PPW/Vortex"
 			TITLE="ScriptExtenderRequester"
 			pollWinRes "$TITLE"
@@ -9312,12 +9828,19 @@ function VortexOptions {
 function installVortex {
 	USEVORTEX="1"
 	initVortexStuff
+
 	if [ -f "$VORTEXPROTON" ]; then
-		installEvalSetName "$PLACEHOLDERAID" "$VTX" "$VORTEXCOMPDATA" "$VORTEXPROTON"
+		reCreateCompatdata "ccd" "$VTX" "s"
+
+		writelog "INFO" "${FUNCNAME[0]} - Base Vortex installation finished" "E"
+
+		VDN="dotnet48"
+
+		writelog "INFO" "${FUNCNAME[0]} - Trying to install $VDN now, which might fail depending on the used wine/proton version" "E"
 		if [ -n "$1" ] && [ "$1" == "X" ]; then
-			installWinetricksPaks "dotnet48" "$VORTEXWINE" "wineVortexRun"
+			installWinetricksPaks "$VDN" "$VORTEXWINE" "wineVortexRun"
 		elif [ -n "$1" ] && [ "$1" == "F" ]; then
-			installWinetricksPaks "dotnet48" "$VORTEXWINE" "wineVortexRun" "F"
+			installWinetricksPaks "$VDN" "$VORTEXWINE" "wineVortexRun" "F"
 		fi
 		setVortexDLMime
 	fi
@@ -9386,6 +9909,7 @@ function askVortex {
 	if [ "$USEVORTEX" == "1" ]; then
 		if [ "$WAITVORTEX" -gt 0 ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Opening Vortex Requester with timeout '$WAITVORTEX'"
+			fixShowGnAid
 			export CURWIKI="$PPW/Vortex"
 			TITLE="${PROGNAME}-OpenVortex"
 			pollWinRes "$TITLE"
@@ -9394,7 +9918,7 @@ function askVortex {
 
 			"$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
 			--title="$TITLE" \
-			--text="$(spanFont "$GN ($AID) - $GUI_ASKVORTEX" "H")" \
+			--text="$(spanFont "$SGNAID - $GUI_ASKVORTEX" "H")" \
 			--button="$BUT_VORTEX":0  \
 			--button="$BUT_CAN":4  \
 			--timeout="$WAITVORTEX" \
@@ -9499,7 +10023,7 @@ function checkVortex {
 				mkdir -p "$UserLocalSetAppData" 2>/dev/null
 
 				# game specific part:
-				writelog "INFO" "${FUNCNAME[0]} - Preparing required registry and path settings for '$GFD' and '$GN ($AID)'"
+				writelog "INFO" "${FUNCNAME[0]} - Preparing required registry and path settings for '$GFD' and '$SGNAID'"
 
 				if [ "$USEWINE" -eq 0 ]; then
 					GVFX="$GPFX"
@@ -9740,6 +10264,8 @@ function setLinGameVals {
 		VIRTUALDESKTOP="0"
 		USERESHADE="0"
 		INSTALL_RESHADE="0"
+		UUUSEIGCS="0"
+		IGCSDST="0"
 	fi
 }
 
@@ -9749,10 +10275,10 @@ function prepareLaunch {
 	linkLog
 
 	createProjectDirs
-
+	fixShowGnAid
 	saveCfg "$STLDEFGLOBALCFG" X
 	loadCfg "$STLDEFGLOBALCFG" X
-	writelog "START" "######### Game Launch: $GN ($AID) #########"
+	writelog "START" "######### Game Launch: $SGNAID #########"
 
 	createDefaultCfgs "${ORGGCMD[@]}"
 	getGameData "$AID"
@@ -9838,26 +10364,15 @@ function prepareLaunch {
 		export DXVK_CONFIG_FILE="$STLDXVKCFG"
 	fi
 
-	# shortcut to enable all required flags for SBSVR with vkbasalt
-	if [ -n "$SBSVRVK" ]; then
-		if [ "$SBSVRVK" -eq 1 ]; then
-			writelog "INFO" " $PROGNAME - SBSVRVK enabled - starting game in SBS-VR using vkbasalt"
-			export RUNSBSVR=1
-			export ENABLE_VKBASALT=1
-			export SBSVRRS=0
-			export USERESHADE=0
-		fi
-	fi
-	
+
 	# shortcut to enable all required flags for SBSVR with ReShade
 	if [ -n "$SBSVRRS" ]; then
 		if [ "$SBSVRRS" -eq 1 ]; then
-			writelog "INFO" " $PROGNAME - SBSVRRS enabled - starting game in SBS-VR using ReShade"
+			writelog "INFO" "${FUNCNAME[0]} - $PROGNAME - SBSVRRS enabled - starting game in SBS-VR using ReShade"
 			export RUNSBSVR=1
 			export INSTALL_RESHADE=1
 			export RESHADE_DEPTH3D=1
 			export USERESHADE=1
-			export SBSVRVK=0
 			export ENABLE_VKBASALT=0
 		fi
 	fi
@@ -9915,10 +10430,6 @@ function prepareLaunch {
 	writelog "INFO" "${FUNCNAME[0]} - UseReshade:"
 	useReshade
 
-	# start game wih usevkBasalt ENABLE_VKBASALT is 1
-	writelog "INFO" "${FUNCNAME[0]} - UsevkBasalt:"
-	usevkBasalt
-
 	# open Shader Menu if CHOOSESHADERS  is 1
 	writelog "INFO" "${FUNCNAME[0]} - ChooseShaders:"
 	chooseShaders
@@ -9957,10 +10468,21 @@ function prepareLaunch {
 	# redirect STEAM_COMPAT_DATA_PATH on request
 	redirectSCDP
 
+	# start igcsinjector if USEIGCS is enabled
+	writelog "INFO" "${FUNCNAME[0]} - :"
+	checkIGCSInjector
+
+	# check if openvr-fsr is enabled
+	checkOpenVRFSR
+
 	# start a custom program if USECUSTOMCMD is enabled
 	writelog "INFO" "${FUNCNAME[0]} - CheckCustomLaunch:"
 	checkCustomLaunch
 
+	# start a custom program if UUUSEPATCH or UUUSEVR is enabled
+	writelog "INFO" "${FUNCNAME[0]} - checkUUUPatchLaunch:"
+	checkUUUPatchLaunch
+	
 	# start strace process in the background if STRACERUN is 1
 	writelog "INFO" "${FUNCNAME[0]} - CheckStraceLaunch:"
 	checkStraceLaunch
@@ -10254,6 +10776,7 @@ function updateConty {
 
 function askConty {
 		writelog "INFO" "${FUNCNAME[0]} - Opening Ask Conty Requester"
+		fixShowGnAid
 		export CURWIKI="$PPW/Conty"
 		TITLE="${PROGNAME}-SelectConty"
 		pollWinRes "$TITLE"
@@ -10262,7 +10785,7 @@ function askConty {
 
 		"$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
 		--title="$TITLE" \
-		--text="$(spanFont "$GN ($AID) - $GUI_ASKCONTY" "H")" \
+		--text="$(spanFont "$SGNAID - $GUI_ASKCONTY" "H")" \
 		--button="$BUT_DLCONTY":0  \
 		--button="$BUT_SELCONTY":2 \
 		--button="$SKIPCONTY":4 \
@@ -10352,7 +10875,7 @@ function logPlayTime {
 	if [ "$LOGPLAYTIME" -eq 1 ] && [ -n "$GN" ] ; then
 		mkProjDir "$PLAYTIMELOGDIR" 1
 		# different date formats?
-		echo "$(date +%d.%m.%Y): $1 sec" >> "$PLAYTIMELOGDIR/${GN/$LGS /}.log"
+		echo "$(date +%d.%m.%Y): $1 sec" >> "$PLAYTIMELOGDIR/${GN}.log"
 	fi
 }
 
@@ -10397,6 +10920,7 @@ function HelpUrlMenu {
 		AID="$1"
 		setAIDCfgs
 	fi
+	fixShowGnAid
 	export CURWIKI="$PPW/Help-Url"
 	TITLE="${PROGNAME}-${FUNCNAME[0]}"
 	pollWinRes "$TITLE"
@@ -10405,7 +10929,7 @@ function HelpUrlMenu {
 
 	WANTHELPURL="$("$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
 	--title="$TITLE" --separator="\n" \
-	--text="$(spanFont "$GN ($AID) $(strFix "$GUI_ASKOPURL" "$1")" "H")" \
+	--text="$(spanFont "$SGNAID $(strFix "$GUI_ASKOPURL" "$1")" "H")" \
 	--field="$GUI_HELPURL!$DESC_HELPURL ":CB "${HELPURL}!${HUYLIST}${NON}" \
 	--button="$BUT_CAN":0  \
 	--button="$BUT_OPURL":2 \
@@ -10434,6 +10958,7 @@ function checkPlayTime {
 	else
 		if [ -n "$CRASHGUESS" ] && [ "$1" -lt "$CRASHGUESS" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - The game stopped after '$1' seconds - opening CrashGuess Requester"
+			fixShowGnAid
 			export CURWIKI="$PPW/Crash-Guess"
 			TITLE="${PROGNAME}-CrashGuess"
 			pollWinRes "$TITLE"
@@ -10444,7 +10969,7 @@ function checkPlayTime {
 
 			WANTHELPURL="$("$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
 			--title="$TITLE" --separator="\n" \
-			--text="$(spanFont "$GN ($AID) $(strFix "$GUI_ASKCRASHGUESS" "$1")" "H")" \
+			--text="$(spanFont "$SGNAID $(strFix "$GUI_ASKCRASHGUESS" "$1")" "H")" \
 			--field="$GUI_HELPURL!$DESC_HELPURL ":CB "${HELPURL}!${HUYLIST}${NON}" \
 			--button="$BUT_RETRYCG":0  \
 			--button="$BUT_SKIPCG":2 \
@@ -10461,7 +10986,7 @@ function checkPlayTime {
 					}
 				;;
 				2)  {
-						writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_SKIPCG' - Setting CRASHGUESS to 0 for $GN ($AID)"
+						writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_SKIPCG' - Setting CRASHGUESS to 0 for $SGNAID"
 						updateConfigEntry "CRASHGUESS" "0" "$STLGAMECFG"
 					}
 				;;
@@ -10490,28 +11015,37 @@ function startGame {
 
 	checkConty
 
+	if [ "$BLOCKINTERNET" -eq 1 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Starting game with blocked internet access"
+		BLOCKCMD="unshare"
+		BLOCKARGS="-n -r"
+		unset BLOCKARGSARR
+		mapfile -d " " -t -O "${#BLOCKARGSARR[@]}" BLOCKARGSARR < <(printf '%s' "$BLOCKARGS")
+		RUNCMD=("$BLOCKCMD" "${BLOCKARGSARR[@]}" "${@}")
+	else
+		RUNCMD=("${@}")
+	fi
+
+	writelog "INFO" "${FUNCNAME[0]} - ## Final GAMESTART command is '${RUNCMD[*]}'"
+
 	SECONDS=0
 	if [ -x "$RUNCONTY" ] && [ "$RUNCONTY" != "$NON" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - ## Starting game using Conty executable '$RUNCONTY'"
-		writelog "INFO" "${FUNCNAME[0]} - ## GAMESTART with command '$RUNCONTY $*'"
-
-		# maybe also strip ${RUNSLR[@]}" from "$@"? TODO?
-		"$RUNCONTY" "$@"
+		"$RUNCONTY" "${RUNCMD[@]}"
 	else
-		writelog "INFO" "${FUNCNAME[0]} - ## GAMESTART with command '$*'"
 		restoreOrgVars # restore original LC_ and friends for the game
 
 		if [ "$USESLR" -eq 1 ] && [ "$STL_PV_VERBOSE" -eq 1 ]; then
 			# logged gamestart
-			PRESSURE_VESSEL_VERBOSE="$STL_PV_VERBOSE" "$@"  2>&1 | tee "$STLPVLOGDIR/pressure-vessel-${AID}.log"
+			PRESSURE_VESSEL_VERBOSE="$STL_PV_VERBOSE" "${RUNCMD[@]}"  2>&1 | tee "$STLPVLOGDIR/pressure-vessel-${AID}.log"
 			# start PV shell "instead"
 		elif [ "$USESLR" -eq 1 ] && [ "$STL_PV_SHELL" != "$NON" ]; then
-			PRESSURE_VESSEL_SHELL="$STL_PV_SHELL" "$@"
+			PRESSURE_VESSEL_SHELL="$STL_PV_SHELL" "${RUNCMD[@]}"
 		elif [ "$USESLR" -eq 1 ] && [ "$STL_PV_TERMINAL" != "$NON" ]; then
-			PRESSURE_VESSEL_TERMINAL="$STL_PV_TERMINAL" "$@"
+			PRESSURE_VESSEL_TERMINAL="$STL_PV_TERMINAL" "${RUNCMD[@]}"
 		else
 			# regular gamestart - COMMENTDEBUG:
-			"$@"
+			"${RUNCMD[@]}" 2>/dev/null
 		fi
 	fi
 	emptyVars "O" "X" # clear original variables again (mostly for a continous log (date))
@@ -10845,7 +11379,14 @@ function setWineVars {
 
 function launchSteamGame {
 ########################
+	if [ "$USEGAMEMODERUN" -eq 1 ]; then
+		GMR="$("$WHICH" "$GAMEMODERUN" 2>/dev/null)"
+	fi
 
+	if [ "$USEGAMESCOPE" -eq 1 ]; then
+		GSC="$("$WHICH" "$GAMESCOPE" 2>/dev/null)"
+	fi
+	
 	if [ "$USEBOXTRON" -eq 1 ] || [ "$USEROBERTA" -eq 1 ] || [ "$USELUXTORPEDA" -eq 1 ]; then
 		ISGAME=3
 	fi
@@ -10897,7 +11438,7 @@ function launchSteamGame {
 				# disable CHANGE_PULSE_LATENCY else audio gets stuck
 				CHANGE_PULSE_LATENCY="0"
 
-				writelog "INFO" "${FUNCNAME[0]} - Starting game '$GN ($AID)' with boxtron. Full start command is: '$BOXTRONCMD $BOXTRONARGS $DOSEXE'"
+				writelog "INFO" "${FUNCNAME[0]} - Starting game '$SGNAID' with boxtron. Full start command is: '$BOXTRONCMD $BOXTRONARGS $DOSEXE'"
 				startGame "$BOXTRONCMD" "$BOXTRONARGS" "$DOSEXE"
 			else
 				writelog "ERROR" "${FUNCNAME[0]} -  boxtron command '$BOXTRONCMD' not found - exit"
@@ -10948,28 +11489,28 @@ function launchSteamGame {
 			# start with gamemoderun:
 			if [ "$USEGAMEMODERUN" -eq 1 ]; then
 				if [ "$USEGAMESCOPE" -eq 1 ]; then
-					writelog "INFO" "${FUNCNAME[0]} - Starting native game '$GN ($AID)' with '$GAMEMODERUN' and '$GAMESCOPE'"
+					writelog "INFO" "${FUNCNAME[0]} - Starting native game '$SGNAID' with '$GAMEMODERUN' and '$GAMESCOPE'"
 					notiShow "$(strFix "$NOTY_STARTNATGAMOSC" "$GN" "$AID")"
 					gameArgs "$GAMESCOPE_ARGS"
 					writelog "INFO" "${FUNCNAME[0]} - Full start command is '$GAMEMODERUN $GAMESCOPE ${GAMEARGSARR[*]} ${GAMESTARTCMD[*]}'"
-					startGame "$GAMEMODERUN" "$GAMESCOPE" "${GAMEARGSARR[@]}" "${GAMESTARTCMD[@]}"
+					startGame "$GMR" "$GSC" "${GAMEARGSARR[@]}" "${GAMESTARTCMD[@]}"
 				else
-					writelog "INFO" "${FUNCNAME[0]} - Starting native game '$GN ($AID)' with '$GAMEMODERUN' - ${GAMESTARTCMD[*]}"
+					writelog "INFO" "${FUNCNAME[0]} - Starting native game '$SGNAID' with '$GAMEMODERUN' - ${GAMESTARTCMD[*]}"
 					notiShow "$(strFix "$NOTY_STARTNATGAMO" "$GN" "$AID")"
 					writelog "INFO" "${FUNCNAME[0]} - Full start command is '$GAMEMODERUN ${GAMESTARTCMD[*]}'"
-					startGame "$GAMEMODERUN" "${GAMESTARTCMD[@]}"	
+					startGame "$GMR" "${GAMESTARTCMD[@]}"	
 				fi
 			# start with gamescope:
 			elif [ "$USEGAMESCOPE" -eq 1 ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Starting native game '$GN ($AID)' with $GAMESCOPE arguments '$GAMESCOPE_ARGS'"
+				writelog "INFO" "${FUNCNAME[0]} - Starting native game '$SGNAID' with $GAMESCOPE arguments '$GAMESCOPE_ARGS'"
 				notiShow "$(strFix "$NOTY_STARTNATGAMSCO" "$GN" "$AID")"
 				gameArgs "$GAMESCOPE_ARGS"
 				writelog "INFO" "${FUNCNAME[0]} - Full start command is '$GAMESCOPE ${GAMEARGSARR[*]} ${GAMESTARTCMD[*]}'"
-				startGame "$GAMESCOPE" "${GAMEARGSARR[@]}" "${GAMESTARTCMD[@]}"
+				startGame "$GSC" "${GAMEARGSARR[@]}" "${GAMESTARTCMD[@]}"
 
 			# regular start:
 			else
-				writelog "INFO" "${FUNCNAME[0]} - Starting native game '$GN ($AID)'"
+				writelog "INFO" "${FUNCNAME[0]} - Starting native game '$SGNAID'"
 				notiShow "$(strFix "$NOTY_STARTNAT" "$GN" "$AID")"
 				if [ "$USESLR" -eq 1 ]; then
 					writelog "INFO" "${FUNCNAME[0]} - Full start command is '${RUNSLR[*]} ${GAMESTARTCMD[*]}'"
@@ -10997,18 +11538,18 @@ function launchSteamGame {
 				if [ "$USEGAMESCOPE" -eq 1 ]; then
 					gameArgs "$GAMESCOPE_ARGS"
 					notiShow "$(strFix "$NOTY_STARTPROTGAMOSC" "$RUNWINEVERSION" "$GN" "$AID")"
-					startWineGame "$GAMEMODERUN" "$GAMESCOPE" "${GAMEARGSARR[@]}"
+					startWineGame "$GMR" "$GSC" "${GAMEARGSARR[@]}"
 					writelog "INFO" "${FUNCNAME[0]} - Started game $GN with '$("$RUNWINE" --version)' using '$GAMEMODERUN' and '$GAMESCOPE' with PID '$WINEPID'"
 				else
 					notiShow "$(strFix "$NOTY_STARTPROTGAMO" "$RUNWINEVERSION" "$GN" "$AID")"
-					startWineGame "$GAMEMODERUN"
+					startWineGame "$GMR"
 					writelog "INFO" "${FUNCNAME[0]} - Started game $GN with '$("$RUNWINE" --version)' using '$GAMEMODERUN' with PID '$WINEPID'"
 				fi
 			# start with gamescope:
 			elif [ "$USEGAMESCOPE" -eq 1 ]; then
 				gameArgs "$GAMESCOPE_ARGS"
 				notiShow "$(strFix "$NOTY_STARTPROTGAMSCO" "$RUNWINEVERSION" "$GN" "$AID")"
-				startWineGame "$GAMESCOPE" "${GAMEARGSARR[@]}"
+				startWineGame "$GSC" "${GAMEARGSARR[@]}"
 				writelog "INFO" "${FUNCNAME[0]} - Started game $GN with '$("$RUNWINE" --version)' using '$GAMESCOPE' with PID '$WINEPID'"
 			# regular start:
 			else
@@ -11094,27 +11635,27 @@ function launchSteamGame {
 			# start with gamemoderun:
 			elif [ "$USEGAMEMODERUN" -eq 1 ]; then
 				if [ "$USEGAMESCOPE" -eq 1 ]; then
-					writelog "INFO" "${FUNCNAME[0]} - Starting '$GN ($AID)' with Proton: '$PROTONVERSION' with '$GAMEMODERUN' and '$GAMESCOPE'"
+					writelog "INFO" "${FUNCNAME[0]} - Starting '$SGNAID' with Proton: '$PROTONVERSION' with '$GAMEMODERUN' and '$GAMESCOPE'"
 					gameArgs "$GAMESCOPE_ARGS"
 					notiShow "$(strFix "$NOTY_STARTPROTGAMOSC" "$PROTONVERSION" "$GN" "$AID")"
 					writelog "INFO" "${FUNCNAME[0]} - Full start command is '$GAMEMODERUN $GAMESCOPE ${GAMEARGSARR[*]} ${GAMESTARTCMD[*]}'"
-					startGame "$GAMEMODERUN" "$GAMESCOPE" "${GAMEARGSARR[@]}" "${GAMESTARTCMD[@]}"		
+					startGame "$GMR" "$GSC" "${GAMEARGSARR[@]}" "${GAMESTARTCMD[@]}"		
 				else
-					writelog "INFO" "${FUNCNAME[0]} - Starting '$GN ($AID)' with Proton: '$PROTONVERSION' with '$GAMEMODERUN'"
+					writelog "INFO" "${FUNCNAME[0]} - Starting '$SGNAID' with Proton: '$PROTONVERSION' with '$GAMEMODERUN'"
 					notiShow "$(strFix "$NOTY_STARTPROTGAMO" "$PROTONVERSION" "$GN" "$AID")"
 					writelog "INFO" "${FUNCNAME[0]} - Full start command is '$GAMEMODERUN ${GAMESTARTCMD[*]}'"
-					startGame "$GAMEMODERUN" "${GAMESTARTCMD[@]}"
+					startGame "$GMR" "${GAMESTARTCMD[@]}"
 				fi
 			# start with gamescope:
 			elif [ "$USEGAMESCOPE" -eq 1 ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Starting '$GN ($AID)' with Proton: '$PROTONVERSION' with $GAMESCOPE arguments '$GAMESCOPE_ARGS'"
+				writelog "INFO" "${FUNCNAME[0]} - Starting '$SGNAID' with Proton: '$PROTONVERSION' with $GAMESCOPE arguments '$GAMESCOPE_ARGS'"
 				notiShow "$(strFix "$NOTY_STARTPROTGAMSCO" "$PROTONVERSION" "$GN" "$AID")"
 				gameArgs "$GAMESCOPE_ARGS"
 				writelog "INFO" "${FUNCNAME[0]} - Full start command is '$GAMESCOPE ${GAMEARGSARR[*]} ${GAMESTARTCMD[*]}'"
-				startGame "$GAMESCOPE" "${GAMEARGSARR[@]}" "${GAMESTARTCMD[@]}"		
+				startGame "$GSC" "${GAMEARGSARR[@]}" "${GAMESTARTCMD[@]}"		
 			# regular start:
 			else
-				writelog "INFO" "${FUNCNAME[0]} - Starting '$GN ($AID)' with Proton: '$PROTONVERSION'"
+				writelog "INFO" "${FUNCNAME[0]} - Starting '$SGNAID' with Proton: '$PROTONVERSION'"
 				notiShow "$(strFix "$NOTY_STARTPROT" "$PROTONVERSION" "$GN" "$AID")"
 				if [ "$USESLR" -eq 1 ]; then
 					writelog "INFO" "${FUNCNAME[0]} - Full start command is '${RUNSLR[*]} ${GAMESTARTCMD[*]}'"
@@ -11291,7 +11832,7 @@ function FUSEID {
 				USEID="${PREVAID//\"}"
 				PREVGAME="$(grep "^PREVGAME" "$LASTRUN" | cut -d '=' -f2)"
 				if [ -n "$PREVGAME" ]; then
-					GN="$LGS ${PREVGAME//\"}"
+					GN="${PREVGAME//\"}"
 				fi
 			fi
 		fi
@@ -11467,6 +12008,7 @@ function commandline {
 		fi
 	elif  [ "$1" == "createcompatdata" ] || [ "$1" == "ccd" ]; then
 		FUSEID "$2"
+		writelog "INFO" "${FUNCNAME[0]} - Starting Install via command: reCreateCompatdata \"$1\" \"$USEID\" \"$3\"" "E"
 		reCreateCompatdata "$1" "$USEID" "$3"
 	elif  [ "$1" == "createdesktopicon" ] || [ "$1" == "cdi" ]; then
 		if [ "$2" == "all" ]; then
@@ -11520,8 +12062,6 @@ function commandline {
 	elif  [ "$1" == "helpurl" ] || [ "$1" == "hu" ]; then
 		FUSEID "$2"
 		HelpUrlMenu "$USEID"
-	elif  [ "$1" == "install" ]; then
-		installEvalPackage "$@"
 	elif  [ "$1" == "launcher" ]; then
 		openGameLauncher "$2" "$3"
 	elif  [ "$1" == "list" ]; then
@@ -11900,7 +12440,7 @@ function backupSteamUser {
 		BAID="$1"
 
 		if [ -n "$GN" ]; then
-			BACKTI="${GN/$LGS /}"
+			BACKTI="$GN"
 		else
 			getGameName "$BAID"
 			if [ -n "$GAMENAME" ] && [ "$GAMENAME" != "$NON" ]; then
@@ -12490,15 +13030,16 @@ function closeSTL {
 	fi
 
 	if [ "$PROTON_LOG" -eq 1 ]; then
-		createSymLink "${FUNCNAME[0]}" "$STLPROTONIDLOGDIR/steam-${AID}.log" "$STLPROTONTILOGDIR//steam-${GN/$LGS /}.log"
+		createSymLink "${FUNCNAME[0]}" "$STLPROTONIDLOGDIR/steam-${AID}.log" "$STLPROTONTILOGDIR//steam-${GN}.log"
 	fi
 
-	writelog "INFO" "${FUNCNAME[0]} - Game $GN ($AID) exited - cleaning up custom processes if necessary"
+	writelog "INFO" "${FUNCNAME[0]} - Game '$SGNAID' exited - cleaning up custom processes if necessary"
 
 # all variables in closeSTL are blocked from being unset before gamestart - dirty list with variables to keep which are not used here:
 #DXVK_HUD DXVK_LOG_LEVEL ENABLE_VKBASALT LOGDIR LOGLEVEL MANGOHUD NETOPTS PROTON_DEBUG_DIR PROTON_DUMP_DEBUG_COMMANDS PROTON_FORCE_LARGE_ADDRESS_AWARE
 #PROTON_LOG PROTON_LOG_DIR PROTON_NO_D3D10 PROTON_NO_D3D11 PROTON_NO_ESYNC PROTON_NO_FSYNC PROTON_USE_WINED3D STL_PV_SHELL STL_PV_TERMINAL
-#STL_PV_VERBOSE USESLR VKBASALT_CONFIG_FILE WINEDLLOVERRIDES WINE_FULLSCREEN_INTEGER_SCALING
+#STL_PV_VERBOSE USESLR WINEDLLOVERRIDES WINE_FULLSCREEN_INTEGER_SCALING WINE_FULLSCREEN_FSR WINE_FULLSCREEN_FSR_STRENGTH
+
 
 	# dummy file which could be used to stop possible while loops
 	touch "$CLOSETMP"
@@ -12568,7 +13109,8 @@ function closeSTL {
 	rm "$CLOSETMP" 2>/dev/null
 	rm "$UPWINTMPL" 2>/dev/null
 	rm "$KILLSWITCH" 2>/dev/null
-
+	rm "$GWXTEMP" 2>/dev/null
+	
 	# only useful for win games:
 	if [ "$ISGAME" -eq 2 ] && [ "$USEWINE" -eq 0 ]; then
 		writeLastRun
@@ -12725,14 +13267,34 @@ function CreateCustomEvaluatorScript {
 				OCNT=$((OCNT+1))
 			fi
 		done <<< "$EVALSCFILES"
+		
+		while read -r intpak; do
+			if [ -n "$intpak" ] ; then
+				IPFDIR="$(awk -F'"' '{print $4}' <<< "$intpak")"
+				IPDIR="${IPFDIR##*/}"
+				INTPAKWA="$STLSHM/intpak"
+				# dirty workaround - proper fix?
+				echo "tac \"$OEVALSC\" | gawk '/$IPDIR/,/appid/' | tac" > "$INTPAKWA"
+				chmod +x "$INTPAKWA"
+				{
+					echo "	\"$OCNT\""
+					echo "	{"
+					"$INTPAKWA"
+					echo "	}" 
+				} >> "$TEVALSC"
+				OCNT=$((OCNT+1))
+				rm "$INTPAKWA" 2>/dev/null
+			fi
+		done <<< "$(grep "$LIINPA" "$OEVALSC" | grep -v "${STEWOS}\|${STLDLDIR}\|STESHA\|STLDLDIR")"
+		
 		echo "}" >> "$TEVALSC"
-		writelog "INFO" "Created temporary '$TEVALSC'" "E"
+		writelog "INFO" "${FUNCNAME[0]} - Created temporary '$TEVALSC'" "E"
 	}
 
 	mkProjDir "$EVMETACUSTOMID" 1
 	mkProjDir "$EVMETAADDONID" 1
 	
-	writelog "INFO" "Starting Gui for Creating a custom '$EVALSC'" "E"
+	writelog "INFO" "${FUNCNAME[0]} - Starting Gui for Creating a custom '$EVALSC'" "E"
 	export CURWIKI="$PPW/Steam-First-Time-Setup"
 	TITLE="${PROGNAME}-${FUNCNAME[0]}"
 	pollWinRes "$TITLE"
@@ -12780,7 +13342,7 @@ function CreateCustomEvaluatorScript {
 	fi
 
 	if [ -f "$OEVALSC" ]; then
-		writelog "INFO" "Pre-Selection is based on packages enabled in '$OEVALSC'" "E"
+		writelog "INFO" "${FUNCNAME[0]} - Pre-Selection is based on packages enabled in '$OEVALSC'" "E"
 	else
 		TEVALSCSEL="$NON"
 	fi
@@ -12794,7 +13356,7 @@ function CreateCustomEvaluatorScript {
 		if [ -f "$OEVALSC" ]; then
 			PACKPROC="$(grep "process 1" "$EPACK")"
 			if [ -n "$PACKPROC" ]; then
-				writelog "INFO" "Searching in '$PACKPROC' '$OEVALSC'"
+				writelog "INFO" "${FUNCNAME[0]} - Searching in '$PACKPROC' '$OEVALSC'"
 				if grep -Fq "$PACKPROC" "$OEVALSC"; then
 					echo TRUE ; echo "${EPACK##*/}"
 				else
@@ -12847,183 +13409,15 @@ function CreateCustomEvaluatorScript {
 	esac
 }
 
-function installEvalPackage {
-
-	if [ -n "$3" ]; then
-		EUNID="$2"
-		PACKNAME="$3"
-		
-		REVP="packages"
-		SEVP="stlpackages"
-		GLOBEVPACKS="${GLOBALEVALDIR}/$REVP"
-		GLOBSTLEVPACKS="${GLOBALEVALDIR}/$SEVP"
-		
-		if [ -f "${GLOBSTLEVPACKS}/$PACKNAME" ]; then
-			EVSRC="${GLOBSTLEVPACKS}/$PACKNAME"
-		elif [ -f "${GLOBEVPACKS}/$PACKNAME" ]; then
-			EVSRC="${GLOBEVPACKS}/$PACKNAME"
-		fi
-
-		if [ -f "$EVSRC" ]; then
-			TEVALSC="${STLSHM}/${EVALSC}_${EUNID}_temp.vdf"
-			echo "\"$EVALSC\"" > "$TEVALSC"
-			{
-				echo "{"
-				echo "	\"0\""
-				cat "$EVSRC"
-				echo "}"
-			} >> "$TEVALSC"
-
-			writelog "INFO" "Created temporary '$TEVALSC'" "E"
-
-			EVSC="${EVALSC}_${EUNID}.vdf"
-			DSTEVSC="$STEAM_COMPAT_CLIENT_INSTALL_PATH/$EVSC"
-			ISCEXE="$STEAM_COMPAT_CLIENT_INSTALL_PATH/legacycompat/iscriptevaluator.exe"
-			createModifiedEvalsc "$TEVALSC" "$DSTEVSC"
-
-			if [ -z "$STEAM_COMPAT_DATA_PATH" ]; then
-				if [ -f "$CUMETA/${EUNID}.conf" ]; then
-					loadCfg "$CUMETA/${EUNID}.conf"
-					if [ -d "$(dirname "$(dirname "$WINEPREFIX")")" ]; then
-						mkdir -p "$WINEPREFIX" 2>/dev/null
-						STEAM_COMPAT_DATA_PATH="${WINEPREFIX%/*}"
-						writelog "INFO" "Using compatdata '$STEAM_COMPAT_DATA_PATH' from metadata '$CUMETA/${EUNID}.conf'" "E"
-					else
-						writelog "ERROR" "parent directory of potential compatdata from WINEPREFIX '$WINEPREFIX' found in '$CUMETA/${EUNID}.conf' does not exist!" "E"
-					fi
-				elif [ -n "$4" ] && [ "$4" != "$NON" ]; then
-					STEAM_COMPAT_DATA_PATH="$4"
-					writelog "INFO" "Using compatdata '$STEAM_COMPAT_DATA_PATH' from commandline '$4'" "E"
-				else
-					writelog "ERROR" "Neither found '$CUMETA/${EUNID}.conf' nor commandline '$4' with a compatdata path" "E"
-				fi
-			else
-				writelog "INFO" "Already have compatdata '$STEAM_COMPAT_DATA_PATH' as variable'" "E"
-			fi
-
-			if [ -z "$INSTPROT" ]; then
-				if [ -f "$STLGAMEDIRID/${EUNID}.conf" ]; then
-					loadCfg "$STLGAMEDIRID/${EUNID}.conf"
-				elif [ -f "$STLDEFGAMECFG" ]; then
-					loadCfg "$STLDEFGAMECFG"
-				fi
-
-				if [ -n "$USEPROTON" ]; then
-					if [ -z "${ProtonCSV[0]}" ]; then
-						writelog "INFO" "${FUNCNAME[0]} - Don't have the Array of available Proton versions yet - creating"
-						getAvailableProtonVersions "up" X
-					fi
-					INSTPROT="$(PROTPATH "$USEPROTON")"					
-				fi
-			fi
-
-			if [ -z "$INSTPROT" ] && [ -n "$5" ]; then
-				if [ -f "$5" ]; then
-				INSTPROT="$5"
-				else
-					if [ -z "${ProtonCSV[0]}" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - Don't have the Array of available Proton versions yet - creating"
-					getAvailableProtonVersions "up" X
-					fi
-					INSTPROT="$(PROTPATH "$5")"	
-				fi
-			fi
-
-			if [ -d "$STEAM_COMPAT_DATA_PATH" ] && [ -f "$INSTPROT" ]; then
-				cd "$STEAM_COMPAT_CLIENT_INSTALL_PATH" >/dev/null || return
-					writelog "INFO" "'$EVALSC' - START - STEAM_COMPAT_DATA_PATH=\"$STEAM_COMPAT_DATA_PATH\"'$INSTPROT run $ISCEXE $EVSC'" "E"
-					STEAM_COMPAT_DATA_PATH="$STEAM_COMPAT_DATA_PATH" "$INSTPROT" run "$ISCEXE" "$EVSC"
-					notiShow "$(strFix "$NOTY_FRDONE" "$1")" "X"
-					writelog "INFO" "$(strFix "$NOTY_FRDONE" "$1")" "E"
-					# move the temporary modified evaluatorscript into '$STMSHM'
-					mv "$DSTEVSC" "$STLSHM/${DSTEVSC##*/}_$RANDOM"
-				cd - >/dev/null || return
-			else
-				writelog "ERROR" "Either compatdata '$STEAM_COMPAT_DATA_PATH' or proton binary '$INSTPROT' not found" "E"
-				if [ -z "$4" ] || [ -z "$5" ]; then
-					writelog "ERROR" "compatdata can be provided as argument 4, the proton binary as argument 5, game config files are automatically preferred if available" "E"
-				fi
-			fi
-		else
-			writelog "ERROR" "No package found for '$PACKNAME'" "E"
-		fi
-	else
-		writelog "ERROR" "${FUNCNAME[0]} - Require at least SteamAppID as argument 2 and the package name as argument 3" "E"
-	fi
-}
-
-function installEvalSetName {
-	if [ -n "$STEAM_COMPAT_DATA_PATH" ]; then
-		ORG_STEAM_COMPAT_DATA_PATH="$STEAM_COMPAT_DATA_PATH"
-	fi
-
-	EUNID="$1"
-	SETNAME="$2"
-	STEAM_COMPAT_DATA_PATH="$3"
-	INSTPROT="$4"
-
-#	REVP="packages"
-#	SEVP="stlpackages"
-#	GLOBEVPACKS="${GLOBALEVALDIR}/$REVP"
-#	GLOBSTLEVPACKS="${GLOBALEVALDIR}/$SEVP"
-
-	GLOBEVSETS="${GLOBALEVALDIR}/sets"
-
-	if [ -f "$GLOBEVSETS/${EVALSC}_${SETNAME}.vdf" ]; then
-		INSTEVAL="$GLOBEVSETS/${EVALSC}_${SETNAME}.vdf"
-	fi
-	
-	if [ -n "$INSTEVAL" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - Installing '$INSTEVAL' to '$STEAM_COMPAT_DATA_PATH'" "E"
-		installEvalSetFile "$EUNID" "$INSTEVAL" "$STEAM_COMPAT_DATA_PATH" "$INSTPROT"
-	else
-		writelog "SKIP" "${FUNCNAME[0]} - No package '$SETNAME' found in '$GLOBEVSETS'" "E"
-	fi
-
-	if [ -n "$ORG_STEAM_COMPAT_DATA_PATH" ]; then
-		STEAM_COMPAT_DATA_PATH="$ORG_STEAM_COMPAT_DATA_PATH"
-	fi
-}
-
-function installEvalSetFile {
-	EUNID="$1"
-	INSTEVAL="$2"
-	STEAM_COMPAT_DATA_PATH="$3"
-	INSTPROT="$4"
-	
-	if [ -z "$4" ]; then
-		writelog "ERROR" "need 4 arguments" "E"
-	else
-		export STEAM_COMPAT_APP_ID="$EUNID"
-		ISCRILOG="$STLSHM/${PROGCMD}-${ISCRI}-${STEAM_COMPAT_APP_ID}.log"
-		EVSC="${EVALSC}_${EUNID}.vdf"
-		DSTEVSC="$STEAM_COMPAT_CLIENT_INSTALL_PATH/$EVSC"
-		ISCEXE="$STEAM_COMPAT_CLIENT_INSTALL_PATH/legacycompat/iscriptevaluator.exe"
-
-		mkdir -p "$STEAM_COMPAT_DATA_PATH" 2>/dev/null
-		createModifiedEvalsc "$INSTEVAL" "$DSTEVSC"
-
-		cd "$STEAM_COMPAT_CLIENT_INSTALL_PATH" >/dev/null || return
-			writelog "INFO" "'$EVALSC' - START - STEAM_COMPAT_DATA_PATH=\"$3\"'$INSTPROT run $ISCEXE $EVSC'" "E"
-			STEAM_COMPAT_DATA_PATH="$3" "$INSTPROT" run "$ISCEXE" "$EVSC"
-			notiShow "$(strFix "$NOTY_FRDONE" "$1")" "X"
-			writelog "INFO" "$(strFix "$NOTY_FRDONE" "$1")" "E"
-			# move the temporary modified evaluatorscript into '$STMSHM'
-			mv "$DSTEVSC" "$STLSHM/${DSTEVSC##*/}_$RANDOM"
-		cd - >/dev/null || return
-	fi
-}
-
 function reCreateCompatdata {
 	function runEvalsc {
 		unset LEV
-		mapfile -d " " -t -O "${#LEV[@]}" LEV <<< "run ${ISCEXE} legacycompat\\${EVALSC}_${1}.vdf"
+		mapfile -d " " -t -O "${#LEV[@]}" LEV <<< "run ${ISCEXE} ${LECO}\\${EVALSC}_${1}.vdf"
 		rm "$EVALISRUN" 2>/dev/null
 		touch "$EVALISRUN"
 		checkFirstTimeRun "${LEV[@]}" >/dev/null 2>/dev/null
 		rm "$EVALISRUN"	"$FRSTATE" "${FRSTATE}-prev" 2>/dev/null
-		notiShow "$(strFix "$NOTY_FRDONE" "$1")" "X"
-		writelog "INFO" "$(strFix "$NOTY_FRDONE" "$1")" "E"
+		doneEvacInstall
 	}
 	
 	function getCurStep {
@@ -13036,42 +13430,53 @@ function reCreateCompatdata {
 			if ! cmp --silent -- "$FRSTATE" "$PRFRSTATE"; then
 				cp "$FRSTATE" "$PRFRSTATE"
 				notiShow "$(strFix "$NOTY_FRSTATE" "$(cat "$FRSTATE")")" "X"
-				writelog "INFO" "$(strFix "$NOTY_FRSTATE" "$(cat "$FRSTATE")")" "E"
+				writelog "INFO" "${FUNCNAME[0]} - $(strFix "$NOTY_FRSTATE" "$(cat "$FRSTATE")")" "E"
 			fi
 		fi
 	}
 
 	WANTGUI=0
 	if [ "$1" == "ccd" ] || [ "$1" == "createcompatdata" ]; then
-		writelog "INFO" "Started from command-line" "E"
+		writelog "INFO" "${FUNCNAME[0]} - Started from command-line" "E"
 		EUNID="$2"
 		if [ -n "$3" ]; then
 			WANTGUI=1
 		fi
 	else
-		writelog "INFO" "Started from gui" "E"
+		writelog "INFO" "${FUNCNAME[0]} - Started from gui" "E"
 		EUNID="$1"
 		WANTGUI=1
 		BACKFUNC="$2"
 	fi
 
-	ISCEXE="$STEAM_COMPAT_CLIENT_INSTALL_PATH/legacycompat/iscriptevaluator.exe"
+	SCCILECO="$STEAM_COMPAT_CLIENT_INSTALL_PATH/$LECO"
+	ISCEXE="$SCCILECO/$ISCRI.exe"
 	
 	if [ -n "$EUNID" ]; then
 		SRCORIGEVSC="$EVMETAID/${EVALSC}_${EUNID}.vdf"
 		SRCCUSTEVSC="$EVMETACUSTOMID/${EVALSC}_${EUNID}.vdf"
 
+		if [ "$EUNID" == "$VTX" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Starting Vortex Set Installation" "E"
+			SRCORIGEVSC="${GLOBALEVALDIR}/sets/${EVALSC}_${VTX}.vdf"
+			SRCEVSC="$SRCORIGEVSC"
+			DESTCODA="$VORTEXCOMPDATA"
+			EARLYPROT="$VORTEXPROTON"
+			export STEAM_COMPAT_APP_ID="$VTX"
+			STEAM_COMPAT_INSTALL_PATH="$VORTEXCOMPDATA"
+		fi
+		
 		if [ ! -f "$ISCEXE" ]; then
-			writelog "ERROR" "'$ISCEXE' not found" "E"
+			writelog "ERROR" "${FUNCNAME[0]} - '$ISCEXE' not found" "E"
 		else
 			
 			if [ ! -f "$SRCORIGEVSC" ] && [ ! -f "$SRCCUSTEVSC" ]; then
 				if [ "$WANTGUI" -eq 0 ]; then
-					writelog "ERROR" "Neither '$SRCORIGEVSC' nor '$SRCCUSTEVSC' found (see wiki if the reason for not being able to continue is unknown)" "E"
-					writelog "ERROR" "Alternatively start the same command with an additional 'gui' parameter, to create a '$SRCCUSTEVSC' via gui" "E"
+					writelog "ERROR" "${FUNCNAME[0]} - Neither '$SRCORIGEVSC' nor '$SRCCUSTEVSC' found (see wiki if the reason for not being able to continue is unknown)" "E"
+					writelog "ERROR" "${FUNCNAME[0]} - Alternatively start the same command with an additional 'gui' parameter, to create a '$SRCCUSTEVSC' via gui" "E"
 					HAVEEVSC=0
 				else
-					writelog "INFO" "Requester to create a custom Install file via Gui" "E"
+					writelog "INFO" "${FUNCNAME[0]} - Requester to create a custom Install file via Gui" "E"
 					CreateCustomEvaluatorScript "$EUNID"
 					if [ -f "$SRCCUSTEVSC" ]; then
 						HAVEEVSC=1
@@ -13085,24 +13490,26 @@ function reCreateCompatdata {
 			
 			if [ "$HAVEEVSC" -eq 1 ]; then
 				if [ -f "$CUMETA/${EUNID}.conf" ]; then
-					writelog "INFO" "Loading Metadata '$CUMETA/${EUNID}.conf'" "E"
+					writelog "INFO" "${FUNCNAME[0]} - Loading Metadata '$CUMETA/${EUNID}.conf'" "E"
 					loadCfg "$CUMETA/${EUNID}.conf"
 				fi
 
-				if [ -n "$WINEPREFIX" ]; then
-					DESTCODA="${WINEPREFIX%/*}"
-				elif [ -n "$STEAM_COMPAT_DATA_PATH" ]; then
-					DESTCODA="$STEAM_COMPAT_DATA_PATH"
-				elif [ -n "$GPFX" ]; then
-					DESTCODA="${GPFX%/*}"
-				else
-					getCompatData "${EUNID}" >/dev/null
-					DESTCODA="$(cut -d ';' -f2 <<< "$FCOMPDAT")"
+				if [ -z "$DESTCODA" ]; then
+					if [ -n "$WINEPREFIX" ]; then
+						DESTCODA="${WINEPREFIX%/*}"
+					elif [ -n "$STEAM_COMPAT_DATA_PATH" ]; then
+						DESTCODA="$STEAM_COMPAT_DATA_PATH"
+					elif [ -n "$GPFX" ]; then
+						DESTCODA="${GPFX%/*}"
+					else
+						getCompatData "${EUNID}" >/dev/null
+						DESTCODA="$(cut -d ';' -f2 <<< "$FCOMPDAT")"
+					fi
 				fi
 
 				if [ -n "$DESTCODA" ]; then
 					export STEAM_COMPAT_DATA_PATH="$DESTCODA"
-					writelog "INFO" "Destination compatdata is '$STEAM_COMPAT_DATA_PATH'" "E"
+					writelog "INFO" "${FUNCNAME[0]} - Destination compatdata is '$STEAM_COMPAT_DATA_PATH'" "E"
 
 					if [ -z "$STEAM_COMPAT_INSTALL_PATH" ]; then
 						if [ -n "$GAMEDIR" ]; then
@@ -13110,12 +13517,15 @@ function reCreateCompatdata {
 						elif [ -n "$EFD" ]; then
 							export STEAM_COMPAT_INSTALL_PATH="$EFD"
 						else
-							writelog "INFO" "STEAM_COMPAT_INSTALL_PATH (game dir) is unknown - setting it at least to '${STLDLDIR}'" "E"
+							writelog "INFO" "${FUNCNAME[0]} - STEAM_COMPAT_INSTALL_PATH (game dir) is unknown - setting it at least to '${STLDLDIR}'" "E"
 							export STEAM_COMPAT_INSTALL_PATH="$STLDLDIR"
 						fi
 					fi
 
 					RECRECODA=1
+
+					find "$DESTCODA" -maxdepth 0 -empty -exec rmdir {} \; 2>/dev/null
+
 					if [ -d "$DESTCODA" ]; then
 						if [ "$3" == "s" ]; then
 							RCSEL="$(confirmReq "Ask_Recreate_Compatdata" "$(strFix "$GUI_RECRECODA" "$EUNID" "${EUNID}_${PROGCMD}")")"
@@ -13130,14 +13540,18 @@ function reCreateCompatdata {
 							fi
 						fi
 
-
 						if [ "$RECRECODA" -eq 1 ]; then
 							if [ -d "${DESTCODA}_${PROGCMD}" ]; then
-								writelog "INFO" "Removing previous backup compatdata backup '${DESTCODA}_${PROGCMD}'" "E"
+								writelog "INFO" "${FUNCNAME[0]} - Removing previous backup compatdata backup '${DESTCODA}_${PROGCMD}'" "E"
 								rm -rf "${DESTCODA}_${PROGCMD}" 2>/dev/null
 							fi
-							writelog "INFO" "Moving existing compatdata to '${DESTCODA}_${PROGCMD}'" "E"
-							mv "$DESTCODA" "${DESTCODA}_${PROGCMD}"
+							
+							find "$DESTCODA" -maxdepth 0 -empty -exec rmdir {} \;
+
+							if [ -d "$DESTCODA" ]; then
+								writelog "INFO" "${FUNCNAME[0]} - Moving existing compatdata to '${DESTCODA}_${PROGCMD}'" "E"
+								mv "$DESTCODA" "${DESTCODA}_${PROGCMD}"
+							fi
 						fi
 					fi
 
@@ -13151,7 +13565,7 @@ function reCreateCompatdata {
 						
 						cd "$STEAM_COMPAT_CLIENT_INSTALL_PATH" >/dev/null || return
 						
-						writelog "INFO" "Launching First Run Installer" "E"
+						writelog "INFO" "${FUNCNAME[0]} - Launching First Run Installer" "E"
 
 						runEvalsc "${EUNID}" &
 
@@ -13167,7 +13581,7 @@ function reCreateCompatdata {
 						cd - >/dev/null || return
 					fi
 				else
-					writelog "SKIP" "No destination compatdata determined" "E"
+					writelog "SKIP" "${FUNCNAME[0]} - No destination compatdata determined" "E"
 				fi
 			fi
 
@@ -13176,7 +13590,7 @@ function reCreateCompatdata {
 			fi
 		fi
 	else
-		writelog "SKIP" "Need SteamAppId as argument" "E"
+		writelog "SKIP" "${FUNCNAME[0]} - Need SteamAppId as argument" "E"
 	fi
 }
 
@@ -13191,22 +13605,22 @@ function autoEvalscPushVersion {
 
 		if [ -n "$VORTEXSETUP" ]; then
 			VORTEXSETUPRAW="$VORTEXSETUP"
-			writelog "INFO" "Already have VORTEXSETUP '$VORTEXSETUPRAW'" "E" | tee -a "$ISCRILOG"
+			writelog "INFO" "${FUNCNAME[0]} - Already have VORTEXSETUP '$VORTEXSETUPRAW'" "E" | tee -a "$ISCRILOG"
 		else
 			# ip sort found here: https://www.oreilly.com/library/view/bash-cookbook/0596526784/ch08s03.html
 			VORTEXSETUPRAW="$(find "$VORTEXDLDIR" | sort -t . -k 1,1n -k 2,2n -k 3,3n -k 4,4n | tail -n1)"
-			writelog "INFO" "Found newest downloaded VORTEXSETUP '$VORTEXSETUPRAW'" "E" | tee -a "$ISCRILOG"
+			writelog "INFO" "${FUNCNAME[0]} - Found newest downloaded VORTEXSETUP '$VORTEXSETUPRAW'" "E" | tee -a "$ISCRILOG"
 		fi
 
 		VORTEXVERSW1="${VORTEXSETUPRAW##*-}"
 		VORTEXVERS="${VORTEXVERSW1//.exe}"
-		writelog "INFO" "Newest VORTEXVERS '$VORTEXVERS'" "E" | tee -a "$ISCRILOG"
+		writelog "INFO" "${FUNCNAME[0]} - Newest VORTEXVERS '$VORTEXVERS'" "E" | tee -a "$ISCRILOG"
 
 		if [ -n "$VORTEXVERS" ] && [ "$VORTEXVERS" != "$NON" ]; then
-			writelog "INFO" "Replacing 'VORTEXVERS' in '$1' with '$VORTEXVERS'" "E" | tee -a "$ISCRILOG"
+			writelog "INFO" "${FUNCNAME[0]} - Replacing 'VORTEXVERS' in '$1' with '$VORTEXVERS'" "E" | tee -a "$ISCRILOG"
 			sed "s:VORTEXVERS:$VORTEXVERS:g" -i "$1"
 		else
-			writelog "ERROR" "No usable VORTEXVERS 'VORTEXVERS' found" "E" | tee -a "$ISCRILOG"
+			writelog "ERROR" "${FUNCNAME[0]} - No usable VORTEXVERS 'VORTEXVERS' found" "E" | tee -a "$ISCRILOG"
 		fi
 	fi
 
@@ -13220,22 +13634,22 @@ function autoEvalscPushVersion {
 
 		if [ -n "$MO2SETUP" ]; then
 			MO2RAW="$MO2SETUP"
-			writelog "INFO" "Already have MO2SETUP '$MO2RAW'" "E" | tee -a "$ISCRILOG"
+			writelog "INFO" "${FUNCNAME[0]} - Already have MO2SETUP '$MO2RAW'" "E" | tee -a "$ISCRILOG"
 		else
 			# ip sort found here: https://www.oreilly.com/library/view/bash-cookbook/0596526784/ch08s03.html
 			MO2RAW="$(find "$MO2DLDIR" | sort -t . -k 1,1n -k 2,2n -k 3,3n -k 4,4n | tail -n1)"
-			writelog "INFO" "Found newest downloaded MO2SETUP '$MO2RAW'" "E" | tee -a "$ISCRILOG"
+			writelog "INFO" "${FUNCNAME[0]} - Found newest downloaded MO2SETUP '$MO2RAW'" "E" | tee -a "$ISCRILOG"
 		fi
 
 		MO2VERSW1="${MO2RAW##*-}"
 		MO2VERS="${MO2VERSW1//.exe}"
-		writelog "INFO" "Newest MO2VERS '$MO2VERS'" "E" | tee -a "$ISCRILOG"
+		writelog "INFO" "${FUNCNAME[0]} - Newest MO2VERS '$MO2VERS'" "E" | tee -a "$ISCRILOG"
 
 		if [ -n "$MO2VERS" ] && [ "$MO2VERS" != "$NON" ]; then
-			writelog "INFO" "Replacing 'MO2VERS' in '$1' with '$MO2VERS'" "E" | tee -a "$ISCRILOG"
+			writelog "INFO" "${FUNCNAME[0]} - Replacing 'MO2VERS' in '$1' with '$MO2VERS'" "E" | tee -a "$ISCRILOG"
 			sed "s:MO2VERS:$MO2VERS:g" -i "$1"
 		else
-			writelog "ERROR" "No usable MO2VERS 'MO2VERS' found" "E" | tee -a "$ISCRILOG"
+			writelog "ERROR" "${FUNCNAME[0]} - No usable MO2VERS 'MO2VERS' found" "E" | tee -a "$ISCRILOG"
 		fi
 	fi
 }
@@ -13245,97 +13659,97 @@ function createModifiedEvalsc {
 		ISCRILOG="$STLSHM/${PROGCMD}-${ISCRI}-temp_$RANDOM.log"
 	fi 
 
-	STESHA="$STEAM_COMPAT_CLIENT_INSTALL_PATH/$SAC/Steamworks Shared"
+	STESHA="$STEAM_COMPAT_CLIENT_INSTALL_PATH$SAC/$STEWOS"
 	if [ ! -d "$STESHA" ]; then
-		writelog "WARN" "'$STESHA' not found - packages expected there won't be found" "E" | tee -a "$ISCRILOG"
+		writelog "WARN" "${FUNCNAME[0]} - '$STESHA' not found - packages expected there won't be found" "E" | tee -a "$ISCRILOG"
 	fi
 
 	SOURCEEVALSC="$1"
 	DSTEVALSC="$2"
 
 	if [ ! -f "$SOURCEEVALSC" ]; then
-		writelog "SKIP" "'$SOURCEEVALSC' does not exists" "E" | tee -a "$ISCRILOG"
+		writelog "SKIP" "${FUNCNAME[0]} - '$SOURCEEVALSC' does not exists" "E" | tee -a "$ISCRILOG"
 	elif [ ! -f "$DSTEVALSC" ]; then
-		# creating a temporary copy of the evaluatorscript in $STEAM_COMPAT_CLIENT_INSTALL_PATH:
-		writelog "INFO" "Copying '$SOURCEEVALSC' to '$STEAM_COMPAT_CLIENT_INSTALL_PATH'" "E" | tee -a "$ISCRILOG"
+		SCCILECO="$STEAM_COMPAT_CLIENT_INSTALL_PATH/$LECO"
+
+		# creating a temporary copy of the evaluatorscript in $SCCILECO:
+		writelog "INFO" "${FUNCNAME[0]} - Copying '$SOURCEEVALSC' to '$SCCILECO'" "E" | tee -a "$ISCRILOG"
 		cp "$SOURCEEVALSC" "$DSTEVALSC"
 		
 		# replace version placeholders automatically:
 		autoEvalscPushVersion "$DSTEVALSC"
 		
-		# Modifying the EVSC copy by adding matching installerfile source paths:
-		INPRO1="process 1"
-		
-		# weird but working way to determine and set the correct path for the corresponding install package
-		while read -r FIPFOUND; do
-			if grep -q "%INSTALLDIR%" <<< "$FIPFOUND"; then
-				INSTFILERAW="$(gawk -F '%INSTALLDIR%' '{print $NF}' <<< "$FIPFOUND")"
-			else
-				INSTFILERAW="$(cut -f3 <<< "$FIPFOUND")" # enough?
-			fi
-
-			INSTFILE1="${INSTFILERAW//\\//}"
-			INSTFILE2="${INSTFILE1//\"/}"
-			INSTFILE="${INSTFILE2##/}"
-
-			
-			if [ -n "$INSTFILE" ]; then
-				unset ABSFIP ZABSFIPRAW ZABSFIP
-				
-				if grep -q "msiexec" <<< "$FIPFOUND"; then # weak, but probably enough
-					ABSFIP="${STESHA}"
-					writelog "INFO" "Found msiexec as '$INPRO1' command - assuming '$ABSFIP' is '$FOINPA'" "E" | tee -a "$ISCRILOG"
-				elif [ -f "${STESHA}/${INSTFILE}" ]; then
-					ABSFIP="${STESHA}"
-					writelog "INFO" "Source package found under '${STESHA}/${INSTFILE}' - using '$ABSFIP' as '$FOINPA'" "E" | tee -a "$ISCRILOG"
-				elif [ -f "${STEAM_COMPAT_INSTALL_PATH}/${INSTFILE}" ]; then
-					ABSFIP="${STEAM_COMPAT_INSTALL_PATH}"
-					writelog "INFO" "Source package found under '${STEAM_COMPAT_INSTALL_PATH}/${INSTFILE}' - using '$ABSFIP' for '$FOINPA'" "E" | tee -a "$ISCRILOG"
-				elif [ -f "${STLDLDIR}/${INSTFILE}" ]; then
-					ABSFIP="${STLDLDIR}"
-					writelog "INFO" "Source package found under '${STLDLDIR}/${INSTFILE}' - using '$ABSFIP' for '$FOINPA'" "E" | tee -a "$ISCRILOG"		
-				else
-					writelog "INFO" "Source package ${INSTFILE} neither found in '$STESHA' nor in '$STEAM_COMPAT_INSTALL_PATH' nor in '$STLDLDIR'}" "E" | tee -a "$ISCRILOG"
-				fi
-		
-				# inserting the windows path variant '$ZABSFIP' of '$ABSFIP' as '$FOINPA' into the temp. evaluatorscript '$EVSC':
-				if [ -d "$ABSFIP" ]; then
-					ZABSFIPRAW="${ABSFIP//\//\\\\}"
-					ZABSFIP="Z:${ZABSFIPRAW//\\/\\\\}";
-					writelog "INFO" "Patching '$FOINPA' '$ZABSFIP' into '$EVSC'" "E" | tee -a "$ISCRILOG"
-					sed "0,/\"$FOINPA\"		\"\"/s//\"$FOINPA\"		\"$ZABSFIP\"/" -i "$DSTEVALSC"
-				fi
-			fi
-		done <<< "$(tac "$DSTEVALSC" | grep "$FOINPA\|$INPRO1" | grep -A1 "$FOINPA" | tac | grep -v "$FOINPA\|--")"
+		# replace placeholders with real paths
+		writelog "INFO" "${FUNCNAME[0]} - Replacing placeholders with real paths in '$DSTEVALSC'" "E" | tee -a "$ISCRILOG"
+		sed "s:STESHA:$STESHA:g" -i "$DSTEVALSC"
+		sed "s:STLDLDIR:$STLDLDIR:g" -i "$DSTEVALSC"
 	else
-		writelog "SKIP" "'$DSTEVALSC' already exists" "E" | tee -a "$ISCRILOG"
+		writelog "SKIP" "${FUNCNAME[0]} - '$DSTEVALSC' already exists" "E" | tee -a "$ISCRILOG"
 	fi
+}
+
+function cleanupOutdatedEvals {
+	writelog "INFO" "${FUNCNAME[0]} - Cleaning up outdated files in '$EVMETAID'"
+
+	mkProjDir "$EVMETAOLD" 1
+	while read -r oldfile; do
+		if [ -f "$oldfile" ]; then
+			mv "$oldfile" "$EVMETAOLD"
+		fi
+	done <<< "$(grep -Rl "foreign_install_path" "$EVMETAID")"
+	
+	while read -r oldfile; do
+		if [ -f "$oldfile" ]; then
+			while read -r lipent; do
+				ABSLIINPA="$(cut -d \" -f4 <<< "$lipent")" # too weak?
+				if [ ! -d "${ABSLIINPA//\"}" ] && [ "${ABSLIINPA//\"}" != "STLDLDIR" ] && [ "${ABSLIINPA//\"}" != "STESHA" ]; then
+					mv "$oldfile" "$EVMETAOLD"
+				fi
+			done <<< "$(grep "$LIINPA" "$oldfile")"
+		fi
+	done <<< "$(grep -Rl "$LIINPA" "$EVMETAID")"
+	writelog "INFO" "${FUNCNAME[0]} - Finished cleaning up '$EVMETAID'"
+}
+
+function doneEvacInstall {
+	notiShow "$(strFix "$NOTY_FRDONE" "$EUNID")" "X"
+	writelog "INFO" "${FUNCNAME[0]} - $(strFix "$NOTY_FRDONE" "$EUNID")" "E"	
+}
+
+function runEvacInstall {
+	INSTPROT="$1"
+	# call $ISCRI via proton with the modified evaluatorscript as parameter:
+	writelog "INFO" "${FUNCNAME[0]} - '$EVALSC' - START -  STEAM_COMPAT_DATA_PATH=\"$STEAM_COMPAT_DATA_PATH\" '$INSTPROT run $ISCEXE $EVSC'" "E" | tee -a "$ISCRILOG"
+	STEAM_COMPAT_DATA_PATH="$STEAM_COMPAT_DATA_PATH" "$INSTPROT" run "$ISCEXE" "$EVSC"
+	# move the temporary modified evaluatorscript into '$STMSHM'
+	mv "$DSTEVSC" "$STLSHM/${DSTEVSC##*/}_$RANDOM"
 }
 
 function checkFirstTimeRun {
 	ISCRILOG="$STLSHM/${PROGCMD}-${ISCRI}-${STEAM_COMPAT_APP_ID}.log"
 	GPFX="$STEAM_COMPAT_DATA_PATH/pfx"
-	ISCEXE="$STEAM_COMPAT_CLIENT_INSTALL_PATH/legacycompat/iscriptevaluator.exe"
+	SCCILECO="$STEAM_COMPAT_CLIENT_INSTALL_PATH/$LECO"
+	ISCEXE="$SCCILECO/$ISCRI.exe"
 	EVALPROTCONF="$STLSHM/evalprot-${STEAM_COMPAT_APP_ID}.conf"
 	
 	function waitForEvaluatorscript {
 		mkProjDir "$EVMETAID" 1
 		mkProjDir "$EVMETATITLE" 1
-
+		
 		ISCRILOG="$2"
-		EVALVDF="$STEAM_COMPAT_CLIENT_INSTALL_PATH/legacycompat/$1"
-		writelog "INFO" " Waiting for '$EVALVDF' to appear" "E" | tee -a "$ISCRILOG"
+		EVALVDF="$SCCILECO/$1"
+		writelog "INFO" "${FUNCNAME[0]} - Waiting for '$EVALVDF' to appear" "E" | tee -a "$ISCRILOG"
 		while [ ! -f "$EVALVDF" ]; do 
 			sleep 0.1
 		done
 		cp "$EVALVDF" "$EVMETAID"
-		writelog "INFO" " Copied '$EVALVDF' to '$EVMETAID/$1'" "E" | tee -a "$ISCRILOG"
+		writelog "INFO" "${FUNCNAME[0]} - Copied '$EVALVDF' to '$EVMETAID/$1'" "E" | tee -a "$ISCRILOG"
 	}
 	
 	function findEarlyProt {
 		if [ -n "$2" ]; then
 			ISCRILOG="$2"
-			writelog "INFO" "Trying to get a proton version from '$1'" "E" | tee -a "$ISCRILOG"
+			writelog "INFO" "${FUNCNAME[0]} - Trying to get a proton version from '$1'" "E" | tee -a "$ISCRILOG"
 			if grep -q "^USEPROTON" "$1"; then
 				CONFPROTRAW="$(grep "^USEPROTON" "$1" | cut -d '=' -f2)"
 				CONFPROT="${CONFPROTRAW//\"}"
@@ -13347,39 +13761,31 @@ function checkFirstTimeRun {
 				createProtonList
 				
 				if [ -f "$PROTONCSV" ]; then
-					writelog "INFO" "Searching '$CONFPROT' in '$PROTONCSV'" "E" | tee -a "$ISCRILOG"
+					writelog "INFO" "${FUNCNAME[0]} - Searching '$CONFPROT' in '$PROTONCSV'" "E" | tee -a "$ISCRILOG"
 
 					if grep -q "^${CONFPROT}" "$PROTONCSV"; then
-						writelog "INFO" "Found '$CONFPROT' in '$PROTONCSV'" "E" | tee -a "$ISCRILOG"
+						writelog "INFO" "${FUNCNAME[0]} - Found '$CONFPROT' in '$PROTONCSV'" "E" | tee -a "$ISCRILOG"
 						EARLYPROT="$(grep "^${CONFPROT}" "$PROTONCSV" | cut -d ';' -f2)"
 						export EARLYPROT
 					else
-						writelog "INFO" "'$CONFPROT' not found in '$PROTONCSV'" "E" | tee -a "$ISCRILOG"
+						writelog "INFO" "${FUNCNAME[0]} - '$CONFPROT' not found in '$PROTONCSV'" "E" | tee -a "$ISCRILOG"
 						# if configured USEPROTON proton binary was not found, try to find a minor version bump instead:
 						TESTEARLYPROT="$(fixProtonVersionMismatch "$CONFPROT" "X")"
 						if [ -f "$TESTEARLYPROT" ]; then
-							writelog "INFO" "Found a minor version mismatch binary for '$CONFPROT':'$TESTEARLYPROT'" "E" | tee -a "$ISCRILOG"
+							writelog "INFO" "${FUNCNAME[0]} - Found a minor version mismatch binary for '$CONFPROT':'$TESTEARLYPROT'" "E" | tee -a "$ISCRILOG"
 							EARLYPROT="$TESTEARLYPROT"
 							export EARLYPROT
 						else
-							writelog "SKIP" "Found '$TESTEARLYPROT' does not exist" "E" | tee -a "$ISCRILOG"
+							writelog "SKIP" "${FUNCNAME[0]} - Found '$TESTEARLYPROT' does not exist" "E" | tee -a "$ISCRILOG"
 						fi
 					fi
 				else
-					writelog "ERROR" "Could not create '$PROTONCSV'" "E" | tee -a "$ISCRILOG"
+					writelog "ERROR" "${FUNCNAME[0]} - Could not create '$PROTONCSV'" "E" | tee -a "$ISCRILOG"
 				fi
 			else
-				writelog "SKIP" "No USEPROTON entry found in '$1'" "E" | tee -a "$ISCRILOG"
+				writelog "SKIP" "${FUNCNAME[0]} - No USEPROTON entry found in '$1'" "E" | tee -a "$ISCRILOG"
 			fi
 		fi	
-	}
-
-	function runEvacInstall {
-		# finally call iscriptevaluator via proton with the modified evaluatorscript as parameter:
-		writelog "INFO" "'$EVALSC' - START - '$EARLYPROT run $ISCEXE $EVSC'" "E" | tee -a "$ISCRILOG"
-		"$EARLYPROT" run "$ISCEXE" "$EVSC"
-		# move the temporary modified evaluatorscript into '$STMSHM'
-		mv "$DSTEVSC" "$STLSHM/${DSTEVSC##*/}_$RANDOM"
 	}
 
 	rmOldLog
@@ -13392,9 +13798,9 @@ function checkFirstTimeRun {
 			writelog "START" "######### '$ISCRI' #########" "E" | tee -a "$ISCRILOG"
 		fi
 	fi
-	# skip iscriptevaluator completely if a SKIP file exists for $STEAM_COMPAT_APP_ID
+	# skip $ISCRI completely if a SKIP file exists for $STEAM_COMPAT_APP_ID
 	if [ -f "$EVMETASKIPID/${EVALSC}_${STEAM_COMPAT_APP_ID}.vdf" ]; then
-		writelog "SKIP" "Skipping '$ISCRI' line '$*' because '$EVMETASKIPID/${EVALSC}_${STEAM_COMPAT_APP_ID}.vdf' exists" "E" | tee -a "$ISCRILOG"
+		writelog "SKIP" "${FUNCNAME[0]} - Skipping '$ISCRI' line '$*' because '$EVMETASKIPID/${EVALSC}_${STEAM_COMPAT_APP_ID}.vdf' exists" "E" | tee -a "$ISCRILOG"
 	else
 		# filter evaluatorscript command
 		if grep -q "$EVALSC" <<< "$@"; then
@@ -13402,10 +13808,13 @@ function checkFirstTimeRun {
 			EVSC="$(gawk -F 'legacycompat\\\' '{print $NF}' <<< "$@")"
 		fi
 
+		cleanupOutdatedEvals
+
 		# check if evaluatorscript should be started:
 		if [ ! -d "$GPFX" ] || [ ! -f "$EVMETAID/$EVSC" ]; then
 			# get a proton version for the install process:
 			if grep -q "$EVALSC" <<< "$@"; then
+
 				# first check if the game has a stl config and use the corresponding proton version:
 				if [ -z "$EARLYPROT" ] && [ ! -f "$EVALPROTCONF" ] && [ -f "$STLGAMEDIRID/$STEAM_COMPAT_APP_ID.conf" ]; then
 					findEarlyProt "$STLGAMEDIRID/$STEAM_COMPAT_APP_ID.conf" "$ISCRILOG"
@@ -13417,13 +13826,13 @@ function checkFirstTimeRun {
 
 				# if everything else failed, check for a "static proton version" just for the base install - either from file or from system variable:
 				if [ -z "$EARLYPROT" ] && [ ! -f "$EVALPROTCONF" ] && [ -f "$STLEARLYPROTCONF" ]; then
-					writelog "INFO" "Trying to get a proton version from '$STLEARLYPROTCONF'" "E" | tee -a "$ISCRILOG"
+					writelog "INFO" "${FUNCNAME[0]} - Trying to get a proton version from '$STLEARLYPROTCONF'" "E" | tee -a "$ISCRILOG"
 					source "$STLEARLYPROTCONF"
 				fi
 
 				# fallback if for whatever reason USEPROTON is empty everywhere - trying to get NOP
 				if [ -z "$EARLYPROT" ]; then
-					writelog "INFO" "Last try - trying to get Newest Official Proton" "E" | tee -a "$ISCRILOG"
+					writelog "INFO" "${FUNCNAME[0]} - Last try - trying to get Newest Official Proton" "E" | tee -a "$ISCRILOG"
 					CONFPROT="$(getDefaultProton)"
 					createProtonList
 					EARLYPROT="$(grep "^${CONFPROT}" "$PROTONCSV" | cut -d ';' -f2)"
@@ -13431,7 +13840,7 @@ function checkFirstTimeRun {
 				
 				# write found protonversion into temp config, so below GECUST runs can use it as well:
 				if [ -n "$EARLYPROT" ]; then
-					writelog "INFO" "Writing 'EARLYPROT=$EARLYPROT' into '$EVALPROTCONF'" "E" | tee -a "$ISCRILOG"
+					writelog "INFO" "${FUNCNAME[0]} - Writing 'EARLYPROT=$EARLYPROT' into '$EVALPROTCONF'" "E" | tee -a "$ISCRILOG"
 					echo "EARLYPROT=\"$EARLYPROT\"" > "$EVALPROTCONF"
 					echo "TEVSC=\"$EVSC\"" >> "$EVALPROTCONF"
 				fi			
@@ -13441,7 +13850,6 @@ function checkFirstTimeRun {
 			TEVSC="$NON"
 			if [ -z "$EARLYPROT" ] && [ -f "$EVALPROTCONF" ]; then
 				source "$EVALPROTCONF"
-				#writelog "INFO" "Reusing '$EARLYPROT' from '$EVALPROTCONF' for command '$*'" "E" | tee -a "$ISCRILOG"
 			fi
 			# only continue with proton being available:
 			if [ -n "$EARLYPROT" ] && [ -f "$EARLYPROT" ]; then
@@ -13456,28 +13864,28 @@ function checkFirstTimeRun {
 						TEVALSC="${STLSHM}/${EVALSC}_${STEAM_COMPAT_APP_ID}_temp.vdf"
 						if [ -f "$TEVALSC" ]; then
 							SRCEVSC="$TEVALSC"
-							writelog "INFO" "Using '$SRCEVSC' as source" "E" | tee -a "$ISCRILOG"
+							writelog "INFO" "${FUNCNAME[0]} - Using '$SRCEVSC' as source" "E" | tee -a "$ISCRILOG"
 						fi
 						
 						if [ -z "$SRCEVSC" ]; then
 							if [ ! -f "$SRCORIGEVSC" ] && [ ! -f "$SRCCUSTEVSC" ]; then
 								SRCEVSC="$SRCORIGEVSC"
-								writelog "INFO" "Both the copy '$SRCORIGEVSC' of the original and a custom '$SRCCUSTEVSC' are missing - trying to get the original'" "E" | tee -a "$ISCRILOG"
+								writelog "INFO" "${FUNCNAME[0]} - Both the copy '$SRCORIGEVSC' of the original and a custom '$SRCCUSTEVSC' are missing - trying to get the original'" "E" | tee -a "$ISCRILOG"
 							elif [ -f "$SRCORIGEVSC" ] && [ ! -f "$SRCCUSTEVSC" ]; then
 								SRCEVSC="$SRCORIGEVSC"
-								writelog "INFO" "Using '$SRCEVSC' as source" "E" | tee -a "$ISCRILOG"
+								writelog "INFO" "${FUNCNAME[0]} - Using '$SRCEVSC' as source" "E" | tee -a "$ISCRILOG"
 							elif [ -f "$SRCORIGEVSC" ] && [ -f "$SRCCUSTEVSC" ]; then
 								SRCEVSC="$SRCCUSTEVSC"
-								writelog "INFO" "Using custom '$SRCCUSTEVSC' as source, as it overrides the original '$SRCORIGEVSC' which also does exist" "E" | tee -a "$ISCRILOG"
+								writelog "INFO" "${FUNCNAME[0]} - Using custom '$SRCCUSTEVSC' as source, as it overrides the original '$SRCORIGEVSC' which also does exist" "E" | tee -a "$ISCRILOG"
 							elif [ ! -f "$SRCORIGEVSC" ] && [ -f "$SRCCUSTEVSC" ]; then
 								SRCEVSC="$SRCCUSTEVSC"
-								writelog "INFO" "Using custom '$SRCCUSTEVSC' as source, and the original '$SRCORIGEVSC' does not exist" "E" | tee -a "$ISCRILOG"
+								writelog "INFO" "${FUNCNAME[0]} - Using custom '$SRCCUSTEVSC' as source, and the original '$SRCORIGEVSC' does not exist" "E" | tee -a "$ISCRILOG"
 							fi
 						fi
-						
+					
 						if [ -n "$EVSC" ] && [ ! -f "$SRCEVSC" ] && [ "$SRCEVSC" == "$SRCORIGEVSC" ]; then
 							waitForEvaluatorscript "$EVSC" "$ISCRILOG" &
-							writelog "INFO" "'$EVALSC' START - '$EARLYPROT run ${RUNISCCMD[*]}'" "E" | tee -a "$ISCRILOG"
+							writelog "INFO" "${FUNCNAME[0]} - '$EVALSC' START - '$EARLYPROT run ${RUNISCCMD[*]}'" "E" | tee -a "$ISCRILOG"
 							"$EARLYPROT" run "${RUNISCCMD[@]}"
 							while [ ! -f "$SRCEVSC" ]; do 
 								sleep 0.1
@@ -13486,40 +13894,36 @@ function checkFirstTimeRun {
 
 						# have a evaluatorscript to work with:
 						if [ -f "$SRCEVSC" ]; then
-							#if ! grep "$FOINPA" "$SRCEVSC" ; then
-							#	writelog "SKIP" "Skipping '$SRCEVSC' because it doesn't contain any packages" "E" | tee -a "$ISCRILOG"
-							#else
-							
-								DSTEVSC="$STEAM_COMPAT_CLIENT_INSTALL_PATH/$EVSC"
-								createModifiedEvalsc "$SRCEVSC" "$DSTEVSC"
-								if grep -q "$EVMETACUSTOMID" <<< "$SRCEVSC" ; then
-									notiShow "$(strFix "$NOTY_FRSTART" "Custom")" "X"
-								elif grep -q "$STLSHM" <<< "$SRCEVSC" ; then
-									notiShow "$(strFix "$NOTY_FRSTART" "Live")" "X"			
-								else
-									notiShow "$(strFix "$NOTY_FRSTART" "Regular")" "X"
-								fi
-								runEvacInstall
-							#fi
-							
+							DSTEVSC="$STEAM_COMPAT_CLIENT_INSTALL_PATH/$EVSC"
+							createModifiedEvalsc "$SRCEVSC" "$DSTEVSC"
+
+							if grep -q "$EVMETACUSTOMID" <<< "$SRCEVSC" ; then
+								notiShow "$(strFix "$NOTY_FRSTART" "Custom")" "X"
+							elif grep -q "$STLSHM" <<< "$SRCEVSC" ; then
+								notiShow "$(strFix "$NOTY_FRSTART" "Live")" "X"			
+							else
+								notiShow "$(strFix "$NOTY_FRSTART" "Regular")" "X"
+							fi
+
+							runEvacInstall "$EARLYPROT"
 							SRCADDONEVSC="$EVMETAADDONID/$EVSC"
 							if [ -f "$SRCADDONEVSC" ]; then
-								writelog "INFO" "Found additional install script in '$SRCADDONEVSC'" "E" | tee -a "$ISCRILOG"
+								writelog "INFO" "${FUNCNAME[0]} - Found additional install script in '$SRCADDONEVSC'" "E" | tee -a "$ISCRILOG"
 								
 								DSTEVSC="$STEAM_COMPAT_CLIENT_INSTALL_PATH/$EVSC"
 								createModifiedEvalsc "$SRCADDONEVSC" "$DSTEVSC"
 								notiShow "$(strFix "$NOTY_FRSTART" "Addon")" "X"
-								runEvacInstall
+								runEvacInstall "$EARLYPROT"
 							fi
 				
 							if [ "$SRCEVSC" == "$TEVALSC" ]; then
 								rm "$TEVALSC" 2>/dev/null
-								writelog "INFO" "Removed temporary '$TEVALSC'" "E" | tee -a "$ISCRILOG"
+								writelog "INFO" "${FUNCNAME[0]} - Removed temporary '$TEVALSC'" "E" | tee -a "$ISCRILOG"
 							fi
 
-							writelog "INFO" "'$EVALSC' - STOP  - '$EARLYPROT run $ISCEXE $EVSC'" "E" | tee -a "$ISCRILOG"
+							writelog "INFO" "${FUNCNAME[0]} - '$EVALSC' - STOP  - '$EARLYPROT run $ISCEXE $EVSC'" "E" | tee -a "$ISCRILOG"
 						else
-							writelog "INFO" "'$EVALSC' - SKIP  - '$SRCEVSC' not found" "E" | tee -a "$ISCRILOG"
+							writelog "INFO" "${FUNCNAME[0]} - '$EVALSC' - SKIP  - '$SRCEVSC' not found" "E" | tee -a "$ISCRILOG"
 						fi
 					# filter get-current-step command - this only updates the steam install gui process.
 					elif grep -q "$GECUST" <<< "$@"; then
@@ -13529,8 +13933,8 @@ function checkFirstTimeRun {
 						if [ -f "$TEVSC" ]; then
 							# shellcheck disable=SC1003
 							while read -r COMRED; do
-								if "$PGREP" -a "" | grep "Steamworks Shared" | grep -v "runasadmin" | grep "${COMRED//\"}" >/dev/null ; then
-										writelog "INFO" "Installation of '${COMRED//\"}' running" | tee -a "$ISCRILOG"
+								if "$PGREP" -a "" | grep "$STEWOS" | grep -v "runasadmin" | grep "${COMRED//\"}" >/dev/null ; then
+										writelog "INFO" "${FUNCNAME[0]} - Installation of '${COMRED//\"}' running" | tee -a "$ISCRILOG"
 									STINFO="$(date +%H:%M:%S) $NICEPROGNAME sees ${COMRED//\"}"
 									break
 								fi
@@ -13539,21 +13943,21 @@ function checkFirstTimeRun {
 						printf '\n%s\n' "$STINFO"	# heh, hello Steam Gui
 					# should not happen, but better log it anyway just in case:
 					else
-						writelog "SKIP" "Skipping '$ISCRI' command '$*' - Exiting" "E" | tee -a "$ISCRILOG"
+						writelog "SKIP" "${FUNCNAME[0]} - Skipping '$ISCRI' command '$*' - Exiting" "E" | tee -a "$ISCRILOG"
 					fi
 			else
 				if ! grep -q "$GECUST" <<< "$@"; then
-					writelog "SKIP" "No usable Proton version found - ignoring '$ISCRI' command '$*' - Exiting" "E" | tee -a "$ISCRILOG"
+					writelog "SKIP" "${FUNCNAME[0]} - No usable Proton version found - ignoring '$ISCRI' command '$*' - Exiting" "E" | tee -a "$ISCRILOG"
 				fi
 			fi
 		else
-			writelog "SKIP" "Skipping '$ISCRI' command '$*' - Exiting" "E" | tee -a "$ISCRILOG"
+			writelog "SKIP" "${FUNCNAME[0]} - Skipping '$ISCRI' command '$*' - Exiting" "E" | tee -a "$ISCRILOG"
 		fi
 	fi
 }
 
 function getCurrentCommandline {
-	# filter iscriptevaluator commands
+	# filter $ISCRI commands
 	if grep -q "$ISCRI" <<< "$@"; then
 		checkFirstTimeRun "$@"
 		exit
@@ -13589,12 +13993,11 @@ function main {
 	saveOrgVars
 	emptyVars "O"
 
+	writelog "START" "######### Initializing Game Launch $AID #########"
+
 	if [ -f "$STLDEFGLOBALCFG" ] && grep -q "^RESETLOG=\"1\"" "$STLDEFGLOBALCFG"; then
 		rmOldLog
-		writelog "START" "######### Initializing Game Launch $AID #########"
 		writelog "INFO" "Starting with a clean log"
-	else
-		writelog "START" "######### Initializing Game Launch $AID #########"
 	fi
 
 	writelog "INFO" "emptyVars - Emptied some original Variables as they slowdown several system calls when started from steam"
@@ -13621,7 +14024,7 @@ function main {
 				if grep -q "reaper SteamLaunch" <<< "$@"; then
 					writelog "INFO" "${FUNCNAME[0]} - Silently executing 'reaper' command line '$*'" "E"
 					"$@"
-				else			
+				else
 					setGameVars "$@"
 
 					if grep -q "$WFEAR" <<< "${ORGGCMD[@]}"; then
