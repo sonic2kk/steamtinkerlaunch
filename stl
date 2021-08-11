@@ -327,7 +327,7 @@ FONTSIZES="!xx-small!x-small!small!smaller!medium!large!larger!!x-large!xx-large
 HAVEINNO="1"
 SREG="system.reg"
 NSGA="non-steam game"
-BTVP="drive_c/Program Files/Black Tree Gaming Ltd/Vortex"
+BTVP="$DRC/Program Files/Black Tree Gaming Ltd/Vortex"
 VTXRAA="resources/app.asar"
 RABP="${VTXRAA}.unpacked/bundledPlugins"
 
@@ -1821,6 +1821,8 @@ function setDefaultCfgValues {
 		if [ -z "$CRASHGUESS" ]							; then	CRASHGUESS="60"; fi
 		if [ -z "$ONLYWICO" ]							; then	ONLYWICO="0"; fi
 		if [ -z "$GAMESCREENRES" ]						; then	GAMESCREENRES="$NON"; fi
+		if [ -z "$FIXSYMLINKS" ]						; then	FIXSYMLINKS="0"; fi
+		if [ -z "$UNSYMLINK" ]							; then	UNSYMLINK="0"; fi
 	}
 	
 	"${FUNCNAME[0]}$1"
@@ -2315,6 +2317,10 @@ function saveCfg {
 			echo "HELPURL=\"$HELPURL\""
 			echo "## Desktop Icon Mode"
 			echo "CREATEDESKTOPICON=\"$CREATEDESKTOPICON\""
+			echo "## $DESC_FIXSYMLINKS"
+			echo "FIXSYMLINKS=\"$FIXSYMLINKS\""
+			echo "## $DESC_UNSYMLINK"
+			echo "UNSYMLINK=\"$UNSYMLINK\""
 			} >> "$1"
 			#ENDsaveCfgdefault_template
 		fi
@@ -3677,6 +3683,8 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_CUSTPROTEXTDIR!$DESC_CUSTPROTEXTDIR ('CUSTPROTEXTDIR')":DIR "${CUSTPROTEXTDIR/#-/ -}" `#CAT_Proton` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_USESUSYM!$DESC_USESUSYM ('USESUSYM')":CHK "${USESUSYM/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_USEGLOBSUSYM!$DESC_USEGLOBSUSYM ('USEGLOBSUSYM')":CHK "${USEGLOBSUSYM/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_FIXSYMLINKS!$DESC_FIXSYMLINKS ('FIXSYMLINKS')":CHK "${FIXSYMLINKS/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_UNSYMLINK!$DESC_UNSYMLINK ('UNSYMLINK')":CHK "${UNSYMLINK/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_BACKUPSTEAMUSER!$DESC_BACKUPSTEAMUSER ('BACKUPSTEAMUSER')":CHK "${BACKUPSTEAMUSER/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_RESTORESTEAMUSER!$DESC_RESTORESTEAMUSER ('RESTORESTEAMUSER')":CB "${RESTORESTEAMUSER/#-/ -}!$NON!ask-always!ask-if-dst-has-no-backup-timestamp!ask-if-unsure!restore-always!restore-if-backup-timestamp-is-newer!restore-if-dst-has-no-backup-timestamp!restore-if-dst-is-empty" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_CLEANPROTONTEMP!$DESC_CLEANPROTONTEMP ('CLEANPROTONTEMP')":CHK "${CLEANPROTONTEMP/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
@@ -7006,8 +7014,8 @@ function checkNetMonLaunch {
 function checkXliveless {
 	if [ -n "$NOGFWL" ]; then
 		if [ "$NOGFWL" -eq 1 ]; then
-			rm -rf "$GPFX/drive_c/Program Files (x86)/Microsoft Games for Windows - LIVE"
-			rm -rf "$GPFX/drive_c/Program Files/Common Files/Microsoft Shared/Windows Live"
+			rm -rf "$GPFX/$DRC/Program Files (x86)/Microsoft Games for Windows - LIVE"
+			rm -rf "$GPFX/$DRC/Program Files/Common Files/Microsoft Shared/Windows Live"
 			# option for USEWINE probably not really required
 			WLID="WLIDSvcM.exe"
 			if "$PGREP" "$WLID" >/dev/null; then
@@ -8946,7 +8954,7 @@ function installCheatEngine {
 		elif [ -f "$RUNWINE" ]; then
 			CEPFX="$STLCEDIR/wineprefix"
 			mkProjDir "$CEPFX" 1
-			CEINSTDIR="$CEPFX/drive_c/Program Files/${CE} $CHEATENGINEVERSION"
+			CEINSTDIR="$CEPFX/$DRC/Program Files/${CE} $CHEATENGINEVERSION"
 			writelog "INFO" "${FUNCNAME[0]} - Installing '$CEDLDIR/$CESET' into '$CEPFX' using '$RUNWINE'"
 			notiShow "$(strFix "$NOTY_INSTCE" "$CESET")"
 			WINE="$RUNWINE" WINEARCH=win64 WINEDEBUG="$STLWINEDEBUG" WINEPREFIX="$CEPFX" "$RUNWINE" "$CEDLDIR/$CESET" "/VERYSILENT"
@@ -10185,7 +10193,7 @@ function checkVortex {
 				writelog "INFO" "${FUNCNAME[0]} - VORTEXEXE '$VORTEXEXE' exists"
 
 				# creating some required directories in VORTEXPFX:
-				SteamAppsCommonRelative="drive_c/Program Files (x86)/Steam/$SAC"
+				SteamAppsCommonRelative="$DRC/Program Files (x86)/Steam/$SAC"
 				VortexSteamAppsCommon="$VORTEXPFX/$SteamAppsCommonRelative"
 
 				writelog "INFO" "${FUNCNAME[0]} - Creating subdirectories in '$VORTEXPFX' if missing"
@@ -11214,6 +11222,92 @@ function checkPlayTime {
 	rm "$WASSTESTA" 2>/dev/null
 }
 
+function fixSymlinks {
+	if [ "$FIXSYMLINKS" -eq 1 ]; then
+		if [ ! -f "$RUNPROTON" ]; then
+			writelog "SKIP" "${FUNCNAME[0]} - Fixing Symlinks is enabled, but RUNPROTON '$RUNPROTON' does not exist"
+		else
+			LRUNPROTDIR="${RUNPROTON%/*}"
+			ORUNPROTDIR="$(readlink -f "$LRUNPROTDIR")"
+			writelog "INFO" "${FUNCNAME[0]} - Starting Symlink Fix as requested"
+
+			# the loop needs >1 second even without updating any symlinks and might need much longer with many syminks to be recreated
+			# maybe worth to create a parsable checkfile to skip it on the next run?
+			while read -r fixme; do
+				SYML="$(awk -F ';' '{print $1}' <<< "$fixme")"
+				OFIL="$(awk -F ';' '{print $2}' <<< "$fixme")"
+
+				# make sure the found result is correct
+				if [ "$(readlink -f "${SYML//\"}")" == "$(readlink -f "${OFIL//\"}")" ]; then #XXXXXXXXX
+					OFIA="${OFIL//\"}"
+					OFIB="${OFIA##*/files/}"
+					OFIC="${OFIB//\/x86_64-windows}"
+					OFID="${OFIC//\/i386-windows}"
+					OOUT="${OFID##*/dist/}"
+					
+					if [ -n "$OOUT" ] && [ "$OOUT" != "" ]; then
+						if [ -d "$LRUNPROTDIR/files" ]; then
+							NFIL="$LRUNPROTDIR/files/$OOUT"
+						elif [ -d "$LRUNPROTDIR/dist" ]; then
+							NFIL="$LRUNPROTDIR/dist/$OOUT"
+						else
+							writelog "SKIP" "${FUNCNAME[0]} - No 'files' or 'dist' dir found in '$LRUNPROTDIR'"
+						fi
+
+						unset NEWFILE
+						if [ -f "$NFIL" ]; then
+							NEWFILE="$NFIL"
+						elif [ -f "${NFIL//lib64\/wine/lib64\/wine\/x86_64-windows}" ]; then
+							NEWFILE="${NFIL//lib64\/wine/lib64\/wine\/x86_64-windows}"
+						elif [ -f "${NFIL//lib\/wine/lib\/wine\/i386-windows}" ]; then
+							NEWFILE="${NFIL//lib\/wine/lib\/wine\/i386-windows}"
+						else
+							writelog "SKIP" "${FUNCNAME[0]} - No equivalent file found for '$OOUT' in '$LRUNPROTDIR'" # collect in generic nofile/${PROTONVERSION}.txt file to skip early?
+						fi
+
+						if [ -f "$NEWFILE" ]; then
+							writelog "INFO" "${FUNCNAME[0]} - Symlink '${SYML//\"}' points to '${OFIL//\"}', but '$NEWFILE' would be correct - fixing:"
+							rm "${SYML//\"}"
+							writelog "INFO" "${FUNCNAME[0]} - 'ln -s \"$NEWFILE\" \"${SYML//\"}\"'"
+							ln -s "$NEWFILE" "${SYML//\"}"
+						fi
+					fi
+				else
+					writelog "SKIP" "${FUNCNAME[0]} - '${SYML//\"}' does not point to '${OFIL//\"}' but to '$(readlink -f "${SYML//\"}")' - Skipping"
+				fi
+			done <<< "$(find "${GPFX}/${DRC}" -type l -exec echo \"{}\" \; -exec readlink -v {} \; | grep -v "$LRUNPROTDIR\|$ORUNPROTDIR\|$STUS" | grep -iB1 "Proton" | grep -v "^\-\-" | sed 'N;s/\n/;\"/' | sed 's/$/\"/')"
+			writelog "INFO" "${FUNCNAME[0]} - Stop Symlink Fix"
+		fi
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - Fixing Symlinks is not enabled"
+	fi
+}
+
+function unSymlink {
+	if [ "$UNSYMLINK" -eq 1 ]; then
+			LRUNPROTDIR="${RUNPROTON%/*}"
+			ORUNPROTDIR="$(readlink -f "$LRUNPROTDIR")"
+			writelog "INFO" "${FUNCNAME[0]} - Starting unsymlinking as requested - might needs some time, depending on the symlink count"
+
+			while read -r unsym; do
+				SYML="$(awk -F ';' '{print $1}' <<< "$unsym")"
+				OFIL="$(awk -F ';' '{print $2}' <<< "$unsym")"
+				mv "${SYML//\"}" "${SYML//\"}_OLD"
+				cp "${OFIL//\"}" "${SYML//\"}"
+				if [ -f "${SYML//\"}" ]; then
+					rm "${SYML//\"}_OLD"
+				else
+					writelog "SKIP" "${FUNCNAME[0]} - Copying to '${SYML//\"}' failed - reverting symlink"
+					mv "${SYML//\"}_OLD" "${SYML//\"}"
+				fi
+			done <<< "$(find "${GPFX}/${DRC}" -type l -exec echo \"{}\" \; -exec readlink -v {} \; | grep -iB1 "Proton" | grep -v "^\-\-" | sed 'N;s/\n/;\"/' | sed 's/$/\"/')"
+			writelog "INFO" "${FUNCNAME[0]} - Stop Unsymlinking"
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - Unsymlinking is not enabled"
+	fi
+}
+
+
 function startGame {
 	#kind of works, but should be optimized:
 #	emptyVars "S"  # unset some internal variables before the game starts
@@ -11278,7 +11372,7 @@ function startGame {
 			echo "$(date) - $GN ($AID) - USEREAP='$USEREAP'; USESLR=$USESLR';OVERRIDEPROTON='$OVERRIDEPROTON'"
 			echo "$(date) - $GN ($AID) - FINAL LAUNCH RUNCMD '${RUNCMD[*]}'"
 			echo "$(date) - $GN ($AID) - ======================"
-		} >> "/tmp/$PROGCMD-startmode-DEBUG-XXXXXXXXXXX"
+		} >> "/tmp/$PROGCMD-startmode-DEBUG-XXXXXXXXX"
 	fi
 	
 	if [ "$HAVESCTP" -eq 1 ]; then
@@ -11844,7 +11938,13 @@ function launchSteamGame {
 					fi
 				fi
 
+				# the last chance to set the Proton version before starting the game,
 				setRunProtonFromUseProton
+
+				# so fixing outdated symlinks if requested
+				fixSymlinks
+				# and/or unsymlink any proton symlink found
+				unSymlink
 
 				if [ "$HAVEINPROTON" -eq 1 ] && [ "${INPROTCMD[*]}" == "$RUNPROTON" ]; then
 					writelog "INFO" "${FUNCNAME[0]} - Command line proton '${INPROTCMD[*]}' is identical to RUNPROTON '$RUNPROTON' - nothing to change"
@@ -12005,14 +12105,20 @@ function setRunProtonFromUseProton {
 		NRUNPROTON="$(PROTPATH "$USEPROTON")"
 
 		if [ -n "$RUNPROTON" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Setting ORUNPROTON to '$RUNPROTON'"
 			ORUNPROTON="$RUNPROTON"
 		fi
 
 		if [ -n "$ORUNPROTON" ] && [ "$ORUNPROTON" == "$NRUNPROTON" ]; then
 			writelog "SKIP" "${FUNCNAME[0]} - RUNPROTON '$RUNPROTON' hasn't changed"
 		elif [ -n "$NRUNPROTON" ]; then
-			writelog "SKIP" "${FUNCNAME[0]} - Updating RUNPROTON for USEPROTON '$USEPROTON' from '$ORUNPROTON' to '$NRUNPROTON'"
+			if [ -z "$ORUNPROTON" ] || [ "$ORUNPROTON" == "" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Initially setting RUNPROTON for USEPROTON '$USEPROTON' to '$NRUNPROTON'"
+			else
+				writelog "INFO" "${FUNCNAME[0]} - Updating RUNPROTON for USEPROTON '$USEPROTON' from '$ORUNPROTON' to '$NRUNPROTON'"
+			fi
 			RUNPROTON="$NRUNPROTON"
+			writelog "INFO" "${FUNCNAME[0]} - Set RUNPROTON to '$RUNPROTON'"
 		fi
 	fi
 }
@@ -12038,6 +12144,8 @@ function checkStartMode {
 						writelog "INFO" "${FUNCNAME[0]} - Override Proton is disabled, when using stl as Steam Launch Option, so using it as-is: '${INPROTCMD[*]}'"
 						writelog "INFO" "${FUNCNAME[0]} - (ignoring USEPROTON '$USEPROTON' from game config)"
 						RUNPROTON="${INPROTCMD[*]}"
+						writelog "INFO" "${FUNCNAME[0]} - Set RUNPROTON to '$RUNPROTON'"
+
 						USEPROTON="$INPROTV"
 						writelog "INFO" "${FUNCNAME[0]} - Set USEPROTON to '$USEPROTON'"
 #					else
@@ -14293,7 +14401,7 @@ function main {
 				setGameVars "$@"
 
 				if [ "$ISGAME" -eq 2 ] || [ "$ISGAME" -eq 3 ]; then
- 					prepareLaunch
+					prepareLaunch
 				else
 					writelog "INFO" "${FUNCNAME[0]} - Unknown parameter '${ORGGCMD[*]}'" "E"
 				fi
