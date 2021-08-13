@@ -180,9 +180,8 @@ Programs needed for optional external features *(no special order)*:
 - [GameScope](https://github.com/frostworx/steamtinkerlaunch/wiki/GameScope)
 - innoextract *(currently only used to extract the [Cheat Engine](https://github.com/frostworx/steamtinkerlaunch/wiki/Cheat-Engine) setup exe - with wine as fallback)*
 - lsusb *(for an optional [SBS-VR](https://github.com/frostworx/steamtinkerlaunch/wiki/Side-by-Side-VR) check if a VR HMD was found)*
-- jq *(used to extract game names from the steam api and for receiving the Lutris wine list)*
+- jq *(used to extract game names from the steam api)*
 - convert, identify from imagemagick *(currently used to scale a custom installed game header picture and for converting [Game Icons](https://github.com/frostworx/steamtinkerlaunch/wiki/Game-Icons) for [Game-Desktop-Files](https://github.com/frostworx/steamtinkerlaunch/wiki/Game-Desktop-Files))*
-- [appinfo-vdf](https://github.com/frostworx/steamtinkerlaunch/wiki/Appinfo) for converting the binary appinfo.vdf into a parsable format
 - rsync *(for backup support)*
 - openssl *(currently only used to generate a random hex string for [Non-Steam Game](https://github.com/frostworx/steamtinkerlaunch/wiki/Add-Non-Steam-Game) `appid`)*
 

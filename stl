@@ -49,7 +49,6 @@ IDENTIFY="identify"
 RSYNC="rsync"
 OSSL="openssl"
 CONTY="conty.sh"
-APPINFO="appinfo-vdf"
 
 STARTDEBUG=0
 HAVEOSSL=1
@@ -207,9 +206,7 @@ SGDBSTYOPTS="alternate,blurred,white_logo,material,no_logo"
 STLGAMES="$STLCFGDIR/games"
 STLGDESKD="$STLGAMES/desktop"
 STLIDFD="$STLGAMES/desktopfiles"
-STLAPPINFODIR="$STLGAMES/${APPINFO%-vdf}"
-STLAPPINFOIDDIR="$STLAPPINFODIR/id"
-STLAIVDF="$STLAPPINFODIR/$APPINFO.txt"
+STLAPPINFOIDDIR="$STLGAMES/appinfo"
 STLGHEADD="$STLGAMES/header"
 STLGSAD="$STLGAMES/standalone"
 STLGICONS="$STLGAMES/icons"
@@ -454,11 +451,14 @@ function getGameName {
 		writelog "INFO" "${FUNCNAME[0]} - Found Game Name '$GNRAW' in '$STLGAMEDIRID/$1.conf'"
 	elif grep -q "_${1}\." <<< "$(listAppManifests)" ; then
 		APPMA="$(grep "_${1}\." <<< "$(listAppManifests)")"
-		if [ -n "$APPMA" ]; then
+		if [ -f "$APPMA" ]; then
 			GNRAW1="$(grep "\"name\"" "$APPMA" | gawk -F '"name"' '{print $NF}')"
 			GNRAW="$(gawk '{$1=$1};1' <<< "$GNRAW1")"
 			writelog "INFO" "${FUNCNAME[0]} - Found Game Name '$GNRAW' in '$APPMA'"
 		fi
+	elif [ -f "$STLAPPINFOIDDIR/${1}.txt" ]; then
+		GNRAW="$(grep "^name" -A1 -m1 "$STLAPPINFOIDDIR/${1}.txt" | tail -n1)"
+		writelog "INFO" "${FUNCNAME[0]} - Found Game Name '$GNRAW' in '$STLAPPINFOIDDIR/${1}.txt'"
 	else
 		if [ "$DLGAMEDATA" -eq 1 ]; then
 			APIURL="https://api.steampowered.com/ISteamApps/GetAppList/v2"
@@ -494,7 +494,7 @@ function writeDesktopFile {
 		writelog "SKIP" "${FUNCNAME[0]} - $DESTDTF already exists"
 	else
 		getGameName "$1"
-	
+
 		if [ -n "$GAMENAME" ] && [ "$GAMENAME" != "$NON" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Creating $DESTDTF" "E"
 
@@ -558,24 +558,42 @@ function createDesktopIconFile {
 	fi
 }
 
-function extractAppInfo {
-	MAXAGE=1440
-	if [ ! -f "$STLAIVDF" ] || test "$(find "$STLAIVDF" -mmin +"$MAXAGE")"; then
-		if  [ -x "$(command -v "$APPINFO" 2>/dev/null)" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Extracting data from '$AIVDF' to '$STLAIVDF' using '$APPINFO'"
-			"$APPINFO" print "$AIVDF" > "$STLAIVDF"
+function getRawAppIDInfo {
+	AIVDF="$HSS/appcache/appinfo.vdf"
+	AIIDRAW="$STLAPPINFOIDDIR/${1}.txt"
+
+	if [ -s "$AIIDRAW" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Already have raw appinfo file for '$1' in '$AIIDRAW'"
+	else
+		if [ ! -s "$AIIDRAW" ]; then
+			rm "$AIIDRAW" 2>/dev/null
+		fi
+
+		if [ -f "$AIVDF" ]; then
+			SEARCHID="$1"
+		#		echo "putt 2600"
+			HXTST="$(printf '%x\n' "$SEARCHID" | fold -w2 | tail -n1)"
+			if [ "${#HXTST}" -eq 1 ]; then
+				SHEX1="$(printf '0%x\n' "$SEARCHID" | fold -w2 | tac)";
+			else
+				SHEX1="$(printf '%x\n' "$SEARCHID" | fold -w2 | tac)";
+			fi
+
+			unset SHEXOUT
+			while read -r line; do
+				SHEXOUT="$SHEXOUT\x${line}"
+			done <<< "${SHEX1^^}"
+#			echo "SHEXOUT $SHEXOUT"
+			sed "s/\x61\x70\x70\x69\x64\x00${SHEXOUT}\x00\x00/APPID$1/g" "$AIVDF" | strings | sed -n "/APPID$1/,/^appid/p" > "$AIIDRAW"
 		fi
 	fi
 }
 
-function getAppIDInfo {
-	SEARCHID="$1"
-	APPINFIDFILE="$STLAPPINFOIDDIR/${SEARCHID}.txt"
-	if [ ! -f "$APPINFIDFILE" ] && [ -f "$STLAIVDF" ]; then
-		sed -n "/^app_id: $SEARCHID$/,/^#/p" "$STLAIVDF" > "$APPINFIDFILE"
-	fi	
-	if [ -f "$APPINFIDFILE" ]; then
-		cat "$APPINFIDFILE"
+function getIconData {
+	getRawAppIDInfo "$2"
+	AIIDRAW="$STLAPPINFOIDDIR/${2}.txt"
+	if [ -f "$AIIDRAW" ]; then
+		grep -A1 -m1 "^$1" "$AIIDRAW" | tail -n1
 	fi
 }
 
@@ -604,35 +622,13 @@ function getGameIcon {
 		fi	
 	}
 
-	function getIconData {
-		SEARCHICO="$1"
-
-		if  [ -x "$(command -v "$APPINFO" 2>/dev/null)" ]; then
-			extractAppInfo
-			if grep -q "$SEARCHICO" <<< "$(getAppIDInfo "$AID")"; then
-				grep "$SEARCHICO" <<< "$(getAppIDInfo "$AID")" | gawk -F ': ' '{print$2}' | grep -oP '"\K[^"]+' | head -n1
-			fi
-		else
-			writelog "WARN" "${FUNCNAME[0]} - Command '$APPINFO' not found - using basic, inacurate search command instead - feel free to fix/improve"
-			if [ -n "$GAMEEXE" ] && [ "$GAMEEXE" != "$NON" ]; then
-				SPAT="$GAMENAME"
-			else
-				writelog "SKIP" "${FUNCNAME[0]} - Don't have the current GAMEEXE $GAMEEXE - trying to get it from the '$PROGCMD' metadata" "E"
-				SPATRAW="$(getExeFromID "$AID")"
-				SPATW1="${SPATRAW//\"}"
-				SPAT="${SPATW1//.exe}.exe"
-			fi
-			strings "$AIVDF" | tac | sed -n  "/^$SPAT/,/^$SEARCHICO/p" | tail -n2 | head -n1
-		fi
-	}
-
 	function getIco {
 		WANTGICO="$STLGICO/${AID}.ico"
 		if [ -f "$WANTGICO" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Already have game ico '$WANTGICO'" "E"
 			IcotoPng
 		else
-			ICONAME="$(getIconData clienticon)"
+			ICONAME="$(getIconData clienticon "$AID")"
 			if [ -n "$ICONAME" ]; then
 				ICOPATH="$ICODIR/${ICONAME}.ico"
 				if [ -f "$ICOPATH" ]; then
@@ -643,7 +639,7 @@ function getGameIcon {
 					writelog "SKIP" "${FUNCNAME[0]} - Absolute path for Steam ico '$ICONAME' not valid - skipping" "E"
 				fi
 			else
-				writelog "SKIP" "${FUNCNAME[0]} - Could not find the icon name for '$AID' in '$AIVDF' - skipping" "E"
+				writelog "SKIP" "${FUNCNAME[0]} - Could not find the icon name for '$AID' in appinfo - skipping" "E"
 			fi
 		fi		
 	}
@@ -668,38 +664,33 @@ function getGameIcon {
 		if [ -f "$WANTGPNG" ]; then
 			writelog "Info" "${FUNCNAME[0]} - Already have game icon png '$WANTGPNG' - nothing to to" "E"
 		else
-			AIVDF="$HSS/appcache/appinfo.vdf"
 			ICODIR="$HSS/steam/games"
 			
 			if [ ! -d "$ICODIR" ]; then
 				writelog "SKIP" "${FUNCNAME[0]} - Steam ico directory not found - skipping" "E"
 			else
-				if [ -f "$AIVDF" ]; then
-					WANTGZIP="$STLGZIP/${AID}.zip"
-					if [ -f "$WANTGZIP" ]; then
-						writelog "INFO" "${FUNCNAME[0]} - Already have game icon zip '$WANTGZIP' - extracting" "E"
-						extractGZip "$WANTGZIP" "$WANTGPNG"
-					else
-						writelog "INFO" "${FUNCNAME[0]} - Looking for icon hash in '$AIVDF'"
-						
-						LICONZIP="$(getIconData linuxclienticon)"
-						if [ -n "$LICONZIP" ]; then
-							LICONPATH="$ICODIR/${LICONZIP}.zip"
-							if [ -f "$LICONPATH" ]; then
-								writelog "INFO" "${FUNCNAME[0]} - Found icon zip for '$AID' under '$LICONPATH'" "E"
-								cp "$LICONPATH" "$WANTGZIP"
-								extractGZip "$WANTGZIP" "$WANTGPNG"
-							else
-								writelog "INFO" "${FUNCNAME[0]} - Absolute path for Steam icon zip '$LICONZIP' not valid - trying to find ico instead" "E"
-								getIco
-							fi
+				WANTGZIP="$STLGZIP/${AID}.zip"
+				if [ -f "$WANTGZIP" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Already have game icon zip '$WANTGZIP' - extracting" "E"
+					extractGZip "$WANTGZIP" "$WANTGPNG"
+				else
+					writelog "INFO" "${FUNCNAME[0]} - Looking for icon hash in appinfo"
+					
+					LICONZIP="$(getIconData linuxclienticon "$AID")"
+					if [ -n "$LICONZIP" ]; then
+						LICONPATH="$ICODIR/${LICONZIP}.zip"
+						if [ -f "$LICONPATH" ]; then
+							writelog "INFO" "${FUNCNAME[0]} - Found icon zip for '$AID' under '$LICONPATH'" "E"
+							cp "$LICONPATH" "$WANTGZIP"
+							extractGZip "$WANTGZIP" "$WANTGPNG"
 						else
-							writelog "SKIP" "${FUNCNAME[0]} - Could not find the icon zip for '$AID' in '$AIVDF' - trying to find ico instead" "E"
+							writelog "INFO" "${FUNCNAME[0]} - Absolute path for Steam icon zip '$LICONZIP' not valid - trying to find ico instead" "E"
 							getIco
 						fi
+					else
+						writelog "SKIP" "${FUNCNAME[0]} - Could not find the icon zip for '$AID' in appinfo - trying to find ico instead" "E"
+						getIco
 					fi
-				else
-					writelog "SKIP" "${FUNCNAME[0]} - Could not find '$AIVDF' - skipping" "E"
 				fi
 			fi
 		fi
@@ -885,7 +876,7 @@ function listAppManifests {
 	if [ -f "$CFGVDF" ] || [ -f "$LFVDF" ]; then
 		while read -r BIF; do
 			findAppMa "${BIF//\"/}/$SA"
-		done <<< "$(grep "BaseInstallFolder\|\"path\"" "$CFGVDF" "$LFVDF" 2>/dev/null | gawk '{print $3}')"
+		done <<< "$(grep "BaseInstallFolder\|\"path\"" "$CFGVDF" "$LFVDF" 2>/dev/null | gawk '{print $3}' | sort -u)"
 	else
 		writelog "SKIP" "${FUNCNAME[0]} - Neither file CFGVDF '$CFGVDF' nor file LFVDF '$LFVDF' found - this should not happen! - skipping"
 	fi
@@ -1550,7 +1541,7 @@ function getAvailableProtonVersions {
 								if [ -f "$PROTBIN" ]; then
 									fillProtonCSV
 								fi
-							done <<< "$(while read -r SLP; do if [ -d "${SLP//\"/}/$SAC" ]; then find "${SLP//\"/}/$SAC" -mindepth 1 -maxdepth 1 -type d -name "Proton*"; fi; done <<< "$(grep "BaseInstallFolder\|\"path\"" "$CFGVDF" "$LFVDF" 2>/dev/null | gawk '{print $3}')")"
+							done <<< "$(while read -r SLP; do if [ -d "${SLP//\"/}/$SAC" ]; then find "${SLP//\"/}/$SAC" -mindepth 1 -maxdepth 1 -type d -name "Proton*"; fi; done <<< "$(grep "BaseInstallFolder\|\"path\"" "$CFGVDF" "$LFVDF" 2>/dev/null | gawk '{print $3}' | sort -u)")"
 						fi
 					else
 						writelog "SKIP" "${FUNCNAME[0]} - Neither file CFGVDF '$CFGVDF' nor file LFVDF '$LFVDF' found - this should not happen! - skipping"
@@ -6766,63 +6757,62 @@ function createGameCfg {
 
 # override game configs with a tweak config if available:
 function checkTweakLaunch {
-		if [ -z "$TWEAKCMD" ]; then
-			TWEAKCMD=""
+	if [ -z "$TWEAKCMD" ]; then
+		TWEAKCMD=""
+	fi
+
+	if [ -f "$GLOBALTWEAKCFG" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Using overrides found in '$GLOBALTWEAKCFG'"
+		notiShow "$(strFix "$NOTY_GLOBALTWEAK" "$GLOBALTWEAKCFG")"
+		loadCfg "$GLOBALTWEAKCFG"
+	fi
+
+	# then user config - (overriding the global one)
+	if [ -f "$TWEAKCFG" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Using overrides found in '$TWEAKCFG'"
+		loadCfg "$TWEAKCFG"
+	fi
+
+	if [ -n "$TWEAKCMD" ]; then
+		# tweak command defined
+		if [ -f "$TWEAKCMD" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Found TWEAKCMD '$TWEAKCMD'"
+			RUNTWEAK="$TWEAKCMD"
+		elif [ -f "$TWEAKCMDDIR/$TWEAKCMD" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Found TWEAKCMD '$TWEAKCMD' in '$TWEAKCMDDIR'"
+			RUNTWEAK="$TWEAKCMDDIR/$TWEAKCMD"
+		elif [ -f "$GFD/$TWEAKCMD" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Found TWEAKCMD '$TWEAKCMD' in '$GFD'"
+			RUNTWEAK="$GFD/$TWEAKCMD"
 		fi
+		# tweak command found
 
-		if [ -f "$GLOBALTWEAKCFG" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Using overrides found in '$GLOBALTWEAKCFG'"
-			notiShow "$(strFix "$NOTY_GLOBALTWEAK" "$GLOBALTWEAKCFG")"
-			loadCfg "$GLOBALTWEAKCFG"
-		fi
+		if [ -n "$RUNTWEAK" ]; then
 
-		# then user config - (overriding the global one)
-		if [ -f "$TWEAKCFG" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Using overrides found in '$TWEAKCFG'"
-			loadCfg "$TWEAKCFG"
-		fi
-
-		if [ -n "$TWEAKCMD" ]; then
-			# tweak command defined
-			if [ -f "$TWEAKCMD" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Found TWEAKCMD '$TWEAKCMD'"
-				RUNTWEAK="$TWEAKCMD"
-			elif [ -f "$TWEAKCMDDIR/$TWEAKCMD" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Found TWEAKCMD '$TWEAKCMD' in '$TWEAKCMDDIR'"
-				RUNTWEAK="$TWEAKCMDDIR/$TWEAKCMD"
-			elif [ -f "$GFD/$TWEAKCMD" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Found TWEAKCMD '$TWEAKCMD' in '$GFD'"
-				RUNTWEAK="$GFD/$TWEAKCMD"
-			fi
-			# tweak command found
-
-			if [ -n "$RUNTWEAK" ]; then
-
-				if grep -q "^TWEAKFILE" "$RUNTWEAK"; then
-					# dependency for tweak command defined
-					writelog "INFO" "${FUNCNAME[0]} - TWEAKFILE configured in $RUNTWEAK as dependency - checking if the file exists in gamedir - relative to the gameexe"
-					TWEAKFILE="$(grep "^TWEAKFILE" "$RUNTWEAK" | gawk -F 'TWEAKFILE=' '{print $2}')"
-					if [ -f "$EFD/$TWEAKFILE" ]; then
-						# dependency for tweak command found
-						writelog "INFO" "${FUNCNAME[0]} - Found tweakcmd dependency in $EFD/$TWEAKFILE - starting the tweakcmd now"
-						# start tweak command
-						"$RUNTWEAK"
-						writelog "INFO" "${FUNCNAME[0]} - $RUNTWEAK finished"
-					else
-						# dependency for tweak command not found
-						writelog "SKIP" "${FUNCNAME[0]} - Configured TWEAKFILE $TWEAKFILE not found - skipping launch of the tweakcmd $TWEAKCMD"
-					fi
-				else
+			if grep -q "^TWEAKFILE" "$RUNTWEAK"; then
+				# dependency for tweak command defined
+				writelog "INFO" "${FUNCNAME[0]} - TWEAKFILE configured in $RUNTWEAK as dependency - checking if the file exists in gamedir - relative to the gameexe"
+				TWEAKFILE="$(grep "^TWEAKFILE" "$RUNTWEAK" | gawk -F 'TWEAKFILE=' '{print $2}')"
+				if [ -f "$EFD/$TWEAKFILE" ]; then
+					# dependency for tweak command found
+					writelog "INFO" "${FUNCNAME[0]} - Found tweakcmd dependency in $EFD/$TWEAKFILE - starting the tweakcmd now"
 					# start tweak command
-					writelog "INFO" "${FUNCNAME[0]} - No TWEAKFILE configured in $RUNTWEAK as dependency - starting the tweakcmd regularly now"
 					"$RUNTWEAK"
 					writelog "INFO" "${FUNCNAME[0]} - $RUNTWEAK finished"
+				else
+					# dependency for tweak command not found
+					writelog "SKIP" "${FUNCNAME[0]} - Configured TWEAKFILE $TWEAKFILE not found - skipping launch of the tweakcmd $TWEAKCMD"
 				fi
 			else
-				writelog "SKIP" "${FUNCNAME[0]} - Configured TWEAKCMD $TWEAKCMD not found - can't start it"
+				# start tweak command
+				writelog "INFO" "${FUNCNAME[0]} - No TWEAKFILE configured in $RUNTWEAK as dependency - starting the tweakcmd regularly now"
+				"$RUNTWEAK"
+				writelog "INFO" "${FUNCNAME[0]} - $RUNTWEAK finished"
 			fi
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - Configured TWEAKCMD $TWEAKCMD not found - can't start it"
 		fi
-#	fi
+	fi
 }
 
 function genDefIcon {
@@ -12263,6 +12253,7 @@ function howto {
 	echo "                                       1=on the desktop"
 	echo "                                       2=for the application menu"
 	echo "                                       3=for desktop and application menu"
+	echo "    createappinfo|cai <id>           Create raw appinfo for <id> or 'all'"
 	echo "    createfirstinstall|cfi <gameid>  Open gui to create a Steam First Time Setup" 
 	echo "    <a|c|r|file> (see wiki)            file for game <gameid>"
 	echo "    dlcustomproton|dcp <url|l>       Download/install custom Proton"
@@ -12391,15 +12382,21 @@ function commandline {
 		reCreateCompatdata "$1" "$USEID" "$3"
 	elif  [ "$1" == "createdesktopicon" ] || [ "$1" == "cdi" ]; then
 		if [ "$2" == "all" ]; then
-			extractAppInfo
-			if [ -f "$STLAIVDF" ]; then
-				while read -r CATAID; do
-					"$0" cdi "$CATAID" "$3"
-				done <<< "$(listInstalledGameIDs)"
-			fi
+			while read -r CATAID; do
+				"$0" cdi "$CATAID" "$3"
+			done <<< "$(listInstalledGameIDs)"
 		else
 			FUSEID "$2"
 			createDesktopIconFile "$USEID" "$3"
+		fi
+	elif  [ "$1" == "createappinfo" ] || [ "$1" == "cai" ]; then
+		if [ "$2" == "all" ]; then
+			while read -r CATAID; do
+				"$0" cai "$CATAID"
+			done <<< "$(listInstalledGameIDs)"
+		else
+			FUSEID "$2"
+			getRawAppIDInfo "$USEID"
 		fi
 	elif  [ "$1" == "createfirstinstall" ] || [ "$1" == "cfi" ]; then
 		FUSEID "$2"
