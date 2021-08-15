@@ -5,7 +5,7 @@
 
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v6.15"
+PROGVERS="v6.15.1"
 PROGCMD="${0##*/}"
 GHURL="https://github.com"
 PROJECTPAGE="$GHURL/frostworx/steamtinkerlaunch"
@@ -196,6 +196,10 @@ STLVORTEXDIR="$STLCFGDIR/$VTX"
 VORTEXDLDIR="$STLDLDIR/Vortex"
 PLACEHOLDERAID="31337"
 PLACEHOLDERGN="Placeholder"
+DPRS="Depressurizer"
+DPRSDLDIR="$STLDLDIR/${DPRS,}"
+PFX86="Program Files (x86)"
+PFX86S="$PFX86/Steam"
 
 SOMEPOPULARWINEPAKS="dotnet4 quartz xact"
 SOMEWINEDEBUGOPTIONS="-all,+steam,+vrclient,+vulkan"
@@ -297,9 +301,14 @@ STLEARLYPROTCONF="$STLPROTDIR/earlyproton.conf"
 PROCU="proton/custom"
 CTVDF="compatibilitytool.vdf"
 SCV="sharedconfig.vdf"
+AAVDF="appcache/appinfo.vdf"
+APVDF="appcache/packageinfo.vdf"
+USDA="userdata"
 SCVDF="shortcuts.vdf"
 SRSCV="7/remote/$SCV"
 LCV="localconfig.vdf"
+SCSHVDF="screenshots.vdf"
+SCRSH="760/$SCSHVDF"
 LASTRUN="$LOGDIR/lastrun.txt"																# some variables from the last run which might be reused
 SAIT="steam_appid.txt"
 RS_D3D47_DEST="d3dcompiler_47.dll"
@@ -356,11 +365,13 @@ function setSteamPath {
 
 function setSteamPaths {
 	setSteamPath "SROOT"
-	setSteamPath "SUSDA" "userdata"
+	setSteamPath "SUSDA" "$USDA"
 	setSteamPath "DEFSTEAMAPPS" "$SA"
 	setSteamPath "DEFSTEAMAPPSCOMMON" "$SAC"
 	setSteamPath "CFGVDF" "config/config.vdf"
 	setSteamPath "LFVDF" "config/libraryfolders.vdf"
+	setSteamPath "FAIVDF" "$AAVDF"
+	setSteamPath "PIVDF" "$APVDF"
 
 	if [ -z "$STEAM_COMPAT_CLIENT_INSTALL_PATH" ]; then
 		export STEAM_COMPAT_CLIENT_INSTALL_PATH="$SROOT"
@@ -559,7 +570,6 @@ function createDesktopIconFile {
 }
 
 function getRawAppIDInfo {
-	AIVDF="$HSS/appcache/appinfo.vdf"
 	AIIDRAW="$STLAPPINFOIDDIR/${1}.txt"
 
 	if [ -s "$AIIDRAW" ]; then
@@ -569,10 +579,10 @@ function getRawAppIDInfo {
 			rm "$AIIDRAW" 2>/dev/null
 		fi
 
-		if [ -f "$AIVDF" ]; then
+		if [ -f "$FAIVDF" ]; then
 			SEARCHID="$1"
-		#		echo "putt 2600"
 			HXTST="$(printf '%x\n' "$SEARCHID" | fold -w2 | tail -n1)"
+
 			if [ "${#HXTST}" -eq 1 ]; then
 				SHEX1="$(printf '0%x\n' "$SEARCHID" | fold -w2 | tac)";
 			else
@@ -583,8 +593,7 @@ function getRawAppIDInfo {
 			while read -r line; do
 				SHEXOUT="$SHEXOUT\x${line}"
 			done <<< "${SHEX1^^}"
-#			echo "SHEXOUT $SHEXOUT"
-			sed "s/\x61\x70\x70\x69\x64\x00${SHEXOUT}\x00\x00/APPID$1/g" "$AIVDF" | strings | sed -n "/APPID$1/,/^appid/p" > "$AIIDRAW"
+			sed "s/\x61\x70\x70\x69\x64\x00${SHEXOUT}\x00\x00/APPID$1/g" "$FAIVDF" | strings | sed -n "/APPID$1/,/^appid/p" > "$AIIDRAW"
 		fi
 	fi
 }
@@ -1613,6 +1622,7 @@ function setDefaultCfgValues {
 		if [ -z "$IGCSZIP" ]							; then	IGCSZIP="$GHURL/FransBouma/InjectableGenericCameraSystem/releases/download/IGCSInjector_102/IGCSInjector_v102.zip"; fi
 		if [ -z "$UUUURL" ]								; then	UUUURL="https://framedsc.github.io/GeneralGuides/universal_ue4_consoleunlocker.htm#downloading-the-uuu"; fi
 		if [ -z "$OVRFSRURL" ]							; then	OVRFSRURL="$GHURL/fholger/$OVFS/releases"; fi
+		if [ -z "$DPRSRELURL" ]							; then	DPRSRELURL="$GHURL/${DPRS}/${DPRS}/releases"; fi
 	}
 
 	function setDefaultCfgValuesglobal {
@@ -1700,6 +1710,10 @@ function setDefaultCfgValues {
 		if [ -z "$UPDATECONTY" ]						; then	UPDATECONTY="1"; fi
 		if [ -z "$LOGPLAYTIME" ]						; then	LOGPLAYTIME="1"; fi
 		if [ -z "$YAD" ]								; then	YAD="$("$WHICH" yad 2>/dev/null)"; fi
+		if [ -z "$DPRSCOMPDATA" ]						; then	DPRSCOMPDATA="$STLCFGDIR/${DPRS,}/compatdata"; fi
+		if [ -z "$USEDPRSPROTON" ]						; then	USEDPRSPROTON="$NON"; fi
+		if [ -z "$DPRSUSEVDFSYMLINKS" ]					; then	DPRSUSEVDFSYMLINKS="0"; fi
+		if [ -z "$DPRSPAUTOUP" ]						; then	DPRSPAUTOUP="0"; fi
 	}
 
 	function setDefaultCfgValuesdefault_template {
@@ -1868,6 +1882,8 @@ function saveCfg {
 			echo "CONTYRELURL=\"$CONTYRELURL\""
 			echo "## Mod Organizer 2 DL URL"
 			echo "MO2DLURL=\"$MO2DLURL\""
+			echo "## $DPRS DL URL"
+			echo "DPRSRELURL=\"$DPRSRELURL\""
 			} >> "$1"
 			#ENDsaveCfgurl
 		fi
@@ -2073,6 +2089,14 @@ function saveCfg {
 			echo "UPDATECONTY=\"$UPDATECONTY\""
 			echo "## $DESC_LOGPLAYTIME"
 			echo "LOGPLAYTIME=\"$LOGPLAYTIME\""
+			echo "## $DESC_DPRSCOMPDATA"
+			echo "DPRSCOMPDATA=\"$DPRSCOMPDATA\""
+			echo "## $DESC_USEDPRSPROTON"
+			echo "USEDPRSPROTON=\"$USEDPRSPROTON\""
+			echo "## $DESC_DPRSUSEVDFSYMLINKS"
+			echo "DPRSUSEVDFSYMLINKS=\"$DPRSUSEVDFSYMLINKS\""
+			echo "## $DESC_DPRSPAUTOUP"
+			echo "DPRSPAUTOUP=\"$DPRSPAUTOUP\""
 			} >> "$1"
 			#ENDsaveCfgglobal
 		fi
@@ -3367,6 +3391,7 @@ function TrayIconExports {
 	export -f TraySRC
 	export -f TrayUWT
 	export -f TrayLCS
+	export -f TrayDPRS
 }
 #ENDIEX
 
@@ -3436,7 +3461,12 @@ function openTrayIcon {
 			writelog "INFO" "${FUNCNAME[0]} - TrayIcon: Triggering Launch custom script"
 			"$TRAYCUSC"
 		}
-		
+
+		function TrayDPRS {
+			writelog "INFO" "${FUNCNAME[0]} - TrayIcon: Starting '$DPRS'"
+			"$PROGCMD" "dprs"
+		}
+	
 		TrayIconExports
 		
 		# actually open the actual trayIcon	
@@ -3448,7 +3478,8 @@ function openTrayIcon {
 		|$TRAY_PICKWINDOW,bash -c TrayPickWin \
 		|$TRAY_SRC,bash -c TraySRC \
 		|$TRAY_UWT,bash -c TrayUWT \
-		|$TRAY_LCS,bash -c TrayLCS" \
+		|$TRAY_LCS,bash -c TrayLCS
+		|$DPRS,bash -c TrayDPRS" \
 		--text="$TRAY_TOOLTIP" >/dev/null 2>/dev/null &
 		YADTRAYPID="$!"
 	fi
@@ -3756,6 +3787,10 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_CUSTCONTY!$DESC_CUSTCONTY ('CUSTCONTY')":FL "${CUSTCONTY/#-/ -}" `#CAT_Tools` `#MENU_GLOBAL` \
 --field="     $GUI_UPDATECONTY!$DESC_UPDATECONTY ('UPDATECONTY')":CHK "${UPDATECONTY/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_RUN_X64DBG!$DESC_RUN_X64DBG ('RUN_X64DBG')":CHK "${RUN_X64DBG/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_DPRSCOMPDATA!$DESC_DPRSCOMPDATA ('DPRSCOMPDATA')":DIR "${DPRSCOMPDATA/#-/ -}" `#CAT_Tools` `#SUB_Directories` `#MENU_GLOBAL` \
+--field="     $GUI_USEDPRSPROTON!$DESC_USEDPRSPROTON ('USEDPRSPROTON')":CB "${USEDPRSPROTON/#-/ -}!$PROTYADLIST" `#CAT_Tools` `#MENU_GLOBAL` \
+--field="     $GUI_DPRSUSEVDFSYMLINKS!$DESC_DPRSUSEVDFSYMLINKS ('DPRSUSEVDFSYMLINKS')":CHK "${DPRSUSEVDFSYMLINKS/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GLOBAL` \
+--field="     $GUI_DPRSPAUTOUP!$DESC_DPRSPAUTOUP ('DPRSPAUTOUP')":CHK "${DPRSPAUTOUP/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="$(spanFont "$GUI_OPTSURLS" "H")":LBL "SKIP" `#CAT_Urls` `#HEAD_Urls` `#MENU_URL` \
 --field="     $GUI_PROJECTPAGE!$(strFix "$DESC_PROJECTPAGE") ('PROJECTPAGE')" "${PROJECTPAGE/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="     $GUI_CP_PROTONTKG!$DESC_CP_PROTONTKG ('CP_PROTONTKG')" "${CP_PROTONTKG/#-/ -}" `#CAT_Urls` `#MENU_URL` \
@@ -3774,6 +3809,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_STEAMGRIDDBAPI!$DESC_STEAMGRIDDBAPI ('STEAMGRIDDBAPI')" "${STEAMGRIDDBAPI/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="     $GUI_CONTYRELURL!$DESC_CONTYRELURL ('CONTYRELURL')" "${CONTYRELURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="     $GUI_MO2DLURL!$DESC_MO2DLURL ('MO2DLURL')" "${MO2DLURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
+--field="     $GUI_DPRSRELURL!$DESC_DPRSRELURL ('DPRSRELURL')" "${DPRSRELURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="$(spanFont "$GUI_OPTSVR" "H")":LBL "SKIP" `#CAT_VR` `#HEAD_VR` `#MENU_GAME` `#MENU_GLOBAL`  \
 --field="     $GUI_SBSVRRS!$DESC_SBSVRRS ('SBSVRRS')":CHK "${SBSVRRS/#-/ -}" `#CAT_VR` `#SUB_Checkbox` `#SUB_ReShade` `#MENU_GAME` \
 --field="     $GUI_RUNSBSVR!$DESC_RUNSBSVR ('RUNSBSVR')":CHK "${RUNSBSVR/#-/ -}" `#CAT_VR` `#SUB_Checkbox` `#MENU_GAME` \
@@ -4383,7 +4419,7 @@ function checkEntryBlocklist {
 		# if validity check file differs - remove temporary menu files
 		if ! cmp -s "$STLMENUBLOCKCFG" "$STLMENUVALBLOCKCFG"; then
 			writelog "INFO" "${FUNCNAME[0]} - Removing temp menufiles in '$STLSHM'"
-			find "$MTEMP"  -maxdepth 1 -type f -name "*menu*" -exec rm {} \;
+			find "$MTEMP" -maxdepth 1 -type f -name "*menu*" -exec rm {} \;
 			cp "$STLMENUBLOCKCFG" "$STLMENUVALBLOCKCFG"
 		fi
 	fi
@@ -7016,7 +7052,7 @@ function checkNetMonLaunch {
 function checkXliveless {
 	if [ -n "$NOGFWL" ]; then
 		if [ "$NOGFWL" -eq 1 ]; then
-			rm -rf "$GPFX/$DRC/Program Files (x86)/Microsoft Games for Windows - LIVE"
+			rm -rf "$GPFX/$DRC/$PFX86/Microsoft Games for Windows - LIVE"
 			rm -rf "$GPFX/$DRC/Program Files/Common Files/Microsoft Shared/Windows Live"
 			# option for USEWINE probably not really required
 			WLID="WLIDSvcM.exe"
@@ -9284,14 +9320,8 @@ function dlLatestMO2 {
 
 function getLatestVortVer {
 	VSET="$VTX-setup"
-
-	if [ "$USEVORTEXPRERELEASE" -eq 1 ]; then
-		writelog "INFO" "${FUNCNAME[0]} - Search for latest Vortex Pre-Release"
-		VORTEXSETUP="$("$WGET" -q  "${VORTEXRELURL}" -O - | grep -m1 "$VSET" | grep -oE "${VSET}[^\"]+")"
-	else
-		writelog "INFO" "${FUNCNAME[0]} - Search for latest Vortex stable Release"
-		VORTEXSETUP="$("$WGET" -q  "${VORTEXRELURL}/latest" -O - | grep -m1 "$VSET" | grep -oE "${VSET}[^\"]+")"
-	fi
+	writelog "INFO" "${FUNCNAME[0]} - Search for latest Vortex stable Release"
+	VORTEXSETUP="$("$WGET" -q  "${VORTEXRELURL}/latest" -O - | grep -m1 "$VSET" | grep -oE "${VSET}[^\"]+")"
 }
 
 function dlLatestVortex {
@@ -9607,7 +9637,7 @@ function setupGameVortex {
 		# Game Settings:
 
 		# autodiscover our "manual added" game
-		GDNP="C:\\\Program Files (x86)\\\Steam\\\steamapps\\\common\\\\$GN"
+		GDNP="C:\\\$PFX86\\\Steam\\\steamapps\\\common\\\\$GN"
 		
 		if [ -n "$NEXUSGAMEID" ]; then
 			cd "$VORTEXINSTDIR" || return
@@ -9864,7 +9894,7 @@ function checkVortexRegs {
 	if [ -n "$3" ]; then
 		INSTP="$3"
 	else
-		INSTP="C:\\Program Files (x86)\\Steam\\steamapps\\common\\$GN"
+		INSTP="C:\\$PFX86\\Steam\\steamapps\\common\\$GN"
 	fi
 
 	writelog "INFO" "${FUNCNAME[0]} - Checking RegKey '$REGKEY' and updating RegKey '$REG32KEY' in registry for game '$SGNAID' now"
@@ -10057,6 +10087,175 @@ function installVortex {
 	fi
 }
 
+function dlLatestDprs {
+	writelog "INFO" "${FUNCNAME[0]} - Search for latest $DPRS version online"
+	LATDPRS="$("$WGET" -q  "${DPRSRELURL}/latest" -O - | grep -m1 "${DPRS}-v*.*.exe" | grep -oE "${DPRS}-v[^\"]+")"
+
+	if [ -n "$LATDPRS" ]; then
+		DSPATH="$DPRSDLDIR/$LATDPRS"
+
+		if [ ! -f "$DSPATH" ]; then
+			DPRSVR1="${LATDPRS//$DPRS-}"
+			DPRSVRS="${DPRSVR1//.exe}"
+		
+			DLURL="$DPRSRELURL/download/$DPRSVRS/$LATDPRS"
+			writelog "INFO" "${FUNCNAME[0]} - Downloading $LATDPRS to $VORTEXDLDIR from '$DLURL'" E
+			notiShow "$(strFix "$NOTY_DLCUSTOMPROTON" "$LATDPRS")"
+			wgetGui "$DLURL" "$DSPATH"
+			notiShow "$(strFix "$NOTY_DLCUSTOMPROTON2" "$LATDPRS")"
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - Already have the latest version in '$DSPATH'" E
+		fi	
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - No valid '$DPRS' version found ('$LATDPRS') - nothing to download - skipping"
+	fi
+}
+
+function startDepressurizer {
+	if [ ! -d "$DPRSCOMPDATA" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Creating '$DPRS' compatdata and installing deps" "E"
+		mkProjDir "$DPRSCOMPDATA" 1
+		reCreateCompatdata "ccd" "$DPRS" "s"
+	fi
+
+	mkProjDir "$DPRSDLDIR" 1
+	if [ "$DPRSPAUTOUP" -eq 1 ]; then
+		dlLatestDprs
+	fi
+	
+	DPRSEXE="$(find "${DPRSDLDIR}" -name "${DPRS}-v*.exe" | sort -V | tail -n1)"
+	
+	if [ ! -f "$DPRSEXE" ] || { [ "$(getArch "$DPRSEXE")" -ne "32" ] && [ "$(getArch "$DPRSEXE")" -ne "64" ];}; then
+		dlLatestDprs
+		DPRSEXE="$(find "${DPRSDLDIR}" -name "${DPRS}-v*.exe" | sort -V | tail -n1)"
+	fi
+
+	if [ ! -f "$DPRSEXE" ]; then
+		writelog "ERROR" "${FUNCNAME[0]} - Could not find or download a '$DPRS' exe" "E"
+	else
+
+	# copy or symlink required vdf files from steam to the DPRSCOMPDATA
+
+	DPRSPFX="${DPRSCOMPDATA//\"/}/pfx"
+	VDFDSTDIR="$DPRSPFX/$DRC/$PFX86S"
+
+	SUIDDIR="$(find "$SUSDA" -maxdepth 1 -type d -name "[1-9]*")"
+	SUIDO="${SUIDDIR//$SUSDA\/}"
+	
+	SC="$SUIDDIR/$SRSCV"
+	FLCV="$SUIDO/config/$LCV"
+	FSCV="$SUIDO/config/$SCVDF"
+
+	
+
+	AIDST="$VDFDSTDIR/$AAVDF"
+	PIDST="$VDFDSTDIR/$APVDF"
+	SRSDST="$VDFDSTDIR/$USDA/$SUIDO/$SRSCV"
+	SRLDST="$VDFDSTDIR/$USDA/$FLCV"
+	SCDST="$VDFDSTDIR/$USDA/$FSCV"
+	SCSHDST="$VDFDSTDIR/$USDA/$SUIDO/$SCRSH"
+	
+	AISRC="$FAIVDF"
+	PISRC="$PIVDF"
+	SRSSRC="$SUIDDIR/$SRSCV"
+	SRLSRC="$SUSDA/$FLCV"
+	SCSRC="$SUIDDIR/config/$SCVDF"
+	SCSHSRC="$SUIDDIR/$SCRSH"
+	
+	function cleanCpSrcTo {
+		if [ -f "$1" ]; then
+			mkdir -p "${2%/*}" 2>/dev/null
+			if ! cmp -s "$1" "$2" || [ -L "$2" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Copying '$1' to '$2'" "E"
+				rm "$2" 2>/dev/null
+				cp "$1" "$2"
+			else
+				writelog "SKIP" "${FUNCNAME[0]} - '$2' is identical to '$1'" "E"
+			fi
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - Source file '$1' not found" "E"
+		fi
+	}
+
+	function cleanLnSrcTo {
+		if [ -f "$1" ]; then
+			mkdir -p "${2%/*}" 2>/dev/null
+			if [ "$(readlink -f "$2")" == "$(readlink -f "$1")" ]; then
+				writelog "SKIP" "${FUNCNAME[0]} - '$2' is already pointing to '$1'" "E"
+			else
+				writelog "INFO" "${FUNCNAME[0]} - Symlinking '$1' to '$2'" "E"
+				rm "$2" 2>/dev/null
+				ln -s "$1" "$2"
+			fi
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - Source file '$1' not found" "E"
+		fi	
+	}
+	
+	if [ "$DPRSUSEVDFSYMLINKS" -eq 1 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Symlinking required vdf files from the linux steam install into '$DPRSCOMPDATA'" "E"
+		cleanLnSrcTo "$AISRC" "$AIDST"
+		cleanLnSrcTo "$PISRC" "$PIDST"
+		cleanLnSrcTo "$SRSSRC" "$SRSDST"
+		cleanLnSrcTo "$SRLSRC" "$SRLDST"
+		cleanLnSrcTo "$SCSRC" "$SCDST"
+		cleanLnSrcTo "$SCSHSRC" "$SCSHDST"
+	elif [ "$DPRSUSEVDFSYMLINKS" -eq 0 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Copying required vdf files from the linux steam install to '$DPRSCOMPDATA'" "E"
+		cleanCpSrcTo "$AISRC" "$AIDST"
+		cleanCpSrcTo "$PISRC" "$PIDST"
+		cleanCpSrcTo "$SRSSRC" "$SRSDST"
+		cleanCpSrcTo "$SRLSRC" "$SRLDST"
+		cleanCpSrcTo "$SCSRC" "$SCDST"
+		cleanCpSrcTo "$SCSHSRC" "$SCSHDST"
+	else
+		writelog "WARN" "${FUNCNAME[0]} - DPRSUSEVDFSYMLINKS is neither '1' nor '0' - this shouldn't happen!" "E"
+	fi
+
+	# start $DPRS via proton starting here
+
+		writelog "INFO" "${FUNCNAME[0]} - Using Proton Version '$USEDPRSPROTON'" "E"
+			
+		if test -z "$DPRSPROTON" || [ ! -f "$DPRSPROTON" ]; then
+			if [ -z "${ProtonCSV[0]}" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Don't have the Array of available Proton versions yet - creating"
+				getAvailableProtonVersions "up" X
+			fi
+			DPRSPROTON="$(PROTPATH "$USEDPRSPROTON")"
+		fi
+
+		if [ ! -f "$DPRSPROTON" ]; then
+			DPRSPROTON="$(fixProtonVersionMismatch "$USEDPRSPROTON" X)"
+		fi
+
+		if [ ! -f "$DPRSPROTON" ]; then
+			writelog "WARN" "${FUNCNAME[0]} - proton file '$DPRSPROTON' for proton version '$USEDPRSPROTON' not found - trying 'USEPROTON' instead" "E"
+			DPRSPROTON="$(PROTPATH "$USEPROTON")"
+		fi
+
+		CHECKWINED="$(dirname "$DPRSPROTON")/$DBW"
+		CHECKWINEF="$(dirname "$DPRSPROTON")/$FBW"
+		if [ -f "$CHECKWINED" ]; then
+			DPRSWINE="$CHECKWINED"
+		elif [ -f "$CHECKWINEF" ]; then
+			DPRSWINE="$CHECKWINEF"
+		fi
+
+		if [ -f "$DPRSWINE" ];then
+			writelog "INFO" "${FUNCNAME[0]} - Starting '$DPRSEXE' using '$DPRSWINE'" "E"
+			DPRSWINEDEBUG="-all"
+			DPRSSUDIR="$DPRSPFX/$DRCU/$STUS/$APDA/$DPRS"
+			mkdir -p "$DPRSSUDIR" 2>/dev/null
+			cd "$DPRSSUDIR" || return
+			sleep 1
+			LC_ALL="C" PATH="$STLPATH" LD_LIBRARY_PATH="" LD_PRELOAD="" WINE="$DPRSWINE"  WINEARCH="win64" WINEDEBUG="$DPRSWINEDEBUG" WINEPREFIX="$DPRSPFX" "$DPRSWINE" "$DPRSEXE" >/dev/null 2>/dev/null
+			cd - || return
+		else
+			writelog "ERROR" "${FUNCNAME[0]} - Proton Wine for not found - can't start '$DPRSEXE'" "E"
+		fi
+	fi
+}
+
 function installVortexGui {
 	export CURWIKI="$PPW/Vortex"
 	TITLE="${PROGNAME}-${FUNCNAME[0]}"
@@ -10195,7 +10394,7 @@ function checkVortex {
 				writelog "INFO" "${FUNCNAME[0]} - VORTEXEXE '$VORTEXEXE' exists"
 
 				# creating some required directories in VORTEXPFX:
-				SteamAppsCommonRelative="$DRC/Program Files (x86)/Steam/$SAC"
+				SteamAppsCommonRelative="$DRC/$PFX86S/$SAC"
 				VortexSteamAppsCommon="$VORTEXPFX/$SteamAppsCommonRelative"
 
 				writelog "INFO" "${FUNCNAME[0]} - Creating subdirectories in '$VORTEXPFX' if missing"
@@ -11240,7 +11439,7 @@ function fixSymlinks {
 				OFIL="$(awk -F ';' '{print $2}' <<< "$fixme")"
 
 				# make sure the found result is correct
-				if [ "$(readlink -f "${SYML//\"}")" == "$(readlink -f "${OFIL//\"}")" ]; then #XXXXXXXXX
+				if [ "$(readlink -f "${SYML//\"}")" == "$(readlink -f "${OFIL//\"}")" ]; then
 					OFIA="${OFIL//\"}"
 					OFIB="${OFIA##*/files/}"
 					OFIC="${OFIB//\/x86_64-windows}"
@@ -12401,6 +12600,8 @@ function commandline {
 	elif  [ "$1" == "createfirstinstall" ] || [ "$1" == "cfi" ]; then
 		FUSEID "$2"
 		CreateCustomEvaluatorScript "$USEID"
+	elif  [ "$1" == "${DPRS,}" ] || [ "$1" == "dprs" ]; then
+		startDepressurizer
 	elif  [ "$1" == "dlcustomproton" ] || [ "$1" == "dcp" ]; then
 		dlCustomProtonGate "$2"
 	elif  [ "$1" == "dlwine" ] || [ "$1" == "dw" ]; then
@@ -13806,7 +14007,7 @@ function reCreateCompatdata {
 		PRFRSTATE="${FRSTATE}-prev"
 
 		if [ -f "$FRSTATE" ]; then
-			if ! cmp --silent -- "$FRSTATE" "$PRFRSTATE"; then
+			if ! cmp -s -- "$FRSTATE" "$PRFRSTATE"; then
 				cp "$FRSTATE" "$PRFRSTATE"
 				notiShow "$(strFix "$NOTY_FRSTATE" "$(cat "$FRSTATE")")" "X"
 				writelog "INFO" "${FUNCNAME[0]} - $(strFix "$NOTY_FRSTATE" "$(cat "$FRSTATE")")" "E"
@@ -13844,11 +14045,20 @@ function reCreateCompatdata {
 			export STEAM_COMPAT_APP_ID="$VTX"
 			STEAM_COMPAT_INSTALL_PATH="$VORTEXCOMPDATA"
 		fi
+
+		if [ "$EUNID" == "$DPRS" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Starting '$DPRS' Installation" "E"
+			SRCORIGEVSC="${GLOBALEVALDIR}/sets/${EVALSC}_${DPRS,}.vdf"
+			SRCEVSC="$SRCORIGEVSC"
+			DESTCODA="$DPRSCOMPDATA"
+			EARLYPROT="$DPRSPROTON"
+			export STEAM_COMPAT_APP_ID="$DPRS"
+			STEAM_COMPAT_INSTALL_PATH="$DPRSCOMPDATA"
+		fi	
 		
 		if [ ! -f "$ISCEXE" ]; then
 			writelog "ERROR" "${FUNCNAME[0]} - '$ISCEXE' not found" "E"
-		else
-			
+		else		
 			if [ ! -f "$SRCORIGEVSC" ] && [ ! -f "$SRCCUSTEVSC" ]; then
 				if [ "$WANTGUI" -eq 0 ]; then
 					writelog "ERROR" "${FUNCNAME[0]} - Neither '$SRCORIGEVSC' nor '$SRCCUSTEVSC' found (see wiki if the reason for not being able to continue is unknown)" "E"
