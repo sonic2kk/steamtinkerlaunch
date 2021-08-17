@@ -5,7 +5,7 @@
 
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v6.15.1"
+PROGVERS="v6.15.2"
 PROGCMD="${0##*/}"
 GHURL="https://github.com"
 PROJECTPAGE="$GHURL/frostworx/steamtinkerlaunch"
@@ -593,7 +593,7 @@ function getRawAppIDInfo {
 			while read -r line; do
 				SHEXOUT="$SHEXOUT\x${line}"
 			done <<< "${SHEX1^^}"
-			sed "s/\x61\x70\x70\x69\x64\x00${SHEXOUT}\x00\x00/APPID$1/g" "$FAIVDF" | strings | sed -n "/APPID$1/,/^appid/p" > "$AIIDRAW"
+			sed "s/\x02\x61\x70\x70\x69\x64\x00${SHEXOUT}\x00/APPID$1/g" "$FAIVDF" | strings | sed -n "/APPID$1/,/^appid/p" > "$AIIDRAW"
 		fi
 	fi
 }
@@ -1828,6 +1828,7 @@ function setDefaultCfgValues {
 		if [ -z "$GAMESCREENRES" ]						; then	GAMESCREENRES="$NON"; fi
 		if [ -z "$FIXSYMLINKS" ]						; then	FIXSYMLINKS="0"; fi
 		if [ -z "$UNSYMLINK" ]							; then	UNSYMLINK="0"; fi
+		if [ -z "$DELPFX" ]								; then	DELPFX="0"; fi
 	}
 	
 	"${FUNCNAME[0]}$1"
@@ -2336,6 +2337,8 @@ function saveCfg {
 			echo "FIXSYMLINKS=\"$FIXSYMLINKS\""
 			echo "## $DESC_UNSYMLINK"
 			echo "UNSYMLINK=\"$UNSYMLINK\""
+			echo "## $DESC_DELPFX"
+			echo "DELPFX=\"$DELPFX\""
 			} >> "$1"
 			#ENDsaveCfgdefault_template
 		fi
@@ -3715,6 +3718,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_USEGLOBSUSYM!$DESC_USEGLOBSUSYM ('USEGLOBSUSYM')":CHK "${USEGLOBSUSYM/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_FIXSYMLINKS!$DESC_FIXSYMLINKS ('FIXSYMLINKS')":CHK "${FIXSYMLINKS/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_UNSYMLINK!$DESC_UNSYMLINK ('UNSYMLINK')":CHK "${UNSYMLINK/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_DELPFX!$DESC_DELPFX ('DELPFX')":CHK "${DELPFX/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_BACKUPSTEAMUSER!$DESC_BACKUPSTEAMUSER ('BACKUPSTEAMUSER')":CHK "${BACKUPSTEAMUSER/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_RESTORESTEAMUSER!$DESC_RESTORESTEAMUSER ('RESTORESTEAMUSER')":CB "${RESTORESTEAMUSER/#-/ -}!$NON!ask-always!ask-if-dst-has-no-backup-timestamp!ask-if-unsure!restore-always!restore-if-backup-timestamp-is-newer!restore-if-dst-has-no-backup-timestamp!restore-if-dst-is-empty" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_CLEANPROTONTEMP!$DESC_CLEANPROTONTEMP ('CLEANPROTONTEMP')":CHK "${CLEANPROTONTEMP/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
@@ -11508,6 +11512,15 @@ function unSymlink {
 	fi
 }
 
+function delPrefix {
+	if [ "$DELPFX" -eq 1 ]; then
+		if [ -d "$STEAM_COMPAT_DATA_PATH" ] ; then
+			writelog "INFO" "${FUNCNAME[0]} - Removing the prefix '$GPFX' as requested"
+			rm -rf "$STEAM_COMPAT_DATA_PATH" 2>/dev/null
+			mkdir "$STEAM_COMPAT_DATA_PATH" 2>/dev/null
+		fi
+	fi
+}
 
 function startGame {
 	#kind of works, but should be optimized:
@@ -12142,6 +12155,9 @@ function launchSteamGame {
 				# the last chance to set the Proton version before starting the game,
 				setRunProtonFromUseProton
 
+				# remove prefix if requested 
+				delPrefix
+				
 				# so fixing outdated symlinks if requested
 				fixSymlinks
 				# and/or unsymlink any proton symlink found

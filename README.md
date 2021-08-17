@@ -114,6 +114,7 @@ For current development changes, you can also check [this Changelog issue](https
 	* [Steam First Time Setup](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam-First-Time-Setup) and [Custom First-Time-Setup](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam-First-Time-Setup#Custom-First-Time-Setup)
 	* [Standalone-Proton](https://github.com/frostworx/steamtinkerlaunch/wiki/Standalone-Proton)
 	* [Compatdata Redirect](https://github.com/frostworx/steamtinkerlaunch/wiki/Compatdata-Redirect)
+	* [Compatdata Delete](https://github.com/frostworx/steamtinkerlaunch/wiki/Compatdata-Delete)
 	* [Symlink SteamUser](https://github.com/frostworx/steamtinkerlaunch/wiki/SteamUser)
 
 * [Shader](https://github.com/frostworx/steamtinkerlaunch/wiki/Shader) [ReShade](https://github.com/frostworx/steamtinkerlaunch/wiki/ReShade) [Management](https://github.com/frostworx/steamtinkerlaunch/wiki/Shader-Management)
