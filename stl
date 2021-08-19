@@ -370,7 +370,7 @@ function setSteamPath {
 }
 
 function setSteamPaths {
-	if [ -f "$STPAVARS" ] && grep -q "^STEAM_COMPAT_CLIENT_INSTALL_PATH" "$STPAVARS" ; then
+	if [ -f "$STPAVARS" ] && grep -q "^SUSDA" "$STPAVARS" ; then
 		writelog "INFO" "${FUNCNAME[0]} - Reading Steam Path variables from '$STPAVARS'"
 		loadCfg "$STPAVARS" X
 	else
@@ -1467,33 +1467,37 @@ function loadLangFile {
 }
 
 function loadLanguage {
-	writelog "INFO" "${FUNCNAME[0]} - First load the default language to make sure all variables are filled"
-	loadLangFile "$STLDEFLANG"
+	if [ ! -f "$STLSHM/lola-$AID.txt" ] ;then
+		writelog "INFO" "${FUNCNAME[0]} - First load the default language to make sure all variables are filled"
+		loadLangFile "$STLDEFLANG"
 
-	saveCfg "$STLDEFGLOBALCFG" X
-	loadCfg "$STLDEFGLOBALCFG" X
+		saveCfg "$STLDEFGLOBALCFG" X
+		loadCfg "$STLDEFGLOBALCFG" X
 
-	if [ -f "$STLDEFGLOBALCFG" ]; then
-		STLLRAW="$(grep "^STLLANG" "$STLDEFGLOBALCFG" | cut -d '=' -f2)"
-		STLLANG="${STLLRAW//\"/}"
-	else
-		ARGSLANG="$(gawk -F 'lang=' '{print $2}' <<< "$@" | cut -d ' ' -f1)"
-		if [ -n "$ARGSLANG" ]; then
-			STLLANG="$ARGSLANG"
+		if [ -f "$STLDEFGLOBALCFG" ]; then
+			STLLRAW="$(grep "^STLLANG" "$STLDEFGLOBALCFG" | cut -d '=' -f2)"
+			STLLANG="${STLLRAW//\"/}"
+		else
+			ARGSLANG="$(gawk -F 'lang=' '{print $2}' <<< "$@" | cut -d ' ' -f1)"
+			if [ -n "$ARGSLANG" ]; then
+				STLLANG="$ARGSLANG"
+			fi
 		fi
-	fi
 
-	if [ -n "$STLLANG" ] && [ "$STLLANG" != "$STLDEFLANG" ]; then 
-		writelog "INFO" "${FUNCNAME[0]} - Now load the language file '$STLLANG'"
-		loadLangFile "$STLLANG"
-	fi
-	
-	if [ -z "$DESC_STLLANG" ]; then 
-		writelog "ERROR"  "${FUNCNAME[0]} - ###############################" "E"
-		writelog "ERROR"  "${FUNCNAME[0]} - No language file could be loaded! For the initial setup at least one file (default english) is required" "E"
-		writelog "ERROR"  "${FUNCNAME[0]} - You can ether copy a valid file to '$STLLANGDIR' or '$SYSTEMSTLCFGDIR/lang' or provide an absolute path via command line using the lang= option" "E"
-		writelog "ERROR"  "${FUNCNAME[0]} - ###############################" "E"
-		exit
+		if [ -n "$STLLANG" ] && [ "$STLLANG" != "$STLDEFLANG" ]; then 
+			writelog "INFO" "${FUNCNAME[0]} - Now load the language file '$STLLANG'"
+			loadLangFile "$STLLANG"
+		fi
+		
+		touch "$STLSHM/lola-$AID.txt"
+		
+		if [ -z "$DESC_STLLANG" ]; then 
+			writelog "ERROR"  "${FUNCNAME[0]} - ###############################" "E"
+			writelog "ERROR"  "${FUNCNAME[0]} - No language file could be loaded! For the initial setup at least one file (default english) is required" "E"
+			writelog "ERROR"  "${FUNCNAME[0]} - You can ether copy a valid file to '$STLLANGDIR' or '$SYSTEMSTLCFGDIR/lang' or provide an absolute path via command line using the lang= option" "E"
+			writelog "ERROR"  "${FUNCNAME[0]} - ###############################" "E"
+			exit
+		fi
 	fi
 }
 
@@ -1561,7 +1565,7 @@ function fillProtonCSV {
 	fi
 	if [ -n "$protonfileV" ]; then
 		PCSV="\"${protonfileV//\"/}\";\"$PROTBIN\""
-		writelog "INFO" "${FUNCNAME[0]} - Adding Proton '${PCSV//\"}'"
+#		writelog "INFO" "${FUNCNAME[0]} - Adding Proton '${PCSV//\"}'" # too much info, $PCSV can always be read if interested
 		mapfile -t -O "${#ProtonCSV[@]}" ProtonCSV <<< "$PCSV"
 	fi
 }
@@ -6679,6 +6683,8 @@ function askSettings {
 			writelog "INFO" "${FUNCNAME[0]} - Using game specific requester timeout '$WAITEDITOR'"
 		fi
 
+		getRawAppIDInfo "$AID" &
+
 		if [ "$WAITEDITOR" -gt 0 ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Opening Requester with timeout '$WAITEDITOR'"
 
@@ -6985,7 +6991,7 @@ function createDefaultCfgs {
 	prepareGUI
 	genDefIcon
 	createProjectDirs
-	getAvailableProtonVersions "up"
+	getAvailableProtonVersions # XXXXXXXXXXXXXXXXXXXXX "up"
 
 	checkStartMode
 	saveCfg "$STLDEFGAMECFG" X
@@ -13822,7 +13828,8 @@ function closeSTL {
 	rm "$UPWINTMPL" 2>/dev/null
 	rm "$KILLSWITCH" 2>/dev/null
 	rm "$GWXTEMP" 2>/dev/null
-	
+	rm "$STLSHM/lola-*.txt"  2>/dev/null
+
 	# only useful for win games:
 	if [ "$ISGAME" -eq 2 ] && [ "$USEWINE" -eq 0 ]; then
 		writeLastRun
