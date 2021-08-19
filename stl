@@ -90,8 +90,10 @@ STLCATSORTENTRIES="$STLSHM/catsortentries.txt"
 UPWINTMPL="$STLSHM/upwintmpl.txt"
 STLMINWIN="$STLSHM/minwin.txt"
 STLMENUVALBLOCKCFG="$STLSHM/$MENUBLOCK"
-VARSIN="${STLSHM}/vars-in.txt"
-FUPDATE="${STLSHM}/fupdate.txt"
+VARSIN="$STLSHM/vars-in.txt"
+FUPDATE="$STLSHM/fupdate.txt"
+STPAVARS="$STLSHM/steampaths.txt"
+PROTONCSV="$STLSHM/ProtonCSV.txt"
 NON="none"
 TMPL="template"
 DLWINEVERSION="$NON"
@@ -301,7 +303,8 @@ STLEARLYPROTCONF="$STLPROTDIR/earlyproton.conf"
 PROCU="proton/custom"
 CTVDF="compatibilitytool.vdf"
 SCV="sharedconfig.vdf"
-AAVDF="appcache/appinfo.vdf"
+AIVDF="appinfo.vdf"
+AAVDF="appcache/$AIVDF"
 APVDF="appcache/packageinfo.vdf"
 USDA="userdata"
 SCVDF="shortcuts.vdf"
@@ -350,40 +353,64 @@ function setSteamPath {
 		if [ -e "${HSR}/${2}" ]; then
 			STPA="${HSR}/${2}"
 			export "$1"="$STPA"
+			echo "$1=\"$STPA\"" >> "$STPAVARS"
 			writelog "INFO" "${FUNCNAME[0]} - Set '$1' to '$STPA'"
 		elif [ -e "${HSS}/${2}" ]; then
 			STPA="${HSS}/${2}"
 			export "$1"="$STPA"
+			echo "$1=\"$STPA\"" >> "$STPAVARS"
 			writelog "INFO" "${FUNCNAME[0]} - Set '$1' to '$STPA'"
 		else
 			writelog "ERROR" "${FUNCNAME[0]} - '$2' not found for variable '$1' in '$HSR' or '$HSS'!" "E"
 		fi	
 	else
 		writelog "SKIP" "${FUNCNAME[0]} - '$1' already defined as '${!1}'"
+		echo "$1=\"${!1}\"" >> "$STPAVARS"
 	fi
 }
 
 function setSteamPaths {
-	setSteamPath "SROOT"
-	setSteamPath "SUSDA" "$USDA"
-	setSteamPath "DEFSTEAMAPPS" "$SA"
-	setSteamPath "DEFSTEAMAPPSCOMMON" "$SAC"
-	setSteamPath "CFGVDF" "config/config.vdf"
-	setSteamPath "LFVDF" "config/libraryfolders.vdf"
-	setSteamPath "FAIVDF" "$AAVDF"
-	setSteamPath "PIVDF" "$APVDF"
+	if [ -f "$STPAVARS" ] && grep -q "^STEAM_COMPAT_CLIENT_INSTALL_PATH" "$STPAVARS" ; then
+		writelog "INFO" "${FUNCNAME[0]} - Reading Steam Path variables from '$STPAVARS'"
+		loadCfg "$STPAVARS" X
+	else
+		mkProjDir "$SROOT/$CTD" 1
+		setSteamPath "SROOT"
+		setSteamPath "SUSDA" "$USDA"
+		setSteamPath "DEFSTEAMAPPS" "$SA"
+		setSteamPath "DEFSTEAMAPPSCOMMON" "$SAC"
+		setSteamPath "CFGVDF" "config/config.vdf"
+		setSteamPath "LFVDF" "config/libraryfolders.vdf"
+		setSteamPath "FAIVDF" "$AAVDF"
+		setSteamPath "PIVDF" "$APVDF"
+		setSteamPath "STEAMCOMPATOOLS" "$CTD"
 
-	if [ -z "$STEAM_COMPAT_CLIENT_INSTALL_PATH" ]; then
-		export STEAM_COMPAT_CLIENT_INSTALL_PATH="$SROOT"
+		if [ -z "$STEAM_COMPAT_CLIENT_INSTALL_PATH" ]; then
+			export STEAM_COMPAT_CLIENT_INSTALL_PATH="$SROOT"
+			echo "STEAM_COMPAT_CLIENT_INSTALL_PATH=\"$SROOT\"" >> "$STPAVARS"
+		fi
+
+		if [ -f "$STLDEFGLOBALCFG" ] && grep -q "^STEAMUSERID=" "$STLDEFGLOBALCFG" ; then
+			STEAMUSERID="$(grep "^STEAMUSERID=" "$STLDEFGLOBALCFG" | grep -o "[[:digit:]]*")"
+			STUIDPATH="$SUSDA/$STEAMUSERID"
+		else
+			# this works for 99% of all users, because most do have 1 steamuser on their system
+			STUIDPATH="$(find "$SUSDA" -maxdepth 1 -type d -name "[1-9]*" | head -n1)"
+			STEAMUSERID="${STUIDPATH##*/}"
+		fi
+
+		SUIC="$STUIDPATH/config"
+		FLCV="$SUIC/$LCV"
+
+		{
+		echo "STUIDPATH=\"$STUIDPATH\""
+		echo "STEAMUSERID=\"$STEAMUSERID\""
+		echo "SUIC=\"$SUIC\""
+		echo "FLCV=\"$FLCV\""
+		} >> "$STPAVARS"
+
+		writelog "INFO" "${FUNCNAME[0]} - Found SteamUserId '$STEAMUSERID'"
 	fi
-
-	mkdir -p "$SROOT/$CTD" 2>/dev/null
-	setSteamPath "STEAMCOMPATOOLS" "$CTD"
-	STEAMUSERID="$(find "$SUSDA" -maxdepth 1 -type d -name "[1-9]*")"
-	SUIC="$STEAMUSERID/config"
-	FLCV="$SUIC/$LCV"
-	
-	writelog "INFO" "${FUNCNAME[0]} - Found SteamUserId '$STEAMUSERID'"
 }
 
 function OpenWikiPage {
@@ -467,9 +494,9 @@ function getGameName {
 			GNRAW="$(gawk '{$1=$1};1' <<< "$GNRAW1")"
 			writelog "INFO" "${FUNCNAME[0]} - Found Game Name '$GNRAW' in '$APPMA'"
 		fi
-	elif [ -f "$STLAPPINFOIDDIR/${1}.txt" ]; then
-		GNRAW="$(grep "^name" -A1 -m1 "$STLAPPINFOIDDIR/${1}.txt" | tail -n1)"
-		writelog "INFO" "${FUNCNAME[0]} - Found Game Name '$GNRAW' in '$STLAPPINFOIDDIR/${1}.txt'"
+	elif [ -f "$STLAPPINFOIDDIR/${1}.bin" ]; then
+		GNRAW="$(strings "$STLAPPINFOIDDIR/${1}.bin" | grep "^name" -A1 -m1 | tail -n1)"
+		writelog "INFO" "${FUNCNAME[0]} - Found Game Name '$GNRAW' in '$STLAPPINFOIDDIR/${1}.bin'"
 	else
 		if [ "$DLGAMEDATA" -eq 1 ]; then
 			APIURL="https://api.steampowered.com/ISteamApps/GetAppList/v2"
@@ -569,9 +596,80 @@ function createDesktopIconFile {
 	fi
 }
 
-function getRawAppIDInfo {
-	AIIDRAW="$STLAPPINFOIDDIR/${1}.txt"
+function getOwnedHexAids {
+	if [ -z "$PIVDF" ]; then
+		setSteamPaths
+	fi
 
+	if [ -f "$PIVDF" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Searching in '$PIVDF' for HexAids"
+		HAIDS="61707069647300023000"
+		xxd -c "$(wc -c "$PIVDF")" -p "$PIVDF" | sed -E "s:$HAIDS:\n$HAIDS:g" | grep -o "$HAIDS.\{0,6\}" | sed "s:$HAIDS::"
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - '$PIVDF' not found"
+	fi	
+}
+
+function getOwnedAids {
+	OAIDLIST="$STLSHM/owned-aids.txt"
+	if [ ! -f "$OAIDLIST" ]; then
+		while read -r line; do
+			getAidFromHexAid "$line" >> "$OAIDLIST"
+		done <<< "$(getOwnedHexAids)"
+		
+		sort -n -u "$OAIDLIST" -o "$OAIDLIST"
+	fi
+	
+	if [ -f "$OAIDLIST" ]; then
+		cat "$OAIDLIST"
+	fi
+}
+
+function getAidFromHexAid {
+	unset REVAID
+	while read -r line; do
+		REVAID="$REVAID${line}"
+	done <<< "$(fold -2 <<< "$1" | tac)"
+	printf "%d\n" "0x$REVAID"
+}
+
+function getHexAidForAid {
+	unset HEXAID
+	if [ -f "$GEMETA/$1.conf" ]; then
+		loadCfg "$GEMETA/$1.conf" X
+	fi
+		
+	if [ -n "$HEXAID" ] && [ -z "$2" ]; then
+		echo "$HEXAID"
+	else
+		HXTST="$(printf '%x\n' "$1" | fold -w2 | tail -n1)"
+
+		if [ "${#HXTST}" -eq 1 ]; then
+			SHEX1="$(printf '0%x\n' "$1" | fold -w2 | tac)";
+		else
+			SHEX1="$(printf '%x\n' "$1" | fold -w2 | tac)";
+		fi
+
+		while read -r line; do
+			HEXAID="$HEXAID${line}"
+		done <<< "$SHEX1"
+		
+		if [ -z "$2" ]; then
+			echo "$HEXAID"
+		fi
+		touch "$FUPDATE"
+		touch "$GEMETA/$1.conf"
+		updateConfigEntry "HEXAID" "$HEXAID" "$GEMETA/$1.conf"
+	fi
+}
+
+function getRawAppIDInfo {
+	AIIDRAW="$STLAPPINFOIDDIR/${1}.bin"
+
+	if [ -z "$FAIVDF" ]; then
+		setSteamPaths
+	fi
+	
 	if [ -s "$AIIDRAW" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Already have raw appinfo file for '$1' in '$AIIDRAW'"
 	else
@@ -579,30 +677,23 @@ function getRawAppIDInfo {
 			rm "$AIIDRAW" 2>/dev/null
 		fi
 
-		if [ -f "$FAIVDF" ]; then
-			SEARCHID="$1"
-			HXTST="$(printf '%x\n' "$SEARCHID" | fold -w2 | tail -n1)"
-
-			if [ "${#HXTST}" -eq 1 ]; then
-				SHEX1="$(printf '0%x\n' "$SEARCHID" | fold -w2 | tac)";
-			else
-				SHEX1="$(printf '%x\n' "$SEARCHID" | fold -w2 | tac)";
-			fi
-
-			unset SHEXOUT
-			while read -r line; do
-				SHEXOUT="$SHEXOUT\x${line}"
-			done <<< "${SHEX1^^}"
-			sed "s/\x02\x61\x70\x70\x69\x64\x00${SHEXOUT}\x00/APPID$1/g" "$FAIVDF" | strings | sed -n "/APPID$1/,/^appid/p" > "$AIIDRAW"
+		HEXAID="$(getHexAidForAid "$1")"
+		HAID="02617070696400"
+	
+		SHMAIVDF="$STLSHM/${AIVDF//\.vdf/\.hex}"
+		if [ ! -f "$SHMAIVDF" ]; then
+			xxd -c "$(wc -c "$FAIVDF")" -p "$FAIVDF" "$SHMAIVDF"
 		fi
+	
+		sed -E "s:$HAID:\n$HAID:g" "$SHMAIVDF" | grep "^${HAID}${HEXAID}00" | xxd -r -p - "$AIIDRAW"
 	fi
 }
 
 function getIconData {
 	getRawAppIDInfo "$2"
-	AIIDRAW="$STLAPPINFOIDDIR/${2}.txt"
+	AIIDRAW="$STLAPPINFOIDDIR/${2}.bin"
 	if [ -f "$AIIDRAW" ]; then
-		grep -A1 -m1 "^$1" "$AIIDRAW" | tail -n1
+		strings "$AIIDRAW" | grep -A1 -m1 "^$1" | tail -n1	# XXXXXXXXXX maybe, when more data is used write a real parser later
 	fi
 }
 
@@ -714,12 +805,11 @@ function getGameData {
 }
 
 function getParsableGameList {
-	if [ -z "$SUSDA" ]; then
+	if [ -z "$SUSDA" ] || [ -z "$STUIDPATH" ]; then
 		setSteamPaths
 	fi
 	if [ -d "$SUSDA" ]; then
-		STEAMUSERID="$(find "$SUSDA" -maxdepth 1 -type d -name "[1-9]*")"
-		SC="$STEAMUSERID/$SRSCV"
+		SC="$STUIDPATH/$SRSCV"
 		APPI="Apps"
 		APPO="StartMenuShortcutCheck"
 		LIST="$(gawk "/$APPI/,/$APPO/" "$SC" | grep -v "$APPI\|$APPO" | gawk '{printf "%s+",$0} END {print ""}' | sed 's/"[0-9][0-9]/\n&/g')"
@@ -833,10 +923,11 @@ function getDataForAllGamesinSharedConfig {
 	done <<< "$(getParsableGameList | cut -d '+' -f1 | sed "s:\"::g" | grep "[0-9]" | sort -n)"
 }
 
-function getAllOwnedGames {
+# XXXXXXXXXXXXXXXXX replaced by getOwnedAids which is more complete - useful for something else?
+#function getAllOwnedGames {
 # shellcheck disable=SC2016
-	sed -n '/"Apps"/,${p;/"LastPlayedTimesSyncTime"/q}' "$FLCV" | grep "{" -B1 | grep "[0-9]" | tr -cd '[[:digit:]]\n' | sort -n
-}
+#	sed -n '/"Apps"/,${p;/"LastPlayedTimesSyncTime"/q}' "$FLCV" | grep "{" -B1 | grep "[0-9]" | tr -cd '[[:digit:]]\n' | sort -n
+#}
 
 function getActiveSteamCategories {
 	getParsableGameList | grep "\"tags\"" | gawk -F '{+' '{print $NF}' | sed 's/\"/'$'\\\n/g' | sort -u | grep -i "^[a-z]"
@@ -1391,7 +1482,7 @@ function loadLanguage {
 		fi
 	fi
 
-	if [ -n "$STLLANG" ]; then 
+	if [ -n "$STLLANG" ] && [ "$STLLANG" != "$STLDEFLANG" ]; then 
 		writelog "INFO" "${FUNCNAME[0]} - Now load the language file '$STLLANG'"
 		loadLangFile "$STLLANG"
 	fi
@@ -1501,7 +1592,6 @@ function getAvailableProtonVersions {
 			if [ "$HAVEINPROTON" -eq 1 ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Skipping check for available Proton versions and directly using the proton version configured from inside Steam"
 			else
-				PROTONCSV="$STLSHM/ProtonCSV.txt"
 				unset ProtonList
 				delEmptyFile "$PROTONCSV"
 				if [ ! -f "$PROTONCSV" ] || { [ -n "$1" ] &&  [ "$1" = "up" ]; } || [ "$1" == "F" ]; then
@@ -2734,11 +2824,10 @@ function setShowPic {
 			if [ ! -f "$STLGHEADD/$AID.jpg" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Using '$SHOWPIC' as fallback picture, because '$STLGHEADD/$AID.jpg' doesn't exist"
 			elif [ ! -s "$STLGHEADD/$AID.jpg" ]; then
-				if [ -z "$SUSDA" ]; then
+				if [ -z "$SUSDA" ] || [ -z "$STUIDPATH" ]; then
 					setSteamPaths
 				fi
-				STEAMUSERID="$(find "$SUSDA" -maxdepth 1 -type d -name "[1-9]*")"
-				CUSTPIC="$STEAMUSERID/config/grid/${AID}_hero.png"
+				CUSTPIC="$STUIDPATH/config/grid/${AID}_hero.png"
 				if [ -f "$CUSTPIC" ]; then
 					writelog "INFO" "${FUNCNAME[0]} - Found custom game picture under '$CUSTPIC'"
 					if  [ -x "$(command -v "$CONVERT" 2>/dev/null)" ]; then
@@ -4388,10 +4477,9 @@ function getCatsFromCode {
 
 function updateMenuSortFile {
 	if [ -f "$STLMENUSORTCFG" ] && [ -s "$STLMENUSORTCFG" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - Found active '$STLMENUSORTCFG' - autoupdating missing Categories"
 		while read -r catent; do
 			if ! grep -q "^$catent" "$STLMENUSORTCFG"; then
-				writelog "INFO" "${FUNCNAME[0]} - Adding missing Category '$catent'"
+				writelog "INFO" "${FUNCNAME[0]} - Adding missing Category '$catent' to '$STLMENUSORTCFG'"
 				echo "$catent" >> "$STLMENUSORTCFG"
 			fi
 		done <<< "$(getCatsFromCode)"
@@ -6493,13 +6581,21 @@ function getScreenRes {
 }
 
 function setInitWinXY {
-
-	SCRW="$(getScreenRes w)"
-	SCRH="$(getScreenRes h)"
-	
-	WINX=$(( SCRW * 3 / 4))
-	WINY=$(( SCRH * 3 / 4))
-	writelog "INFO" "${FUNCNAME[0]} - Using '${WINX}x${WINY}' as default resolution for all windows without a configured resolution"
+	DEFRESSHM="$STLSHM/defres.txt"
+	if [ -f "$DEFRESSHM" ] ; then
+		loadCfg "$DEFRESSHM" X
+	else
+		SCRW="$(getScreenRes w)"
+		SCRH="$(getScreenRes h)"
+		
+		WINX=$(( SCRW * 3 / 4))
+		WINY=$(( SCRH * 3 / 4))
+		{
+		echo "WINX=\"$WINX\""
+		echo "WINY=\"$WINY\""
+		} >> "$DEFRESSHM"
+		writelog "INFO" "${FUNCNAME[0]} - Using '${WINX}x${WINY}' as default resolution for all windows without a configured resolution"
+	fi
 }
 
 function setNewRes {
@@ -6958,12 +7054,11 @@ function updateConfigEntry {
 # autoapply configuration settings based on the steam categories the game is in:
 function autoCategorySettings {
 	if [ "$CHECKCATEGORIES" -eq 1 ]; then
-		if [ -z "$SUSDA" ]; then
+		if [ -z "$SUSDA" ] || [ -z "$STUIDPATH" ]; then
 			setSteamPaths
 		fi
 		if [ -d "$SUSDA" ]; then
-			STEAMUSERID="$(find "$SUSDA" -maxdepth 1 -type d -name "[1-9]*")"
-			SC="$STEAMUSERID/$SRSCV"
+			SC="$STUIDPATH/$SRSCV"
 
 			if [ ! -f "$SC" ]; then
 				writelog "SKIP" "${FUNCNAME[0]} - File '${SC##*/}' not found in steam userid dir - skipping"
@@ -7645,6 +7740,8 @@ function launchCustomProg {
 				if [ "$FORK_CUSTOMCMD" -eq 1 ]; then	
 					writelog "INFO" "${FUNCNAME[0]} - FORK_CUSTOMCMD is set to 1 -  forking the custom program in background and continue"
 					extProtonRun "F" "$LACO" "$CUSTOMCMD_ARGS"
+					
+					sleep 60
 				else
 					extProtonRun "R" "$LACO" "$CUSTOMCMD_ARGS"
 				fi
@@ -9421,12 +9518,11 @@ function getInstalledGamesWithVortexSupport {
 function getGameSteamCategories {
 	SCGAME="$1"
 
-	if [ -z "$SUSDA" ]; then
+	if [ -z "$SUSDA" ] || [ -z "$STUIDPATH" ]; then
 		setSteamPaths
 	fi
 	if [ -d "$SUSDA" ]; then
-		STEAMUSERID="$(find "$SUSDA" -maxdepth 1 -type d -name "[1-9]*")"
-		SC="$STEAMUSERID/$SRSCV"
+		SC="$STUIDPATH/$SRSCV"
 
 		if [ ! -f "$SC" ]; then
 			writelog "SKIP" "${FUNCNAME[0]} - File '${SC##*/}' not found in steam userid dir - skipping"
@@ -10148,28 +10244,27 @@ function startDepressurizer {
 	DPRSPFX="${DPRSCOMPDATA//\"/}/pfx"
 	VDFDSTDIR="$DPRSPFX/$DRC/$PFX86S"
 
-	SUIDDIR="$(find "$SUSDA" -maxdepth 1 -type d -name "[1-9]*")"
-	SUIDO="${SUIDDIR//$SUSDA\/}"
-	
-	SC="$SUIDDIR/$SRSCV"
-	FLCV="$SUIDO/config/$LCV"
-	FSCV="$SUIDO/config/$SCVDF"
+	if [ -z "$SUSDA" ] || [ -z "$STUIDPATH" ]; then
+		setSteamPaths
+	fi
 
-	
+	SC="$STUIDPATH/$SRSCV"
+	FLCV="$STUIDPATH/config/$LCV"
+	FSCV="$STUIDPATH/config/$SCVDF"
 
 	AIDST="$VDFDSTDIR/$AAVDF"
 	PIDST="$VDFDSTDIR/$APVDF"
-	SRSDST="$VDFDSTDIR/$USDA/$SUIDO/$SRSCV"
+	SRSDST="$VDFDSTDIR/$USDA/$STEAMUSERID/$SRSCV"
 	SRLDST="$VDFDSTDIR/$USDA/$FLCV"
 	SCDST="$VDFDSTDIR/$USDA/$FSCV"
-	SCSHDST="$VDFDSTDIR/$USDA/$SUIDO/$SCRSH"
+	SCSHDST="$VDFDSTDIR/$USDA/$STEAMUSERID/$SCRSH"
 	
 	AISRC="$FAIVDF"
 	PISRC="$PIVDF"
-	SRSSRC="$SUIDDIR/$SRSCV"
+	SRSSRC="$STUIDPATH/$SRSCV"
 	SRLSRC="$SUSDA/$FLCV"
-	SCSRC="$SUIDDIR/config/$SCVDF"
-	SCSHSRC="$SUIDDIR/$SCRSH"
+	SCSRC="$STUIDPATH/config/$SCVDF"
+	SCSHSRC="$STUIDPATH/$SCRSH"
 	
 	function cleanCpSrcTo {
 		if [ -f "$1" ]; then
@@ -12478,7 +12573,9 @@ function howto {
 	echo "                                       1=on the desktop"
 	echo "                                       2=for the application menu"
 	echo "                                       3=for desktop and application menu"
-	echo "    createappinfo|cai <id>           Create raw appinfo for <id> or 'all'"
+	echo "    createappinfo|cai <id|i|o>       Create raw appinfo for <id>"
+	echo "                                      or for 'installed|i' or 'owned|o' games"
+	echo "                                      (takes a long time for many games!)"
 	echo "    createfirstinstall|cfi <gameid>  Open gui to create a Steam First Time Setup" 
 	echo "    <a|c|r|file> (see wiki)            file for game <gameid>"
 	echo "    dlcustomproton|dcp <url|l>       Download/install custom Proton"
@@ -12512,6 +12609,7 @@ function howto {
 	echo "                                       installed games first"
 	echo "             update                    ReCreate all Category Menus"
 	echo "                                       Can be combined with auto"
+	echo "    list <owned|installed>           List ids of <owned|o,installed|i> games"
 	echo "    meta                             Generates/Updates metadata"
 	echo "                                       for all installed games"
  	echo "    proton|p <title> <X>             Start and/or create <title> with proton"
@@ -12608,17 +12706,21 @@ function commandline {
 	elif  [ "$1" == "createdesktopicon" ] || [ "$1" == "cdi" ]; then
 		if [ "$2" == "all" ]; then
 			while read -r CATAID; do
-				"$0" cdi "$CATAID" "$3"
+				createDesktopIconFile "$CATAID" "$3"
 			done <<< "$(listInstalledGameIDs)"
 		else
 			FUSEID "$2"
 			createDesktopIconFile "$USEID" "$3"
 		fi
 	elif  [ "$1" == "createappinfo" ] || [ "$1" == "cai" ]; then
-		if [ "$2" == "all" ]; then
+		if [ "$2" == "installed" ] || [ "$2" == "i" ]; then
 			while read -r CATAID; do
-				"$0" cai "$CATAID"
+				getRawAppIDInfo "$CATAID"
 			done <<< "$(listInstalledGameIDs)"
+		elif [ "$2" == "owned" ] || [ "$2" == "o" ]; then
+			while read -r CATAID; do
+				getRawAppIDInfo "$CATAID"
+			done <<< "$(getOwnedAids)"
 		else
 			FUSEID "$2"
 			getRawAppIDInfo "$USEID"
@@ -12668,8 +12770,10 @@ function commandline {
 	elif  [ "$1" == "launcher" ]; then
 		openGameLauncher "$2" "$3"
 	elif  [ "$1" == "list" ]; then
-		if [ "$2" == "owned" ]; then
-			getAllOwnedGames
+		if [ "$2" == "owned" ] || [ "$2" == "o" ]; then
+			getOwnedAids
+		elif [ "$2" == "installed" ] || [ "$2" == "i" ]; then
+			listInstalledGameIDs
 		fi
 	elif  [ "$1" == "meta" ]; then
 		createMetaData "yes"
@@ -13409,11 +13513,10 @@ function addNonSteamGame {
 	if [ -z "$HAVEOSSL" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - '$OSSL' could not be found, can't generate a random AppID without it"
 	else
-		if [ -z "$SUSDA" ]; then
+		if [ -z "$SUSDA" ] || [ -z "$STUIDPATH" ]; then
 			setSteamPaths
 		fi
-		STEAMUSERID="$(find "$SUSDA" -maxdepth 1 -type d -name "[1-9]*")"
-		SCPATH="$STEAMUSERID/config/$SCVDF"
+		SCPATH="$STUIDPATH/config/$SCVDF"
 
 		function getCRC {
 			echo -n "$1" | gzip -c | tail -c 8 | od -An -N 4 -tx4
@@ -13704,6 +13807,9 @@ function closeSTL {
 	fi
 
 	togWindows windowraise	# TOGGLEWINDOWS
+
+	writelog "INFO" "${FUNCNAME[0]} - Writing '$AID' HexAid into metadata X"
+	getHexAidForAid "$AID" X
 
 	cleanYadLeftOvers
 
@@ -14368,7 +14474,7 @@ function checkFirstTimeRun {
 			if grep -q "^USEPROTON" "$1"; then
 				CONFPROTRAW="$(grep "^USEPROTON" "$1" | cut -d '=' -f2)"
 				CONFPROT="${CONFPROTRAW//\"}"
-				PROTONCSV="$STLSHM/ProtonCSV.txt"
+
 				if [ -z "$SUSDA" ]; then
 					setSteamPaths
 				fi
