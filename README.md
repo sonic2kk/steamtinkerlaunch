@@ -166,6 +166,7 @@ Programs required for a full internal functionality:
 - xdotool
 - xprop
 - xrandr
+- xxd *(part of vim)*
 - xwininfo
 - [Yad](https://github.com/v1cont/yad) All GUI elements like [Main Menu](https://github.com/frostworx/steamtinkerlaunch/wiki/Main-Menu), [Tray Icon](https://github.com/frostworx/steamtinkerlaunch/wiki/Tray-Icon), the [Editor Menu](https://github.com/frostworx/steamtinkerlaunch/wiki/Editor-Menu)
   and all other windows use yad. **A new enough version *(>=7.2; see [here](https://github.com/frostworx/steamtinkerlaunch/issues/98))* is required**
