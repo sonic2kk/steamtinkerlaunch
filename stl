@@ -505,7 +505,7 @@ function getGameName {
 			writelog "INFO" "${FUNCNAME[0]} - Found Game Name '$GNRAW' in '$APPMA'"
 		fi
 	elif [ -f "$STLAPPINFOIDDIR/${1}.bin" ]; then
-		GNRAW="$(extractHexInfo "$AID" "name")"
+		GNRAW="$(getAppInfoData "$AID" "name")"
 		writelog "INFO" "${FUNCNAME[0]} - Found Game Name '$GNRAW' in '$STLAPPINFOIDDIR/${1}.bin'"
 	else
 		if [ "$DLGAMEDATA" -eq 1 ]; then
@@ -682,9 +682,13 @@ function getRawAppIDInfo {
 		setSteamPaths
 	fi
 	
-	if [ -s "$AIIDRAW" ]; then
+	if  [ -s "$AIIDRAW" ] && [ -z "$2" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Found raw $APIN file '$AIIDRAW'"
 	else
+		if [ -n "$2" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Updating raw $APIN file '$AIIDRAW'"
+		fi
+
 		if [ ! -s "$AIIDRAW" ]; then
 			rm "$AIIDRAW" 2>/dev/null
 		fi
@@ -701,6 +705,7 @@ function getRawAppIDInfo {
 }
 
 function getAppInfoData {
+	# $1=AID; $2=category; optional $3=skip stdout; optional $4=force writing metadata again
 	if [ -n "$2" ]; then
 		AILIST="$GLOBALMISCDIR/$AITXT"
 
@@ -713,7 +718,7 @@ function getAppInfoData {
 				loadCfg "$GEMETA/$1.conf" X
 			fi
 			
-			if  [ -n "${!UPDAT}" ]; then
+			if  [ -n "${!UPDAT}" ] && [ -z "$4" ]; then
 				if [ -z "$3" ]; then
 					writelog "INFO" "${FUNCNAME[0]} - Got value '${!UPDAT}' for '$UPDAT' from '$GEMETA/$1.conf'"
 					echo "${!UPDAT}"
@@ -729,29 +734,37 @@ function getAppInfoData {
 
 					HVAR="$(echo -n "$2" | "$XXD" -ps)"
 					unset HXOUT
-					OCOUNT=0
-					ZCOUNT=0
-					while read -r line; do
-						if [ "$line" == "01" ]; then
-							OCOUNT=$((OCOUNT+1))
-							if [[ "$OCOUNT" -eq 2 ]]; then
-								break
-							fi
-						elif [ "$line" == "00" ] ; then
-							ZCOUNT=$((ZCOUNT+1))
-							if [[ "$ZCOUNT" -eq 2 ]]; then
-								break
-							fi
-						else
-							HXOUT="$HXOUT$line"
+
+					if [ "$2" == "metacritic_score" ]; then
+						UPVALHX="$("$XXD" -c "$(wc -c "$SRCHEX")" -p "$SRCHEX" | sed -E "s:$HVAR:\n$HVAR:g" | grep "^$HVAR" | head -c "$(( $(wc -c <<< "$HVAR") + 3))" | tail -c2)"
+						if [ -n "$UPVALHX" ]; then
+							UPVAL="$((16#$UPVALHX))"
 						fi
-					done <<< "$("$XXD" -c "$(wc -c "$SRCHEX")" -p "$SRCHEX" | sed -E "s:01$HVAR:\n01$HVAR:g" | grep "^01$HVAR" | fold -2)"
-					UPVALHX="${HXOUT//${HVAR}00/}"
-					UPVALHX1="${UPVALHX//${HVAR}/}"
-					UPVALHXO="${UPVALHX1%*00}"
-					
-					
-					UPVAL="$("$XXD" -r -p - <<< "$UPVALHXO")"
+					else
+						OCOUNT=0
+						ZCOUNT=0
+						while read -r line; do
+							if [ "$line" == "01" ]; then
+								OCOUNT=$((OCOUNT+1))
+								if [[ "$OCOUNT" -eq 2 ]]; then
+									break
+								fi
+							elif [ "$line" == "00" ] ; then
+								ZCOUNT=$((ZCOUNT+1))
+								if [[ "$ZCOUNT" -eq 2 ]]; then
+									break
+								fi
+							else
+								HXOUT="$HXOUT$line"
+							fi
+						done <<< "$("$XXD" -c "$(wc -c "$SRCHEX")" -p "$SRCHEX" | sed -E "s:01$HVAR:\n01$HVAR:g" | grep "^01$HVAR" | fold -2)"
+						UPVALHX="${HXOUT//${HVAR}00/}"
+						UPVALHX1="${UPVALHX//${HVAR}/}"
+						UPVALHXO="${UPVALHX1%*00}"				
+						
+						UPVAL="$("$XXD" -r -p - <<< "$UPVALHXO")"
+					fi
+
 					if [ -n "$UPVAL" ]; then
 						touch "$FUPDATE"
 						touch "$GEMETA/$1.conf"
@@ -770,9 +783,12 @@ function getAppInfoData {
 
 function writeAllAIMeta {
 	if [ -n "$1" ] && [ "$1" -eq "$1" ]; then
+		if  [ -n "$2" ]; then
+			rm "$STLAPPINFOIDDIR/${1}.bin" 2>/dev/null
+		fi
 		AILIST="$GLOBALMISCDIR/$AITXT"
 		while read -r line; do
-			getAppInfoData "$1" "$line" X
+		 	getAppInfoData "$1" "$line" X "$2"
 		done < "$GLOBALMISCDIR/$AITXT"
 	else
 		writelog "SKIP" "${FUNCNAME[0]} - need SteamAppId as arg 1"
@@ -12773,6 +12789,12 @@ function howto {
 	echo "                                       3=for desktop and application menu"
 	echo "    createappinfo|cai <id|i|o>       Create raw appinfo for <id>"
 	echo "                                      or for 'installed|i' or 'owned|o' games"
+	echo "                                      Append any arg to update the raw file"
+	echo "                                      (takes a long time for many games!)"
+	echo "    createappinfometa|caim <id|i|o>  Read data from raw appinfo for <id>"
+	echo "                                      or for 'installed|i' or 'owned|o' games"
+	echo "                                      and write to game metadata."
+	echo "                                      Append any arg to update the metadata"
 	echo "                                      (takes a long time for many games!)"
 	echo "    createfirstinstall|cfi <gameid>  Open gui to create a Steam First Time Setup" 
 	echo "    <a|c|r|file> (see wiki)            file for game <gameid>"
@@ -12913,29 +12935,29 @@ function commandline {
 	elif  [ "$1" == "createappinfo" ] || [ "$1" == "cai" ]; then
 		if [ "$2" == "installed" ] || [ "$2" == "i" ]; then
 			while read -r CATAID; do
-				getRawAppIDInfo "$CATAID"
+				getRawAppIDInfo "$CATAID" "$3"
 			done <<< "$(listInstalledGameIDs)"
 		elif [ "$2" == "owned" ] || [ "$2" == "o" ]; then
 			while read -r CATAID; do
-				getRawAppIDInfo "$CATAID"
+				getRawAppIDInfo "$CATAID" "$3"
 			done <<< "$(getOwnedAids)"
 		else
 			FUSEID "$2"
-			getRawAppIDInfo "$USEID"
+			getRawAppIDInfo "$USEID" "$3"
 		fi
 	elif  [ "$1" == "createappinfometa" ] || [ "$1" == "caim" ]; then
 		if [ "$2" == "installed" ] || [ "$2" == "i" ]; then
 			while read -r CATAID; do
-				writeAllAIMeta "$CATAID"
+				writeAllAIMeta "$CATAID" "$3"
 			done <<< "$(listInstalledGameIDs)"
 		elif [ "$2" == "owned" ] || [ "$2" == "o" ]; then
 			while read -r CATAID; do
-				writeAllAIMeta "$CATAID"
+				writeAllAIMeta "$CATAID" "$3"
 			done <<< "$(getOwnedAids)"
 		else
 			if [ "$2" -eq "$2" ]; then
 				FUSEID "$2"
-				writeAllAIMeta "$USEID"
+				writeAllAIMeta "$USEID" "$3"
 			fi
 		fi
 	elif  [ "$1" == "createfirstinstall" ] || [ "$1" == "cfi" ]; then
