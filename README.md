@@ -98,7 +98,8 @@ For current development changes, you can also check [this Changelog issue](https
 	* [X64dbg](https://github.com/frostworx/steamtinkerlaunch/wiki/X64dbg-Support)
 	* [IGCSInjector](https://github.com/frostworx/steamtinkerlaunch/wiki/IGCSInjector)
 	* [UniversalUE4Unlocker](https://github.com/frostworx/steamtinkerlaunch/wiki/UniversalUE4Unlocker)
-
+	* [Dependencies-Program](https://github.com/frostworx/steamtinkerlaunch/wiki/Dependencies-Program)
+	
 * Highly customizable [Gui System](https://github.com/frostworx/steamtinkerlaunch/wiki/Gui)
 
 * [Misc](https://github.com/frostworx/steamtinkerlaunch/wiki/Misc) features like support for various methods to launch custom programs
