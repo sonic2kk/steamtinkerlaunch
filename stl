@@ -5,7 +5,7 @@
 
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v6.15.2"
+PROGVERS="v6.15.3"
 PROGCMD="${0##*/}"
 GHURL="https://github.com"
 PROJECTPAGE="$GHURL/frostworx/steamtinkerlaunch"
@@ -203,6 +203,7 @@ DPRS="Depressurizer"
 DPRSDLDIR="$STLDLDIR/${DPRS,}"
 PFX86="Program Files (x86)"
 PFX86S="$PFX86/Steam"
+APIN="appinfo"
 
 SOMEPOPULARWINEPAKS="dotnet4 quartz xact"
 SOMEWINEDEBUGOPTIONS="-all,+steam,+vrclient,+vulkan"
@@ -213,7 +214,7 @@ SGDBSTYOPTS="alternate,blurred,white_logo,material,no_logo"
 STLGAMES="$STLCFGDIR/games"
 STLGDESKD="$STLGAMES/desktop"
 STLIDFD="$STLGAMES/desktopfiles"
-STLAPPINFOIDDIR="$STLGAMES/appinfo"
+STLAPPINFOIDDIR="$STLGAMES/$APIN"
 STLGHEADD="$STLGAMES/header"
 STLGSAD="$STLGAMES/standalone"
 STLGICONS="$STLGAMES/icons"
@@ -304,7 +305,8 @@ STLEARLYPROTCONF="$STLPROTDIR/earlyproton.conf"
 PROCU="proton/custom"
 CTVDF="compatibilitytool.vdf"
 SCV="sharedconfig.vdf"
-AIVDF="appinfo.vdf"
+AIVDF="$APIN.vdf"
+AITXT="$APIN.txt"
 AAVDF="appcache/$AIVDF"
 APVDF="appcache/packageinfo.vdf"
 USDA="userdata"
@@ -375,7 +377,7 @@ function setSteamPaths {
 		writelog "INFO" "${FUNCNAME[0]} - Reading Steam Path variables from '$STPAVARS'"
 		loadCfg "$STPAVARS" X
 	else
-		mkProjDir "$SROOT/$CTD" 1
+		mkProjDir "$SROOT/$CTD"
 		setSteamPath "SROOT"
 		setSteamPath "SUSDA" "$USDA"
 		setSteamPath "DEFSTEAMAPPS" "$SA"
@@ -496,7 +498,7 @@ function getGameName {
 			writelog "INFO" "${FUNCNAME[0]} - Found Game Name '$GNRAW' in '$APPMA'"
 		fi
 	elif [ -f "$STLAPPINFOIDDIR/${1}.bin" ]; then
-		GNRAW="$(strings "$STLAPPINFOIDDIR/${1}.bin" | grep "^name" -A1 -m1 | tail -n1)"
+		GNRAW="$(extractHexInfo "$AID" "name")"
 		writelog "INFO" "${FUNCNAME[0]} - Found Game Name '$GNRAW' in '$STLAPPINFOIDDIR/${1}.bin'"
 	else
 		if [ "$DLGAMEDATA" -eq 1 ]; then
@@ -674,7 +676,7 @@ function getRawAppIDInfo {
 	fi
 	
 	if [ -s "$AIIDRAW" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - Already have raw appinfo file for '$1' in '$AIIDRAW'"
+		writelog "INFO" "${FUNCNAME[0]} - Found raw $APIN file '$AIIDRAW'"
 	else
 		if [ ! -s "$AIIDRAW" ]; then
 			rm "$AIIDRAW" 2>/dev/null
@@ -691,13 +693,85 @@ function getRawAppIDInfo {
 	fi
 }
 
-function getIconData {
-	getRawAppIDInfo "$2"
-	AIIDRAW="$STLAPPINFOIDDIR/${2}.bin"
-	if [ -f "$AIIDRAW" ]; then
-		strings "$AIIDRAW" | grep -A1 -m1 "^$1" | tail -n1	# XXXXXXXXXX maybe, when more data is used write a real parser later
+function getAppInfoData {
+	if [ -n "$2" ]; then
+		AILIST="$GLOBALMISCDIR/$AITXT"
+
+		if grep -q "$2" "$AILIST"; then
+
+			UPDAT="${2^^}"
+			unset "$UPDAT"
+
+			if [ -f "$GEMETA/$1.conf" ]; then
+				loadCfg "$GEMETA/$1.conf" X
+			fi
+			
+			if  [ -n "${!UPDAT}" ]; then
+				if [ -z "$3" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Got value '${!UPDAT}' for '$UPDAT' from '$GEMETA/$1.conf'"
+					echo "${!UPDAT}"
+				fi
+			else
+				getRawAppIDInfo "$1"
+				SRCHEX="$STLAPPINFOIDDIR/$1.bin"
+
+				if [ -f "$SRCHEX" ]; then
+					if [ -z "$3" ]; then
+						writelog "INFO" "${FUNCNAME[0]} - Retrieving data for '$2' from '$SRCHEX'"
+					fi
+
+					HVAR="$(echo -n "$2" | "$XXD" -ps)"
+					unset HXOUT
+					OCOUNT=0
+					ZCOUNT=0
+					while read -r line; do
+						if [ "$line" == "01" ]; then
+							OCOUNT=$((OCOUNT+1))
+							if [[ "$OCOUNT" -eq 2 ]]; then
+								break
+							fi
+						elif [ "$line" == "00" ] ; then
+							ZCOUNT=$((ZCOUNT+1))
+							if [[ "$ZCOUNT" -eq 2 ]]; then
+								break
+							fi
+						else
+							HXOUT="$HXOUT$line"
+						fi
+					done <<< "$("$XXD" -c "$(wc -c "$SRCHEX")" -p "$SRCHEX" | sed -E "s:01$HVAR:\n01$HVAR:g" | grep "^01$HVAR" | fold -2)"
+					UPVALHX="${HXOUT//${HVAR}00/}"
+					UPVALHX1="${UPVALHX//${HVAR}/}"
+					UPVALHXO="${UPVALHX1%*00}"
+					
+					
+					UPVAL="$("$XXD" -r -p - <<< "$UPVALHXO")"
+					if [ -n "$UPVAL" ]; then
+						touch "$FUPDATE"
+						touch "$GEMETA/$1.conf"
+						updateConfigEntry "$UPDAT" "$UPVAL" "$GEMETA/$1.conf"
+						if [ -z "$3" ]; then
+							echo "$UPVAL"
+						fi
+					fi
+				fi
+			fi
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - '$2' is not in '$AILIST'"
+		fi
 	fi
 }
+
+function writeAllAIMeta {
+	if [ -n "$1" ] && [ "$1" -eq "$1" ]; then
+		AILIST="$GLOBALMISCDIR/$AITXT"
+		while read -r line; do
+			getAppInfoData "$1" "$line" X
+		done < "$GLOBALMISCDIR/$AITXT"
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - need SteamAppId as arg 1"
+	fi
+}
+
 
 function getGameIcon {
 	function IcotoPng {
@@ -730,7 +804,7 @@ function getGameIcon {
 			writelog "INFO" "${FUNCNAME[0]} - Already have game ico '$WANTGICO'"
 			IcotoPng
 		else
-			ICONAME="$(getIconData clienticon "$AID")"
+			ICONAME="$(getAppInfoData "$AID" "clienticon")"
 			if [ -n "$ICONAME" ]; then
 				ICOPATH="$ICODIR/${ICONAME}.ico"
 				if [ -f "$ICOPATH" ]; then
@@ -741,7 +815,7 @@ function getGameIcon {
 					writelog "SKIP" "${FUNCNAME[0]} - Absolute path for Steam ico '$ICONAME' not valid - skipping"
 				fi
 			else
-				writelog "SKIP" "${FUNCNAME[0]} - Could not find the icon name for '$AID' in appinfo - skipping"
+				writelog "SKIP" "${FUNCNAME[0]} - Could not find the icon name for '$AID' in $APIN - skipping"
 			fi
 		fi		
 	}
@@ -776,9 +850,9 @@ function getGameIcon {
 					writelog "INFO" "${FUNCNAME[0]} - Already have game icon zip '$WANTGZIP' - extracting"
 					extractGZip "$WANTGZIP" "$WANTGPNG"
 				else
-					writelog "INFO" "${FUNCNAME[0]} - Looking for icon hash in appinfo"
+					writelog "INFO" "${FUNCNAME[0]} - Looking for icon hash in $APIN"
 					
-					LICONZIP="$(getIconData linuxclienticon "$AID")"
+					LICONZIP="$(getAppInfoData "$AID" "linuxclienticon")"
 					if [ -n "$LICONZIP" ]; then
 						LICONPATH="$ICODIR/${LICONZIP}.zip"
 						if [ -f "$LICONPATH" ]; then
@@ -790,7 +864,7 @@ function getGameIcon {
 							getIco
 						fi
 					else
-						writelog "SKIP" "${FUNCNAME[0]} - Could not find the icon zip for '$AID' in appinfo - trying to find ico instead"
+						writelog "SKIP" "${FUNCNAME[0]} - Could not find the icon zip for '$AID' in $APIN - trying to find ico instead"
 						getIco
 					fi
 				fi
@@ -881,7 +955,7 @@ function getGrid {
 				GRIDDLDIR="$STLDLDIR/steamgriddb"
 			fi
 
-			mkdir -p "$GRIDDLDIR" 2>/dev/null
+			mkProjDir "$GRIDDLDIR"
 	
 			DLDST="$GRIDDLDIR/${1}p.${GRIDDLURL##*.}"
 			STARTDL=1
@@ -892,7 +966,7 @@ function getGrid {
 					STARTDL=0
 				elif [ "$SGDBHASFILE" == "backup" ]; then
 					BACKDIR="${GRIDDLDIR}/backup"
-					mkdir -p "$BACKDIR" 2>/dev/null
+					mkProjDir "$BACKDIR"
 					writelog "INFO" "${FUNCNAME[0]} - Backup existing file into '$BACKDIR', because SGDBHASFILE is set to '$SGDBHASFILE'"
 					mv "$DLDST" "$BACKDIR"
 				elif [ "$SGDBHASFILE" == "replace" ]; then
@@ -925,7 +999,7 @@ function getDataForAllGamesinSharedConfig {
 	done <<< "$(getParsableGameList | cut -d '+' -f1 | sed "s:\"::g" | grep "[0-9]" | sort -n)"
 }
 
-# XXXXXXXXXXXXXXXXX replaced by getOwnedAids which is more complete - useful for something else?
+# replaced by getOwnedAids which is more complete - useful for something else?
 #function getAllOwnedGames {
 # shellcheck disable=SC2016
 #	sed -n '/"Apps"/,${p;/"LastPlayedTimesSyncTime"/q}' "$FLCV" | grep "{" -B1 | grep "[0-9]" | tr -cd '[[:digit:]]\n' | sort -n
@@ -937,7 +1011,7 @@ function getActiveSteamCategories {
 
 function createCategoryMenus {
 	DFIDIR="$DFDIR/installed"
-	mkdir -p "$DFIDIR" 2>/dev/null
+	mkProjDir "$DFIDIR"
 
 	if [ -n "$1" ] && [ "$1" == "update" ] && [ "$(find "$DFDIR" -name "*.desktop" | wc -l)" -gt 0 ]; then
 		find "$DFDIR" -name "*.desktop" -exec rm {} \;
@@ -946,7 +1020,7 @@ function createCategoryMenus {
 	if  [ "$(find "$DFDIR" -name "*.desktop" | wc -l)" -eq 0 ]; then
 		while read -r CAT; do
 			DFCDIR="$DFDIR/$CAT"
-			mkdir -p "$DFCDIR" 2>/dev/null
+			mkProjDir "$DFCDIR"
 			while read -r CATGAME; do
 				if [ -f "$STLGDESKD/$CATGAME.desktop" ]; then
 					if [ ! -h "$DFCDIR/$CATGAME.desktop" ]; then
@@ -1013,8 +1087,8 @@ function pollWinRes {
 	TEMPLGUICFG="$STLGUIDIR/$SCREENRES/${TEMPL}/${TITLE}.conf"
 	GLOBTEMPLGUICFG="$GLOBALSTLGUIDIR/$SCREENRES/${TEMPL}/${TITLE}.conf"
 
-	mkProjDir "${GAMEGUICFG%/*}" 1
-	mkProjDir "${TEMPLGUICFG%/*}" 1
+	mkProjDir "${GAMEGUICFG%/*}"
+	mkProjDir "${TEMPLGUICFG%/*}"
 	
 	if [ -f "$TEMPLGUICFG" ] && [ ! -f "$GAMEGUICFG" ]; then
 		loadCfg "$TEMPLGUICFG" X
@@ -1116,7 +1190,7 @@ function openGameLauncher {
 					if [ -f "$STLGDESKD/$AID.desktop" ]; then
 						writelog "INFO" "${FUNCNAME[0]} - '$1' selected, so opening splash for '$STLGDESKD/$AID.desktop'"
 						DFCDIR="$DFDIR/last"
-						mkdir -p "$DFCDIR" 2>/dev/null
+						mkProjDir "$DFCDIR"
 						cp "$STLGDESKD/$AID.desktop" "$DFCDIR"
 						GLgui "$1"
 					else
@@ -1208,7 +1282,7 @@ function setGlobalAIDCfgs {
 
 function setCompatDataTitle {
 	if [ "$STORECOMPDATTITLE" -eq 1 ] && [ -n "$OSCDP" ]; then
-		mkProjDir "$STLCOMPDAT" 1
+		mkProjDir "$STLCOMPDAT"
 		COMPDATTITLE="$STLCOMPDAT/$GN"
 		if readlink "$COMPDATTITLE" >/dev/null ; then
 			writelog "INFO" "${FUNCNAME[0]} - Symlink $COMPDATTITLE already exists"
@@ -1444,7 +1518,7 @@ function loadLangFile {
 			STLLANG="$(cut -d '.' -f1 <<< "${LANGFILENAME##*/}")"
 			LAFI="$STLLANGDIR/${STLLANG}.txt"
 			if [ ! -f "$LAFI" ]; then
-				mkProjDir "$STLLANGDIR" 1
+				mkProjDir "$STLLANGDIR"
 				cp "$LANGFILENAME" "$LAFI"
 			fi
 		else
@@ -1904,6 +1978,7 @@ function setDefaultCfgValues {
 		if [ -z "$PROTON_NO_D3D10" ]					; then	PROTON_NO_D3D10="0"; fi
 		if [ -z "$PROTON_NO_ESYNC" ]					; then	PROTON_NO_ESYNC="0"; fi
 		if [ -z "$PROTON_NO_FSYNC" ]					; then	PROTON_NO_FSYNC="0"; fi
+		if [ -z "$PROTON_ENABLE_NVAPI" ]				; then	PROTON_ENABLE_NVAPI="0"; fi
 		if [ -z "$PROTON_FORCE_LARGE_ADDRESS_AWARE" ]	; then	PROTON_FORCE_LARGE_ADDRESS_AWARE="1"; fi
 		if [ -z "$PROTON_DUMP_DEBUG_COMMANDS" ]			; then	PROTON_DUMP_DEBUG_COMMANDS="0"; fi
 		if [ -z "$CLEANPROTONTEMP" ]					; then	CLEANPROTONTEMP="0"; fi
@@ -2389,6 +2464,8 @@ function saveCfg {
 			echo "PROTON_NO_ESYNC=\"$PROTON_NO_ESYNC\""
 			echo "## $DESC_PROTON_NO_FSYNC"
 			echo "PROTON_NO_FSYNC=\"$PROTON_NO_FSYNC\""
+			echo "## $DESC_PROTON_ENABLE_NVAPI"
+			echo "PROTON_ENABLE_NVAPI=\"$PROTON_ENABLE_NVAPI\""
 			echo "## $DESC_PROTON_FORCE_LARGE_ADDRESS_AWARE"
 			echo "PROTON_FORCE_LARGE_ADDRESS_AWARE=\"$PROTON_FORCE_LARGE_ADDRESS_AWARE\""
 			echo "## $DESC_WINE_FULLSCREEN_INTEGER_SCALING"
@@ -2520,7 +2597,7 @@ function setNewProtVars {
 				
 				if [ ! -f "$CHECKWINED" ] && [ ! -f "$CHECKWINEF" ] && [ -f "$(dirname "$RUNPROTON")/$PDTGZ" ]; then
 					writelog "INFO" "${FUNCNAME[0]} - Wine binary not found, but a proton archive '$PDTGZ' - extracting now"
-					mkdir "$(dirname "$RUNPROTON")/dist"
+					mkProjDir "$(dirname "$RUNPROTON")/dist"
 					"$TAR" xf "$(dirname "$RUNPROTON")/$PDTGZ" -C "$(dirname "$RUNPROTON")/dist"
 				fi
 
@@ -2663,7 +2740,7 @@ function dlCustomProton {
 					EXTDEST="$CUSTPROTEXTDIR/$PROTNAME"
 					PROTFULLPATH="$EXTDEST/$PROTRELPATH"
 					writelog "INFO" "${FUNCNAME[0]} - Archive is a tarbomb - creating parent directory '$EXTDEST' as extract dest dir"
-					mkProjDir "$EXTDEST" 1
+					mkProjDir "$EXTDEST"
 				else
 					writelog "INFO" "${FUNCNAME[0]} - Archive contains proton in subdirectory '$PROTRELPATH'"
 					PROTFULLPATH="$CUSTPROTEXTDIR/$PROTRELPATH"
@@ -3800,6 +3877,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_PROTON_NO_D3D11!$DESC_PROTON_NO_D3D11 ('PROTON_NO_D3D11')":CHK "${PROTON_NO_D3D11/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_PROTON_NO_ESYNC!$DESC_PROTON_NO_ESYNC ('PROTON_NO_ESYNC')":CHK "${PROTON_NO_ESYNC/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_PROTON_NO_FSYNC!$DESC_PROTON_NO_FSYNC ('PROTON_NO_FSYNC')":CHK "${PROTON_NO_FSYNC/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_PROTON_ENABLE_NVAPI!$DESC_PROTON_ENABLE_NVAPI ('PROTON_ENABLE_NVAPI')":CHK "${PROTON_ENABLE_NVAPI/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_PROTON_USE_WINED3D!$DESC_PROTON_USE_WINED3D ('PROTON_USE_WINED3D')":CHK "${PROTON_USE_WINED3D/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_PROTON_DEBUG_DIR!$DESC_PROTON_DEBUG_DIR ('PROTON_DEBUG_DIR')":DIR "${PROTON_DEBUG_DIR/#-/ -}" `#CAT_Proton` `#SUB_Directories` `#MENU_GAME` \
 --field="     $GUI_PROTON_DUMP_DEBUG_COMMANDS!$DESC_PROTON_DUMP_DEBUG_COMMANDS ('PROTON_DUMP_DEBUG_COMMANDS')":CHK "${PROTON_DUMP_DEBUG_COMMANDS/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
@@ -4786,7 +4864,7 @@ function gitUpdate {
 		writelog "INFO" "${FUNCNAME[0]} - Pulling '$GITURL' update in '$GITDIR'"
 		"$GIT" --work-tree="$GITDIR" --git-dir="$GITDIR/.git" pull --rebase=false
 	else
-		mkdir "$GITDIR" >/dev/null 2>/dev/null
+		mkProjDir "$GITDIR"
 		writelog "INFO" "${FUNCNAME[0]} - Cloning '$GITURL' in '$GITDIR'"
 		"$GIT" clone "$GITURL" "$GITDIR"
 	fi
@@ -5054,7 +5132,7 @@ function dlOvrFSR {
 	}
 
 	DLDST="$STLDLDIR/$OVFS"
-	mkProjDir "$DLDST" 1
+	mkProjDir "$DLDST"
 	OVRFSRZIP="$(getLatestOVRFSR)"
 	FSR1="${OVRFSRZIP//openvr_}"
 	FSRV="${FSR1%.*}"
@@ -5957,7 +6035,7 @@ function prepareReshadeFiles {
 
 				if [ ! -d "$RESHADESRCDIR" ]; then
 					writelog "404" "${FUNCNAME[0]} - '$RESHADESRCDIR' does not exist - trying to create it" 
-					mkdir -p "$RESHADESRCDIR" >/dev/null 2>/dev/null
+					mkProjDir "$RESHADESRCDIR"
 				fi
 
 				if [ -d "$RESHADESRCDIR" ]; then
@@ -6172,7 +6250,7 @@ function GameShaderDialog {
 	fi
 
 	if [ "$SHADDESTDIR" != "$NON" ] && [ ! -d "$SHADDESTDIR" ]; then
-		mkdir -p "$SHADDESTDIR" 2>/dev/null
+		mkProjDir "$SHADDESTDIR"
 	fi
 
 	if [ -d "$SHADDESTDIR" ]; then
@@ -6231,7 +6309,7 @@ function GameShaderDialog {
 									if [ ! -f "$SHADDESTDIR/${shadadd##*/}" ]; then
 										SUBDIRPATH="${shadadd//$(dirname "$STLSHADDIR/$upshad")/}"
 										writelog "INFO" "${FUNCNAME[0]} - Installing shader helper file '$SUBDIRPATH' into '$SHADDESTDIR'"
-										mkdir -p "$SHADDESTDIR/$(dirname "$SUBDIRPATH")" 2>/dev/null
+										mkProjDir "$SHADDESTDIR/$(dirname "$SUBDIRPATH")"
 										cp "$shadadd" "$SHADDESTDIR/$(dirname "$SUBDIRPATH")"
 									fi
 								done <  <(find "$(dirname "$STLSHADDIR/$upshad")" -name "*.fxh" -o -name "*.txt")
@@ -6751,56 +6829,51 @@ function askSettings {
 	fi
 }
 
-# create project dir $1 if $2 is 1 or empty
+# create project dir $1 - no idea what the former arg2 was good for :)
 function mkProjDir {
-	if [ -n "$2" ]; then
-		if [ "$2" -eq 1 ]; then
-			if [ ! -d "$1" ]; then
-				mkdir -p "$1" 2>/dev/null >/dev/null
-			fi
-		fi
-	fi
+	mkdir -p "$1" 2>/dev/null >/dev/null
 }
 
 # create project dirs
 function createProjectDirs {
-	mkProjDir "$STLCFGDIR" 1
-	mkProjDir "$STLLANGDIR" 1
-	mkProjDir "$LOGDIRID" 1
-	mkProjDir "$LOGDIRTI" 1
-	mkProjDir "$STLPROTONIDLOGDIR" 1
-	mkProjDir "$STLPROTONTILOGDIR" 1
-	mkProjDir "$STLDXVKLOGDIR" 1
-	mkProjDir "$STLWINELOGDIR" 1
-	mkProjDir "$STLPVLOGDIR" 1
-	mkProjDir "$STLGAMEDIRID" 1
-	mkProjDir "$STLGAMEDIRTI" 1
-	mkProjDir "$STLCATEGORYDIR" 1
-	mkProjDir "$TWEAKDIR" 1
-	mkProjDir "$USERTWEAKDIR" 1
-	mkProjDir "$TWEAKCMDDIR" 1
-	mkProjDir "$SBSTWEAKDIR" 1
-	mkProjDir "$STLDLDIR" 1
-	mkProjDir "$STLSHADDIR" 1
-	mkProjDir "$STLVORTEXDIR" 1
-	mkProjDir "${STLVORTEXDIR}/downloads" 1
-	mkProjDir "$RESHADESRCDIR" 1
-	mkProjDir "$CUSTPROTDLDIR" 1
-	mkProjDir "$CUSTPROTEXTDIR" 1
-	mkProjDir "$WINEDLDIR" 1
-	mkProjDir "$WINEEXTDIR" 1
-	mkProjDir "$STLGAMES" 1
-	mkProjDir "$STLGDESKD" 1
-	mkProjDir "$STLIDFD" 1
-	mkProjDir "$STLGHEADD" 1
-	mkProjDir "$STLGICO" 1
-	mkProjDir "$STLGZIP" 1
-	mkProjDir "$STLGPNG" 1
-	mkProjDir "$STLAPPINFOIDDIR" 1
-	mkProjDir "$STLRSPRESETDIR" 1
-	mkProjDir "$CEDLDIR" 1
-	mkProjDir "$HIDEDIR" 1
-	mkProjDir "$VORTEXCOMPDATA" 1
+	mkProjDir "$STLCFGDIR"
+	mkProjDir "$STLLANGDIR"
+	mkProjDir "$LOGDIRID"
+	mkProjDir "$LOGDIRTI"
+	mkProjDir "$STLPROTONIDLOGDIR"
+	mkProjDir "$STLPROTONTILOGDIR"
+	mkProjDir "$STLDXVKLOGDIR"
+	mkProjDir "$STLWINELOGDIR"
+	mkProjDir "$STLPVLOGDIR"
+	mkProjDir "$STLGAMEDIRID"
+	mkProjDir "$STLGAMEDIRTI"
+	mkProjDir "$STLCATEGORYDIR"
+	mkProjDir "$TWEAKDIR"
+	mkProjDir "$USERTWEAKDIR"
+	mkProjDir "$TWEAKCMDDIR"
+	mkProjDir "$SBSTWEAKDIR"
+	mkProjDir "$STLDLDIR"
+	mkProjDir "$STLSHADDIR"
+	mkProjDir "$STLVORTEXDIR"
+	mkProjDir "${STLVORTEXDIR}/downloads"
+	mkProjDir "$RESHADESRCDIR"
+	mkProjDir "$CUSTPROTDLDIR"
+	mkProjDir "$CUSTPROTEXTDIR"
+	mkProjDir "$WINEDLDIR"
+	mkProjDir "$WINEEXTDIR"
+	mkProjDir "$STLGAMES"
+	mkProjDir "$STLGDESKD"
+	mkProjDir "$STLIDFD"
+	mkProjDir "$STLGHEADD"
+	mkProjDir "$STLGICO"
+	mkProjDir "$STLGZIP"
+	mkProjDir "$STLGPNG"
+	mkProjDir "$STLAPPINFOIDDIR"
+	mkProjDir "$STLRSPRESETDIR"
+	mkProjDir "$CEDLDIR"
+	mkProjDir "$HIDEDIR"
+	mkProjDir "$VORTEXCOMPDATA"
+	mkProjDir "$GEMETA"
 }
 
 # add missing config entries to configfile $1 using seperator $2:
@@ -6992,7 +7065,7 @@ function createDefaultCfgs {
 	prepareGUI
 	genDefIcon
 	createProjectDirs
-	getAvailableProtonVersions # XXXXXXXXXXXXXXXXXXXXX "up"
+	getAvailableProtonVersions # XXXXXXXXX "up"
 
 	checkStartMode
 	saveCfg "$STLDEFGAMECFG" X
@@ -7037,11 +7110,11 @@ function updateConfigEntry {
 					if [ "$(grep -c "#${CFGCAT}=" "$CFGFILE")" -eq 1 ]; then
 						writelog "INFO" "${FUNCNAME[0]} - Option '$CFGCAT' commented out in config '${CFGFILE##*/}' - activating it with the new value '$CFGVALUE'"
 						sed -i "/^#${CFGCAT}=/c$CFGCAT=\"$CFGVALUE\"" "$CFGFILE"
-					elif [ "$(grep -c "${CFGCAT}=" "$CFGFILE")" -eq 0 ]; then
+					elif [ "$(grep -c "^${CFGCAT}=" "$CFGFILE")" -eq 0 ]; then
 						writelog "INFO" "${FUNCNAME[0]} - '$CFGCAT' option missing in config '${CFGFILE##*/}' - adding a new line"
 						echo "$CFGCAT=\"$CFGVALUE\"" >> "$CFGFILE"
 					else
-						writelog "INFO" "${FUNCNAME[0]} - Option '$CFGCAT' is updated with the new value $CFGVALUE in config '${CFGFILE##*/}'"
+						writelog "INFO" "${FUNCNAME[0]} - Option '$CFGCAT' is updated with the new value '$CFGVALUE' in config '${CFGFILE##*/}'"
 						sed -i "/^${CFGCAT}=/c$CFGCAT=\"$CFGVALUE\"" "$CFGFILE"
 						if [ "$CFGCAT" == "USEPROTON" ]; then
 							writelog "INFO" "${FUNCNAME[0]} - Updating One Time Proton for this launch to the updated USEPROTON value '$CFGVALUE'"
@@ -7133,7 +7206,7 @@ function netrun {
 	if [ -n "$NETMONDIR" ]; then
 		if [ ! -d "$NETMONDIR" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - $NETMON dest directory $NETMONDIR does not exist - trying to create it"
-			mkdir "$NETMONDIR" 2>/dev/null
+			mkProjDir "$NETMONDIR"
 		fi
 
 		if [ -d "$NETMONDIR" ]; then
@@ -7175,7 +7248,7 @@ function checkXliveless {
 
 			XLIVEDLL="xlive.dll"
 			XLDL="$STLDLDIR/xlive/"
-			mkdir -p "$XLDL" 2>/dev/null
+			mkProjDir "$XLDL"
 
 			writelog "INFO" "${FUNCNAME[0]} - Game '$SGNAID' needs '$XLIVEDLL' - checking"
 			if [ -f "$EFD/$XLIVEDLL" ]; then
@@ -7387,7 +7460,7 @@ function StandaloneProtonGame {
 
 		if [ -z "$SAP_COMPAT_DATA_PATH" ]; then
 			SAP_COMPAT_DATA_PATH="$STLGSACD/${PROGCMD}-$((10000 + RANDOM % 10000))"
-			mkProjDir "$SAP_COMPAT_DATA_PATH" 1
+			mkProjDir "$SAP_COMPAT_DATA_PATH"
 			IN_SAP_COMPAT_DATA_PATH="$SAP_COMPAT_DATA_PATH"
 		fi
 
@@ -7485,7 +7558,7 @@ function StandaloneProtonGame {
 
 	createProtonList X
 
-	mkProjDir "$STLGSAPD" 1
+	mkProjDir "$STLGSAPD"
 	SAPGUI=1
 	SAPRUN="TRUE"
 
@@ -7847,7 +7920,7 @@ function symlinkSteamUser {
 	SteamUserDir="$GPFX/$DRCU/$STUS"
 
 	if [ "$1" -eq 1 ]; then
-		mkProjDir "$STLPROTSTUSDIR" 1
+		mkProjDir "$STLPROTSTUSDIR"
 
 		if [ "$USEGLOBSUSYM" -eq 1 ]; then
 			SUSYD="$STLPROTSTUSDIR/global"
@@ -7862,7 +7935,7 @@ function symlinkSteamUser {
 			if [ -d "$SteamUserDir" ]; then
 				mv "$SteamUserDir" "$SUSYD"
 			else
-				mkProjDir "$SUSYD" 1
+				mkProjDir "$SUSYD"
 			fi
 		else
 			writelog "INFO" "${FUNCNAME[0]} - '$SUSYD' does already exists"
@@ -7905,7 +7978,7 @@ function symlinkSteamUser {
 			writelog "INFO" "${FUNCNAME[0]} - '$SteamUserDir' points to '$SUSYD'"
 			if [ -d "$SUSYD" ]; then
 				rm "$SteamUserDir"
-				mkProjDir "$SteamUserDir" 1
+				mkProjDir "$SteamUserDir"
 				if grep -q "$AID" <<< "$SUSYD"; then
 					writelog "INFO" "${FUNCNAME[0]} - The directory '$SUSYD' where the symlink '$SteamUserDir' points to is game specific - "
 					writelog "INFO" "${FUNCNAME[0]} - Migrating all files into the freshly created '$SteamUserDir' from it"
@@ -7945,11 +8018,11 @@ function redirectSCDP {
 			writelog "INFO" "${FUNCNAME[0]} - New compatdata '$DIR' does not exist yet"
 			if [ -d "${STEAM_COMPAT_DATA_PATH}_SAC" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Moving found backed autocloud compatdata '${STEAM_COMPAT_DATA_PATH}_SAC' to '$DIR'"
-				mkProjDir "${DIR%/*}" 1
+				mkProjDir "${DIR%/*}"
 				mv "${STEAM_COMPAT_DATA_PATH}_SAC" "$DIR"
 			else
 				writelog "INFO" "${FUNCNAME[0]} - Creating new compatdata dir '$DIR'"
-				mkProjDir "$DIR" 1	
+				mkProjDir "$DIR"
 			fi
 		else
 			writelog "INFO" "${FUNCNAME[0]} - Using existing compatdata '$DIR'"
@@ -8112,7 +8185,7 @@ function redirectSCDP {
 				rm "${STEAM_COMPAT_DATA_PATH}/used_by-$AID" 2>/dev/null
 				writelog "INFO" "${FUNCNAME[0]} - '$STEAM_COMPAT_DATA_PATH' is a symlink. Removing it, as REDIRCOMPDATA is $REDIRCOMPDATA"
 				rm "$STEAM_COMPAT_DATA_PATH"
-				mkProjDir "$STEAM_COMPAT_DATA_PATH" 1	
+				mkProjDir "$STEAM_COMPAT_DATA_PATH"
 			fi
 		fi
 	fi
@@ -8325,7 +8398,7 @@ function checkIGCSInjector {
 			writelog "INFO" "${FUNCNAME[0]} - '$IGCSDST' not found"
 			IGCSDL="$STLDLDIR/igcs/"
 			IGCSSRC="$IGCSDL/$IGCSEXE"
-			mkProjDir "$IGCSDL" 1
+			mkProjDir "$IGCSDL"
 
 			if [ ! -f "$IGCSSRC" ]; then
 				if [ ! -f "$IGCSDL/${IGCSZIP##*/}" ]; then
@@ -8384,7 +8457,7 @@ function checkIGCSInjector {
 				if [ "$UUUSEIGCS" -eq 1 ]; then
 					UUUDL="$STLDLDIR/uuu"
 					UUUSRC="$UUUDL/$IGCSDLL"
-					mkProjDir "$UUUDL" 1	
+					mkProjDir "$UUUDL"	
 					writelog "INFO" "${FUNCNAME[0]} - 'UUUSEIGCS' is enabled, but '$EFD/$IGCSDLL' is not available - checking if '$UUUSRC' is available"
 					if [ ! -f "$UUUSRC" ]; then
 						writelog "WARN" "${FUNCNAME[0]} -'$UUUSRC' was not found - opening Info requester, because it needs to be downloaded manually from '$UUUURL' and extracted to '$UUUDL'"
@@ -9105,7 +9178,7 @@ function installCheatEngine {
 			fi
 		elif [ -f "$RUNWINE" ]; then
 			CEPFX="$STLCEDIR/wineprefix"
-			mkProjDir "$CEPFX" 1
+			mkProjDir "$CEPFX"
 			CEINSTDIR="$CEPFX/$DRC/Program Files/${CE} $CHEATENGINEVERSION"
 			writelog "INFO" "${FUNCNAME[0]} - Installing '$CEDLDIR/$CESET' into '$CEPFX' using '$RUNWINE'"
 			notiShow "$(strFix "$NOTY_INSTCE" "$CESET")"
@@ -9271,7 +9344,7 @@ function addVortexStage {
 		if [ -d "$1" ]; then
 			NEWVS="$1"
 		elif [ -d "$(dirname "$1")" ]; then
-			if mkdir "$1" 2>/dev/null; then
+			if mkProjDir "$1"; then
 				NEWVS="$1"
 			else
 				writelog "SKIP" "${FUNCNAME[0]} - Skipping invalid argument '$1'"
@@ -9412,7 +9485,7 @@ function dlLatestMO2 {
 	getLatestMO2Ver
 
 	if [ -n "$MO2SETUP" ]; then
-		mkProjDir "$MO2DLDIR" 1
+		mkProjDir "$MO2DLDIR"
 		MO2SPATH="$MO2DLDIR/$MO2SETUP"
 		if [ ! -f "$MO2SPATH" ]; then
 			MO2VRAW="$(grep -oP "${MO2SET}-\K[^X]+" <<< "$MO2SETUP")"
@@ -9447,7 +9520,7 @@ function dlLatestVortex {
 
 		# download:
 		if [ ! -d "$VORTEXDLDIR" ]; then
-			mkdir -p "$VORTEXDLDIR" 2>/dev/null
+			mkProjDir "$VORTEXDLDIR"
 		fi
 
 		if [ ! -f "$VSPATH" ]; then
@@ -9506,7 +9579,7 @@ function linkVortex {
 function getVortexStage {
 	if [ -z "$VORTEXSTAGING" ]; then
 		WANTSTAGE="$1"
-		mkdir "$WANTSTAGE" 2>/dev/null
+		mkProjDir "$WANTSTAGE"
 		if [ -d "$WANTSTAGE" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Created dir '$WANTSTAGE' $PARTLOG"
 			VORTEXSTAGING="$WANTSTAGE"
@@ -9731,7 +9804,7 @@ function setupGameVortex {
 
 			if [ ! -d "$VORTEXDOWNLOADPATH" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Creating Vortex Download Dir '$VORTEXDOWNLOADPATH'"
-				mkdir -p "$VORTEXDOWNLOADPATH"
+				mkProjDir "$VORTEXDOWNLOADPATH"
 			fi
 
 			VDPF="$VORTEXDOWNLOADPATH/__vortex_downloads_folder"
@@ -9769,7 +9842,7 @@ function setupGameVortex {
 				GMODPATH="$(grep -E 'getPath.*documents' "$NEXUSGAMEFILE" | grep -v "LOAD_ORDER_FILENAME\|()" | gawk -F ')\, ' '{print $NF}' | gawk -F ')' '{print $1}' | sed "s:, :\/:g" | sed "s:'::g")"
 				if [ -n "$SteamUserMyDocs" ] && [ -n "$GMODPATH" ]; then
 					writelog "INFO" "${FUNCNAME[0]} - Creating directory $SteamUserMyDocs/$GMODPATH"
-					mkdir -p "$SteamUserMyDocs/$GMODPATH" 2>/dev/null
+					mkProjDir "$SteamUserMyDocs/$GMODPATH"
 				fi
 			fi
 
@@ -9831,7 +9904,7 @@ function setupGameVortex {
 				VGSGM="$VORTEXSTAGING/$NEXUSGAMEID/mods"
 
 				writelog "INFO" "${FUNCNAME[0]} - Creating Vortex Staging folder '$VGSGM'"
-				mkdir -p "$VGSGM"
+				mkProjDir "$VGSGM"
 
 				VGSGMSF="$VGSGM/__vortex_staging_folder"
 				if [ ! -f "$VGSGMSF" ]; then
@@ -9914,13 +9987,13 @@ function precustomVortexGameDirs {
 
 		CDIR="$SteamUserDir/$MyDocsMyGames/$2"
 		if [ ! -d "$CDIR" ]; then
-			mkdir -p "$CDIR" 2>/dev/null
+			mkProjDir "$CDIR"
 			writelog "INFO" "${FUNCNAME[0]} - Created dir '$CDIR'"
 		fi
 
 		CADGDIR="$SteamUserDir/$LSAD/$2"
 		if [ ! -d "$CADGDIR" ]; then
-			mkdir -p "$CADGDIR" 2>/dev/null
+			mkProjDir "$CADGDIR"
 			writelog "INFO" "${FUNCNAME[0]} - Created dir '$CADGDIR'"
 		fi
 	fi
@@ -9942,7 +10015,7 @@ function customVortexGameSettings {
 	if [ "$AID" == "22370" ]; then
 		FOGDIR="$SteamUserDir/$LSAD/Fallout3goty"
 		if [ ! -d "$FOGDIR" ]; then
-			mkdir -p "$FOGDIR" 2>/dev/null
+			mkProjDir "$FOGDIR"
 		fi
 
 		if [ -d "$FOGDIR" ]; then
@@ -10227,11 +10300,11 @@ function dlLatestDprs {
 function startDepressurizer {
 	if [ ! -d "$DPRSCOMPDATA" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Creating '$DPRS' compatdata and installing deps"
-		mkProjDir "$DPRSCOMPDATA" 1
+		mkProjDir "$DPRSCOMPDATA"
 		reCreateCompatdata "ccd" "$DPRS" "s"
 	fi
 
-	mkProjDir "$DPRSDLDIR" 1
+	mkProjDir "$DPRSDLDIR"
 	if [ "$DPRSPAUTOUP" -eq 1 ]; then
 		dlLatestDprs
 	fi
@@ -10276,7 +10349,7 @@ function startDepressurizer {
 	
 	function cleanCpSrcTo {
 		if [ -f "$1" ]; then
-			mkdir -p "${2%/*}" 2>/dev/null
+			mkProjDir "${2%/*}"
 			if ! cmp -s "$1" "$2" || [ -L "$2" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Copying '$1' to '$2'"
 				rm "$2" 2>/dev/null
@@ -10291,7 +10364,7 @@ function startDepressurizer {
 
 	function cleanLnSrcTo {
 		if [ -f "$1" ]; then
-			mkdir -p "${2%/*}" 2>/dev/null
+			mkProjDir "${2%/*}"
 			if [ "$(readlink -f "$2")" == "$(readlink -f "$1")" ]; then
 				writelog "SKIP" "${FUNCNAME[0]} - '$2' is already pointing to '$1'"
 			else
@@ -10357,7 +10430,7 @@ function startDepressurizer {
 			writelog "INFO" "${FUNCNAME[0]} - Starting '$DPRSEXE' using '$DPRSWINE'"
 			DPRSWINEDEBUG="-all"
 			DPRSSUDIR="$DPRSPFX/$DRCU/$STUS/$APDA/$DPRS"
-			mkdir -p "$DPRSSUDIR" 2>/dev/null
+			mkProjDir "$DPRSSUDIR"
 			cd "$DPRSSUDIR" || return
 			sleep 1
 			LC_ALL="C" PATH="$STLPATH" LD_LIBRARY_PATH="" LD_PRELOAD="" WINE="$DPRSWINE"  WINEARCH="win64" WINEDEBUG="$DPRSWINEDEBUG" WINEPREFIX="$DPRSPFX" "$DPRSWINE" "$DPRSEXE" >/dev/null 2>/dev/null
@@ -10497,7 +10570,7 @@ function checkVortex {
 
 	# checking WINEPREFIX for Vortex:
 	if [ -n "$VORTEXPFX" ]; then
-		mkdir -p "$VORTEXPFX" 2>/dev/null
+		mkProjDir "$VORTEXPFX"
 		if [ -d "$VORTEXPFX" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - VORTEXPFX is a 'pfx' subdirectory of '$VORTEXCOMPDATA' and the directory exists"
 
@@ -10513,7 +10586,7 @@ function checkVortex {
 
 				if [ ! -d "$VortexSteamAppsCommon" ]; then
 					writelog "INFO" "${FUNCNAME[0]} - Creating directory $VortexSteamAppsCommon"
-					mkdir -p "$VortexSteamAppsCommon"
+					mkProjDir "$VortexSteamAppsCommon"
 				fi
 				MyDocs="My Documents"
 				MyDocsMyGames="$MyDocs/My Games"
@@ -10541,8 +10614,8 @@ function checkVortex {
 					rm "$UserLocalSetAppData"
 				fi
 				
-				mkdir -p "$UserMyDocsMyGames" 2>/dev/null
-				mkdir -p "$UserLocalSetAppData" 2>/dev/null
+				mkProjDir "$UserMyDocsMyGames"
+				mkProjDir "$UserLocalSetAppData"
 
 				# game specific part:
 				writelog "INFO" "${FUNCNAME[0]} - Preparing required registry and path settings for '$GFD' and '$SGNAID'"
@@ -11110,7 +11183,7 @@ function getProtonDBRating {
 
 		if [ -n "$PDBRATINGCACHE" ] && [ "$PDBRATINGCACHE" -ge 1 ]; then
 			PDBDLDIR="$STLDLDIR/proton/rating"
-			mkProjDir "$PDBDLDIR" 1
+			mkProjDir "$PDBDLDIR"
 			PDBAJ="$PDBDLDIR/${AID}.json"
 			if [ ! -f "$PDBAJ" ] || test "$(find "$PDBAJ" -mmin +"$(( DMIN * PDBRATINGCACHE ))")"; then
 				rm "$PDBAJ" 2>/dev/null
@@ -11255,7 +11328,7 @@ function OneTimeProton {
 }
 
 function dlConty {
-	mkProjDir "$CONTYDLDIR" 1
+	mkProjDir "$CONTYDLDIR"
 	CONTYDLVERS="$("$WGET" -q "$CONTYRELURL" -O - | grep -m1 "download.*.$CONTY" | grep -oP 'releases\K[^"]+')"
 
 	if grep -q "$CONTY" <<< "$CONTYDLVERS"; then
@@ -11406,7 +11479,7 @@ function checkConty {
 
 function logPlayTime {
 	if [ "$LOGPLAYTIME" -eq 1 ] && [ -n "$GN" ] ; then
-		mkProjDir "$PLAYTIMELOGDIR" 1
+		mkProjDir "$PLAYTIMELOGDIR"
 		# different date formats?
 		echo "$(date +%d.%m.%Y): $1 sec" >> "$PLAYTIMELOGDIR/${GN}.log"
 	fi
@@ -11630,7 +11703,7 @@ function delPrefix {
 			writelog "INFO" "${FUNCNAME[0]} - Removing the prefix '$GPFX' as requested"
 			notiShow "$(strFix "$NOTY_DELPFX" "$GPFX")"
 			rm -rf "$STEAM_COMPAT_DATA_PATH" 2>/dev/null
-			mkdir "$STEAM_COMPAT_DATA_PATH" 2>/dev/null
+			mkProjDir "$STEAM_COMPAT_DATA_PATH"
 		fi
 	fi
 }
@@ -12357,12 +12430,12 @@ function CompatTool {
 		if [ -d "$SROOT" ]; then
 			if [ ! -d "$STEAMCOMPATOOLS" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Initially creating dir '$STEAMCOMPATOOLS'"
-				mkdir -p "$STEAMCOMPATOOLS" 2>/dev/null
+				mkProjDir "$STEAMCOMPATOOLS"
 			fi
 
 			if [ ! -d "$SCTS" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Creating dir '$SCTS'"
-				mkdir -p "$SCTS" 2>/dev/null
+				mkProjDir "$SCTS"
 
 				CVDF="$SCTS/$CTVDF"
 				writelog "INFO" "${FUNCNAME[0]} - Creating file '$CVDF'"
@@ -12733,6 +12806,21 @@ function commandline {
 			FUSEID "$2"
 			getRawAppIDInfo "$USEID"
 		fi
+	elif  [ "$1" == "createappinfometa" ] || [ "$1" == "caim" ]; then
+		if [ "$2" == "installed" ] || [ "$2" == "i" ]; then
+			while read -r CATAID; do
+				writeAllAIMeta "$CATAID"
+			done <<< "$(listInstalledGameIDs)"
+		elif [ "$2" == "owned" ] || [ "$2" == "o" ]; then
+			while read -r CATAID; do
+				writeAllAIMeta "$CATAID"
+			done <<< "$(getOwnedAids)"
+		else
+			if [ "$2" -eq "$2" ]; then
+				FUSEID "$2"
+				writeAllAIMeta "$USEID"
+			fi
+		fi
 	elif  [ "$1" == "createfirstinstall" ] || [ "$1" == "cfi" ]; then
 		FUSEID "$2"
 		CreateCustomEvaluatorScript "$USEID"
@@ -12994,10 +13082,10 @@ function storeMetaData {
 
 	writelog "INFO" "${FUNCNAME[0]} - Saving metadata for game '$MGNA ($MAID)'"
 
-	mkProjDir "$GEMETA" 1
-	mkProjDir "$CUMETA" 1
-	mkProjDir "$TIGEMETA" 1
-	mkProjDir "$TICUMETA" 1
+	mkProjDir "$GEMETA"
+	mkProjDir "$CUMETA"
+	mkProjDir "$TIGEMETA"
+	mkProjDir "$TICUMETA"
 
 	if [ ! -f "$GEMETA/$MAID.conf" ]; then
 		if [ "$SGDBAUTODL" == "no_meta" ] ; then
@@ -13057,7 +13145,7 @@ function restoreSteamUser {
 	function startRestore {
 		writelog "INFO" "${FUNCNAME[0]} - Restoring backup from '$BACKUPSRC' to '$SteamUserDir'"
 		notiShow "$(strFix "$NOTY_STARTRESTORE" "$BACKUPSRC" "$AID")"
-		mkProjDir "$SteamUserDir" 1
+		mkProjDir "$SteamUserDir"
 		"$RSYNC" -am "$BACKUPSRC" "$SteamUserDir" 
 		notiShow "$(strFix "$NOTY_STOPRESTORE" "$SteamUserDir")"
 	}
@@ -13201,8 +13289,8 @@ function backupSteamUser {
 			if [ -z "$2" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Backup enabled for Game '$BACKTI ($BAID)'"
 			fi
-			mkProjDir "$SUBADIRID/$BAID" 1
-			mkProjDir "$SUBADIRTI" 1
+			mkProjDir "$SUBADIRID/$BAID"
+			mkProjDir "$SUBADIRTI"
 			SteamUserDir="$GPFX/$DRCU/$STUS"
 			
 			if [ -d "$SteamUserDir" ]; then
@@ -13210,7 +13298,7 @@ function backupSteamUser {
 				if [ -z "$2" ]; then
 					notiShow "$(strFix "$NOTY_STARTBACKUP" "$BACKTI" "$BAID")"
 				fi
-				mkProjDir "$BACKEX" 1
+				mkProjDir "$BACKEX"
 				
 				EXID="$BACKEX/exclude-${BAID}.txt"
 				touch "$EXGLOB" "$EXID"
@@ -13297,7 +13385,7 @@ function dlX64Dbg {
 	if [ -f "$DLCH" ]; then
 		writelog "SKIP" "${FUNCNAME[0]} - '$X64D' is already ready"
 	else	
-		mkProjDir "$DLDST" 1
+		mkProjDir "$DLDST"
 		X64ZIP="$(getLatestX64dbgSnap)"
 
 		if [ ! -f "$DLDST/$X64ZIP" ]; then
@@ -13755,7 +13843,7 @@ function closeSTL {
 
 # all variables in closeSTL are blocked from being unset before gamestart - dirty list with variables to keep which are not used here:
 #DXVK_HUD DXVK_LOG_LEVEL ENABLE_VKBASALT LOGDIR LOGLEVEL MANGOHUD NETOPTS PROTON_DEBUG_DIR PROTON_DUMP_DEBUG_COMMANDS PROTON_FORCE_LARGE_ADDRESS_AWARE
-#PROTON_LOG PROTON_LOG_DIR PROTON_NO_D3D10 PROTON_NO_D3D11 PROTON_NO_ESYNC PROTON_NO_FSYNC PROTON_USE_WINED3D STL_PV_SHELL STL_PV_TERMINAL
+#PROTON_LOG PROTON_LOG_DIR PROTON_NO_D3D10 PROTON_NO_D3D11 PROTON_NO_ESYNC PROTON_NO_FSYNC PROTON_ENABLE_NVAPI PROTON_USE_WINED3D STL_PV_SHELL STL_PV_TERMINAL
 #STL_PV_VERBOSE USESLR WINEDLLOVERRIDES WINE_FULLSCREEN_INTEGER_SCALING WINE_FULLSCREEN_FSR WINE_FULLSCREEN_FSR_STRENGTH
 
 	# kill $VRVIDEOPLAYER in case it wasn't closed before
@@ -14011,8 +14099,8 @@ function CreateCustomEvaluatorScript {
 		writelog "INFO" "${FUNCNAME[0]} - Created temporary '$TEVALSC'"
 	}
 
-	mkProjDir "$EVMETACUSTOMID" 1
-	mkProjDir "$EVMETAADDONID" 1
+	mkProjDir "$EVMETACUSTOMID"
+	mkProjDir "$EVMETAADDONID"
 	
 	writelog "INFO" "${FUNCNAME[0]} - Starting Gui for Creating a custom '$EVALSC'"
 	export CURWIKI="$PPW/Steam-First-Time-Setup"
@@ -14289,7 +14377,7 @@ function reCreateCompatdata {
 							export STEAM_COMPAT_APP_ID="${EUNID}"
 						fi
 
-						mkdir -p "$DESTCODA" 2>/dev/null
+						mkProjDir "$DESTCODA"
 						EVALISRUN="$STLSHM/evalisrun.txt"
 						
 						cd "$STEAM_COMPAT_CLIENT_INSTALL_PATH" >/dev/null || return
@@ -14420,7 +14508,7 @@ function createModifiedEvalsc {
 function cleanupOutdatedEvals {
 	writelog "INFO" "${FUNCNAME[0]} - Cleaning up outdated files in '$EVMETAID'"
 
-	mkProjDir "$EVMETAOLD" 1
+	mkProjDir "$EVMETAOLD"
 	while read -r oldfile; do
 		if [ -f "$oldfile" ]; then
 			mv "$oldfile" "$EVMETAOLD"
@@ -14462,8 +14550,8 @@ function checkFirstTimeRun {
 	EVALPROTCONF="$STLSHM/evalprot-${STEAM_COMPAT_APP_ID}.conf"
 	
 	function waitForEvaluatorscript {
-		mkProjDir "$EVMETAID" 1
-		mkProjDir "$EVMETATITLE" 1
+		mkProjDir "$EVMETAID"
+		mkProjDir "$EVMETATITLE"
 		
 		ISCRILOG="$2"
 		EVALVDF="$SCCILECO/$1"
@@ -14703,13 +14791,13 @@ function getCurrentCommandline {
 }
 
 function initShmStl {
-	mkProjDir "$MTEMP" 1
+	mkProjDir "$MTEMP"
 	SHMVERS="$STLSHM/version"
 
 	if [ -f "$SHMVERS" ]; then
 		if [ "$PROGVERS" != "$(cat "$SHMVERS")" ]; then
 			mv "${STLSHM}" "${STLSHM}-$((100 + RANDOM % 100))"
-			mkProjDir "$MTEMP" 1
+			mkProjDir "$MTEMP"
 			echo "$PROGVERS" > "$SHMVERS"
 		fi	
 	else
