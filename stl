@@ -210,7 +210,7 @@ DEPSL32="$DEPSLATDIR/32/$DEPSGE"
 PFX86="Program Files (x86)"
 PFX86S="$PFX86/Steam"
 APIN="appinfo"
-
+SLO="Steam Launch Option"
 SOMEPOPULARWINEPAKS="dotnet4 quartz xact"
 SOMEWINEDEBUGOPTIONS="-all,+steam,+vrclient,+vulkan"
 SOMEWINEDLLOVERRIDES="dxgi=n,b;d3d9=n,b;d3dcompiler_47=n,b"
@@ -343,6 +343,7 @@ CE="Cheat Engine"
 HEADLINEFONT="larger"
 FONTSIZES="!xx-small!x-small!small!smaller!medium!large!larger!!x-large!xx-large!"
 HAVEINNO="1"
+FOUNDPROTONMM="0"
 SREG="system.reg"
 NSGA="non-steam game"
 BTVP="$DRC/Program Files/Black Tree Gaming Ltd/Vortex"
@@ -370,7 +371,7 @@ function setSteamPath {
 			echo "$1=\"$STPA\"" >> "$STPAVARS"
 			writelog "INFO" "${FUNCNAME[0]} - Set '$1' to '$STPA'"
 		else
-			writelog "ERROR" "${FUNCNAME[0]} - '$2' not found for variable '$1' in '$HSR' or '$HSS'!" "E"
+			writelog "WARN" "${FUNCNAME[0]} - '$2' not found for variable '$1' in '$HSR' or '$HSS'!"
 		fi	
 	else
 		writelog "SKIP" "${FUNCNAME[0]} - '$1' already defined as '${!1}'"
@@ -1601,29 +1602,6 @@ function loadLanguage {
 	fi
 }
 
-function OVPROT {
-	if [ "$HAVEINPROTON" -eq 1 ]; then
-		writelog "INFO" "${FUNCNAME[0]} - proton override is disabled, because Steam Launch option was used"
-		echo 0
-	else
-		writelog "INFO" "${FUNCNAME[0]} - No proton provided by steam command line, so an override is required"
-		if [ -n "$OVERRIDEPROTON" ] && [ "$OVERRIDEPROTON" -eq 1 ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Proton override is already enabled anyway"
-		else
-			writelog "INFO" "${FUNCNAME[0]} - Force Enabling proton override"
-			OVERRIDEPROTON=1
-		fi
-
-		if [ -n "$OVERRIDEPROTON" ] && [ "$OVERRIDEPROTON" -eq 1 ]; then
-			writelog "INFO" "${FUNCNAME[0]} - proton override is enabled"
-			echo 1
-		else
-			writelog "INFO" "${FUNCNAME[0]} - proton override is disabled"
-			echo 0
-		fi
-	fi
-}
-
 function setProtonPathVersion {
 	if [ -n "$INPROTV" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Using directly known '$INPROTV' as Proton Version for '$1'"
@@ -1917,7 +1895,6 @@ function setDefaultCfgValues {
 		if [ -z "$USESLR" ]								; then	USESLR="1"; fi
 		if [ -z "$USEREAP" ]							; then	USEREAP="1"; fi
 		if [ -z "$USEPROTON" ]							; then	USEPROTON="$(getDefaultProton)"; fi
-		if [ -z "$OVERRIDEPROTON" ]						; then	OVERRIDEPROTON="0"; fi
 		if [ -z "$REDIRCOMPDATA" ]						; then	REDIRCOMPDATA="disabled"; fi
 		if [ -z "$REDIRSTEAMUSER" ]						; then	REDIRSTEAMUSER="disabled"; fi
 		if [ -z "$PROTONCHECK" ]						; then	PROTONCHECK="disabled"; fi
@@ -2322,8 +2299,6 @@ function saveCfg {
 			echo "USESLR=\"$USESLR\""
 			echo "## $DESC_USEREAP"
 			echo "USEREAP=\"$USEREAP\""
-			echo "## $(strFix "$DESC_OVERRIDEPROTON" "$PROGCMD")"
-			echo "OVERRIDEPROTON=\"$OVERRIDEPROTON\""
 			echo "## $DESC_USEPROTON"
 			echo "USEPROTON=\"$USEPROTON\""
 			echo "## $DESC_REDIRCOMPDATA"
@@ -2592,22 +2567,40 @@ function PROTPATH {
 }
 
 function setRunWineServer {
-	if [ -z "$RUNPROTON" ]; then
-		setRunProtonFromUseProton
-	fi
-	
-	CHECKWINED="$(dirname "$RUNPROTON")/$DBW"
-	CHECKWINEF="$(dirname "$RUNPROTON")/$FBW"
-	if [ -f "$CHECKWINED" ]; then
-		RUNWINE="$CHECKWINED"
-		RUNWINESERVER="${RUNWINE}server"
-		writelog "INFO" "${FUNCNAME[0]} - Set the wine binary for proton in path '$RUNPROTON' to '$RUNWINE' and wineserver to '$RUNWINESERVER'"	
-	elif [ -f "$CHECKWINEF" ]; then
-		RUNWINE="$CHECKWINEF"
-		RUNWINESERVER="${RUNWINE}server"
-		writelog "INFO" "${FUNCNAME[0]} - Set the wine binary for proton in path '$RUNPROTON' to '$RUNWINE' and wineserver to '$RUNWINESERVER'"
-	else
-		writelog "WARN" "${FUNCNAME[0]} - Couldn't find the wine binary for the proton in path '$RUNPROTON' - falling back to 'wine' for plain RUNWINE and 'wineserver' for RUNWINESERVER"
+	if [ "$ISGAME" -eq 2 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Initiated from '$1'"
+
+		if [ -n "$USEPROTON" ] && [ ! -f "$(PROTPATH "$USEPROTON")" ]; then
+			fixProtonVersionMismatch "USEPROTON"
+		fi
+		if [ -z "$RUNPROTON" ]; then
+			setRunProtonFromUseProton
+		fi
+
+		if [ "$PROTONCHECK" == "disabled" ] || [ "$PROTONCHECK" == "ask_before_menu" ] || [ "$PROTONCHECK" == "only_notify" ]; then
+			if [ "$ISGAME" -eq 2 ] && [ "$USEWINE" -eq 0 ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Entering checkProtonBump"
+				checkProtonBump "$USEPROTON"
+			fi
+		fi
+
+		if [ ! -f "$RUNPROTON" ] || [ -z "$RUNPROTON" ]; then
+			setRunProtonFromUseProton 
+		fi
+		
+		CHECKWINED="$(dirname "$RUNPROTON")/$DBW"
+		CHECKWINEF="$(dirname "$RUNPROTON")/$FBW"
+		if [ -f "$CHECKWINED" ]; then
+			RUNWINE="$CHECKWINED"
+			RUNWINESERVER="${RUNWINE}server"
+			writelog "INFO" "${FUNCNAME[0]} - Set the wine binary for proton in path '$RUNPROTON' to '$RUNWINE' and wineserver to '$RUNWINESERVER'"	
+		elif [ -f "$CHECKWINEF" ]; then
+			RUNWINE="$CHECKWINEF"
+			RUNWINESERVER="${RUNWINE}server"
+			writelog "INFO" "${FUNCNAME[0]} - Set the wine binary for proton in path '$RUNPROTON' to '$RUNWINE' and wineserver to '$RUNWINESERVER'"
+		else
+			writelog "WARN" "${FUNCNAME[0]} - Couldn't find the wine binary for the proton in path '$RUNPROTON' - falling back to 'wine' for plain RUNWINE and 'wineserver' for RUNWINESERVER"
+		fi
 	fi
 }
 
@@ -2615,11 +2608,11 @@ function setNewProtVars {
 	if [ "$ISGAME" -eq 2 ] && [ "$USEWINE" -eq 0 ]; then
 		if [ "$HAVEINPROTON" -eq 1 ]; then
 			if [ -z "$RUNWINESERVER" ]; then
-				setRunWineServer
+				setRunWineServer "${FUNCNAME[0]}"
 			fi
 		else
 			# arg1 is absolute proton path
-			if [ "$(OVPROT)" -eq 1 ]; then
+			if [ "$HAVEINPROTON" -eq 0 ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Setting new Proton Variables based on '$1'"
 				RUNPROTON="$1"
 				CHECKWINED="$(dirname "$RUNPROTON")/$DBW"
@@ -2635,12 +2628,12 @@ function setNewProtVars {
 					"$TAR" xf "$(dirname "$RUNPROTON")/$PDTGZ" -C "$(dirname "$RUNPROTON")/dist"
 				fi
 
-				setRunWineServer
+				setRunWineServer "${FUNCNAME[0]}"
 				
 				PROTONVERSION="$(setProtonPathVersion "$RUNPROTON")"
 				USEPROTON="$PROTONVERSION"
 			else
-				writelog "SKIP" "${FUNCNAME[0]} - Using Steam Proton '$FIRSTUSEPROTON' instead of $PROGCMD Proton '$USEPROTON' because OVERRIDEPROTON is disabled"
+				writelog "SKIP" "${FUNCNAME[0]} - Using Steam Proton '$FIRSTUSEPROTON' instead of $PROGCMD Proton '$USEPROTON' because '$PROGCMD' was used as '$SLO'"
 				notiShow "$(strFix "$NOTY_SETNEWPROTVARS" "$FIRSTUSEPROTON")"
 			fi
 		fi
@@ -2682,7 +2675,7 @@ function setNOP {
 }
 
 function needNewProton {
-	if [ "$(OVPROT)" -eq 1 ] || [ -n "$1" ]; then
+	if [ "$HAVEINPROTON" -eq 0 ] || [ -n "$1" ]; then
 		getAvailableProtonVersions "up"
 		export CURWIKI="$PPW/Proton-Versions"
 		TITLE="${PROGNAME}-NeedNewProtonVersion"
@@ -2694,8 +2687,6 @@ function needNewProton {
 		--text="$(spanFont "$GUI_NEEDNEWPROTON" "H")" \
 		--field="$GUI_NEEDNEWPROTON2":CB "${USEPROTON/#-/ -}!$PROTYADLIST" \
 		--title="$TITLE" "$GEOM")"
-
-
 
 		if [ -n "$PICKPROTON" ]; then
 			if [ -n "$1" ]; then
@@ -2896,8 +2887,6 @@ function dlUpCustomProton {
 	NEWMINORPROT="$(printProtonArr | grep "^${NEWESTPROT%-*}" | cut -d ';' -f1 | sort -nr | head -n1)"
 	NEWMINORRUN="$(PROTPATH "${NEWMINORPROT//\"/}")"
 	if [ -f "$NEWMINORRUN" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - Enabling proton override"
-		OVERRIDEPROTON=1
 		switchProton "$NEWMINORPROT"
 		writelog "INFO" "${FUNCNAME[0]} - $(strFix "$NOTY_NEWPROTON2" "$CURPROTON" "$NEWMINORPROT")"
 		notiShow "$(strFix "$NOTY_NEWPROTON2" "$CURPROTON" "$NEWMINORPROT")"
@@ -3582,10 +3571,10 @@ function TrayIconExports {
 	fi
 
 	if [ ! -f "$RUNWINE" ]; then
-		setRunWineServer
+		setRunWineServer "${FUNCNAME[0]}"
 	fi
 
-	export RUNWINESERVER="${RUNWINE}server"
+	export RUNWINESERVER="$RUNWINESERVER"
 
 	if [ -n "$KPFX" ]; then
 		echo "WINEPREFIX=\"$KPFX\" \"$RUNWINESERVER\" -k" > "$KILLSWITCH"
@@ -3605,10 +3594,12 @@ function TrayIconExports {
 #ENDIEX
 
 function openTrayIcon {
-	# loading gameconfig here, as some vars might have to be exported
-	writelog "INFO" "${FUNCNAME[0]} - LoadCfg: $STLGAMECFG"
-	loadCfg "$STLGAMECFG"
-
+	if [ -z "$1" ]; then
+		# loading gameconfig here, as some vars might have to be exported
+		writelog "INFO" "${FUNCNAME[0]} - LoadCfg: $STLGAMECFG"
+		loadCfg "$STLGAMECFG"
+	fi
+	
 	if [ -z "$YADTRAYPID" ] && [ "$USETRAYICON" -eq 1 ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Opening trayIcon:" "X"
 
@@ -3895,7 +3886,6 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_STL_PV_SHELL!$DESC_STL_PV_SHELL ('STL_PV_SHELL')":CB "${STL_PV_SHELL/#-/ -}!none!after!fail!instead" `#CAT_Misc` `#MENU_GAME` \
 --field="     $GUI_STL_PV_TERMINAL!$DESC_STL_PV_TERMINAL ('STL_PV_TERMINAL')":CB "${STL_PV_TERMINAL/#-/ -}!none!auto!tty!xterm" `#CAT_Misc` `#MENU_GAME` \
 --field="$(spanFont "$GUI_OPTSPROTON" "H")":LBL "SKIP" `#CAT_Proton` `#HEAD_Proton` `#MENU_GAME` `#MENU_GLOBAL` \
---field="     $GUI_OVERRIDEPROTON!$(strFix "$DESC_OVERRIDEPROTON" "$PROGCMD") ('OVERRIDEPROTON')":CHK "${OVERRIDEPROTON/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_USEPROTON!$DESC_USEPROTON ('USEPROTON')":CB "${USEPROTON/#-/ -}!$PROTYADLIST" `#CAT_Proton` `#MENU_GAME` \
 --field="     $GUI_USESLR!$DESC_USESLR ('USESLR')":CHK "${USESLR/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_USEREAP!$DESC_USEREAP ('USEREAP')":CHK "${USEREAP/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
@@ -4496,6 +4486,7 @@ function MainMenu {
 	#SETHEAD="${SETHEAD//&/+}"
 	
 	createProtonList X
+
 	WANTPROTON="$("$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --center --window-icon="$STLICON" --form --center "$WINDECO" --title="$TITLE" \
     --text="$SETHEAD" \
 	--columns="$COLCOUNT" --f1-action="$F1ACTIONCG" --separator="" \
@@ -4911,9 +4902,14 @@ function loadCfg {
 	CFGFILE="$1"
 
 	if [ -f "$CFGFILE" ]; then
+
 		# disable logging here when the program just started (cosmetics)
 		if [ -z "$2" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - '$CFGFILE' START"
+		fi
+
+		if [ "$CFGFILE" == "$STLGAMECFG" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Loading game config '$CFGFILE'"
 		fi
 
 		while read -r line; do
@@ -4955,7 +4951,7 @@ function extProtonRun {
 	# could help here:
 	if [ ! -f "${RUNPROTON//\"/}" ]; then
 		writelog "WARN" "${FUNCNAME[0]} - '$USEPROTON' seems outdated as the executable ${RUNPROTON//\"/} wasn't found"
-		fixProtonVersionMismatch "$USEPROTON"
+		fixProtonVersionMismatch "USEPROTON"
 	fi
 
 	writelog "INFO" "${FUNCNAME[0]} - Continuing with RUNPROTON='$RUNPROTON'"
@@ -5446,7 +5442,11 @@ function getTitleFromID {
 		echo "A Game ID is required as argument"
 	else
 		if [ -f "$GEMETA/${1}.conf" ]; then
-			grep "^GAMENAME" "$GEMETA/${1}.conf" | cut -d '=' -f2
+			if grep -q "^GAMENAME" "$GEMETA/${1}.conf"; then
+				grep "^GAMENAME" "$GEMETA/${1}.conf" | cut -d '=' -f2
+			else
+				getAppInfoData "$1" "name"
+			fi
 		else
 			echo "No Title found for '$1'"
 		fi
@@ -7084,25 +7084,32 @@ function genDefIcon {
 }
 
 function createDefaultCfgs {
-	writelog "INFO" "${FUNCNAME[0]} - Preparing some default configs"
+	writelog "INFO" "${FUNCNAME[0]} - START"
 
 	createProjectDirs
 
 	rm "$TEMPLOG" "$WINRESLOG" 2>/dev/null
 
 	loadLanguage "$@"
+
+	writelog "INFO" "${FUNCNAME[0]} - setSteamPaths:"
 	setSteamPaths
 
 	saveCfg "$STLDEFGLOBALCFG" X
 	loadCfg "$STLDEFGLOBALCFG" X
-
 	saveCfg "$STLURLCFG" X
 	loadCfg "$STLURLCFG" X
-
 	prepareGUI
 	genDefIcon
+
 	createProjectDirs
-	getAvailableProtonVersions # "up"
+
+	if [ "$ISGAME" -eq 2 ] || [ ! -f "$PROTONCSV" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - getAvailableProtonVersions:"
+		getAvailableProtonVersions # "up"
+	elif [ "$ISGAME" -ne 2 ] && [ -f "$PROTONCSV" ]; then
+		mapfile -t -O "${#ProtonCSV[@]}" ProtonCSV < "$PROTONCSV"
+	fi
 
 	checkStartMode
 	saveCfg "$STLDEFGAMECFG" X
@@ -7111,6 +7118,7 @@ function createDefaultCfgs {
 	listAllSettingsEntries
 	checkEntryBlocklist
 	updateMenuSortFile
+	writelog "INFO" "${FUNCNAME[0]} - STOP"
 }
 
 # updates or creates option $1 with value $2 in configfile $3:
@@ -7466,7 +7474,7 @@ function StandaloneProtonGame {
 		if [ "$SAPRUN" == "TRUE" ]; then
 			RUNSAPPROTON="$(PROTPATH "$SAPPROTON")"
 			if [ ! -f "$RUNSAPPROTON" ]; then
-				RUNSAPPROTON="$(fixProtonVersionMismatch "$SAPPROTON" X)"
+				RUNSAPPROTON="$(fixProtonVersionMismatch "SAPPROTON" X)"
 			fi
 
 			if [ ! -f "$RUNSAPPROTON" ]; then
@@ -7680,7 +7688,7 @@ function OneTimeRunGui {
 
 						RUNOTPROTON="$(PROTPATH "$OTPROTON")"
 						if [ ! -f "$RUNOTPROTON" ]; then
-							RUNOTPROTON="$(fixProtonVersionMismatch "$OTPROTON" X)"
+							RUNOTPROTON="$(fixProtonVersionMismatch "OTPROTON" X)"
 						fi
 		
 						if [ ! -f "$RUNOTPROTON" ]; then
@@ -8200,7 +8208,7 @@ function redirectSCDP {
 			VERSFIX="$(grep "${USEPROTON%-*}" "$PROTONCSV" | cut -d ';' -f1 | sort -nr | head -n1)"
 			if [ -n "$VERSFIX" ]; then
 				DESTPROT1="${VERSFIX//proton-}"
-				writelog "INFO" "${FUNCNAME[0]} - Using Proton version with minor version fix '$DESTPROT1' for '$CODA' directory name"
+				writelog "INFO" "${FUNCNAME[0]} - Using Proton version with minor version fix '$DESTPROT1' for $CODA directory name"
 			else
 				DESTPROT1="${USEPROTON//proton-}"
 				writelog "INFO" "${FUNCNAME[0]} - Using Proton version '$DESTPROT1' for '$CODA' directory name"
@@ -8968,7 +8976,7 @@ function chooseWinetricksPrefix {
 					RUNWTPROTON="$(PROTPATH "$WTPROTON")"
 
 					if [ ! -f "$RUNWTPROTON" ]; then
-						RUNWTPROTON="$(fixProtonVersionMismatch "$WTPROTON" X)"
+						RUNWTPROTON="$(fixProtonVersionMismatch "WTPROTON" X)"
 					fi
 
 					if [ -f "$(dirname "$RUNWTPROTON")/$DBW" ]; then
@@ -9421,7 +9429,7 @@ function setVortexProtonWine {
 			fi
 
 			if [ ! -f "$VORTEXPROTON" ]; then
-				VORTEXPROTON="$(fixProtonVersionMismatch "$USEVORTEXPROTON" X)"
+				VORTEXPROTON="$(fixProtonVersionMismatch "USEVORTEXPROTON" X)"
 			fi
 
 			if [ ! -f "$VORTEXPROTON" ]; then
@@ -10541,7 +10549,7 @@ function startDepressurizer {
 		fi
 
 		if [ ! -f "$DPRSPROTON" ]; then
-			DPRSPROTON="$(fixProtonVersionMismatch "$USEDPRSPROTON" X)"
+			DPRSPROTON="$(fixProtonVersionMismatch "USEDPRSPROTON" X)"
 		fi
 
 		if [ ! -f "$DPRSPROTON" ]; then
@@ -10995,6 +11003,70 @@ function setLinGameVals {
 	fi
 }
 
+function prepareProton {
+	if [ "$ISGAME" -eq 2 ]; then
+		if [ "$USEWINE" -eq 0 ]; then
+			if [ "$EARLYUSEWINE" -eq 1 ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Wine has just been disabled, so preparing Proton now"
+				getAvailableProtonVersions "up"
+				checkStartMode
+			fi
+
+			if [ "$HAVEINPROTON" -eq 0 ]; then
+				if [ -n "$USEPROTON" ] && [ ! -f "$(PROTPATH "$USEPROTON")" ]; then
+					fixProtonVersionMismatch "USEPROTON"
+				fi
+			
+				# (re)initialize Proton dependant variables, when USEPROTON changed in a menu above
+				if [ -n "$USEPROTON" ] && [ "$USEPROTON" != "$FIRSTGAMEUSEPROTON" ] && [ "$ISGAME" -eq 2 ]; then
+					writelog "INFO" "${FUNCNAME[0]} - setNewProtVars, because '$USEPROTON' != '$FIRSTGAMEUSEPROTON'"
+					setNewProtVars "$(PROTPATH "$USEPROTON")"
+				fi
+			else
+				USEPROTON="$INPROTV"
+				setNewProtVars "$(PROTPATH "$USEPROTON")"
+				writelog "INFO" "${FUNCNAME[0]} - Checking the Proton version is not required, because $SLO is used. Proton version set in Steam is '$USEPROTON'"
+			fi
+			
+			if [ "$USEWINEDEBUGPROTON" -eq 1 ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Using '$STLWINEDEBUG' as Proton 'WINEDEBUG' parameters, because 'USEWINEDEBUGPROTON' is enabled"
+				export WINEDEBUG=\"$STLWINEDEBUG\"
+			fi
+
+			if [ -n "$STLWINEDLLOVERRIDES" ] && [ "$STLWINEDLLOVERRIDES" != "$NON" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Using '$STLWINEDLLOVERRIDES' as 'WINEDLLOVERRIDES' parameter"
+				export WINEDLLOVERRIDES=\"$WINEDLLOVERRIDES;$STLWINEDLLOVERRIDES\"
+			fi
+			
+			if [ "$HAVEINPROTON" -eq 0 ]; then
+				if [ "$PROTONCHECK" == "ask_before_game" ] || [ "$PROTONCHECK" == "auto_download" ] || [ "$PROTONCHECK" == "auto_download_and_use" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Entering checkProtonBump"
+					checkProtonBump "$USEPROTON" 
+				fi
+			fi
+		fi
+		
+		# export DXVK_CONFIG_FILE if STLDXVKCFG was found:
+		if [ -f "$STLDXVKCFG" ]; then
+			export DXVK_CONFIG_FILE="$STLDXVKCFG"
+		fi
+
+		# shortcut to enable all required flags for SBSVR with ReShade
+		if [ -n "$SBSVRRS" ]; then
+			if [ "$SBSVRRS" -eq 1 ]; then
+				writelog "INFO" "${FUNCNAME[0]} - $PROGNAME - SBSVRRS enabled - starting game in SBS-VR using ReShade"
+				export RUNSBSVR=1
+				export INSTALL_RESHADE=1
+				export RESHADE_DEPTH3D=1
+				export USERESHADE=1
+				export ENABLE_VKBASALT=0
+			fi
+		fi
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - No Proton game"
+	fi	
+}
+
 function prepareLaunch {
 	rm "$CLOSETMP" 2>/dev/null
 	rm "$KILLSWITCH" 2>/dev/null
@@ -11007,6 +11079,7 @@ function prepareLaunch {
 	writelog "START" "######### Game Launch: $SGNAID #########"
 
 	createDefaultCfgs "${ORGGCMD[@]}"
+
 	getGameData "$AID"
 
 	writelog "INFO" "${FUNCNAME[0]} - Game launch args '${ORGGCMD[*]}'"
@@ -11017,10 +11090,25 @@ function prepareLaunch {
 	writelog "INFO" "${FUNCNAME[0]} -------------------"
 	writelog "INFO" "${FUNCNAME[0]} - CreateGameCfg:"
 	createGameCfg
-	
+
 	FIRSTUSEPROTON="$USEPROTON"
+	writelog "INFO" "${FUNCNAME[0]} - Initial Proton version from '$STLDEFGAMECFG' before loading the game config: '$FIRSTUSEPROTON'"
+
+	writelog "INFO" "${FUNCNAME[0]} - First LoadCfg: $STLGAMECFG"
+	loadCfg "$STLGAMECFG"
+	if [ "$ISGAME" -eq 2 ]; then
+		FIRSTGAMEUSEPROTON="$USEPROTON"
+		writelog "INFO" "${FUNCNAME[0]} -  Initial Proton version from the game config: '$FIRSTGAMEUSEPROTON'"
+		if [ -n "$USEPROTON" ] && [ ! -f "$(PROTPATH "$USEPROTON")" ]; then
+			fixProtonVersionMismatch "USEPROTON"
+		fi
+
+		writelog "INFO" "${FUNCNAME[0]} - Initializing internal Proton Vars for '$FIRSTGAMEUSEPROTON' using setNewProtVars"
+		setNewProtVars "$(PROTPATH "$USEPROTON")"
+	fi
+	
 	writelog "INFO" "${FUNCNAME[0]} - OpenTrayIcon:"
-	openTrayIcon
+	openTrayIcon X
 
 	if [ -z "$1" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - AskSettings:"
@@ -11030,83 +11118,26 @@ function prepareLaunch {
 	fi
 	
 	#  in case a path changed in between, call createProjectDirs again:
-	writelog "INFO" "${FUNCNAME[0]} - CreateProjectDirs:"
 	createProjectDirs
-
-	writelog "INFO" "${FUNCNAME[0]} - LoadCfg: $STLGAMECFG"
-	loadCfg "$STLGAMECFG"
 
 	createDesktopIconFile "$AID" "0"
 
 	# autoapply configuration settings based on the steam categories the game is in:
-	writelog "INFO" "${FUNCNAME[0]} - AutoCategorySettings:"
 	autoCategorySettings
 
-	symlinkSteamUser "$USESUSYM"
+	if [ "$ISGAME" -eq 2 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - symlinkSteamUser:"
+		symlinkSteamUser "$USESUSYM"
 
-	restoreSteamUser
+		writelog "INFO" "${FUNCNAME[0]} - restoreSteamUser:"
+		restoreSteamUser
 
-	if [ "$USEWINE" -eq 0 ]; then
-
-		if [ "$EARLYUSEWINE" -eq 1 ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Wine has just been disabled, so preparing Proton now"
-			getAvailableProtonVersions "up"
-			checkStartMode
-		fi
-
-		if [ "$HAVEINPROTON" -eq 0 ]; then
-			if [ -n "$USEPROTON" ] && [ ! -f "$(PROTPATH "$USEPROTON")" ]; then
-				fixProtonVersionMismatch "$USEPROTON"
-			fi
-		
-			# (re)initialize Proton dependant variables, when USEPROTON changed in a menu above
-			if [ -n "$USEPROTON" ] && [ "$USEPROTON" != "$FIRSTUSEPROTON" ] && [ "$ISGAME" -eq 2 ]; then
-				setNewProtVars "$(PROTPATH "$USEPROTON")"
-			fi
-		else
-			USEPROTON="$INPROTV"
-			setNewProtVars "$(PROTPATH "$USEPROTON")"
-			writelog "INFO" "${FUNCNAME[0]} - Checking the Proton version is not required, because Steam Launch option is used. Proton version set in Steam is '$USEPROTON'"
-		fi
-		
-		if [ "$USEWINEDEBUGPROTON" -eq 1 ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Using '$STLWINEDEBUG' as Proton 'WINEDEBUG' parameters, because 'USEWINEDEBUGPROTON' is enabled"
-			export WINEDEBUG=\"$STLWINEDEBUG\"
-		fi
-
-		if [ -n "$STLWINEDLLOVERRIDES" ] && [ "$STLWINEDLLOVERRIDES" != "$NON" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Using '$STLWINEDLLOVERRIDES' as 'WINEDLLOVERRIDES' parameter"
-			export WINEDLLOVERRIDES=\"$WINEDLLOVERRIDES;$STLWINEDLLOVERRIDES\"
-		fi
-		
-		if [ "$HAVEINPROTON" -eq 0 ]; then
-			if [ "$PROTONCHECK" == "ask_before_game" ] || [ "$PROTONCHECK" == "auto_download" ] || [ "$PROTONCHECK" == "auto_download_and_use" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Entering checkProtonBump"
-				checkProtonBump "$USEPROTON" 
-			fi
-		fi
+		writelog "INFO" "${FUNCNAME[0]} - prepareProton:"
+		prepareProton
 	fi
-	
-	# export DXVK_CONFIG_FILE if STLDXVKCFG was found:
-	if [ -f "$STLDXVKCFG" ]; then
-		export DXVK_CONFIG_FILE="$STLDXVKCFG"
-	fi
-
-
-	# shortcut to enable all required flags for SBSVR with ReShade
-	if [ -n "$SBSVRRS" ]; then
-		if [ "$SBSVRRS" -eq 1 ]; then
-			writelog "INFO" "${FUNCNAME[0]} - $PROGNAME - SBSVRRS enabled - starting game in SBS-VR using ReShade"
-			export RUNSBSVR=1
-			export INSTALL_RESHADE=1
-			export RESHADE_DEPTH3D=1
-			export USERESHADE=1
-			export ENABLE_VKBASALT=0
-		fi
-	fi
-
 ####
 
+	writelog "INFO" "${FUNCNAME[0]} -setLinGameVals :"
 	setLinGameVals
 
 #################
@@ -11115,33 +11146,35 @@ function prepareLaunch {
 	writelog "INFO" "${FUNCNAME[0]} - CheckTweakLaunch:"
 	checkTweakLaunch
 
-	# remove GFWL if NOGFWL is 1
-	writelog "INFO" "${FUNCNAME[0]} - checkXliveless:"
-	checkXliveless
+	if [ "$ISGAME" -eq 2 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - checkXliveless:"
+		checkXliveless
 
-	# choose either system winetricks or downloaded one
-	writelog "INFO" "${FUNCNAME[0]} - chooseWinetricks:"
-	chooseWinetricks
+		# choose either system winetricks or downloaded one
+		writelog "INFO" "${FUNCNAME[0]} - chooseWinetricks:"
+		chooseWinetricks
+	fi
 
 	# check dependencies - disable functions if dependency programs are missing and/or warn
 	writelog "INFO" "${FUNCNAME[0]} - checkExtDeps:"
 	checkExtDeps
 
-	# set some wine variables if USEWINE is 1
-	writelog "INFO" "${FUNCNAME[0]} - setWineVars:"
-	setWineVars
+	if [ "$ISGAME" -eq 2 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - setWineVars:"
+		setWineVars
 
-	# start winetricks gui if RUN_WINETRICKS is 1 or silently if WINETRICKSPAKS is not empty
-	writelog "INFO" "${FUNCNAME[0]} - CheckWinetricksLaunch:"
-	checkWinetricksLaunch
+		# start winetricks gui if RUN_WINETRICKS is 1 or silently if WINETRICKSPAKS is not empty
+		writelog "INFO" "${FUNCNAME[0]} - CheckWinetricksLaunch:"
+		checkWinetricksLaunch
 
-	# start $WINECFG if RUN_WINECFG is 1
-	writelog "INFO" "${FUNCNAME[0]} - CheckWineCfgLaunch:"
-	checkWineCfgLaunch
+		# start $WINECFG if RUN_WINECFG is 1
+		writelog "INFO" "${FUNCNAME[0]} - CheckWineCfgLaunch:"
+		checkWineCfgLaunch
 
-	# apply some regs if requested
-	writelog "INFO" "${FUNCNAME[0]} - CustomRegs:"
-	customRegs
+		# apply some regs if requested
+		writelog "INFO" "${FUNCNAME[0]} - CustomRegs:"
+		customRegs
+	fi
 
 	# minimize all open windows if TOGGLEWINDOWS is 1
 	writelog "INFO" "${FUNCNAME[0]} - TogWindows:"
@@ -11151,21 +11184,23 @@ function prepareLaunch {
 	writelog "INFO" "${FUNCNAME[0]} - StateSteamWebHelper:"
 	StateSteamWebHelper pause
 
-	# install ReShade if INSTALL_RESHADE is 1
-	writelog "INFO" "${FUNCNAME[0]} - InstallReshade:"
-	installReshade
+	if [ "$ISGAME" -eq 2 ]; then
+		# install ReShade if INSTALL_RESHADE is 1
+		writelog "INFO" "${FUNCNAME[0]} - InstallReshade:"
+		installReshade
 
-	# install Depth3D Shader if RESHADE_DEPTH3D is 1
-	writelog "INFO" "${FUNCNAME[0]} - InstallReshadeDepth3D:"
-	installReshadeDepth3D
+		# install Depth3D Shader if RESHADE_DEPTH3D is 1
+		writelog "INFO" "${FUNCNAME[0]} - InstallReshadeDepth3D:"
+		installReshadeDepth3D
 
-	# start game wih Reshade if USERESHADE is 1
-	writelog "INFO" "${FUNCNAME[0]} - UseReshade:"
-	useReshade
+		# start game wih Reshade if USERESHADE is 1
+		writelog "INFO" "${FUNCNAME[0]} - UseReshade:"
+		useReshade
 
-	# open Shader Menu if CHOOSESHADERS  is 1
-	writelog "INFO" "${FUNCNAME[0]} - ChooseShaders:"
-	chooseShaders
+		# open Shader Menu if CHOOSESHADERS  is 1
+		writelog "INFO" "${FUNCNAME[0]} - ChooseShaders:"
+		chooseShaders
+	fi
 
 	# start $NYRNA if RUN_NYRNA is 1
 	writelog "INFO" "${FUNCNAME[0]} - UseNyrnaz:"
@@ -11179,9 +11214,11 @@ function prepareLaunch {
 	writelog "INFO" "${FUNCNAME[0]} - CheckSBSVRLaunch:"
 	checkSBSVRLaunch "$NON"
 
-	# disable side-by-side Depth3D Shader if RUNSBSVR is 0 
-	writelog "INFO" "${FUNCNAME[0]} - CheckDepth3DUse:"
-	checkDepth3DUse
+	if [ "$ISGAME" -eq 2 ]; then
+		# disable side-by-side Depth3D Shader if RUNSBSVR is 0 
+		writelog "INFO" "${FUNCNAME[0]} - CheckDepth3DUse:"
+		checkDepth3DUse
+	fi
 
 	# start Vortex if USEVORTEX is 1
 	if [ "$USEVORTEX" -eq 1 ]; then
@@ -11193,29 +11230,37 @@ function prepareLaunch {
 	fi
 	
 	# set other screen resolution
+	writelog "INFO" "${FUNCNAME[0]} - setNewRes:"
 	setNewRes
 	
 	# start custom user script
+	writelog "INFO" "${FUNCNAME[0]} - customUserScriptStart:"
 	customUserScriptStart
 	
 	# redirect STEAM_COMPAT_DATA_PATH on request
+	writelog "INFO" "${FUNCNAME[0]} - redirectSCDP:"
 	redirectSCDP
 
-	# start igcsinjector if USEIGCS is enabled
-	writelog "INFO" "${FUNCNAME[0]} - :"
-	checkIGCSInjector
+	if [ "$ISGAME" -eq 2 ]; then
+		# start igcsinjector if USEIGCS is enabled
+		writelog "INFO" "${FUNCNAME[0]} - checkIGCSInjector:"
+		checkIGCSInjector
 
-	# check if openvr-fsr is enabled
-	checkOpenVRFSR
+		# check if openvr-fsr is enabled
+		writelog "INFO" "${FUNCNAME[0]} - checkOpenVRFSR:"
+		checkOpenVRFSR
+	fi
 
 	# start a custom program if USECUSTOMCMD is enabled
 	writelog "INFO" "${FUNCNAME[0]} - CheckCustomLaunch:"
 	checkCustomLaunch
 
-	# start a custom program if UUUSEPATCH or UUUSEVR is enabled
-	writelog "INFO" "${FUNCNAME[0]} - checkUUUPatchLaunch:"
-	checkUUUPatchLaunch
-	
+	if [ "$ISGAME" -eq 2 ]; then
+		# start a custom program if UUUSEPATCH or UUUSEVR is enabled
+		writelog "INFO" "${FUNCNAME[0]} - checkUUUPatchLaunch:"
+		checkUUUPatchLaunch
+	fi
+
 	# start strace process in the background if STRACERUN is 1
 	writelog "INFO" "${FUNCNAME[0]} - CheckStraceLaunch:"
 	checkStraceLaunch
@@ -11225,15 +11270,21 @@ function prepareLaunch {
 	checkNetMonLaunch
 
 	# start gameconqueror when game starts if RUN_GAMCON is -ge 1
+	writelog "INFO" "${FUNCNAME[0]} - checkGamConLaunch:"
 	checkGamConLaunch
 
-	# start CheatEngine when game starts if RUN_CHEATENGINE is -ge 1
-	checkCheatEngineLaunch
+	if [ "$ISGAME" -eq 2 ]; then
+		# start CheatEngine when game starts if RUN_CHEATENGINE is -ge 1
+		writelog "INFO" "${FUNCNAME[0]} - checkCheatEngineLaunch:"
+		checkCheatEngineLaunch
+	fi
 
 	# set pulse latency if CHANGE_PULSE_LATENCY is 1
+	writelog "INFO" "${FUNCNAME[0]} - checkPulse:"
 	checkPulse
 
 	# create/remove steam_appid.txt
+	writelog "INFO" "${FUNCNAME[0]} - checkSteamAppIDFile:"
 	checkSteamAppIDFile
 
 	# Automatic Grid Update Check before_game
@@ -11242,10 +11293,14 @@ function prepareLaunch {
 		getGrid "$AID" &
 	fi
 
-	# Create GameTitle Symlink in STLCOMPDAT if enabled
-	setCompatDataTitle
+	if [ "$ISGAME" -eq 2 ]; then
+		# Create GameTitle Symlink in STLCOMPDAT if enabled
+		writelog "INFO" "${FUNCNAME[0]} - setCompatDataTitle:"
+		setCompatDataTitle
+	fi
 
 	# GAME START
+	writelog "INFO" "${FUNCNAME[0]} -launchSteamGame:"
 	launchSteamGame
 
 	# GAME ENDED - Closing:
@@ -11331,46 +11386,58 @@ function getProtonDBRating {
 }
 
 function fixProtonVersionMismatch {
-	ORGUSEPROTON="$USEPROTON"
-	MIMAPROT="$1"
-	writelog "INFO" "${FUNCNAME[0]} - Looking for an alternative similar version for '$MIMAPROT'"
-	notiShow "$(strFix "$NOTY_WANTPROTON3" "$MIMAPROT")"
+	if [ "$ISGAME" -eq 2 ]; then
+		ORGPROTCAT="$1"
+		MIMAPROT="${!1}"
+		writelog "INFO" "${FUNCNAME[0]} - Incoming category is '$ORGPROTCAT' with value '$MIMAPROT'"
+		writelog "INFO" "${FUNCNAME[0]} - Looking for an alternative similar version for '$MIMAPROT'"
 
-	if [ ! -f "$PROTONCSV" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - Looking for available Proton versions"
-		getAvailableProtonVersions "up"
-	fi
+		notiShow "$(strFix "$NOTY_WANTPROTON3" "$MIMAPROT")"
 
-	MIMAPROTSHORT="^${MIMAPROT%-*}"
-	NEWMINORPROT="$(grep "$MIMAPROTSHORT" "$PROTONCSV" | cut -d ';' -f1 | sort -nr | head -n1)"
+		if [ ! -f "$PROTONCSV" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Looking for available Proton versions"
+			getAvailableProtonVersions "up"
+		fi
 
-	if [ -f "$(PROTPATH "${NEWMINORPROT//\"/}")" ] && [ -n "${NEWMINORPROT//\"/}" ]; then
-		NEWMINORRUN="$(PROTPATH "${NEWMINORPROT//\"/}")"
-		writelog "INFO" "${FUNCNAME[0]} - Found Proton '$NEWMINORPROT' in path '$NEWMINORRUN' as an alternative for the requested '$MIMAPROT'"
-	elif grep -q "GE" <<< "$MIMAPROT"; then
-		writelog "INFO" "${FUNCNAME[0]} - No alternative for '$MIMAPROT' found directly"
-		NEWMINORPROT="$(grep "GE" "$PROTONCSV" | cut -d ';' -f1 | sort -nr | head -n1)"
-		if [ -f "$(PROTPATH "${NEWMINORPROT//\"/}")" ]; then
+		MIMAPROTSHORT="^${MIMAPROT%-*}"
+		NEWMINORPROT="$(grep "$MIMAPROTSHORT" "$PROTONCSV" | cut -d ';' -f1 | sort -nr | head -n1)"
+
+		if [ -f "$(PROTPATH "${NEWMINORPROT//\"/}")" ] && [ -n "${NEWMINORPROT//\"/}" ]; then
 			NEWMINORRUN="$(PROTPATH "${NEWMINORPROT//\"/}")"
-			writelog "INFO" "${FUNCNAME[0]} - Using found '$NEWMINORPROT' instead, as it is at least also a GE Proton like the requested '$MIMAPROT'"
+			writelog "INFO" "${FUNCNAME[0]} - Found Proton '$NEWMINORPROT' in path '$NEWMINORRUN' as an alternative for the requested '$MIMAPROT'"
+		elif grep -q "GE" <<< "$MIMAPROT"; then
+			writelog "INFO" "${FUNCNAME[0]} - No alternative for '$MIMAPROT' found directly"
+			NEWMINORPROT="$(grep "GE" "$PROTONCSV" | cut -d ';' -f1 | sort -nr | head -n1)"
+			if [ -f "$(PROTPATH "${NEWMINORPROT//\"/}")" ]; then
+				NEWMINORRUN="$(PROTPATH "${NEWMINORPROT//\"/}")"
+				writelog "INFO" "${FUNCNAME[0]} - Using found '$NEWMINORPROT' instead, as it is at least also a GE Proton like the requested '$MIMAPROT'"
+			fi
 		fi
-	fi
 
-	if [ -n "$2" ]; then
-		if [ -f "$NEWMINORRUN" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - found '$NEWMINORRUN'"
-			echo "$NEWMINORRUN"
-		fi
-	else
-		if [ -f "$NEWMINORRUN" ]; then
-			switchProton  "$NEWMINORPROT"
-			notiShow "$(strFix "$NOTY_WANTPROTON2" "$NEWMINORPROT" "$MIMAPROT")"
-		elif [ "$AUTOLASTPROTON" -eq 1 ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Automatically selecting newest official one"
-			setNOP
+		if [ -n "$2" ]; then
+			if [ -f "$NEWMINORRUN" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - found '$NEWMINORRUN'"
+				echo "$NEWMINORRUN"
+				FOUNDPROTONMM=1
+			fi
 		else
-			writelog "INFO" "${FUNCNAME[0]} - Asking for one"
-			needNewProton
+			if [ -f "$NEWMINORRUN" ]; then
+				switchProton  "$NEWMINORPROT"
+				notiShow "$(strFix "$NOTY_WANTPROTON2" "$NEWMINORPROT" "$MIMAPROT")"
+			elif [ "$AUTOLASTPROTON" -eq 1 ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Automatically selecting newest official one"
+				setNOP
+			else
+				writelog "INFO" "${FUNCNAME[0]} - Asking for one"
+				needNewProton
+			fi
+		fi
+
+		if [ ! -f "$(PROTPATH "$MIMAPROT")" ] && [ "$ORGPROTCAT" == "USEPROTON" ] && [ "$MIMAPROT" != "$NEWMINORPROT" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Automatically updating USEPROTON to '$USEPROTON' in '$STLGAMECFG'"
+			touch "$FUPDATE"
+			updateConfigEntry "USEPROTON" "$USEPROTON" "$STLGAMECFG"
+			setInternalProtonVars
 		fi
 	fi
 }
@@ -11385,8 +11452,8 @@ function checkProtonBump {
 		if [ "$PROTONCHECK" == "disabled" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - PROTONCHECK is '$PROTONCHECK' - nothing to do"
 		else
-			if [ "$OVERRIDEPROTON" -eq 0 ]; then
-				writelog "INFO" "${FUNCNAME[0]} - OVERRIDEPROTON is $OVERRIDEPROTON - so currently set '$USEPROTON' isn't used anyway - nothing to do"
+			if [ "$HAVEINPROTON" -eq 1 ]; then
+				writelog "INFO" "${FUNCNAME[0]} - '$PROGCMD' was used as '$SLO', so currently set '$USEPROTON' isn't used anyway - nothing to do"
 			else		
 				if [ -z "${ProtonDLList[0]}" ]; then
 					createDLProtList
@@ -11432,9 +11499,9 @@ function checkProtonBump {
 }
 
 function OneTimeProton {
-	if [ -n "$WANTPROTON" ] &&  [ -n "$USEPROTON" ]; then
+	if { [ -n "$WANTPROTON" ] && [ -n "$USEPROTON" ];} || [ "$FOUNDPROTONMM" -eq 1 ]; then
 		if [ "$HAVEINPROTON" -eq 1 ]; then
-			writelog "SKIP" "${FUNCNAME[0]} - Skipping OneTimeProton, because Steam Launch Option is used"
+			writelog "SKIP" "${FUNCNAME[0]} - Skipping OneTimeProton, because '$SLO' is used"
 		else
 			if [ "$WANTPROTON" != "$USEPROTON" ]; then
 				if [ -z "$USEPROTON" ]; then
@@ -11444,14 +11511,12 @@ function OneTimeProton {
 				fi
 				writelog "INFO" "${FUNCNAME[0]} - One time Proton version '$WANTPROTON' selected, but '$DISPPROT' is set"
 				notiShow "$(strFix "$NOTY_WANTPROTON" "$WANTPROTON" "$DISPPROT")"
-				writelog "INFO" "${FUNCNAME[0]} - Enabling proton override"
-				OVERRIDEPROTON=1
 			
 				if [ -f "$(PROTPATH "$WANTPROTON")" ]; then
 					writelog "INFO" "${FUNCNAME[0]} -  One time Proton version '$WANTPROTON' does exist - switching"
 					switchProton "$WANTPROTON"
 				else
-					fixProtonVersionMismatch "$WANTPROTON"
+					fixProtonVersionMismatch "WANTPROTON"
 				fi
 			fi
 		fi
@@ -11900,7 +11965,7 @@ function startGame {
 			echo "$(date) - $GN ($AID) - INSTLCMD '${INSTLCMD[*]}'"
 			echo "$(date) - $GN ($AID) - ORGGCMD '${ORGGCMD[*]}'"
 			echo "$(date) - $GN ($AID) - ORG_STEAM_COMPAT_TOOL_PATHS '${ORG_STEAM_COMPAT_TOOL_PATHS[*]}'"
-			echo "$(date) - $GN ($AID) - USEREAP='$USEREAP'; USESLR=$USESLR';OVERRIDEPROTON='$OVERRIDEPROTON'"
+			echo "$(date) - $GN ($AID) - USEREAP='$USEREAP'; USESLR=$USESLR'"
 			echo "$(date) - $GN ($AID) - FINAL LAUNCH RUNCMD '${RUNCMD[*]}'"
 			echo "$(date) - $GN ($AID) - ======================"
 		} >> "/tmp/$PROGCMD-startmode-DEBUG-XXXXXXXXX"
@@ -12486,7 +12551,7 @@ function launchSteamGame {
 				else
 					if [ ! -f "${RUNPROTON//\"/}" ]; then
 						writelog "WARN" "${FUNCNAME[0]} - '$USEPROTON' seems outdated as the executable ${RUNPROTON//\"/} wasn't found"
-						fixProtonVersionMismatch "$USEPROTON"
+						fixProtonVersionMismatch "USEPROTON"
 					fi
 					
 					if [ -f "${RUNPROTON//\"/}" ]; then
@@ -12656,6 +12721,8 @@ function setRunProtonFromUseProton {
 			RUNPROTON="$NRUNPROTON"
 			writelog "INFO" "${FUNCNAME[0]} - Set RUNPROTON to '$RUNPROTON'"
 		fi
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - USEPROTON is empty"
 	fi
 }
 
@@ -12674,20 +12741,15 @@ function checkStartMode {
 				# could still be enabled via steamcategory, but this would be an overkill here, as ${FUNCNAME[0]} is non-fatal
 			else
 				if [ "$HAVEINPROTON" -eq 1 ]; then
-					writelog "INFO" "${FUNCNAME[0]} - Game was started via Steam Launch Options ('$PROGCMD %command%'),"
+					writelog "INFO" "${FUNCNAME[0]} - Game was started via '$SLO' ('$PROGCMD %command%'),"
 					writelog "INFO" "${FUNCNAME[0]} - because a Proton path was found in the command line provided by steam"
-#					if [ "$OVERRIDEPROTON" -eq 0 ]; then
-						writelog "INFO" "${FUNCNAME[0]} - Override Proton is disabled, when using stl as Steam Launch Option, so using it as-is: '${INPROTCMD[*]}'"
-						writelog "INFO" "${FUNCNAME[0]} - (ignoring USEPROTON '$USEPROTON' from game config)"
-						RUNPROTON="${INPROTCMD[*]}"
-						writelog "INFO" "${FUNCNAME[0]} - Set RUNPROTON to '$RUNPROTON'"
+					writelog "INFO" "${FUNCNAME[0]} - Override Proton is disabled, when using $PROGCMD as '$SLO', so using it as-is: '${INPROTCMD[*]}'"
+					writelog "INFO" "${FUNCNAME[0]} - (ignoring USEPROTON '$USEPROTON' from game config)"
+					RUNPROTON="${INPROTCMD[*]}"
+					writelog "INFO" "${FUNCNAME[0]} - Set RUNPROTON to '$RUNPROTON'"
 
-						USEPROTON="$INPROTV"
-						writelog "INFO" "${FUNCNAME[0]} - Set USEPROTON to '$USEPROTON'"
-#					else
-#						writelog "INFO" "${FUNCNAME[0]} - Override it, because override proton is enabled"
-#						setRunProtonFromUseProton
-#					fi
+					USEPROTON="$INPROTV"
+					writelog "INFO" "${FUNCNAME[0]} - Set USEPROTON to '$USEPROTON'"
 				else
 					writelog "INFO" "${FUNCNAME[0]} - Game was started as Steam Compatibility Tool - automatically enabling override Proton,"
 					writelog "INFO" "${FUNCNAME[0]} - as proton doesn't appear in the command line here"
@@ -13589,9 +13651,17 @@ function checkX64dbgLaunch {
 
 function startSettings {
 	FUSEID "$1"
+
+	writelog "INFO" "${FUNCNAME[0]} - createProtonList:"
 	createProtonList X
+
+	writelog "INFO" "${FUNCNAME[0]} - openTrayIcon:"
 	openTrayIcon
+
+	writelog "INFO" "${FUNCNAME[0]} - MainMenu:"
 	MainMenu "$USEID"
+
+	writelog "INFO" "${FUNCNAME[0]} - cleanYadLeftOvers:"
 	cleanYadLeftOvers	
 }
 
@@ -13974,7 +14044,7 @@ function closeSTL {
 		getGrid "$AID"
 	fi
 
-	if [ "$PROTON_LOG" -eq 1 ]; then
+	if [ "$ISGAME" -eq 2 ] && [ "$PROTON_LOG" -eq 1 ]; then
 		createSymLink "${FUNCNAME[0]}" "$STLPROTONIDLOGDIR/steam-${AID}.log" "$STLPROTONTILOGDIR//steam-${GN}.log"
 	fi
 
@@ -14726,7 +14796,7 @@ function checkFirstTimeRun {
 					else
 						writelog "INFO" "${FUNCNAME[0]} - '$CONFPROT' not found in '$PROTONCSV'" "E" | tee -a "$ISCRILOG"
 						# if configured USEPROTON proton binary was not found, try to find a minor version bump instead:
-						TESTEARLYPROT="$(fixProtonVersionMismatch "$CONFPROT" "X")"
+						TESTEARLYPROT="$(fixProtonVersionMismatch "CONFPROT" "X")"
 						if [ -f "$TESTEARLYPROT" ]; then
 							writelog "INFO" "${FUNCNAME[0]} - Found a minor version mismatch binary for '$CONFPROT':'$TESTEARLYPROT'" "E" | tee -a "$ISCRILOG"
 							EARLYPROT="$TESTEARLYPROT"
@@ -14952,6 +15022,7 @@ function main {
 	initAID "$@"
 	setAIDCfgs
 	loadLangFile "$STLDEFLANG"
+
 	getCurrentCommandline "$@"
 	saveOrgVars
 	emptyVars "O"
@@ -14964,7 +15035,9 @@ function main {
 	fi
 
 	writelog "INFO" "emptyVars - Emptied some original Variables as they slowdown several system calls when started from steam"
+
 	createDefaultCfgs "$@"
+
 	checkIntDeps "$@"
 	setInitWinXY
 
