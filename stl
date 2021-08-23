@@ -5,7 +5,7 @@
 
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v6.15.4"
+PROGVERS="v6.15.6"
 PROGCMD="${0##*/}"
 GHURL="https://github.com"
 PROJECTPAGE="$GHURL/frostworx/steamtinkerlaunch"
@@ -96,6 +96,7 @@ FUPDATE="$STLSHM/fupdate.txt"
 STPAVARS="$STLSHM/steampaths.txt"
 PROTONCSV="$STLSHM/ProtonCSV.txt"
 NON="none"
+NOPE="nope"
 TMPL="template"
 DLWINEVERSION="$NON"
 GAMENAME="$NON"
@@ -622,6 +623,7 @@ function getOwnedHexAids {
 }
 
 function getOwnedAids {
+	mkProjDir "$STLSHM"
 	OAIDLIST="$STLSHM/owned-aids.txt"
 	if [ ! -f "$OAIDLIST" ]; then
 		while read -r line; do
@@ -1346,10 +1348,6 @@ function setGameVars {
 		ISGAME=3																				# no STEAM_COMPAT_DATA_PATH, so it is no windows game
 	fi
 
-	if [ -z "$GAMEEXE" ]; then
-		GAMEEXE1="${*##*/}"
-		GAMEEXE="${GAMEEXE1//$WFEAR }"
-	fi
 
 	# common
 	if [ -n "$STEAM_COMPAT_INSTALL_PATH" ]; then
@@ -1468,19 +1466,39 @@ function setGameVars {
 					FOUNDINSTL=1
 				fi
 			else
-				mapfile -t -O "${#ORGGCMD[@]}" ORGGCMD <<< "$ORGARG"
+				mapfile -t -O "${#ORGFGCMD[@]}" ORGFGCMD <<< "$ORGARG"
 			fi
 		done <<< "$(printf "%s\n" "${WIPCGCMD[@]}")"
 	else
 		while read -r ORGARG; do
-			mapfile -t -O "${#ORGGCMD[@]}" ORGGCMD <<< "$ORGARG"
+			mapfile -t -O "${#ORGFGCMD[@]}" ORGFGCMD <<< "$ORGARG"
 		done <<< "$(printf "%s\n" "${WIPCGCMD[@]}")"	
 	fi
+	
+	# what is left now is the game executable and its command line arguments - splitting
+
+	FOUNDORGGCMD=0
+	while read -r ORGARG; do
+		if [ "$FOUNDORGGCMD" -eq 0 ]; then
+			mapfile -t -O "${#ORGGCMD[@]}" ORGGCMD <<< "$ORGARG"
+			if [[ "$ORGARG" =~ $GP ]]; then
+				FOUNDORGGCMD=1
+			fi
+		else
+			mapfile -t -O "${#ORGCMDARGS[@]}" ORGCMDARGS <<< "$ORGARG"
+		fi
+	done <<< "$(printf "%s\n" "${ORGFGCMD[@]}")"
 
 	if [ "${ORGGCMD[0]}" == "$WFEAR" ]; then
 		# removing first ORGGCMD element as it is '$WFEAR'
 		unset "ORGGCMD[0]"
 	fi
+
+	if [ -z "$GAMEEXE" ]; then
+		GAMEEXE1="${ORGGCMD[*]}"
+		GAMEEXE="${GAMEEXE1##*/}"
+	fi
+
 }
 
 function setCustomGameVars {
@@ -1912,6 +1930,7 @@ function setDefaultCfgValues {
 		if [ -z "$UUUPATCHWAIT" ]						; then	UUUPATCHWAIT="0"; fi
 		if [ -z "$UUUSEVR" ]							; then	UUUSEVR="0"; fi
 		if [ -z "$GAMEARGS" ]							; then	GAMEARGS="$NON"; fi
+		if [ -z "$HARDARGS" ]							; then	HARDARGS="$NOPE"; fi
 		if [ -z "$USEGAMEMODERUN" ]						; then	USEGAMEMODERUN="0";	fi
 		if [ -z "$USEGAMESCOPE" ]						; then	USEGAMESCOPE="0"; fi
 		if [ -z "$GAMESCOPE_ARGS" ]						; then	GAMESCOPE_ARGS="--"; fi
@@ -2004,7 +2023,8 @@ function setDefaultCfgValues {
 		if [ -z "$FIXSYMLINKS" ]						; then	FIXSYMLINKS="0"; fi
 		if [ -z "$UNSYMLINK" ]							; then	UNSYMLINK="0"; fi
 		if [ -z "$DELPFX" ]								; then	DELPFX="0"; fi
-		if [ -z "$RUN_DEPS" ]							; then	RUN_DEPS="0";	fi
+		if [ -z "$RUN_DEPS" ]							; then	RUN_DEPS="0"; fi
+		if [ -z "$SORTGARGS" ]							; then	SORTGARGS="0"; fi
 	}
 	
 	"${FUNCNAME[0]}$1"
@@ -2335,6 +2355,8 @@ function saveCfg {
 			echo "UUUSEVR=\"$UUUSEVR\""
 			echo "## $DESC_GAMEARGS"
 			echo "GAMEARGS=\"$GAMEARGS\""
+			echo "## $DESC_HARDARGS"
+			echo "HARDARGS=\"$HARDARGS\""
 			echo "## $DESC_USEGAMEMODERUN"
 			echo "USEGAMEMODERUN=\"$USEGAMEMODERUN\""
 			echo "## $DESC_USEGAMESCOPE"
@@ -2521,6 +2543,8 @@ function saveCfg {
 			echo "DELPFX=\"$DELPFX\""
 			echo "## $DESC_RUN_DEPS"
 			echo "RUN_DEPS=\"$RUN_DEPS\""
+			echo "## $DESC_SORTGARGS"
+			echo "SORTGARGS=\"$SORTGARGS\""
 			} >> "$1"
 			#ENDsaveCfgdefault_template
 		fi
@@ -2593,11 +2617,15 @@ function setRunWineServer {
 		if [ -f "$CHECKWINED" ]; then
 			RUNWINE="$CHECKWINED"
 			RUNWINESERVER="${RUNWINE}server"
-			writelog "INFO" "${FUNCNAME[0]} - Set the wine binary for proton in path '$RUNPROTON' to '$RUNWINE' and wineserver to '$RUNWINESERVER'"	
+			writelog "INFO" "${FUNCNAME[0]} - Set the wine binary for proton in path '$RUNPROTON'"	
+			writelog "INFO" "${FUNCNAME[0]} - to '$RUNWINE'"	
+			writelog "INFO" "${FUNCNAME[0]} - and wineserver to '$RUNWINESERVER'"	
 		elif [ -f "$CHECKWINEF" ]; then
 			RUNWINE="$CHECKWINEF"
 			RUNWINESERVER="${RUNWINE}server"
-			writelog "INFO" "${FUNCNAME[0]} - Set the wine binary for proton in path '$RUNPROTON' to '$RUNWINE' and wineserver to '$RUNWINESERVER'"
+			writelog "INFO" "${FUNCNAME[0]} - Set the wine binary for proton in path '$RUNPROTON'"	
+			writelog "INFO" "${FUNCNAME[0]} - to '$RUNWINE'"	
+			writelog "INFO" "${FUNCNAME[0]} - and wineserver to '$RUNWINESERVER'"
 		else
 			writelog "WARN" "${FUNCNAME[0]} - Couldn't find the wine binary for the proton in path '$RUNPROTON' - falling back to 'wine' for plain RUNWINE and 'wineserver' for RUNWINESERVER"
 		fi
@@ -3867,6 +3895,9 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_USERSTART!$DESC_USERSTART $GUI_ECHOPLAC ('USERSTART')":FL "${USERSTART/#-/ -}" `#CAT_Misc` `#MENU_GAME` \
 --field="     $GUI_USERSTOP!$DESC_USERSTOP $GUI_ECHOPLAC ('USERSTOP')":FL "${USERSTOP/#-/ -}" `#CAT_Misc` `#MENU_GAME` \
 --field="     $GUI_GAMEARGS!$DESC_GAMEARGS ('GAMEARGS')" "${GAMEARGS/#-/ -}" `#CAT_Misc` `#MENU_GAME` \
+--field="     $GUI_SORTGARGS!$DESC_SORTGARGS ('SORTGARGS')":CHK "${SORTGARGS/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_HARDARGS!$DESC_HARDARGS ('HARDARGS')":CBE "${HARDARGS/#-/ -}!$ARGUMENTS" `#CAT_Misc` `#MENU_GAME` \
+--field="     $GUI_SLOARGS!$DESC_SLOARGS ('SLOARGS')":RO "${SLOARGS/#-/ -}" `#CAT_Misc` `#MENU_GAME` \
 --field="     $GUI_CHANGE_PULSE_LATENCY!$DESC_CHANGE_PULSE_LATENCY ('CHANGE_PULSE_LATENCY')":CHK "${CHANGE_PULSE_LATENCY/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_STL_PULSE_LATENCY_MSEC!$DESC_STL_PULSE_LATENCY_MSEC ('STL_PULSE_LATENCY_MSEC')":NUM "${STL_PULSE_LATENCY_MSEC/#-/ -}" `#CAT_Misc` `#MENU_GAME` \
 --field="     $GUI_LOGLEVEL!$DESC_LOGLEVEL ('LOGLEVEL')":CB "${LOGLEVEL/#-/ -}!0!1!2" `#CAT_Misc` `#MENU_GLOBAL` \
@@ -4480,6 +4511,10 @@ function MainMenu {
 
 	if [ -n "$GAMEEXE" ]; then
 		SETHEAD="$SETHEAD \n ${GUI_SGE}: '$GAMEEXE'"
+	fi
+
+	if [ "${#ORGCMDARGS[@]}" -ge 1 ]; then
+		SETHEAD="$SETHEAD \n ${GUI_SGA}: '${ORGCMDARGS[*]}'"
 	fi
 	
 	# filter html incompatible chars here
@@ -6799,7 +6834,7 @@ function askSettings {
 			writelog "INFO" "${FUNCNAME[0]} - Using game specific requester timeout '$WAITEDITOR'"
 		fi
 
-		getRawAppIDInfo "$AID" &
+		writeAllAIMeta "$AID" &
 
 		if [ "$WAITEDITOR" -gt 0 ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Opening Requester with timeout '$WAITEDITOR'"
@@ -11067,6 +11102,61 @@ function prepareProton {
 	fi	
 }
 
+function sortGameArgs {
+	if [ -z "$SLOARGS" ] || [ "$SLOARGS" == "$NON" ]; then
+		SLOARGS="$NON"
+
+		if [ "$SORTGARGS" -eq 1 ]; then
+			if [ "${#ORGCMDARGS[@]}" -ge 1 ]; then
+				CFSTG="coming from Steam/the game"
+				if [ -n "$ARGUMENTS" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Game arguments '$ARGUMENTS' $CFSTG directly"
+					writelog "INFO" "${FUNCNAME[0]} - Separating them from the found arguments '${ORGCMDARGS[*]}'"
+					
+					while read -r arg; do
+						if [ -n "$arg" ] && [ "$arg" != "" ] && grep -q -- "$arg" <<< "$ARGUMENTS" ; then
+							writelog "INFO" "${FUNCNAME[0]} - '$arg' is an argument $CFSTG, because it is within ARGUMENTS: '$ARGUMENTS'"
+							mapfile -d " " -t -O "${#HARGSARR[@]}" HARGSARR <<< "$arg"
+						elif [[ ! "${HARGSARR[*]}" =~ $arg ]] && [ -n "$arg" ] && [ "$arg" != "" ]; then
+							writelog "INFO" "${FUNCNAME[0]} - '$arg' is probably an argument coming from $SLO"
+							mapfile -d " " -t -O "${#SLOARRGS[@]}" SLOARRGS <<< "$arg"
+						else
+							writelog "SKIP" "${FUNCNAME[0]} - skipping '$arg'"
+						fi
+					done <<< "$(printf "%s\n" "${ORGCMDARGS[@]}")"
+
+					if [ "${#HARGSARR[@]}" -ge 1 ] && [ "$HARDARGS" == "$NOPE" ]; then
+						writelog "INFO" "${FUNCNAME[0]} - Filling empty game config variable 'HARDARGS' with arguments $CFSTG"
+						HARDARGSR="$(printf "%s" "${HARGSARR[@]}" | tr '\n' ' ')"
+						HARDARGS="${HARDARGSR%*[[:blank:]]}"
+						touch "$FUPDATE"
+						updateConfigEntry "HARDARGS" "$HARDARGS" "$STLGAMECFG"
+					fi
+
+				else
+					writelog "INFO" "${FUNCNAME[0]} - No game arguments $CFSTG found"
+					writelog "INFO" "${FUNCNAME[0]} - So assuming '${ORGCMDARGS[*]}' comes completely from $SLO."
+					while read -r arg; do
+						mapfile -d " " -t -O "${#SLOARRGS[@]}" SLOARRGS <<< "$arg"
+					done <<< "$(printf "%s\n" "${ORGCMDARGS[@]}")"
+				fi
+
+				if [ "${#SLOARRGS[@]}" -ge 1 ]; then
+					SLOARGSR="$(printf "%s" "${SLOARRGS[@]}" | tr '\n' ' ')"
+					SLOARGS="${SLOARGSR%*[[:blank:]]}"
+					writelog "INFO" "${FUNCNAME[0]} - Set SLOARGS to '$SLOARGS'"
+				fi
+			else
+				writelog "SKIP" "${FUNCNAME[0]} - No game arguments $CFSTG or via $SLO"
+			fi
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - Sorting the game arguments is disabled"
+		fi
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - Nothing to do on the 2nd run"
+	fi
+}
+
 function prepareLaunch {
 	rm "$CLOSETMP" 2>/dev/null
 	rm "$KILLSWITCH" 2>/dev/null
@@ -11110,6 +11200,12 @@ function prepareLaunch {
 	writelog "INFO" "${FUNCNAME[0]} - OpenTrayIcon:"
 	openTrayIcon X
 
+	loadCfg "$CUMETA/$AID.conf" X
+	loadCfg "$GEMETA/$AID.conf" X
+	
+	writelog "INFO" "${FUNCNAME[0]} - sortGameArgs:"
+	sortGameArgs
+
 	if [ -z "$1" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - AskSettings:"
 		askSettings
@@ -11124,6 +11220,9 @@ function prepareLaunch {
 
 	# autoapply configuration settings based on the steam categories the game is in:
 	autoCategorySettings
+
+	writelog "INFO" "${FUNCNAME[0]} - sortGameArgs again, incase something changed above:"
+	sortGameArgs
 
 	if [ "$ISGAME" -eq 2 ]; then
 		writelog "INFO" "${FUNCNAME[0]} - symlinkSteamUser:"
@@ -12034,7 +12133,31 @@ function startGame {
 function gameArgs {
 	ARGSTRING="$1"
 	unset GAMEARGSARR
-	mapfile -d " " -t -O "${#GAMEARGSARR[@]}" GAMEARGSARR < <(printf '%s' "$ARGSTRING")
+
+	if [ "$1" == "$GAMEARGS" ]; then
+		if [ "$SORTGARGS" -eq 1 ]; then
+			# add (originally "hardcoded", but now possibly modified) command line arguments coming directly from Steam/the game
+			if [ "$HARDARGS" != "$NOPE" ] && [ "$HARDARGS" != "$NON" ]; then
+				mapfile -d " " -t -O "${#GAMEARGSARR[@]}" GAMEARGSARR < <(printf '%s' "$HARDARGS")
+			fi
+
+			# now append those command line arguments coming from $SLO
+			if [ "$SLOARGS" != "$NON" ]; then
+				mapfile -d " " -t -O "${#GAMEARGSARR[@]}" GAMEARGSARR < <(printf '%s' "$SLOARGS")
+			fi
+		else
+			if [ "${#ORGCMDARGS[@]}" -ge 1 ]; then
+				GAMEARGSARR=("${ORGCMDARGS[@]}")
+			fi
+		fi
+	fi 
+	
+	# finally add the own custom command line arguments
+	if [ "$1" != "$NON" ]; then
+		mapfile -d " " -t -O "${#GAMEARGSARR[@]}" GAMEARGSARR < <(printf '%s' "$ARGSTRING")
+	fi
+
+	writelog "INFO" "${FUNCNAME[0]} - Combined final game command line arguments: '${GAMEARGSARR[*]}'"
 }
 
 function createDLWineList {
@@ -12367,10 +12490,8 @@ function launchSteamGame {
 	# game start command for both proton and linux native games:
 	if [ "$USEBOXTRON" -eq 0 ] && [ "$USEROBERTA" -eq 0 ] && [ "$USELUXTORPEDA" -eq 0 ]; then
 		# the actual game launch:
-		if [ "$GAMEARGS" != "$NON" ]; then
-			gameArgs "$GAMEARGS"
-#			mapfile -t -O "${#RUNGAMEARGS[@]}" RUNGAMEARGS <<< "$GAMEARGS"
-		fi
+
+		gameArgs "$GAMEARGS"
 
 		GAMESTARTCMD=("${ORGGCMD[@]}" "${GAMEARGSARR[@]}")
 		unset GAMEARGSARR
