@@ -4554,7 +4554,7 @@ function MainMenu {
 	--field="$FBUT_GUISET_FAVSEL":FBTN "$PROGCMD fav \"$AID\" set"\
 	--field="$FBUT_GUISET_BLOCKCAT":FBTN "$PROGCMD block" \
 	--field="$FBUT_GUISET_SORTCAT":FBTN "$PROGCMD sort" \
-	--field="$FBUT_GUISET_OPURL!$TT_OPENURL":FBTN "$PROGCMD hu \"$AID\"" \
+	--field="$FBUT_GUISET_OPURL!$TT_OPENURL":FBTN "$PROGCMD hu \"$AID\" X" \
 	--field="$FBUT_GUISET_GASCO":FBTN "$PROGCMD gs \"$AID\"" \
 	--field="$FBUT_GUISET_VORTEX":FBTN "$PROGCMD vortex gui" \
 	--field="$FBUT_GUISET_WIKI":FBTN "$PROGCMD wiki" \
@@ -11841,15 +11841,33 @@ function setHuyList {
 	if [ -z "$HELPURL" ] || [ "$HELPURL" == "$NON" ]; then 
 		HELPURL="$(grep "$DHU" "$HELPURLLIST" | cut -d ';' -f2)"
 	fi
-	HUYLIST="$(while read -r line; do cut -d ';' -f1 <<<"$line"; done <<< "$(grep -v "$DHU" "$HELPURLLIST")" | tr '\n' '!')"	
+	HUYLIST="$(while read -r line; do cut -d ';' -f1 <<<"$line"; done <<< "$(grep -v "$DHU" "$HELPURLLIST")" | tr '\n' '!')"
+	
+	loadCfg "$GEMETA/$AID.conf" X
+	 
+	if [ -n "$METACRITIC_FULLURL" ]; then
+		HUYLIST="${HUYLIST}metacritic!"
+	fi 
+
+	if [ -n "$GAMEMANUALURL" ]; then
+		HUYLIST="${HUYLIST}gamemanual!"
+	fi 
+	
 	export HUYLIST
 }
 
 function checkHelpUrl {
 	WANTHELPURL="$1"
 	if  [ -n "$WANTHELPURL" ] && [ "$WANTHELPURL" != "$NON" ] && [ ! -f "$STLSHM/KillBrowser-$AID.txt" ]; then
-		HELPURL="$(grep "$WANTHELPURL" "$HELPURLLIST" | grep -v "$DHU" | cut -d ';' -f2)"
-		writelog "INFO" "${FUNCNAME[0]} - Searching Help Url for '$WANTHELPURL' with command: 'grep \"$WANTHELPURL\" \"$HELPURLLIST\" | grep -v \"$DHU\" | cut -d ';' -f2'"
+
+		if [ "$WANTHELPURL" == "metacritic" ]; then
+			HELPURL="$METACRITIC_FULLURL"
+		elif [ "$WANTHELPURL" == "gamemanual" ]; then
+			HELPURL="$GAMEMANUALURL"
+		else
+			HELPURL="$(grep "$WANTHELPURL" "$HELPURLLIST" | grep -v "$DHU" | cut -d ';' -f2)"
+			writelog "INFO" "${FUNCNAME[0]} - Searching Help Url for '$WANTHELPURL' with command: 'grep \"$WANTHELPURL\" \"$HELPURLLIST\" | grep -v \"$DHU\" | cut -d ';' -f2'"
+		fi
 
 		if [ -n "$HELPURL" ]; then
 			HELPURLNQ="${HELPURL//\"}"
@@ -11858,7 +11876,7 @@ function checkHelpUrl {
 				touch "$STLSHM/KillBrowser-$AID.txt"
 			fi
 		
-			"$BROWSER" "${HELPURLNQ//AID/$AID}" & 
+			"$BROWSER" "${HELPURLNQ//AID/$AID}" 2>/dev/null & 
 		fi
 	fi
 }
@@ -13236,6 +13254,9 @@ function commandline {
 	elif  [ "$1" == "helpurl" ] || [ "$1" == "hu" ]; then
 		FUSEID "$2"
 		HelpUrlMenu "$USEID"
+		if [ -z "$3" ]; then
+			rm "$STLSHM/KillBrowser-$AID.txt" 2>/dev/null
+		fi
 	elif  [ "$1" == "launcher" ]; then
 		openGameLauncher "$2" "$3"
 	elif  [ "$1" == "list" ]; then
