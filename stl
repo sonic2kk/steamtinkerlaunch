@@ -1637,9 +1637,9 @@ function setProtonPathVersion {
 		echo "$INPROTV"
 	else
 		if [ -n "$1" ]; then
-			PROTPATH="$1"
-			CTVDF="$(dirname "$PROTPATH")/$CTVDF"
-			PPV="$(dirname "$PROTPATH")/version"
+			PRTPATH="$1"
+			CTVDF="$(dirname "$PRTPATH")/$CTVDF"
+			PPV="$(dirname "$PRTPATH")/version"
 			if [ -f "$CTVDF" ]; then
 				PROTVOUT="$(grep "display_name" "$CTVDF" | grep -v "e.g." | sed "s:\" \":\";\":g" | cut -d ';' -f2)"
 			elif [ -f "$PPV" ]; then
@@ -1648,7 +1648,7 @@ function setProtonPathVersion {
 
 			if [ -z "$PROTVOUT" ]; then
 				# if no useful version was provided - hardcode it here:
-				if grep -q "Proton 3.7" <<<"$PROTPATH"; then
+				if grep -q "Proton 3.7" <<<"$PRTPATH"; then
 					PROTVOUT="proton-3.7-8"
 				else
 				# fallback if everything fails - in the rare cases where this unknown proton version is used this might cause problems
@@ -1701,102 +1701,97 @@ function getAvailableProtonVersions {
 			writelog "SKIP" "${FUNCNAME[0]} - USEWINE is enabled in the to-be-loaded gameconfig '$STLGAMECFG' - skipping this function"
 			# could still be enabled via steamcategory, but this would be an overkill here, as ${FUNCNAME[0]} is non-fatal
 		else
-			if [ "$HAVEINPROTON" -eq 1 ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Skipping check for available Proton versions and directly using the proton version configured from inside Steam"
-			else
-				unset ProtonList
-				delEmptyFile "$PROTONCSV"
-				if [ ! -f "$PROTONCSV" ] || { [ -n "$1" ] &&  [ "$1" = "up" ]; } || [ "$1" == "F" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - Initially creating an array with available Proton versions"
+			delEmptyFile "$PROTONCSV"
+			if [ ! -f "$PROTONCSV" ] || { [ -n "$1" ] &&  [ "$1" = "up" ]; } || [ "$1" == "F" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Initially creating an array with available Proton versions"
 
-					# user installed compatibilitytool:
-					if [ -d "$STEAMCOMPATOOLS" ]; then
-						writelog "INFO" "${FUNCNAME[0]} - Adding Proton versions found in STEAMCOMPATOOLS '$STEAMCOMPATOOLS'"
-						while read -r PROTBIN; do
+				# user installed compatibilitytool:
+				if [ -d "$STEAMCOMPATOOLS" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Adding Proton versions found in STEAMCOMPATOOLS '$STEAMCOMPATOOLS'"
+					while read -r PROTBIN; do
+						fillProtonCSV
+					done <<< "$(find "$STEAMCOMPATOOLS" -type f -name "proton")"	
+				else
+					writelog "SKIP" "${FUNCNAME[0]} - Directory STEAMCOMPATOOLS '$STEAMCOMPATOOLS' not found - skipping"
+				fi
+				
+				if [ -d "$SYSSTEAMCOMPATOOLS" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Adding Proton versions found in SYSSTEAMCOMPATOOLS '$SYSSTEAMCOMPATOOLS'"
+					while read -r PROTBIN; do
+						fillProtonCSV
+					done <<< "$(find "$SYSSTEAMCOMPATOOLS" -type f -name "proton")"
+				else
+					writelog "SKIP" "${FUNCNAME[0]} - Directory SYSSTEAMCOMPATOOLS '$SYSSTEAMCOMPATOOLS' not found - skipping"
+				fi
+				
+				# official proton versions installed via Steam in default SteamLibrary 
+				if [ -d "$DEFSTEAMAPPSCOMMON" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Adding Proton versions found in DEFSTEAMAPPSCOMMON '$DEFSTEAMAPPSCOMMON'"
+					while read -r protondir; do
+						PROTBIN="$protondir/proton"
+						if [ -f "$PROTBIN" ]; then
 							fillProtonCSV
-						done <<< "$(find "$STEAMCOMPATOOLS" -type f -name "proton")"	
+						fi
+					done <<< "$(find "$DEFSTEAMAPPSCOMMON" -mindepth 1 -maxdepth 1 -type d -name "Proton*")"	
+				else
+					writelog "SKIP" "${FUNCNAME[0]} - Directory DEFSTEAMAPPSCOMMON '$DEFSTEAMAPPSCOMMON' not found - this should not happen! - skipping"
+				fi
+
+				# official proton versions installed via Steam in additional SteamLibrary Paths
+				if [ -f "$CFGVDF" ] || [ -f "$LFVDF" ]; then
+					if ! grep -q "BaseInstallFolder\|\"path\"" "$CFGVDF" "$LFVDF" 2>/dev/null; then
+						writelog "INFO" "${FUNCNAME[0]} - No additional Steam Libraries configured in '$CFGVDF' or '$LFVDF' - so no need to search in there"
 					else
-						writelog "SKIP" "${FUNCNAME[0]} - Directory STEAMCOMPATOOLS '$STEAMCOMPATOOLS' not found - skipping"
-					fi
-					
-					if [ -d "$SYSSTEAMCOMPATOOLS" ]; then
-						writelog "INFO" "${FUNCNAME[0]} - Adding Proton versions found in SYSSTEAMCOMPATOOLS '$SYSSTEAMCOMPATOOLS'"
-						while read -r PROTBIN; do
-							fillProtonCSV
-						done <<< "$(find "$SYSSTEAMCOMPATOOLS" -type f -name "proton")"
-					else
-						writelog "SKIP" "${FUNCNAME[0]} - Directory SYSSTEAMCOMPATOOLS '$SYSSTEAMCOMPATOOLS' not found - skipping"
-					fi
-					
-					# official proton versions installed via Steam in default SteamLibrary 
-					if [ -d "$DEFSTEAMAPPSCOMMON" ]; then
-						writelog "INFO" "${FUNCNAME[0]} - Adding Proton versions found in DEFSTEAMAPPSCOMMON '$DEFSTEAMAPPSCOMMON'"
+						writelog "INFO" "${FUNCNAME[0]} - Adding Proton versions found in additional SteamLibrary Paths"
 						while read -r protondir; do
 							PROTBIN="$protondir/proton"
 							if [ -f "$PROTBIN" ]; then
 								fillProtonCSV
 							fi
-						done <<< "$(find "$DEFSTEAMAPPSCOMMON" -mindepth 1 -maxdepth 1 -type d -name "Proton*")"	
-					else
-						writelog "SKIP" "${FUNCNAME[0]} - Directory DEFSTEAMAPPSCOMMON '$DEFSTEAMAPPSCOMMON' not found - this should not happen! - skipping"
-					fi
-
-					# official proton versions installed via Steam in additional SteamLibrary Paths
-					if [ -f "$CFGVDF" ] || [ -f "$LFVDF" ]; then
-						if ! grep -q "BaseInstallFolder\|\"path\"" "$CFGVDF" "$LFVDF" 2>/dev/null; then
-							writelog "INFO" "${FUNCNAME[0]} - No additional Steam Libraries configured in '$CFGVDF' or '$LFVDF' - so no need to search in there"
-						else
-							writelog "INFO" "${FUNCNAME[0]} - Adding Proton versions found in additional SteamLibrary Paths"
-							while read -r protondir; do
-								PROTBIN="$protondir/proton"
-								if [ -f "$PROTBIN" ]; then
-									fillProtonCSV
-								fi
-							done <<< "$(while read -r SLP; do if [ -d "${SLP//\"/}/$SAC" ]; then find "${SLP//\"/}/$SAC" -mindepth 1 -maxdepth 1 -type d -name "Proton*"; fi; done <<< "$(grep "BaseInstallFolder\|\"path\"" "$CFGVDF" "$LFVDF" 2>/dev/null | gawk '{print $3}' | sort -u)")"
-						fi
-					else
-						writelog "SKIP" "${FUNCNAME[0]} - Neither file CFGVDF '$CFGVDF' nor file LFVDF '$LFVDF' found - this should not happen! - skipping"
-					fi
-
-					# custom Proton List:
-					if [ -f "$CUSTOMPROTONLIST" ]; then
-						writelog "INFO" "${FUNCNAME[0]} - Adding Proton versions found in CUSTOMPROTONLIST '$CUSTOMPROTONLIST'"
-
-						gawk -i inplace '!visited[$0]++' "$CUSTOMPROTONLIST"
-
-						while read -r PROTLINE; do
-							writelog "INFO" "${FUNCNAME[0]} - Checking line '$PROTLINE' in '$CUSTOMPROTONLIST'"
-
-							if grep -q ";" <<< "$PROTLINE"; then
-								PROTBIN="$(cut -d ';' -f2 <<< "$PROTLINE")"
-								PROTVERS="$(cut -d ';' -f1 <<< "$PROTLINE")"
-								writelog "INFO" "${FUNCNAME[0]} - Adding '$PROTVERS' to the list"
-								fillProtonCSV "$PROTVERS"
-							elif [ -f "$PROTLINE" ]; then
-								writelog "INFO" "${FUNCNAME[0]} - File '$PROTLINE' exists - adding it to the list"
-								PROTBIN="$PROTLINE"
-								fillProtonCSV
-							else
-								writelog "INFO" "${FUNCNAME[0]} - Removing invalid line '$PROTLINE' from '$CUSTOMPROTONLIST'"
-								mapfile -t -O "${#ProtonMissing[@]}" ProtonMissing <<< "$PROTLINE"
-							fi
-						done <<< "$(grep -v "^#" "$CUSTOMPROTONLIST")"
-
-						# remove files from custom list which do not exist (anymore)
-						if [ -n "${ProtonMissing[0]}" ]; then
-							while read -r NOPROT; do
-								sed "/${NOPROT//\//\\/}/d" -i "$CUSTOMPROTONLIST"
-							done <<< "$(printf "%s\n" "${ProtonMissing[@]}")"
-							unset ProtonMissing
-						fi
+						done <<< "$(while read -r SLP; do if [ -d "${SLP//\"/}/$SAC" ]; then find "${SLP//\"/}/$SAC" -mindepth 1 -maxdepth 1 -type d -name "Proton*"; fi; done <<< "$(grep "BaseInstallFolder\|\"path\"" "$CFGVDF" "$LFVDF" 2>/dev/null | gawk '{print $3}' | sort -u)")"
 					fi
 				else
-					writelog "INFO" "${FUNCNAME[0]} - Creating an array with available Proton versions using the file '$PROTONCSV' which was created during a previous run"
-					mapfile -t -O "${#ProtonCSV[@]}" ProtonCSV < "$PROTONCSV"
+					writelog "SKIP" "${FUNCNAME[0]} - Neither file CFGVDF '$CFGVDF' nor file LFVDF '$LFVDF' found - this should not happen! - skipping"
 				fi
-				printProtonArr > "$PROTONCSV"
-				gawk -i inplace '!visited[$0]++' "$PROTONCSV"
+
+				# custom Proton List:
+				if [ -f "$CUSTOMPROTONLIST" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Adding Proton versions found in CUSTOMPROTONLIST '$CUSTOMPROTONLIST'"
+
+					gawk -i inplace '!visited[$0]++' "$CUSTOMPROTONLIST"
+
+					while read -r PROTLINE; do
+						writelog "INFO" "${FUNCNAME[0]} - Checking line '$PROTLINE' in '$CUSTOMPROTONLIST'"
+
+						if grep -q ";" <<< "$PROTLINE"; then
+							PROTBIN="$(cut -d ';' -f2 <<< "$PROTLINE")"
+							PROTVERS="$(cut -d ';' -f1 <<< "$PROTLINE")"
+							writelog "INFO" "${FUNCNAME[0]} - Adding '$PROTVERS' to the list"
+							fillProtonCSV "$PROTVERS"
+						elif [ -f "$PROTLINE" ]; then
+							writelog "INFO" "${FUNCNAME[0]} - File '$PROTLINE' exists - adding it to the list"
+							PROTBIN="$PROTLINE"
+							fillProtonCSV
+						else
+							writelog "INFO" "${FUNCNAME[0]} - Removing invalid line '$PROTLINE' from '$CUSTOMPROTONLIST'"
+							mapfile -t -O "${#ProtonMissing[@]}" ProtonMissing <<< "$PROTLINE"
+						fi
+					done <<< "$(grep -v "^#" "$CUSTOMPROTONLIST")"
+
+					# remove files from custom list which do not exist (anymore)
+					if [ -n "${ProtonMissing[0]}" ]; then
+						while read -r NOPROT; do
+							sed "/${NOPROT//\//\\/}/d" -i "$CUSTOMPROTONLIST"
+						done <<< "$(printf "%s\n" "${ProtonMissing[@]}")"
+						unset ProtonMissing
+					fi
+				fi
+			else
+				writelog "INFO" "${FUNCNAME[0]} - Creating an array with available Proton versions using the file '$PROTONCSV' which was created during a previous run"
+				mapfile -t -O "${#ProtonCSV[@]}" ProtonCSV < "$PROTONCSV"
 			fi
+			printProtonArr > "$PROTONCSV"
+			gawk -i inplace '!visited[$0]++' "$PROTONCSV"
 		fi
 	fi
 }
@@ -2594,6 +2589,7 @@ function strFix {
 }
 
 function getProtPathFromCSV {
+	delEmptyFile "$PROTONCSV"
 	if [ ! -f "$PROTONCSV" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Creating '$PROTONCSV'"
 		getAvailableProtonVersions "up" X
@@ -2604,21 +2600,18 @@ function getProtPathFromCSV {
 	fi
 }
 
-function PROTPATH {
-	if [ -z "${ProtonCSV[0]}" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - Don't have the Array of available Proton versions yet - creating"
-		getAvailableProtonVersions "up" X
-	fi
-	printProtonArr | grep "^$1" | sort -nr | head -n1 | cut -d ';' -f2
-}
-
 function setRunWineServer {
 	if [ "$ISGAME" -eq 2 ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Initiated from '$1'"
 
-		if [ -n "$USEPROTON" ] && [ ! -f "$(PROTPATH "$USEPROTON")" ]; then
+		if [ -n "$USEPROTON" ] && [ ! -f "$(getProtPathFromCSV "$USEPROTON")" ] && [ "$HAVEINPROTON" -eq 0 ]; then
 			fixProtonVersionMismatch "USEPROTON" "$STLGAMECFG"
 		fi
+		
+		if [ -z "$RUNPROTON" ] && [ "$HAVEINPROTON" -eq 1 ]; then
+			RUNPROTON="${INPROTCMD[*]}"
+		fi
+
 		if [ -z "$RUNPROTON" ]; then
 			setRunProtonFromUseProton
 		fi
@@ -2743,7 +2736,7 @@ function needNewProton {
 				echo "${PICKPROTON//\'}"
 			else
 				writelog "INFO" "${FUNCNAME[0]} - Selected Proton Version $PICKPROTON"
-				setNewProtVars "$(PROTPATH "$PICKPROTON")"
+				setNewProtVars "$(getProtPathFromCSV "$PICKPROTON")"
 			fi
 		else
 			writelog "INFO" "${FUNCNAME[0]} - No Proton Version was selected - try again"
@@ -2934,7 +2927,7 @@ function dlUpCustomProton {
 	NEWESTPROT="$1"
 	dlNewCustomProt "$NEWESTPROT"
 	NEWMINORPROT="$(printProtonArr | grep "^${NEWESTPROT%-*}" | cut -d ';' -f1 | sort -nr | head -n1)"
-	NEWMINORRUN="$(PROTPATH "${NEWMINORPROT//\"/}")"
+	NEWMINORRUN="$(getProtPathFromCSV "${NEWMINORPROT//\"/}")"
 	if [ -f "$NEWMINORRUN" ]; then
 		switchProton "$NEWMINORPROT"
 		writelog "INFO" "${FUNCNAME[0]} - $(strFix "$NOTY_NEWPROTON2" "$CURPROTON" "$NEWMINORPROT")"
@@ -7166,11 +7159,14 @@ function createDefaultCfgs {
 
 	delEmptyFile "$PROTONCSV"
 
-	if [ "$ISGAME" -eq 2 ] || [ ! -f "$PROTONCSV" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - createProtonList:"
-		createProtonList X
-	elif [ "$ISGAME" -ne 2 ] && [ -f "$PROTONCSV" ]; then
-		mapfile -t -O "${#ProtonCSV[@]}" ProtonCSV < "$PROTONCSV"
+	if [ "$HAVEINPROTON" -eq 0 ]; then
+		if [ "$ISGAME" -eq 2 ] || [ ! -f "$PROTONCSV" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - createProtonList:"
+			createProtonList X
+			writelog "INFO" "${FUNCNAME[0]} - createProtonList end"
+		elif [ "$ISGAME" -ne 2 ] && [ -f "$PROTONCSV" ]; then
+			mapfile -t -O "${#ProtonCSV[@]}" ProtonCSV < "$PROTONCSV"
+		fi
 	fi
 
 	checkStartMode
@@ -7534,7 +7530,7 @@ function GameScopeGui {
 function StandaloneProtonGame {
 	function SapRun {
 		if [ "$SAPRUN" == "TRUE" ]; then
-			RUNSAPPROTON="$(PROTPATH "$SAPPROTON")"
+			RUNSAPPROTON="$(getProtPathFromCSV "$SAPPROTON")"
 			if [ ! -f "$RUNSAPPROTON" ]; then
 				RUNSAPPROTON="$(fixProtonVersionMismatch "SAPPROTON" "$STLGAMECFG" X)"
 			fi
@@ -7748,7 +7744,7 @@ function OneTimeRunGui {
 						OTARGS="${OTARR[2]}"
 						OTSAVE="${OTARR[3]}"					
 
-						RUNOTPROTON="$(PROTPATH "$OTPROTON")"
+						RUNOTPROTON="$(getProtPathFromCSV "$OTPROTON")"
 						if [ ! -f "$RUNOTPROTON" ]; then
 							RUNOTPROTON="$(fixProtonVersionMismatch "OTPROTON" "$STLGAMECFG" X)"
 						fi
@@ -9035,7 +9031,7 @@ function chooseWinetricksPrefix {
 			6)	{
 					WTPROTON="$(cut -d ';' -f3 <<< "$WTCATPFX")"
 					writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_INSTALL' - Installing '$WINETRICKSPAKS' using '$WTPROTON'"
-					RUNWTPROTON="$(PROTPATH "$WTPROTON")"
+					RUNWTPROTON="$(getProtPathFromCSV "$WTPROTON")"
 
 					if [ ! -f "$RUNWTPROTON" ]; then
 						RUNWTPROTON="$(fixProtonVersionMismatch "WTPROTON" "$STLGAMECFG" X)"
@@ -9487,7 +9483,7 @@ function setVortexProtonWine {
 					writelog "INFO" "${FUNCNAME[0]} - Don't have the Array of available Proton versions yet - creating"
 					getAvailableProtonVersions "up" X
 				fi
-				VORTEXPROTON="$(PROTPATH "$USEVORTEXPROTON")"
+				VORTEXPROTON="$(getProtPathFromCSV "$USEVORTEXPROTON")"
 			fi
 
 			if [ ! -f "$VORTEXPROTON" ]; then
@@ -9496,7 +9492,7 @@ function setVortexProtonWine {
 
 			if [ ! -f "$VORTEXPROTON" ]; then
 				writelog "WARN" "${FUNCNAME[0]} - proton file '$VORTEXPROTON' for proton version '$VORTEXPROTON' not found - trying 'USEPROTON' instead"
-				VORTEXPROTON="$(PROTPATH "$USEPROTON")"
+				VORTEXPROTON="$(getProtPathFromCSV "$USEPROTON")"
 			fi
 
 			if [ -f "$VORTEXPROTON" ]; then
@@ -10607,7 +10603,7 @@ function startDepressurizer {
 				writelog "INFO" "${FUNCNAME[0]} - Don't have the Array of available Proton versions yet - creating"
 				getAvailableProtonVersions "up" X
 			fi
-			DPRSPROTON="$(PROTPATH "$USEDPRSPROTON")"
+			DPRSPROTON="$(getProtPathFromCSV "$USEDPRSPROTON")"
 		fi
 
 		if [ ! -f "$DPRSPROTON" ]; then
@@ -10616,7 +10612,7 @@ function startDepressurizer {
 
 		if [ ! -f "$DPRSPROTON" ]; then
 			writelog "WARN" "${FUNCNAME[0]} - proton file '$DPRSPROTON' for proton version '$USEDPRSPROTON' not found - trying 'USEPROTON' instead"
-			DPRSPROTON="$(PROTPATH "$USEPROTON")"
+			DPRSPROTON="$(getProtPathFromCSV "$USEPROTON")"
 		fi
 
 		CHECKWINED="$(dirname "$DPRSPROTON")/$DBW"
@@ -11075,18 +11071,18 @@ function prepareProton {
 			fi
 
 			if [ "$HAVEINPROTON" -eq 0 ]; then
-				if [ -n "$USEPROTON" ] && [ ! -f "$(PROTPATH "$USEPROTON")" ]; then
+				if [ -n "$USEPROTON" ] && [ ! -f "$(getProtPathFromCSV "$USEPROTON")" ]; then
 					fixProtonVersionMismatch "USEPROTON" "$STLGAMECFG"
 				fi
 			
 				# (re)initialize Proton dependant variables, when USEPROTON changed in a menu above
 				if [ -n "$USEPROTON" ] && [ "$USEPROTON" != "$FIRSTGAMEUSEPROTON" ] && [ "$ISGAME" -eq 2 ]; then
 					writelog "INFO" "${FUNCNAME[0]} - setNewProtVars, because '$USEPROTON' != '$FIRSTGAMEUSEPROTON'"
-					setNewProtVars "$(PROTPATH "$USEPROTON")"
+					setNewProtVars "$(getProtPathFromCSV "$USEPROTON")"
 				fi
 			else
 				USEPROTON="$INPROTV"
-				setNewProtVars "$(PROTPATH "$USEPROTON")"
+				setNewProtVars "$(getProtPathFromCSV "$USEPROTON")"
 				writelog "INFO" "${FUNCNAME[0]} - Checking the Proton version is not required, because $SLO is used. Proton version set in Steam is '$USEPROTON'"
 			fi
 			
@@ -11185,26 +11181,30 @@ function sortGameArgs {
 }
 
 function initFirstProton {
-	writelog "INFO" "${FUNCNAME[0]} - Initializing Proton"
+	if [ "$HAVEINPROTON" -eq 1 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - skipping function, because Proton version is provided by commandline ($PROGCMD used via '$SLO')"
+	else
+		writelog "INFO" "${FUNCNAME[0]} - Initializing Proton"
 
-	FUP1="$(grep "^USEPROTON=" "$STLDEFGAMECFG" | cut -d '=' -f2)"
-	FIRSTUSEPROTON="${FUP1//\"}"
-
-	if [ -z "$FIRSTUSEPROTON" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - No Proton version available in template yet - searching for one"
-		FIRSTUSEPROTON="$(getDefaultProton)"
-		touch "$FUPDATE"
-		updateConfigEntry "USEPROTON" "$USEPROTON" "$STLDEFGAMECFG"
-		writelog "INFO" "${FUNCNAME[0]} - Updated 'USEPROTON' in '$STLDEFGAMECFG' to '$USEPROTON'"
-	fi
-	if [ ! -f "$(getProtPathFromCSV "$FIRSTUSEPROTON")" ]; then
-		USEPROTON="$FIRSTUSEPROTON"
-		fixProtonVersionMismatch "USEPROTON" "$STLDEFGAMECFG"
 		FUP1="$(grep "^USEPROTON=" "$STLDEFGAMECFG" | cut -d '=' -f2)"
 		FIRSTUSEPROTON="${FUP1//\"}"
-	fi
 
-	writelog "INFO" "${FUNCNAME[0]} - Initial Proton version 'FIRSTUSEPROTON' from '$STLDEFGAMECFG' is '$FIRSTUSEPROTON'"
+		if [ -z "$FIRSTUSEPROTON" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - No Proton version available in template yet - searching for one"
+			FIRSTUSEPROTON="$(getDefaultProton)"
+			touch "$FUPDATE"
+			updateConfigEntry "USEPROTON" "$USEPROTON" "$STLDEFGAMECFG"
+			writelog "INFO" "${FUNCNAME[0]} - Updated 'USEPROTON' in '$STLDEFGAMECFG' to '$USEPROTON'"
+		fi
+		if [ ! -f "$(getProtPathFromCSV "$FIRSTUSEPROTON")" ]; then
+			USEPROTON="$FIRSTUSEPROTON"
+			fixProtonVersionMismatch "USEPROTON" "$STLDEFGAMECFG"
+			FUP1="$(grep "^USEPROTON=" "$STLDEFGAMECFG" | cut -d '=' -f2)"
+			FIRSTUSEPROTON="${FUP1//\"}"
+		fi
+
+		writelog "INFO" "${FUNCNAME[0]} - Initial Proton version 'FIRSTUSEPROTON' from '$STLDEFGAMECFG' is '$FIRSTUSEPROTON'"
+	fi
 }
 
 function prepareLaunch {
@@ -11233,15 +11233,15 @@ function prepareLaunch {
 
 	writelog "INFO" "${FUNCNAME[0]} - First LoadCfg: $STLGAMECFG"
 	loadCfg "$STLGAMECFG"
-	if [ "$ISGAME" -eq 2 ]; then
+	if [ "$ISGAME" -eq 2 ] && [ "$HAVEINPROTON" -eq 0 ]; then
 		FIRSTGAMEUSEPROTON="$USEPROTON"
 		writelog "INFO" "${FUNCNAME[0]} -  Initial Proton version from the game config: '$FIRSTGAMEUSEPROTON'"
-		if [ -n "$USEPROTON" ] && [ ! -f "$(PROTPATH "$USEPROTON")" ]; then
+		if [ -n "$USEPROTON" ] && [ ! -f "$(getProtPathFromCSV "$USEPROTON")" ]; then
 			fixProtonVersionMismatch "USEPROTON" "$STLGAMECFG"
 		fi
 
 		writelog "INFO" "${FUNCNAME[0]} - Initializing internal Proton Vars for '$FIRSTGAMEUSEPROTON' using setNewProtVars"
-		setNewProtVars "$(PROTPATH "$USEPROTON")"
+		setNewProtVars "$(getProtPathFromCSV "$USEPROTON")"
 	fi
 	
 	writelog "INFO" "${FUNCNAME[0]} - OpenTrayIcon:"
@@ -11457,7 +11457,7 @@ function prepareLaunch {
 function switchProton {
 	writelog "INFO" "${FUNCNAME[0]} - Switching used Proton and its Variables to version '$1'"
 
-	if [ ! -f "$(PROTPATH "$1")" ]; then
+	if [ ! -f "$(getProtPathFromCSV "$1")" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Tried to switch to Proton '$1', but it is not available"
 		if [ "$AUTOPULLPROTON" -eq 1 ]; then
 			writelog "INFO" "${FUNCNAME[0]} - AUTOPULLPROTON is enabled, so trying to download and enable '$1'"
@@ -11473,12 +11473,12 @@ function switchProton {
 			writelog "SKIP" "${FUNCNAME[0]} - AUTOPULLPROTON is disabled, so giving up switching to proton version '$1'"
 		fi
 	else
-		writelog "INFO" "${FUNCNAME[0]} - Requested Proton version '$1' found under '$(PROTPATH "$1")'"
+		writelog "INFO" "${FUNCNAME[0]} - Requested Proton version '$1' found under '$(getProtPathFromCSV "$1")'"
 	fi
 
-	if [ -f "$(PROTPATH "$1")" ]; then
+	if [ -f "$(getProtPathFromCSV "$1")" ]; then
 		USEPROTON="$1"
-		setNewProtVars "$(PROTPATH "$USEPROTON")"
+		setNewProtVars "$(getProtPathFromCSV "$USEPROTON")"
 	fi
 }
 
@@ -11548,14 +11548,14 @@ function fixProtonVersionMismatch {
 		MIMAPROTSHORT="^${MIMAPROT%-*}"
 		NEWMINORPROT="$(grep "$MIMAPROTSHORT" "$PROTONCSV" | cut -d ';' -f1 | sort -nr | head -n1)"
 
-		if [ -f "$(PROTPATH "${NEWMINORPROT//\"/}")" ] && [ -n "${NEWMINORPROT//\"/}" ]; then
-			NEWMINORRUN="$(PROTPATH "${NEWMINORPROT//\"/}")"
+		if [ -f "$(getProtPathFromCSV "${NEWMINORPROT//\"/}")" ] && [ -n "${NEWMINORPROT//\"/}" ]; then
+			NEWMINORRUN="$(getProtPathFromCSV "${NEWMINORPROT//\"/}")"
 			writelog "INFO" "${FUNCNAME[0]} - Found Proton '$NEWMINORPROT' in path '$NEWMINORRUN' as an alternative for the requested '$MIMAPROT'"
 		elif grep -q "GE" <<< "$MIMAPROT"; then
 			writelog "INFO" "${FUNCNAME[0]} - No alternative for '$MIMAPROT' found directly"
 			NEWMINORPROT="$(grep "GE" "$PROTONCSV" | cut -d ';' -f1 | sort -nr | head -n1)"
-			if [ -f "$(PROTPATH "${NEWMINORPROT//\"/}")" ]; then
-				NEWMINORRUN="$(PROTPATH "${NEWMINORPROT//\"/}")"
+			if [ -f "$(getProtPathFromCSV "${NEWMINORPROT//\"/}")" ]; then
+				NEWMINORRUN="$(getProtPathFromCSV "${NEWMINORPROT//\"/}")"
 				writelog "INFO" "${FUNCNAME[0]} - Using found '$NEWMINORPROT' instead, as it is at least also a GE Proton like the requested '$MIMAPROT'"
 			fi
 		fi
@@ -11579,7 +11579,7 @@ function fixProtonVersionMismatch {
 			fi
 		fi
 
-		if [ ! -f "$(PROTPATH "$MIMAPROT")" ] && [ "$ORGPROTCAT" == "USEPROTON" ] && [ "$MIMAPROT" != "$NEWMINORPROT" ]; then
+		if [ ! -f "$(getProtPathFromCSV "$MIMAPROT")" ] && [ "$ORGPROTCAT" == "USEPROTON" ] && [ "$MIMAPROT" != "$NEWMINORPROT" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Automatically updating USEPROTON to '$USEPROTON' in '$2'"
 			touch "$FUPDATE"
 			updateConfigEntry "USEPROTON" "$USEPROTON" "$2"
@@ -11658,7 +11658,7 @@ function OneTimeProton {
 				writelog "INFO" "${FUNCNAME[0]} - One time Proton version '$WANTPROTON' selected, but '$DISPPROT' is set"
 				notiShow "$(strFix "$NOTY_WANTPROTON" "$WANTPROTON" "$DISPPROT")"
 			
-				if [ -f "$(PROTPATH "$WANTPROTON")" ]; then
+				if [ -f "$(getProtPathFromCSV "$WANTPROTON")" ]; then
 					writelog "INFO" "${FUNCNAME[0]} -  One time Proton version '$WANTPROTON' does exist - switching"
 					switchProton "$WANTPROTON"
 				else
@@ -12204,7 +12204,11 @@ function gameArgs {
 		mapfile -d " " -t -O "${#GAMEARGSARR[@]}" GAMEARGSARR < <(printf '%s' "$ARGSTRING")
 	fi
 
-	writelog "INFO" "${FUNCNAME[0]} - Combined final game command line arguments: '${GAMEARGSARR[*]}'"
+	if [ "${#GAMEARGSARR[@]}" -ge 1 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Combined final game command line arguments: '${GAMEARGSARR[*]}'"
+	else
+		writelog "INFO" "${FUNCNAME[0]} - Game doesn't use any command line arguments"
+	fi
 }
 
 function createDLWineList {
@@ -12871,7 +12875,7 @@ function CompatTool {
 
 function setRunProtonFromUseProton {
 	if [ -n "$USEPROTON" ]; then
-		NRUNPROTON="$(PROTPATH "$USEPROTON")"
+		NRUNPROTON="$(getProtPathFromCSV "$USEPROTON")"
 
 		if [ -n "$RUNPROTON" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Setting ORUNPROTON to '$RUNPROTON'"
