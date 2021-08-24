@@ -685,8 +685,18 @@ function getRawAppIDInfo {
 		setSteamPaths
 	fi
 	
+	if [ -z "$LOGRAWINFO" ]; then
+		LOGRAWINFO=1
+	fi
+	
 	if  [ -s "$AIIDRAW" ] && [ -z "$2" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - Found raw $APIN file '$AIIDRAW'"
+		if [ -z "$LOGRAWINFO" ]; then
+			LOGRAWINFO=1
+		fi
+
+		if [ "$LOGRAWINFO" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Found raw $APIN file '$AIIDRAW'"
+		fi
 	else
 		if [ -n "$2" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Updating raw $APIN file '$AIIDRAW'"
@@ -727,6 +737,7 @@ function getAppInfoData {
 					echo "${!UPDAT}"
 				fi
 			else
+				LOGRAWINFO=0
 				getRawAppIDInfo "$1"
 				SRCHEX="$STLAPPINFOIDDIR/$1.bin"
 
@@ -1646,7 +1657,7 @@ function setProtonPathVersion {
 				fi
 			fi
 
-			writelog "INFO" "${FUNCNAME[0]} - Setting the Proton Version for '$1' to '${PROTVOUT//\"/}'"
+			#writelog "INFO" "${FUNCNAME[0]} - Setting the Proton Version for '$1' to '${PROTVOUT//\"/}'"	# checking $PROTONCSV should be enough
 
 			echo "${PROTVOUT//\"/}"
 		fi
@@ -1672,7 +1683,7 @@ function printProtonArr {
 
 function delEmptyFile {
 	if [ -f "$1" ]; then
-		if [ "$(wc -l < "$1")" -eq 0 ]; then
+		if [ "$(wc -l < "$1")" -le 1 ]; then
 			rm "$1" 2>/dev/null
 		fi
 	fi
@@ -2582,6 +2593,17 @@ function strFix {
 	fi
 }
 
+function getProtPathFromCSV {
+	if [ ! -f "$PROTONCSV" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Creating '$PROTONCSV'"
+		getAvailableProtonVersions "up" X
+	fi
+
+	if [ -f "$PROTONCSV" ]; then
+		grep "^$1" "$PROTONCSV" | sort -nr | head -n1 | cut -d ';' -f2
+	fi
+}
+
 function PROTPATH {
 	if [ -z "${ProtonCSV[0]}" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Don't have the Array of available Proton versions yet - creating"
@@ -2595,7 +2617,7 @@ function setRunWineServer {
 		writelog "INFO" "${FUNCNAME[0]} - Initiated from '$1'"
 
 		if [ -n "$USEPROTON" ] && [ ! -f "$(PROTPATH "$USEPROTON")" ]; then
-			fixProtonVersionMismatch "USEPROTON"
+			fixProtonVersionMismatch "USEPROTON" "$STLGAMECFG"
 		fi
 		if [ -z "$RUNPROTON" ]; then
 			setRunProtonFromUseProton
@@ -2681,7 +2703,6 @@ function setNewProtVars {
 # in case you wonder NOP='Newest Official Proton'
 function getNOP {
 	createProtonList
-
 	NEWESTPROTRAW="$(printProtonArr | grep "^proton-[0-9]." | sort -nr | head -n1)"
 	
 	if [ "$1" == "p" ]; then
@@ -3714,13 +3735,13 @@ function openTrayIcon {
 }
 
 function createProtonList {
+	delEmptyFile "$PROTONCSV"
 	if [ ! -f "$PROTONCSV" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Looking for available Proton versions"
 		getAvailableProtonVersions "up" X
 	fi
 
 	if [ "$ISGAME" -eq 2 ] || [ -n "$1" ] ; then
-		writelog "INFO" "${FUNCNAME[0]} - Updating the Proton Dropdown List"
 		PROTYADLIST="$(printf "!%s\n" "${ProtonCSV[@]//\"/}" | sort -u | cut -d ';' -f1 | tr -d '\n'  | sed "s:^!::" | sed "s:!$::")"
 	fi
 }
@@ -4986,7 +5007,7 @@ function extProtonRun {
 	# could help here:
 	if [ ! -f "${RUNPROTON//\"/}" ]; then
 		writelog "WARN" "${FUNCNAME[0]} - '$USEPROTON' seems outdated as the executable ${RUNPROTON//\"/} wasn't found"
-		fixProtonVersionMismatch "USEPROTON"
+		fixProtonVersionMismatch "USEPROTON" "$STLGAMECFG"
 	fi
 
 	writelog "INFO" "${FUNCNAME[0]} - Continuing with RUNPROTON='$RUNPROTON'"
@@ -7139,9 +7160,15 @@ function createDefaultCfgs {
 
 	createProjectDirs
 
+	if [ -n "$STEAM_COMPAT_DATA_PATH" ]; then
+		ISGAME=2
+	fi
+
+	delEmptyFile "$PROTONCSV"
+
 	if [ "$ISGAME" -eq 2 ] || [ ! -f "$PROTONCSV" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - getAvailableProtonVersions:"
-		getAvailableProtonVersions # "up"
+		writelog "INFO" "${FUNCNAME[0]} - createProtonList:"
+		createProtonList X
 	elif [ "$ISGAME" -ne 2 ] && [ -f "$PROTONCSV" ]; then
 		mapfile -t -O "${#ProtonCSV[@]}" ProtonCSV < "$PROTONCSV"
 	fi
@@ -7509,7 +7536,7 @@ function StandaloneProtonGame {
 		if [ "$SAPRUN" == "TRUE" ]; then
 			RUNSAPPROTON="$(PROTPATH "$SAPPROTON")"
 			if [ ! -f "$RUNSAPPROTON" ]; then
-				RUNSAPPROTON="$(fixProtonVersionMismatch "SAPPROTON" X)"
+				RUNSAPPROTON="$(fixProtonVersionMismatch "SAPPROTON" "$STLGAMECFG" X)"
 			fi
 
 			if [ ! -f "$RUNSAPPROTON" ]; then
@@ -7723,7 +7750,7 @@ function OneTimeRunGui {
 
 						RUNOTPROTON="$(PROTPATH "$OTPROTON")"
 						if [ ! -f "$RUNOTPROTON" ]; then
-							RUNOTPROTON="$(fixProtonVersionMismatch "OTPROTON" X)"
+							RUNOTPROTON="$(fixProtonVersionMismatch "OTPROTON" "$STLGAMECFG" X)"
 						fi
 		
 						if [ ! -f "$RUNOTPROTON" ]; then
@@ -9011,7 +9038,7 @@ function chooseWinetricksPrefix {
 					RUNWTPROTON="$(PROTPATH "$WTPROTON")"
 
 					if [ ! -f "$RUNWTPROTON" ]; then
-						RUNWTPROTON="$(fixProtonVersionMismatch "WTPROTON" X)"
+						RUNWTPROTON="$(fixProtonVersionMismatch "WTPROTON" "$STLGAMECFG" X)"
 					fi
 
 					if [ -f "$(dirname "$RUNWTPROTON")/$DBW" ]; then
@@ -9464,7 +9491,7 @@ function setVortexProtonWine {
 			fi
 
 			if [ ! -f "$VORTEXPROTON" ]; then
-				VORTEXPROTON="$(fixProtonVersionMismatch "USEVORTEXPROTON" X)"
+				VORTEXPROTON="$(fixProtonVersionMismatch "USEVORTEXPROTON" "$STLGAMECFG" X)"
 			fi
 
 			if [ ! -f "$VORTEXPROTON" ]; then
@@ -10584,7 +10611,7 @@ function startDepressurizer {
 		fi
 
 		if [ ! -f "$DPRSPROTON" ]; then
-			DPRSPROTON="$(fixProtonVersionMismatch "USEDPRSPROTON" X)"
+			DPRSPROTON="$(fixProtonVersionMismatch "USEDPRSPROTON" "$STLGAMECFG" X)"
 		fi
 
 		if [ ! -f "$DPRSPROTON" ]; then
@@ -11049,7 +11076,7 @@ function prepareProton {
 
 			if [ "$HAVEINPROTON" -eq 0 ]; then
 				if [ -n "$USEPROTON" ] && [ ! -f "$(PROTPATH "$USEPROTON")" ]; then
-					fixProtonVersionMismatch "USEPROTON"
+					fixProtonVersionMismatch "USEPROTON" "$STLGAMECFG"
 				fi
 			
 				# (re)initialize Proton dependant variables, when USEPROTON changed in a menu above
@@ -11157,6 +11184,29 @@ function sortGameArgs {
 	fi
 }
 
+function initFirstProton {
+	writelog "INFO" "${FUNCNAME[0]} - Initializing Proton"
+
+	FUP1="$(grep "^USEPROTON=" "$STLDEFGAMECFG" | cut -d '=' -f2)"
+	FIRSTUSEPROTON="${FUP1//\"}"
+
+	if [ -z "$FIRSTUSEPROTON" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - No Proton version available in template yet - searching for one"
+		FIRSTUSEPROTON="$(getDefaultProton)"
+		touch "$FUPDATE"
+		updateConfigEntry "USEPROTON" "$USEPROTON" "$STLDEFGAMECFG"
+		writelog "INFO" "${FUNCNAME[0]} - Updated 'USEPROTON' in '$STLDEFGAMECFG' to '$USEPROTON'"
+	fi
+	if [ ! -f "$(getProtPathFromCSV "$FIRSTUSEPROTON")" ]; then
+		USEPROTON="$FIRSTUSEPROTON"
+		fixProtonVersionMismatch "USEPROTON" "$STLDEFGAMECFG"
+		FUP1="$(grep "^USEPROTON=" "$STLDEFGAMECFG" | cut -d '=' -f2)"
+		FIRSTUSEPROTON="${FUP1//\"}"
+	fi
+
+	writelog "INFO" "${FUNCNAME[0]} - Initial Proton version 'FIRSTUSEPROTON' from '$STLDEFGAMECFG' is '$FIRSTUSEPROTON'"
+}
+
 function prepareLaunch {
 	rm "$CLOSETMP" 2>/dev/null
 	rm "$KILLSWITCH" 2>/dev/null
@@ -11168,7 +11218,7 @@ function prepareLaunch {
 	loadCfg "$STLDEFGLOBALCFG" X
 	writelog "START" "######### Game Launch: $SGNAID #########"
 
-	createDefaultCfgs "${ORGGCMD[@]}"
+#	createDefaultCfgs "${ORGGCMD[@]}"
 
 	getGameData "$AID"
 
@@ -11181,16 +11231,13 @@ function prepareLaunch {
 	writelog "INFO" "${FUNCNAME[0]} - CreateGameCfg:"
 	createGameCfg
 
-	FIRSTUSEPROTON="$USEPROTON"
-	writelog "INFO" "${FUNCNAME[0]} - Initial Proton version from '$STLDEFGAMECFG' before loading the game config: '$FIRSTUSEPROTON'"
-
 	writelog "INFO" "${FUNCNAME[0]} - First LoadCfg: $STLGAMECFG"
 	loadCfg "$STLGAMECFG"
 	if [ "$ISGAME" -eq 2 ]; then
 		FIRSTGAMEUSEPROTON="$USEPROTON"
 		writelog "INFO" "${FUNCNAME[0]} -  Initial Proton version from the game config: '$FIRSTGAMEUSEPROTON'"
 		if [ -n "$USEPROTON" ] && [ ! -f "$(PROTPATH "$USEPROTON")" ]; then
-			fixProtonVersionMismatch "USEPROTON"
+			fixProtonVersionMismatch "USEPROTON" "$STLGAMECFG"
 		fi
 
 		writelog "INFO" "${FUNCNAME[0]} - Initializing internal Proton Vars for '$FIRSTGAMEUSEPROTON' using setNewProtVars"
@@ -11513,7 +11560,7 @@ function fixProtonVersionMismatch {
 			fi
 		fi
 
-		if [ -n "$2" ]; then
+		if [ -n "$3" ]; then
 			if [ -f "$NEWMINORRUN" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - found '$NEWMINORRUN'"
 				echo "$NEWMINORRUN"
@@ -11533,9 +11580,9 @@ function fixProtonVersionMismatch {
 		fi
 
 		if [ ! -f "$(PROTPATH "$MIMAPROT")" ] && [ "$ORGPROTCAT" == "USEPROTON" ] && [ "$MIMAPROT" != "$NEWMINORPROT" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Automatically updating USEPROTON to '$USEPROTON' in '$STLGAMECFG'"
+			writelog "INFO" "${FUNCNAME[0]} - Automatically updating USEPROTON to '$USEPROTON' in '$2'"
 			touch "$FUPDATE"
-			updateConfigEntry "USEPROTON" "$USEPROTON" "$STLGAMECFG"
+			updateConfigEntry "USEPROTON" "$USEPROTON" "$2"
 			setInternalProtonVars
 		fi
 	fi
@@ -11615,7 +11662,7 @@ function OneTimeProton {
 					writelog "INFO" "${FUNCNAME[0]} -  One time Proton version '$WANTPROTON' does exist - switching"
 					switchProton "$WANTPROTON"
 				else
-					fixProtonVersionMismatch "WANTPROTON"
+					fixProtonVersionMismatch "WANTPROTON" "$STLGAMECFG"
 				fi
 			fi
 		fi
@@ -12672,7 +12719,7 @@ function launchSteamGame {
 				else
 					if [ ! -f "${RUNPROTON//\"/}" ]; then
 						writelog "WARN" "${FUNCNAME[0]} - '$USEPROTON' seems outdated as the executable ${RUNPROTON//\"/} wasn't found"
-						fixProtonVersionMismatch "USEPROTON"
+						fixProtonVersionMismatch "USEPROTON" "$STLGAMECFG"
 					fi
 					
 					if [ -f "${RUNPROTON//\"/}" ]; then
@@ -14917,7 +14964,7 @@ function checkFirstTimeRun {
 					else
 						writelog "INFO" "${FUNCNAME[0]} - '$CONFPROT' not found in '$PROTONCSV'" "E" | tee -a "$ISCRILOG"
 						# if configured USEPROTON proton binary was not found, try to find a minor version bump instead:
-						TESTEARLYPROT="$(fixProtonVersionMismatch "CONFPROT" "X")"
+						TESTEARLYPROT="$(fixProtonVersionMismatch "CONFPROT" "$STLGAMECFG" "X")"
 						if [ -f "$TESTEARLYPROT" ]; then
 							writelog "INFO" "${FUNCNAME[0]} - Found a minor version mismatch binary for '$CONFPROT':'$TESTEARLYPROT'" "E" | tee -a "$ISCRILOG"
 							EARLYPROT="$TESTEARLYPROT"
@@ -15158,6 +15205,8 @@ function main {
 	writelog "INFO" "emptyVars - Emptied some original Variables as they slowdown several system calls when started from steam"
 
 	createDefaultCfgs "$@"
+
+	initFirstProton
 
 	checkIntDeps "$@"
 	setInitWinXY
