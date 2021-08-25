@@ -77,81 +77,10 @@ you might want to check the [articles and videos](#Press) of many cool people!**
 
 
 ## Features
-**For a complete list of features, please see [the wiki](https://github.com/frostworx/steamtinkerlaunch/wiki). For the most recent changes, see [the release page](https://github.com/frostworx/steamtinkerlaunch/releases)
-For current development changes, you can also check [this Changelog issue](https://github.com/frostworx/steamtinkerlaunch/issues/177)**
 
-* Support for multiple [External Tools](https://github.com/frostworx/steamtinkerlaunch/wiki/Tools) like
-	* [Boxtron](https://github.com/frostworx/steamtinkerlaunch/wiki/Boxtron)
-	* [Cheat Engine](https://github.com/frostworx/steamtinkerlaunch/wiki/Cheat-Engine)
-	* [Conty](https://github.com/frostworx/steamtinkerlaunch/wiki/Conty)
-	* [GameConqueror](https://github.com/frostworx/steamtinkerlaunch/wiki/GameConqueror)
-	* [GameMode](https://github.com/frostworx/steamtinkerlaunch/wiki/GameMode)
-	* [GameScope](https://github.com/frostworx/steamtinkerlaunch/wiki/GameScope)
-	* [Luxtorpeda](https://github.com/frostworx/steamtinkerlaunch/wiki/Luxtorpeda)
-	* [MangoHud](https://github.com/frostworx/steamtinkerlaunch/wiki/MangoHud)
-	* [Block Internet](https://github.com/frostworx/steamtinkerlaunch/wiki/Block Internet)
-	* [Network-Monitoring](https://github.com/frostworx/steamtinkerlaunch/wiki/Network-Monitoring)
-	* [Nyrna](https://github.com/frostworx/steamtinkerlaunch/wiki/Nyrna)
-	* [ReplaySorcery](https://github.com/frostworx/steamtinkerlaunch/wiki/ReplaySorcery)
-	* [Roberta](https://github.com/frostworx/steamtinkerlaunch/wiki/Roberta)
-	* [Strace](https://github.com/frostworx/steamtinkerlaunch/wiki/Strace)
-	* [X64dbg](https://github.com/frostworx/steamtinkerlaunch/wiki/X64dbg-Support)
-	* [IGCSInjector](https://github.com/frostworx/steamtinkerlaunch/wiki/IGCSInjector)
-	* [UniversalUE4Unlocker](https://github.com/frostworx/steamtinkerlaunch/wiki/UniversalUE4Unlocker)
-	* [Dependencies-Program](https://github.com/frostworx/steamtinkerlaunch/wiki/Dependencies-Program)
-	
-* Highly customizable [Gui System](https://github.com/frostworx/steamtinkerlaunch/wiki/Gui)
-
-* [Misc](https://github.com/frostworx/steamtinkerlaunch/wiki/Misc) features like support for various methods to launch custom programs
-
-* Multiple [Proton](https://github.com/frostworx/steamtinkerlaunch/wiki/Proton) options like
-	* [Backup Support](https://github.com/frostworx/steamtinkerlaunch/wiki/Backup-Support)
-	* [Custom Proton Autoupdate](https://github.com/frostworx/steamtinkerlaunch/wiki/Custom-Proton-Autoupdate)
-	* [Download Custom Proton](https://github.com/frostworx/steamtinkerlaunch/wiki/Download-Custom-Proton)
-	* [Dxvk Hud Options](https://github.com/frostworx/steamtinkerlaunch/wiki/Dxvk-Hud-Options)
-	* [Proton Versions](https://github.com/frostworx/steamtinkerlaunch/wiki/Proton-Versions)
-	* [ProtonDB-Rating](https://github.com/frostworx/steamtinkerlaunch/wiki/ProtonDB-Rating)
-	* [(Re-)Create Proton compatdata and WINEPREFIX](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam-First-Time-Setup#re-create-compatdata-and-wineprefix)
-	* [Steam First Time Setup](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam-First-Time-Setup) and [Custom First-Time-Setup](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam-First-Time-Setup#Custom-First-Time-Setup)
-	* [Standalone-Proton](https://github.com/frostworx/steamtinkerlaunch/wiki/Standalone-Proton)
-	* [Compatdata Redirect](https://github.com/frostworx/steamtinkerlaunch/wiki/Compatdata-Redirect)
-	* [Compatdata Delete](https://github.com/frostworx/steamtinkerlaunch/wiki/Compatdata-Delete)
-	* [Symlink SteamUser](https://github.com/frostworx/steamtinkerlaunch/wiki/SteamUser)
-
-* [Shader](https://github.com/frostworx/steamtinkerlaunch/wiki/Shader) [ReShade](https://github.com/frostworx/steamtinkerlaunch/wiki/ReShade) [Management](https://github.com/frostworx/steamtinkerlaunch/wiki/Shader-Management)
-
-* Multiple [Steam](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam) related options like
-	* [SteamGridDB Support](https://github.com/frostworx/steamtinkerlaunch/wiki/SteamGridDB)
-	* [Add Non Steam Game](https://github.com/frostworx/steamtinkerlaunch/wiki/Add-Non-Steam-Game)
-	* [One Time Run](https://github.com/frostworx/steamtinkerlaunch/wiki/One-Time-Run)
-	* [Steam First Time Setup](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam-First-Time-Setup)
-	* [Steam Categories](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam-Categories)
-	* [Steam Compatibility Tool](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam-Compatibility-Tool)
-	* [Steam Launch Option](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam-Launch-Option)
-	* [Steam Linux Runtime](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam-Linux-Runtime)
-	* [Help-Url](https://github.com/frostworx/steamtinkerlaunch/wiki/Help-Url)
-	* [SteamAppID.txt](https://github.com/frostworx/steamtinkerlaunch/wiki/SteamAppID.txt)
-	* [Steam Deck](https://github.com/frostworx/steamtinkerlaunch/wiki/SteamDeck)
-
-
-* [Vortex](https://github.com/frostworx/steamtinkerlaunch/wiki/Vortex)
-
-* Support for [Stereoscopic3D](https://github.com/frostworx/steamtinkerlaunch/wiki/Side-by-Side-VR) [VR](https://github.com/frostworx/steamtinkerlaunch/wiki/VR)
-
-* Use [Wine](https://github.com/frostworx/steamtinkerlaunch/wiki/Wine) instead of [Proton](https://github.com/frostworx/steamtinkerlaunch/wiki/Proton):
-	* [Wine Support](https://github.com/frostworx/steamtinkerlaunch/wiki/Wine-Support)
-	* [Download Custom Wine](https://github.com/frostworx/steamtinkerlaunch/wiki/Download-Custom-Wine)
-	* [Winetricks](https://github.com/frostworx/steamtinkerlaunch/wiki/Winetricks)
-	* [Winecfg](https://github.com/frostworx/steamtinkerlaunch/wiki/Winecfg)
-	* [Wineconsole](https://github.com/frostworx/steamtinkerlaunch/wiki/Wineconsole)
-	* [Wine Debug](https://github.com/frostworx/steamtinkerlaunch/wiki/Wine-Debug)
-	* [Registry](https://github.com/frostworx/steamtinkerlaunch/wiki/Registry)
-	* [Wineprefix](https://github.com/frostworx/steamtinkerlaunch/wiki/Wineprefix)
-	* [Wine FSR](https://github.com/frostworx/steamtinkerlaunch/wiki/Wine-FSR)
-
-* multiple automations and configuration options for [VR](https://github.com/frostworx/steamtinkerlaunch/wiki/VR)
-	* [Flat2VR](https://github.com/frostworx/steamtinkerlaunch/wiki/Flat2VR)
-	* [Side by Side VR](https://github.com/frostworx/steamtinkerlaunch/wiki/Side-by-Side-VR)
+**[Feature list](https://github.com/frostworx/steamtinkerlaunch/wiki#features)
+[Changes in the latest release](https://github.com/frostworx/steamtinkerlaunch/releases/latest)
+[Changes in after the latest release](https://github.com/frostworx/steamtinkerlaunch/issues/177)**
 
 ## Requirements
 *(no special order)*
