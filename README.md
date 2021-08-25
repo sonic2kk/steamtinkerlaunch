@@ -77,12 +77,10 @@ you might want to check the [articles and videos](#Press) of many cool people!**
 
 
 ## Features
-
-**
 - [Feature list](https://github.com/frostworx/steamtinkerlaunch/wiki#features)
 - [Changes in the latest release](https://github.com/frostworx/steamtinkerlaunch/releases/latest)
 - [Changes in after the latest release](https://github.com/frostworx/steamtinkerlaunch/issues/177)
-**
+
 
 ## Requirements
 *(no special order)*
