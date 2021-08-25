@@ -1316,7 +1316,6 @@ function linkLog {
 function setGlobalAIDCfgs {
 	GLOBALSBSTWEAKCFG="$GLOBALSBSTWEAKS/$AID.conf"
 	GLOBALTWEAKCFG="$GLOBALTWEAKS/$AID.conf"
-	AIDREG="$GLOBALREGDIR/$AID.reg"
 }
 
 function setCompatDataTitle {
@@ -1840,7 +1839,6 @@ function setDefaultCfgValues {
 		if [ -z "$NETMONDIR" ]							; then	NETMONDIR="$LOGDIR"; fi
 		if [ -z "$VRVIDEOPLAYER" ]						; then	VRVIDEOPLAYER="$("$WHICH" vr-video-player 2>/dev/null)"; fi
 		if [ -z "$GAMCON" ]								; then	GAMCON="/usr/share/gameconqueror/GameConqueror.py"; fi
-		if [ -z "$GLOBALREGDIR" ]						; then	GLOBALREGDIR="$SYSTEMSTLCFGDIR/regs"; fi
 		if [ -z "$GLOBALCATEGORYDIR" ]					; then	GLOBALCATEGORYDIR="$SYSTEMSTLCFGDIR/categories"; fi
 		if [ -z "$GLOBALMISCDIR" ]						; then	GLOBALMISCDIR="$SYSTEMSTLCFGDIR/misc"; fi
 		if [ -z "$GLOBALSBSTWEAKS" ]					; then	GLOBALSBSTWEAKS="$SYSTEMSTLCFGDIR/misc/sbstweaks"; fi
@@ -2172,8 +2170,6 @@ function saveCfg {
 			echo "VRVIDEOPLAYER=\"$VRVIDEOPLAYER\""
 			echo "## $DESC_GAMCON"
 			echo "GAMCON=\"$GAMCON\""
-			echo "## $DESC_GLOBALREGDIR"
-			echo "GLOBALREGDIR=\"$GLOBALREGDIR\""
 			echo "## $DESC_GLOBALSBSTWEAKS"
 			echo "GLOBALSBSTWEAKS=\"$GLOBALSBSTWEAKS\""
 			echo "## $DESC_GLOBALTWEAKS"
@@ -3987,7 +3983,6 @@ function AllSettingsEntriesDummyFunction {
 --field="$(spanFont "$PROGNAME $GUI_PATHS" "H")":LBL "SKIP" `#CAT_Paths` `#HEAD_Stl` `#MENU_GLOBAL`  \
 --field="     $GUI_GLOBALCATEGORYDIR!$DESC_GLOBALCATEGORYDIR ('GLOBALCATEGORYDIR')":DIR "${GLOBALCATEGORYDIR/#-/ -}" `#CAT_Paths` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_GLOBALMISCDIR!$DESC_GLOBALMISCDIR ('GLOBALMISCDIR')":DIR "${GLOBALMISCDIR/#-/ -}" `#CAT_Paths` `#SUB_Directories` `#MENU_GLOBAL` \
---field="     $GUI_GLOBALREGDIR!$DESC_GLOBALREGDIR ('GLOBALREGDIR')":DIR "${GLOBALREGDIR/#-/ -}" `#CAT_Paths` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_GLOBALRSPRESETDIR!$DESC_GLOBALRSPRESETDIR ('GLOBALRSPRESETDIR')":DIR "${GLOBALRSPRESETDIR/#-/ -}" `#CAT_Paths` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_GLOBALSBSTWEAKS!$DESC_GLOBALSBSTWEAKS ('GLOBALSBSTWEAKS')":DIR "${GLOBALSBSTWEAKS/#-/ -}" `#CAT_Paths` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_GLOBALTWEAKS!$DESC_GLOBALTWEAKS ('GLOBALTWEAKS')":DIR "${GLOBALTWEAKS/#-/ -}" `#CAT_Paths` `#SUB_Directories` `#MENU_GLOBAL` \
@@ -9113,67 +9108,47 @@ function regEdit {
 }
 
 function customRegs {
-	if [ -n  "$VIRTUALDESKTOP" ]; then
-		TEMPREG="$GPFX/VirtualDesktop.reg"
+	TEMPREG="$GPFX/VirtualDesktop.reg"
 
-		if [ "$VIRTUALDESKTOP" -eq 1 ]; then
-			if [ -f "$TEMPREG" ]; then
-				writelog "SKIP" "${FUNCNAME[0]} - Looks like virtual desktop was already applied before"
-			else
-				if touch "$TEMPREG"; then
-					writelog "INFO" "${FUNCNAME[0]} - VIRTUALDESKTOP is set to 1 - enabling virtual desktop"
-					{
-					echo "Windows Registry Editor Version 5.00"
-					echo "[HKEY_CURRENT_USER\Software\Wine\Explorer]"
-					echo "\"Desktop\"=\"Default\""
-					echo "[HKEY_CURRENT_USER\Software\Wine\Explorer\Desktops]"
-					echo "\"Default\"=\"$(getScreenRes r)\""
-					} >> "$TEMPREG"
-					if [ -f "$TEMPREG" ]; then
-						regEdit "$TEMPREG"
-					else
-						writelog "SKIP" "${FUNCNAME[0]} - '$TEMPREG' should be here, but it isn't!"
-					fi
+	if [ "$VIRTUALDESKTOP" -eq 1 ]; then
+		if [ -f "$TEMPREG" ]; then
+			writelog "SKIP" "${FUNCNAME[0]} - Looks like virtual desktop was already applied before"
+		else
+			if touch "$TEMPREG"; then
+				writelog "INFO" "${FUNCNAME[0]} - VIRTUALDESKTOP is set to 1 - enabling virtual desktop"
+				{
+				echo "Windows Registry Editor Version 5.00"
+				echo "[HKEY_CURRENT_USER\Software\Wine\Explorer]"
+				echo "\"Desktop\"=\"Default\""
+				echo "[HKEY_CURRENT_USER\Software\Wine\Explorer\Desktops]"
+				echo "\"Default\"=\"$(getScreenRes r)\""
+				} >> "$TEMPREG"
+				if [ -f "$TEMPREG" ]; then
+					regEdit "$TEMPREG"
 				else
-					writelog "SKIP" "${FUNCNAME[0]} - Could not create '$TEMPREG' - skipping!"
+					writelog "SKIP" "${FUNCNAME[0]} - '$TEMPREG' should be here, but it isn't!"
 				fi
+			else
+				writelog "SKIP" "${FUNCNAME[0]} - Could not create '$TEMPREG' - skipping!"
 			fi
-		elif [ "$VIRTUALDESKTOP" -eq 0 ]; then
-			if [ -f "$TEMPREG" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Virtual desktop is disabled, but was enabled before - removing the registry value"
-				sed "s:\[:\[-:g" -i "$TEMPREG"
-				regEdit "$TEMPREG"
-				rm "$TEMPREG"
-			fi		
 		fi
+	elif [ "$VIRTUALDESKTOP" -eq 0 ]; then
+		if [ -f "$TEMPREG" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Virtual desktop is disabled, but was enabled before - removing the registry value"
+			sed "s:\[:\[-:g" -i "$TEMPREG"
+			regEdit "$TEMPREG"
+			rm "$TEMPREG"
+		fi		
 	fi
 
 	if [ "$REGEDIT" -eq 1 ]; then
-		writelog "INFO" "${FUNCNAME[0]} - REGEDIT set, looking for '$AID' registry files"
-
-		if [ -f "$AIDREG" ]; then
-			regEdit "$AIDREG"
-		fi
-		
+		mkProjDir "$STLREGDIR"
 		if [ -f "$STLREGDIR/$AID.reg" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Applying registry file '$STLREGDIR/$AID.reg'"
 			regEdit "$STLREGDIR/$AID.reg"
-		fi
-	else
-		if [ "$REGEDIT" -ne 0 ]; then
-		
-			AIDREG="$GLOBALREGDIR/$REGEDIT"
-
-			if [ -f "$AIDREG" ]; then
-				regEdit "$AIDREG"
-			fi
-
-			if [ -f "$STLREGDIR/$REGEDIT" ]; then
-				regEdit "$STLREGDIR/$REGEDIT"		
-			fi
-
-			if [ ! -f "$AIDREG" ] && [ ! -f "$STLREGDIR/$REGEDIT" ]; then
-				writelog "SKIP" "${FUNCNAME[0]} - '$REGEDIT' neither found global nor local - skipping"
-			fi
+		else
+			writelog "INFO" "${FUNCNAME[0]} - No game specific regfile found. Opening the regedit editor"
+			regEdit
 		fi
 	fi
 }
@@ -11278,7 +11253,10 @@ function prepareLaunch {
 	else
 		MainMenu "$AID"
 	fi
-	
+
+	writelog "INFO" "${FUNCNAME[0]} - Second LoadCfg after menus: $STLGAMECFG"
+	loadCfg "$STLGAMECFG"
+		
 	#  in case a path changed in between, call createProjectDirs again:
 	createProjectDirs
 
@@ -13852,7 +13830,7 @@ function checkX64dbgLaunch {
 			RUN_X64DBG=0
 		else
 			writelog "INFO" "${FUNCNAME[0]} - Applying registry '${X64D}.reg'"
-			regEdit "$GLOBALREGDIR/${X64D}.reg"
+			regEdit "$GLOBALMISCDIR/${X64D}.reg"
 
 			WGP="$(extWine64Run "$RUNWINE" winepath -w "$GP")"
 			writelog "INFO" "${FUNCNAME[0]} - Starting '$XDBFPATH' using extWine64Run for the game '$WGP'"
