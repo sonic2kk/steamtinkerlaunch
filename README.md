@@ -61,7 +61,6 @@ Feel free to contribute to the project - there are many possibilities to do so:
 - suggest new features
 - maintain a package for your distribution
 - add translations
-- contribute your tinkered tweaks to [steamtinkerlaunch-tweaks](https://github.com/frostworx/steamtinkerlaunch-tweaks)
 - find out how cool it is and tell others :)
 
 Got and idea or suggestions, but don't want to open an issue?
