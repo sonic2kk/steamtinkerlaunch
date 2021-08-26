@@ -6653,43 +6653,41 @@ function installReshadeDepth3D {
 }
 
 function useReshade {
-	if [ -n "$USERESHADE" ]; then
-		if [ "$USERESHADE" -eq 1 ]; then
-			if [ -f "$EFD/$RSDISABLED" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - ReShade has been disabled previously using '$PROGCMD' - enabling it now"
-				RSDLL="$(cat "$EFD/$RSDISABLED")" 
-				mv "$EFD/$RSDLL" "$EFD/${RSDLL//_disabled/}"
-				rm "$EFD/$RSDISABLED" 2>/dev/null
-				echo "${RSDLL//_disabled/}" > "$EFD/$RSENABLED"
-			fi
-
-			if [ ! -f "$EFD/$RS_D3D47_DEST" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - USERESHADE is '$USERESHADE' - looks like Reshade is not yet installed in '$EFD' - installing because USERESHADE is enabled"
-				INSTALL_RESHADE=1 installReshade
-			fi
-
-			if [ -f "$EFD/$RSINI" ] && [ ! -f "$EFD/$RSENABLED" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Looks like Reshade was installed previously using '$PROGCMD' without creating '$RSENABLED' - recreating it now"
-				INSTALL_RESHADE=1 installReshade F
-			fi
-
-			writelog "INFO" "${FUNCNAME[0]} - Setting WINEDLLOVERRIDES for ReShade: dxgi=n,b;d3d9=n,b;d3dcompiler_47=n,b"
-			export WINEDLLOVERRIDES="$WINEDLLOVERRIDES;dxgi=n,b;d3d9=n,b;d3dcompiler_47=n,b"
-		else
-			if [ -f "$EFD/$RSINI" ] && [ ! -f "$EFD/$RSENABLED" ] && [ ! -f "$EFD/$RSDISABLED" ] ; then
-				writelog "INFO" "${FUNCNAME[0]} - USERESHADE is '$USERESHADE' - looks like Reshade was installed previously using '$PROGCMD' without creating '$RSENABLED' - recreating it now"
-				INSTALL_RESHADE=1 installReshade F
-			fi
-
-			if [ -f "$EFD/$RSENABLED" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - ReShade has been installed previously with '$PROGCMD' - disabling it now"
-				RSDLL="$(cat "$EFD/$RSENABLED")" 
-				mv "$EFD/$RSDLL" "$EFD/${RSDLL}_disabled"
-				rm "$EFD/$RSENABLED" 2>/dev/null
-				echo "${RSDLL}_disabled" > "$EFD/$RSDISABLED"
-			fi
+	if [ "$USERESHADE" -eq 1 ]; then
+		if [ -f "$EFD/$RSDISABLED" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - ReShade has been disabled previously using '$PROGCMD' - enabling it now"
+			RSDLL="$(cat "$EFD/$RSDISABLED")" 
+			mv "$EFD/$RSDLL" "$EFD/${RSDLL//_disabled/}"
+			rm "$EFD/$RSDISABLED" 2>/dev/null
+			echo "${RSDLL//_disabled/}" > "$EFD/$RSENABLED"
 		fi
-	fi	
+
+		if [ ! -f "$EFD/$RS_D3D47_DEST" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - USERESHADE is '$USERESHADE' - looks like Reshade is not yet installed in '$EFD' - installing because USERESHADE is enabled"
+			INSTALL_RESHADE=1 installReshade
+		fi
+
+		if [ -f "$EFD/$RSINI" ] && [ ! -f "$EFD/$RSENABLED" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Looks like Reshade was installed previously using '$PROGCMD' without creating '$RSENABLED' - recreating it now"
+			INSTALL_RESHADE=1 installReshade F
+		fi
+
+		writelog "INFO" "${FUNCNAME[0]} - Setting WINEDLLOVERRIDES for ReShade: dxgi=n,b;d3d9=n,b;d3dcompiler_47=n,b"
+		export WINEDLLOVERRIDES="$WINEDLLOVERRIDES;dxgi=n,b;d3d9=n,b;d3dcompiler_47=n,b"
+	else
+		if [ -f "$EFD/$RSINI" ] && [ ! -f "$EFD/$RSENABLED" ] && [ ! -f "$EFD/$RSDISABLED" ] ; then
+			writelog "INFO" "${FUNCNAME[0]} - USERESHADE is '$USERESHADE' - looks like Reshade was installed previously using '$PROGCMD' without creating '$RSENABLED' - recreating it now"
+			INSTALL_RESHADE=1 installReshade F
+		fi
+
+		if [ -f "$EFD/$RSENABLED" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - ReShade has been installed previously with '$PROGCMD' - disabling it now"
+			RSDLL="$(cat "$EFD/$RSENABLED")" 
+			mv "$EFD/$RSDLL" "$EFD/${RSDLL}_disabled"
+			rm "$EFD/$RSENABLED" 2>/dev/null
+			echo "${RSDLL}_disabled" > "$EFD/$RSDISABLED"
+		fi
+	fi
 }
 
 function checkDepth3DUse {
@@ -11178,7 +11176,17 @@ function sortGameArgs {
 	fi
 }
 
+function initOldProtonArr {
+	delEmptyFile "$PROTONCSV"
+	if [ -f "$PROTONCSV" ]; then
+		unset ProtonCSV
+		writelog "INFO" "${FUNCNAME[0]} - Creating an initial array with available Proton versions using the file '$PROTONCSV' which was created during a previous run"
+		mapfile -t -O "${#ProtonCSV[@]}" ProtonCSV < "$PROTONCSV"
+	fi
+}
+
 function initFirstProton {
+	initOldProtonArr
 	if [ "$HAVEINPROTON" -eq 1 ]; then
 		writelog "INFO" "${FUNCNAME[0]} - skipping function, because Proton version is provided by commandline ($PROGCMD used via '$SLO')"
 	else
