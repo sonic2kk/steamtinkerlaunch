@@ -1377,6 +1377,14 @@ function setGameVars {
 		ORG_STEAM_COMPAT_TOOL_PATHS="$STEAM_COMPAT_TOOL_PATHS"
 	fi
 
+	if [ -n "$STEAM_COMPAT_INSTALL_PATH" ]; then
+		STECOSHAPA="$STEAM_COMPAT_SHADER_PATH"
+	fi
+
+	if [ -n "$STEAM_COMPAT_LIBRARY_PATHS" ]; then
+		APPMAFE="${STEAM_COMPAT_LIBRARY_PATHS}/appmanifest_${AID}.acf"
+	fi
+
 	REAPSESTR="reaper SteamLaunch"
 
 	if grep -q "$REAPSESTR" <<< "$@"; then
@@ -3323,10 +3331,10 @@ function updateEditor {
 
 function setGPfxFromAppMa {
 	if [ -z "$GPFX" ]; then
-		APPMA="$(listAppManifests | grep "${1}.acf")"
-		if [ -n "$APPMA" ]; then
-			AMF="${APPMA##*/}"
-			GPFX="$(dirname "$APPMA")/$CODA/$1/pfx"
+		APPMAFE="$(listAppManifests | grep "${1}.acf")"
+		if [ -n "$APPMAFE" ]; then
+			AMF="${APPMAFE##*/}"
+			GPFX="$(dirname "$APPMAFE")/$CODA/$1/pfx"
 			writelog "INFO" "${FUNCNAME[0]} - Found WINEPREFIX '$GPFX' in '$AMF'"
 		fi
 	fi
@@ -3631,6 +3639,7 @@ function TrayIconExports {
 	export -f TrayUWT
 	export -f TrayLCS
 	export -f TrayDPRS
+	export -f TrayGameFiles
 }
 #ENDIEX
 
@@ -3707,6 +3716,11 @@ function openTrayIcon {
 			writelog "INFO" "${FUNCNAME[0]} - TrayIcon: Starting '$DPRS'"
 			"$PROGCMD" "dprs"
 		}
+
+		function TrayGameFiles {
+			writelog "INFO" "${FUNCNAME[0]} - TrayIcon: Executing Game Files command for game '$GN '$AID'"
+			"$PROGCMD" "gf" "$AID"
+		}	
 	
 		TrayIconExports
 		
@@ -3719,8 +3733,9 @@ function openTrayIcon {
 		|$TRAY_PICKWINDOW,bash -c TrayPickWin \
 		|$TRAY_SRC,bash -c TraySRC \
 		|$TRAY_UWT,bash -c TrayUWT \
-		|$TRAY_LCS,bash -c TrayLCS
-		|$DPRS,bash -c TrayDPRS" \
+		|$TRAY_LCS,bash -c TrayLCS \
+		|$DPRS,bash -c TrayDPRS
+		|$GUI_GAFI,bash -c TrayGameFiles " \
 		--text="$TRAY_TOOLTIP" >/dev/null 2>/dev/null &
 		YADTRAYPID="$!"
 	fi
@@ -4577,6 +4592,7 @@ function MainMenu {
 	--field="$FBUT_GUISET_GASCO":FBTN "$PROGCMD gs \"$AID\"" \
 	--field="$FBUT_GUISET_VORTEX":FBTN "$PROGCMD vortex gui" \
 	--field="$FBUT_GUISET_WIKI":FBTN "$PROGCMD wiki" \
+	--field="$GUI_GAFI":FBTN "$PROGCMD gf \"$AID\"" \
 	--button="$BUT_EXIT":0 \
 	--button="$BUT_GUISET_CATMENUSHORT":4 \
     --button="$BUT_GM":6 \
@@ -5434,17 +5450,28 @@ function getGameWindowPID {
 			TESTPID="$("$XDO" getactivewindow getwindowpid)"
 			SYMCWD="$(readlink "/proc/$TESTPID/cwd")"
 			SYMEXE="$(readlink "/proc/$TESTPID/exe")"
-			if [[ "$SYMCWD" == "$EFD" ]] && [[ "$SYMEXE" != *"$YAD"* ]]; then
-				writelog "WAIT" "${FUNCNAME[0]} - Found PID '$TESTPID' for CWD '$SYMCWD' with EXE '$SYMEXE' - leaving loop"
+			
+			if [ -n "$EXECUTABLE" ] && [ "$EXECUTABLE" == "$(cat "/proc/$TESTPID/comm")" ]; then
+				writelog "WAIT" "${FUNCNAME[0]} - Found PID '$TESTPID' for game 'EXECUTABLE'  '$EXECUTABLE' - leaving loop"
 				FOUNDWIN="$YES"
 				break;
-			fi
-			if [ -n "$STEAM_COMPAT_CLIENT_INSTALL_PATH" ] && [[ "$SYMCWD" == "$STEAM_COMPAT_CLIENT_INSTALL_PATH" ]] && [[ "$SYMEXE" != *"$YAD"* ]]; then
-				writelog "WAIT" "${FUNCNAME[0]} - Found PID '$TESTPID' for STEAM_COMPAT_CLIENT_INSTALL_PATH '$SYMCWD' with EXE '$SYMEXE' - leaving loop"
+			elif [ -n "$GE" ] && [ "$GE" == "$(cut -d '.' -f1 < "/proc/$TESTPID/comm")" ]; then
+				writelog "WAIT" "${FUNCNAME[0]} - Found PID '$TESTPID' for game executable 'GE' '$GE' - leaving loop"
 				FOUNDWIN="$YES"
 				break;
+			else
+				# might not even be required anymore - maybe remove later:
+				if [[ "$SYMCWD" == "$EFD" ]] && [[ "$SYMEXE" != *"$YAD"* ]]; then
+					writelog "WAIT" "${FUNCNAME[0]} - Found PID '$TESTPID' for CWD '$SYMCWD' with EXE '$SYMEXE' - leaving loop"
+					FOUNDWIN="$YES"
+					break;
+				fi
+				if [ -n "$STEAM_COMPAT_CLIENT_INSTALL_PATH" ] && [[ "$SYMCWD" == "$STEAM_COMPAT_CLIENT_INSTALL_PATH" ]] && [[ "$SYMEXE" != *"$YAD"* ]]; then
+					writelog "WAIT" "${FUNCNAME[0]} - Found PID '$TESTPID' for STEAM_COMPAT_CLIENT_INSTALL_PATH '$SYMCWD' with EXE '$SYMEXE' - leaving loop"
+					FOUNDWIN="$YES"
+					break;
+				fi
 			fi
-
 			writelog "WAIT" "${FUNCNAME[0]} - Sec $COUNTER/$MAXWAIT Game Window with pwd '$EFD' not yet in front"
 			COUNTER=$((COUNTER+1))
 			sleep 1
@@ -7983,7 +8010,85 @@ function launchCustomProg {
 			writelog "INFO" "${FUNCNAME[0]} - Changing pwd into previous directory"
 			cd - || return
 		fi
+	fi
+}
 
+function GameFilesMenu {
+	if [ -n "$1" ]; then
+		AID="$1"
+
+		APPMAFE="$(listAppManifests | grep "${AID}.acf")"
+
+		if [ -f "$APPMAFE" ]; then
+			if [ -z "$GPFX" ]; then
+				GPFX="$(dirname "$APPMAFE")/$CODA/$1/pfx"
+			fi
+	
+			if [ -z "$EFD" ]; then
+				GIRAW="$(grep "\"installdir\"" "$APPMAFE" | gawk -F '"installdir"' '{print $NF}')"
+				GINS="$(gawk '{$1=$1};1' <<< "${GIRAW//\"/}")"
+				EFD="${APPMAFE%/*}/common/$GINS"
+			fi
+
+			if [ -z "$STECOSHAPA" ]; then
+				STECOSHAPA="${APPMAFE%/*}/shadercache/$AID"
+			fi
+		fi
+	else
+		setGameVars
+	fi
+
+	fixShowGnAid
+
+	if  [ "$EFD" != "." ] && [ -d "$EFD" ]; then
+		GamDesc+=("$GUI_GD")
+		GamFiles+=("$EFD")
+	fi
+
+	if [ -d "$GPFX" ]; then
+		GamDesc+=("$GUI_WP")
+		GamFiles+=("$GPFX")
+	fi
+
+	if [ -f "$APPMAFE" ]; then
+		GamDesc+=("$GUI_AM")
+		GamFiles+=("$APPMAFE")
+	fi
+
+	if [ -d "$STECOSHAPA" ]; then
+		GamDesc+=("$GUI_SP")
+		GamFiles+=("$STECOSHAPA")
+	fi
+		
+	if [ "${#GamFiles[@]}" -ge 1 ]; then	
+		writelog "INFO" "${FUNCNAME[0]} - Found ${#GamFiles[@]} available game files and directories - opening menu"
+		export CURWIKI="$PPW/Game-Files"
+		TITLE="${PROGNAME}-Game-Files"
+		pollWinRes "$TITLE"
+
+		setShowPic
+		OPFILES="$(for i in "${!GamFiles[@]}"; do printf "FALSE\n%s\n%s\n" "${GamDesc[$i]}" "${GamFiles[$i]}"; done | \
+		"$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center $WINDECO --list --checklist --column=Open --column=Description --column=Path --separator="\n" --print-column="3" \
+		--text="$(spanFont "$(strFix "$GUI_GAFIDIALOG" "$SGNAID")" "H")" --title="$TITLE" --button="$BUT_CAN:0" --button="$BUT_SELECT:2" "$GEOM")"
+		case $? in
+			0)	writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_CAN' - Cancelling selection"
+			;;
+			2)  writelog "INFO" "${FUNCNAME[0]} - Selected Open - Opening selected files and directories using '$XDGO'"
+				mapfile -t -O "${#OpArr[@]}" OpArr <<< "$OPFILES"
+				if [ "${#OpArr[@]}" -ge 1 ]; then
+					while read -r gafi; do
+						if [ -n "$gafi" ]; then
+							"$XDGO" "$gafi"
+						fi
+					done <<< "$(printf "%s\n" "${OpArr[@]}")"
+					unset OpArr
+				else
+					writelog "SKIP" "${FUNCNAME[0]} - Nothing selected"
+				fi
+			;;
+		esac
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - Could not find any game files"
 	fi
 }
 
@@ -13079,6 +13184,8 @@ function howto {
 	echo "                                       (for 'SteamAppID' or 'last')"
 	echo "    fav <value>                      Opens the favorite menu"
 	echo "                                       (for 'SteamAppID' or 'last')"
+	echo "    gamefiles|gf <gameid>            Opens menu for opening <gameid> files"
+	echo "    gamescope|gs <gameid>            Gamescope config-menu for <gameid>"
 	echo "    (get commands only for games known by $PROGCMD:)"
 	echo "    getexe|ge <gameid>               Print the Game Exe for <gameid>"
 	echo "    getid|gi <gametitle>             Print the SteamAppId for <gametitle>"
@@ -13254,6 +13361,9 @@ function commandline {
 			favoritesMenu "$USEID"
 			cleanYadLeftOvers
 		fi
+	elif  [ "$1" == "gamefiles" ] || [ "$1" == "gf" ]; then
+		FUSEID "$2"
+		GameFilesMenu "$USEID"	
 	elif  [ "$1" == "gamescope" ] || [ "$1" == "gs" ]; then
 		FUSEID "$2"
 		GameScopeGui "$USEID"	
