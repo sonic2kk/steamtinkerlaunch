@@ -4519,6 +4519,9 @@ function MainMenu {
 	fi
 
 	prepareProtonDBRating
+	getGameFiles "$AID"
+	setGameFilesArray
+	TT_GAFI="$(for i in "${!GamFiles[@]}"; do printf "%s: %s\n" "${GamDesc[$i]}" "${GamFiles[$i]}"; done)"
 
 	if [ -n "$METACRITIC_SCORE" ] && ! grep -q "^${GUI_MCS}" "$PDBRAINFO"; then
 		echo "${GUI_MCS}: $METACRITIC_SCORE" >> "$PDBRAINFO"
@@ -4533,24 +4536,8 @@ function MainMenu {
 		TT_OPENURL="$(cat "$PDBRAINFO")"
 	fi
 
-	if [ -n "$GPFX" ]; then
-		if [ -L "${GPFX%/*}" ]; then
-			SETHEAD="$SETHEAD \n ${GUI_SCD}: '${GPFX%/*}' (symlink)"
-		else
-			SETHEAD="$SETHEAD \n ${GUI_SCD}: '${GPFX%/*}'"
-		fi
-	fi
-	
-	if [ -n "$WINEPREFIX" ]; then
-		SETHEAD="$SETHEAD \n ${GUI_SWP}: '$WINEPREFIX'"
-	fi
-
 	if [ -L "$GPFX/$DRCU/$STUS" ]; then
 		SETHEAD="$SETHEAD \n ${GUI_SSU}: symlink to '$(readlink "$GPFX/$DRCU/$STUS")'"
-	fi
-
-	if [ -n "$GAMEDIR" ]; then
-		SETHEAD="$SETHEAD \n ${GUI_SGD}: '$(fixShow "$GAMEDIR")'"
 	fi
 
 	if [ -n "$GAMEWINDOW" ] && [ "$GAMEWINDOW" != "$NON" ]; then
@@ -4592,7 +4579,7 @@ function MainMenu {
 	--field="$FBUT_GUISET_GASCO":FBTN "$PROGCMD gs \"$AID\"" \
 	--field="$FBUT_GUISET_VORTEX":FBTN "$PROGCMD vortex gui" \
 	--field="$FBUT_GUISET_WIKI":FBTN "$PROGCMD wiki" \
-	--field="$GUI_GAFI":FBTN "$PROGCMD gf \"$AID\"" \
+	--field="$GUI_GAFI!$TT_GAFI":FBTN "$PROGCMD gf \"$AID\"" \
 	--button="$BUT_EXIT":0 \
 	--button="$BUT_GUISET_CATMENUSHORT":4 \
     --button="$BUT_GM":6 \
@@ -8013,33 +8000,33 @@ function launchCustomProg {
 	fi
 }
 
-function GameFilesMenu {
-	if [ -n "$1" ]; then
-		AID="$1"
+function getGameFiles {
+	AID="$1"
 
+	if [ -z "$APPMAFE" ]; then
 		APPMAFE="$(listAppManifests | grep "${AID}.acf")"
-
-		if [ -f "$APPMAFE" ]; then
-			if [ -z "$GPFX" ]; then
-				GPFX="$(dirname "$APPMAFE")/$CODA/$1/pfx"
-			fi
-	
-			if [ -z "$EFD" ]; then
-				GIRAW="$(grep "\"installdir\"" "$APPMAFE" | gawk -F '"installdir"' '{print $NF}')"
-				GINS="$(gawk '{$1=$1};1' <<< "${GIRAW//\"/}")"
-				EFD="${APPMAFE%/*}/common/$GINS"
-			fi
-
-			if [ -z "$STECOSHAPA" ]; then
-				STECOSHAPA="${APPMAFE%/*}/shadercache/$AID"
-			fi
-		fi
-	else
-		setGameVars
 	fi
 
-	fixShowGnAid
+	if [ -f "$APPMAFE" ]; then
+		if [ -z "$GPFX" ]; then
+			GPFX="$(dirname "$APPMAFE")/$CODA/$1/pfx"
+		fi
 
+		if [ -z "$EFD" ]; then
+			GIRAW="$(grep "\"installdir\"" "$APPMAFE" | gawk -F '"installdir"' '{print $NF}')"
+			GINS="$(gawk '{$1=$1};1' <<< "${GIRAW//\"/}")"
+			EFD="${APPMAFE%/*}/common/$GINS"
+		fi
+
+		if [ -z "$STECOSHAPA" ]; then
+			STECOSHAPA="${APPMAFE%/*}/shadercache/$AID"
+		fi
+	fi
+}
+
+function setGameFilesArray {
+	unset GamDesc
+	unset GamFiles
 	if  [ "$EFD" != "." ] && [ -d "$EFD" ]; then
 		GamDesc+=("$GUI_GD")
 		GamFiles+=("$EFD")
@@ -8059,6 +8046,18 @@ function GameFilesMenu {
 		GamDesc+=("$GUI_SP")
 		GamFiles+=("$STECOSHAPA")
 	fi
+}
+
+function GameFilesMenu {
+	if [ -n "$1" ]; then
+		getGameFiles "$1"
+	else
+		setGameVars
+	fi
+
+	fixShowGnAid
+
+	setGameFilesArray
 		
 	if [ "${#GamFiles[@]}" -ge 1 ]; then	
 		writelog "INFO" "${FUNCNAME[0]} - Found ${#GamFiles[@]} available game files and directories - opening menu"
