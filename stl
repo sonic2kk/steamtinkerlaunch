@@ -3338,17 +3338,19 @@ function updateEditor {
 }
 
 function setGPfxFromAppMa {
-	if [ -z "$GPFX" ]; then
-		APPMAFE="$(listAppManifests | grep "${1}.acf")"
-		if [ -n "$APPMAFE" ]; then
-			AMF="${APPMAFE##*/}"
-			GPFX="$(dirname "$APPMAFE")/$CODA/$1/pfx"
-			writelog "INFO" "${FUNCNAME[0]} - Found WINEPREFIX '$GPFX' in '$AMF'"
+	if [ "$ISGAME" -eq 2 ]; then
+		if [ -z "$GPFX" ]; then
+			APPMAFE="$(listAppManifests | grep "${1}.acf")"
+			if [ -n "$APPMAFE" ]; then
+				AMF="${APPMAFE##*/}"
+				GPFX="$(dirname "$APPMAFE")/$CODA/$1/pfx"
+				writelog "INFO" "${FUNCNAME[0]} - Found WINEPREFIX '$GPFX' in '$AMF'"
+			fi
 		fi
-	fi
-	
-	if [ -z "$GPFX" ] && [ -n "$AMF" ]; then
-		writelog "SKIP" "${FUNCNAME[0]} - Could not retrieve WINEPREFIX from '$AMF'"
+		
+		if [ -z "$GPFX" ] && [ -n "$AMF" ]; then
+			writelog "SKIP" "${FUNCNAME[0]} - Could not retrieve WINEPREFIX from '$AMF'"
+		fi
 	fi
 }
 
@@ -7288,7 +7290,7 @@ function autoCategorySettings {
 			if [ ! -f "$SC" ]; then
 				writelog "SKIP" "${FUNCNAME[0]} - File '${SC##*/}' not found in steam userid dir - skipping"
 			else
-				writelog "INFO" "${FUNCNAME[0]} - File '${SC##*/}' found in steam userid dir - searching categories for game '$AID'"
+				writelog "INFO" "${FUNCNAME[0]} - Searching categories for game '$AID' in '${SC##*/}'"
 
 				while read -r SCAT; do
 					GLOBALSCATCONF="$GLOBALCATEGORYDIR/$SCAT.conf"
@@ -11135,18 +11137,18 @@ function checkIntDeps {
 			YADVER="$("$YAD" --version | tail -n1 | cut -d ' ' -f1)"
 		fi
 
-		if [ "$1" == "--help" ]|| [ "$1" == "-h" ]; then
-			howto
-		else
-			if [ "$(printf '%s\n' "$MINYAD" "$YADVER" | sort -V | head -n1)" != "$MINYAD" ]; then 
-				writelog "ERROR" "${FUNCNAME[0]} - Yad version '$YADVER' is too old. You need to update to at least '$MINYAD'"
-				notiShow "$(strFix "$NOTY_NOTFOUND2" "$YADVER" "$MINYAD")"
+		if [ "$(printf '%s\n' "$MINYAD" "$YADVER" | sort -V | head -n1)" != "$MINYAD" ]; then 
+			writelog "ERROR" "${FUNCNAME[0]} - Yad version '$YADVER' is too old. You need to update to at least '$MINYAD'"
+			notiShow "$(strFix "$NOTY_NOTFOUND2" "$YADVER" "$MINYAD")"
+			if [ "$1" != "--help" ] && [ "$1" != "-h" ]; then
 				exit
 			fi
+		fi
 
-			if [ "$DEPSMISSING" -eq 1 ]; then
-				writelog "ERROR" "${FUNCNAME[0]} - Above programs need to be installed to use '$PROGCMD'"
-				writelog "ERROR" "${FUNCNAME[0]} The dependency check can be disabled with enabling 'SKIPINTDEPCHECK' - exiting now"
+		if [ "$DEPSMISSING" -eq 1 ]; then
+			writelog "ERROR" "${FUNCNAME[0]} - Above programs need to be installed to use '$PROGCMD'"
+			writelog "ERROR" "${FUNCNAME[0]} The dependency check can be disabled with enabling 'SKIPINTDEPCHECK' - exiting now"
+			if [ "$1" != "--help" ] && [ "$1" != "-h" ]; then
 				exit
 			fi
 		fi
