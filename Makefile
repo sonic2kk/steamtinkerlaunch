@@ -7,6 +7,7 @@ endif
 build:
 
 install:
+	
 	install -Dm755 stl -t "$(PREFIX)/bin"
 
 	install -d "$(PREFIX)/share/stl"
