@@ -7,7 +7,7 @@ endif
 build:
 
 install:
-	
+	sed "s:^PREFIX=\"/usr\":PREFIX=\"$(PREFIX)\":" -i stl
 	install -Dm755 stl -t "$(PREFIX)/bin"
 
 	install -d "$(PREFIX)/share/stl"
