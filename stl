@@ -11660,57 +11660,63 @@ function getProtonDBRating {
 
 function fixProtonVersionMismatch {
 	if [ "$ISGAME" -eq 2 ]; then
+
 		ORGPROTCAT="$1"
 		MIMAPROT="${!1}"
-		writelog "INFO" "${FUNCNAME[0]} - Incoming category is '$ORGPROTCAT' with value '$MIMAPROT'"
-		writelog "INFO" "${FUNCNAME[0]} - Looking for an alternative similar version for '$MIMAPROT'"
 
-		notiShow "$(strFix "$NOTY_WANTPROTON3" "$MIMAPROT")"
-
-		if [ ! -f "$PROTONCSV" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Looking for available Proton versions"
-			getAvailableProtonVersions "up"
-		fi
-
-		MIMAPROTSHORT="^${MIMAPROT%-*}"
-		NEWMINORPROT="$(grep "$MIMAPROTSHORT" "$PROTONCSV" | cut -d ';' -f1 | sort -nr | head -n1)"
-
-		if [ -f "$(getProtPathFromCSV "${NEWMINORPROT//\"/}")" ] && [ -n "${NEWMINORPROT//\"/}" ]; then
-			NEWMINORRUN="$(getProtPathFromCSV "${NEWMINORPROT//\"/}")"
-			writelog "INFO" "${FUNCNAME[0]} - Found Proton '$NEWMINORPROT' in path '$NEWMINORRUN' as an alternative for the requested '$MIMAPROT'"
-		elif grep -q "GE" <<< "$MIMAPROT"; then
-			writelog "INFO" "${FUNCNAME[0]} - No alternative for '$MIMAPROT' found directly"
-			NEWMINORPROT="$(grep "GE" "$PROTONCSV" | cut -d ';' -f1 | sort -nr | head -n1)"
-			if [ -f "$(getProtPathFromCSV "${NEWMINORPROT//\"/}")" ]; then
-				NEWMINORRUN="$(getProtPathFromCSV "${NEWMINORPROT//\"/}")"
-				writelog "INFO" "${FUNCNAME[0]} - Using found '$NEWMINORPROT' instead, as it is at least also a GE Proton like the requested '$MIMAPROT'"
-			fi
-		fi
-
-		if [ -n "$3" ]; then
-			if [ -f "$NEWMINORRUN" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - found '$NEWMINORRUN'"
-				echo "$NEWMINORRUN"
-				FOUNDPROTONMM=1
-			fi
+		if [[ "$MIMAPROT" =~ "experimental" ]]; then
+			writelog "INFO" "${FUNCNAME[0]} - Skipping function for 'experimental' Proton version"
 		else
-			if [ -f "$NEWMINORRUN" ]; then
-				switchProton  "$NEWMINORPROT"
-				notiShow "$(strFix "$NOTY_WANTPROTON2" "$NEWMINORPROT" "$MIMAPROT")"
-			elif [ "$AUTOLASTPROTON" -eq 1 ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Automatically selecting newest official one"
-				setNOP
-			else
-				writelog "INFO" "${FUNCNAME[0]} - Asking for one"
-				needNewProton
-			fi
-		fi
+			writelog "INFO" "${FUNCNAME[0]} - Incoming category is '$ORGPROTCAT' with value '$MIMAPROT'"
+			writelog "INFO" "${FUNCNAME[0]} - Looking for an alternative similar version for '$MIMAPROT'"
 
-		if [ ! -f "$(getProtPathFromCSV "$MIMAPROT")" ] && [ "$ORGPROTCAT" == "USEPROTON" ] && [ "$MIMAPROT" != "$NEWMINORPROT" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Automatically updating USEPROTON to '$USEPROTON' in '$2'"
-			touch "$FUPDATE"
-			updateConfigEntry "USEPROTON" "$USEPROTON" "$2"
-			setInternalProtonVars
+			notiShow "$(strFix "$NOTY_WANTPROTON3" "$MIMAPROT")"
+
+			if [ ! -f "$PROTONCSV" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Looking for available Proton versions"
+				getAvailableProtonVersions "up"
+			fi
+
+			MIMAPROTSHORT="^${MIMAPROT%-*}"
+			NEWMINORPROT="$(grep "$MIMAPROTSHORT" "$PROTONCSV" | cut -d ';' -f1 | sort -nr | head -n1)"
+
+			if [ -f "$(getProtPathFromCSV "${NEWMINORPROT//\"/}")" ] && [ -n "${NEWMINORPROT//\"/}" ]; then
+				NEWMINORRUN="$(getProtPathFromCSV "${NEWMINORPROT//\"/}")"
+				writelog "INFO" "${FUNCNAME[0]} - Found Proton '$NEWMINORPROT' in path '$NEWMINORRUN' as an alternative for the requested '$MIMAPROT'"
+			elif grep -q "GE" <<< "$MIMAPROT"; then
+				writelog "INFO" "${FUNCNAME[0]} - No alternative for '$MIMAPROT' found directly"
+				NEWMINORPROT="$(grep "GE" "$PROTONCSV" | cut -d ';' -f1 | sort -nr | head -n1)"
+				if [ -f "$(getProtPathFromCSV "${NEWMINORPROT//\"/}")" ]; then
+					NEWMINORRUN="$(getProtPathFromCSV "${NEWMINORPROT//\"/}")"
+					writelog "INFO" "${FUNCNAME[0]} - Using found '$NEWMINORPROT' instead, as it is at least also a GE Proton like the requested '$MIMAPROT'"
+				fi
+			fi
+
+			if [ -n "$3" ]; then
+				if [ -f "$NEWMINORRUN" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - found '$NEWMINORRUN'"
+					echo "$NEWMINORRUN"
+					FOUNDPROTONMM=1
+				fi
+			else
+				if [ -f "$NEWMINORRUN" ]; then
+					switchProton  "$NEWMINORPROT"
+					notiShow "$(strFix "$NOTY_WANTPROTON2" "$NEWMINORPROT" "$MIMAPROT")"
+				elif [ "$AUTOLASTPROTON" -eq 1 ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Automatically selecting newest official one"
+					setNOP
+				else
+					writelog "INFO" "${FUNCNAME[0]} - Asking for one"
+					needNewProton
+				fi
+			fi
+
+			if [ ! -f "$(getProtPathFromCSV "$MIMAPROT")" ] && [ "$ORGPROTCAT" == "USEPROTON" ] && [ "$MIMAPROT" != "$NEWMINORPROT" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Automatically updating USEPROTON to '$USEPROTON' in '$2'"
+				touch "$FUPDATE"
+				updateConfigEntry "USEPROTON" "$USEPROTON" "$2"
+				setInternalProtonVars
+			fi
 		fi
 	fi
 }
