@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v6.15.7"
+PROGVERS="v6.15.90"
 PROGCMD="${0##*/}"
 GHURL="https://github.com"
 PROJECTPAGE="$GHURL/frostworx/steamtinkerlaunch"
@@ -208,6 +208,11 @@ STLCEDIR="$STLCFGDIR/cheatengine"
 VTX="vortex"
 STLVORTEXDIR="$STLCFGDIR/$VTX"
 VORTEXDLDIR="$STLDLDIR/Vortex"
+MO2="mo2"
+STLMO2DIR="$STLCFGDIR/$MO2"
+MO="ModOrganizer"
+MORDIR="$DRC/Modding"
+MOERPATH="$MORDIR/MO2/${MO}.exe"
 DOCS="Documents"
 MYDOCS="My $DOCS"
 MYGAMES="My Games"
@@ -1933,6 +1938,8 @@ function setDefaultCfgValues {
 		if [ -z "$DPRSUSEVDFSYMLINKS" ]					; then	DPRSUSEVDFSYMLINKS="0"; fi
 		if [ -z "$DPRSPAUTOUP" ]						; then	DPRSPAUTOUP="0"; fi
 		if [ -z "$DEPSAUTOUP" ]							; then	DEPSAUTOUP="0"; fi
+		if [ -z "$MO2COMPDATA" ]						; then	MO2COMPDATA="$STLMO2DIR/$CODA"; fi
+		if [ -z "$USEMO2PROTON" ]						; then	USEMO2PROTON="$NON"; fi
 	}
 
 	function setDefaultCfgValuesdefault_template {
@@ -2051,6 +2058,8 @@ function setDefaultCfgValues {
 		if [ -z "$DELPFX" ]								; then	DELPFX="0"; fi
 		if [ -z "$RUN_DEPS" ]							; then	RUN_DEPS="0"; fi
 		if [ -z "$SORTGARGS" ]							; then	SORTGARGS="0"; fi
+		if [ -z "$MO2MODE" ]							; then	MO2MODE="disabled"; fi
+		if [ -z "$WAITMO2" ]							; then	WAITMO2="2"; fi
 	}
 	
 	"${FUNCNAME[0]}$1"
@@ -2322,6 +2331,10 @@ function saveCfg {
 			echo "DPRSPAUTOUP=\"$DPRSPAUTOUP\""
 			echo "## $DESC_DEPSAUTOUP"
 			echo "DEPSAUTOUP=\"$DEPSAUTOUP\""
+			echo "## $DESC_MO2COMPDATA"
+			echo "MO2COMPDATA=\"$MO2COMPDATA\""
+			echo "## $DESC_USEMO2PROTON"
+			echo "USEMO2PROTON=\"$USEMO2PROTON\""
 			} >> "$1"
 			#ENDsaveCfgglobal
 		fi
@@ -2569,6 +2582,10 @@ function saveCfg {
 			echo "RUN_DEPS=\"$RUN_DEPS\""
 			echo "## $DESC_SORTGARGS"
 			echo "SORTGARGS=\"$SORTGARGS\""
+			echo "## $DESC_WAITMO2"
+			echo "WAITMO2=\"$WAITMO2\""
+			echo "## $DESC_MO2MODE"
+			echo "MO2MODE=\"$MO2MODE\""
 			} >> "$1"
 			#ENDsaveCfgdefault_template
 		fi
@@ -4128,7 +4145,11 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_WINEEXTDIR!$DESC_WINEEXTDIR ('WINEEXTDIR')":DIR "${WINEEXTDIR/#-/ -}" `#CAT_Wine` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_WINE_LOG_DIR!$DESC_WINE_LOG_DIR ('WINE_LOG_DIR')":DIR "${WINE_LOG_DIR/#-/ -}" `#CAT_Wine` `#SUB_Directories` `#MENU_GAME` \
 --field="     $GUI_ONLYWICO!$DESC_ONLYWICO ('ONLYWICO')":CHK "${ONLYWICO/#-/ -}" `#CAT_Wine` `#SUB_Checkbox` `#MENU_GAME` \
-
+--field="$(spanFont "$GUI_OPTSMO2" "H")":LBL "SKIP" `#CAT_MO2` `#HEAD_Vortex` `#MENU_GAME` `#MENU_GLOBAL` \
+--field="     $GUI_MO2COMPDATA!$DESC_MO2COMPDATA ('MO2COMPDATA')":DIR "${MO2COMPDATA/#-/ -}" `#CAT_MO2` `#SUB_Directories` `#MENU_GLOBAL` \
+--field="     $GUI_USEMO2PROTON!$DESC_USEMO2PROTON ('USEMO2PROTON')":CB "${USEMO2PROTON/#-/ -}!$PROTYADLIST" `#CAT_MO2` `#MENU_GLOBAL` \
+--field="     $GUI_MO2MODE!$DESC_MO2MODE ('MO2MODE')":CB "${MO2MODE/#-/ -}!disabled!gui!silent" `#CAT_MO2` `#MENU_GAME` \
+--field="     $GUI_WAITMO2!$DESC_WAITMO2 ('WAITMO2')":NUM "${WAITMO2/#-/ -}" `#CAT_MO2` `#MENU_GAME` \
 #ENDSETENTRIES
 }
 
@@ -5431,65 +5452,69 @@ function getGameWinNameFromXid {
 }
 
 function getGameWindowPID {
-	if [ -n "$GAMEWINPID" ]; then
-		writelog "SKIP" "${FUNCNAME[0]} - Already have the GAMEWINPID '$GAMEWINPID'"
-		echo "$GAMEWINPID"
+	if [ "$MO2MODE" == "gui" ]; then
+		writelog "SKIP" "${FUNCNAME[0]} - Skipping check for window pid, because MO2MODE is '$MO2MODE'"
 	else
-		MAXWAIT=20
-		COUNTER=0
-		TESTPID="$NON"
-		WASCLOSED=0
-
-		touch "$PIDLOCK"
-		
-		while [ "$COUNTER" -lt "$MAXWAIT" ]; do
-			if [ -f "$CLOSETMP" ]; then
-				writelog "WAIT" "${FUNCNAME[0]} - $PROGCMD is just closing - leaving loop"
-				WASCLOSED=1
-				break
-			fi
-			TESTPID="$("$XDO" getactivewindow getwindowpid)"
-			SYMCWD="$(readlink "/proc/$TESTPID/cwd")"
-			SYMEXE="$(readlink "/proc/$TESTPID/exe")"
-			
-			if [ -n "$EXECUTABLE" ] && [ "$EXECUTABLE" == "$(cat "/proc/$TESTPID/comm")" ]; then
-				writelog "WAIT" "${FUNCNAME[0]} - Found PID '$TESTPID' for game 'EXECUTABLE'  '$EXECUTABLE' - leaving loop"
-				FOUNDWIN="$YES"
-				break;
-			elif [ -n "$GE" ] && [ "$GE" == "$(cut -d '.' -f1 < "/proc/$TESTPID/comm")" ]; then
-				writelog "WAIT" "${FUNCNAME[0]} - Found PID '$TESTPID' for game executable 'GE' '$GE' - leaving loop"
-				FOUNDWIN="$YES"
-				break;
-			else
-				# might not even be required anymore - maybe remove later:
-				if [[ "$SYMCWD" == "$EFD" ]] && [[ "$SYMEXE" != *"$YAD"* ]]; then
-					writelog "WAIT" "${FUNCNAME[0]} - Found PID '$TESTPID' for CWD '$SYMCWD' with EXE '$SYMEXE' - leaving loop"
-					FOUNDWIN="$YES"
-					break;
-				fi
-				if [ -n "$STEAM_COMPAT_CLIENT_INSTALL_PATH" ] && [[ "$SYMCWD" == "$STEAM_COMPAT_CLIENT_INSTALL_PATH" ]] && [[ "$SYMEXE" != *"$YAD"* ]]; then
-					writelog "WAIT" "${FUNCNAME[0]} - Found PID '$TESTPID' for STEAM_COMPAT_CLIENT_INSTALL_PATH '$SYMCWD' with EXE '$SYMEXE' - leaving loop"
-					FOUNDWIN="$YES"
-					break;
-				fi
-			fi
-			writelog "WAIT" "${FUNCNAME[0]} - Sec $COUNTER/$MAXWAIT Game Window with pwd '$EFD' not yet in front"
-			COUNTER=$((COUNTER+1))
-			sleep 1
-		done
-
-		rm "$PIDLOCK" 2>/dev/null
-		
-		if [ "$FOUNDWIN" == "$YES" ]; then
-			if [ "$TESTPID" == "$NON" ]; then
-				writelog "SKIP" "${FUNCNAME[0]} - FAIL - Found PID returned but it is empty: '$TESTPID'"
-			fi
-			writelog "INFO" "${FUNCNAME[0]} - Found PID '$TESTPID' for running exe '$(readlink "/proc/$TESTPID/exe")'"
-			echo "$TESTPID"
+		if [ -n "$GAMEWINPID" ]; then
+			writelog "SKIP" "${FUNCNAME[0]} - Already have the GAMEWINPID '$GAMEWINPID'"
+			echo "$GAMEWINPID"
 		else
-			if [ "$WASCLOSED" -eq 0 ]; then
-				writelog "SKIP" "${FUNCNAME[0]} - ERROR - timeout waiting for '$EFD' window"
-				echo "$NON"
+			MAXWAIT=20
+			COUNTER=0
+			TESTPID="$NON"
+			WASCLOSED=0
+
+			touch "$PIDLOCK"
+			
+			while [ "$COUNTER" -lt "$MAXWAIT" ]; do
+				if [ -f "$CLOSETMP" ]; then
+					writelog "WAIT" "${FUNCNAME[0]} - $PROGCMD is just closing - leaving loop"
+					WASCLOSED=1
+					break
+				fi
+				TESTPID="$("$XDO" getactivewindow getwindowpid)"
+				SYMCWD="$(readlink "/proc/$TESTPID/cwd")"
+				SYMEXE="$(readlink "/proc/$TESTPID/exe")"
+				
+				if [ -n "$EXECUTABLE" ] && [ "$EXECUTABLE" == "$(cat "/proc/$TESTPID/comm")" ]; then
+					writelog "WAIT" "${FUNCNAME[0]} - Found PID '$TESTPID' for game 'EXECUTABLE'  '$EXECUTABLE' - leaving loop"
+					FOUNDWIN="$YES"
+					break;
+				elif [ -n "$GE" ] && [ "$GE" == "$(cut -d '.' -f1 < "/proc/$TESTPID/comm")" ]; then
+					writelog "WAIT" "${FUNCNAME[0]} - Found PID '$TESTPID' for game executable 'GE' '$GE' - leaving loop"
+					FOUNDWIN="$YES"
+					break;
+				else
+					# might not even be required anymore - maybe remove later:
+					if [[ "$SYMCWD" == "$EFD" ]] && [[ "$SYMEXE" != *"$YAD"* ]]; then
+						writelog "WAIT" "${FUNCNAME[0]} - Found PID '$TESTPID' for CWD '$SYMCWD' with EXE '$SYMEXE' - leaving loop"
+						FOUNDWIN="$YES"
+						break;
+					fi
+					if [ -n "$STEAM_COMPAT_CLIENT_INSTALL_PATH" ] && [[ "$SYMCWD" == "$STEAM_COMPAT_CLIENT_INSTALL_PATH" ]] && [[ "$SYMEXE" != *"$YAD"* ]]; then
+						writelog "WAIT" "${FUNCNAME[0]} - Found PID '$TESTPID' for STEAM_COMPAT_CLIENT_INSTALL_PATH '$SYMCWD' with EXE '$SYMEXE' - leaving loop"
+						FOUNDWIN="$YES"
+						break;
+					fi
+				fi
+				writelog "WAIT" "${FUNCNAME[0]} - Sec $COUNTER/$MAXWAIT Game Window with pwd '$EFD' not yet in front"
+				COUNTER=$((COUNTER+1))
+				sleep 1
+			done
+
+			rm "$PIDLOCK" 2>/dev/null
+			
+			if [ "$FOUNDWIN" == "$YES" ]; then
+				if [ "$TESTPID" == "$NON" ]; then
+					writelog "SKIP" "${FUNCNAME[0]} - FAIL - Found PID returned but it is empty: '$TESTPID'"
+				fi
+				writelog "INFO" "${FUNCNAME[0]} - Found PID '$TESTPID' for running exe '$(readlink "/proc/$TESTPID/exe")'"
+				echo "$TESTPID"
+			else
+				if [ "$WASCLOSED" -eq 0 ]; then
+					writelog "SKIP" "${FUNCNAME[0]} - ERROR - timeout waiting for '$EFD' window"
+					echo "$NON"
+				fi
 			fi
 		fi
 	fi
@@ -7014,6 +7039,7 @@ function createProjectDirs {
 	mkProjDir "$HIDEDIR"
 	mkProjDir "$VORTEXCOMPDATA"
 	mkProjDir "$GEMETA"
+	mkProjDir "$MO2COMPDATA"
 }
 
 # add missing config entries to configfile $1 using seperator $2:
@@ -9678,6 +9704,13 @@ function setVortexDLMime {
 		echo "Exec=env LC_ALL=C WINEDEBUG=\"-all\" WINEPREFIX=\"$VORTEXPFX\" \"$VORTEXWINE\" Vortex.exe -d %u"
 		echo "NoDisplay=true"
 		} >> "$FVD"
+		
+		MO2D="$MO-$PROGCMD-dl.desktop"
+		FMO2D="$HOME/.local/share/applications/$MO2D"
+		if [ -f "$FMO2D" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Renaming desktopfile ${FMO2D} to ${FMO2D}-off, because '$VF' was created"
+			mv "$FMO2D" "${FMO2D}-off"
+		fi
 	else
 		if grep -q "$VORTEXPFX" "$FVD"; then
 			writelog "INFO" "${FUNCNAME[0]} - Desktopfile $FVD seems to be up2date"
@@ -9849,7 +9882,9 @@ function dlLatestMO2 {
 			MO2VERSION="${MO2VRAW%.exe}"
 			DLURL="$MO2DLURL/download/v$MO2VERSION/$MO2SETUP"
 			writelog "INFO" "${FUNCNAME[0]} - Downloading $MO2SETUP to $MO2DLDIR from '$DLURL'"
+			notiShow "$(strFix "$NOTY_DLCUSTOMPROTON" "$MO2SETUP")"
 			wgetGui "$DLURL" "$MO2SPATH"
+			notiShow "$(strFix "$NOTY_DLCUSTOMPROTON2" "$MO2SETUP")"
 
 			if [ -f "$MO2SPATH" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Download succeeded - continuing installation"
@@ -9860,6 +9895,528 @@ function dlLatestMO2 {
 	else
 		writelog "SKIP" "${FUNCNAME[0]} - No MO2SETUP defined - nothing to download - skipping"
 	fi
+}
+
+function setMO2Vars {
+	if [ -z "$MO2PFX" ]; then
+		MO2PFX="${MO2COMPDATA//\"/}/pfx"
+		if [ -z "$USEMO2PROTON" ] || [ "$USEMO2PROTON" == "$NON" ]; then
+			USEMO2PROTON="$FIRSTUSEPROTON"
+		fi
+		MO2RUNPROT="$(getProtPathFromCSV "${USEMO2PROTON//\"}")"
+		MO2WINE="$(getProtWinePath "$MO2RUNPROT")"
+		MO2EXE="$MO2PFX/$MOERPATH"
+		MO2GAMES="$GLOBALMISCDIR/mo2games.txt"
+		NXMG="nxmhandler"
+		NMXHLOG="$MO2PFX/$DRCU/$STUS/$ADLO/$MO/${NXMG}.log"
+	fi
+}
+
+function installMO2 {
+	dlLatestMO2
+	if [ -f "$MO2SPATH" ]; then
+		setMO2Vars
+		if [ -f "$MO2EXE" ]; then
+			writelog "SKIP" "${FUNCNAME[0]} - '$MO2EXE' does already exists - nothing to install - skipping"
+		else
+			STEAM_COMPAT_DATA_PATH="${MO2COMPDATA//\"/}" "$MO2RUNPROT" run "$NON" >"$STLSHM/${FUNCNAME[0]}_init-proton.log" 2>"$STLSHM/${FUNCNAME[0]}_init-proton.log"
+			sleep 1 # let it settle before install something
+			MO2INSTARGS="/VERYSILENT"
+			writelog "INFO" "${FUNCNAME[0]} - Installing 'vcrun2019-x64' into '$MO2PFX'"
+			installSteWoShPak "vcrun2019-x64" "$MO2PFX" "$MO2WINE"
+
+#			writelog "INFO" "${FUNCNAME[0]} - Installing 'dotnet48' into '$MO2PFX'"
+#			installSteWoShPak "dotnet48" "$MO2PFX" "$MO2WINE"
+
+			writelog "INFO" "${FUNCNAME[0]} - Installing '$MO2SPATH' into '$MO2PFX'"
+			notiShow "$(strFix "$NOTY_INSTSTART" "${MO2SPATH##*/}")"
+			runExe "$MO2SPATH" "$MO2PFX" "$MO2WINE" "$MO2INSTARGS"
+			notiShow "$(strFix "$NOTY_INSTSTOP" "${MO2SPATH##*/}")" 
+		fi
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - No MO2SETUP defined - nothing to install - skipping"
+	fi
+}
+
+function checkInstalledMO2Games {
+
+	function prepMO2GameSym {
+		DSTL="$1"
+		gdir="$2"
+		if [ -n "$2" ]; then
+			if [ ! -L "$DSTL" ] || [ "$(readlink "$DSTL")" != "$gdir" ]; then
+				if [ -L "$DSTL" ]; then
+				 	writelog "INFO" "${FUNCNAME[0]} - Removing symlink '$DSTL' pointing to '$(readlink "$DSTL")'"
+					rm "$DSTL" 2>/dev/null
+				fi
+			 	writelog "INFO" "${FUNCNAME[0]} - Creating Symlink from '$gdir' to '$DSTL'"
+				ln -s "$gdir" "$DSTL"
+			fi
+		fi
+	}
+
+	mkProjDir "$MO2PFX/$DRCU/$STUS/$DOCS/$MYGAMES"
+
+	while read -r line; do
+		MGID1="$(cut -d ';' -f2 <<< "$line")"
+		MGID="${MGID1//\"}"
+
+		while read -r sl; do
+			CHKAPMA="$sl/$SA/appmanifest_${MGID}.acf"
+			if [ -f "$CHKAPMA" ]; then
+				MGNA1="$(cut -d ';' -f1 <<< "$line")"
+				MGNA="${MGNA1//\"}"
+				MGPFX="$(dirname "$CHKAPMA")/$CODA/${MGID}/pfx"
+
+				if [ ! -d "$MGPFX" ]; then
+					writelog "SKIP" "${FUNCNAME[0]} - '$MGPFX' missing - looks like the game was removed or never started yet"
+				else
+					if [ -n "$1" ] && [ "$1" == "li" ]; then
+						echo "$MGID;$MGNA;$MGPFX;"
+					else
+						writelog "INFO" "${FUNCNAME[0]} - Found game '$MGNA ($MGID)' with pfx '$MGPFX'"
+						# maybe merge redundant code later:
+						
+						if [ -d "$MGPFX/$DRCU/$STUS/$DOCS/$MYGAMES" ]; then
+							while read -r gdir; do
+								DSTL="$MO2PFX/$DRCU/$STUS/$DOCS/$MYGAMES/${gdir##*/}"
+								prepMO2GameSym "$DSTL" "$gdir"
+							done <<< "$(find "$MGPFX/$DRCU/$STUS/$DOCS/$MYGAMES" -mindepth 1 -maxdepth 1 -type d)"
+						fi
+
+						if [ -d "$MGPFX/$DRCU/$STUS/$DOCS" ]; then
+							while read -r gdir; do
+								if [ "${gdir##*/}" == "$MYGAMES" ]; then
+									while read -r gsdir; do
+										DSTL="$MO2PFX/$DRCU/$STUS/$DOCS/$MYGAMES/${gsdir##*/}"
+										prepMO2GameSym "$DSTL" "$gsdir"
+									done <<< "$(find "$MGPFX/$DRCU/$STUS/$DOCS/$MYGAMES" -mindepth 1 -maxdepth 1 -type d)"
+								elif [ "${gdir##*/}" == "$EAGA" ]; then
+									mkProjDir "$MO2PFX/$DRCU/$STUS/$DOCS/$EAGA"
+									while read -r geadir; do
+										DSTL="$MO2PFX/$DRCU/$STUS/$DOCS/$EAGA/${geadir##*/}"
+										prepMO2GameSym "$DSTL" "$geadir"
+									done <<< "$(find "$MGPFX/$DRCU/$STUS/$DOCS/$EAGA" -mindepth 1 -maxdepth 1 -type d)"
+								elif [ "${gdir##*/}" == "$LAGA" ]; then
+									mkProjDir "$MO2PFX/$DRCU/$STUS/$DOCS/$LAGA"
+									while read -r gladir; do
+										DSTL="$MO2PFX/$DRCU/$STUS/$DOCS/$LAGA/${gladir##*/}"
+										prepMO2GameSym "$DSTL" "$gladir"
+									done <<< "$(find "$MGPFX/$DRCU/$STUS/$DOCS/$LAGA" -mindepth 1 -maxdepth 1 -type d)"
+								elif [ "${gdir##*/}" == "$BIOW" ]; then
+									mkProjDir "$MO2PFX/$DRCU/$STUS/$DOCS/$BIOW"
+									while read -r gbiodir; do
+										DSTL="$MO2PFX/$DRCU/$STUS/$DOCS/$BIOW/${gbiodir##*/}"
+										prepMO2GameSym "$DSTL" "$gbiodir"
+									done <<< "$(find "$MGPFX/$DRCU/$STUS/$DOCS/$BIOW" -mindepth 1 -maxdepth 1 -type d)"
+								else
+									DSTL="$MO2PFX/$DRCU/$STUS/$DOCS/${gdir##*/}"
+									prepMO2GameSym "$DSTL" "$gdir"
+								fi
+							done <<< "$(find "$MGPFX/$DRCU/$STUS/$DOCS" -mindepth 1 -maxdepth 1 -type d -not -empty)"
+						fi
+
+						if [ -d "$MGPFX/$DRCU/$STUS/$MYDOCS" ] && [ ! -L "$MGPFX/$DRCU/$STUS/$MYDOCS" ]; then
+							while read -r gdir; do
+								if [ "${gdir##*/}" == "$MYGAMES" ]; then
+									while read -r gsdir; do
+										DSTL="$MO2PFX/$DRCU/$STUS/$DOCS/$MYGAMES/${gsdir##*/}"
+										prepMO2GameSym "$DSTL" "$gsdir"
+									done <<< "$(find "$MGPFX/$DRCU/$STUS/$MYDOCS/$MYGAMES" -mindepth 1 -maxdepth 1 -type d)"
+								elif [ "${gdir##*/}" == "$EAGA" ]; then
+									mkProjDir "$MO2PFX/$DRCU/$STUS/$DOCS/$EAGA"
+									while read -r geadir; do
+										DSTL="$MO2PFX/$DRCU/$STUS/$DOCS/$EAGA/${geadir##*/}"
+										prepMO2GameSym "$DSTL" "$geadir"
+									done <<< "$(find "$MGPFX/$DRCU/$STUS/$MYDOCS/$EAGA" -mindepth 1 -maxdepth 1 -type d)"
+								elif [ "${gdir##*/}" == "$LAGA" ]; then
+									mkProjDir "$MO2PFX/$DRCU/$STUS/$DOCS/$LAGA"
+									while read -r gladir; do
+										DSTL="$MO2PFX/$DRCU/$STUS/$DOCS/$LAGA/${gladir##*/}"
+										prepMO2GameSym "$DSTL" "$gladir"
+									done <<< "$(find "$MGPFX/$DRCU/$STUS/$MYDOCS/$LAGA" -mindepth 1 -maxdepth 1 -type d)"
+								elif [ "${gdir##*/}" == "$BIOW" ]; then
+									mkProjDir "$MO2PFX/$DRCU/$STUS/$DOCS/$BIOW"
+									while read -r gbiodir; do
+										DSTL="$MO2PFX/$DRCU/$STUS/$DOCS/$BIOW/${gbiodir##*/}"
+										prepMO2GameSym "$DSTL" "$gbiodir"
+									done <<< "$(find "$MGPFX/$DRCU/$STUS/$DOCS/$BIOW" -mindepth 1 -maxdepth 1 -type d)"
+								else
+									DSTL="$MO2PFX/$DRCU/$STUS/$DOCS/${gdir##*/}"
+									prepMO2GameSym "$DSTL" "$gdir"
+								fi
+							done <<< "$(find "$MGPFX/$DRCU/$STUS/$MYDOCS" -mindepth 1 -maxdepth 1 -type d -not -empty)"
+						fi
+
+						if [ -d "$MGPFX/$DRCU/$STUS/$APDA" ]; then
+							while read -r gdir; do
+								if [ "${gdir##*/}" != "Microsoft" ] ; then
+									DSTL="$MO2PFX/$DRCU/$STUS/$ADRO/${gdir##*/}"
+									prepMO2GameSym "$DSTL" "$gdir"
+								fi
+							done <<< "$(find "$MGPFX/$DRCU/$STUS/$APDA" -mindepth 1 -maxdepth 1 -type d -not -empty)"
+						fi
+
+						if [ -d "$MGPFX/$DRCU/$STUS/$ADLO" ]; then
+							while read -r gdir; do
+								if [ "${gdir##*/}" != "openvr" ] && [ "${gdir##*/}" != "Microsoft" ] ; then
+									DSTL="$MO2PFX/$DRCU/$STUS/$ADLO/${gdir##*/}"
+									prepMO2GameSym "$DSTL" "$gdir"
+								fi
+							done <<< "$(find "$MGPFX/$DRCU/$STUS/$ADLO" -mindepth 1 -maxdepth 1 -type d -not -empty)"
+						fi
+
+						if [ -d "$MGPFX/$DRCU/$STUS/$LSAD" ]; then
+							while read -r gdir; do
+								if [ "${gdir##*/}" != "openvr" ] && [ "${gdir##*/}" != "Microsoft" ] ; then
+									DSTL="$MO2PFX/$DRCU/$STUS/$ADLO/${gdir##*/}"
+									prepMO2GameSym "$DSTL" "$gdir"
+								fi
+							done <<< "$(find "$MGPFX/$DRCU/$STUS/$LSAD" -mindepth 1 -maxdepth 1 -type d -not -empty)"
+						fi
+
+						if [ -d "$MGPFX/$DRCU/$STUS/$SAGE/$CDPR" ]; then
+							mkProjDir "$MO2PFX/$DRCU/$STUS/$SAGE/$CDPR"
+							while read -r gdir; do
+									DSTL="$MO2PFX/$DRCU/$STUS/$SAGE/$CDPR/${gdir##*/}"
+									prepMO2GameSym "$DSTL" "$gdir"
+							done <<< "$(find "$MGPFX/$DRCU/$STUS/$SAGE/$CDPR" -mindepth 1 -maxdepth 1 -type d -not -empty)"
+						fi
+
+						if grep -qi "^\"installed path\"=" "$MGPFX/system.reg"; then
+							MO2GREG="$STLSHM/mo2games.reg"
+							if [ ! -f "$MO2GREG" ]; then
+								echo "Windows Registry Editor Version 5.00" > "$MO2GREG"
+							fi
+
+							MEFD="$(getGameDirFromAM "$CHKAPMA")"
+							if [ -d "$MEFD" ]; then
+								writelog "INFO" "${FUNCNAME[0]} - Game Dir is '$MEFD' - adding the windows variant into $MO registry, because it is required for this game"
+								grep -i -B2 "^\"installed path\"=" "$MGPFX/system.reg" | grep -v "^#\|LastKey\|CurrentVersion\|^--" | head -n1 | sed "s:^\[Software:\[HKEY_LOCAL_MACHINE\\\Software:" | sed "s:\\\\Wow6432Node::" >> "$MO2GREG"
+								# the path could be grepped as well, but at least two games had the Steamworks Shared path in the reg value instead here
+								echo "\"installed path\"=\"Z:${MEFD//\//\\\\}\\\\\"" >> "$MO2GREG"
+							else
+								writelog "SKIP" "${FUNCNAME[0]} - Game Dir '$MEFD' not found"
+							fi
+						fi
+					fi
+				fi
+			fi
+		done <<< "$(printf "%s\n" "${SLARR[@]}")"
+	done < "$MO2GAMES"
+
+	if [ -f "$MO2GREG" ]; then
+		WINEPREFIX="$MO2PFX" "$MO2WINE" regedit "$MO2GREG" 2>/dev/null
+		rm "$MO2GREG" 2>/dev/null
+	fi
+}
+
+function listWinSteamLibraries {
+	COUNTER=1
+	SL1="${SROOT%*/}"
+	echo "\"$COUNTER\" \"Z:${SL1//\//\\\\}\""
+
+	unset SLARR
+	mapfile -t -O "${#SLARR[@]}" SLARR <<< "$SL1"
+
+	while read -r line; do
+		COUNTER=$((COUNTER+1))
+		W1="${line//\"}"
+		mapfile -t -O "${#SLARR[@]}" SLARR <<< "$W1"
+		W2="${W1//\//\\\\}"
+		echo "\"$COUNTER\" \"Z:$W2\""
+	done <<< "$(grep "\"path\"" "$LFVDF" | gawk '{print $2}')"
+}
+
+function prepAllMO2Games {
+	MO2STDIR="$MO2PFX/$DRC/$PFX86S"
+	MO2SADIR="$MO2STDIR/$SA"
+	mkProjDir "$MO2SADIR"
+	
+	rm "$MO2SADIR/$LIFOVDF" 2>/dev/null
+	{
+		echo "\"LibraryFolders\""
+		echo "{"
+		listWinSteamLibraries
+		echo "}"
+	} >> "$MO2SADIR/$LIFOVDF"
+
+	checkInstalledMO2Games "$1"
+}
+
+function listMO2Games {
+	echo "Games supported by $MO:"
+	echo "---------------------------------"
+	cat "$GLOBALMISCDIR/mo2games.txt"
+}
+
+function manageMO2GInstance {
+	setMO2Vars
+	if [ ! -f "$MO2EXE" ]; then
+		installMO2
+	fi
+
+	if grep -q "$1" "$MO2GAMES"; then
+		MO2AID="$1"
+		MO2GA1="$(grep -m1 "\"$MO2AID\"" "$MO2GAMES" | cut -d ';' -f1)"
+		MO2GAM="${MO2GA1//\"}"
+
+		MO2GAMIN1="$(grep -m1 "\"$MO2AID\"" "$MO2GAMES" | cut -d ';' -f3)"
+		MO2GAMINI="${MO2GAMIN1//\"}"
+		
+		if [ -n "$MO2GAM" ]; then
+			MOIN="$MO2PFX/$DRCU/$STUS/$ADLO/$MO/$MO2GAM"
+			MODPRDE="$MOIN/profiles/Default"
+			MODLIST="$MODPRDE/modlist.txt"
+			MOININI="$MOIN/${MO}.ini"
+			MOINEW=0
+			if [ ! -f "$MOININI" ]; then
+				MO2GADI="$(getGameDirFromAID "$MO2AID")"
+				
+				if [ -d "$MO2GADI" ]; then
+					MO2GAZDI="Z:${MO2GADI//\//\\\\}"
+					mkProjDir "$MOIN"
+					touch "$MOININI"
+					{
+					echo "[General]"
+					echo "gameName=$MO2GAMINI"
+					echo "selected_profile=@ByteArray(Default)"
+					echo "gamePath=@ByteArray($MO2GAZDI)"
+					} >> "$MOININI"
+					MOINEW=1
+				else
+					writelog "SKIP" "${FUNCNAME[0]} - '$MO2AID' is a supported Id, but the game installation could not be found"
+				fi
+			fi
+			if [ -d "$MOIN" ]; then
+				if [ -n "$2" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Using $MO instance '$MO2GAM'"
+					MO2INST="$MO2GAM"
+				else
+					if [ "$MOINEW" -eq 1 ]; then
+						writelog "INFO" "${FUNCNAME[0]} - Created initial $MO instance '$MO2GAM'"
+					else
+						writelog "SKIP" "${FUNCNAME[0]} - $MO instance '$MO2GAM' already exists"
+					fi
+				fi
+			fi
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Could not find game name for '$MO2AID' - starting regularly with default instance"
+		fi
+	else
+		STAMO2=0
+		writelog "SKIP" "${FUNCNAME[0]} - '$1' is no supported $MO game"
+		listMO2Games
+	fi	
+}
+
+function createAllMO2Instances {
+	setMO2Vars
+	while read -r line; do
+		manageMO2GInstance "$line"
+	done <<< "$(prepAllMO2Games "ci" | cut -d ';' -f1)"
+}
+
+function prepareMO2 {
+	setMO2Vars
+	STAMO2=1
+	if [ -n "$1" ] && [ "$1" != "$NON" ]; then
+		if [ "$1" -eq "$1" ] 2>/dev/null; then
+			manageMO2GInstance "$1" "X"
+			if [ "$2" == "disabled" ]; then
+				STAMO2=0
+			fi
+		else
+			if grep -q "^\"$1\"" "$MO2GAMES"; then
+				writelog "INFO" "${FUNCNAME[0]} - Using $MO instance '$1'"
+				MO2INST="$1"
+			fi
+		fi
+	else
+		writelog "INFO" "${FUNCNAME[0]} - Updating/creating $MO instances"
+		createAllMO2Instances
+		STAMO2=1
+	fi
+
+	if [ "$STAMO2" -eq 1 ] && [ "$2" != "disabled" ]; then
+		if [ ! -f "$MO2EXE" ]; then
+			installMO2
+		fi
+
+		prepAllMO2Games
+
+		if [ -f "$MO2EXE" ]; then
+			if [ -z "$MO2INST" ]; then
+				if [ -f "$NMXHLOG" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - No $MO instance provided - searching last one found in '$NMXHLOG'"
+					RINST1="$(tac "$NMXHLOG" | grep -m1 \"reg\")"
+					RINST2="${RINST1##*\"reg\" }"
+					RINST="$(cut -d '"' -f2 <<< "$RINST2")"
+					if [ -n "$RINST" ]; then
+						MO2INST1="$(grep -m1 "\"$RINST\"" "$MO2GAMES" | cut -d ';' -f1)"
+						MO2INST="${MO2INST1//\"}"
+						writelog "INFO" "${FUNCNAME[0]} - Found '$RINST' as last used game in '$NMXHLOG', so using instance '$MO2INST'"
+						MO2AID="$(grep -m1 "\"$RINST\"" "$MO2GAMES" | cut -d ';' -f2)"
+						manageMO2GInstance "${MO2AID//\"}" "X"
+						if [ -z "$EFD" ]; then
+							if [ -z "$APPMAFE" ]; then
+								APPMAFE="$(listAppManifests | grep "${MO2AID//\"}.acf")"
+							fi
+							EFD="$(getGameDirFromAM "$APPMAFE")"
+						fi
+					fi
+				fi
+			fi
+
+			if [ -n "$MO2INST" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Using $MO instance '$MO2INST'"
+			fi
+
+			setMO2DLMime
+		fi
+	fi
+}
+
+function startMO2 {
+	prepareMO2 "$NON" "gui"
+	writelog "INFO" "${FUNCNAME[0]} - Starting '$MO2EXE' in standalone mode" E
+	cd "${MO2EXE%/*}" >/dev/null || return
+		if [ -n "$MO2INST" ]; then
+			WINEDEBUG="-all" WINEPREFIX="$MO2PFX" "$MO2WINE" "$MO2EXE" -i "$MO2INST" >"$STLSHM/${FUNCNAME[0]}_${IFILE##*/}.log" 2>"$STLSHM/${FUNCNAME[0]}_${IFILE##*/}.log"
+		else
+			WINEDEBUG="-all" WINEPREFIX="$MO2PFX" "$MO2WINE" "$MO2EXE" >"$STLSHM/${FUNCNAME[0]}_${IFILE##*/}.log" 2>"$STLSHM/${FUNCNAME[0]}_${IFILE##*/}.log"
+		fi
+	cd - >/dev/null || return
+}
+
+function dlMod2nexurl {
+	setMO2Vars
+	# XXXXXXXXX
+	MONGUR1="${1//nxm:\/\/}"
+	MONGURL="${MONGUR1%%/*}"
+	MODLER="$STLSHM/dlNexMod-$MONGURL"
+
+	if [ -f "$MODLER" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Download Url '$1' for game '$MONGURL' using currently running MO session via '$MODLER'"
+		"$MODLER" "$1" >"$MODLER.log" 2>"$MODLER.log"
+	else
+		setSteamPath "SROOT"
+		MONINST="$(grep -i "\"$MONGURL\"" "$MO2GAMES" | head -n1 | cut -d ';' -f1)"
+		MOIN="$MO2PFX/$DRCU/$STUS/$ADLO/$MO/${MONINST//\"}"
+		MOININI="$MOIN/${MO}.ini"
+
+		if [ -f "$MOININI" ]; then
+			cd "${MO2EXE%/*}" >/dev/null || return
+				writelog "INFO" "${FUNCNAME[0]} - Download Url '$1' for game '$MONGURL'" "E"
+				echo "STEAM_COMPAT_CLIENT_INSTALL_PATH=\"$SROOT\" STEAM_COMPAT_DATA_PATH=\"$MO2COMPDATA\" \"$MO2RUNPROT\" \"run\" \"${MO}.exe\" \"\$1\""
+				STEAM_COMPAT_CLIENT_INSTALL_PATH="$SROOT" STEAM_COMPAT_DATA_PATH="$MO2COMPDATA" "$MO2RUNPROT" "run" "${MO}.exe" "$1"
+				#LC_ALL=C WINEDEBUG="-all" WINEDEBUG="-all" WINEPREFIX="$MO2PFX" "$MO2WINE" "${MO}.exe" -i "${MONINST//\"}" "$1" >"$STLSHM/${FUNCNAME[0]}_$MONGURL.log" 2>"$STLSHM/${FUNCNAME[0]}_$MONGURL.log"
+			cd - >/dev/null || return
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - Download Url is for game '$MONGURL', which does not have an instance in '$MO2PFX/$DRCU/$STUS/$ADLO/$MO'"
+		fi
+	fi
+}
+
+function setMO2DLMime {
+	setMO2Vars
+
+	MO2D="$MO-$PROGCMD-dl.desktop"
+	FMO2D="$HOME/.local/share/applications/$MO2D"
+	
+	if [ ! -f "$FMO2D" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Creating new desktop file $MO2D"
+		{
+		echo "[Desktop Entry]"
+		echo "Type=Application"
+		echo "Categories=Game;"
+		echo "Name=$MO ($PROGNAME - $PROGCMD)"
+		echo "MimeType=x-scheme-handler/nxm;x-scheme-handler/nxm-protocol"
+		echo "Terminal=false"
+		echo "X-KeepTerminal=false"
+		echo "Path=$(dirname "$MO2EXE")"
+		echo "Exec=$0 mo2 u %u"
+		echo "NoDisplay=true"
+		} >> "$FMO2D"
+		
+		VD="$VTX-$PROGCMD-dl.desktop"
+		FVD="$HOME/.local/share/applications/$VD"
+		if [ -f "$FVD" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Renaming desktopfile ${FVD} to ${FVD}-off, because '$MO2D' was created"
+			mv "$FVD" "$FVD-off"
+		fi
+	else
+		if grep -q "$MO2PFX" "$FMO2D"; then
+			writelog "INFO" "${FUNCNAME[0]} - Desktopfile '$FMO2D' looks to be up2date"
+			return
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Renaming desktopfile '$FMO2D' and creating a new one for $PROGCMD"
+			mv "$FMO2D" "$FMO2D-old"
+			setMO2DLMime
+		fi	
+	fi
+
+	# setting mime types for nxm
+	XDGMIME="xdg-mime"
+
+	if  [ -x "$(command -v "$XDGMIME" 2>/dev/null)" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Setting download defaults for nexusmod protocol via $XDGMIME pointing at $MO2D"
+		"$XDGMIME" default "$MO2D" x-scheme-handler/nxm
+		"$XDGMIME" default "$MO2D" x-scheme-handler/nxm-protocol
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - $XDGMIME not found - couldn't set download defaults for nexusmod protocol - skipping"
+	fi
+}
+
+function checkMO2 {
+	if [ "$MO2MODE" != "disabled" ]; then
+		if [ "$WAITMO2" -gt 0 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Opening $MO Requester with timeout '$WAITMO2'"
+			fixShowGnAid
+			export CURWIKI="$PPW/Mod-Organizer-2"
+			TITLE="${PROGNAME}-Open-Mod-Organizer2"
+			pollWinRes "$TITLE"
+
+			setShowPic
+
+			"$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
+			--title="$TITLE" \
+			--text="$(spanFont "$SGNAID - $GUI_ASKMO2" "H")" \
+			--button="$BUT_MO2_GUI":0  \
+			--button="$BUT_MO2_SIL":4  \
+			--button="$BUT_CAN":6  \
+			--timeout="$WAITMO2" \
+			--timeout-indicator=top \
+			"$GEOM"
+
+			case $? in
+				0)  {
+						writelog "INFO" "${FUNCNAME[0]} - Selected to start $MO with gui"
+						MO2MODE="gui"
+					}
+				;;
+				4)  {
+						writelog "INFO" "${FUNCNAME[0]} - Selected to start $MO with mods silently"
+						MO2MODE="silent"
+					}
+				;;
+				6)  {
+						writelog "INFO" "${FUNCNAME[0]} - Selected CANCEL - Not starting $MO at all"
+						MO2MODE="disabled"
+					}
+				;;
+				70) {
+						writelog "INFO" "${FUNCNAME[0]} - TIMEOUT - Starting $MO2 with mods silently"
+						MO2MODE="silent"
+					}
+				;;
+			esac
+		else
+			writelog "INFO" "${FUNCNAME[0]} - $MO Requester was skipped because WAITMO2 is '$WAITMO2' - not changing MO2MODE '$MO2MODE'"
+		fi
+	fi
+
+	prepareMO2 "$AID" "$MO2MODE"
 }
 
 function getLatestVortVer {
@@ -11638,6 +12195,9 @@ function prepareLaunch {
 		writelog "INFO" "${FUNCNAME[0]} - CheckVortexSELaunch with argument '$SELAUNCH':"
 		checkVortexSELaunch "$SELAUNCH"
 	fi
+
+	writelog "INFO" "${FUNCNAME[0]} - checkMO2:"
+	checkMO2
 	
 	# set other screen resolution
 	writelog "INFO" "${FUNCNAME[0]} - setNewRes:"
@@ -12338,7 +12898,39 @@ function delPrefix {
 	fi
 }
 
+function createOrUpdateSymDir {
+	SYML="$1"
+	ODIR="$2"
+	if [ -d "$SYML" ] && [ ! -L "$SYML" ] ; then
+		writelog "WARN" "${FUNCNAME[0]} - Renaming existing '$SYML' to '${SYML}_old'"
+		mv "$SYML" "${SYML}_old"
+	fi
+	
+	if [ -L "$SYML" ] && [ "$(readlink "$SYML")" != "$ODIR" ]; then
+		writelog "WARN" "${FUNCNAME[0]} - Renaming existing symlink '$SYML' to '${SYML}_old'"
+		writelog "WARN" "${FUNCNAME[0]} - because it points to '$(readlink "$SYML")'"
+		mv "$SYML" "${SYML}_old"
+	fi
+
+	if [ ! -L "$SYML" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Created symlink from '$ODIR' to '$SYML'"
+		ln -s "$ODIR" "$SYML"
+	fi
+}
+
 function startGame {
+	
+	function setBaseMO2RunCmd {
+		unset RUNCMD
+		while read -r arg; do
+			mapfile -t -O "${#RUNCMD[@]}" RUNCMD <<< "$arg"
+			if [ "$arg" == "$WFEAR" ]; then
+				break
+			fi
+		done <<< "$(printf "%s\n" "$@")"
+		# done <<< "$(printf "%s\n" "${#RUNCMD[@]}")"
+	}
+	
 	#kind of works, but should be optimized:
 #	emptyVars "S"  # unset some internal variables before the game starts
 
@@ -12359,6 +12951,72 @@ function startGame {
 		RUNCMD=("$BLOCKCMD" "${BLOCKARGSARR[@]}" "${@}")
 	else
 		RUNCMD=("${@}")
+	fi
+
+	if [ "$ISGAME" -eq 2 ] &&  [ "$USEWINE" -ne 1 ]; then
+		if [ "$MO2MODE" != "disabled" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - MO2MODE is '$MO2MODE' - preparing MO2 symlinks in '$GPFX'"
+
+			GAMMO2DAT="$GPFX/$DRCU/$STUS/$ADLO/$MO"
+			ORGMO2DAT="$MO2PFX/$DRCU/$STUS/$ADLO/$MO"
+			createOrUpdateSymDir "$GAMMO2DAT" "$ORGMO2DAT"
+
+			OMODDIR="$MO2PFX/$MORDIR"
+			GMODDIR="$GPFX/$MORDIR"
+			createOrUpdateSymDir "$GMODDIR" "$OMODDIR"
+			setBaseMO2RunCmd "$@"
+			GMO2EXE="$GPFX/$MOERPATH"
+		fi
+
+		if [ "$MO2MODE" == "silent" ]; then
+			if [ -n "$MO2GAM" ] && [ -f "$MO2EXE" ]; then
+				if [ "$(grep -c "^+" "$MODLIST")" -eq 0 ]; then
+					writelog "SKIP" "${FUNCNAME[0]} - Not starting $MO silent as requested, because no mod is enabled in '$MODLIST'"
+					notiShow "$(strFix "$NOTY_NOMO" "$GN" "$AID")"
+					MO2MODE="gui"
+				else
+# XXXXXXXXX
+					# both seem to work:
+#					ZEXE="Z:${3//\//\\\\}"
+#					ZEXE="$(grep "^1\\\binary" "$MOININI" | tr -d "\015" | cut -d '=' -f2)"
+#					sed "/^MainWindow_modList_state/d" -i "$MOININI"
+#					sed "/^MainWindow_downloadView_state/d" -i "$MOININI"
+#					sed "/^MainWindow_geometry/d" -i "$MOININI"
+
+					RUNCMD=("${RUNCMD[@]}" "$GMO2EXE" "moshortcut://$MO2GAM:$MO2GAMINI" "-p" "Default")
+#					RUNCMD=("$1" "$2" "$GMO2EXE" "$ZEXE" "-i" "$MO2GAM")
+#					RUNCMD=("$1" "$2" "$GMO2EXE" "-i" "$MO2GAM")
+
+					writelog "INFO" "${FUNCNAME[0]} - Starting '$SGNAID' with $MO enabled mods with command '${RUNCMD[*]}'"
+					notiShow "$(strFix "$NOTY_STARTSIMO" "$GN" "$AID")"
+				fi
+			else
+				writelog "SKIP" "${FUNCNAME[0]} - Not starting $MO silent as requested, because MO2GAM ('$MO2GAM') or MO2EXE ('$MO2EXE') is empty"
+				MO2MODE="gui"
+			fi
+		fi
+		if [ "$MO2MODE" == "gui" ]; then
+			if [ -n "$MO2GAM" ]; then
+				RUNCMD=("${RUNCMD[@]}" "$MO2EXE" "-i" "$MO2GAM")
+				writelog "INFO" "${FUNCNAME[0]} - Starting '$SGNAID' with $MO gui via '${RUNCMD[*]}'"
+				notiShow "$(strFix "$NOTY_STARTVEMO" "$GN" "$AID")"
+			else
+				RUNCMD=("${RUNCMD[@]}" "$MO2EXE")
+				writelog "INFO" "${FUNCNAME[0]} - Starting '$SGNAID' with $MO gui via '${RUNCMD[*]}'"
+				notiShow "$(strFix "$NOTY_STARTVEMO" "$GN" "$AID")"
+			fi
+		
+			MONGURL="$(grep -i "\"$MO2GAM\"" "$MO2GAMES" | head -n1 | cut -d ';' -f4)"
+			MONGURL="${MONGURL//\"}"
+			MODLER="$STLSHM/dlNexMod-$MONGURL"
+			head -n1 "$0" > "$MODLER"
+			{
+			echo "cd \"${GMO2EXE%/*}\" >/dev/null || return"
+			echo "STEAM_COMPAT_CLIENT_INSTALL_PATH=\"$STEAM_COMPAT_CLIENT_INSTALL_PATH\" STEAM_COMPAT_DATA_PATH=\"$STEAM_COMPAT_DATA_PATH\" \"$RUNPROTON\" \"run\" \"${MO}.exe\" -i \"${MO2GAM//\"}\" \"\$1\""
+			echo "cd - >/dev/null || return"
+			} >> "$MODLER"
+			chmod +x "$MODLER"
+		fi
 	fi
 
 	if [ "$HAVESLR" -eq 1 ] && [ "$USESLR" -eq 1 ]; then
@@ -12419,6 +13077,11 @@ function startGame {
 
 	SECONDS=0
 
+	if [ "$MO2MODE" != "disabled" ] && [ -n "$GMO2EXE" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Changing pwd to '${GMO2EXE%/*}' for $MO launch"
+		cd "${GMO2EXE%/*}" >/dev/null || return
+	fi
+
 	if [ -x "$RUNCONTY" ] && [ "$RUNCONTY" != "$NON" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - ## Starting game using Conty executable '$RUNCONTY'"
 		"$RUNCONTY" "${RUNCMD[@]}"
@@ -12445,6 +13108,11 @@ function startGame {
 			"${RUNCMD[@]}"
 		fi
 	fi
+
+	if [ "$MO2MODE" != "disabled" ]; then
+		cd - >/dev/null || return
+	fi
+
 	emptyVars "O" "X" # clear original variables again (mostly for a continous log (date))
 
 	if [ "$ISGAME" -eq 2 ] && [ "$USEWINE" -eq 0 ] && { grep -q "\-GE\-" <<< "$USEPROTON" || grep -qi "\-TKG" <<< "$USEPROTON";}; then
@@ -13358,6 +14026,14 @@ function howto {
 	echo "    list <owned|installed>           List ids of <owned|o,installed|i> games"
 	echo "    meta                             Generates/Updates metadata"
 	echo "                                       for all installed games"
+	echo "    mo2                              Mod Organizer 2"
+	echo "         <install|i>                   install MO2 (includes download)"
+	echo "         <download|d>                  download latest MO2 release"
+	echo "         <start|s>                     start MO2 (includes download+install)"
+	echo "         <list-supported|ls>           list games supported by MO2"
+	echo "         <list-installed|li>           list installed games supported by MO2"
+	echo "         <create-instance|ci> <id>     create MO2 instance for <id>"
+	echo "         <url|u>                       open nxm url with MO2"
  	echo "    proton|p <title> <X>             Start and/or create <title> with proton"
 	echo "                                       without using steam."
 	echo "                                       Optional <X> opens gui"
@@ -13555,7 +14231,24 @@ function commandline {
 		if [ -n "$2" ]; then
 			if [ "$2" == "download" ] || [ "$2" == "d" ]; then
 				dlLatestMO2
-			else	
+			elif [ "$2" == "install" ] || [ "$2" == "i" ]; then
+				installMO2
+			elif [ "$2" == "start" ] || [ "$2" == "s" ]; then
+				startMO2
+			elif [ "$2" == "list-supported" ] || [ "$2" == "ls" ]; then
+				listMO2Games
+			elif [ "$2" == "list-installed" ] || [ "$2" == "li" ]; then
+				setMO2Vars
+				prepAllMO2Games "li"
+			elif [ "$2" == "create-instance" ] || [ "$2" == "ci" ]; then
+				if [ -z "$3" ] || [ "$3" == "all" ]; then
+					createAllMO2Instances
+				else
+					manageMO2GInstance "$3"
+				fi
+			elif [ "$2" == "url" ] || [ "$2" == "u" ]; then
+				dlMod2nexurl "$3"
+			else
 				writelog "INFO" "${FUNCNAME[0]} - arg2 '$2' is no valid command"
 				howto
 			fi
@@ -14055,7 +14748,6 @@ function createMetaData {
 
 			GNRAW="$(grep "\"name\"" "$APPMA" | gawk -F '"name"' '{print $NF}')"
 			GNAM="$(gawk '{$1=$1};1' <<< "$GNRAW")"
-
 			GDIR="$(getGameDirFromAM "$APPMA")"
 			MPFX="$(dirname "$APPMA")/$CODA/$MAID/pfx"
 
@@ -14525,6 +15217,10 @@ function closeSTL {
 		writelog "INFO" "${FUNCNAME[0]} - '$BROWSER' instance was created, so closing it now, to exit the game session"
 		"$PKILL" -f "$BROWSER"
 		rm "$STLSHM/KillBrowser-$AID.txt"
+	fi
+
+	if [ "$MO2MODE" != "disabled" ] && [ -n "$MODLER" ] && [ -f "$MODLER" ]; then 
+		rm "$MODLER" 2>/dev/null
 	fi
 
 	cleanSUTemp
