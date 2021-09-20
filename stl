@@ -2807,7 +2807,7 @@ function wgetGui {
 	else
 		writelog "INFO" "${FUNCNAME[0]} - Downloading '$SRCURL' via command line, as 'USEWGETGUI' is disabled"
 		writelog "INFO" "${FUNCNAME[0]} - Download Command is '$WGET -q $SRCURL -O $DESTDIR'"
-		"$WGET" -q "$SRCURL" -O "$DESTDIR"
+		"$WGET" -q "$SRCURL" -O "$DESTDIR" 2>/dev/null
 	fi
 }
 
@@ -9868,7 +9868,7 @@ function getLatestMO2Ver {
 	MO2SET="Mod.Organizer"
 
 	writelog "INFO" "${FUNCNAME[0]} - Search for latest '$MO2SET' Release"
-	MO2SETUP="$("$WGET" -q  "${MO2DLURL}" -O - | grep "exe" | grep -m1 "$MO2SET" | grep -oE "${MO2SET}[^\"]+")"
+	MO2SETUP="$("$WGET" -q  "${MO2DLURL}" -O - 2>/dev/null | grep "exe" | grep -m1 "$MO2SET" | grep -oE "${MO2SET}[^\"]+")"
 }
 
 function dlLatestMO2 {
@@ -10218,7 +10218,7 @@ function createAllMO2Instances {
 	setMO2Vars
 	while read -r line; do
 		manageMO2GInstance "$line"
-	done <<< "$(prepAllMO2Games "ci" | cut -d ';' -f1)"
+	done <<< "$(prepAllMO2Games "li" | cut -d ';' -f1)"
 }
 
 function prepareMO2 {
@@ -10237,6 +10237,10 @@ function prepareMO2 {
 			fi
 		fi
 	else
+		if [ ! -f "$MO2EXE" ]; then
+			installMO2
+		fi
+
 		writelog "INFO" "${FUNCNAME[0]} - Updating/creating $MO instances"
 		createAllMO2Instances
 		STAMO2=1
@@ -10269,11 +10273,18 @@ function prepareMO2 {
 							EFD="$(getGameDirFromAM "$APPMAFE")"
 						fi
 					fi
+				else
+					writelog "INFO" "${FUNCNAME[0]} - No log '$NMXHLOG' found, so the last used instance can't be determined - using last supported instance installed instead"
+					LAINST="$(checkInstalledMO2Games "li" | tail -n1)"
+					MO2INST="$(cut -d ';' -f2 <<< "$LAINST")"
+					MO2AID="$(cut -d ';' -f1 <<< "$LAINST")"
 				fi
 			fi
 
 			if [ -n "$MO2INST" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Using $MO instance '$MO2INST'"
+			else
+				writelog "INFO" "${FUNCNAME[0]} - No $MO instance provided"
 			fi
 
 			setMO2DLMime
