@@ -10087,21 +10087,26 @@ function checkInstalledMO2Games {
 							done <<< "$(find "$MGPFX/$DRCU/$STUS/$SAGE/$CDPR" -mindepth 1 -maxdepth 1 -type d -not -empty)"
 						fi
 
-						if grep -qi "^\"installed path\"=" "$MGPFX/system.reg"; then
-							MO2GREG="$STLSHM/mo2games.reg"
-							if [ ! -f "$MO2GREG" ]; then
-								echo "Windows Registry Editor Version 5.00" > "$MO2GREG"
-							fi
+						MSREG="$MGPFX/$SREG"
+						if [ -f "$MSREG" ]; then
+							if grep -qi "^\"installed path\"=" "$MSREG"; then
+								MO2GREG="$STLSHM/mo2games.reg"
+								if [ ! -f "$MO2GREG" ]; then
+									echo "Windows Registry Editor Version 5.00" > "$MO2GREG"
+								fi
 
-							MEFD="$(getGameDirFromAM "$CHKAPMA")"
-							if [ -d "$MEFD" ]; then
-								writelog "INFO" "${FUNCNAME[0]} - Game Dir is '$MEFD' - adding the windows variant into $MO registry, because it is required for this game"
-								grep -i -B2 "^\"installed path\"=" "$MGPFX/system.reg" | grep -v "^#\|LastKey\|CurrentVersion\|^--" | head -n1 | sed "s:^\[Software:\[HKEY_LOCAL_MACHINE\\\Software:" | sed "s:\\\\Wow6432Node::" >> "$MO2GREG"
-								# the path could be grepped as well, but at least two games had the Steamworks Shared path in the reg value instead here
-								echo "\"installed path\"=\"Z:${MEFD//\//\\\\}\\\\\"" >> "$MO2GREG"
-							else
-								writelog "SKIP" "${FUNCNAME[0]} - Game Dir '$MEFD' not found"
+								MEFD="$(getGameDirFromAM "$CHKAPMA")"
+								if [ -d "$MEFD" ]; then
+									writelog "INFO" "${FUNCNAME[0]} - Game Dir is '$MEFD' - adding the windows variant into $MO registry, because it is required for this game"
+									grep -i -B2 "^\"installed path\"=" "$MSREG" | grep -v "^#\|LastKey\|CurrentVersion\|^--" | head -n1 | sed "s:^\[Software:\[HKEY_LOCAL_MACHINE\\\Software:" | sed "s:\\\\Wow6432Node::" >> "$MO2GREG"
+									# the path could be grepped as well, but at least two games had the Steamworks Shared path in the reg value instead here
+									echo "\"installed path\"=\"Z:${MEFD//\//\\\\}\\\\\"" >> "$MO2GREG"
+								else
+									writelog "SKIP" "${FUNCNAME[0]} - Game Dir '$MEFD' not found"
+								fi
 							fi
+						else
+							writelog "SKIP" "${FUNCNAME[0]} - '$MSREG' not found"
 						fi
 					fi
 				fi
