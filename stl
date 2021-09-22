@@ -9950,9 +9950,9 @@ function checkInstalledMO2Games {
 					rm "$DSTL" 2>/dev/null
 				fi
 			 	if [ -d "$DSTL" ]; then
-			 		writelog "SKIP" "${FUNCNAME[0]} - Not creating Symlink from '$gdir' to '$DSTL', because '$DSTL' is a real directory"
+			 		writelog "SKIP" "${FUNCNAME[0]} - Not creating symlink from '$gdir' to '$DSTL', because '$DSTL' is a real directory"
 			 	else
-					writelog "INFO" "${FUNCNAME[0]} - Creating Symlink from '$gdir' to '$DSTL'"
+					writelog "INFO" "${FUNCNAME[0]} - Creating symlink from '$gdir' to '$DSTL'"
 					ln -s "$gdir" "$DSTL"
 				fi
 			fi
@@ -9960,6 +9960,12 @@ function checkInstalledMO2Games {
 	}
 
 	mkProjDir "$MO2PFX/$DRCU/$STUS/$DOCS/$MYGAMES"
+	
+	MOLOOT="$MO2PFX/$DRCU/$STUS/$ADLO/LOOT"
+	if [ -L "$MOLOOT" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Removing symlink '$MOLOOT' for creating a real directory instead - is it worth/useful to migrate the content to '$MOLOOT'?"
+	fi
+	mkProjDir "$MOLOOT"
 
 	while read -r line; do
 		MGID1="$(cut -d ';' -f2 <<< "$line")"
@@ -10064,12 +10070,24 @@ function checkInstalledMO2Games {
 						if [ -d "$MGPFX/$DRCU/$STUS/$ADLO" ]; then
 							while read -r gdir; do
 								if [ "${gdir##*/}" != "openvr" ] && [ "${gdir##*/}" != "Microsoft" ] ; then
-									DSTL="$MO2PFX/$DRCU/$STUS/$ADLO/${gdir##*/}"
-									prepMO2GameSym "$DSTL" "$gdir"
+									if [ "${gdir##*/}" == "$MO" ] && [ ! -L "$gdir" ]; then
+										writelog "WARN" "${FUNCNAME[0]} - Renaming old real directory '$gdir' to '${gdir}_OLD', to make place for a symlink into '$MO2PFX'"
+										mv "$gdir" "${gdir}_OLD"
+									else
+										DSTL="$MO2PFX/$DRCU/$STUS/$ADLO/${gdir##*/}"
+										prepMO2GameSym "$DSTL" "$gdir"
+									fi
 								fi
 							done <<< "$(find "$MGPFX/$DRCU/$STUS/$ADLO" -mindepth 1 -maxdepth 1 -type d -not -empty)"
 						fi
-
+						
+						if [ -d "$MGPFX/$DRCU/$STUS/$ADLO/LOOT" ]; then
+							while read -r gdir; do
+								DSTL="$MOLOOT/${gdir##*/}"
+								prepMO2GameSym "$DSTL" "$gdir"
+							done <<< "$(find "$MGPFX/$DRCU/$STUS/$ADLO/LOOT" -mindepth 1 -maxdepth 1 -type d -not -empty)"
+						fi
+						
 						if [ -d "$MGPFX/$DRCU/$STUS/$LSAD" ]; then
 							while read -r gdir; do
 								if [ "${gdir##*/}" != "openvr" ] && [ "${gdir##*/}" != "Microsoft" ] ; then
@@ -10164,58 +10182,62 @@ function manageMO2GInstance {
 	if [ ! -f "$MO2EXE" ]; then
 		installMO2
 	fi
+	
+	if [ -z "$1" ]; then
+		writelog "SKIP" "${FUNCNAME[0]} - argument 1 '$1' is invalid"
+	else
+		if grep -q "$1" "$MO2GAMES"; then
+			MO2AID="$1"
+			MO2GA1="$(grep -m1 "\"$MO2AID\"" "$MO2GAMES" | cut -d ';' -f1)"
+			MO2GAM="${MO2GA1//\"}"
 
-	if grep -q "$1" "$MO2GAMES"; then
-		MO2AID="$1"
-		MO2GA1="$(grep -m1 "\"$MO2AID\"" "$MO2GAMES" | cut -d ';' -f1)"
-		MO2GAM="${MO2GA1//\"}"
-
-		MO2GAMIN1="$(grep -m1 "\"$MO2AID\"" "$MO2GAMES" | cut -d ';' -f3)"
-		MO2GAMINI="${MO2GAMIN1//\"}"
-		
-		if [ -n "$MO2GAM" ]; then
-			MOIN="$MO2PFX/$DRCU/$STUS/$ADLO/$MO/$MO2GAM"
-			MODPRDE="$MOIN/profiles/Default"
-			MODLIST="$MODPRDE/modlist.txt"
-			MOININI="$MOIN/${MO}.ini"
-			MOINEW=0
-			if [ ! -f "$MOININI" ]; then
-				MO2GADI="$(getGameDirFromAID "$MO2AID")"
-				
-				if [ -d "$MO2GADI" ]; then
-					MO2GAZDI="Z:${MO2GADI//\//\\\\}"
-					mkProjDir "$MOIN"
-					touch "$MOININI"
-					{
-					echo "[General]"
-					echo "gameName=$MO2GAMINI"
-					echo "selected_profile=@ByteArray(Default)"
-					echo "gamePath=@ByteArray($MO2GAZDI)"
-					} >> "$MOININI"
-					MOINEW=1
-				else
-					writelog "SKIP" "${FUNCNAME[0]} - '$MO2AID' is a supported Id, but the game installation could not be found"
-				fi
-			fi
-			if [ -d "$MOIN" ]; then
-				if [ -n "$2" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - Using $MO instance '$MO2GAM'"
-					MO2INST="$MO2GAM"
-				else
-					if [ "$MOINEW" -eq 1 ]; then
-						writelog "INFO" "${FUNCNAME[0]} - Created initial $MO instance '$MO2GAM'"
+			MO2GAMIN1="$(grep -m1 "\"$MO2AID\"" "$MO2GAMES" | cut -d ';' -f3)"
+			MO2GAMINI="${MO2GAMIN1//\"}"
+			
+			if [ -n "$MO2GAM" ]; then
+				MOIN="$MO2PFX/$DRCU/$STUS/$ADLO/$MO/$MO2GAM"
+				MODPRDE="$MOIN/profiles/Default"
+				MODLIST="$MODPRDE/modlist.txt"
+				MOININI="$MOIN/${MO}.ini"
+				MOINEW=0
+				if [ ! -f "$MOININI" ]; then
+					MO2GADI="$(getGameDirFromAID "$MO2AID")"
+					
+					if [ -d "$MO2GADI" ]; then
+						MO2GAZDI="Z:${MO2GADI//\//\\\\}"
+						mkProjDir "$MOIN"
+						touch "$MOININI"
+						{
+						echo "[General]"
+						echo "gameName=$MO2GAMINI"
+						echo "selected_profile=@ByteArray(Default)"
+						echo "gamePath=@ByteArray($MO2GAZDI)"
+						} >> "$MOININI"
+						MOINEW=1
 					else
-						writelog "SKIP" "${FUNCNAME[0]} - $MO instance '$MO2GAM' already exists"
+						writelog "SKIP" "${FUNCNAME[0]} - '$MO2AID' is a supported Id, but the game installation could not be found"
 					fi
 				fi
+				if [ -d "$MOIN" ]; then
+					if [ -n "$2" ]; then
+						writelog "INFO" "${FUNCNAME[0]} - Using $MO instance '$MO2GAM'"
+						MO2INST="$MO2GAM"
+					else
+						if [ "$MOINEW" -eq 1 ]; then
+							writelog "INFO" "${FUNCNAME[0]} - Created initial $MO instance '$MO2GAM'"
+						else
+							writelog "SKIP" "${FUNCNAME[0]} - $MO instance '$MO2GAM' already exists"
+						fi
+					fi
+				fi
+			else
+				writelog "INFO" "${FUNCNAME[0]} - Could not find game name for '$MO2AID' - starting regularly with default instance"
 			fi
 		else
-			writelog "INFO" "${FUNCNAME[0]} - Could not find game name for '$MO2AID' - starting regularly with default instance"
+			STAMO2=0
+			writelog "SKIP" "${FUNCNAME[0]} - '$MO2AID' is no supported $MO game"
+			listMO2Games
 		fi
-	else
-		STAMO2=0
-		writelog "SKIP" "${FUNCNAME[0]} - '$1' is no supported $MO game"
-		listMO2Games
 	fi	
 }
 
@@ -10300,11 +10322,13 @@ function prepareMO2 {
 function startMO2 {
 	prepareMO2 "$NON" "gui"
 	if [ -d "${MO2EXE%/*}" ] ; then
-		writelog "INFO" "${FUNCNAME[0]} - Starting '$MO2EXE' in standalone mode" E
+		writelog "INFO" "${FUNCNAME[0]} - Starting '$MO2EXE' in standalone mode with command:" E
 		cd "${MO2EXE%/*}" >/dev/null || return
 			if [ -n "$MO2INST" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - WINEDEBUG=\"-all\" WINEPREFIX=\"$MO2PFX\" \"$MO2WINE\" \"$MO2EXE\" -i \"$MO2INST\"" E
 				WINEDEBUG="-all" WINEPREFIX="$MO2PFX" "$MO2WINE" "$MO2EXE" -i "$MO2INST" >"$STLSHM/${FUNCNAME[0]}_${IFILE##*/}.log" 2>"$STLSHM/${FUNCNAME[0]}_${IFILE##*/}.log"
 			else
+				writelog "INFO" "${FUNCNAME[0]} - WINEDEBUG=\"-all\" WINEPREFIX=\"$MO2PFX\" \"$MO2WINE\" \"$MO2EXE\"" E
 				WINEDEBUG="-all" WINEPREFIX="$MO2PFX" "$MO2WINE" "$MO2EXE" >"$STLSHM/${FUNCNAME[0]}_${IFILE##*/}.log" 2>"$STLSHM/${FUNCNAME[0]}_${IFILE##*/}.log"
 			fi
 		cd - >/dev/null || return
