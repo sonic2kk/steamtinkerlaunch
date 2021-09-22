@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v6.15.90"
+PROGVERS="v6.15.95"
 PROGCMD="${0##*/}"
 GHURL="https://github.com"
 PROJECTPAGE="$GHURL/frostworx/steamtinkerlaunch"
@@ -226,6 +226,14 @@ DEPSDLDIR="$STLDLDIR/${DEPS,}"
 DEPSLATDIR="$DEPSDLDIR/latest"
 DEPSL64="$DEPSLATDIR/64/$DEPSGE"
 DEPSL32="$DEPSLATDIR/32/$DEPSGE"
+MAHU="mangohud"
+MAHUCFGDIR="$STLCFGDIR/$MAHU"
+MAHUCID="$MAHUCFGDIR/id"
+MAHUCTI="$MAHUCFGDIR/title"
+MAHUTMPL="$MAHUCFGDIR/$MAHU-${PROGCMD}-template.conf"
+MAHULOGDIR="$BASELOGDIR/$MAHU"
+MAHULID="$MAHULOGDIR/id"
+MAHULTI="$MAHULOGDIR/title"
 PFX86="Program Files (x86)"
 PFX86S="$PFX86/Steam"
 APIN="appinfo"
@@ -2060,6 +2068,7 @@ function setDefaultCfgValues {
 		if [ -z "$SORTGARGS" ]							; then	SORTGARGS="0"; fi
 		if [ -z "$MO2MODE" ]							; then	MO2MODE="disabled"; fi
 		if [ -z "$WAITMO2" ]							; then	WAITMO2="2"; fi
+		if [ -z "$USEMANGOHUDSTLCFG" ]					; then	USEMANGOHUDSTLCFG="0";	fi
 	}
 	
 	"${FUNCNAME[0]}$1"
@@ -2586,6 +2595,8 @@ function saveCfg {
 			echo "WAITMO2=\"$WAITMO2\""
 			echo "## $DESC_MO2MODE"
 			echo "MO2MODE=\"$MO2MODE\""
+			echo "## $DESC_USEMANGOHUDSTLCFG"
+			echo "USEMANGOHUDSTLCFG=\"$USEMANGOHUDSTLCFG\""
 			} >> "$1"
 			#ENDsaveCfgdefault_template
 		fi
@@ -3454,6 +3465,15 @@ function EditorDialog {
 	if [ -f "$HIDEID" ]; then
 		CfgFiles+=("$HIDEID")
 	fi
+
+	if [ -f "$MAHUTMPL" ]; then
+		CfgFiles+=("$MAHUTMPL")
+	fi
+
+	MHIC="$MAHUCID/${AID}.conf"
+	if [ -f "$MHIC" ]; then
+		CfgFiles+=("$MHIC")
+	fi
 	
 	getGameTextFiles
 	CfgFiles+=("${GameTxtFiles[@]}")
@@ -4042,6 +4062,7 @@ function AllSettingsEntriesDummyFunction {
 --field="$(spanFont "$GUI_OPTSTOOLS" "H")":LBL "SKIP" `#CAT_Tools` `#HEAD_Tools` `#MENU_GAME` `#MENU_GLOBAL`  \
 --field="     $GUI_USEGAMEMODERUN!$DESC_USEGAMEMODERUN ('USEGAMEMODERUN')":CHK "${USEGAMEMODERUN/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_MANGOHUD!$DESC_MANGOHUD ('MANGOHUD')":CHK "${MANGOHUD/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_USEMANGOHUDSTLCFG!$DESC_USEMANGOHUDSTLCFG ('USEMANGOHUDSTLCFG')":CHK "${USEMANGOHUDSTLCFG/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_USEGAMESCOPE!$DESC_USEGAMESCOPE ('USEGAMESCOPE')":CHK "${USEGAMESCOPE/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_GAMESCOPE_ARGS!$DESC_GAMESCOPE_ARGS ('GAMESCOPE_ARGS')":CBE "${GAMESCOPE_ARGS/#-/ -}!--" `#CAT_Tools` `#MENU_GAME` \
 --field="     $GUI_RUN_NYRNA!$DESC_RUN_NYRNA ('RUN_NYRNA')":CHK "${RUN_NYRNA/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
@@ -12073,6 +12094,61 @@ function initFirstProton {
 	fi
 }
 
+function setMangoHudCfg {
+	if [ "$USEMANGOHUDSTLCFG" -eq 1 ]; then
+		mkProjDir "$MAHUCID"
+		mkProjDir "$MAHUCTI"
+		MHIC="$MAHUCID/${AID}.conf"
+		writelog "INFO" "${FUNCNAME[0]} - Using internal $MAHU config '$MHIC' as requested"
+		getGameName "$AID"
+		MHTC="$MAHUCTI/${GAMENAME}.conf"
+		
+		if [ ! -f "$MHIC" ]; then
+			writelog "WARN" "${FUNCNAME[0]} - '$MHIC' does not exist (yet) - trying to create it from the template '$MAHUTMPL'"
+			if [ ! -f "$MAHUTMPL" ]; then
+				writelog "WARN" "${FUNCNAME[0]} - The template '$MAHUTMPL' does not exist (yet) - trying to get the upstream example config"
+				MAHUEX="/usr/share/doc/mangohud/MangoHud.conf.example"
+				if [ -f "$MAHUEX" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Copying '$MAHUEX' to '$MAHUTMPL'"
+					cp "$MAHUEX" "$MAHUTMPL"
+				else
+					writelog "SKIP" "${FUNCNAME[0]} - Could not find '$MAHUEX'"
+				fi
+			fi
+			
+			if ! grep -q "$MAHULID/XXX" "$MAHUTMPL" && ! grep -q "^output_folder" "$MAHUTMPL" ; then
+				writelog "INFO" "${FUNCNAME[0]} - Appending default $MAHU output_folder to '$MAHUTMPL', because none is configured"
+				echo "output_folder = $MAHULID/XXX" >> "$MAHUTMPL"
+			fi
+			
+			if [ -f "$MAHUTMPL" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Copying '$MAHUTMPL' to '$MHIC'"
+				cp "$MAHUTMPL" "$MHIC"
+				if grep -q "$MAHULID/XXX" "$MHIC"; then
+					writelog "INFO" "${FUNCNAME[0]} - Setting $MAHU output_folder to '$MAHULID/$AID' in $MHIC"
+					sed "s:$MAHULID/XXX:$MAHULID/$AID:" -i "$MHIC"
+				fi
+			else
+				writelog "SKIP" "${FUNCNAME[0]} - Could not find or create '$MAHUTMPL'"
+			fi
+		fi
+		
+		if [ -f "$MHIC" ]; then
+			if grep -q "$MAHULID/$AID" "$MHIC"; then
+				mkProjDir "$MAHULID/$AID"
+				mkProjDir "$MAHULTI"
+				createSymLink "${FUNCNAME[0]}" "$MAHULID/$AID" "$MAHULTI/${GAMENAME}"
+			fi
+
+			writelog "INFO" "${FUNCNAME[0]} - Pointing variable MANGOHUD_CONFIGFILE to '$MHIC'"
+			export MANGOHUD_CONFIGFILE="$MHIC"
+			createSymLink "${FUNCNAME[0]}" "$MHIC" "$MHTC"
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - Could not find or create '$MHIC'"
+		fi
+	fi
+}
+
 function prepareLaunch {
 	rm "$CLOSETMP" 2>/dev/null
 	rm "$KILLSWITCH" 2>/dev/null
@@ -12215,6 +12291,12 @@ function prepareLaunch {
 		# open Shader Menu if CHOOSESHADERS  is 1
 		writelog "INFO" "${FUNCNAME[0]} - ChooseShaders:"
 		chooseShaders
+	fi
+
+	# use internal $MAHU config if enabled
+	if [ "$MANGOHUD" -eq 1 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - setMangoHudCfg:"
+		setMangoHudCfg
 	fi
 
 	# start $NYRNA if RUN_NYRNA is 1
