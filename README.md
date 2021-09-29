@@ -33,9 +33,11 @@ When done with configuring (or when the requester timeouts) the game will be sta
 
 ## Installation
 ### Installation via Package Management
-If you are on Arch Linux you can install stl from [AUR](https://aur.archlinux.org/packages/steamtinkerlaunch) *(f.e. using yay)*:
+
+Arch Linux [via AUR](https://aur.archlinux.org/packages/steamtinkerlaunch) *(f.e. using yay)*:
 `yay -S steamtinkerlaunch`
-Solus offers an official package as well:
+
+Solus has an official package:
 `sudo eopkg install steamtinkerlaunch`
 
 [![Packaging status](https://repology.org/badge/vertical-allrepos/steamtinkerlaunch.svg)](https://repology.org/project/steamtinkerlaunch/versions)
