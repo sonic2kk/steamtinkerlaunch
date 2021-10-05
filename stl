@@ -216,6 +216,7 @@ VORTSETCMD="$STLSHM/vortset.cmd"
 DEFDOTNETPROTON="Proton-6.17-STL-1"
 SPEK="SpecialK"
 SPEKDLDIR="$STLDLDIR/${SPEK,,}"
+DISC="discord"
 DOTN="dotnet"
 MO2="mo2"
 STLMO2DIR="$STLCFGDIR/$MO2"
@@ -364,6 +365,7 @@ SAIT="steam_appid.txt"
 DXGI="dxgi.dll"
 D3D9="d3d9.dll"
 D3D47="d3dcompiler_47.dll"
+OGL32="opengl32.dll"
 D3D47DLDIR="$STLDLDIR/${D3D47%.*}"
 SOMEWINEDLLOVERRIDES="dxgi=n,b;d3d9=n,b;${D3D47//.dll}=n,b"
 RS_DX_DEST="$DXGI"
@@ -4031,7 +4033,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_STL_PV_SHELL!$DESC_STL_PV_SHELL ('STL_PV_SHELL')":CB "${STL_PV_SHELL/#-/ -}!none!after!fail!instead" `#CAT_Misc` `#MENU_GAME` \
 --field="     $GUI_STL_PV_TERMINAL!$DESC_STL_PV_TERMINAL ('STL_PV_TERMINAL')":CB "${STL_PV_TERMINAL/#-/ -}!none!auto!tty!xterm" `#CAT_Misc` `#MENU_GAME` \
 --field="     $GUI_USESPECIALK!$DESC_USESPECIALK ('USESPECIALK')":CHK "${USESPECIALK/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
---field="     $GUI_SPEKVERS!$DESC_SPEKVERS ('SPEKVERS')":CB "${SPEKVERS/#-/ -}!test!stable!old" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_SPEKVERS!$DESC_SPEKVERS ('SPEKVERS')":CB "${SPEKVERS/#-/ -}!test!stable!old!$DISC" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="$(spanFont "$GUI_OPTSPROTON" "H")":LBL "SKIP" `#CAT_Proton` `#HEAD_Proton` `#MENU_GAME` `#MENU_GLOBAL` \
 --field="     $GUI_USEPROTON!$DESC_USEPROTON ('USEPROTON')":CB "${USEPROTON/#-/ -}!$PROTYADLIST" `#CAT_Proton` `#MENU_GAME` \
 --field="     $GUI_USESLR!$DESC_USESLR ('USESLR')":CHK "${USESLR/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
@@ -6845,7 +6847,20 @@ function useReshade {
 	fi
 }
 
+function extSpek {
+	SRCARCH="$1"
+	if [ -f "$SRCARCH" ]; then
+		if  [ -x "$(command -v "$("$WHICH" "$SEVZA" 2>/dev/null)" 2>/dev/null)" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Extracting '$SRCARCH' to '$SPEKDLDIR/$SPEKVERS'" "E"
+			"$SEVZA" x "$SRCARCH" -o"$SPEKDLDIR/$SPEKVERS" 2>/dev/null
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - Can't extract '$SRCARCH', because '$SEVZA' wasn't found!" "E"
+		fi
+	fi	
+}
+
 function dlSpecialK {
+
 	if [ -n "$1" ]; then
 		SPEKVERS="$1"
 	fi
@@ -6856,7 +6871,17 @@ function dlSpecialK {
 		SPEKARC="${SPEK}.7z"
 	fi
 	mkProjDir "$SPEKDLDIR/$SPEKVERS"
-	
+	mkProjDir "$SPEKDLDIR/$DISC"
+	SPEKDISCSRC="$SPEKDLDIR/$DISC/$SPEKARC"
+
+	if [ -f "$SPEKDISCSRC" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Found the '$DISC' package under '$SPEKDISCSRC'" "E"
+		if [ "$SPEKVERS" != "$DISC" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Continuing using that instead of '$SPEKVERS'" "E"
+			SPEKVERS="$DISC"
+		fi
+	fi
+
 	SPEKDL="$SPEKDLDIR/$SPEKVERS/$SPEKARC"
 	SPEKDLURL="$SPEKURL/$SPEKARC"
 
@@ -6865,21 +6890,22 @@ function dlSpecialK {
 	fi
 
 	if [ ! -f "$SPEKDL" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - Downloading '$SPEKARC' from '$SPEKURL' to '$SPEKDLDIR'" "E"
-		notiShow "$(strFix "$NOTY_DLCUSTOMPROTON" "$SPEK")"
-		wgetGui "$SPEKDLURL" "$SPEKDL"
-		if [ -f "$SPEKDL" ]; then
-			if  [ -x "$(command -v "$("$WHICH" "$SEVZA" 2>/dev/null)" 2>/dev/null)" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Extracting '$SPEKDL' to '$SPEKDLDIR/$SPEKVERS'" "E"
-				"$SEVZA" x "$SPEKDL" -o"$SPEKDLDIR/$SPEKVERS" 2>/dev/null
-			else
-				writelog "SKIP" "${FUNCNAME[0]} - Can't extract '$SPEKDL', because '$SEVZA' wasn't found!" "E"
-			fi
+		if [ "$SPEKVERS" == "$DISC" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - The $SPEKVERS package needs to be downloaded manually to '$SPEKDL'" "E"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Downloading '$SPEKARC' from '$SPEKURL' to '$SPEKDLDIR'" "E"
+			notiShow "$(strFix "$NOTY_DLCUSTOMPROTON" "$SPEK")"
+			wgetGui "$SPEKDLURL" "$SPEKDL"
+			extSpek "$SPEKDL"
 		fi
 	else
-		writelog "INFO" "${FUNCNAME[0]} - Already downloaded archive '${SPEKDL}'" "E"
+		writelog "INFO" "${FUNCNAME[0]} - Already have the archive '${SPEKDL}'" "E"
 	fi
 	
+	if [ -f "$SPEKDL" ] && [ "$SPEKVERS" == "$DISC" ]; then
+		extSpek "$SPEKDL"
+	fi
+
 	SPEK32SRC="$SPEKDLDIR/$SPEKVERS/${SPEK}32.dll"
 	SPEK64SRC="$SPEKDLDIR/$SPEKVERS/${SPEK}64.dll"
 
@@ -6902,6 +6928,68 @@ function dlSpecialK {
 	fi
 }
 
+function prepareDiscordSpecialK {
+	SPEKARC="${SPEK}.7z"
+	SPEKDISCSRC="$SPEKDLDIR/$DISC/$SPEKARC"
+
+	if [ "$SPEKVERS" != "$DISC" ] && [ -f "$SPEKDISCSRC" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Found the '$DISC' package under '$SPEKDISCSRC'" "E"
+		writelog "INFO" "${FUNCNAME[0]} - Continuing using '$DISC' instead of '$SPEKVERS'" "E"
+		SPEKVERS="$DISC"
+	fi
+
+	if [ "$SPEKVERS" == "$DISC" ]; then
+		mkProjDir "$SPEKDLDIR/$DISC"
+
+		if [ ! -f "$SPEKDISCSRC" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - The $SPEKVERS package needs to be downloaded manually to '$SPEKDL'" "E"
+		else
+			extSpek "$SPEKDISCSRC"
+		fi
+
+		UWI="UsingWINE"
+		UWIT="$UWI=true"
+
+		if [ -f "$SPEKDDIR/$DXGI" ]; then
+			FOUNDRAPI="""$SPEKDDIR/$DXGI"
+		elif [ -f "$SPEKDDIR/$D3D9" ]; then
+			FOUNDRAPI="""$SPEKDDIR/$D3D9"
+		elif [ -f "$SPEKDDIR/$OGL32" ]; then
+			FOUNDRAPI="""$SPEKDDIR/$D3D9"
+		fi
+		SPEKINI="${FOUNDRAPI//.dll/.ini}"
+		
+		COGE="Compatibility.General"
+
+		if [ "$SPEKVERS" == "$DISC" ]; then
+			if [ -f "$SPEKINI" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Found the ini file '$SPEKINI' - enabling '$UWI' function" "E"
+				if grep -q "$UWIT" "$SPEKINI"; then
+					writelog "SKIP" "${FUNCNAME[0]} - nothing to do - '$UWI' is already enabled" "E"
+				elif grep -q "$UWI=false" "$SPEKINI"; then
+					writelog "INFO" "${FUNCNAME[0]} - Enabling '$UWI' in the config" "E"
+					sed "s:$UWI=false:$UWIT:" -i "$SPEKINI"
+				else
+					writelog "INFO" "${FUNCNAME[0]} - Adding a new entry '$UWI' in the ini, because it is missing" "E"
+					if grep -q "$COGE" "$SPEKINI"; then
+						sed "/\[$COGE\]/a $UWIT" -i "$SPEKINI"
+					else
+						sed "1 i $UWIT" -i "$SPEKINI"
+						sed "1 i \[$COGE\]" -i "$SPEKINI"
+					fi
+				fi
+
+			else
+				writelog "INFO" "${FUNCNAME[0]} - Creating a minimal ini file '$SPEKINI' with enabled '$UWI' function" "E"
+				{
+					echo "[$COGE]"
+					echo "$UWIT"
+				} >>  "$SPEKINI"
+			fi
+		fi
+	fi	
+}
+
 function useSpecialK {
 	function installSpekDll {
 		SPEKSRC="$1"
@@ -6914,6 +7002,7 @@ function useSpecialK {
 			cp "${SPEKSRC//dll/pdb}" "$SPEKDDIR"
 			echo "$SPEKDDIR/$SPEKPDB" >> "$SPEKENA"
 		fi
+		
 		IPAK="vcrun2019-$3"
 		if [ -f "$GPFX/${IPAK}_installed.txt" ]; then
 			writelog "SKIP" "${FUNCNAME[0]} - Skipping '$IPAK' - already installed" "E"
@@ -6934,6 +7023,8 @@ function useSpecialK {
 			writelog "SKIP" "${FUNCNAME[0]} - '$SPEK' requires '$REQDLL', which is not available in the WINEPREFIX currently running with '$USEPROTON'" "E"
 			notiShow "$(strFix "$NOTY_MISSDLL" "$SPEK" "$REQDLL" "$USEPROTON")"
 		else
+			prepareDiscordSpecialK
+
 			if [ -f "$SPEKENA" ]; then
 				writelog "SKIP" "${FUNCNAME[0]} - ${SPEK} is already configured - nothing to do"
 			else
@@ -6949,7 +7040,7 @@ function useSpecialK {
 					elif [ "$RAPI" == "Direct3D 9" ]; then
 						SPEKDST="$SPEKDDIR/$D3D9"
 					elif [ "$RAPI" == "OpenGL" ]; then
-						SPEKDST="$SPEKDDIR/opengl32.dll"
+						SPEKDST="$SPEKDDIR/$OGL32"
 					else
 						writelog "INFO" "${FUNCNAME[0]} - Unknown Render Api '$RAPI' - assuming 'Direct3D 11'"
 						SPEKDST="$SPEKDDIR/$DXGI"
