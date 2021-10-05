@@ -6993,16 +6993,20 @@ function prepareDiscordSpecialK {
 function useSpecialK {
 	function installSpekDll {
 		SPEKSRC="$1"
-		writelog "INFO" "${FUNCNAME[0]} - Installing '${SPEKSRC##*/}' as '$GP' is $2-bit" "E"
-		cp "$SPEKSRC" "$SPEKDST"
-		if [ -f "${SPEKSRC//dll/pdb}" ]; then
-			SPEKPDB="${SPEKSRC##*/}"
-			SPEKPDB="${SPEKPDB//dll/pdb}"
-			writelog "INFO" "${FUNCNAME[0]} - Also installing debugging '$SPEKPDB'" "E"
-			cp "${SPEKSRC//dll/pdb}" "$SPEKDDIR"
-			echo "$SPEKDDIR/$SPEKPDB" >> "$SPEKENA"
+		if [ -f "$SPEKDST" ] && [ "$(stat -c %s "$SPEKSRC")" -eq "$(stat -c %s "$SPEKDST")" ]; then
+			writelog "SKIP" "${FUNCNAME[0]} - Nothing to update - '$SPEKDST' corresponds to '$SPEKSRC'" "E"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Installing '${SPEKSRC##*/}' as '$GP' is $2-bit" "E"
+			cp "$SPEKSRC" "$SPEKDST"
+			if [ -f "${SPEKSRC//dll/pdb}" ]; then
+				SPEKPDB="${SPEKSRC##*/}"
+				SPEKPDB="${SPEKPDB//dll/pdb}"
+				writelog "INFO" "${FUNCNAME[0]} - Also installing debugging '$SPEKPDB'" "E"
+				cp "${SPEKSRC//dll/pdb}" "$SPEKDDIR"
+				echo "$SPEKDDIR/$SPEKPDB" >> "$SPEKENA"
+			fi
 		fi
-		
+
 		IPAK="vcrun2019-$3"
 		if [ -f "$GPFX/${IPAK}_installed.txt" ]; then
 			writelog "SKIP" "${FUNCNAME[0]} - Skipping '$IPAK' - already installed" "E"
@@ -7013,6 +7017,16 @@ function useSpecialK {
 		installd3d47dll "$4" "$SPEKDDIR"
 	}
 
+	function installSpekArchDll {
+		if [ "$(getArch "$GP")" == "32" ]; then
+			installSpekDll "$SPEK32SRC" "32" "x86" "$D3D47_32"
+		elif [ "$(getArch "$GP")" == "64" ]; then
+			installSpekDll "$SPEK64SRC" "64" "x64" "$D3D47_64"
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - Could not determine the architecture of '$GP' - not installing '$SPEK'" "E"
+		fi
+	}
+	
 	SPEKDDIR="$EFD"
 	setFullGameExePath "SPEKDDIR"	
 	SPEKENA="$SPEKDDIR/${SPEK}_enabled.txt"
@@ -7024,10 +7038,23 @@ function useSpecialK {
 			notiShow "$(strFix "$NOTY_MISSDLL" "$SPEK" "$REQDLL" "$USEPROTON")"
 		else
 			prepareDiscordSpecialK
-
+			UPSPEK=1
 			if [ -f "$SPEKENA" ]; then
-				writelog "SKIP" "${FUNCNAME[0]} - ${SPEK} is already configured - nothing to do"
-			else
+				if [ "$SPEKVERS" != "$DISC" ]; then
+					writelog "SKIP" "${FUNCNAME[0]} - ${SPEK} is already configured - nothing to do"
+					UPSPEK=0
+				else
+					if grep -q "$(stat -c %s "$(grep -v ${SPEK} "$SPEKENA")")" <<< "$(find . -name "$SPEK*.dll" -exec stat -c %s {} \;)"; then
+						writelog "SKIP" "${FUNCNAME[0]} - The installed ${SPEKVERS} dll is identical to the available one"
+						UPSPEK=0
+					else
+						writelog "INFO" "${FUNCNAME[0]} - Updating the '$SPEKVERS' dll"
+						UPSPEK=1
+					fi
+				fi
+			fi
+			
+			if [ "$UPSPEK" -eq 1 ]; then
 				writelog "INFO" "${FUNCNAME[0]} - ${SPEK} is enabled - Installing dlls if required"
 				dlSpecialK
 
@@ -7071,15 +7098,13 @@ function useSpecialK {
 				echo "$SPEKDST" > "$SPEKENA"
 
 				if [ -f "$SPEKDST" ]; then
-					writelog "SKIP" "${FUNCNAME[0]} - Already have a '${SPEKDST##*/}' in '$SPEKDDIR' - not installing '$SPEK'" "E"
-				else
-					if [ "$(getArch "$GP")" == "32" ]; then
-						installSpekDll "$SPEK32SRC" "32" "x86" "$D3D47_32"
-					elif [ "$(getArch "$GP")" == "64" ]; then
-						installSpekDll "$SPEK64SRC" "64" "x64" "$D3D47_64"
+					if [ "$SPEKVERS" != "$DISC" ]; then
+						writelog "SKIP" "${FUNCNAME[0]} - Already have a '${SPEKDST##*/}' in '$SPEKDDIR' - not installing '$SPEK'" "E"
 					else
-						writelog "SKIP" "${FUNCNAME[0]} - Could not determine the architecture of '$GP' - not installing '$SPEK'" "E"
+						installSpekArchDll
 					fi
+				else
+					installSpekArchDll
 				fi
 			fi
 		fi
