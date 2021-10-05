@@ -11037,7 +11037,7 @@ function startVortex {
 	fi
 }
 
-function setSELaunch {
+function setVortexSELaunch {
 	if [ "$1" == "$AID" ]; then
 		SEEXE="$EFD/$2"
 		if [ ! -f "$SEEXE" ]; then
@@ -11086,8 +11086,8 @@ function setSELaunch {
 	fi
 }
 
-function checkSELaunch {
-	# (mostly for Vortex and MO2)
+function checkVortexSELaunch {
+	# (mostly for Vortex)
 	# if $1 is 1 check if a preconfigured exe instead of the game is defined/found - f.e. script extender for skyrim, fallout etc
 	# if $1 is 2 it is assumed the check already happended before'
 
@@ -11105,16 +11105,16 @@ function checkSELaunch {
 		if [ "$SECHECK" -eq 2 ] && [ -n "$SELAUNCH" ] && [ "$SELAUNCH" -eq 1 ]; then
 			writelog "SKIP" "${FUNCNAME[0]} - Skipping option $SECHECK because SELAUNCH is already enabled"
 		else
-			setSELaunch "377160" "f4se_loader.exe" "$SECHECK" # Fallout4
-			setSELaunch "611660" "f4sevr_loader.exe" "$SECHECK"	# Fallout4 VR
-			setSELaunch "611670" "sksevr_loader.exe" "$SECHECK" # Skyrim VR
-			setSELaunch "489830" "skse64_loader.exe" "$SECHECK" # Skyrim Special Edition
-			setSELaunch "72850" "skse_loader.exe" "$SECHECK"	# Skyrim
-			setSELaunch "933480" "skse_loader.exe" "$SECHECK"	# Enderal
-			setSELaunch "22300" "fose_loader.exe" "$SECHECK"	# Fallout 3
-			setSELaunch "22370" "fose_loader.exe" "$SECHECK"	# Fallout 3 GOTY
-			setSELaunch "22380" "nvse_loader.exe" "$SECHECK"	# Fallout New Vegas 
-			setSELaunch "22330" "obse_loader.exe" "$SECHECK"	# Oblivion
+			setVortexSELaunch "377160" "f4se_loader.exe" "$SECHECK" # Fallout4
+			setVortexSELaunch "611660" "f4sevr_loader.exe" "$SECHECK"	# Fallout4 VR
+			setVortexSELaunch "611670" "sksevr_loader.exe" "$SECHECK" # Skyrim VR
+			setVortexSELaunch "489830" "skse64_loader.exe" "$SECHECK" # Skyrim Special Edition
+			setVortexSELaunch "72850" "skse_loader.exe" "$SECHECK"	# Skyrim
+			setVortexSELaunch "933480" "skse_loader.exe" "$SECHECK"	# Enderal
+			setVortexSELaunch "22300" "fose_loader.exe" "$SECHECK"	# Fallout 3
+			setVortexSELaunch "22370" "fose_loader.exe" "$SECHECK"	# Fallout 3 GOTY
+			setVortexSELaunch "22380" "nvse_loader.exe" "$SECHECK"	# Fallout New Vegas 
+			setVortexSELaunch "22330" "obse_loader.exe" "$SECHECK"	# Oblivion
 		fi
 	fi
 }
@@ -11760,7 +11760,11 @@ function checkMO2 {
 		else
 			writelog "INFO" "${FUNCNAME[0]} - $MO Requester was skipped because WAITMO2 is '$WAITMO2' - not changing MO2MODE '$MO2MODE'"
 		fi
-	prepareMO2 "$AID" "$MO2MODE"
+		prepareMO2 "$AID" "$MO2MODE"
+		if [ "$MO2MODE" != "disabled" ] && [ "$USECUSTOMCMD" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Disabling custom command, because $MO2 is enabled"
+			USECUSTOMCMD=0
+		fi
 	fi
 }
 
@@ -12578,16 +12582,13 @@ function prepareLaunch {
 	if [ "$USEVORTEX" -eq 1 ]; then
 		writelog "INFO" "${FUNCNAME[0]} - ${VTX^} is enabled - startVortex:"
 		startVortex "ask" "$AID"
+		# (for Vortex) if SELAUNCH is 0 start a preconfigured exe directly
+		writelog "INFO" "${FUNCNAME[0]} - CheckVortexSELaunch with argument '$SELAUNCH':"
+		checkVortexSELaunch "$SELAUNCH"
 	fi
 
 	writelog "INFO" "${FUNCNAME[0]} - checkMO2:"
 	checkMO2
-
-	if [ "$USEVORTEX" -eq 1 ]; then
-		# (for Vortex or MO2) if SELAUNCH is 0 start a preconfigured exe directly
-		writelog "INFO" "${FUNCNAME[0]} - CheckSELaunch with argument '$SELAUNCH':"
-		checkSELaunch "$SELAUNCH"
-	fi
 	
 	# set other screen resolution
 	writelog "INFO" "${FUNCNAME[0]} - setNewRes:"
