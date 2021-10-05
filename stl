@@ -6458,14 +6458,34 @@ function getAvailableShaders {
 }
 
 function setFullGameExePath {
-	loadCfg "$GEMETA/$AID.conf" X
-	if [ -n "$EXECUTABLE" ] && grep -q "\\\\" <<< "$EXECUTABLE"; then
-		RELEX="${EXECUTABLE//\\//}"
-		FGEP="${EFD}/${RELEX%/*}"
+	if [ "$USECUSTOMCMD" -eq 1 ] && [ -f "$CUSTOMCMD" ]; then
+		FGEP="${CUSTOMCMD%/*}"
+		writelog "INFO" "${FUNCNAME[0]} - Using the directory '$FGEP' of the used custom command as absolute game exe path"
 		export "$1"="$FGEP"
-		writelog "INFO" "${FUNCNAME[0]} - Appending the game exe subdirectory '${RELEX%/*}' to the game dir '$EFD'"
 	else
-		export "$1"="$EFD"
+		loadCfg "$GEMETA/$AID.conf" X
+		if [ -n "$EXECUTABLE" ] && grep -q "\\\\" <<< "$EXECUTABLE"; then
+			RELEX="${EXECUTABLE//\\//}"
+			FGEP="${EFD}/${RELEX%/*}"
+			if [ ! -d "$FGEP" ]; then
+				if grep -q "/" <<< "${RELEX%/*}"; then
+					FGEP="${EFD}"
+					while read -r subdir; do
+						FGEP="$(find "$FGEP" -iname "$subdir")"
+					done <<< "$(tr '/' '\n' <<< "${RELEX%/*}")"
+				else
+					FGEP="$(find "${EFD}" -iname "${RELEX%/*}")"
+				fi
+			fi
+			
+			if [ -d "$FGEP" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Using '$FGEP' as absolute game exe path"
+				export "$1"="$FGEP"	
+			fi
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Using the base game directory '$EFD' as absolute game exe path"
+			export "$1"="$EFD"
+		fi
 	fi
 }
 
@@ -7044,9 +7064,15 @@ function useSpecialK {
 	}
 
 	function installSpekArchDll {
-		if [ "$(getArch "$GP")" == "32" ]; then
+		if [ "$USECUSTOMCMD" -eq 1 ] && [ -f "$CUSTOMCMD" ]; then
+			ARCHEXE="$CUSTOMCMD"
+		else
+			ARCHEXE="$GP"
+		fi
+		
+		if [ "$(getArch "$ARCHEXE")" == "32" ]; then
 			installSpekDll "$SPEK32SRC" "32" "x86" "$D3D47_32"
-		elif [ "$(getArch "$GP")" == "64" ]; then
+		elif [ "$(getArch "$ARCHEXE")" == "64" ]; then
 			installSpekDll "$SPEK64SRC" "64" "x64" "$D3D47_64"
 		else
 			writelog "SKIP" "${FUNCNAME[0]} - Could not determine the architecture of '$GP' - not installing '$SPEK'" "E"
