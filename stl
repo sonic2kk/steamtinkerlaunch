@@ -6920,12 +6920,32 @@ function dlSpecialK {
 	else
 		writelog "SKIP" "${FUNCNAME[0]} - '$SPEK64SRC' is missing!" "E"
 	fi
+}
 
+function getSpecialKGameRenderApi {
 	SPEKCOMP="$SPEKDLDIR/${SPEK}_compat.html"
 	MAXAGE=1440
 	if [ ! -f "$SPEKCOMP" ] || test "$(find "$SPEKCOMP" -mmin +"$MAXAGE")"; then
 		wgetGui "$SPEKCOMPURL" "$SPEKCOMP"
 	fi
+	writelog "INFO" "${FUNCNAME[0]} - Searching Render Api for '$GN' in '$SPEKCOMP'"
+	RAPI="$(sed -n "/id=\"Compatibility_list\"/,$ p" "$SPEKCOMP" | grep -A1 "${GN// /\*.\*}" | tail -n1 | cut -d '>' -f2 | cut -d '<' -f1)"
+	if [ -n "$RAPI" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Found Render Api '$RAPI'"
+		if [ "$RAPI" == "Direct3D 11" ]; then
+			SPEKDST="$SPEKDDIR/$DXGI"
+		elif [ "$RAPI" == "Direct3D 9" ]; then
+			SPEKDST="$SPEKDDIR/$D3D9"
+		elif [ "$RAPI" == "OpenGL" ]; then
+			SPEKDST="$SPEKDDIR/$OGL32"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Unknown Render Api '$RAPI' - assuming 'Direct3D 11'"
+			SPEKDST="$SPEKDDIR/$DXGI"
+		fi
+	else
+		writelog "INFO" "${FUNCNAME[0]} - Could not find Render Api - assuming 'Direct3D 11'"
+		SPEKDST="$SPEKDDIR/$DXGI"
+	fi	
 }
 
 function prepareDiscordSpecialK {
@@ -6951,17 +6971,23 @@ function prepareDiscordSpecialK {
 		UWIT="$UWI=true"
 
 		if [ -f "$SPEKDDIR/$DXGI" ]; then
-			FOUNDRAPI="""$SPEKDDIR/$DXGI"
+			FOUNDRAPI="$SPEKDDIR/$DXGI"
 		elif [ -f "$SPEKDDIR/$D3D9" ]; then
-			FOUNDRAPI="""$SPEKDDIR/$D3D9"
+			FOUNDRAPI="$SPEKDDIR/$D3D9"
 		elif [ -f "$SPEKDDIR/$OGL32" ]; then
-			FOUNDRAPI="""$SPEKDDIR/$D3D9"
+			FOUNDRAPI="$SPEKDDIR/$D3D9"
+		else
+			getSpecialKGameRenderApi
+			FOUNDRAPI="$SPEKDST"
 		fi
-		SPEKINI="${FOUNDRAPI//.dll/.ini}"
+
+		if [ -z "$SPEKINI" ]; then
+			SPEKINI="${FOUNDRAPI//.dll/.ini}"
+		fi
 		
 		COGE="Compatibility.General"
 
-		if [ "$SPEKVERS" == "$DISC" ]; then
+		if [ "$SPEKVERS" == "$DISC" ] && [ -n "$SPEKINI" ]; then
 			if [ -f "$SPEKINI" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Found the ini file '$SPEKINI' - enabling '$UWI' function" "E"
 				if grep -q "$UWIT" "$SPEKINI"; then
@@ -7058,28 +7084,8 @@ function useSpecialK {
 				writelog "INFO" "${FUNCNAME[0]} - ${SPEK} is enabled - Installing dlls if required"
 				dlSpecialK
 
-				writelog "INFO" "${FUNCNAME[0]} - Searching Render Api for '$GN' in '$SPEKCOMP'"
-				RAPI="$(sed -n "/id=\"Compatibility_list\"/,$ p" "$SPEKCOMP" | grep -A1 "${GN// /\*.\*}" | tail -n1 | cut -d '>' -f2 | cut -d '<' -f1)"
-				if [ -n "$RAPI" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - Found Render Api '$RAPI'"
-					if [ "$RAPI" == "Direct3D 11" ]; then
-						SPEKDST="$SPEKDDIR/$DXGI"
-					elif [ "$RAPI" == "Direct3D 9" ]; then
-						SPEKDST="$SPEKDDIR/$D3D9"
-					elif [ "$RAPI" == "OpenGL" ]; then
-						SPEKDST="$SPEKDDIR/$OGL32"
-					else
-						writelog "INFO" "${FUNCNAME[0]} - Unknown Render Api '$RAPI' - assuming 'Direct3D 11'"
-						SPEKDST="$SPEKDDIR/$DXGI"
-					fi
-				else
-					writelog "INFO" "${FUNCNAME[0]} - Could not find Render Api - assuming 'Direct3D 11'"
-					SPEKDST="$SPEKDDIR/$DXGI"
-				fi
+				getSpecialKGameRenderApi
 				
-				RAPDLL="${SPEKDST##*/}"
-				RAPDLL="${RAPDLL//.dll}"
-
 				#DISABLED XXXXXXXXX stable and testing versions are currently broken in proton - see wiki
 				if [ "$SPEKVERS" == "test" ] || [ "$SPEKVERS" == "stable" ]; then
 					writelog "INFO" "${FUNCNAME[0]} - Disabling '$SPEKDST', because '${SPEK}-${SPEKVERS}' is currently broken in Proton - see wiki"
