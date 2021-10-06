@@ -3696,10 +3696,10 @@ function TrayIconExports {
 	export TRAYCUSC="$TRAYCUSC"
 
 	if [ -n "$(GETALTEXEPATH)" ]; then
-		TSHADDESTDIR="$(GETALTEXEPATH)"
-	else
-		TSHADDESTDIR="$EFD"
+		SHADDESTDIR="$(GETALTEXEPATH)"
 	fi
+
+	export SHADDESTDIR="$SHADDESTDIR"
 
 	KPFX="$GPFX"
 	if [ "$USEWINE" -eq 1 ]; then
@@ -3719,7 +3719,7 @@ function TrayIconExports {
 		chmod +x "$KILLSWITCH"
 	fi
 
-	export SHADDESTDIR="$TSHADDESTDIR"
+	export SHADDESTDIR="$SHADDESTDIR"
 	export -f TrayShaderMenu
 	export -f TrayVR
 	export -f TrayPickWin
@@ -3732,6 +3732,8 @@ function TrayIconExports {
 #ENDIEX
 
 function openTrayIcon {
+	setShadDestDir
+
 	if [ -z "$1" ]; then
 		# loading gameconfig here, as some vars might have to be exported
 		writelog "INFO" "${FUNCNAME[0]} - LoadCfg: $STLGAMECFG"
@@ -3763,7 +3765,7 @@ function openTrayIcon {
 		}
 
 		function TrayShaderMenu {
-			"$PROGCMD" update gameshaders
+			"$PROGCMD" update gameshaders "$SHADDESTDIR"
 		}
 
 		function TrayVR {
@@ -4582,6 +4584,22 @@ function fixShow {
 	echo "${1//&/+}"
 }
 
+function setShadDestDir {
+	autoCategorySettings
+
+	if [ "$USESPECIALK" -eq 1 ] && [ "$USERESHADE" -eq 1 ]; then
+	writelog "INFO" "${FUNCNAME[0]} - Both '$SPEK' and '$RESH' are enabled." "E"
+	writelog "INFO" "${FUNCNAME[0]} - Unfortunately the game currently crashes using Proton when both are enabled"
+	writelog "INFO" "${FUNCNAME[0]} - therefore $RESH path redirect to the $SPEK directory is disabled" "E"
+
+#		SPEKRESHDIR="My Mods/${SPEK}/Plugins/ThirdParty/${RESH}"
+#		SHADDESTDIR="$GPFX/$DRCU/$STUS/$DOCS/$SPEKRESHDIR"
+#	else
+	fi
+		setFullGameExePath "SHADDESTDIR"
+#	fi
+}
+
 function MainMenu {
 	prepareMenu "$@"
 
@@ -4589,6 +4607,7 @@ function MainMenu {
 	
 	setHuyList
 	setOPCustPath
+
 	export CURWIKI="$PPW/Main-Menu"
 	TITLE="${PROGNAME}-MainMenu"
 	pollWinRes "$TITLE" 4
@@ -4663,7 +4682,7 @@ function MainMenu {
 	--field="$FBUT_GUISET_OTR":FBTN "$PROGCMD otr \"$AID\"" \
 	--field="$FBUT_GUISET_DXHSEL":FBTN "$PROGCMD dxh \"$AID\"" \
 	--field="$FBUT_GUISET_SHADERREPOS":FBTN "$PROGCMD update shaders repos" \
-	--field="$FBUT_GUISET_UPSHADER":FBTN "$PROGCMD update gameshaders \"$EFD\"" \
+	--field="$FBUT_GUISET_UPSHADER":FBTN "$PROGCMD update gameshaders \"$SHADDESTDIR\"" \
 	--field="$FBUT_GUISET_FAVSEL":FBTN "$PROGCMD fav \"$AID\" set"\
 	--field="$FBUT_GUISET_BLOCKCAT":FBTN "$PROGCMD block" \
 	--field="$FBUT_GUISET_SORTCAT":FBTN "$PROGCMD sort" \
@@ -6495,11 +6514,10 @@ function GameShaderDialog {
 		writelog "INFO" "${FUNCNAME[0]} - Overriding SHADDESTDIR to '$SHADDESTDIR' because ALTEXEPATH is set to '$ALTEXEPATH'"
 	fi
 
-	if [ -z "$SHADDESTDIR" ]; then
-		if [ -z "$1" ]; then
-			
-			setFullGameExePath "SHADDESTDIR"
+	writelog "INFO" "${FUNCNAME[0]} -  Using Shader destination directory '$SHADDESTDIR'"
 
+	if [ -z "$SHADDESTDIR" ]; then
+		if [ -z "$1" ]; then		
 			if [ ! -d "$SHADDESTDIR" ]; then
 				resetAID "last"
 				if [ -f "$LASTRUN" ] && grep -q "$AID" "$LASTRUN"; then
@@ -6676,8 +6694,8 @@ function getArch {
 
 function chooseShaders {
 	if [ "$CHOOSESHADERS" -eq 1 ]; then
-		writelog "INFO" "${FUNCNAME[0]} - Opening Shader Menu"
-		setFullGameExePath "SHADDESTDIR"
+		setShadDestDir
+		writelog "INFO" "${FUNCNAME[0]} - Opening Shader Menu - shader destination path is '$SHADDESTDIR'"
 		GameShaderDialog "$SHADDESTDIR"
 	fi
 }
@@ -6715,7 +6733,7 @@ function installReshade {
 		if [ "$INSTALL_RESHADE" -eq 1 ]; then
 
 			prepareReshadeFiles
-			setFullGameExePath "SHADDESTDIR"
+			setShadDestDir
 
 			if [ -n "$(GETALTEXEPATH)" ]; then
 				INSTDESTDIR="$(GETALTEXEPATH)"
@@ -6787,7 +6805,7 @@ function installReshadeDepth3D {
 		if [ "$RESHADE_DEPTH3D" -eq 1 ]; then
 			dlShaders "$SHADERPOOL"
 
-			setFullGameExePath "SHADDESTDIR"
+			setShadDestDir
 			if [ -n "$(GETALTEXEPATH)" ]; then
 				INSTDESTDIR="$(GETALTEXEPATH)"
 			else
@@ -6820,29 +6838,52 @@ function installReshadeDepth3D {
 }
 
 function useReshade {
+	setShadDestDir
+
 	if [ "$USERESHADE" -eq 1 ]; then
-		setFullGameExePath "SHADDESTDIR"
-		if [ -f "$SHADDESTDIR/$RSDISABLED" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - ${RESH} has been disabled previously using '$PROGCMD' - enabling it now"
-			RSDLL="$(cat "$SHADDESTDIR/$RSDISABLED")" 
-			mv "$SHADDESTDIR/$RSDLL" "$SHADDESTDIR/${RSDLL//_disabled/}"
-			rm "$SHADDESTDIR/$RSDISABLED" 2>/dev/null
-			echo "${RSDLL//_disabled/}" > "$SHADDESTDIR/$RSENABLED"
+
+#XXXXXXXXXXXXX
+		if [ "$USESPECIALK" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Both '$SPEK' and '$RESH' are enabled." "E"
+			writelog "INFO" "${FUNCNAME[0]} - Unfortunately the game currently crashes using Proton when both are enabled"
+			writelog "INFO" "${FUNCNAME[0]} - therefore the $RESH install to the $SPEK directory redirect is disabled" "E"
+
+#			writelog "INFO" "${FUNCNAME[0]} - Using ${RESH} and $SPEK together"
+#			mkProjDir "$SHADDESTDIR"
+#			if [ ! -f "$SHADDESTDIR/$RS_64" ]; then
+#				writelog "INFO" "${FUNCNAME[0]} - Copying '$RESHADESRCDIR/$RS_64' and friends to '$SHADDESTDIR'"
+#				cp "$RESHADESRCDIR/$RS_64" "$SHADDESTDIR"
+#				cp "$RESHADESRCDIR/$RS_32" "$SHADDESTDIR"
+#				cp "$RESHADESRCDIR/${RS_64//.dll/.json}" "$SHADDESTDIR"
+#				cp "$RESHADESRCDIR/${RS_32//.dll/.json}" "$SHADDESTDIR"
+#			else
+#				writelog "SKIP" "${FUNCNAME[0]} - Already have '$$RS_64' in '$SHADDESTDIR'"
+#			fi
 		fi
 
-		if [ ! -f "$SHADDESTDIR/$D3D47" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - USERESHADE is '$USERESHADE' - looks like ${RESH} is not yet installed in '$SHADDESTDIR' - installing because USERESHADE is enabled"
-			INSTALL_RESHADE=1 installReshade
-		fi
+#		else
+			if [ -f "$SHADDESTDIR/$RSDISABLED" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - ${RESH} has been disabled previously using '$PROGCMD' - enabling it now"
+				RSDLL="$(cat "$SHADDESTDIR/$RSDISABLED")" 
+				mv "$SHADDESTDIR/$RSDLL" "$SHADDESTDIR/${RSDLL//_disabled/}"
+				rm "$SHADDESTDIR/$RSDISABLED" 2>/dev/null
+				echo "${RSDLL//_disabled/}" > "$SHADDESTDIR/$RSENABLED"
+			fi
 
-		if [ -f "$SHADDESTDIR/$RSINI" ] && [ ! -f "$SHADDESTDIR/$RSENABLED" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Looks like ${RESH} was installed previously using '$PROGCMD' without creating '$RSENABLED' - recreating it now"
-			INSTALL_RESHADE=1 installReshade F
-		fi
+			if [ ! -f "$SHADDESTDIR/$D3D47" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - USERESHADE is '$USERESHADE' - looks like ${RESH} is not yet installed in '$SHADDESTDIR' - installing because USERESHADE is enabled"
+				INSTALL_RESHADE=1 installReshade
+			fi
 
-		writelog "INFO" "${FUNCNAME[0]} - Setting WINEDLLOVERRIDES for ${RESH}: dxgi=n,b;d3d9=n,b;${D3D47//.dll}=n,b"
-		export WINEDLLOVERRIDES="$WINEDLLOVERRIDES;dxgi=n,b;d3d9=n,b;${D3D47//.dll}=n,b"
-	else
+			if [ -f "$SHADDESTDIR/$RSINI" ] && [ ! -f "$SHADDESTDIR/$RSENABLED" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Looks like ${RESH} was installed previously using '$PROGCMD' without creating '$RSENABLED' - recreating it now"
+				INSTALL_RESHADE=1 installReshade F
+			fi
+
+			writelog "INFO" "${FUNCNAME[0]} - Setting WINEDLLOVERRIDES for ${RESH}: dxgi=n,b;d3d9=n,b;${D3D47//.dll}=n,b"
+			export WINEDLLOVERRIDES="$WINEDLLOVERRIDES;dxgi=n,b;d3d9=n,b;${D3D47//.dll}=n,b"
+#		fi
+	else	
 		if [ -f "$SHADDESTDIR/$RSINI" ]; then
 			mv "$SHADDESTDIR/$RSINI" "$SHADDESTDIR/${RSINI}_disabled"
 		fi
@@ -6869,14 +6910,20 @@ function useReshade {
 
 function extSpek {
 	SRCARCH="$1"
-	if [ -f "$SRCARCH" ]; then
-		if  [ -x "$(command -v "$("$WHICH" "$SEVZA" 2>/dev/null)" 2>/dev/null)" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Extracting '$SRCARCH' to '$SPEKDLDIR/$SPEKVERS'" "E"
-			"$SEVZA" x "$SRCARCH" -o"$SPEKDLDIR/$SPEKVERS" 2>/dev/null
-		else
-			writelog "SKIP" "${FUNCNAME[0]} - Can't extract '$SRCARCH', because '$SEVZA' wasn't found!" "E"
+	SPEXT64="$SPEKDLDIR/$SPEKVERS/${SPEK}64.dll"
+
+	if [ -f "$SPEXT64" ]; then
+		writelog "SKIP" "${FUNCNAME[0]} - Already have '$SPEXT64' - skipping extraction" "E"
+	else
+		if [ -f "$SRCARCH" ]; then
+			if  [ -x "$(command -v "$("$WHICH" "$SEVZA" 2>/dev/null)" 2>/dev/null)" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Extracting '$SRCARCH' to '$SPEKDLDIR/$SPEKVERS'" "E"
+				"$SEVZA" x "$SRCARCH" -o"$SPEKDLDIR/$SPEKVERS" 2>/dev/null
+			else
+				writelog "SKIP" "${FUNCNAME[0]} - Can't extract '$SRCARCH', because '$SEVZA' wasn't found!" "E"
+			fi
 		fi
-	fi	
+	fi
 }
 
 function dlSpecialK {
@@ -6966,6 +7013,22 @@ function getSpecialKGameRenderApi {
 		writelog "INFO" "${FUNCNAME[0]} - Could not find Render Api - assuming 'Direct3D 11'"
 		SPEKDST="$SPEKDDIR/$DXGI"
 	fi	
+}
+
+function prepareSpecialKReshade {
+	if [ "$USERESHADE" -eq 1 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Both '$SPEK' and '$RESH' are enabled." "E"
+		writelog "INFO" "${FUNCNAME[0]} - Unfortunately the game currently crashes using Proton when both are enabled"
+		writelog "INFO" "${FUNCNAME[0]} - therefore the auto-apply $RESH to the $SPEK config is not implemented" "E"
+		# XXXXXXXXXXXXX
+		# maybe later:
+		# "[Import.ReShade64]"
+		# "Architecture=x64"
+		# "Role=ThirdParty"
+		# "When=PlugIn"
+		# "When=Early"
+		# "Filename=C:\users\steamuser\Documents\My Mods\SpecialK\PlugIns\ThirdParty\ReShade\ReShade64.dll"
+	fi
 }
 
 function prepareDiscordSpecialK {
@@ -7090,6 +7153,7 @@ function useSpecialK {
 			notiShow "$(strFix "$NOTY_MISSDLL" "$SPEK" "$REQDLL" "$USEPROTON")"
 		else
 			prepareDiscordSpecialK
+			prepareSpecialKReshade
 			UPSPEK=1
 			if [ -f "$SPEKENA" ]; then
 				if [ "$SPEKVERS" != "$DISC" ]; then
@@ -14776,6 +14840,7 @@ function commandline {
 					GameShaderDialog
 				else
 					if [ -d "$3" ]; then
+						writelog "INFO" "${FUNCNAME[0]} - command line: GameShaderDialog \"$3\""
 						GameShaderDialog "$3"
 					else
 						writelog "SKIP" "${FUNCNAME[0]} - Game directory '$3' does not exist - exit"
