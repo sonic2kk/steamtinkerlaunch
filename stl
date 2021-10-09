@@ -7216,16 +7216,19 @@ function useSpecialK {
 }
 
 function checkDepth3DUse {
-	SPIDIS="$EFD/${RSPINI}_disabled"
-	if [ "$RUNSBSVR" -eq 0 ] && [ -f "$EFD/$RSPINI" ]; then
-		if grep -q "Techniques=${SD3DVR//+/}" "$EFD/$RSPINI"; then
-			writelog "INFO" "${FUNCNAME[0]} - Deactivating '$SD3DVR' because VR is disabled"
-			mv "$EFD/$RSPINI" "$SPIDIS"
+	if [ -d "$EFD" ]; then
+		SPIDIS="$EFD/${RSPINI}_disabled"
+		
+		if [ "$RUNSBSVR" -eq 0 ] && [ -f "$EFD/$RSPINI" ]; then
+			if grep -q "Techniques=${SD3DVR//+/}" "$EFD/$RSPINI"; then
+				writelog "INFO" "${FUNCNAME[0]} - Deactivating '$SD3DVR' because VR is disabled"
+				mv "$EFD/$RSPINI" "$SPIDIS"
+			fi
 		fi
-	fi
-	if [ "$RUNSBSVR" -eq 1 ] && [ ! -f "$EFD/$RSPINI" ] && [ -f "$SPIDIS" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - Reactivating '$SD3DVR' because VR is enabled"
-		mv "$SPIDIS" "$EFD/$RSPINI"
+		if [ "$RUNSBSVR" -eq 1 ] && [ ! -f "$EFD/$RSPINI" ] && [ -f "$SPIDIS" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Reactivating '$SD3DVR' because VR is enabled"
+			mv "$SPIDIS" "$EFD/$RSPINI"
+		fi
 	fi
 }
 
@@ -9004,29 +9007,31 @@ function postIGCS {
 }
 	
 function selectIGCSdll {
-	fixShowGnAid
-	export CURWIKI="$PPW/$IGCS"
-	TITLE="${PROGNAME}-Select-IGCS-dll"
-	pollWinRes "$TITLE"
-	setShowPic
-	
-	PICKIGCSDLL="$("$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
-	--separator="" --title="$TITLE" \
-	--text="$(spanFont "$SGNAID - $GUI_SELECTIGCSDLL" "H")" \
-	--field=" ":LBL " " \
-	--field="$GUI_SELECTDLL":FL "${EFD}" --file-filter="$GUI_DLLFILES (*.dll)| *.dll" "$GEOM")"
-	if [ -f "$PICKIGCSDLL" ]; then
-		IGCSDLL="${PICKIGCSDLL##*/}"
-		if [ ! -f "$EFD/$IGCSDLL" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Copying selected dll '$PICKIGCSDLL' to '$EFD'"
-			cp "$PICKIGCSDLL" "$EFD"
+	if [ -d "$EFD" ]; then
+		fixShowGnAid
+		export CURWIKI="$PPW/$IGCS"
+		TITLE="${PROGNAME}-Select-IGCS-dll"
+		pollWinRes "$TITLE"
+		setShowPic
+		
+		PICKIGCSDLL="$("$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
+		--separator="" --title="$TITLE" \
+		--text="$(spanFont "$SGNAID - $GUI_SELECTIGCSDLL" "H")" \
+		--field=" ":LBL " " \
+		--field="$GUI_SELECTDLL":FL "${EFD}" --file-filter="$GUI_DLLFILES (*.dll)| *.dll" "$GEOM")"
+		if [ -f "$PICKIGCSDLL" ]; then
+			IGCSDLL="${PICKIGCSDLL##*/}"
+			if [ ! -f "$EFD/$IGCSDLL" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Copying selected dll '$PICKIGCSDLL' to '$EFD'"
+				cp "$PICKIGCSDLL" "$EFD"
+			fi
+			IGCSINI="$EFD/${IGCS}.ini"
+			writelog "INFO" "${FUNCNAME[0]} - Inserting '$IGCSDLL' into '$IGCSINI'"
+			sed "/^Dll=/d" -i "$IGCSINI"
+			echo "Dll=$IGCSDLL" >> "$IGCSINI"
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - No dll selected - skipping"
 		fi
-		IGCSINI="$EFD/${IGCS}.ini"
-		writelog "INFO" "${FUNCNAME[0]} - Inserting '$IGCSDLL' into '$IGCSINI'"
-		sed "/^Dll=/d" -i "$IGCSINI"
-		echo "Dll=$IGCSDLL" >> "$IGCSINI"
-	else
-		writelog "SKIP" "${FUNCNAME[0]} - No dll selected - skipping"
 	fi
 }
 
@@ -9989,41 +9994,43 @@ function checkCheatEngineLaunch {
 }
 
 function checkSteamAppIDFile {
-	GSAIT="$EFD/$SAIT"
-	CSAIT="$EFD/check-$SAIT"
+	if [ -d "$EFD" ]; then
+		GSAIT="$EFD/$SAIT"
+		CSAIT="$EFD/check-$SAIT"
 
-	if [ ! -f "$CSAIT" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - Creating new control file '$CSAIT'"
-		if [ ! -f "$GSAIT" ]; then
-			echo "OWNSAIT=\"0\"" > "$CSAIT"
-		else
-			echo "OWNSAIT=\"1\"" > "$CSAIT"
-		fi
-	fi
-
-	if [ "$STEAMAPPIDFILE" -eq 1 ]; then	
-		if [ ! -f "$GSAIT" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Creating '$GSAIT' because STEAMAPPIDFILE is enabled"
-			echo "$AID" > "$GSAIT"
-		else
-			writelog "INFO" "${FUNCNAME[0]} - STEAMAPPIDFILE is enabled and '$GSAIT' already exists - nothing to do"
-		fi
-	else
-		if [ ! -f "$GSAIT" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - STEAMAPPIDFILE is disabled and there's no '$GSAIT' - nothing to do"
-		else
-			if [ ! -f "$CSAIT" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Removing '$GSAIT' because STEAMAPPIDFILE is disabled"
-				rm "$GSAIT" 2>/dev/null	
+		if [ ! -f "$CSAIT" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Creating new control file '$CSAIT'"
+			if [ ! -f "$GSAIT" ]; then
+				echo "OWNSAIT=\"0\"" > "$CSAIT"
 			else
-				loadCfg "$CSAIT" X
-				if [ "$OWNSAIT" -eq 1 ]; then
-					writelog "INFO" "${FUNCNAME[0]} - OWNSAIT is '$OWNSAIT', means the game ships an own '$SAIT'. Leaving untouched and enabling STEAMAPPIDFILE"
-					updateConfigEntry "STEAMAPPIDFILE" "1" "$STLGAMECFG"
-					STEAMAPPIDFILE=1				
-				else
-					writelog "INFO" "${FUNCNAME[0]} - Removing '$GSAIT' because the game doesn't own it and STEAMAPPIDFILE is disabled"
+				echo "OWNSAIT=\"1\"" > "$CSAIT"
+			fi
+		fi
+
+		if [ "$STEAMAPPIDFILE" -eq 1 ]; then	
+			if [ ! -f "$GSAIT" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Creating '$GSAIT' because STEAMAPPIDFILE is enabled"
+				echo "$AID" > "$GSAIT"
+			else
+				writelog "INFO" "${FUNCNAME[0]} - STEAMAPPIDFILE is enabled and '$GSAIT' already exists - nothing to do"
+			fi
+		else
+			if [ ! -f "$GSAIT" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - STEAMAPPIDFILE is disabled and there's no '$GSAIT' - nothing to do"
+			else
+				if [ ! -f "$CSAIT" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Removing '$GSAIT' because STEAMAPPIDFILE is disabled"
 					rm "$GSAIT" 2>/dev/null	
+				else
+					loadCfg "$CSAIT" X
+					if [ "$OWNSAIT" -eq 1 ]; then
+						writelog "INFO" "${FUNCNAME[0]} - OWNSAIT is '$OWNSAIT', means the game ships an own '$SAIT'. Leaving untouched and enabling STEAMAPPIDFILE"
+						updateConfigEntry "STEAMAPPIDFILE" "1" "$STLGAMECFG"
+						STEAMAPPIDFILE=1				
+					else
+						writelog "INFO" "${FUNCNAME[0]} - Removing '$GSAIT' because the game doesn't own it and STEAMAPPIDFILE is disabled"
+						rm "$GSAIT" 2>/dev/null	
+					fi
 				fi
 			fi
 		fi
@@ -11102,7 +11109,7 @@ function startVortex {
 }
 
 function setVortexSELaunch {
-	if [ "$1" == "$AID" ]; then
+	if [ "$1" == "$AID" ] && [ -d "$EFD" ]; then
 		SEEXE="$EFD/$2"
 		if [ ! -f "$SEEXE" ]; then
 			writelog "SKIP" "${FUNCNAME[0]} - Special exe '$2' for '$SGNAID' not found in gamedir '$EFD' - starting normal exe"
