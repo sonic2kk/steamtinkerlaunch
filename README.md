@@ -46,7 +46,7 @@ Solus has an official package:
 If **stl** is not in your package management yet, just `sudo make install`
 
 **stl** depends on several other programs which need to be installed as well.
-Check the [Requirements](Requirements) below or read the [Installation wiki](https://github.com/frostworx/steamtinkerlaunch/wiki/Installation)
+Check the [Installation wiki](https://github.com/frostworx/steamtinkerlaunch/wiki/Installation)
 
 ## Press
 Several great people already mentioned **stl** on their platforms/channels.
