@@ -45,6 +45,9 @@ Solus has an official package:
 ### Manual Installation:
 If **stl** is not in your package management yet, just `sudo make install`
 
+**stl** depends on several other programs which need to be installed as well.
+Check the [Requirements](Requirements) below or read the [Installation wiki](https://github.com/frostworx/steamtinkerlaunch/wiki/Installation)
+
 ## Press
 Several great people already mentioned **stl** on their platforms/channels.
 
@@ -86,48 +89,8 @@ you might want to check the [articles and videos](#Press) of many cool people!**
 
 
 ## Requirements
-*(no special order)*
-
-Programs required for a full internal functionality:
-- awk *(gawk)*
-- bash *(only shell tested)*
-- git
-- pgrep
-- unzip
-- wget
-- which
-- xdotool
-- xprop
-- xrandr
-- xxd *(part of vim)*
-- xwininfo
-- [Yad](https://github.com/v1cont/yad) All GUI elements like [Main Menu](https://github.com/frostworx/steamtinkerlaunch/wiki/Main-Menu), [Tray Icon](https://github.com/frostworx/steamtinkerlaunch/wiki/Tray-Icon), the [Editor Menu](https://github.com/frostworx/steamtinkerlaunch/wiki/Editor-Menu)
-  and all other windows use yad. **A new enough version *(>=7.2; see [here](https://github.com/frostworx/steamtinkerlaunch/issues/98))* is required**
-  **Instead of a global/system wide installation, stl also supports easy to use [custom solutions](https://github.com/frostworx/steamtinkerlaunch/wiki/Custom-Yad)**
-   
-Programs needed for optional external features *(no special order)*:
-- [strace](https://github.com/frostworx/steamtinkerlaunch/wiki/Strace)
-- [Gamemode](https://github.com/frostworx/steamtinkerlaunch/wiki/GameMode)
-- [MangoHud](https://github.com/frostworx/steamtinkerlaunch/wiki/MangoHud)
-- [winetricks](https://github.com/frostworx/steamtinkerlaunch/wiki/Winetricks)
-- vr-video-player for playing regular games side-by-side in VR ([SBS-VR](https://github.com/frostworx/steamtinkerlaunch/wiki/Side-by-Side-VR))
-- a graphical text editor and optionally an internet browser see [Global Config](https://github.com/frostworx/steamtinkerlaunch/wiki/Configuration-Files#Global-Config)
-- [vkBasalt](https://github.com/frostworx/steamtinkerlaunch/wiki/vkBasalt)
-- [Nyrna](https://github.com/frostworx/steamtinkerlaunch/wiki/Nyrna)
-- [ReplaySorcery](https://github.com/frostworx/steamtinkerlaunch/wiki/ReplaySorcery)
-- netstat from net-tools for basic network monitoring
-- [Boxtron](https://github.com/frostworx/steamtinkerlaunch/wiki/Boxtron) and dosbox to optionally start dos games with linux native dosbox
-- ScummVM to optionally start compatible games natively using [Roberta](https://github.com/dreamer/roberta)
-- [luxtorpeda-dev](https://github.com/luxtorpeda-dev/luxtorpeda) or [Luxtorpeda](https://github.com/dreamer/luxtorpeda) to optionally start supported games with a linux native binary
-- [GameConqueror/scanmem](https://github.com/frostworx/steamtinkerlaunch/wiki/GameConqueror) to optionally cheat
-- [GameScope](https://github.com/frostworx/steamtinkerlaunch/wiki/GameScope)
-- innoextract *(currently only used to extract the [Cheat Engine](https://github.com/frostworx/steamtinkerlaunch/wiki/Cheat-Engine) setup exe - with wine as fallback)*
-- lsusb *(for an optional [SBS-VR](https://github.com/frostworx/steamtinkerlaunch/wiki/Side-by-Side-VR) check if a VR HMD was found)*
-- jq *(used to extract game names from the steam api)*
-- convert, identify from imagemagick *(currently used to scale a custom installed game header picture and for converting [Game Icons](https://github.com/frostworx/steamtinkerlaunch/wiki/Game-Icons) for [Game-Desktop-Files](https://github.com/frostworx/steamtinkerlaunch/wiki/Game-Desktop-Files))*
-- rsync *(for backup support)*
-- openssl *(currently only used to generate a random hex string for [Non-Steam Game](https://github.com/frostworx/steamtinkerlaunch/wiki/Add-Non-Steam-Game) `appid`)*
-
+See [Installation](https://github.com/frostworx/steamtinkerlaunch/wiki/Installation)
+ 
 ## Configuration
 All [Configuration Files](https://github.com/frostworx/steamtinkerlaunch/wiki/Configuration-Files) are self-contained documented and always growing, so not every option is documented in here.
 For a general overview what can be configured, just check the [wiki](https://github.com/frostworx/steamtinkerlaunch/wiki) or simply browse through the 
