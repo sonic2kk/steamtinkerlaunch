@@ -406,12 +406,13 @@ function setSteamPath {
 
 	if [ -z "${!1}" ]; then
 		if [ -e "${HSR}/${2}" ]; then
-			STPA="${HSR}/${2}"
+			# readlink might be better in both STPAs here to be distribution independant, possible side effects not tested!
+			STPA="$(readlink -f "${HSR}/${2}")"
 			export "$1"="$STPA"
 			echo "$1=\"$STPA\"" >> "$STPAVARS"
 			writelog "INFO" "${FUNCNAME[0]} - Set '$1' to '$STPA'"
 		elif [ -e "${HSS}/${2}" ]; then
-			STPA="${HSS}/${2}"
+			STPA="$(readlink -f "${HSS}/${2}")"
 			export "$1"="$STPA"
 			echo "$1=\"$STPA\"" >> "$STPAVARS"
 			writelog "INFO" "${FUNCNAME[0]} - Set '$1' to '$STPA'"
@@ -1764,12 +1765,14 @@ function getAvailableProtonVersions {
 			if [ ! -f "$PROTONCSV" ] || { [ -n "$1" ] &&  [ "$1" = "up" ]; } || [ "$1" == "F" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Initially creating an array with available Proton versions"
 
+				# following symlinks (find -L) and using maxdepth 2 to avoid duplicates caused by _(user created)_ symlinks
+
 				# user installed compatibilitytool:
 				if [ -d "$STEAMCOMPATOOLS" ]; then
 					writelog "INFO" "${FUNCNAME[0]} - Adding Proton versions found in STEAMCOMPATOOLS '$STEAMCOMPATOOLS'"
 					while read -r PROTBIN; do
 						fillProtonCSV
-					done <<< "$(find "$STEAMCOMPATOOLS" -type f -name "proton")"	
+					done <<< "$(find -L "$STEAMCOMPATOOLS" -mindepth 2 -maxdepth 2 -type f -name "proton")"	
 				else
 					writelog "SKIP" "${FUNCNAME[0]} - Directory STEAMCOMPATOOLS '$STEAMCOMPATOOLS' not found - skipping"
 				fi
@@ -1778,22 +1781,24 @@ function getAvailableProtonVersions {
 					writelog "INFO" "${FUNCNAME[0]} - Adding Proton versions found in SYSSTEAMCOMPATOOLS '$SYSSTEAMCOMPATOOLS'"
 					while read -r PROTBIN; do
 						fillProtonCSV
-					done <<< "$(find "$SYSSTEAMCOMPATOOLS" -type f -name "proton")"
+					done <<< "$(find -L "$SYSSTEAMCOMPATOOLS" -mindepth 2 -maxdepth 2 -type f -name "proton")"
 				else
 					writelog "SKIP" "${FUNCNAME[0]} - Directory SYSSTEAMCOMPATOOLS '$SYSSTEAMCOMPATOOLS' not found - skipping"
 				fi
-				
+			
 				# official proton versions installed via Steam in default SteamLibrary 
-				if [ -d "$DEFSTEAMAPPSCOMMON" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - Adding Proton versions found in DEFSTEAMAPPSCOMMON '$DEFSTEAMAPPSCOMMON'"
-					while read -r protondir; do
-						PROTBIN="$protondir/proton"
-						if [ -f "$PROTBIN" ]; then
-							fillProtonCSV
-						fi
-					done <<< "$(find "$DEFSTEAMAPPSCOMMON" -mindepth 1 -maxdepth 1 -type d -name "Proton*")"	
-				else
-					writelog "SKIP" "${FUNCNAME[0]} - Directory DEFSTEAMAPPSCOMMON '$DEFSTEAMAPPSCOMMON' not found - this should not happen! - skipping"
+				if ! grep -q "\"path\".*.\"$SROOT\"" "$LFVDF"; then
+					if [ -d "$DEFSTEAMAPPSCOMMON" ]; then
+						writelog "INFO" "${FUNCNAME[0]} - Adding Proton versions found in DEFSTEAMAPPSCOMMON '$DEFSTEAMAPPSCOMMON'"
+						while read -r protondir; do
+							PROTBIN="$protondir/proton"
+							if [ -f "$PROTBIN" ]; then
+								fillProtonCSV
+							fi
+						done <<< "$(find -L "$DEFSTEAMAPPSCOMMON" -mindepth 2 -maxdepth 2 -type f -name "proton")"	
+					else
+						writelog "SKIP" "${FUNCNAME[0]} - Directory DEFSTEAMAPPSCOMMON '$DEFSTEAMAPPSCOMMON' not found - this should not happen! - skipping"
+					fi
 				fi
 
 				# official proton versions installed via Steam in additional SteamLibrary Paths
