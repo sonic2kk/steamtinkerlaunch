@@ -7744,7 +7744,8 @@ function updateConfigEntry {
 	CFGCAT="$1"
 	CFGVALUE="$2"
 	CFGFILE="$3"
-
+	CFGAID="$(cut -d . -f1 <<< "${CFGFILE##*/}")"
+	
 	if [ "$CFGCAT" == "CUSTOMCMD" ] && [ "$CFGFILE" == "$STLDEFGAMECFG" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Emptying '$CFGCAT' for '$STLDEFGAMECFG'"
 		CFGVALUE="$("$WHICH" echo 2>/dev/null)"
@@ -7753,37 +7754,39 @@ function updateConfigEntry {
 	if [ -z "$3" ]; then
 		writelog "SKIP" "${FUNCNAME[0]} - Expected 3 arguments - only got $*"
 	else
-		if [ ! -f "$CFGFILE" ]; then
-			writelog "SKIP" "${FUNCNAME[0]} - Configfile '$CFGFILE' does not exist - skipping config update"
-		else
-			if [ -n "$CFGVALUE" ]; then
-				if [ "$CFGVALUE" == "TRUE" ]; then
-					CFGVALUE="1"
-				elif [ "$CFGVALUE" == "FALSE" ]; then
-					CFGVALUE="0"
-				fi	
-		
-				if [ "$CFGVALUE" == "DUMMY" ]; then
-					CFGVALUE=""
-				fi
-
-				# only save value if it changed
-				if [ "${!CFGCAT}" != "$CFGVALUE" ] || [ -f "$FUPDATE" ]; then
-					if [ "$(grep -c "#${CFGCAT}=" "$CFGFILE")" -eq 1 ]; then
-						writelog "INFO" "${FUNCNAME[0]} - Option '$CFGCAT' commented out in config '${CFGFILE##*/}' - activating it with the new value '$CFGVALUE'"
-						sed -i "/^#${CFGCAT}=/c$CFGCAT=\"$CFGVALUE\"" "$CFGFILE"
-					elif [ "$(grep -c "^${CFGCAT}=" "$CFGFILE")" -eq 0 ]; then
-						writelog "INFO" "${FUNCNAME[0]} - '$CFGCAT' option missing in config '${CFGFILE##*/}' - adding a new line"
-						echo "$CFGCAT=\"$CFGVALUE\"" >> "$CFGFILE"
-					else
-						writelog "INFO" "${FUNCNAME[0]} - Option '$CFGCAT' is updated with the new value '$CFGVALUE' in config '${CFGFILE##*/}'"
-						sed -i "/^${CFGCAT}=/c$CFGCAT=\"$CFGVALUE\"" "$CFGFILE"
-						if [ "$CFGCAT" == "USEPROTON" ]; then
-							writelog "INFO" "${FUNCNAME[0]} - Updating One Time Proton for this launch to the updated USEPROTON value '$CFGVALUE'"
-							WANTPROTON="$CFGVALUE"
-						fi
+		if [ "$CFGAID" -ne "$PLACEHOLDERAID" ]; then
+			if [ ! -f "$CFGFILE" ]; then
+				writelog "SKIP" "${FUNCNAME[0]} - Configfile '$CFGFILE' does not exist - skipping config update"
+			else
+				if [ -n "$CFGVALUE" ]; then
+					if [ "$CFGVALUE" == "TRUE" ]; then
+						CFGVALUE="1"
+					elif [ "$CFGVALUE" == "FALSE" ]; then
+						CFGVALUE="0"
+					fi	
+			
+					if [ "$CFGVALUE" == "DUMMY" ]; then
+						CFGVALUE=""
 					fi
-					rm "$FUPDATE" 2>/dev/null
+
+					# only save value if it changed
+					if [ "${!CFGCAT}" != "$CFGVALUE" ] || [ -f "$FUPDATE" ]; then
+						if [ "$(grep -c "#${CFGCAT}=" "$CFGFILE")" -eq 1 ]; then
+							writelog "INFO" "${FUNCNAME[0]} - Option '$CFGCAT' commented out in config '${CFGFILE##*/}' - activating it with the new value '$CFGVALUE'"
+							sed -i "/^#${CFGCAT}=/c$CFGCAT=\"$CFGVALUE\"" "$CFGFILE"
+						elif [ "$(grep -c "^${CFGCAT}=" "$CFGFILE")" -eq 0 ]; then
+							writelog "INFO" "${FUNCNAME[0]} - '$CFGCAT' option missing in config '${CFGFILE##*/}' - adding a new line"
+							echo "$CFGCAT=\"$CFGVALUE\"" >> "$CFGFILE"
+						else
+							writelog "INFO" "${FUNCNAME[0]} - Option '$CFGCAT' is updated with the new value '$CFGVALUE' in config '${CFGFILE##*/}'"
+							sed -i "/^${CFGCAT}=/c$CFGCAT=\"$CFGVALUE\"" "$CFGFILE"
+							if [ "$CFGCAT" == "USEPROTON" ]; then
+								writelog "INFO" "${FUNCNAME[0]} - Updating One Time Proton for this launch to the updated USEPROTON value '$CFGVALUE'"
+								WANTPROTON="$CFGVALUE"
+							fi
+						fi
+						rm "$FUPDATE" 2>/dev/null
+					fi
 				fi
 			fi
 		fi
@@ -10792,7 +10795,11 @@ function checkVortexRegs {
 		if [ "$REGPATH" == "${INSTP//\\\\/\\}" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - The registry entry '$REGPATH' for '$PATHKEY' is identical to the gamepath '${INSTP//\\\\/\\}'"
 		else
-			writelog "WARN" "${FUNCNAME[0]} - The registry entry '$REGPATH' for '$PATHKEY' is not equal to gamepath '${INSTP//\\\\/\\}' - resetting registry to '${INSTP//\\\\/\\}'"
+			if [ -n "$REGPATH" ]; then
+				writelog "WARN" "${FUNCNAME[0]} - The registry entry '$REGPATH' for '$PATHKEY' is not equal to gamepath '${INSTP//\\\\/\\}' - resetting registry to '${INSTP//\\\\/\\}'"
+			else
+				writelog "WARN" "${FUNCNAME[0]} - The registry entry for '$PATHKEY' is empty - resetting registry to '${INSTP//\\\\/\\}'"
+			fi
 			wineVortexRun "$VORTEXWINE" reg DELETE "$REGKEY" /f >/dev/null
 		fi						
 	else
