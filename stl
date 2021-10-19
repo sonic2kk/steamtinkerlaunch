@@ -22,12 +22,10 @@ PKILL="pkill"
 TAR="tar"
 UNZIP="unzip"
 WGET="wget"
-WHICH="which"
 XDO="xdotool"
 XPROP="xprop"
 XRANDR="xrandr"
 XWININFO="xwininfo"
-AWK="gawk"
 XXD="xxd"
 #ENDINTDEPS
 
@@ -474,6 +472,41 @@ function setSteamPaths {
 	fi
 }
 
+function setAwkBin {
+	if [ -z "$AWKBIN" ];then
+		if [ -x "$(command -v "gawk")" ]; then
+			AWKBIN="gawk"
+			if [ -z "$1" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Found '$AWKBIN' as an 'awk' variant. It should work without any issues, because 'gawk' was tested completely"
+			fi
+		elif [ -x "$(command -v "mawk")" ]; then
+			AWKBIN="mawk"
+			if [ -z "$1" ]; then
+				writelog "WARN" "${FUNCNAME[0]} - Only found '$AWKBIN' as an 'awk' variant. It might be incompatible in several functions, as only 'gawk' was tested completely!"
+			fi
+		elif  [ -x "$(command -v "awk")" ]; then
+			AWKBIN="mawk"
+			if [ -z "$1" ]; then
+				writelog "WARN" "${FUNCNAME[0]} - Only found '$AWKBIN' as an 'awk' variant. It might be incompatible in several functions, as only 'gawk' was tested completely!"
+			fi
+		fi	
+		
+		if [ -z "$AWKBIN" ];then
+			writelog "ERROR" "${FUNCNAME[0]} - No 'awk' variant found, but at least one is required (best would be 'gawk') - Can't continue" "E"
+			exit
+		else
+			export AWKBIN="$AWKBIN"
+		fi
+	fi
+}
+
+function awk {
+	if [ -z "$AWKBIN" ];then
+		setAwkBin "X"
+	fi
+	"$AWKBIN" "$@"
+}
+
 function OpenWikiPage {
 	if [ -n "$1" ]; then
 		if grep -q "$PPW" <<< "$1"; then
@@ -551,8 +584,8 @@ function getGameName {
 	elif grep -q "_${1}\." <<< "$(listAppManifests)" ; then
 		APPMA="$(grep "_${1}\." <<< "$(listAppManifests)")"
 		if [ -f "$APPMA" ]; then
-			GNRAW1="$(grep "\"name\"" "$APPMA" | gawk -F '"name"' '{print $NF}')"
-			GNRAW="$(gawk '{$1=$1};1' <<< "$GNRAW1")"
+			GNRAW1="$(grep "\"name\"" "$APPMA" | awk -F '"name"' '{print $NF}')"
+			GNRAW="$(awk '{$1=$1};1' <<< "$GNRAW1")"
 			writelog "INFO" "${FUNCNAME[0]} - Found Game Name '$GNRAW' in '$APPMA'"
 		fi
 	elif [ -f "$STLAPPINFOIDDIR/${1}.bin" ]; then
@@ -570,7 +603,7 @@ function getGameName {
 		fi
 
 		if [ -f "$APIDL" ]; then
-			if  [ ! -x "$(command -v "$("$WHICH" "$JQ" 2>/dev/null)" 2>/dev/null)" ]; then
+			if  [ ! -x "$(command -v "$JQ")" ]; then
 				writelog "WARN" "${FUNCNAME[0]} - Can't get data from '$APIDL' because '$JQ' is not installed"
 			else
 				writelog "INFO" "${FUNCNAME[0]} - Searching Game Name for '$1' in $APIDL"
@@ -907,7 +940,7 @@ function getGameIcon {
 	}
 	
 	function extractGZip {
-		BIGGESTPNG="$("$UNZIP" -l "$WANTGZIP" | grep "\.png" | sort -n | tail -n1 | gawk -F ':[0-9][0-9]   ' '{print $NF}')" # weak gawk might break here(?)
+		BIGGESTPNG="$("$UNZIP" -l "$WANTGZIP" | grep "\.png" | sort -n | tail -n1 | awk -F ':[0-9][0-9]   ' '{print $NF}')" # weak 'awk' might break here(?)
 		if [ -n "$BIGGESTPNG" ];then
 			writelog "INFO" "${FUNCNAME[0]} - Extracting biggest png file '$BIGGESTPNG' in archive '$WANTGZIP' to '$WANTGPNG'"
 			writelog "INFO" "${FUNCNAME[0]} - $UNZIP -dqq ${WANTGPNG//.png} $WANTGZIP $BIGGESTPNG"
@@ -976,7 +1009,7 @@ function getParsableGameList {
 		SC="$STUIDPATH/$SRSCV"
 		APPI="Apps"
 		APPO="StartMenuShortcutCheck"
-		LIST="$(gawk "/$APPI/,/$APPO/" "$SC" | grep -v "$APPI\|$APPO" | gawk '{printf "%s+",$0} END {print ""}' | sed 's/"[0-9][0-9]/\n&/g')"
+		LIST="$(awk "/$APPI/,/$APPO/" "$SC" | grep -v "$APPI\|$APPO" | awk '{printf "%s+",$0} END {print ""}' | sed 's/"[0-9][0-9]/\n&/g')"
 		LISTCNT="$(wc -l <<< "$LIST")"
 		writelog "INFO" "${FUNCNAME[0]} - Found '$LISTCNT' parsable Game Entries in '$SC'"
 		if [ "$LISTCNT" -eq 0 ]; then
@@ -1094,7 +1127,7 @@ function getDataForAllGamesinSharedConfig {
 #}
 
 function getActiveSteamCategories {
-	getParsableGameList | grep "\"tags\"" | gawk -F '{+' '{print $NF}' | sed 's/\"/'$'\\\n/g' | sort -u | grep -i "^[a-z]"
+	getParsableGameList | grep "\"tags\"" | awk -F '{+' '{print $NF}' | sed 's/\"/'$'\\\n/g' | sort -u | grep -i "^[a-z]"
 }
 
 function createCategoryMenus {
@@ -1140,7 +1173,7 @@ function listAppManifests {
 	if [ -f "$CFGVDF" ] || [ -f "$LFVDF" ]; then
 		while read -r BIF; do
 			findAppMa "${BIF//\"/}/$SA"
-		done <<< "$(grep "BaseInstallFolder\|\"path\"" "$CFGVDF" "$LFVDF" 2>/dev/null | gawk '{print $3}' | sort -u)"
+		done <<< "$(grep "BaseInstallFolder\|\"path\"" "$CFGVDF" "$LFVDF" 2>/dev/null | awk '{print $3}' | sort -u)"
 	else
 		writelog "SKIP" "${FUNCNAME[0]} - Neither file CFGVDF '$CFGVDF' nor file LFVDF '$LFVDF' found - this should not happen! - skipping"
 	fi
@@ -1392,7 +1425,7 @@ function setGameVars {
 	# win game
 		GPFX="$STEAM_COMPAT_DATA_PATH/pfx"														# currently used WINEPREFIX
 		GP="$(printf "%s\n" "$@" | grep -v "proton\|$SLR" | grep -m1 "$SAC")"					# the absolute game path of the windows game exe
-		GE="$(gawk -F '.exe' '{print $1}' <<< "${GP##*/}")"										# just the windows game exe name
+		GE="$(awk -F '.exe' '{print $1}' <<< "${GP##*/}")"										# just the windows game exe name
 		ISGAME=2																				# with STEAM_COMPAT_DATA_PATH being available it is a windows game
 	else
 	# linux game
@@ -1415,8 +1448,8 @@ function setGameVars {
 		EFD="$(dirname "$GP")"
 	fi
 
-	GFD="$(gawk -F 'common' '{print $1}' <<< "$EFD")common/$(gawk -F 'common' '{print $NF}' <<< "$EFD" | cut -d'/' -f2)" # f.e. used for vortex symlinks
-	GN="$(grep -oE 'common/[^\/]+' <<< "$EFD" | gawk -F 'common/' '{print $NF}')"				# THIS is hopefully the proper game name
+	GFD="$(awk -F 'common' '{print $1}' <<< "$EFD")common/$(awk -F 'common' '{print $NF}' <<< "$EFD" | cut -d'/' -f2)" # f.e. used for vortex symlinks
+	GN="$(grep -oE 'common/[^\/]+' <<< "$EFD" | awk -F 'common/' '{print $NF}')"				# THIS is hopefully the proper game name
 
 	if [ -z "$STEAM_COMPAT_TOOL_PATHS" ] || [ "$STEAM_COMPAT_TOOL_PATHS" == "" ]; then
 		HAVESCTP=0
@@ -1580,7 +1613,7 @@ function setCustomGameVars {
 		ISGAME=3
 	fi
 	
-	GE="$(gawk -F '.exe' '{print $1}' <<< "${GP##*/}")"
+	GE="$(awk -F '.exe' '{print $1}' <<< "${GP##*/}")"
 	EFD="$(dirname "$GP")"
 	# need to just guess here, because of missing fix strings
 	GFD="$EFD"
@@ -1664,7 +1697,7 @@ function loadLanguage {
 			STLLRAW="$(grep "^STLLANG" "$STLDEFGLOBALCFG" | cut -d '=' -f2)"
 			STLLANG="${STLLRAW//\"/}"
 		else
-			ARGSLANG="$(gawk -F 'lang=' '{print $2}' <<< "$@" | cut -d ' ' -f1)"
+			ARGSLANG="$(awk -F 'lang=' '{print $2}' <<< "$@" | cut -d ' ' -f1)"
 			if [ -n "$ARGSLANG" ]; then
 				STLLANG="$ARGSLANG"
 			fi
@@ -1699,7 +1732,7 @@ function setProtonPathVersion {
 			if [ -f "$CTVDF" ]; then
 				PROTVOUT="$(grep "display_name" "$CTVDF" | grep -v "e.g." | sed "s:\" \":\";\":g" | cut -d ';' -f2)"
 			elif [ -f "$PPV" ]; then
-				PROTVOUT="$(gawk '{print $2}' < "$PPV")"
+				PROTVOUT="$(awk '{print $2}' < "$PPV")"
 			fi
 
 			if [ -z "$PROTVOUT" ]; then
@@ -1746,6 +1779,16 @@ function delEmptyFile {
 		if [ "$(wc -l < "$1")" -le 1 ]; then
 			rm "$1" 2>/dev/null
 		fi
+	fi
+}
+
+function rmDupLines {
+	if grep -q "gawk" <<< "$AWKBIN"; then
+		gawk -i inplace '!visited[$0]++' "$1"
+	else
+		awk '!seen[$0]++' "$1" > "$STLSHM/${FUNCNAME[0]}"
+		cp "$STLSHM/${FUNCNAME[0]}" "$1"
+		rm "$STLSHM/${FUNCNAME[0]}" 2>/dev/null
 	fi
 }
 
@@ -1812,7 +1855,7 @@ function getAvailableProtonVersions {
 							if [ -f "$PROTBIN" ]; then
 								fillProtonCSV
 							fi
-						done <<< "$(while read -r SLP; do if [ -d "${SLP//\"/}/$SAC" ]; then find "${SLP//\"/}/$SAC" -mindepth 1 -maxdepth 1 -type d -name "Proton*"; fi; done <<< "$(grep "BaseInstallFolder\|\"path\"" "$CFGVDF" "$LFVDF" 2>/dev/null | gawk '{print $3}' | sort -u)")"
+						done <<< "$(while read -r SLP; do if [ -d "${SLP//\"/}/$SAC" ]; then find "${SLP//\"/}/$SAC" -mindepth 1 -maxdepth 1 -type d -name "Proton*"; fi; done <<< "$(grep "BaseInstallFolder\|\"path\"" "$CFGVDF" "$LFVDF" 2>/dev/null | awk '{print $3}' | sort -u)")"
 					fi
 				else
 					writelog "SKIP" "${FUNCNAME[0]} - Neither file CFGVDF '$CFGVDF' nor file LFVDF '$LFVDF' found - this should not happen! - skipping"
@@ -1822,7 +1865,7 @@ function getAvailableProtonVersions {
 				if [ -f "$CUSTOMPROTONLIST" ]; then
 					writelog "INFO" "${FUNCNAME[0]} - Adding Proton versions found in CUSTOMPROTONLIST '$CUSTOMPROTONLIST'"
 
-					gawk -i inplace '!visited[$0]++' "$CUSTOMPROTONLIST"
+					rmDupLines "$CUSTOMPROTONLIST"
 
 					while read -r PROTLINE; do
 						writelog "INFO" "${FUNCNAME[0]} - Checking line '$PROTLINE' in '$CUSTOMPROTONLIST'"
@@ -1855,7 +1898,7 @@ function getAvailableProtonVersions {
 				mapfile -t -O "${#ProtonCSV[@]}" ProtonCSV < "$PROTONCSV"
 			fi
 			printProtonArr > "$PROTONCSV"
-			gawk -i inplace '!visited[$0]++' "$PROTONCSV"
+			rmDupLines "$PROTONCSV"
 		fi
 	fi
 }
@@ -1898,15 +1941,15 @@ function setDefaultCfgValues {
 		if [ -z "$LOGDIR" ]								; then	LOGDIR="$DEFLOGDIR"; fi
 		if [ -z "$LOGLEVEL" ]							; then	LOGLEVEL="2"; fi
 		if [ -z "$RESETLOG" ]							; then	RESETLOG="1"; fi
-		if [ -z "$STLEDITOR" ]							; then	STLEDITOR="$("$WHICH" geany 2>/dev/null)"; fi
+		if [ -z "$STLEDITOR" ]							; then	STLEDITOR="$(command -v "geany")"; fi
 		if [ -z "$MAXASK" ]								; then	MAXASK="3"; fi
-		if [ -z "$BROWSER" ]							; then	BROWSER="$("$WHICH" firefox 2>/dev/null)"; fi
-		if [ -z "$NOTY" ]								; then	NOTY="$("$WHICH" notify-send 2>/dev/null)"; fi
+		if [ -z "$BROWSER" ]							; then	BROWSER="$(command -v "firefox")"; fi
+		if [ -z "$NOTY" ]								; then	NOTY="$(command -v "notify-send")"; fi
 		if [ -z "$USENOTIFIER" ]						; then	USENOTIFIER="1"; fi
-		if [ -z "$NETMON" ]								; then	NETMON="$("$WHICH" netstat 2>/dev/null)"; fi
+		if [ -z "$NETMON" ]								; then	NETMON="$(command -v "netstat")"; fi
 		if [ -z "$NETOPTS" ]							; then	NETOPTS="-taucp -W"; fi
 		if [ -z "$NETMONDIR" ]							; then	NETMONDIR="$LOGDIR"; fi
-		if [ -z "$VRVIDEOPLAYER" ]						; then	VRVIDEOPLAYER="$("$WHICH" vr-video-player 2>/dev/null)"; fi
+		if [ -z "$VRVIDEOPLAYER" ]						; then	VRVIDEOPLAYER="$(command -v "vr-video-player")"; fi
 		if [ -z "$GAMCON" ]								; then	GAMCON="/usr/share/gameconqueror/GameConqueror.py"; fi
 		if [ -z "$GLOBALCATEGORYDIR" ]					; then	GLOBALCATEGORYDIR="$SYSTEMSTLCFGDIR/categories"; fi
 		if [ -z "$GLOBALMISCDIR" ]						; then	GLOBALMISCDIR="$SYSTEMSTLCFGDIR/misc"; fi
@@ -1970,7 +2013,7 @@ function setDefaultCfgValues {
 		if [ -z "$CUSTCONTY" ]							; then	CUSTCONTY="$NON"; fi
 		if [ -z "$UPDATECONTY" ]						; then	UPDATECONTY="1"; fi
 		if [ -z "$LOGPLAYTIME" ]						; then	LOGPLAYTIME="1"; fi
-		if [ -z "$YAD" ]								; then	YAD="$("$WHICH" yad 2>/dev/null)"; fi
+		if [ -z "$YAD" ]								; then	YAD="$(command -v "yad")"; fi
 		if [ -z "$DPRSCOMPDATA" ]						; then	DPRSCOMPDATA="$STLCFGDIR/${DPRS,}/$CODA"; fi
 		if [ -z "$USEDPRSPROTON" ]						; then	USEDPRSPROTON="$NON"; fi
 		if [ -z "$DPRSUSEVDFSYMLINKS" ]					; then	DPRSUSEVDFSYMLINKS="0"; fi
@@ -1988,7 +2031,7 @@ function setDefaultCfgValues {
 		if [ -z "$REDIRSTEAMUSER" ]						; then	REDIRSTEAMUSER="disabled"; fi
 		if [ -z "$PROTONCHECK" ]						; then	PROTONCHECK="disabled"; fi
 		if [ -z "$USECUSTOMCMD" ]						; then	USECUSTOMCMD="0"; fi
-		if [ -z "$CUSTOMCMD" ]							; then	CUSTOMCMD="$("$WHICH" echo 2>/dev/null)"; fi
+		if [ -z "$CUSTOMCMD" ]							; then	CUSTOMCMD="$(command -v "echo")"; fi
 		if [ -z "$CUSTOMCMD_ARGS" ]						; then	CUSTOMCMD_ARGS="$NON"; fi
 		if [ -z "$ONLY_CUSTOMCMD" ]						; then	ONLY_CUSTOMCMD="0";	fi
 		if [ -z "$FORK_CUSTOMCMD" ]						; then	FORK_CUSTOMCMD="0";	fi
@@ -2012,7 +2055,7 @@ function setDefaultCfgValues {
 		if [ -z "$RUN_REPLAY" ]							; then	RUN_REPLAY="0";	fi
 		if [ -z "$RUN_GAMCON" ]							; then	RUN_GAMCON="0";	fi
 		if [ -z "$RUN_CHEATENGINE" ]					; then	RUN_CHEATENGINE="0"; fi
-		if [ -z "$GAMCONWAITEXE" ]						; then	GAMCONWAITEXE="$("$WHICH" echo 2>/dev/null)"; fi
+		if [ -z "$GAMCONWAITEXE" ]						; then	GAMCONWAITEXE="$(command -v "echo")"; fi
 		if [ -z "$RUN_X64DBG" ]							; then	RUN_X64DBG="0";	fi
 		if [ -z "$USEVORTEX" ]							; then	USEVORTEX="0"; fi
 		if [ -z "$WAITVORTEX" ]							; then	WAITVORTEX="2"; fi
@@ -2023,8 +2066,8 @@ function setDefaultCfgValues {
 		if [ -z "$WINETRICKSPAKS" ]						; then	WINETRICKSPAKS="$NON"; fi
 		if [ -z "$RUN_WINECFG" ]						; then	RUN_WINECFG="0"; fi
 		if [ -z "$USEWINE" ]							; then	USEWINE="0"; fi
-		if [ -z "$WINEVERSION" ]						; then	WINEVERSION="$("$WHICH" echo 2>/dev/null)"; fi
-		if [ -z "$WINEDEFAULT" ]						; then	WINEDEFAULT="$("$WHICH" echo 2>/dev/null)"; fi
+		if [ -z "$WINEVERSION" ]						; then	WINEVERSION="$(command -v "echo")"; fi
+		if [ -z "$WINEDEFAULT" ]						; then	WINEDEFAULT="$(command -v "echo")"; fi
 		if [ -z "$USEWICO" ]							; then	USEWICO="0"; fi
 		if [ -z "$VIRTUALDESKTOP" ]						; then	VIRTUALDESKTOP="0"; fi
 		if [ -z "$USEBOXTRON" ]							; then	USEBOXTRON="0"; fi
@@ -2038,7 +2081,7 @@ function setDefaultCfgValues {
 		if [ -z "$RESHADEPRESET" ]						; then	RESHADEPRESET="$NON"; fi
 		if [ -z "$CHOOSESHADERS" ]						; then	CHOOSESHADERS="0"; fi
 		if [ -z "$ALTEXEPATH" ]							; then	ALTEXEPATH="/tmp"; fi
-		if [ -z "$ARCHALTEXE" ]							; then	ARCHALTEXE="$("$WHICH" echo 2>/dev/null)"; fi
+		if [ -z "$ARCHALTEXE" ]							; then	ARCHALTEXE="$(command -v "echo")"; fi
 		if [ -z "$USEOPENVRFSR" ]						; then	USEOPENVRFSR="0"; fi
 		if [ -z "$RUNSBSVR" ]							; then	RUNSBSVR="0"; fi
 		if [ -z "$VRVIDEOPLAYERARGS" ]					; then	VRVIDEOPLAYERARGS="--flat"; fi
@@ -2081,8 +2124,8 @@ function setDefaultCfgValues {
 		if [ -z "$WINE_FULLSCREEN_FSR_STRENGTH" ]		; then	WINE_FULLSCREEN_FSR_STRENGTH="5"; fi
 		if [ -z "$STLWINEDEBUG" ]						; then	STLWINEDEBUG="-all"; fi
 		if [ -z "$STLWINEDLLOVERRIDES" ]				; then	STLWINEDLLOVERRIDES="$NON"; fi
-		if [ -z "$USERSTART" ]							; then	USERSTART="$("$WHICH" echo 2>/dev/null)"; fi
-		if [ -z "$USERSTOP" ]							; then	USERSTOP="$("$WHICH" echo 2>/dev/null)"; fi	
+		if [ -z "$USERSTART" ]							; then	USERSTART="$(command -v "echo")"; fi
+		if [ -z "$USERSTOP" ]							; then	USERSTOP="$(command -v "echo")"; fi	
 		if [ -z "$STL_PV_VERBOSE" ]						; then	STL_PV_VERBOSE="0"; fi
 		if [ -z "$STL_PV_SHELL" ]						; then	STL_PV_SHELL="$NON"; fi
 		if [ -z "$STL_PV_TERMINAL" ]					; then	STL_PV_TERMINAL="$NON"; fi
@@ -2644,11 +2687,11 @@ function saveCfg {
 
 function notiShow { 
 	if [ -n "$2" ]; then
-		NOTY="$("$WHICH" notify-send 2>/dev/null)"
+		NOTY="$(command -v "notify-send")"
 	fi
 	
 	if [ -n "$USENOTIFIER" ] && [ "$USENOTIFIER" -eq 1 ] || [ -n "$2" ]; then
-		if  [ ! -x "$(command -v "$("$WHICH" "$NOTY" 2>/dev/null)" 2>/dev/null)" ]; then
+		if  [ ! -x "$(command -v "$NOTY")" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Warning - '$NOTY' not found - disabling notifier"
 			USENOTIFIER=0
 		else
@@ -3335,7 +3378,7 @@ function updateWinRes {
 		writelog "INFO" "${FUNCNAME[0]} - Window '$WNAM' is running - polling the resolution" "$WINRESLOG"
 
 		while true; do
-			SRES="$("$XWININFO" -name "$WNAM" -stats 2>/dev/null | gawk '$1=="-geometry" {print $2}' | cut -d '+' -f1)"
+			SRES="$("$XWININFO" -name "$WNAM" -stats 2>/dev/null | awk '$1=="-geometry" {print $2}' | cut -d '+' -f1)"
 			if grep -q "x" <<< "$SRES"; then
 				PREVW="$NEWW"
 				PREVH="$NEWH"
@@ -3387,16 +3430,16 @@ function updateEditor {
 		writelog "WARN" "${FUNCNAME[0]} - '$XDGO' selected as editor or configured editor not found - trying to find an installed editor installed"
 		XDGED="$(command -v "$(xdg-mime query default text/plain | cut -d '.' -f1)" 2>/dev/null)"
 		if [ -x "$XDGED" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Xdg-mime points to '$XDGED', which also exists"
+			writelog "INFO" "${FUNCNAME[0]} - xdg-mime points to '$XDGED', which also exists"
 			FOUNDEDITOR="$XDGED"
-		elif  [ -x "$(command -v "$("$WHICH" geany 2>/dev/null)" 2>/dev/null)" ]; then
-			FOUNDEDITOR="$("$WHICH" geany 2>/dev/null)"
-		elif  [ -x "$(command -v "$("$WHICH" gedit 2>/dev/null)" 2>/dev/null)" ]; then
-			FOUNDEDITOR="$("$WHICH" gedit 2>/dev/null)"
-		elif  [ -x "$(command -v "$("$WHICH" leafpad 2>/dev/null)" 2>/dev/null)" ]; then
-			FOUNDEDITOR="$("$WHICH" leafpad 2>/dev/null)"
-		elif  [ -x "$(command -v "$("$WHICH" kwrite 2>/dev/null)" 2>/dev/null)" ]; then
-			FOUNDEDITOR="$("$WHICH" kwrite 2>/dev/null)"
+		elif  [ -x "$(command -v "geany")" ]; then
+			FOUNDEDITOR="$(command -v "geany")"
+		elif  [ -x "$(command -v "gedit")" ]; then
+			FOUNDEDITOR="$(command -v "gedit")"
+		elif  [ -x "$(command -v "leafpad")" ]; then
+			FOUNDEDITOR="$(command -v "leafpad")"
+		elif  [ -x "$(command -v "kwrite")" ]; then
+			FOUNDEDITOR="$(command -v "kwrite")"
 		else
 			writelog "SKIP" "${FUNCNAME[0]} - No valid editor found - leaving '$XDGO'"
 		fi
@@ -4042,7 +4085,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_CRASHGUESS!$DESC_CRASHGUESS ('CRASHGUESS')":NUM "${CRASHGUESS/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_HELPURL!$DESC_HELPURL ('HELPURL')":CB "$(cleanDropDown "${HELPURL}" "${HUYLIST}${NON}")" `#CAT_Misc` `#MENU_GAME` \
 --field="     $GUI_CREATEDESKTOPICON!$DESC_CREATEDESKTOPICON ('CREATEDESKTOPICON')":NUM "${CREATEDESKTOPICON}!0..3" `#CAT_Misc` `#MENU_GAME` \
---field="     $GUI_GAMESCREENRES!$DESC_GAMESCREENRES ('GAMESCREENRES')":CBE "$(cleanDropDown "${GAMESCREENRES/#-/ -}" "$(printf "%s\n" "$("$XRANDR" --current | grep "[0-9]x" | gawk '{print $1}' | grep "^[0-9]" | tr '\n' '!')")$NON")" `#CAT_Misc` `#MENU_GAME` \
+--field="     $GUI_GAMESCREENRES!$DESC_GAMESCREENRES ('GAMESCREENRES')":CBE "$(cleanDropDown "${GAMESCREENRES/#-/ -}" "$(printf "%s\n" "$("$XRANDR" --current | grep "[0-9]x" | awk '{print $1}' | grep "^[0-9]" | tr '\n' '!')")$NON")" `#CAT_Misc` `#MENU_GAME` \
 --field="     $GUI_TOGSTEAMWEBHELPER!$DESC_TOGSTEAMWEBHELPER ('TOGSTEAMWEBHELPER')":CHK "${TOGSTEAMWEBHELPER/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_STL_PV_VERBOSE!$DESC_STL_PV_VERBOSE ('STL_PV_VERBOSE')":CHK "${STL_PV_VERBOSE/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_STL_PV_SHELL!$DESC_STL_PV_SHELL ('STL_PV_SHELL')":CB "$(cleanDropDown "${STL_PV_SHELL/#-/ -}" "none!after!fail!instead")" `#CAT_Misc` `#MENU_GAME` \
@@ -4918,7 +4961,7 @@ function createMenu {
 	if [ ! -f "$MYTMPL" ] || [ ! -s "$MYTMPL" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Creating menu template '$MYTMPL'"
 		getFilteredEntries "$STLRAWENTRIES" | grep "$ARGSPAT" > "$MYTMPL"
-		gawk -i inplace '!visited[$0]++' "$MYTMPL"
+		rmDupLines "$MYTMPL"
 		splitMenu "$ARGSPLIT" "$MYTMPL"
 	fi
 
@@ -5138,7 +5181,7 @@ function extProtonRun {
 	PROGARGS="$3"
 	EXTWINERUN=0
 
-	if [ "$USEWINE" -eq 1 ] && [ "$WINEVERSION" != "$("$WHICH" echo 2>/dev/null)" ] && [ "$WINEVERSION" != "$NON" ]; then
+	if [ "$USEWINE" -eq 1 ] && [ "$WINEVERSION" != "$(command -v "echo")" ] && [ "$WINEVERSION" != "$NON" ]; then
 		EXTWINERUN=1
 	fi
 
@@ -5249,7 +5292,7 @@ function extProtonRun {
 
 function getWindowHeight {
 	WINID="$1"
-	"$XWININFO" -id "$WINID" -stats | gawk '$1=="-geometry" {print $2}' | cut -d '+' -f1 | cut -d 'x' -f2
+	"$XWININFO" -id "$WINID" -stats | awk '$1=="-geometry" {print $2}' | cut -d '+' -f1 | cut -d 'x' -f2
 }
 
 function initSteamVR {
@@ -5478,7 +5521,7 @@ function getGamePidFromWindowName {
 		#CHECKWINDOWNAME="${GAMEWINDOW//(*}"
 		writelog "INFO" "${FUNCNAME[0]} - Trying to get the PID of the window '$GAMEWINDOW'"
 		# TESTPID="$("$XDO" getwindowpid "$("$XDO" search --name "$CHECKWINDOWNAME")" 2>/dev/null)"
-		TESTPID="$("$XWININFO" -name "${GAMEWINDOW//\"/}" -wm | grep "Process id:" | gawk -F 'Process id: ' '{print $2}' | cut -d ' ' -f1)"
+		TESTPID="$("$XWININFO" -name "${GAMEWINDOW//\"/}" -wm | grep "Process id:" | awk -F 'Process id: ' '{print $2}' | cut -d ' ' -f1)"
 		if [ -n "$TESTPID" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Found the PID '$TESTPID' for the window '$GAMEWINDOW'"
 			echo "$TESTPID"
@@ -5495,7 +5538,7 @@ function GAMEPID {
 			GAMPI="$("$PIDOF" "$WAITFORTHISPID" | cut -d ' ' -f1)"
 		else
 			if [ -n "$GAMEWINDOW" ] && [ "$GAMEWINDOW" != "$NON" ]; then
-				GAMPI="$("$XWININFO" -name "${GAMEWINDOW//\"/}" -wm | grep "Process id:" | gawk -F 'Process id: ' '{print $2}' | cut -d ' ' -f1)"
+				GAMPI="$("$XWININFO" -name "${GAMEWINDOW//\"/}" -wm | grep "Process id:" | awk -F 'Process id: ' '{print $2}' | cut -d ' ' -f1)"
 				writelog "INFO" "${FUNCNAME[0]} - Found gamewindow '$GAMEWINDOW' PID $GAMPI"
 			else
 				GAMPI="$("$PGREP" -a "" | grep "$GE" | grep "Z:" | grep "\.exe" | grep -v "CrashHandler"  | cut -d ' ' -f1 | tail -n1)"
@@ -5856,7 +5899,7 @@ function SBSrunVRVideoPlayer {
 			done
 
 			# player windowid:
-			SBSVRWID=$("$XWININFO" -name "$SBSVRWINNAME" -stats | grep "^$XWININFO" | gawk -F 'id: ' '{print $2}' | cut -d ' ' -f1)
+			SBSVRWID=$("$XWININFO" -name "$SBSVRWINNAME" -stats | grep "^$XWININFO" | awk -F 'id: ' '{print $2}' | cut -d ' ' -f1)
 				
 			if [ -n "$SBSVRWID" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Pressing w in '$VRVIDEOPLAYER' window '$SBSVRWINNAME' to adjust view: '$XDO windowactivate --sync $SBSVRWID key w'"
@@ -5992,7 +6035,7 @@ function getGameWindowXID {
 		writelog "INFO" "${FUNCNAME[0]} - Already have the windowid '$GAMEWINXID'"
 	else	
 		if [ -n "$GAMEWINDOW" ] && [ "$GAMEWINDOW" != "$NON" ]; then
-			GAMEWINXID="$("$XWININFO" -name "${GAMEWINDOW//\"/}" -stats | grep "^$XWININFO" | gawk -F 'id: ' '{print $2}' | cut -d ' ' -f1)"
+			GAMEWINXID="$("$XWININFO" -name "${GAMEWINDOW//\"/}" -stats | grep "^$XWININFO" | awk -F 'id: ' '{print $2}' | cut -d ' ' -f1)"
 			if [ -n "$GAMEWINXID" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Found windowid '$GAMEWINXID' for the windowname '$GAMEWINDOW'"
 			fi
@@ -6043,7 +6086,7 @@ function waitForGameWindowXid {
 			writelog "SKIP" "${FUNCNAME[0]} - Can't wait for the windowid GAMEWINXID without either a valid GAMEWINDOW or GAMEWINPID"
 		fi
 
-		GAMEWINXID="$("$XWININFO" -name "${GAMEWINDOW//\"/}" -stats | grep "^$XWININFO" | gawk -F 'id: ' '{print $2}' | cut -d ' ' -f1)"
+		GAMEWINXID="$("$XWININFO" -name "${GAMEWINDOW//\"/}" -stats | grep "^$XWININFO" | awk -F 'id: ' '{print $2}' | cut -d ' ' -f1)"
 
 		if [ -n "$GAMEWINXID" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Found the game window id '$GAMEWINXID'"
@@ -6367,7 +6410,7 @@ function createShaderRepoList {
 
 	if [ ! -f "$SHADREPOLIST" ] || test "$(find "$SHADREPOLIST" -mmin +"$MAXAGE")"; then	
 		# if this breaks, we'll use bundled static url list instead
-		"$WGET" -q "$SHADREPOURL" -O - | sed -n '/Repository</,/table>/p' | grep "^<td>" | gawk 'ORS=NR%3?FS:RS' | grep -v "https://blues" | sed "s:<td><a rel=\"nofollow\" class=\"external text\" href=::; s:</a></td> <td>:;:; s:</td> <td>:;:; s:\">:\";:; s:<br />: :; s: ;:;:; s:/tree/master::; s:/reshade/Shaders::" > "$SHADREPOLIST"
+		"$WGET" -q "$SHADREPOURL" -O - | sed -n '/Repository</,/table>/p' | grep "^<td>" | awk 'ORS=NR%3?FS:RS' | grep -v "https://blues" | sed "s:<td><a rel=\"nofollow\" class=\"external text\" href=::; s:</a></td> <td>:;:; s:</td> <td>:;:; s:\">:\";:; s:<br />: :; s: ;:;:; s:/tree/master::; s:/reshade/Shaders::" > "$SHADREPOLIST"
 	fi
 
 	RCL="repocustomlist.txt"
@@ -6778,7 +6821,7 @@ function installReshade {
 			else
 				writelog "INFO" "${FUNCNAME[0]} - No old logfile ${RS_DX_DEST//.dll/.log} found"
 			fi
-			if [ -n "$ARCHALTEXE" ] && [ "$ARCHALTEXE" != "$("$WHICH" echo 2>/dev/null)" ]; then
+			if [ -n "$ARCHALTEXE" ] && [ "$ARCHALTEXE" != "$(command -v "echo")" ]; then
 				CHARCH="$ARCHALTEXE"
 			else
 				CHARCH="$GP"
@@ -6929,7 +6972,7 @@ function extSpek {
 		writelog "SKIP" "${FUNCNAME[0]} - Already have '$SPEXT64' - skipping extraction" "E"
 	else
 		if [ -f "$SRCARCH" ]; then
-			if  [ -x "$(command -v "$("$WHICH" "$SEVZA" 2>/dev/null)" 2>/dev/null)" ]; then
+			if  [ -x "$(command -v "$SEVZA")" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Extracting '$SRCARCH' to '$SPEKDLDIR/$SPEKVERS'" "E"
 				"$SEVZA" x "$SRCARCH" -o"$SPEKDLDIR/$SPEKVERS" 2>/dev/null
 			else
@@ -7248,7 +7291,7 @@ function checkDepth3DUse {
 function getUsedVars {
 	while read -r line; do 
 		if  grep -q -v "^#" <<< "$line"; then
-			gawk -F '=' '{print $1}' <<< "$line" 
+			awk -F '=' '{print $1}' <<< "$line" 
 		fi
 	done <"$1"
 }
@@ -7341,7 +7384,7 @@ function setPrevRes {
 }
 
 function customUserScriptStart {
-	if [ -n "$USERSTART" ] && [ "$USERSTART" != "$("$WHICH" echo 2>/dev/null)" ]; then
+	if [ -n "$USERSTART" ] && [ "$USERSTART" != "$(command -v "echo")" ]; then
 		if [ -x "$USERSTART" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Starting custom user startscript '$USERSTART'"
 			if [ "$USEWINE" -eq 0 ]; then
@@ -7356,7 +7399,7 @@ function customUserScriptStart {
 }
 
 function customUserScriptStop {
-	if [ -n "$USERSTOP" ] && [ "$USERSTOP" != "$("$WHICH" echo 2>/dev/null)" ]; then
+	if [ -n "$USERSTOP" ] && [ "$USERSTOP" != "$(command -v "echo")" ]; then
 		if [ -x "$USERSTOP" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Starting custom user stopscript '$USERSTOP'"
 			if [ "$USEWINE" -eq 0 ]; then
@@ -7538,7 +7581,7 @@ function updateConfigFile {
 		if grep -q "config Version: $PROGVERS" "$1"; then
 			writelog "SKIP" "${FUNCNAME[0]} - Config file '$CFGFILE' already at version '$PROGVERS'"
 		else
-			OLDVERS="$(grep "config Version" "$CFGFILE" | gawk -F ': ' '{print $2}')"
+			OLDVERS="$(grep "config Version" "$CFGFILE" | awk -F ': ' '{print $2}')"
 
 			if [ -n "$OLDVERS" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Updating '$CFGFILE' from '$OLDVERS' to '$PROGVERS'"
@@ -7571,7 +7614,7 @@ function updateConfigFile {
 					writelog "UPDATE" "${FUNCNAME[0]} - Adding line '$ADDLINE'"
 					echo "$ADDLINE" >> "$CFGFILE"
 				fi
-			done <<< "$(sed -n "/#START$SEP/,/#END$SEP/p;/#END$SEP/q" "$0" | gawk -F 'echo ' '{print $2}' | grep -v "\"##" | sed '/^[[:space:]]*$/d'| sed 's/\"//g' | sed 's/=\\/=/g' | sed 's/\\$//g')"
+			done <<< "$(sed -n "/#START$SEP/,/#END$SEP/p;/#END$SEP/q" "$0" | awk -F 'echo ' '{print $2}' | grep -v "\"##" | sed '/^[[:space:]]*$/d'| sed 's/\"//g' | sed 's/=\\/=/g' | sed 's/\\$//g')"
 		fi
 
 		# re-enable logging
@@ -7596,7 +7639,7 @@ function createGameCfg {
 		# add missing config entries in the default global config:
 		updateConfigFile "$STLGAMECFG" "saveCfgdefault_template"
 	else
-		updateConfigEntry "CUSTOMCMD" "$("$WHICH" echo 2>/dev/null)" "$STLDEFGAMECFG"
+		updateConfigEntry "CUSTOMCMD" "$(command -v "echo")" "$STLDEFGAMECFG"
 		getGameName "$AID"
 		if [ -n "$GAMENAME" ] && [ "$GAMENAME" != "$NON" ]; then
 		{
@@ -7654,7 +7697,7 @@ function checkTweakLaunch {
 			if grep -q "^TWEAKFILE" "$RUNTWEAK"; then
 				# dependency for tweak command defined
 				writelog "INFO" "${FUNCNAME[0]} - TWEAKFILE configured in $RUNTWEAK as dependency - checking if the file exists in gamedir - relative to the gameexe"
-				TWEAKFILE="$(grep "^TWEAKFILE" "$RUNTWEAK" | gawk -F 'TWEAKFILE=' '{print $2}')"
+				TWEAKFILE="$(grep "^TWEAKFILE" "$RUNTWEAK" | awk -F 'TWEAKFILE=' '{print $2}')"
 				if [ -f "$EFD/$TWEAKFILE" ]; then
 					# dependency for tweak command found
 					writelog "INFO" "${FUNCNAME[0]} - Found tweakcmd dependency in $EFD/$TWEAKFILE - starting the tweakcmd now"
@@ -7744,17 +7787,16 @@ function updateConfigEntry {
 	CFGCAT="$1"
 	CFGVALUE="$2"
 	CFGFILE="$3"
-	CFGAID="$(cut -d . -f1 <<< "${CFGFILE##*/}")"
 	
 	if [ "$CFGCAT" == "CUSTOMCMD" ] && [ "$CFGFILE" == "$STLDEFGAMECFG" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Emptying '$CFGCAT' for '$STLDEFGAMECFG'"
-		CFGVALUE="$("$WHICH" echo 2>/dev/null)"
+		CFGVALUE="$(command -v "echo")"
 	fi
 
 	if [ -z "$3" ]; then
 		writelog "SKIP" "${FUNCNAME[0]} - Expected 3 arguments - only got $*"
 	else
-		if [ "$CFGAID" -ne "$PLACEHOLDERAID" ]; then
+#		if [ "$AID" -ne "$PLACEHOLDERAID" ]; then
 			if [ ! -f "$CFGFILE" ]; then
 				writelog "SKIP" "${FUNCNAME[0]} - Configfile '$CFGFILE' does not exist - skipping config update"
 			else
@@ -7789,7 +7831,7 @@ function updateConfigEntry {
 					fi
 				fi
 			fi
-		fi
+#		fi
 	fi
 
 	CFGCAT=""
@@ -7838,7 +7880,7 @@ function autoCategorySettings {
 							"$SCATCMD" "$AID" "$EFD" "$GWFX"
 						fi
 					fi
-				done <<< "$(sed -n "/\"$AID\"/,/}/p;" "$SC" | sed -n "/\"tags\"/,/}/p" | sed -n "/{/,/}/p" | grep -v '{\|}' | gawk '{print $2}' | sed "s:\"::g")"
+				done <<< "$(sed -n "/\"$AID\"/,/}/p;" "$SC" | sed -n "/\"tags\"/,/}/p" | sed -n "/{/,/}/p" | grep -v '{\|}' | awk '{print $2}' | sed "s:\"::g")"
 			fi
 		else
 			writelog "SKIP" "${FUNCNAME[0]} - '$SUSDA' not found - this should not happen! - skipping"
@@ -8016,8 +8058,8 @@ function GameScopeGui {
 	GASCOS="$("$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top $WINDECO \
 			--title="$TITLE" --separator="|" \
 			--text="$(spanFont "$(strFix "$GUI_GASCOSET" "$SGNAID")" "H")" \
-			--field="$GUI_GSINTRES!$DESC_GSINTRES ('GSINTRES')":CBE "$(cleanDropDown "${GSINTRES//\"}" "$(printf "%s\n" "$("$XRANDR" --current | grep "[0-9]x" | gawk '{print $1}' | grep "^[0-9]" | tr '\n' '!')")")" \
-			--field="$GUI_GSSHWRES!$DESC_GSSHWRES ('GSSHWRES')":CBE "$(cleanDropDown "${GSSHWRES//\"}" "$(printf "%s\n" "$("$XRANDR" --current | grep "[0-9]x" | gawk '{print $1}' | grep "^[0-9]" | tr '\n' '!')")")" \
+			--field="$GUI_GSINTRES!$DESC_GSINTRES ('GSINTRES')":CBE "$(cleanDropDown "${GSINTRES//\"}" "$(printf "%s\n" "$("$XRANDR" --current | grep "[0-9]x" | awk '{print $1}' | grep "^[0-9]" | tr '\n' '!')")")" \
+			--field="$GUI_GSSHWRES!$DESC_GSSHWRES ('GSSHWRES')":CBE "$(cleanDropDown "${GSSHWRES//\"}" "$(printf "%s\n" "$("$XRANDR" --current | grep "[0-9]x" | awk '{print $1}' | grep "^[0-9]" | tr '\n' '!')")")" \
 			--field="$GUI_GSFLR!$DESC_GSFLR ('GSFLR')":CBE "$(cleanDropDown "${GSFLR//\"}" "30!60!90!120!$UL")" \
 			--field="$GUI_GSFLU!$DESC_GSFLU ('GSFLU')":CBE "$(cleanDropDown "${GSFLU//\"}" "30!60!90!120!$UL")" \
 			--field="$GUI_GSIS!$DESC_GSIS ('GSIS')":CHK "$GSIS" \
@@ -8342,7 +8384,7 @@ function OneTimeRunGui {
 }
 
 function setOPCustPath {
-	if [ -z "$CUSTOMCMD" ] || [ "$CUSTOMCMD" == "$("$WHICH" echo 2>/dev/null)" ]; then
+	if [ -z "$CUSTOMCMD" ] || [ "$CUSTOMCMD" == "$(command -v "echo")" ]; then
 		OPCUSTPATH="$GP"
 	fi
 	
@@ -8361,7 +8403,7 @@ function launchCustomProg {
 		CUSTOMCMD="$WICO"
 	fi
 	
-	if [ -z "$CUSTOMCMD" ] || [ "$CUSTOMCMD" == "$("$WHICH" echo 2>/dev/null)" ]; then
+	if [ -z "$CUSTOMCMD" ] || [ "$CUSTOMCMD" == "$(command -v "echo")" ]; then
 
 		writelog "INFO" "${FUNCNAME[0]} - CUSTOMCMD variable is empty - opening file requester"
 		fixShowGnAid
@@ -8403,10 +8445,10 @@ function launchCustomProg {
 		writelog "INFO" "${FUNCNAME[0]} - Using '$WICO' as custom command"
 		LACO="$WICO"
 		CUSTCOM="$WICO"
-	elif  [ -x "$(command -v "$CUSTOMCMD" 2>/dev/null)" ]; then
+	elif  [ -x "$(command -v "$CUSTOMCMD")" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - '$CUSTOMCMD' found"
 		LACO="$CUSTOMCMD"
-		CUSTCOM="$("$WHICH" "$CUSTOMCMD" 2>/dev/null)"
+		CUSTCOM="$(command -v "$CUSTOMCMD")"
 		CHCUSTDIR=1
 	else
 		writelog "INFO" "${FUNCNAME[0]} - '$CUSTOMCMD' not found - searching in gamedir"
@@ -9301,7 +9343,7 @@ function checkCustomLaunch {
 					fi
 				fi
 			else
-				if [ -n "$CUSTOMCMD" ] && [ "$CUSTOMCMD" != "$("$WHICH" echo 2>/dev/null)" ]; then
+				if [ -n "$CUSTOMCMD" ] && [ "$CUSTOMCMD" != "$(command -v "echo")" ]; then
 					writelog "SKIP" "${FUNCNAME[0]} - USECUSTOMCMD is '$USECUSTOMCMD' therefore skipping the custom program '$CUSTOMCMD'"
 				fi
 			fi
@@ -9406,7 +9448,7 @@ function installWinetricksPaks {
 		fi
 
 		if [ -f "$WTLOG" ]; then
-			gawk -i inplace '!visited[$0]++' "$WTLOG"
+			rmDupLines "$WTLOG"
 			if [ ! -f "${WTLOG//.log/.checked}" ]; then
 				mapfile -t -O "${#NOTINSTALLED[@]}" NOTINSTALLED <<< "$(comm -23 <(echo "${INSTPAKS[*]}" | tr ' ' '\n' | sort) <(sort < "$WTLOG"))"
 				if [ -n "${NOTINSTALLED[0]}" ]; then
@@ -9459,7 +9501,7 @@ function chooseWinetricks {
 				writelog "SKIP" "${FUNCNAME[0]} - DLWINETRICKS is set to '$DLWINETRICKS', but '$DLWT' was not found!"
 			fi
 		else
-			if  [ -x "$(command -v "$("$WHICH" "$SYSWINETRICKS" 2>/dev/null)" 2>/dev/null)" ]; then
+			if  [ -x "$(command -v "$SYSWINETRICKS")" ]; then
 				WINETRICKS="$SYSWINETRICKS"
 				writelog "INFO" "${FUNCNAME[0]} - Using systemwide winetricks with version '$($SYSWINETRICKS -V | cut -d ' ' -f1)'"
 			fi	
@@ -9833,7 +9875,7 @@ function useReplay {
 function runGamCon {
 	writelog "INFO" "${FUNCNAME[0]} - Starting '$GAMCON' process"
 
-	if [ -n "$GAMCONWAITEXE" ] && [ "$GAMCONWAITEXE" != "$("$WHICH" echo 2>/dev/null)" ]; then
+	if [ -n "$GAMCONWAITEXE" ] && [ "$GAMCONWAITEXE" != "$(command -v "echo")" ]; then
 		if [ -f "$GAMCONWAITEXE" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Waiting for alternative '$GAMCONWAITEXE' process"
 			while [ -z "$("$PIDOF" "$GAMCONWAITEXE" | cut -d ' ' -f1)" ]; do 
@@ -10090,8 +10132,8 @@ function listSteWoShPaks {
 
 function getGameDirFromAM {
 	APPMAFE="$1"
-	GIRAW="$(grep "\"installdir\"" "$APPMAFE" | gawk -F '"installdir"' '{print $NF}')"
-	GINS="$(gawk '{$1=$1};1' <<< "${GIRAW//\"/}")"
+	GIRAW="$(grep "\"installdir\"" "$APPMAFE" | awk -F '"installdir"' '{print $NF}')"
+	GINS="$(awk '{$1=$1};1' <<< "${GIRAW//\"/}")"
 	OUTGD="${APPMAFE%/*}/common/$GINS"
 	if [ -d "$OUTGD" ]; then
 		echo "$OUTGD"
@@ -10429,7 +10471,7 @@ function listWinSteamLibraries {
 		mapfile -t -O "${#SLARR[@]}" SLARR <<< "$W1"
 		W2="${W1//\//\\\\}"
 		echo "\"$COUNTER\" \"Z:$W2\""
-	done <<< "$(grep "\"path\"" "$LFVDF" | gawk '{print $2}')"
+	done <<< "$(grep "\"path\"" "$LFVDF" | awk '{print $2}')"
 }
 
 function installDotNet {
@@ -10479,7 +10521,7 @@ function addVortexStage {
 	
 	if [ -n "$NEWVS" ]; then
 		echo "$NEWVS" >> "$VORTEXSTAGELIST"
-		gawk -i inplace '!visited[$0]++' "$VORTEXSTAGELIST"
+		rmDupLines "$VORTEXSTAGELIST"
 	fi
 }
 
@@ -10608,7 +10650,7 @@ function dlVortexSupportedList {
 		"$WGET" -q "$VORTSUPURL" -O "$VORTHTMLLIST"
 	fi
 	
-	gawk '/supported-games/,/Vortex FAQ/' "$VORTHTMLLIST" | grep -oP "(?<=<li><a href=).*" | grep -v "Nexus Mods" | sed "s:^\"/:\":; s:\">:\";\":; s:</a></li>:\":" | sort -o "$VORTTMPLIST"
+	awk '/supported-games/,/Vortex FAQ/' "$VORTHTMLLIST" | grep -oP "(?<=<li><a href=).*" | grep -v "Nexus Mods" | sed "s:^\"/:\":; s:\">:\";\":; s:</a></li>:\":" | sort -o "$VORTTMPLIST"
 	grep -wF -f "$VORTTMPLIST"  "$VORTEXGAMES" > "${VORTTMPLIST//-temp/-temp2}"
 	{
 		cat "${VORTTMPLIST//-temp/-temp2}"
@@ -10633,7 +10675,7 @@ function getGameSteamCategories {
 
 			while read -r SCAT; do
 				mapfile -t -O "${#GSCATS[@]}" GSCATS <<< "$SCAT"
-			done <<< "$(sed -n "/\"$SCGAME\"/,/}/p;" "$SC" | sed -n "/\"tags\"/,/}/p" | sed -n "/{/,/}/p" | grep -v '{\|}' | gawk '{print $2}' | sed "s:\"::g")"
+			done <<< "$(sed -n "/\"$SCGAME\"/,/}/p;" "$SC" | sed -n "/\"tags\"/,/}/p" | sed -n "/{/,/}/p" | grep -v '{\|}' | awk '{print $2}' | sed "s:\"::g")"
 			if [ -n "$2" ]; then
 				OUT1="$(printf "%s," "${GSCATS[@]}")"
 				printf "%s\n" "${OUT1%*,}"
@@ -10695,7 +10737,7 @@ function VortexGamesDialog {
 	case $? in
 		0)
 			while read -r checkvgame; do
-				VGNAM="$(grep "^$checkvgame" "$VGNLIST" | gawk -F ';' '{print $2}')"
+				VGNAM="$(grep "^$checkvgame" "$VGNLIST" | awk -F ';' '{print $2}')"
 				GVCFG="$STLGAMEDIRID/${checkvgame}.conf"
 
 				if ! grep -q "$checkvgame" <<< "${VINGAMES[@]}"; then
@@ -10790,7 +10832,7 @@ function checkVortexRegs {
 	if wineVortexRun "$VORTEXWINE" reg QUERY "$REGKEY" >/dev/null ; then
 		writelog "INFO" "${FUNCNAME[0]} - Registry path $REGKEY already set"
 		# value of the currently set registry path:
-		REGPATH="$(wineVortexRun "$VORTEXWINE" reg QUERY "$REGKEY" | grep -i "$PATHKEY" | gawk -F 'REG_SZ' '{print $NF}' | gawk '{$1=$1};1' | tr -d "\n\r")"
+		REGPATH="$(wineVortexRun "$VORTEXWINE" reg QUERY "$REGKEY" | grep -i "$PATHKEY" | awk -F 'REG_SZ' '{print $NF}' | awk '{$1=$1};1' | tr -d "\n\r")"
 
 		if [ "$REGPATH" == "${INSTP//\\\\/\\}" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - The registry entry '$REGPATH' for '$PATHKEY' is identical to the gamepath '${INSTP//\\\\/\\}'"
@@ -10824,7 +10866,7 @@ function runVortex {
 
 function runVortSetCmd {
 	if [ -f "$VORTSETCMD" ]; then
-		gawk -i inplace '!visited[$0]++' "$VORTSETCMD"
+		rmDupLines "$VORTSETCMD"
 		cd "$VORTEXINSTDIR" >/dev/null || return
 		wineVortexRun "$VORTEXWINE" "$VORTSETCMD"
 		cd - >/dev/null || return
@@ -10853,7 +10895,7 @@ function setVortexDLPath {
 function setGameVortexStaging {
 	VGAMEDIR="$1"
 	# find matching Staging Directory:
-	GAMEMP="$(df -P "$VGAMEDIR" | gawk 'END{print $NF}')"
+	GAMEMP="$(df -P "$VGAMEDIR" | awk 'END{print $NF}')"
 	writelog "INFO" "${FUNCNAME[0]} - Mount point of partition where the game is installed: '$GAMEMP'"
 	unset CONFSTAGE VORTEXSTAGING
 
@@ -10876,7 +10918,7 @@ function setGameVortexStaging {
 			USEVORTEX="0"
 		else
 			PARTLOG=" - using that as VORTEXSTAGING dir for all games on partition' $GAMEMP'"
-			HOMEMP="$(df -P "${STLVORTEXDIR%/*}" | gawk 'END{print $NF}')"
+			HOMEMP="$(df -P "${STLVORTEXDIR%/*}" | awk 'END{print $NF}')"
 			writelog "INFO" "${FUNCNAME[0]} - HOMEMP is $HOMEMP and GAMEMP is $GAMEMP"
 
 			# don't pollute base steam installation with a ~/.steam/steam/Vortex dir, so default to $STLVORTEXDIR/stageing
@@ -10888,7 +10930,7 @@ function setGameVortexStaging {
 			getVortexStage "$GAMEMP/${VTX^}"
 
 			# then try in the current SteamLibrary dir besides steamapps, as it should be writeable by the user and is unused from steam(?):
-			getVortexStage "$(gawk -F 'steamapps' '{print $1}' <<< "$VGAMEDIR")${VTX^}"
+			getVortexStage "$(awk -F 'steamapps' '{print $1}' <<< "$VGAMEDIR")${VTX^}"
 
 			# updating Vortex config with the new found VORTEXSTAGING dir:
 			touch "$VORTEXSTAGELIST"
@@ -10960,7 +11002,7 @@ function setInstPathReg {
 			writelog "INFO" "${FUNCNAME[0]} - Found some instPath registry value in '$NEXUSGAMEFILE' - trying to extract it"
 			REGKEY=""
 			PATHKEY=""
-			RAWREG="$(grep -E 'instPath.*winapi.RegGetValue' "$NEXUSGAMEFILE" -A3 | tr -d "\n\r" | gawk -F 'RegGetValue' '{print $2}' | cut -d';' -f1 | tr -s " " | sed "s:^(::g" | sed "s:)$::g" | sed 's/, /,/g' | gawk '{$1=$1;print}')"
+			RAWREG="$(grep -E 'instPath.*winapi.RegGetValue' "$NEXUSGAMEFILE" -A3 | tr -d "\n\r" | awk -F 'RegGetValue' '{print $2}' | cut -d';' -f1 | tr -s " " | sed "s:^(::g" | sed "s:)$::g" | sed 's/, /,/g' | awk '{$1=$1;print}')"
 			
 			if [ -n "$RAWREG" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Analyzing found registry snippet $RAWREG"
@@ -10973,8 +11015,8 @@ function setInstPathReg {
 					
 					writelog "INFO" "${FUNCNAME[0]} - REGWIP is $REGWIP"
 
-					REGWIPKEY="$(gawk -F ',' '{print $1}' <<< "$REGWIP" | sed "s:'::g")"
-					PATHKEY="$(gawk -F ',' '{print $2}' <<< "$REGWIP" | sed "s:'::g")"
+					REGWIPKEY="$(awk -F ',' '{print $1}' <<< "$REGWIP" | sed "s:'::g")"
+					PATHKEY="$(awk -F ',' '{print $2}' <<< "$REGWIP" | sed "s:'::g")"
 
 					if grep -q -i "WOW6432Node" <<< "$REGWIPKEY"; then
 						writelog "INFO" "${FUNCNAME[0]} - Squeezing in a 'WOW6432Node' into the '$REGWIPKEY' string"
@@ -11039,7 +11081,7 @@ function prepareVortexGame {
 			fi
 #			setupGameVortex "Z:${VGAMEDIR//\//\\\\}"
 			grep "\"$VAID\"" "$VORTEXGAMES" >> "$SEENVORTEXGAMES"
-			gawk -i inplace '!visited[$0]++' "$SEENVORTEXGAMES"
+			rmDupLines "$SEENVORTEXGAMES"
 			setGameVortexStaging "$VGAMEDIR"
 
 			if [ -z "$2" ]; then
@@ -11072,7 +11114,7 @@ function setVortexConfigVdf {
 	writelog "INFO" "${FUNCNAME[0]} - Updating '$COCOV' in the ${VTX^} pfx, to make newly games available when auto-detectable"
 	cp "$CFGVDF" "$VTXSTCFG"
 	while read -r line; do
-		BIF="$(gawk '{print $2}' <<< "$line")"
+		BIF="$(awk '{print $2}' <<< "$line")"
 		BIF="${BIF//\"}"
 		sed "s:$BIF:Z\:$BIF:" -i "$VTXSTCFG"
 	done <<< "$(grep "BaseInstallFolder" "$VTXSTCFG")"
@@ -11245,7 +11287,7 @@ function VortexOptions {
 		TT_CODA="$(printf '%s\n%s\n' "${TT_CODA}" "Version installed: $(getInstVtxVers)")"
 	fi
 
-	VTXDLV="$(find "${VORTEXDLDIR}" -name "${VTX}-setup*" | sort -V | tail -n1 | gawk -F'${VTX}-setup' '{print $NF}')"
+	VTXDLV="$(find "${VORTEXDLDIR}" -name "${VTX}-setup*" | sort -V | tail -n1 | awk -F'${VTX}-setup' '{print $NF}')"
 	if [ -n "$VTXDLV" ]; then
 		VSD1="${VTXDLV//${VORTEXDLDIR}\/${VTX}-setup-}"
 		VSD="${VSD1//.exe}"
@@ -11381,7 +11423,7 @@ function installVortexGui {
 		GUI_VTXINST="$(printf '%s\n%s\n' "${GUI_VTXINST}" "Version installed: $(getInstVtxVers)")"
 	fi
 
-	VTXDLV="$(find "${VORTEXDLDIR}" -name "${VTX}-setup*" | sort -V | tail -n1 | gawk -F'${VTX}-setup' '{print $NF}')"
+	VTXDLV="$(find "${VORTEXDLDIR}" -name "${VTX}-setup*" | sort -V | tail -n1 | awk -F'${VTX}-setup' '{print $NF}')"
 	if [ -n "$VTXDLV" ]; then
 		VSD1="${VTXDLV//${VORTEXDLDIR}\/${VTX}-setup-}"
 		VSD="${VSD1//.exe}"
@@ -12139,7 +12181,7 @@ function checkDep {
 
 	if [ -n "${!CATNAM##*[!0-9]*}" ]; then
 		if [ "${!CATNAM}" -eq 1 ]; then
-			if  [ ! -x "$(command -v "$("$WHICH" "$CHECKPROG" 2>/dev/null)" 2>/dev/null)" ]; then
+			if  [ ! -x "$(command -v "$CHECKPROG")" ]; then
 				writelog "WARN" "${FUNCNAME[0]} - Disabling '$CATNAM' because '$CHECKPROG' is missing"
 				notiShow "$(strFix "$NOTY_PROGRAMMISSING" "$CATNAM" "$CHECKPROG")"
 				unset "$CATNAM"
@@ -12233,7 +12275,7 @@ function checkIntDeps {
 		DEPSMISSING=0
 
 		while read -r INTDEP; do
-			if  [ ! -x "$(command -v "$("$WHICH" "${!INTDEP}" 2>/dev/null)" 2>/dev/null)" ]; then
+			if  [ ! -x "$(command -v "${!INTDEP}")" ]; then
 				writelog "ERROR" "${FUNCNAME[0]} - ${!INTDEP} not found!" "E"
 				notiShow "$(strFix "$NOTY_NOTFOUND" "${!INTDEP}")"
 				DEPSMISSING=1
@@ -12241,20 +12283,17 @@ function checkIntDeps {
 		done <<< "$(sed -n "/^#STARTINTDEPS/,/^#ENDINTDEPS/p;/^#ENDINTDEPS/q" "$0" | grep -v "^#" | cut -d '=' -f1)"
 
 		if [ -z "$YAD" ]; then
-			YAD="$("$WHICH" yad 2>/dev/null)"
+			YAD="$(command -v "yad")"
 		fi
 
-		if  [ ! -x "$(command -v "$("$WHICH" "$YAD" 2>/dev/null)" 2>/dev/null)" ]; then
+		if  [ ! -x "$(command -v "$YAD")" ]; then
 			DEPSMISSING=1
 			writelog "ERROR" "${FUNCNAME[0]} - '$YAD' was not found! Check 'stl --help' for alternatives and/or read '$PROJECTPAGE/wiki/Yad'" "E"
 			notiShow "$(strFix "$NOTY_NOTFOUND" "$YAD")"
 		fi
 
-
-		if  [ -x "$(command -v "$("$WHICH" "awk" 2>/dev/null)" 2>/dev/null)" ] && [ ! -x "$(command -v "$("$WHICH" "$AWK" 2>/dev/null)" 2>/dev/null)" ]; then
-			writelog "WARN" "${FUNCNAME[0]} - Binary awk was found, but not '$AWK'. As awk can also be a different binary with different parameters 'gawk' is used for '$AWK'" "E"
-		fi	
-
+		setAwkBin
+		
 		MINYAD="7.2"
 		YADVER="0"
 
@@ -12827,7 +12866,7 @@ function getProtonDBRating {
 		AID="$1"
 	fi
 	
-	if [ ! -x "$(command -v "$("$WHICH" "$JQ" 2>/dev/null)" 2>/dev/null)" ]; then
+	if [ ! -x "$(command -v "$JQ")" ]; then
 		writelog "WARN" "${FUNCNAME[0]} - Can't get data from '${PDBAPI//XXX/$AID}' because '$JQ' is not installed"
 	else
 		PDBAPI="https://www.protondb.com/api/v1/reports/summaries/XXX.json"
@@ -13103,9 +13142,9 @@ function findConty {
 		writelog "INFO" "${FUNCNAME[0]} - Using downloaded Conty '$CONTYDLDIR/$CONTY'"
 		updateConty
 		export RUNCONTY="$CONTYDLDIR/$CONTY"
-	elif  [ -x "$(command -v "$("$WHICH" "$CONTY" 2>/dev/null)" 2>/dev/null)" ]; then
+	elif  [ -x "$(command -v "$CONTY")" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Using Conty in 'PATH' '$("$WHICH" "$CONTY")'"
-		RUNCONTY="$("$WHICH" "$CONTY")"
+		RUNCONTY="$(command -v "$CONTY")"
 		export RUNCONTY
 	else
 		writelog "INFO" "${FUNCNAME[0]} - No Conty found - Opening requester"
@@ -13306,8 +13345,8 @@ function fixSymlinks {
 			# the loop needs >1 second even without updating any symlinks and might need much longer with many syminks to be recreated
 			# maybe worth to create a parsable checkfile to skip it on the next run?
 			while read -r fixme; do
-				SYML="$(gawk -F ';' '{print $1}' <<< "$fixme")"
-				OFIL="$(gawk -F ';' '{print $2}' <<< "$fixme")"
+				SYML="$(awk -F ';' '{print $1}' <<< "$fixme")"
+				OFIL="$(awk -F ';' '{print $2}' <<< "$fixme")"
 
 				# make sure the found result is correct
 				if [ "$(readlink -f "${SYML//\"}")" == "$(readlink -f "${OFIL//\"}")" ]; then
@@ -13362,8 +13401,8 @@ function unSymlink {
 			writelog "INFO" "${FUNCNAME[0]} - Starting unsymlinking as requested - might needs some time, depending on the symlink count"
 
 			while read -r unsym; do
-				SYML="$(gawk -F ';' '{print $1}' <<< "$unsym")"
-				OFIL="$(gawk -F ';' '{print $2}' <<< "$unsym")"
+				SYML="$(awk -F ';' '{print $1}' <<< "$unsym")"
+				OFIL="$(awk -F ';' '{print $2}' <<< "$unsym")"
 				mv "${SYML//\"}" "${SYML//\"}_OLD"
 				cp "${OFIL//\"}" "${SYML//\"}"
 				if [ -f "${SYML//\"}" ]; then
@@ -13893,9 +13932,9 @@ function WineSelection {
 
 function setWineVersion {
 	if [ "$USEWINE" -eq 1 ] && [ "$ISGAME" -eq 2 ]; then
-		if [ "$WINEVERSION" == "$("$WHICH" echo 2>/dev/null)" ] || [ "$WINEVERSION" == "$NON" ]; then
+		if [ "$WINEVERSION" == "$(command -v "echo")" ] || [ "$WINEVERSION" == "$NON" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - No current wine version configured yet"
-			if [ "$WINEDEFAULT" != "$("$WHICH" echo 2>/dev/null)" ] && [ "$WINEDEFAULT" != "$NON" ]; then
+			if [ "$WINEDEFAULT" != "$(command -v "echo")" ] && [ "$WINEDEFAULT" != "$NON" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Default wine version set to '$WINEDEFAULT' - using that as current wine"
 				WINEVERSION="$WINEDEFAULT"
 			else
@@ -13941,7 +13980,7 @@ function setWineVars {
 	if [ "$USEWINE" -eq 1 ] && [ "$ISGAME" -eq 2 ] && { [ -z "$RUNWINEVERSION" ] || [ "$RUNWINEVERSION" != "$WINEVERSION" ];}; then
 		writelog "INFO" "${FUNCNAME[0]} - USEWINE is enabled. Creating some wine related variables"
 
-		if [ -n "$RUNWINEVERSION" ] && [ "$WINEVERSION" == "$("$WHICH" echo 2>/dev/null)" ]; then
+		if [ -n "$RUNWINEVERSION" ] && [ "$WINEVERSION" == "$(command -v "echo")" ]; then
 			WINEVERSION="$RUNWINEVERSION"
 		else
 			createDLWineList
@@ -13964,7 +14003,7 @@ function setWineVars {
 		RUNWICO="$USEWINEBIN/$WICO"
 		writelog "INFO" "${FUNCNAME[0]} - Setting $WICO binary to '$RUNWICO'"
 
-		if [ -n "$ARCHALTEXE" ] && [ "$ARCHALTEXE" != "$("$WHICH" echo 2>/dev/null)" ]; then
+		if [ -n "$ARCHALTEXE" ] && [ "$ARCHALTEXE" != "$(command -v "echo")" ]; then
 			CHARCH="$ARCHALTEXE"
 		else
 			CHARCH="$GP"
@@ -13985,11 +14024,11 @@ function setWineVars {
 function launchSteamGame {
 ########################
 	if [ "$USEGAMEMODERUN" -eq 1 ]; then
-		GMR="$("$WHICH" "$GAMEMODERUN" 2>/dev/null)"
+		GMR="$(command -v "$GAMEMODERUN")"
 	fi
 
 	if [ "$USEGAMESCOPE" -eq 1 ]; then
-		GSC="$("$WHICH" "$GAMESCOPE" 2>/dev/null)"
+		GSC="$(command -v "$GAMESCOPE")"
 	fi
 	
 	if [ "$USEBOXTRON" -eq 1 ] || [ "$USEROBERTA" -eq 1 ] || [ "$USELUXTORPEDA" -eq 1 ]; then
@@ -15285,8 +15324,8 @@ function createMetaData {
 			AMF="${APPMA##*/}"
 			MAID="$(cut -d'_' -f2 <<< "$AMF" | cut -d'.' -f1)"
 
-			GNRAW="$(grep "\"name\"" "$APPMA" | gawk -F '"name"' '{print $NF}')"
-			GNAM="$(gawk '{$1=$1};1' <<< "$GNRAW")"
+			GNRAW="$(grep "\"name\"" "$APPMA" | awk -F '"name"' '{print $NF}')"
+			GNAM="$(awk '{$1=$1};1' <<< "$GNRAW")"
 			GDIR="$(getGameDirFromAM "$APPMA")"
 			MPFX="$(dirname "$APPMA")/$CODA/$MAID/pfx"
 
@@ -15645,7 +15684,7 @@ function addNonSteamGame {
 
 			NOSTAIDRHX="$("$OSSL" rand -hex 4)"
 			NOSTAID="$(hex2dec "$NOSTAIDRHX")"
-			NOSTAIDHX="\x$(gawk '{$1=$1}1' FPAT='.{2}' OFS="\\\x" <<< "$NOSTAIDRHX")"
+			NOSTAIDHX="\x$(awk '{$1=$1}1' FPAT='.{2}' OFS="\\\x" <<< "$NOSTAIDRHX")"
 
 			writelog "INFO" "${FUNCNAME[0]} - === Adding new $NSGA ==="
 			writelog "INFO" "${FUNCNAME[0]} - AppID: '${NOSTAID}'"
@@ -15743,7 +15782,7 @@ function addNonSteamGame {
 function closeSTL {
 	writelog "INFO" "${FUNCNAME[0]} - closing STL"
 
-	updateConfigEntry "CUSTOMCMD" "$("$WHICH" echo 2>/dev/null)" "$STLDEFGAMECFG"
+	updateConfigEntry "CUSTOMCMD" "$(command -v "echo")" "$STLDEFGAMECFG"
 	
 	# dummy file which could be used to stop possible while loops
 	writelog "INFO" "${FUNCNAME[0]} - Creating '$CLOSETMP'"
@@ -15835,7 +15874,7 @@ function closeSTL {
 			"$PKILL" -f "$NETMON"
 			writelog "INFO" "${FUNCNAME[0]} - $NETMON killed"
 			# remove duplicate lines to make reading easier
-			gawk -i inplace '!visited[$0]++' "$NETMONDIR/$AID-$NETMON.log"
+			rmDupLines "$NETMONDIR/$AID-$NETMON.log"
 		fi
 	fi
 
@@ -15899,11 +15938,11 @@ function emptyVars {
 		TIEXF="$STLSHM/TrayIconFuncs.txt"
 
 		if [ ! -f "$TIEXV" ]; then
-			sed -n "/^#STARTIEX/,/^#ENDIEX/p;/^#ENDIEX/q" "$0" | grep export | grep -v "export \-f" | cut -d '=' -f1 | gawk -F 'export ' '{print $2}' > "$TIEXV"
+			sed -n "/^#STARTIEX/,/^#ENDIEX/p;/^#ENDIEX/q" "$0" | grep export | grep -v "export \-f" | cut -d '=' -f1 | awk -F 'export ' '{print $2}' > "$TIEXV"
 		fi
 
 		if [ ! -f "$TIEXF" ]; then
-			sed -n "/^#STARTIEX/,/^#ENDIEX/p;/^#ENDIEX/q" "$0" | grep "export \-f" | gawk -F '-f ' '{print $2}' > "$TIEXF"
+			sed -n "/^#STARTIEX/,/^#ENDIEX/p;/^#ENDIEX/q" "$0" | grep "export \-f" | awk -F '-f ' '{print $2}' > "$TIEXF"
 		fi
 
 		while read -r intvar; do
@@ -16015,11 +16054,11 @@ function CreateCustomEvaluatorScript {
 		
 		while read -r intpak; do
 			if [ -n "$intpak" ] ; then
-				IPFDIR="$(gawk -F'"' '{print $4}' <<< "$intpak")"
+				IPFDIR="$(awk -F'"' '{print $4}' <<< "$intpak")"
 				IPDIR="${IPFDIR##*/}"
 				INTPAKWA="$STLSHM/intpak"
 				# dirty workaround - proper fix?
-				echo "tac \"$OEVALSC\" | gawk '/$IPDIR/,/appid/' | tac" > "$INTPAKWA"
+				echo "tac \"$OEVALSC\" | awk '/$IPDIR/,/appid/' | tac" > "$INTPAKWA"
 				chmod +x "$INTPAKWA"
 				{
 					echo "	\"$OCNT\""
@@ -16487,7 +16526,7 @@ function checkFirstTimeRun {
 		# filter evaluatorscript command
 		if grep -q "$EVALSC" <<< "$@"; then
 			# shellcheck disable=SC1003
-			EVSC="$(gawk -F 'legacycompat\\\' '{print $NF}' <<< "$@")"
+			EVSC="$(awk -F 'legacycompat\\\' '{print $NF}' <<< "$@")"
 		fi
 
 		cleanupOutdatedEvals
@@ -16537,7 +16576,7 @@ function checkFirstTimeRun {
 			if [ -n "$EARLYPROT" ] && [ -f "$EARLYPROT" ]; then
 					# filter evaluatorscript command
 					if grep -q "$EVALSC" <<< "$@"; then
-						mapfile -d " " -t -O "${#RUNISCCMD[@]}" RUNISCCMD < <(printf '%s' "$(gawk -F 'run ' '{print $NF}' <<< "$*")")
+						mapfile -d " " -t -O "${#RUNISCCMD[@]}" RUNISCCMD < <(printf '%s' "$(awk -F 'run ' '{print $NF}' <<< "$*")")
 						# no evaluatorscript for the started game yet in the metadata - so starting the collector:
 						
 						SRCCUSTEVSC="$EVMETACUSTOMID/$EVSC"
@@ -16620,7 +16659,7 @@ function checkFirstTimeRun {
 									STINFO="$(date +%H:%M:%S) $NICEPROGNAME sees ${COMRED//\"}"
 									break
 								fi
-							done <<< "$(grep "process 1" "$TEVSC" | gawk -F'\\' '{print $NF}')"
+							done <<< "$(grep "process 1" "$TEVSC" | awk -F'\\' '{print $NF}')"
 						fi
 						printf '\n%s\n' "$STINFO"	# heh, hello Steam Gui
 					# should not happen, but better log it anyway just in case:
