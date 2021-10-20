@@ -48,10 +48,8 @@ JQ="jq"
 CONVERT="convert"
 IDENTIFY="identify"
 RSYNC="rsync"
-OSSL="openssl"
 CONTY="conty.sh"
 SEVZA="7za"
-HAVEOSSL=1
 CHECKHMD=1
 X32D="x32dbg"
 X64D="x64dbg"
@@ -15556,296 +15554,284 @@ function AutoMarkSCat {
 }
 
 function addNonSteamGameGui {
-	checkDep "HAVEOSSL" "$OSSL"
+	writelog "INFO" "${FUNCNAME[0]} - Starting the Gui for adding a $NSGA to Steam"
 
-	if [ -z "$HAVEOSSL" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - '$OSSL' could not be found, can't generate a random AppID without it"
-	else
-		writelog "INFO" "${FUNCNAME[0]} - Starting the Gui for adding a $NSGA to Steam"
-
-		# defaults
-		if [ -n "$1" ]; then
-			for i in "$@"
-			do
-			case $i in
-				-ep=*|--exepath=*)
-				NOSTGEXEPATH="${i#*=}";
-				shift
-				;;
-			esac
-			done
-
-			NOSTGAPPNAME="${NOSTGEXEPATH##*/}"
-			NOSTGSTDIR="${NOSTGEXEPATH%/*}"
-		fi
-		
-		if  grep -q "^NOSTEAMSTLDEF=\"1\"" "$STLDEFGLOBALCFG"; then
-			NOSTGICONPATH="$STLICON"
-		else
-			NOSTGICONPATH=""
-		fi
-		NOSTGHIDE=0
-		NOSTGADC=1
-		NOSTGAO=1
-		NOSTGVR=0
-		unset VALTAGS
-		mapfile -d "\n" -t -O "${#VALTAGS[@]}" VALTAGS <<< "$(getActiveSteamCategories | sed '/^$/d')"
-		VALIDTAGS="$(printf "%s" "${VALTAGS[@]}" | tr '\n' ',' | sed 's/,*$//g')"
-
-		AutoMarkSCat
-
-		if [[ -v SCATSEL[@] ]]; then
-			NOSTTAGS="$(printf "%s" "${SCATSEL[@]}" | tr '\n' ',' | sed 's/,*$//g')"
-		fi 
-		export CURWIKI="$PPW/Add-Non-Steam-Game"
-		TITLE="${PROGNAME}-$NSGA"
-		pollWinRes "$TITLE"
-
-		NSGSET="$("$YAD" --f1-action="$F1ACTION" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
-		--title="$TITLE" --separator="|" \
-		--text="$(spanFont "$GUI_ADDNSG" "H")\n<span font=\"italic\">$(strFix "$GUI_WARNNSG1" "$STERECO")\n$(strFix "$GUI_WARNNSG2" "$STERECO"))</span>" \
-		--field=" ":LBL " " \
-		--field="     $GUI_NOSTGAPPNAME!$DESC_NOSTGAPPNAME ('NOSTGAPPNAME')" "${NOSTGAPPNAME/#-/ -}" \
-		--field="     $GUI_NOSTGEXEPATH!$DESC_NOSTGEXEPATH ('NOSTGEXEPATH')":FL "${NOSTGEXEPATH/#-/ -}" \
-		--field="     $GUI_NOSTGSTDIR!$DESC_NOSTGSTDIR ('NOSTGSTDIR')":DIR "${NOSTGSTDIR/#-/ -}" \
-		--field="     $GUI_NOSTGICONPATH!$DESC_NOSTGICONPATH ('NOSTGICONPATH')":FL "${NOSTGICONPATH/#-/ -}" \
-		--field="     $GUI_NOSTGLAOP!$DESC_NOSTGLAOP ('NOSTGLAOP')" "${NOSTGLAOP/#-/ -}" \
-		--field="     $GUI_NOSTGHIDE!$DESC_NOSTGHIDE ('NOSTGHIDE')":CHK "${NOSTGHIDE/#-/ -}" \
-		--field="     $GUI_NOSTGADC!$DESC_NOSTGADC ('NOSTGADC')":CHK "${NOSTGADC/#-/ -}" \
-		--field="     $GUI_NOSTGAO!$DESC_NOSTGAO ('NOSTGAO')":CHK "${NOSTGAO/#-/ -}" \
-		--field="     $GUI_NOSTGVR!$DESC_NOSTGVR ('NOSTGVR')":CHK "${NOSTGVR/#-/ -}" \
-		--field="     $GUI_NOSTTAGS!$DESC_NOSTTAGS ('NOSTTAGS')":CBE "$(cleanDropDown "${NOSTTAGS/#-/ -}" "$VALIDTAGS")" \
-		--button="$BUT_CAN":0 --button="$BUT_TAGS":2 --button="$BUT_CREATE":4 "$GEOM")"
-
-		case $? in
-			0)  writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_CAN'"
-			;;
-			2)  writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_TAGS"
-				SteamCatSelect "$NON" "${FUNCNAME[0]}"
-			;;
-			4)  writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_CREATE'"
-				if [ -n "$NSGSET" ]; then
-					mapfile -d "|" -t -O "${#NSGSETARR[@]}" NSGSETARR < <(printf '%s' "$NSGSET")
-					NOSTGAPPNAME="${NSGSETARR[1]}"
-					NOSTGEXEPATH="${NSGSETARR[2]}"
-					NOSTGSTDIR="${NSGSETARR[3]}"
-					NOSTGICONPATH="${NSGSETARR[4]}"
-					NOSTGLAOP="${NSGSETARR[5]}"
-					NOSTGHIDE="$(retBool "${NSGSETARR[6]}")"
-					NOSTGADC="$(retBool "${NSGSETARR[7]}")"
-					NOSTGAO="$(retBool "${NSGSETARR[8]}")"
-					NOSTGVR="$(retBool "${NSGSETARR[9]}")"
-					NOSTTAGS="${NSGSETARR[10]}"
-					writelog "INFO" "${FUNCNAME[0]} - Launching command: addNonSteamGame -an=\"$NOSTGAPPNAME\" -ep=\"$NOSTGEXEPATH\" -sd=\"$NOSTGSTDIR\" -ip=\"$NOSTGICONPATH\" -lo=\"$NOSTGLAOP\" -hd=\"$NOSTGHIDE\" -adc=\"$NOSTGADC\" -ao=\"$NOSTGAO\" -vr=\"$NOSTGVR\" -t=\"$NOSTTAGS\""
-					addNonSteamGame	-an="$NOSTGAPPNAME" -ep="$NOSTGEXEPATH" -sd="$NOSTGSTDIR" -ip="$NOSTGICONPATH" -lo="$NOSTGLAOP" -hd="$NOSTGHIDE" -adc="$NOSTGADC" -ao="$NOSTGAO" -vr="$NOSTGVR" -t="$NOSTTAGS"
-				fi
+	# defaults
+	if [ -n "$1" ]; then
+		for i in "$@"
+		do
+		case $i in
+			-ep=*|--exepath=*)
+			NOSTGEXEPATH="${i#*=}";
+			shift
 			;;
 		esac
+		done
+
+		NOSTGAPPNAME="${NOSTGEXEPATH##*/}"
+		NOSTGSTDIR="${NOSTGEXEPATH%/*}"
 	fi
+	
+	if  grep -q "^NOSTEAMSTLDEF=\"1\"" "$STLDEFGLOBALCFG"; then
+		NOSTGICONPATH="$STLICON"
+	else
+		NOSTGICONPATH=""
+	fi
+	NOSTGHIDE=0
+	NOSTGADC=1
+	NOSTGAO=1
+	NOSTGVR=0
+	unset VALTAGS
+	mapfile -d "\n" -t -O "${#VALTAGS[@]}" VALTAGS <<< "$(getActiveSteamCategories | sed '/^$/d')"
+	VALIDTAGS="$(printf "%s" "${VALTAGS[@]}" | tr '\n' ',' | sed 's/,*$//g')"
+
+	AutoMarkSCat
+
+	if [[ -v SCATSEL[@] ]]; then
+		NOSTTAGS="$(printf "%s" "${SCATSEL[@]}" | tr '\n' ',' | sed 's/,*$//g')"
+	fi 
+	export CURWIKI="$PPW/Add-Non-Steam-Game"
+	TITLE="${PROGNAME}-$NSGA"
+	pollWinRes "$TITLE"
+
+	NSGSET="$("$YAD" --f1-action="$F1ACTION" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
+	--title="$TITLE" --separator="|" \
+	--text="$(spanFont "$GUI_ADDNSG" "H")\n<span font=\"italic\">$(strFix "$GUI_WARNNSG1" "$STERECO")\n$(strFix "$GUI_WARNNSG2" "$STERECO"))</span>" \
+	--field=" ":LBL " " \
+	--field="     $GUI_NOSTGAPPNAME!$DESC_NOSTGAPPNAME ('NOSTGAPPNAME')" "${NOSTGAPPNAME/#-/ -}" \
+	--field="     $GUI_NOSTGEXEPATH!$DESC_NOSTGEXEPATH ('NOSTGEXEPATH')":FL "${NOSTGEXEPATH/#-/ -}" \
+	--field="     $GUI_NOSTGSTDIR!$DESC_NOSTGSTDIR ('NOSTGSTDIR')":DIR "${NOSTGSTDIR/#-/ -}" \
+	--field="     $GUI_NOSTGICONPATH!$DESC_NOSTGICONPATH ('NOSTGICONPATH')":FL "${NOSTGICONPATH/#-/ -}" \
+	--field="     $GUI_NOSTGLAOP!$DESC_NOSTGLAOP ('NOSTGLAOP')" "${NOSTGLAOP/#-/ -}" \
+	--field="     $GUI_NOSTGHIDE!$DESC_NOSTGHIDE ('NOSTGHIDE')":CHK "${NOSTGHIDE/#-/ -}" \
+	--field="     $GUI_NOSTGADC!$DESC_NOSTGADC ('NOSTGADC')":CHK "${NOSTGADC/#-/ -}" \
+	--field="     $GUI_NOSTGAO!$DESC_NOSTGAO ('NOSTGAO')":CHK "${NOSTGAO/#-/ -}" \
+	--field="     $GUI_NOSTGVR!$DESC_NOSTGVR ('NOSTGVR')":CHK "${NOSTGVR/#-/ -}" \
+	--field="     $GUI_NOSTTAGS!$DESC_NOSTTAGS ('NOSTTAGS')":CBE "$(cleanDropDown "${NOSTTAGS/#-/ -}" "$VALIDTAGS")" \
+	--button="$BUT_CAN":0 --button="$BUT_TAGS":2 --button="$BUT_CREATE":4 "$GEOM")"
+
+	case $? in
+		0)  writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_CAN'"
+		;;
+		2)  writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_TAGS"
+			SteamCatSelect "$NON" "${FUNCNAME[0]}"
+		;;
+		4)  writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_CREATE'"
+			if [ -n "$NSGSET" ]; then
+				mapfile -d "|" -t -O "${#NSGSETARR[@]}" NSGSETARR < <(printf '%s' "$NSGSET")
+				NOSTGAPPNAME="${NSGSETARR[1]}"
+				NOSTGEXEPATH="${NSGSETARR[2]}"
+				NOSTGSTDIR="${NSGSETARR[3]}"
+				NOSTGICONPATH="${NSGSETARR[4]}"
+				NOSTGLAOP="${NSGSETARR[5]}"
+				NOSTGHIDE="$(retBool "${NSGSETARR[6]}")"
+				NOSTGADC="$(retBool "${NSGSETARR[7]}")"
+				NOSTGAO="$(retBool "${NSGSETARR[8]}")"
+				NOSTGVR="$(retBool "${NSGSETARR[9]}")"
+				NOSTTAGS="${NSGSETARR[10]}"
+				writelog "INFO" "${FUNCNAME[0]} - Launching command: addNonSteamGame -an=\"$NOSTGAPPNAME\" -ep=\"$NOSTGEXEPATH\" -sd=\"$NOSTGSTDIR\" -ip=\"$NOSTGICONPATH\" -lo=\"$NOSTGLAOP\" -hd=\"$NOSTGHIDE\" -adc=\"$NOSTGADC\" -ao=\"$NOSTGAO\" -vr=\"$NOSTGVR\" -t=\"$NOSTTAGS\""
+				addNonSteamGame	-an="$NOSTGAPPNAME" -ep="$NOSTGEXEPATH" -sd="$NOSTGSTDIR" -ip="$NOSTGICONPATH" -lo="$NOSTGLAOP" -hd="$NOSTGHIDE" -adc="$NOSTGADC" -ao="$NOSTGAO" -vr="$NOSTGVR" -t="$NOSTTAGS"
+			fi
+		;;
+	esac
 }
 
 function addNonSteamGame {
-	checkDep "HAVEOSSL" "$OSSL"
+	if [ -z "$SUSDA" ] || [ -z "$STUIDPATH" ]; then
+		setSteamPaths
+	fi
+	SCPATH="$STUIDPATH/config/$SCVDF"
 
-	if [ -z "$HAVEOSSL" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - '$OSSL' could not be found, can't generate a random AppID without it"
-	else
-		if [ -z "$SUSDA" ] || [ -z "$STUIDPATH" ]; then
-			setSteamPaths
-		fi
-		SCPATH="$STUIDPATH/config/$SCVDF"
+	function getCRC {
+		echo -n "$1" | gzip -c | tail -c 8 | od -An -N 4 -tx4
+	}
 
-		function getCRC {
-			echo -n "$1" | gzip -c | tail -c 8 | od -An -N 4 -tx4
-		}
+	function dec2hex {
+		 printf '%x\n' "$1"
+	}
 
-		function dec2hex {
-			 printf '%x\n' "$1"
-		}
+	function hex2dec {
+		printf "%d\n" "0x${1#0x}"
+	}
 
-		function hex2dec {
-			printf "%d\n" "0x${1#0x}"
-		}
-
-		function splitTags {
-			mapfile -d "," -t -O "${#TAGARR[@]}" TAGARR < <(printf '%s' "$1")
-			for i in "${!TAGARR[@]}"; do
-				if grep -q "${TAGARR[$i]}" <<< "$(getActiveSteamCategories)"; then
-					printf '\x01%s\x00%s\x00' "$i" "${TAGARR[i]}"
-				fi
-			done
-		}
-
-		NOSTHIDE=0
-		NOSTADC=1
-		NOSTAO=1
-		NOSTVR=0
-		NOSTSTLLO=0
-
-		for i in "$@"; do
-			case $i in
-				-an=*|--appname=*)
-				NOSTAPPNAME="${i#*=}"
-				shift
-				;;
-				-ep=*|--exepath=*)
-				QEP="${i#*=}"; NOSTEXEPATH="\"$QEP\""
-				shift
-				;;
-				-sd=*|--startdir=*)
-				QSD="${i#*=}"; NOSTSTDIR="\"$QSD\""
-				shift
-				;;
-				-ip=*|--iconpath=*)
-				NOSTICONPATH="${i#*=}"
-				shift
-				;;
-				-lo=*|--launchoptions=*)
-				NOSTLAOP="${i#*=}"
-				shift
-				;;
-				-hd=*|--hide=*)
-				NOSTHIDE="${i#*=}"
-				shift
-				;;
-				-adc=*|--allowdesktopconf=*)
-				NOSTADC="${i#*=}"
-				shift
-				;;
-				-ao=*|--allowoverlay=*)
-				NOSTAO="${i#*=}"
-				shift
-				;;
-				-vr=*|--openvr=*)
-				NOSTVR="${i#*=}"
-				shift
-				;;
-				-t=*|--tags=*)
-				NOSTTAGS="${i#*=}"
-				shift
-				;;
-				-stllo=*|--stllaunchoption=*)
-				NOSTSTLLO="${i#*=}"
-				shift
-				;;
-				*)
-				;;
-			esac
+	function splitTags {
+		mapfile -d "," -t -O "${#TAGARR[@]}" TAGARR < <(printf '%s' "$1")
+		for i in "${!TAGARR[@]}"; do
+			if grep -q "${TAGARR[$i]}" <<< "$(getActiveSteamCategories)"; then
+				printf '\x01%s\x00%s\x00' "$i" "${TAGARR[i]}"
+			fi
 		done
+	}
 
-		if [ -n "${NOSTEXEPATH}" ]; then
-		
-			if [ -z "${NOSTAPPNAME}" ]; then
-				NOSTAPPNAME="${QEP##*/}"
-			fi
+	NOSTHIDE=0
+	NOSTADC=1
+	NOSTAO=1
+	NOSTVR=0
+	NOSTSTLLO=0
 
-			if [ -z "${NOSTSTDIR}" ]; then
-				QSD="$(dirname "$QEP")"; NOSTSTDIR="\"$QSD\""
-			fi
+	for i in "$@"; do
+		case $i in
+			-an=*|--appname=*)
+			NOSTAPPNAME="${i#*=}"
+			shift
+			;;
+			-ep=*|--exepath=*)
+			QEP="${i#*=}"; NOSTEXEPATH="\"$QEP\""
+			shift
+			;;
+			-sd=*|--startdir=*)
+			QSD="${i#*=}"; NOSTSTDIR="\"$QSD\""
+			shift
+			;;
+			-ip=*|--iconpath=*)
+			NOSTICONPATH="${i#*=}"
+			shift
+			;;
+			-lo=*|--launchoptions=*)
+			NOSTLAOP="${i#*=}"
+			shift
+			;;
+			-hd=*|--hide=*)
+			NOSTHIDE="${i#*=}"
+			shift
+			;;
+			-adc=*|--allowdesktopconf=*)
+			NOSTADC="${i#*=}"
+			shift
+			;;
+			-ao=*|--allowoverlay=*)
+			NOSTAO="${i#*=}"
+			shift
+			;;
+			-vr=*|--openvr=*)
+			NOSTVR="${i#*=}"
+			shift
+			;;
+			-t=*|--tags=*)
+			NOSTTAGS="${i#*=}"
+			shift
+			;;
+			-stllo=*|--stllaunchoption=*)
+			NOSTSTLLO="${i#*=}"
+			shift
+			;;
+			*)
+			;;
+		esac
+	done
 
-			if [ "$NOSTSTLLO" -eq 1 ]; then
-				NOSTGICONPATH="$STLICON"
-			fi
-
-			# looks like the appid used here is randomly generated or at least not created from CRC
-			# (like the shortcutnames found in screenshots.vdf - see commented out lines)
-			# NOSTCRC="$(getCRC "${NOSTEXEPATH}${NOSTAPPNAME}")"
-			# NOSTSCNHEX="${NOSTCRC}02000000"
-			# echo "NOSTSCNHEX = ${NOSTSCNHEX}"
-
-			NOSTAIDRHX="$("$OSSL" rand -hex 4)"
-			NOSTAID="$(hex2dec "$NOSTAIDRHX")"
-			NOSTAIDHX="\x$(awk '{$1=$1}1' FPAT='.{2}' OFS="\\\x" <<< "$NOSTAIDRHX")"
-
-			writelog "INFO" "${FUNCNAME[0]} - === Adding new $NSGA ==="
-			writelog "INFO" "${FUNCNAME[0]} - AppID: '${NOSTAID}'"
-			writelog "INFO" "${FUNCNAME[0]} - App Name: '${NOSTAPPNAME}'"
-			writelog "INFO" "${FUNCNAME[0]} - Exe Path: '${NOSTEXEPATH}'"
-			writelog "INFO" "${FUNCNAME[0]} - Start Dir: '${NOSTSTDIR}'"
-			writelog "INFO" "${FUNCNAME[0]} - Icon Path: '${NOSTICONPATH}'"
-			writelog "INFO" "${FUNCNAME[0]} - Launch options: '${NOSTLAOP}'"
-			writelog "INFO" "${FUNCNAME[0]} - Is Hidden: '${NOSTHIDE}'"
-			writelog "INFO" "${FUNCNAME[0]} - Allow Desktop Config: '${NOSTADC}'"
-			writelog "INFO" "${FUNCNAME[0]} - Allow Overlay: '${NOSTAO}'"
-			writelog "INFO" "${FUNCNAME[0]} - OpenVR: '${NOSTVR}'"
-			writelog "INFO" "${FUNCNAME[0]} - Tags: '${NOSTTAGS}'"
-
-			if [ -f "$SCPATH" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - The file '$SCPATH' already exists, creating a backup, then removing the 2 closing backslashes at the end"
-				cp "$SCPATH" "${SCPATH//.vdf}_${PROGNAME}_backup.vdf" 2>/dev/null
-				truncate -s-2 "$SCPATH"
-				OLDSET="$(grep -aPo '\x00[0-9]\x00\x02appid' "$SCPATH" | tail -n1 | tr -dc '0-9')"
-				NEWSET=$((OLDSET + 1))
-				writelog "INFO" "${FUNCNAME[0]} - Last set in file has ID '$OLDSET', so continuing with '$OLDSET'"
-			else
-				writelog "INFO" "${FUNCNAME[0]} - Creating new $SCPATH"
-				printf '\x00%s\x00' "shortcuts" > "$SCPATH"
-				NEWSET=0
-			fi
-
-			writelog "INFO" "${FUNCNAME[0]} - Adding new set '$NEWSET'"
-
-			{
-			printf '\x00%s\x00' "$NEWSET"
-			printf '\x02%s\x00%b' "appid" "$NOSTAIDHX"
-			printf '\x01%s\x00%s\x00' "appname" "$NOSTAPPNAME"
-			printf '\x01%s\x00%s\x00' "Exe" "$NOSTEXEPATH"
-			printf '\x01%s\x00%s\x00' "StartDir" "$NOSTSTDIR"
-
-			if [ -n "$NOSTICONPATH" ]; then
-				printf '\x01%s\x00%s\x00' "icon" "$NOSTICONPATH"
-			else
-				printf '\x01%s\x00\x00' "icon"
-			fi
-
-			printf '\x01%s\x00\x00' "ShortcutPath"
-
-			if [ -n "$NOSTLAOP" ]; then
-				printf '\x01%s\x00%s\x00' "LaunchOptions" "$NOSTLAOP"
-			else
-				printf '\x01%s\x00\x00' "LaunchOptions"
-			fi
-			
-			if [ "$NOSTHIDE" -eq 1 ]; then
-				printf '\x02%s\x00\x01\x00\x00\x00' "IsHidden"
-			else
-				printf '\x02%s\x00\x00\x00\x00\x00' "IsHidden"
-			fi
-
-			if [ "$NOSTADC" -eq 1 ]; then
-				printf '\x02%s\x00\x01\x00\x00\x00' "AllowDesktopConfig"
-			else
-				printf '\x02%s\x00\x00\x00\x00\x00' "AllowDesktopConfig"
-			fi
-
-			if [ "$NOSTAO" -eq 1 ]; then
-				printf '\x02%s\x00\x01\x00\x00\x00' "AllowOverlay"
-			else
-				printf '\x02%s\x00\x00\x00\x00\x00' "AllowOverlay"
-			fi
-
-			if [ "$NOSTVR" -eq 1 ]; then
-				printf '\x02%s\x00\x01\x00\x00\x00' "openvr"
-			else
-				printf '\x02%s\x00\x00\x00\x00\x00' "openvr"
-			fi
-
-			printf '\x02%s\x00\x00\x00\x00\x00' "Devkit"
-			printf '\x01%s\x00\x00' "DevkitGameID"
-
-			printf '\x02%s\x00\x00\x00\x00\x00' "LastPlayTime"
-			printf '\x00%s\x00' "tags"
-			splitTags "$NOSTTAGS"
-			printf '\x08'
-			printf '\x08'
-
-			#file end:
-			printf '\x08'
-			printf '\x08'
-			} >> "$SCPATH"
-			
-			writelog "INFO" "${FUNCNAME[0]} - Finished adding new $NSGA"
+	if [ -n "${NOSTEXEPATH}" ]; then
+	
+		if [ -z "${NOSTAPPNAME}" ]; then
+			NOSTAPPNAME="${QEP##*/}"
 		fi
+
+		if [ -z "${NOSTSTDIR}" ]; then
+			QSD="$(dirname "$QEP")"; NOSTSTDIR="\"$QSD\""
+		fi
+
+		if [ "$NOSTSTLLO" -eq 1 ]; then
+			NOSTGICONPATH="$STLICON"
+		fi
+
+		# looks like the appid used here is randomly generated or at least not created from CRC
+		# (like the shortcutnames found in screenshots.vdf - see commented out lines)
+		# NOSTCRC="$(getCRC "${NOSTEXEPATH}${NOSTAPPNAME}")"
+		# NOSTSCNHEX="${NOSTCRC}02000000"
+		# echo "NOSTSCNHEX = ${NOSTSCNHEX}"
+
+		NOSTAIDRHX="$(printf "%03x%03x%02x\n" $((RANDOM%4096)) $((RANDOM%4096)) $((RANDOM%256)))"
+		NOSTAID="$(hex2dec "$NOSTAIDRHX")"
+		NOSTAIDHX="\x$(awk '{$1=$1}1' FPAT='.{2}' OFS="\\\x" <<< "$NOSTAIDRHX")"
+
+		writelog "INFO" "${FUNCNAME[0]} - === Adding new $NSGA ==="
+		writelog "INFO" "${FUNCNAME[0]} - AppID: '${NOSTAID}'"
+		writelog "INFO" "${FUNCNAME[0]} - App Name: '${NOSTAPPNAME}'"
+		writelog "INFO" "${FUNCNAME[0]} - Exe Path: '${NOSTEXEPATH}'"
+		writelog "INFO" "${FUNCNAME[0]} - Start Dir: '${NOSTSTDIR}'"
+		writelog "INFO" "${FUNCNAME[0]} - Icon Path: '${NOSTICONPATH}'"
+		writelog "INFO" "${FUNCNAME[0]} - Launch options: '${NOSTLAOP}'"
+		writelog "INFO" "${FUNCNAME[0]} - Is Hidden: '${NOSTHIDE}'"
+		writelog "INFO" "${FUNCNAME[0]} - Allow Desktop Config: '${NOSTADC}'"
+		writelog "INFO" "${FUNCNAME[0]} - Allow Overlay: '${NOSTAO}'"
+		writelog "INFO" "${FUNCNAME[0]} - OpenVR: '${NOSTVR}'"
+		writelog "INFO" "${FUNCNAME[0]} - Tags: '${NOSTTAGS}'"
+
+		if [ -f "$SCPATH" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - The file '$SCPATH' already exists, creating a backup, then removing the 2 closing backslashes at the end"
+			cp "$SCPATH" "${SCPATH//.vdf}_${PROGNAME}_backup.vdf" 2>/dev/null
+			truncate -s-2 "$SCPATH"
+			OLDSET="$(grep -aPo '\x00[0-9]\x00\x02appid' "$SCPATH" | tail -n1 | tr -dc '0-9')"
+			NEWSET=$((OLDSET + 1))
+			writelog "INFO" "${FUNCNAME[0]} - Last set in file has ID '$OLDSET', so continuing with '$OLDSET'"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Creating new $SCPATH"
+			printf '\x00%s\x00' "shortcuts" > "$SCPATH"
+			NEWSET=0
+		fi
+
+		writelog "INFO" "${FUNCNAME[0]} - Adding new set '$NEWSET'"
+
+		{
+		printf '\x00%s\x00' "$NEWSET"
+		printf '\x02%s\x00%b' "appid" "$NOSTAIDHX"
+		printf '\x01%s\x00%s\x00' "appname" "$NOSTAPPNAME"
+		printf '\x01%s\x00%s\x00' "Exe" "$NOSTEXEPATH"
+		printf '\x01%s\x00%s\x00' "StartDir" "$NOSTSTDIR"
+
+		if [ -n "$NOSTICONPATH" ]; then
+			printf '\x01%s\x00%s\x00' "icon" "$NOSTICONPATH"
+		else
+			printf '\x01%s\x00\x00' "icon"
+		fi
+
+		printf '\x01%s\x00\x00' "ShortcutPath"
+
+		if [ -n "$NOSTLAOP" ]; then
+			printf '\x01%s\x00%s\x00' "LaunchOptions" "$NOSTLAOP"
+		else
+			printf '\x01%s\x00\x00' "LaunchOptions"
+		fi
+		
+		if [ "$NOSTHIDE" -eq 1 ]; then
+			printf '\x02%s\x00\x01\x00\x00\x00' "IsHidden"
+		else
+			printf '\x02%s\x00\x00\x00\x00\x00' "IsHidden"
+		fi
+
+		if [ "$NOSTADC" -eq 1 ]; then
+			printf '\x02%s\x00\x01\x00\x00\x00' "AllowDesktopConfig"
+		else
+			printf '\x02%s\x00\x00\x00\x00\x00' "AllowDesktopConfig"
+		fi
+
+		if [ "$NOSTAO" -eq 1 ]; then
+			printf '\x02%s\x00\x01\x00\x00\x00' "AllowOverlay"
+		else
+			printf '\x02%s\x00\x00\x00\x00\x00' "AllowOverlay"
+		fi
+
+		if [ "$NOSTVR" -eq 1 ]; then
+			printf '\x02%s\x00\x01\x00\x00\x00' "openvr"
+		else
+			printf '\x02%s\x00\x00\x00\x00\x00' "openvr"
+		fi
+
+		printf '\x02%s\x00\x00\x00\x00\x00' "Devkit"
+		printf '\x01%s\x00\x00' "DevkitGameID"
+
+		printf '\x02%s\x00\x00\x00\x00\x00' "LastPlayTime"
+		printf '\x00%s\x00' "tags"
+		splitTags "$NOSTTAGS"
+		printf '\x08'
+		printf '\x08'
+
+		#file end:
+		printf '\x08'
+		printf '\x08'
+		} >> "$SCPATH"
+		
+		writelog "INFO" "${FUNCNAME[0]} - Finished adding new $NSGA"
 	fi
 }
 
