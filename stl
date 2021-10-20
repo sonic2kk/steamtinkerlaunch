@@ -6,12 +6,13 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v6.18.307"
+PROGVERS="v6.18.320"
 PROGCMD="${0##*/}"
 GHURL="https://github.com"
 PROJECTPAGE="$GHURL/frostworx/steamtinkerlaunch"
 PPW="$PROJECTPAGE/wiki"
 CURWIKI="$PPW"
+STARTDEBUG=0
 
 ### internal dependencies ###
 #STARTINTDEPS
@@ -50,7 +51,6 @@ RSYNC="rsync"
 OSSL="openssl"
 CONTY="conty.sh"
 SEVZA="7za"
-STARTDEBUG=0
 HAVEOSSL=1
 CHECKHMD=1
 X32D="x32dbg"
@@ -1420,27 +1420,7 @@ function setCompatDataTitle {
 }
 
 function setGameVars {
-
-	if [ -n "$STEAM_COMPAT_DATA_PATH" ]; then
-	# win game
-		GPFX="$STEAM_COMPAT_DATA_PATH/pfx"														# currently used WINEPREFIX
-		GP="$(printf "%s\n" "$@" | grep -v "proton\|$SLR" | grep -m1 "$SAC")"					# the absolute game path of the windows game exe
-		GE="$(awk -F '.exe' '{print $1}' <<< "${GP##*/}")"										# just the windows game exe name
-		ISGAME=2																				# with STEAM_COMPAT_DATA_PATH being available it is a windows game
-	else
-	# linux game
-		GPRAW="$(printf "%s\n" "$@" | grep -m1 "$SAC")"											# the absolute game path of the game exe
-		if grep -q "/./" <<< "$GPRAW"; then
-			GP="${GPRAW//\/.\//\/}"
-		else
-			GP="$GPRAW"
-		fi
-		
-		GE="${GP##*/}"																			# the game executable
-		ISGAME=3																				# no STEAM_COMPAT_DATA_PATH, so it is no windows game
-	fi
-
-
+	getGameOS "$@"
 	# common
 	if [ -n "$STEAM_COMPAT_INSTALL_PATH" ]; then
 		EFD="$STEAM_COMPAT_INSTALL_PATH"
@@ -1566,13 +1546,37 @@ function setGameVars {
 					FOUNDINSTL=1
 				fi
 			else
-				mapfile -t -O "${#ORGFGCMD[@]}" ORGFGCMD <<< "$ORGARG"
+				mapfile -t -O "${#WIPDGCMD[@]}" WIPDGCMD <<< "$ORGARG"
 			fi
 		done <<< "$(printf "%s\n" "${WIPCGCMD[@]}")"
 	else
 		while read -r ORGARG; do
-			mapfile -t -O "${#ORGFGCMD[@]}" ORGFGCMD <<< "$ORGARG"
+			mapfile -t -O "${#WIPDGCMD[@]}" WIPDGCMD <<< "$ORGARG"
 		done <<< "$(printf "%s\n" "${WIPCGCMD[@]}")"	
+	fi
+
+	if grep -q "$SLR" <<< "${WIPDGCMD[@]}"; then
+		HAVESLRCT=1
+	else
+		HAVESLRCT=0
+	fi
+	
+	if [ "$HAVESLRCT" -eq 1 ]; then
+		FOUNDSLR=0
+		while read -r ORGARG; do
+			if [ "$FOUNDSLR" -eq 0 ]; then
+				mapfile -t -O "${#RUNSLRCT[@]}" RUNSLRCT <<< "$ORGARG"
+				if [ "$ORGARG" == "--" ]; then
+					FOUNDSLR=1
+				fi
+			else
+				mapfile -t -O "${#ORGFGCMD[@]}" ORGFGCMD <<< "$ORGARG"
+			fi
+		done <<< "$(printf "%s\n" "${WIPDGCMD[@]}")"
+	else
+		while read -r ORGARG; do
+			mapfile -t -O "${#ORGFGCMD[@]}" ORGFGCMD <<< "$ORGARG"
+		done <<< "$(printf "%s\n" "${WIPDGCMD[@]}")"	
 	fi
 	
 	# what is left now is the game executable and its command line arguments - splitting
@@ -1601,18 +1605,77 @@ function setGameVars {
 
 }
 
+function getGameOS {
+	function setLin {
+		if [ -f "$OSCHECKGAMEEXE" ]; then
+			GP="$OSCHECKGAMEEXE"
+		else
+			GPRAW="$(printf "%s\n" "$@" | grep -m1 "$SAC")"
+			if grep -q "/./" <<< "$GPRAW"; then
+				GP="${GPRAW//\/.\//\/}"
+			else
+				GP="$GPRAW"
+			fi
+		fi
+		GE="${GP##*/}"																			# the game executable
+		ISGAME=3																				# no STEAM_COMPAT_DATA_PATH, so it is no windows game		
+	}
+
+	function setWin {
+		if [ -f "$OSCHECKGAMEEXE" ]; then
+			GP="$OSCHECKGAMEEXE"
+		else
+			GP="$(printf "%s\n" "$@" | grep -v "proton\|$SLR" | grep -m1 "$SAC")"				# the absolute game path of the windows game exe
+		fi
+		GPFX="$STEAM_COMPAT_DATA_PATH/pfx"														# currently used WINEPREFIX
+		GE="$(awk -F '.exe' '{print $1}' <<< "${GP##*/}")"										# just the windows game exe name
+		writelog "INFO" "${FUNCNAME[0]} - '$GE' determined to be a Windows Game"
+		ISGAME=2		
+	}
+	
+	if [ "$ISGAME" -eq 0 ]; then 
+		writelog "INFO" "${FUNCNAME[0]} - Starting game OS detection"
+
+		while read -r INGARG; do
+			if grep -q "$STEAM_COMPAT_INSTALL_PATH" <<< "$INGARG"; then
+				OSCHECKGAMEEXE="$INGARG"
+			fi
+			mapfile -t -O "${#OSCHECKINGCMD[@]}" OSCHECKINGCMD <<< "$INGARG"
+		done <<< "$(printf "%s\n" "$@")"
+
+		if [ -n "$STEAM_COMPAT_DATA_PATH" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - STEAM_COMPAT_DATA_PATH is defined - This is no longer necessarily a reliable indication that this is a Windows game."
+			if [ -f "$OSCHECKGAMEEXE" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Making some more checks on '$OSCHECKGAMEEXE' to determine the OS version of the game"
+				if grep -q "POSIX shell script" <<< "$(file "$OSCHECKGAMEEXE")" || grep -q "ELF.*.LSB" <<< "$(file "$OSCHECKGAMEEXE")" ; then
+					writelog "INFO" "${FUNCNAME[0]} - Looks like this is a Linux game!"
+					setLin "$@"
+				elif grep -q "PE32" <<< "$(file "$OSCHECKGAMEEXE")"; then
+					writelog "INFO" "${FUNCNAME[0]} - Looks like this is a Windows game!"
+					setWin "$@"
+				else
+					writelog "WARN" "${FUNCNAME[0]} - Could not determine OS version of '$OSCHECKGAMEEXE' (add check?), so assuming this is a Windows game"
+					setWin "$@"
+				fi
+			else
+				writelog "WARN" "${FUNCNAME[0]} - Could not extract the full game binary path from the incoming game launch gommand, so assuming this is a Windows game!"
+				setWin "$@"
+			fi
+		else
+			writelog "INFO" "${FUNCNAME[0]} - STEAM_COMPAT_DATA_PATH is dot defined, so this is (very likely) a Linux Game"
+			setLin "$@"
+		fi
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - ISGAME is already set to '$ISGAME' - nothing to determine"
+	fi
+}
+
 function setCustomGameVars {
 	# there doesn't seem to be a possibility to distinguish game platform based on given variables, so using at least a basic arch check on the exe:
 	GP="$(printf "%s\n" "$@" | grep -v "$WFEAR" | head -n1)"
 
-	if [ "$(getArch "$GP")" == "32" ] || [ "$(getArch "$GP")" == "64" ]; then
-	# win game
-		ISGAME=2
-		GPFX="$STEAM_COMPAT_DATA_PATH/pfx"
-	else
-		ISGAME=3
-	fi
-	
+	getGameOS "$@"
+
 	GE="$(awk -F '.exe' '{print $1}' <<< "${GP##*/}")"
 	EFD="$(dirname "$GP")"
 	# need to just guess here, because of missing fix strings
@@ -7754,11 +7817,7 @@ function createDefaultCfgs {
 	genDefIcon
 
 	createProjectDirs
-
-	if [ -n "$STEAM_COMPAT_DATA_PATH" ]; then
-		ISGAME=2
-	fi
-
+	getGameOS "$@"
 	delEmptyFile "$PROTONCSV"
 
 	if [ "$HAVEINPROTON" -eq 0 ]; then
@@ -12189,6 +12248,10 @@ function checkDep {
 }
 
 function checkExtDeps {
+	if [ -z "$NOTY" ]; then
+		NOTY="notify-send"
+	fi
+
 	checkDep "USEGAMEMODERUN" "$GAMEMODERUN"
 	checkDep "USEGAMESCOPE" "$GAMESCOPE"
 	checkDep "RUN_NYRNA" "$NYRNA"
@@ -12863,11 +12926,12 @@ function getProtonDBRating {
 	if [ -n "$1" ]; then
 		AID="$1"
 	fi
-	
+
+	PDBAPI="https://www.protondb.com/api/v1/reports/summaries/XXX.json"
+
 	if [ ! -x "$(command -v "$JQ")" ]; then
 		writelog "WARN" "${FUNCNAME[0]} - Can't get data from '${PDBAPI//XXX/$AID}' because '$JQ' is not installed"
 	else
-		PDBAPI="https://www.protondb.com/api/v1/reports/summaries/XXX.json"
 		DMIN=1440
 
 		if [ -n "$PDBRATINGCACHE" ] && [ "$PDBRATINGCACHE" -ge 1 ]; then
@@ -13555,15 +13619,22 @@ function disabledWIPSilentMode {
 		fi
 	fi
 
+	if [ "$HAVESLRCT" -eq 1 ] && [ "$USESLR" -eq 1 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - ## SLR is enabled via USESLR=$USESLR - prepending SLR from Compatibility Tool to the current launch command"
+		RUNCMD=("${RUNSLRCT[@]}" "${RUNCMD[@]}")
+	fi
+	
 	if [ "$HAVESLR" -eq 1 ] && [ "$USESLR" -eq 1 ]; then
-		writelog "INFO" "${FUNCNAME[0]} - ## SLR is enabled via USESLR=$USESLR - prepending to the current launch command"
+		writelog "INFO" "${FUNCNAME[0]} - ## SLR is enabled via USESLR=$USESLR - prepending SLR from command line to the current launch command"
 		RUNCMD=("${RUNSLR[@]}" "${RUNCMD[@]}")
-	else
-		if [ "$HAVESLR" -eq 1 ]; then
-			writelog "SKIP" "${FUNCNAME[0]} - USESLR is disabled, so skipping '$SLR' found in the commandline: '${RUNSLR[*]}'"
-		else
-			writelog "SKIP" "${FUNCNAME[0]} - No SLR was provided via command line, so configuration USESLR '$USESLR' is ignored"
-		fi
+	fi
+
+	if [ "$HAVESLR" -eq 1 ] && [ "$USESLR" -eq 0 ] ; then
+		writelog "SKIP" "${FUNCNAME[0]} - USESLR is disabled, so skipping '$SLR' found in the commandline: '${RUNSLR[*]}'"
+	fi
+
+	if [ "$HAVESLR" -eq 0 ] && [ "$USESLR" -eq 1 ] ; then
+		writelog "SKIP" "${FUNCNAME[0]} - No SLR was provided via command line, so configuration USESLR '$USESLR' is ignored"
 	fi
 
 	if [ "$HAVEREAP" -eq 1 ] && [ "$USEREAP" -eq 1 ]; then
@@ -13586,9 +13657,11 @@ function disabledWIPSilentMode {
 			fi
 
 			echo "$(date) - $GN ($AID) - INITIAL LAUNCH COMAND '${INGCMD[*]}'"
-			echo "$(date) - $GN ($AID) - HAVESCTP='$HAVESCTP';HAVEREAP='$HAVEREAP';HAVESLR='$HAVESLR';HAVEINPROTON='$HAVEINPROTON'"
+			echo "$(date) - $GN ($AID) - HAVESCTP='$HAVESCTP';HAVEREAP='$HAVEREAP';HAVESLR='$HAVESLR';HAVESLRCT='$HAVESLRCT';HAVEINPROTON='$HAVEINPROTON'"
 			echo "$(date) - $GN ($AID) - REAPCMD '${REAPCMD[*]}'"
 			echo "$(date) - $GN ($AID) - RUNSLR '${RUNSLR[*]}'"
+			echo "$(date) - $GN ($AID) - RUNSLRCT '${RUNSLRCT[*]}'"
+			echo "$(date) - $GN ($AID) - ISGAME '$ISGAME'"
 			echo "$(date) - $GN ($AID) - INPROTCMD '${INPROTCMD[*]}'"
 			echo "$(date) - $GN ($AID) - INSTLCMD '${INSTLCMD[*]}'"
 			echo "$(date) - $GN ($AID) - ORGGCMD '${ORGGCMD[*]}'"
@@ -13599,7 +13672,7 @@ function disabledWIPSilentMode {
 		} >> "/tmp/$PROGCMD-startmode-DEBUG-XXXXXXXXX"
 	fi
 	
-	if [ "$HAVESCTP" -eq 1 ]; then
+	if [ "$HAVESCTP" -eq 1 ] && [ "$ISGAME" -eq 2 ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Rebuilding STEAM_COMPAT_TOOL_PATHS variable:"
 		writelog "INFO" "${FUNCNAME[0]} - Adding RUNPROTON '${RUNPROTON%/*}'"
 		STEAM_COMPAT_TOOL_PATHS="${RUNPROTON%/*}"
@@ -14281,7 +14354,7 @@ function launchSteamGame {
 			fi
 		fi
 	else
-		writelog "SKIP" "${FUNCNAME[0]} - With ISGAME='$ISGAME' the game failed to start"
+		writelog "SKIP" "${FUNCNAME[0]} - With ISGAME '$ISGAME' the game failed to start"
 	fi
 
 	writelog "STOP" "######### $PROGNAME $PROGVERS #########"
