@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v6.18.320"
+PROGVERS="v6.18.321"
 PROGCMD="${0##*/}"
 GHURL="https://github.com"
 PROJECTPAGE="$GHURL/frostworx/steamtinkerlaunch"
@@ -1488,6 +1488,11 @@ function setGameVars {
 			mapfile -t -O "${#WIPAGCMD[@]}" WIPAGCMD <<< "$INGARG"
 		done <<< "$(printf "%s\n" "${INGCMD[@]}")"
 	fi
+	THISREAP="${REAPCMD[*]}"
+	THISREAP="${THISREAP% SteamLaunch*}"
+	if [ -z "$LASTREAP" ] || { [ -n "$LASTREAP" ] && [ "$LASTREAP" != "$THISREAP" ];}; then
+		updateConfigEntry "LASTREAP" "$THISREAP" "$STLDEFGLOBALCFG"
+	fi
 
 	# if the SLR is called from command line put it into an array as well
 	if [ "$HAVESLR" -eq 1 ]; then
@@ -1506,6 +1511,10 @@ function setGameVars {
 		while read -r ORGARG; do
 			mapfile -t -O "${#WIPBGCMD[@]}" WIPBGCMD <<< "$ORGARG"
 		done <<< "$(printf "%s\n" "${WIPAGCMD[@]}")"	
+	fi
+
+	if [ -z "$LASTSLR" ] || { [ -n "$LASTSLR" ] && [ "$LASTSLR" != "${RUNSLR[*]}" ];}; then
+		updateConfigEntry "LASTSLR" "${RUNSLR[*]}" "$STLDEFGLOBALCFG"
 	fi
 
 	# put the proton path into an array as well if provided from command line
@@ -2086,7 +2095,9 @@ function setDefaultCfgValues {
 
 	function setDefaultCfgValuesdefault_template {
 		if [ -z "$USESLR" ]								; then	USESLR="1"; fi
+		if [ -z "$FORCESLR" ]							; then	FORCESLR="0"; fi
 		if [ -z "$USEREAP" ]							; then	USEREAP="1"; fi
+		if [ -z "$FORCEREAP" ]							; then	FORCEREAP="0"; fi
 		if [ -z "$USEPROTON" ]							; then	USEPROTON="$(getDefaultProton)"; fi
 		if [ -z "$REDIRCOMPDATA" ]						; then	REDIRCOMPDATA="disabled"; fi
 		if [ -z "$REDIRSTEAMUSER" ]						; then	REDIRSTEAMUSER="disabled"; fi
@@ -2497,10 +2508,14 @@ function saveCfg {
 			{
 			echo "## config Version: $PROGVERS"
 			echo "##########################"
-			echo "## $DESC_SLR"
+			echo "## $DESC_USESLR"
 			echo "USESLR=\"$USESLR\""
+			echo "## $DESC_FORCESLR"
+			echo "FORCESLR=\"$FORCESLR\""
 			echo "## $DESC_USEREAP"
 			echo "USEREAP=\"$USEREAP\""
+			echo "## $DESC_FORCEREAP"
+			echo "FORCEREAP=\"$FORCEREAP\""
 			echo "## $DESC_USEPROTON"
 			echo "USEPROTON=\"$USEPROTON\""
 			echo "## $DESC_REDIRCOMPDATA"
@@ -4156,7 +4171,9 @@ function AllSettingsEntriesDummyFunction {
 --field="$(spanFont "$GUI_OPTSPROTON" "H")":LBL "SKIP" `#CAT_Proton` `#HEAD_Proton` `#MENU_GAME` `#MENU_GLOBAL` \
 --field="     $GUI_USEPROTON!$DESC_USEPROTON ('USEPROTON')":CB "$(cleanDropDown  "${USEPROTON/#-/ -}" "$PROTYADLIST")" `#CAT_Proton` `#MENU_GAME` \
 --field="     $GUI_USESLR!$DESC_USESLR ('USESLR')":CHK "${USESLR/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_FORCESLR!$DESC_FORCESLR ('FORCESLR')":CHK "${FORCESLR/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_USEREAP!$DESC_USEREAP ('USEREAP')":CHK "${USEREAP/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_FORCEREAP!$DESC_FORCEREAP ('FORCEREAP')":CHK "${FORCEREAP/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_AUTOLASTPROTON!$DESC_AUTOLASTPROTON ('AUTOLASTPROTON')":CHK "${AUTOLASTPROTON/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_AUTOPULLPROTON!$DESC_AUTOPULLPROTON ('AUTOPULLPROTON')":CHK "${AUTOPULLPROTON/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_REDIRCOMPDATA!$DESC_REDIRCOMPDATA ('REDIRCOMPDATA')":CB "$(cleanDropDown "${REDIRCOMPDATA/#-/ -}" "disabled!single-proton!global-proton")" `#CAT_Proton` `#MENU_GAME` \
@@ -12958,6 +12975,8 @@ function fixProtonVersionMismatch {
 
 		if [[ "$MIMAPROT" =~ "experimental" ]]; then
 			writelog "INFO" "${FUNCNAME[0]} - Skipping function for 'experimental' Proton version"
+		elif [[ "$MIMAPROT" =~ "proton-unknown" ]]; then
+			writelog "INFO" "${FUNCNAME[0]} - Skipping function for 'proton-unknown' Proton version"
 		else
 			writelog "INFO" "${FUNCNAME[0]} - Incoming category is '$ORGPROTCAT' with value '$MIMAPROT'"
 			writelog "INFO" "${FUNCNAME[0]} - Looking for an alternative similar version for '$MIMAPROT'"
@@ -13631,13 +13650,24 @@ function disabledWIPSilentMode {
 		writelog "SKIP" "${FUNCNAME[0]} - USESLR is disabled, so skipping '$SLR' found in the commandline: '${RUNSLR[*]}'"
 	fi
 
+	RUNFORCESLR=0
 	if [ "$HAVESLR" -eq 0 ] && [ "$USESLR" -eq 1 ] ; then
-		writelog "SKIP" "${FUNCNAME[0]} - No SLR was provided via command line, so configuration USESLR '$USESLR' is ignored"
+		if [ -n "$LASTSLR" ] && [ -f "${LASTSLR% --verb*}" ] && [ "$FORCESLR" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - ## No SLR provided from command line, but FORCESLR is $FORCESLR, so prepending LASTSLR '$LASTSLR' to the current launch command"
+			mapfile -d " " -t -O "${#LASTSLRARR[@]}" LASTSLRARR < <(printf '%s' "$LASTSLR")
+			RUNCMD=("${LASTSLRARR[@]}" "${RUNCMD[@]}")
+			RUNFORCESLR=1
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - No SLR was provided via command line, so configuration USESLR '$USESLR' is ignored '${LASTSLR% --verb*}' $FORCESLR"
+		fi
 	fi
 
 	if [ "$HAVEREAP" -eq 1 ] && [ "$USEREAP" -eq 1 ]; then
 		writelog "INFO" "${FUNCNAME[0]} - ## reaper command is enabled via USEREAP=$USEREAP - prepending to the current launch command"
 		RUNCMD=("${REAPCMD[@]}" "${RUNCMD[@]}")
+	elif [ "$HAVEREAP" -eq 0 ] && [ "$USEREAP" -eq 1 ] && [ -n "$LASTREAP" ] && [ -f "$LASTREAP" ] && [ "$FORCEREAP" -eq 1 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - ## No reaper command provided from command line, but FORCEREAP is $FORCEREAP, so prepending LASTREAP '$LASTREAP' to the current launch command"
+		RUNCMD=("$LASTREAP" "SteamLaunch" "AppId=$AID" "--" "${RUNCMD[@]}")
 	fi
 
 	if [ "$STARTDEBUG" -eq 1 ]; then
@@ -13669,7 +13699,7 @@ function disabledWIPSilentMode {
 			echo "$(date) - $GN ($AID) - ======================"
 		} >> "/tmp/$PROGCMD-startmode-DEBUG-XXXXXXXXX"
 	fi
-	
+
 	if [ "$HAVESCTP" -eq 1 ] && [ "$ISGAME" -eq 2 ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Rebuilding STEAM_COMPAT_TOOL_PATHS variable:"
 		writelog "INFO" "${FUNCNAME[0]} - Adding RUNPROTON '${RUNPROTON%/*}'"
@@ -13680,6 +13710,13 @@ function disabledWIPSilentMode {
 			STEAM_COMPAT_TOOL_PATHS="$STEAM_COMPAT_TOOL_PATHS:${RUNSLA%/*}"
 		fi
 		writelog "INFO" "${FUNCNAME[0]} - Result: Set STEAM_COMPAT_TOOL_PATHS from '$ORG_STEAM_COMPAT_TOOL_PATHS' to '$STEAM_COMPAT_TOOL_PATHS'"
+	elif [ "$RUNFORCESLR" -eq 1 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Rebuilding STEAM_COMPAT_TOOL_PATHS variable, because SLR was forced"
+		writelog "INFO" "${FUNCNAME[0]} - Adding RUNPROTON '${RUNPROTON%/*}'"
+		STEAM_COMPAT_TOOL_PATHS="${RUNPROTON%/*}"
+		LASTSLRPATH="${LASTSLR% --verb*}"
+		STEAM_COMPAT_TOOL_PATHS="$STEAM_COMPAT_TOOL_PATHS:${LASTSLRPATH%/*}"
+		writelog "INFO" "${FUNCNAME[0]} - Result: Updated STEAM_COMPAT_TOOL_PATHS to '$STEAM_COMPAT_TOOL_PATHS'"
 	fi
 
 	SECONDS=0
