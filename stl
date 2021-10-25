@@ -64,6 +64,7 @@ NOICON="$STLSHM/empty.png"
 FAVPIC="$STLSHM/fav.jpg"
 DFDIR="$STLSHM/desktopfiles"
 CLOSETMP="$STLSHM/${PROGCMD}-closing.tmp"
+PROTBUMPTEMP="$STLSHM/protonbump.tmp"
 KILLSWITCH="$STLSHM/KillSwitch"
 TEMPLOG="$STLSHM/${PROGCMD}.log"
 WINRESLOG="$STLSHM/winres.log"
@@ -1863,9 +1864,7 @@ function rmDupLines {
 
 function getAvailableProtonVersions {
 	# skip this function if a linux game was started
-	
 	if [ "$ISGAME" -eq 2 ] || [ -n "$2" ]; then
-
 		# ...and if USEWINE is enabled	
 		if [ -n "$USEWINE" ] && [ "$USEWINE" -eq 1 ]; then
 			writelog "SKIP" "${FUNCNAME[0]} - USEWINE is enabled - skipping this function"
@@ -3014,6 +3013,7 @@ function dlCustomProton {
 					notiShow "$(strFix "$NOTY_DLCUSTOMPROTON3" "$CPURL")"
 					"$TAR" xf "$DSTDL" -C "$EXTDEST" 2>/dev/null
 					getAvailableProtonVersions "up"
+					touch "$PROTBUMPTEMP"
 				fi
 			else
 				notiShow "$(strFix "$NOTY_DLCUSTOMPROTON6" "$CPURL")"
@@ -3031,6 +3031,7 @@ function dlCustomProton {
 					notiShow "$(strFix "$NOTY_DLCUSTOMPROTON3" "$CPURL")"
 					"$UNZIP" "$DSTDL" -d "$CUSTPROTEXTDIR/$SUBDIR" 2>/dev/null
 					getAvailableProtonVersions "up"
+					touch "$PROTBUMPTEMP"
 				fi
 			else
 				notiShow "$(strFix "$NOTY_DLCUSTOMPROTON6" "$CPURL")"
@@ -4730,6 +4731,15 @@ function setShadDestDir {
 #	fi
 }
 
+function refreshProtList {
+	if [ -f "$PROTBUMPTEMP" ]; then
+		rm "$PROTONCSV" 2>/dev/null
+		unset ProtonCSV
+		rm "$PROTBUMPTEMP" 2>/dev/null
+		createProtonList X
+	fi	
+}
+
 function MainMenu {
 	prepareMenu "$@"
 
@@ -4841,26 +4851,31 @@ function MainMenu {
 	;;
 	4) 	{
 			clickInfo "${FUNCNAME[0]}" "$?" "$BUT_GUISET_CATMENUSHORT" "$SETMENU" "Category Menu Selection"
+			refreshProtList
 			setGuiCategoryMenuSel "$AID" "${FUNCNAME[0]}"
 		}
 	;;
 	6) 	{
 			clickInfo "${FUNCNAME[0]}" "$?" "$BUT_GM" "$SETMENU" "$GAMMENU"
+			refreshProtList
 			openGameMenu "$AID" "${FUNCNAME[0]}"
 		}
 	;;
 	8) 	{
 			clickInfo "${FUNCNAME[0]}" "$?" "$BUT_DGM" "$SETMENU" "Game Default Menu"
+			refreshProtList
 			openGameDefaultMenu "$AID" "${FUNCNAME[0]}"
 		}
 	;;
 	10) 	{
 			clickInfo "${FUNCNAME[0]}" "$?" "$BUT_GLM" "$SETMENU" "Global Menu"
+			refreshProtList
 			openGlobalMenu "$AID" "${FUNCNAME[0]}" "1"
 		}
 	;;
 	12) 	{
 			clickInfo "${FUNCNAME[0]}" "$?" "$BUT_FAV" "$SETMENU" "Favorites"
+			refreshProtList
 			favoritesMenu "$AID" "${FUNCNAME[0]}"
 		}
 	;;
