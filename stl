@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v6.18.323"
+PROGVERS="v6.18.324"
 PROGCMD="${0##*/}"
 GHURL="https://github.com"
 PROJECTPAGE="$GHURL/frostworx/steamtinkerlaunch"
@@ -2061,6 +2061,7 @@ function setDefaultCfgValues {
 		if [ -z "$AUTOPULLPROTON" ]						; then	AUTOPULLPROTON="1"; fi
 		if [ -z "$CUSTPROTDLDIR" ]						; then	CUSTPROTDLDIR="$STLDLDIR/$PROCU"; fi
 		if [ -z "$CUSTPROTEXTDIR" ]						; then	CUSTPROTEXTDIR="$STLCFGDIR/$PROCU"; fi
+		if [ -z "$CUPROTOCOMPAT" ]						; then	CUPROTOCOMPAT="0"; fi
 		if [ -z "$WINEDLDIR" ]							; then	WINEDLDIR="$STLDLDIR/wine"; fi
 		if [ -z "$WINEEXTDIR" ]							; then	WINEEXTDIR="$STLCFGDIR/wine"; fi
 		if [ -z "$USEVORTEXPROTON" ]					; then	USEVORTEXPROTON="$DEFDOTNETPROTON"; fi
@@ -2331,6 +2332,8 @@ function saveCfg {
 			echo "CUSTPROTDLDIR=\"$CUSTPROTDLDIR\""
 			echo "## $DESC_CUSTPROTEXTDIR"
 			echo "CUSTPROTEXTDIR=\"$CUSTPROTEXTDIR\""
+			echo "## $DESC_CUPROTOCOMPAT"
+			echo "CUPROTOCOMPAT=\"$CUPROTOCOMPAT\""
 			echo "## $DESC_WINEDLDIR"
 			echo "WINEDLDIR=\"$WINEDLDIR\""
 			echo "## $DESC_WINEEXTDIR"
@@ -2975,6 +2978,12 @@ function wgetGui {
 }
 
 function dlCustomProton {
+	if [ "$CUPROTOCOMPAT" -eq 1 ]; then
+		CUPROEXTDIR="$STEAMCOMPATOOLS"
+	else
+		CUPROEXTDIR="$CUSTPROTEXTDIR"
+	fi
+
 	CPURL="${1//\"/}"
 	PROTV="${2//\"/}"
 	CPURLFILE="${CPURL##*/}"
@@ -2992,8 +3001,8 @@ function dlCustomProton {
 	PROTNAMERAW="${CPURLFILE%%.tar*}"
 	PROTNAME="${PROTNAMERAW//.zip/}"
 
-	if [ -d "$CUSTPROTEXTDIR/$PROTNAME" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - Directory '$CUSTPROTEXTDIR/$PROTNAME' already exists - nothing to extract"
+	if [ -d "$CUPROEXTDIR/$PROTNAME" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Directory '$CUPROEXTDIR/$PROTNAME' already exists - nothing to extract"
 	else
 		if grep -q "\.tar\." <<< "$DSTDL"; then
 			notiShow "$(strFix "$NOTY_DLCUSTOMPROTON5" "$CPURLFILE")"
@@ -3001,14 +3010,14 @@ function dlCustomProton {
 			PROTRELPATH="$("$TAR" -tf "$DSTDL" 2>/dev/null | grep "proton$" 2>/dev/null )"
 			if [ -n "$PROTRELPATH" ]; then
 				if grep -q "^proton$" <<< "$PROTRELPATH"; then
-					EXTDEST="$CUSTPROTEXTDIR/$PROTNAME"
+					EXTDEST="$CUPROEXTDIR/$PROTNAME"
 					PROTFULLPATH="$EXTDEST/$PROTRELPATH"
 					writelog "INFO" "${FUNCNAME[0]} - Archive is a tarbomb - creating parent directory '$EXTDEST' as extract dest dir"
 					mkProjDir "$EXTDEST"
 				else
 					writelog "INFO" "${FUNCNAME[0]} - Archive contains proton in subdirectory '$PROTRELPATH'"
-					PROTFULLPATH="$CUSTPROTEXTDIR/$PROTRELPATH"
-					EXTDEST="$CUSTPROTEXTDIR"
+					PROTFULLPATH="$CUPROEXTDIR/$PROTRELPATH"
+					EXTDEST="$CUPROEXTDIR"
 				fi
 
 				if [ -f "$PROTFULLPATH" ]; then
@@ -3028,12 +3037,12 @@ function dlCustomProton {
 				writelog "INFO" "${FUNCNAME[0]} - Archive contains proton"
 				SUBDIR="$(basename "${DSTDL//.zip/}")"
 				PROTRELPATH="$SUBDIR/proton"
-				PROTFULLPATH="$CUSTPROTEXTDIR/$PROTRELPATH"
+				PROTFULLPATH="$CUPROEXTDIR/$PROTRELPATH"
 				if [ -f "$PROTFULLPATH" ]; then
 					writelog "SKIP" "${FUNCNAME[0]} - The destination path '$PROTFULLPATH' already exists - looks like '$DSTDL' was already extracted before"
 				else
 					notiShow "$(strFix "$NOTY_DLCUSTOMPROTON3" "$CPURL")"
-					"$UNZIP" "$DSTDL" -d "$CUSTPROTEXTDIR/$SUBDIR" 2>/dev/null
+					"$UNZIP" "$DSTDL" -d "$CUPROEXTDIR/$SUBDIR" 2>/dev/null
 					getAvailableProtonVersions "up"
 					touch "$PROTBUMPTEMP"
 				fi
@@ -4197,6 +4206,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_DXVK_LOG_PATH!$DESC_DXVK_LOG_PATH ('DXVK_LOG_PATH')":DIR "${DXVK_LOG_PATH/#-/ -}" `#CAT_Proton` `#SUB_Directories` `#MENU_GAME` \
 --field="     $GUI_CUSTPROTDLDIR!$DESC_CUSTPROTDLDIR ('CUSTPROTDLDIR')":DIR "${CUSTPROTDLDIR/#-/ -}" `#CAT_Proton` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_CUSTPROTEXTDIR!$DESC_CUSTPROTEXTDIR ('CUSTPROTEXTDIR')":DIR "${CUSTPROTEXTDIR/#-/ -}" `#CAT_Proton` `#SUB_Directories` `#MENU_GLOBAL` \
+--field="     $GUI_CUPROTOCOMPAT!$DESC_CUPROTOCOMPAT ('CUPROTOCOMPAT')":CHK "${CUPROTOCOMPAT/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_USESUSYM!$DESC_USESUSYM ('USESUSYM')":CHK "${USESUSYM/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_USEGLOBSUSYM!$DESC_USEGLOBSUSYM ('USEGLOBSUSYM')":CHK "${USEGLOBSUSYM/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_FIXSYMLINKS!$DESC_FIXSYMLINKS ('FIXSYMLINKS')":CHK "${FIXSYMLINKS/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
