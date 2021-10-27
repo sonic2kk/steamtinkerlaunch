@@ -3,9 +3,9 @@
 [![GitHub contributors](https://img.shields.io/github/contributors/frostworx/steamtinkerlaunch.svg?style=flat-square)](https://github.com/frostworx/steamtinkerlaunch/graphs/contributors)
 [![GitHub issues](https://img.shields.io/github/issues/frostworx/steamtinkerlaunch.svg?style=flat-square)](https://github.com/frostworx/steamtinkerlaunch/issues)
 [![GitHub license](https://img.shields.io/github/license/frostworx/steamtinkerlaunch.svg?style=flat-square)](https://github.com/frostworx/steamtinkerlaunch/blob/dev/LICENSE)
-[![reddit](https://img.shields.io/reddit/subreddit-subscribers/SteamTinkerLaunch?style=flat-square)](https://www.reddit.com/r/SteamTinkerLaunch)
-[![discord](https://img.shields.io/discord/900037707349250088?style=flat-square)](https://discord.gg/sE52kB7a)
-[![matrix](https://img.shields.io/matrix/steamtinkerlaunch:matrix.org?style=flat-square)](https://matrix.to/#/#steamtinkerlaunch:matrix.org)
+[![reddit](https://img.shields.io/reddit/subreddit-subscribers/SteamTinkerLaunch?style=flat-square&label=Reddit)](https://www.reddit.com/r/SteamTinkerLaunch)
+[![discord](https://img.shields.io/discord/900037707349250088?style=flat-square&label=Discord)](https://discord.gg/sE52kB7a)
+[![matrix](https://img.shields.io/matrix/steamtinkerlaunch:matrix.org?style=flat-square&label=Matrix)](https://matrix.to/#/#steamtinkerlaunch:matrix.org)
 
 # Summary
 
