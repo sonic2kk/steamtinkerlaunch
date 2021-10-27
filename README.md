@@ -3,6 +3,9 @@
 [![GitHub contributors](https://img.shields.io/github/contributors/frostworx/steamtinkerlaunch.svg?style=flat-square)](https://github.com/frostworx/steamtinkerlaunch/graphs/contributors)
 [![GitHub issues](https://img.shields.io/github/issues/frostworx/steamtinkerlaunch.svg?style=flat-square)](https://github.com/frostworx/steamtinkerlaunch/issues)
 [![GitHub license](https://img.shields.io/github/license/frostworx/steamtinkerlaunch.svg?style=flat-square)](https://github.com/frostworx/steamtinkerlaunch/blob/dev/LICENSE)
+[![reddit](https://img.shields.io/reddit/subreddit-subscribers/SteamTinkerLaunch?style=flat-square)](https://www.reddit.com/r/SteamTinkerLaunch)
+[![discord](https://img.shields.io/discord/900037707349250088?style=flat-square)](https://discord.gg/sE52kB7a)
+[![matrix](https://img.shields.io/matrix/steamtinkerlaunch:matrix.org?style=flat-square)](https://matrix.to/#/#steamtinkerlaunch:matrix.org)
 
 # Summary
 
@@ -69,9 +72,14 @@ Feel free to contribute to the project - there are many possibilities to do so:
 - maintain a package for your distribution
 - add translations
 - find out how cool it is and tell others :)
+- help others if you can!
 
-Got and idea or suggestions, but don't want to open an issue?
-Visit [/r/SteamTinkerLaunch/](https://www.reddit.com/r/SteamTinkerLaunch)
+### Community Platforms:
+
+- Reddit: https://www.reddit.com/r/SteamTinkerLaunch
+- Discord: https://discord.gg/sE52kB7a
+- Matrix: https://matrix.to/#/#steamtinkerlaunch:matrix.org
+- Github discussions: https://github.com/frostworx/steamtinkerlaunch/discussions
 
 ## Quick start
 When **stl** is started for the first time it will create its default [configuration](#Configuration) structure.
