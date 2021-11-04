@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v7.0"
+PROGVERS="v7.211104"
 PROGCMD="${0##*/}"
 GHURL="https://github.com"
 PROJECTPAGE="$GHURL/frostworx/steamtinkerlaunch"
@@ -2134,6 +2134,8 @@ function setDefaultCfgValues {
 		if [ -z "$RUN_X64DBG" ]							; then	RUN_X64DBG="0";	fi
 		if [ -z "$USEVORTEX" ]							; then	USEVORTEX="0"; fi
 		if [ -z "$WAITVORTEX" ]							; then	WAITVORTEX="2"; fi
+		if [ -z "$RUN_VORTEX_WINETRICKS" ]				; then	RUN_VORTEX_WINETRICKS="0"; fi
+		if [ -z "$RUN_VORTEX_WINECFG" ]					; then	RUN_VORTEX_WINECFG="0";fi
 		if [ -z "$CHANGE_PULSE_LATENCY" ] 				; then	CHANGE_PULSE_LATENCY="0"; fi
 		if [ -z "$STL_PULSE_LATENCY_MSEC" ]				; then	STL_PULSE_LATENCY_MSEC="60"; fi
 		if [ -z "$TOGGLEWINDOWS" ]						; then	TOGGLEWINDOWS="0"; fi
@@ -2587,6 +2589,10 @@ function saveCfg {
 			echo "USEVORTEX=\"$USEVORTEX\""
 			echo "## $DESC_WAITVORTEX"
 			echo "WAITVORTEX=\"$WAITVORTEX\""
+			echo "## $DESC_RUN_VORTEX_WINETRICKS"
+			echo "RUN_VORTEX_WINETRICKS=\"$RUN_VORTEX_WINETRICKS\""
+			echo "## $DESC_RUN_VORTEX_WINECFG"
+			echo "RUN_VORTEX_WINECFG=\"$RUN_VORTEX_WINECFG\""
 			echo "## $DESC_CHANGE_PULSE_LATENCY"
 			echo "CHANGE_PULSE_LATENCY=\"$CHANGE_PULSE_LATENCY\""
 			echo "## $DESC_STL_PULSE_LATENCY_MSEC"
@@ -4324,6 +4330,8 @@ function AllSettingsEntriesDummyFunction {
 --field="$(spanFont "$GUI_OPTSVORTEX" "H")":LBL "SKIP" `#CAT_Vortex` `#HEAD_Vortex` `#MENU_GAME` `#MENU_GLOBAL` \
 --field="     $GUI_USEVORTEX!$DESC_USEVORTEX ('USEVORTEX')":CHK "${USEVORTEX/#-/ -}" `#CAT_Vortex` `#MENU_GAME` \
 --field="     $GUI_WAITVORTEX!$DESC_WAITVORTEX ('WAITVORTEX')":NUM "${WAITVORTEX/#-/ -}" `#CAT_Vortex` `#MENU_GAME` \
+--field="     $GUI_RUN_VORTEX_WINETRICKS!$DESC_RUN_VORTEX_WINETRICKS ('RUN_VORTEX_WINETRICKS')":CHK "${RUN_VORTEX_WINETRICKS/#-/ -}" `#CAT_Vortex` `#MENU_GAME` \
+--field="     $GUI_RUN_VORTEX_WINECFG!$DESC_RUN_VORTEX_WINECFG ('RUN_VORTEX_WINECFG')":CHK "${RUN_VORTEX_WINECFG/#-/ -}" `#CAT_Vortex` `#MENU_GAME` \
 --field="     $GUI_USEVORTEXPRERELEASE!$DESCUSEVORTEXPRERELEASE ('USEVORTEXPRERELEASE')":CHK "${USEVORTEXPRERELEASE/#-/ -}" `#CAT_Vortex` `#SUB_Checkbox` `#MENU_GLOBAL`  \
 --field="     $GUI_VORTEXDOWNLOADPATH!$DESC_VORTEXDOWNLOADPATH ('VORTEXDOWNLOADPATH')":DIR "${VORTEXDOWNLOADPATH/#-/ -}" `#CAT_Vortex` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_VORTEXCOMPDATA!$DESC_VORTEXCOMPDATA ('VORTEXCOMPDATA')":DIR "${VORTEXCOMPDATA/#-/ -}" `#CAT_Vortex` `#SUB_Directories` `#MENU_GLOBAL` \
@@ -11243,6 +11251,17 @@ function startVortex {
 		if [ ! -f "$VORTEXEXE" ]; then
 			writelog "WARN" "${FUNCNAME[0]} - VORTEXEXE '$VORTEXEXE' does not exist - installing now"
 			installVortex X
+		fi
+
+		if [ "$RUN_VORTEX_WINETRICKS" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Starting $WINETRICKS before Vortex"
+			chooseWinetricks
+			WINE="$VORTEXWINE" WINEDEBUG="-all" WINEPREFIX="$VORTEXPFX" "$WINETRICKS"
+		fi
+
+		if [ "$RUN_VORTEX_WINECFG" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Starting $WINECFG before Vortex"
+			WINE="$VORTEXWINE" WINEDEBUG="-all" WINEPREFIX="$VORTEXPFX" "$WINECFG"
 		fi
 
 		if [ -f "$VORTEXEXE" ]; then
