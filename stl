@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v7.211104"
+PROGVERS="v7.211107"
 PROGCMD="${0##*/}"
 GHURL="https://github.com"
 PROJECTPAGE="$GHURL/frostworx/steamtinkerlaunch"
@@ -214,6 +214,8 @@ VORTSETCMD="$STLSHM/vortset.cmd"
 DEFDOTNETPROTON="Proton-6.17-STL-1"
 SPEK="SpecialK"
 SPEKDLDIR="$STLDLDIR/${SPEK,,}"
+FWS="FlawlessWidescreen"
+FWSDLDIR="$STLDLDIR/${FWS,,}"
 DISC="discord"
 DOTN="dotnet"
 MO2="mo2"
@@ -2004,6 +2006,7 @@ function setDefaultCfgValues {
 		if [ -z "$SPEKOLDDLURL" ]						; then	SPEKOLDDLURL="https://github.com/Kaldaien/SpecialK/releases/download/sk_0_8_50/SpecialK_0_8_66.7z";fi
 		if [ -z "$SPEKURL" ]							; then	SPEKURL="https://sk-data.special-k.info/";fi
 		if [ -z "$SPEKCOMPURL" ]						; then	SPEKCOMPURL="https://www.pcgamingwiki.com/wiki/List_of_games_compatible_with_Special_K#Compatibility_list";fi
+		if [ -z "$FWSURL" ]								; then	FWSURL="https://www.${FWS,,}.org/fws";fi
 	}
 
 	function setDefaultCfgValuesglobal {
@@ -2221,6 +2224,7 @@ function setDefaultCfgValues {
 		if [ -z "$USEMANGOHUDSTLCFG" ]					; then	USEMANGOHUDSTLCFG="0";	fi
 		if [ -z "$USESPECIALK" ]						; then	USESPECIALK="0"; fi
 		if [ -z "$SPEKVERS" ]							; then	SPEKVERS="old"; fi
+		if [ -z "$USEFWS" ]								; then	USEFWS="0"; fi
 	}
 	
 	"${FUNCNAME[0]}$1"
@@ -2287,6 +2291,8 @@ function saveCfg {
 			echo "SPEKURL=\"$SPEKURL\""
 			echo "## $SPEK compatibility URL"
 			echo "SPEKCOMPURL=\"$SPEKCOMPURL\""
+			echo "## $FWS DL URL"
+			echo "FWSURL=\"$FWSURL\""
 			} >> "$1"
 			#ENDsaveCfgurl
 		fi
@@ -2763,6 +2769,8 @@ function saveCfg {
 			echo "USESPECIALK=\"$USESPECIALK\""
 			echo "## $DESC_SPEKVERS"
 			echo "SPEKVERS=\"$SPEKVERS\""
+			echo "## $DESC_USEFWS"
+			echo "USEFWS=\"$USEFWS\""
 			} >> "$1"
 			#ENDsaveCfgdefault_template
 		fi
@@ -4184,6 +4192,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_STL_PV_TERMINAL!$DESC_STL_PV_TERMINAL ('STL_PV_TERMINAL')":CB "$(cleanDropDown "${STL_PV_TERMINAL/#-/ -}" "none!auto!tty!xterm")" `#CAT_Misc` `#MENU_GAME` \
 --field="     $GUI_USESPECIALK!$DESC_USESPECIALK ('USESPECIALK')":CHK "${USESPECIALK/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_SPEKVERS!$DESC_SPEKVERS ('SPEKVERS')":CB "$(cleanDropDown "${SPEKVERS/#-/ -}" "test!stable!old!$DISC")" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_USEFWS!$DESC_USEFWS ('USEFWS')":CHK "${USEFWS/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="$(spanFont "$GUI_OPTSPROTON" "H")":LBL "SKIP" `#CAT_Proton` `#HEAD_Proton` `#MENU_GAME` `#MENU_GLOBAL` \
 --field="     $GUI_USEPROTON!$DESC_USEPROTON ('USEPROTON')":CB "$(cleanDropDown  "${USEPROTON/#-/ -}" "$PROTYADLIST")" `#CAT_Proton` `#MENU_GAME` \
 --field="     $GUI_USESLR!$DESC_USESLR ('USESLR')":CHK "${USESLR/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
@@ -9461,6 +9470,68 @@ function checkCustomLaunch {
 	fi
 }
 
+function setFWSArch {
+	if [ -z "$FWSARCH" ]; then
+		FWSARCH="64"
+		if [ -n "$GP" ] && [ -f "$GP" ]; then
+			if [ "$(getArch "$GP")" == "32" ]; then
+				FWSARCH="32"
+			fi
+		fi
+	fi
+}
+
+function dlFWS {
+	setFWSArch
+	mkProjDir "$FWSDLDIR/$FWSARCH"
+	DSTFILE="${FWS,,}_x64.zip"
+	if [ "$FWSARCH" == "32" ]; then
+		DSTFILE="${DSTFILE//_x64}"
+	fi
+	DLDST="$FWSDLDIR/$FWSARCH/$DSTFILE"
+	
+	if [ ! -f "$DLDST" ]; then
+		notiShow "$(strFix "$NOTY_DLCUSTOMPROTON" "$DSTFILE")"
+		wgetGui "$FWSURL/$DSTFILE" "$DLDST"
+	fi
+
+	FWSEXE="$FWSDLDIR/$FWSARCH/${FWS}.exe"
+	if [ ! -f "$FWSEXE" ]; then
+		if [ -f "$DLDST" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Extracting $DSTFILE in '$FWSDLDIR/$FWSARCH'"
+			"$UNZIP" -q "$DLDST" -d "$FWSDLDIR/$FWSARCH"
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - Downloading '$FWS' failed! Disabling '$FWS'"
+			USEFWS=0
+		fi
+	fi
+
+	if [ ! -f "$FWSEXE" ]; then
+		writelog "SKIP" "${FUNCNAME[0]} - Extracting '$FWS' failed! Disabling '$FWS'"
+		USEFWS=0
+	fi
+}
+
+function checkFWS {
+	if [ "$USEFWS" -eq 1 ]; then
+		dlFWS
+		if [ "$USEFWS" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - 'USEFWS' is enabled - starting '$FWS' exe '$FWSEXE'"
+			setFWSArch
+			IPAK="vcrun2010-x64"
+			if [ "$FWSARCH" == "32" ]; then
+				IPAK="${IPAK//x64/x86}"
+			fi
+			writelog "INFO" "${FUNCNAME[0]} - Installing '$IPAK' into '$GPFX' using '$RUNWINE'"
+			installSteWoShPak "$IPAK" "$GPFX" "$RUNWINE"
+			writelog "INFO" "${FUNCNAME[0]} - Starting '$FWSEXE' forked into the background"
+			restoreOrgVars
+			(sleep 2; "$RUNPROTON" run "$FWSEXE") &
+			emptyVars "O" "X"
+		fi
+	fi
+}
+
 function togWindows {
 	function windowminimize {
 		rm "$STLMINWIN" 2>/dev/null
@@ -12474,6 +12545,7 @@ function setLinGameVals {
 		UUUSEIGCS="0"
 		IGCSDST="0"
 		USESPECIALK="0"
+		USEFWS="0"
 	fi
 }
 
@@ -12893,6 +12965,10 @@ function prepareLaunch {
 		writelog "INFO" "${FUNCNAME[0]} - checkOpenVRFSR:"
 		checkOpenVRFSR
 	fi
+
+	# start '$FWS' if USEFWS is enabled
+	writelog "INFO" "${FUNCNAME[0]} - CheckFWS:"
+	checkFWS
 
 	# start a custom program if USECUSTOMCMD is enabled
 	writelog "INFO" "${FUNCNAME[0]} - CheckCustomLaunch:"
