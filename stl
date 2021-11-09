@@ -10730,12 +10730,12 @@ function setVortexDLMime {
 		echo "[Desktop Entry]"
 		echo "Type=Application"
 		echo "Categories=Game;"
-		echo "Name=Vortex ($PROGNAME - $PROGCMD)"
+		echo "Name=${VTX^} ($PROGNAME - $PROGCMD)"
 		echo "MimeType=x-scheme-handler/nxm;x-scheme-handler/nxm-protocol"
 		echo "Terminal=false"
 		echo "X-KeepTerminal=false"
 		echo "Path=$(dirname "$VORTEXEXE")"
-		echo "Exec=env LC_ALL=C WINEDEBUG=\"-all\" WINEPREFIX=\"$VORTEXPFX\" \"$VORTEXWINE\" ${VTX^}.exe -d %u"
+		echo "Exec=$(realpath "$0") $VTX u %u"
 		echo "NoDisplay=true"
 		} >> "$FVD"
 		
@@ -11350,7 +11350,15 @@ function startVortex {
 				writelog "INFO" "${FUNCNAME[0]} - Starting ${VTX^} now with command 'runVortex \"--game\" \"$NEXUSGAMEID\"' in WINEPREFIX '$VORTEXPFX'"
 				runVortex "--game" "$NEXUSGAMEID"
 			else
-				if [ "$2" == "getset" ]; then
+				if [ "$2" == "url" ]; then
+					if [ -z "$3" ]; then
+						writelog "INFO" "${FUNCNAME[0]} - need arg3"
+						howto
+					else
+						writelog "INFO" "${FUNCNAME[0]} - Starting ${VTX^} now with command 'runVortex \"-d\" \"$3\""
+						runVortex "-d" "$3"
+					fi
+				elif [ "$2" == "getset" ]; then
 					writelog "INFO" "${FUNCNAME[0]} - Showing ${VTX^} settings as requested"
 					runVortex "--get" "settings"
 					grep -v "^info\: Epic" "$VWRUN"
@@ -12014,7 +12022,7 @@ function setMO2DLMime {
 		echo "Terminal=false"
 		echo "X-KeepTerminal=false"
 		echo "Path=$(dirname "$MO2EXE")"
-		echo "Exec=$0 mo2 u %u"
+		echo "Exec=$(realpath "$0") mo2 u %u"
 		echo "NoDisplay=true"
 		} >> "$FMO2D"
 		
@@ -14816,13 +14824,13 @@ function howto {
 	echo "    meta                             Generates/Updates metadata"
 	echo "                                       for all installed games"
 	echo "    mo2                              Mod Organizer 2"
-	echo "         <install|i>                   install MO2 (includes download)"
-	echo "         <download|d>                  download latest MO2 release"
-	echo "         <start|s>                     start MO2 (includes download+install)"
-	echo "         <list-supported|ls>           list games supported by MO2"
-	echo "         <list-installed|li>           list installed games supported by MO2"
-	echo "         <create-instance|ci> <id>     create MO2 instance for <id>"
-	echo "         <url|u>                       open nxm url with MO2"
+	echo "         install|i                   install MO2 (includes download)"
+	echo "         download|d                  download latest MO2 release"
+	echo "         start|s                     start MO2 (includes download+install)"
+	echo "         list-supported|ls           list games supported by MO2"
+	echo "         list-installed|li           list installed games supported by MO2"
+	echo "         create-instance|ci <id>     create MO2 instance for <id>"
+	echo "         url|u <url>                 open nxm url with MO2"
  	echo "    proton|p <title> <X>             Start and/or create <title> with proton"
 	echo "                                       without using steam."
 	echo "                                       Optional <X> opens gui"
@@ -14863,6 +14871,7 @@ function howto {
 	echo "           games                       Gui to en/disable ${VTX^} for supported game"
 	echo "           symlinks                    Gui showing ${VTX^} symlinks"
 	echo "           start                       Starts ${VTX^}"
+	echo "           url|u <url>                 Open nxm url with ${VTX^}"
 	echo "           getset                      Show config of installed ${VTX^}"
 	echo "           reset                       Reset all autodetected settings in ${VTX^}"
 	echo "           stage <path>                Add ${VTX^} stage via dialog"
@@ -15189,6 +15198,8 @@ function commandline {
 				fi
 			elif [ "$2" == "start" ]; then
 				startVortex "noask" "$3"
+			elif [ "$2" == "url" ] || [ "$2" == "u" ]; then
+				startVortex "noask" "url" "$3"
 			elif [ "$2" == "getset" ]; then
 				startVortex "noask" "$2"
 			elif [ "$2" == "gui" ]; then
