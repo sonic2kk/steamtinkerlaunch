@@ -535,6 +535,19 @@ function OpenWiki {
 
 export -f OpenWiki
 
+function StatusWindow {
+	YAD=yad
+    TITLE="${PROGNAME}-Busy"
+    pollWinRes "$TITLE"
+	writelog "INFO" "${FUNCNAME[0]} - for '$1'"
+
+    RUNFUNC="$2"
+    $RUNFUNC |
+    while read -r line; do
+		echo "# ${line}";
+	done | "$YAD" --window-icon="$STLICON" --title="$TITLE" --on-top --progress --progress-text="$1..." --pulsate --center --no-buttons --auto-close "$WINDECO" "$GEOM"
+}
+
 function setColGui {
 	HAVCOL=0
 	if grep -q "^COLCOUNT" "$CURGUICFG"; then
@@ -2780,19 +2793,24 @@ function saveCfg {
 	"${FUNCNAME[0]}$SCFG" "$1" "$SCFG" "$2"
 }
 
-function notiShow { 
-	if [ -n "$2" ]; then
+function notiShow {
+	if [ -n "$2" ] && [ "$2" == "X" ]; then
 		NOTY="$(command -v "notify-send")"
 	fi
 	
-	if [ -n "$USENOTIFIER" ] && [ "$USENOTIFIER" -eq 1 ] || [ -n "$2" ]; then
+	if [ -n "$USENOTIFIER" ] && [ "$USENOTIFIER" -eq 1 ] && { [ -z "$2" ] || { [ -n "$2" ] && [ "$2" != "S" ]; };} || { [ -n "$2" ] && [ "$2" == "X" ]; }; then
 		if [ ! -x "$(command -v "$NOTY")" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Warning - '$NOTY' not found - disabling notifier"
 			USENOTIFIER=0
 		else
 			"$NOTY" "$1"
 		fi
-	fi	
+	fi
+	
+	if [ -n "$2" ] && [ "$2" == "S" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Message '$1' should go to StatusWindow"
+		echo "$1"
+	fi
 }
 
 function strFix {
@@ -3004,9 +3022,9 @@ function dlCustomProton {
 	DSTDL="$CUSTPROTDLDIR/$CPURLFILE"
 	if [ ! -f "$DSTDL" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Downloading '$CPURL' to '$CUSTPROTDLDIR'"
-		notiShow "$(strFix "$NOTY_DLCUSTOMPROTON" "$CPURL")"
+		notiShow "$(strFix "$NOTY_DLCUSTOMPROTON" "$CPURL")" "S"
 		wgetGui "$CPURL" "$DSTDL"
-		notiShow "$(strFix "$NOTY_DLCUSTOMPROTON2" "$CPURL")"
+		notiShow "$(strFix "$NOTY_DLCUSTOMPROTON2" "$CPURL")" "S"
 	else
 		writelog "INFO" "${FUNCNAME[0]} - File '$DSTDL' already exists - nothing to download"
 		notiShow "$(strFix "$NOTY_DLCUSTOMPROTON4" "$CPURLFILE")"
@@ -3019,7 +3037,7 @@ function dlCustomProton {
 		writelog "INFO" "${FUNCNAME[0]} - Directory '$CUPROEXTDIR/$PROTNAME' already exists - nothing to extract"
 	else
 		if grep -q "\.tar\." <<< "$DSTDL"; then
-			notiShow "$(strFix "$NOTY_DLCUSTOMPROTON5" "$CPURLFILE")"
+			notiShow "$(strFix "$NOTY_DLCUSTOMPROTON5" "$CPURLFILE")" "S"
 
 			PROTRELPATH="$("$TAR" -tf "$DSTDL" 2>/dev/null | grep "proton$" 2>/dev/null )"
 			if [ -n "$PROTRELPATH" ]; then
@@ -3037,13 +3055,13 @@ function dlCustomProton {
 				if [ -f "$PROTFULLPATH" ]; then
 					writelog "SKIP" "${FUNCNAME[0]} - The destination path '$PROTFULLPATH' already exists - looks like '$DSTDL' was already extracted before"
 				else
-					notiShow "$(strFix "$NOTY_DLCUSTOMPROTON3" "$CPURL")"
+					notiShow "$(strFix "$NOTY_DLCUSTOMPROTON3" "$CPURL")" "S"
 					"$TAR" xf "$DSTDL" -C "$EXTDEST" 2>/dev/null
 					getAvailableProtonVersions "up"
 					touch "$PROTBUMPTEMP"
 				fi
 			else
-				notiShow "$(strFix "$NOTY_DLCUSTOMPROTON6" "$CPURL")"
+				notiShow "$(strFix "$NOTY_DLCUSTOMPROTON6" "$CPURL")" "S"
 				writelog "SKIP" "${FUNCNAME[0]} - Archive doesn't seem to contain a 'proton' file"
 			fi
 		elif grep -q "\.zip$" <<< "$DSTDL"; then
@@ -3055,13 +3073,14 @@ function dlCustomProton {
 				if [ -f "$PROTFULLPATH" ]; then
 					writelog "SKIP" "${FUNCNAME[0]} - The destination path '$PROTFULLPATH' already exists - looks like '$DSTDL' was already extracted before"
 				else
-					notiShow "$(strFix "$NOTY_DLCUSTOMPROTON3" "$CPURL")"
+					notiShow "$(strFix "$NOTY_DLCUSTOMPROTON3" "$CPURL")" "S"
 					"$UNZIP" "$DSTDL" -d "$CUPROEXTDIR/$SUBDIR" 2>/dev/null
 					getAvailableProtonVersions "up"
 					touch "$PROTBUMPTEMP"
+					notiShow "$GUI_DONE" "S"
 				fi
 			else
-				notiShow "$(strFix "$NOTY_DLCUSTOMPROTON6" "$CPURL")"
+				notiShow "$(strFix "$NOTY_DLCUSTOMPROTON6" "$CPURL")" "S"
 				writelog "SKIP" "${FUNCNAME[0]} - Archive doesn't seem to contain a 'proton' file"
 			fi
 		else
@@ -3130,11 +3149,11 @@ function dlCustomProtonGUI {
 	if [ -n "${DLDISPCUSTPROT}" ]; then
 		if grep -q "^http" <<< "${DLDISPCUSTPROT}"; then
 			writelog "INFO" "${FUNCNAME[0]} - The URL '$DLDISPCUSTPROT' was entered manually - downloading directly"
-			dlCustomProton "${DLDISPCUSTPROT}"
+			StatusWindow "$GUI_DLCUSTPROT" "dlCustomProton ${DLDISPCUSTPROT}"
 		else
 			DLURL="$(printf "%s\n" "${ProtonDLList[@]}" | grep -m1 "${DLDISPCUSTPROT}")"
 			writelog "INFO" "${FUNCNAME[0]} - '${DLDISPCUSTPROT}' was selected - downloading '$DLURL'"
-			dlCustomProton "${DLURL}"
+			StatusWindow "$GUI_DLCUSTPROT" "dlCustomProton ${DLURL}"
 		fi
 
 		createProtonList
@@ -3144,7 +3163,7 @@ function dlCustomProtonGUI {
 function dlNewCustomProt {
 	NEWESTPROT="$1"
 	DLURL="$(grep "$NEWESTPROT" <<< "$(printf "%s\n" "${ProtonDLList[@]}")")"
-	dlCustomProton "$DLURL"
+	StatusWindow "$GUI_DLCUSTPROT" "dlCustomProton ${DLURL}"
 }
 
 function dlUpCustomProton {
@@ -3273,7 +3292,7 @@ function addCustomProtonToList {
 			if grep -q "|http" <<< "$NEWCUSTPROT"; then
 				CPURLWIP="$(tr '|' '"' <<< "$NEWCUSTPROT" | sed "s:\"http:\";\"http:g")"
 				CPURL="$(cut -d ';' -f2 <<< "$CPURLWIP")"
-				dlCustomProton "$CPURL"
+				StatusWindow "$GUI_DLCUSTPROT" "dlCustomProton ${CPURL}"
 			else
 				CPWIP="$(tr -s '|' <<< "$NEWCUSTPROT" | tr '|' '"')"
 				if [ -f "${CPWIP//\"/}" ]; then
@@ -3285,7 +3304,7 @@ function addCustomProtonToList {
 				CPURLWIP="$(tr '|' '"' <<< "$NEWCUSTPROT" | sed "s:\"http:\";\"http:g")"
 				CPURL="$(cut -d ';' -f2 <<< "$CPURLWIP")"
 				CPV="$(cut -d ';' -f1 <<< "$CPURLWIP")"
-				dlCustomProton "$CPURL" "$CPV"
+				StatusWindow "$GUI_DLCUSTPROT" "dlCustomProton ${CPURL} $CPV"
 			else
 				CPWIP="$(tr '|' '"' <<< "$NEWCUSTPROT" | sed "s:\"/:\";\"/:g")"
 				CPWIPF="$(cut -d ';' -f2 <<< "$CPWIP")"
@@ -3311,7 +3330,7 @@ function dlCustomProtonGate {
 	else
 		if grep -q "^http" <<< "$1"; then
 			writelog "INFO" "${FUNCNAME[0]} - '$1' is an URL - sending directly to dlCustomProton"
-			dlCustomProton "$@"
+			StatusWindow "$GUI_DLCUSTPROT" "dlCustomProton $*"
 		else
 			if [ "$1" == "latest" ] || [ "$1" == "l" ] || [ "$1" == "latestge" ] || [ "$1" == "lge" ]; then
 				createDLProtList
@@ -3320,11 +3339,11 @@ function dlCustomProtonGate {
 				else
 					writelog "INFO" "${FUNCNAME[0]} - Downloading latest custom Proton ${ProtonDLDispList[0]//\"/}"
 				fi
-				dlCustomProton "${ProtonDLList[0]//\"/}"
+				StatusWindow "$GUI_DLCUSTPROT" "dlCustomProton ${ProtonDLList[0]//\"/}"
 			elif [ "$1" == "latesttkg" ] || [ "$1" == "ltkg" ]; then
 				createDLProtList
 				writelog "INFO" "${FUNCNAME[0]} - Downloading latest Proton TKG"
-				dlCustomProton "$(printf "%s\n" "${ProtonDLList[@]}" | grep -im1 "tkg")"
+				StatusWindow "$GUI_DLCUSTPROT" "dlCustomProton $(printf "%s\n" "${ProtonDLList[@]}" | grep -im1 "tkg")"
 			else
 				writelog "SKIP" "${FUNCNAME[0]} - Don't know what to do with argument '$1'"
 			fi
@@ -5533,16 +5552,16 @@ function dlOvrFSR {
 	FSRV="${FSR1%.*}"
 
 	if [ ! -f "$DLDST/$OVRFSRZIP" ]; then
-		notiShow "$(strFix "$NOTY_DLCUSTOMPROTON" "$OVRFSRZIP")"
+		notiShow "$(strFix "$NOTY_DLCUSTOMPROTON" "$OVRFSRZIP")" "S"
 		wgetGui "${OVRFSRURL}/download/$FSRV/$OVRFSRZIP" "$DLDST/$OVRFSRZIP"
-		notiShow "$(strFix "$NOTY_DLCUSTOMPROTON2" "$OVRFSRZIP")"
+		notiShow "$(strFix "$NOTY_DLCUSTOMPROTON2" "$OVRFSRZIP")" "S"
 	fi
 
 	if [ ! -s "$DLDST/$OVRFSRZIP" ]; then
 		writelog "SKIP" "${FUNCNAME[0]} - Downloaded file '$DLDST/$OVRFSRZIP' is empty - removing"
 		rm "$DLDST/$OVRFSRZIP" 2>/dev/null
 	else
-		notiShow "$(strFix "$NOTY_DLCUSTOMPROTON3" "$OVRFSRZIP")"
+		notiShow "$(strFix "$NOTY_DLCUSTOMPROTON3" "$OVRFSRZIP")" "S"
 		writelog "INFO" "${FUNCNAME[0]} - Download of '$OVRFSRZIP' to '$DLDST' was successful"
 	 	OMSRC="$DLDST/$OVRMOD"
 	 	if [ -f "$OMSRC" ]; then
@@ -5572,7 +5591,7 @@ function checkOpenVRFSR {
 			OVRASRC="$STLDLDIR/$OVFS/$OVRA"
 			if [ ! -f "$OVRASRC" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - No $OVFS source dll found under '$OVRASRC' - Trying automatic download"
-				dlOvrFSR
+				StatusWindow "$(strFix "$NOTY_DLCUSTOMPROTON" "$OVRFSRZIP")" "dlOvrFSR"
 			fi
 
 			if [ ! -f "$OVRASRC" ]; then
@@ -6436,9 +6455,11 @@ function presetReShade {
 function createReShadePresetList {
 
 	function listRSP {
+		if [ -d "$GLOBALRSPRESETDIR" ]; then
 		while read -r RSPF; do
 			echo "${RSPF##*/}"
 		done <<< "$(find "$GLOBALRSPRESETDIR" -mindepth 1 -maxdepth 1 -type d)"
+		fi
 
 		while read -r RSPF; do
 			echo "${RSPF##*/}"
@@ -6517,7 +6538,7 @@ function prepareReshadeFiles {
 	# make sure Depth3D is even wanted
 	if [ "$RESHADE_DEPTH3D" -eq 1 ]; then
 		writelog "INFO" "${FUNCNAME[0]} - RESHADE_DEPTH3D enabled"
-		dlShaders "depth3d"
+		StatusWindow "$GUI_DLSHADER" "dlShaders depth3d"
 	fi	
 }
 
@@ -6560,12 +6581,13 @@ function dlShaders {
 				SHADNAM="$(cut -d ';' -f2 <<< "$SHADLINE")"
 				if ! grep -qi "$SHADNAM" "$SHADERREPOBLOCKLIST"; then
 					writelog "INFO" "${FUNCNAME[0]} - Updating $SHADNAM" 
-					notiShow "$(strFix "$NOTY_DLSHADERS" "$SHADNAM")"
+					notiShow "$(strFix "$NOTY_DLSHADERS" "$SHADNAM")" "S"
 					gitUpdate "$(SHADSRC "$SHADNAM")" "${SHADURL//\"/}"
 				else
 					writelog "SKIP" "${FUNCNAME[0]} - Skipping $SHADNAM"
 				fi
 			done < "$SHADREPOLIST"
+			notiShow "$GUI_DONE" "S"
 		fi
 	else
 		if [ "$1" == "list" ]; then
@@ -6740,7 +6762,7 @@ function GameShaderDialog {
 		MAXAGE=1440
 
 		if [ ! -f "$SHADDLLAST" ] || test "$(find "$SHADDLLAST" -mmin +"$MAXAGE")"; then
-			dlShaders
+			StatusWindow "$GUI_DLSHADER" "dlShaders"
 			echo "$(date) - ${FUNCNAME[0]}" > "$SHADDLLAST"
 		fi
 
@@ -6984,8 +7006,7 @@ function installReshadeDepth3D {
 	
 	if [ -n "$RESHADE_DEPTH3D" ]; then
 		if [ "$RESHADE_DEPTH3D" -eq 1 ]; then
-			dlShaders "$SHADERPOOL"
-
+			StatusWindow "$GUI_DLSHADER" "dlShaders $SHADERPOOL"
 			setShadDestDir
 			if [ -n "$(GETALTEXEPATH)" ]; then
 				INSTDESTDIR="$(GETALTEXEPATH)"
@@ -7329,7 +7350,7 @@ function useSpecialK {
 
 	if [ "$USESPECIALK" -eq 1 ]; then
 		REQDLL="api-ms-win-crt-string-l1-1-0.dll"
-		if [ -d "$GPFX/$DRCW" ] && [ ! -f "$GPFX/$DRCW/system32/$REQDLL" ]; then # the directory check exists for skipping the arning if the pfx does not exist yet _(not nice, but )_ - PR if you care
+		if [ -d "$GPFX/$DRCW" ] && [ ! -f "$GPFX/$DRCW/system32/$REQDLL" ]; then # the directory check exists for skipping the warning if the pfx does not exist yet _(not nice, but )_ - PR if you care
 			writelog "SKIP" "${FUNCNAME[0]} - '$SPEK' requires '$REQDLL', which is not available in the WINEPREFIX currently running with '$USEPROTON'" "E"
 			notiShow "$(strFix "$NOTY_MISSDLL" "$SPEK" "$REQDLL" "$USEPROTON")"
 		else
@@ -10099,10 +10120,11 @@ function downloadCheatEngine {
 	if [ "$CHEATENGINEVERSION" == "7.2" ]; then
 		writelog "ERROR" "${FUNCNAME[0]} - Cheat Engine upstream removed version 7.2 - check the wiki for details!"
 	else
-	CESET="$1"
-	writelog "INFO" "${FUNCNAME[0]} - Downloading '$CESET' into '$CEDLDIR'"
-	notiShow "$(strFix "$NOTY_DLCE" "$CESET")"
-	wgetGui "$CHEATENGINEURL/download/$CHEATENGINEVERSION/$CESET" "$CEDLDIR/$CESET"
+		CESET="$1"
+		writelog "INFO" "${FUNCNAME[0]} - Downloading '$CESET' into '$CEDLDIR'"
+		notiShow "$(strFix "$NOTY_DLCE" "$CESET")" "S"
+		wgetGui "$CHEATENGINEURL/download/$CHEATENGINEVERSION/$CESET" "$CEDLDIR/$CESET"
+		notiShow "$GUI_DONE" "S"
 	fi
 }
 
@@ -10150,8 +10172,9 @@ function installCheatEngine {
 			mkProjDir "$CEPFX"
 			CEINSTDIR="$CEPFX/$DRC/Program Files/${CE} $CHEATENGINEVERSION"
 			writelog "INFO" "${FUNCNAME[0]} - Installing '$CEDLDIR/$CESET' into '$CEPFX' using '$RUNWINE'"
-			notiShow "$(strFix "$NOTY_INSTCE" "$CESET")"
+			notiShow "$(strFix "$NOTY_INSTCE" "$CESET")" "S"
 			WINE="$RUNWINE" WINEARCH=win64 WINEDEBUG="$STLWINEDEBUG" WINEPREFIX="$CEPFX" "$RUNWINE" "$CEDLDIR/$CESET" "/VERYSILENT"
+			notiShow "$GUI_DONE" "S"
 			if [ -d "$CEINSTDIR" ]; then
 				mv "$CEINSTDIR" "$CEDIR"
 				rm -rf "$CEPFX"
@@ -10225,7 +10248,7 @@ function checkCheatEngineLaunch {
 			
 			if [ ! -f "$CEEXE" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - File '$CEEXE' does not exit - starting installer"
-				installCheatEngine
+				StatusWindow "$GUI_RUN_CHEATENGINE" "installCheatEngine"
 			fi
 
 			if [ ! -f "$CEEXE" ]; then
@@ -10790,9 +10813,15 @@ function dlLatestVortex {
 			VORTEXVERSION="${VVRAW%.exe}"
 			DLURL="$VORTEXRELURL/download/v$VORTEXVERSION/$VORTEXSETUP"
 			writelog "INFO" "${FUNCNAME[0]} - Downloading $VORTEXSETUP to $VORTEXDLDIR from '$DLURL'"
-			notiShow "$(strFix "$NOTY_DLCUSTOMPROTON" "$VORTEXSETUP")"
-			wgetGui "$DLURL" "$VSPATH"
-			notiShow "$(strFix "$NOTY_DLCUSTOMPROTON2" "$VORTEXSETUP")"
+			if [ -n "$1" ]; then
+				notiShow "$(strFix "$NOTY_DLCUSTOMPROTON" "$VORTEXSETUP")" "S"
+				wgetGui "$DLURL" "$VSPATH"
+				notiShow "$(strFix "$NOTY_DLCUSTOMPROTON2" "$VORTEXSETUP")" "S"
+			else
+				notiShow "$(strFix "$NOTY_DLCUSTOMPROTON" "$VORTEXSETUP")"
+				wgetGui "$DLURL" "$VSPATH"
+				notiShow "$(strFix "$NOTY_DLCUSTOMPROTON2" "$VORTEXSETUP")"
+			fi
 		fi	
 	else
 		writelog "SKIP" "${FUNCNAME[0]} - No VORTEXSETUP defined - nothing to download - skipping"
@@ -11243,9 +11272,8 @@ function prepareVortexGame {
 
 			VGNAME="$(grep "\"$VAID\"" "$VORTEXGAMES" | cut -d ';' -f2)"
 			VGNAME="${VGNAME//\"}"
-
-			writelog "INFO" "${FUNCNAME[0]} - Preparing ${VTX^} game '$VGNAME ($VAID)' with Nexus GameID '$NEXUSGAMEID'" # "E"
-
+			writelog "INFO" "${FUNCNAME[0]} - $(strFix "$NOTY_PREPVTX" "$VGNAME" "$VAID" "$NEXUSGAMEID")"
+			notiShow "$(strFix "$NOTY_PREPVTX" "$VGNAME" "$VAID" "$NEXUSGAMEID")" "S" 
 			# prepare symlinks in VORTEXPFX
 			VAPPMAFE="$(listAppManifests | grep "${VAID}.acf")"
 			VGPFX="$(setGPfxFromAppMa "$VAID" "$VAPPMAFE")"
@@ -11262,9 +11290,9 @@ function prepareVortexGame {
 			grep "\"$VAID\"" "$VORTEXGAMES" >> "$SEENVORTEXGAMES"
 			rmDupLines "$SEENVORTEXGAMES"
 			setGameVortexStaging "$VGAMEDIR"
-
 			if [ -z "$2" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Applying ${VTX^} settings for game '$NEXUSGAMEID' via autogenerated cmd '$VORTSETCMD'"
+				writelog "INFO" "${FUNCNAME[0]} - $(strFix "$NOTY_APPLVTX" "$NEXUSGAMEID" "$VORTSETCMD")"
+				notiShow "$(strFix "$NOTY_APPLVTX" "$NEXUSGAMEID" "$VORTSETCMD")" "S" 
 				runVortSetCmd
 				writelog "INFO" "${FUNCNAME[0]} - Symlinks, registry entries and $VTX settings for '$NEXUSGAMEID' should be ready at this point for ${VTX^}"
 			fi
@@ -11279,7 +11307,7 @@ function prepareAllInstalledVortexGames {
 	setVortexVars
 	while read -r line ;do
 		unset NEXUSGAMEID
-		prepareVortexGame "$line" "X"
+		StatusWindow "${VTX^}" "prepareVortexGame $line X"
 	done <<< "$(getInstalledGamesWithVortexSupport X)"
 	writelog "INFO" "${FUNCNAME[0]} - Applying ${VTX^} settings for all games via autogenerated cmd '$VORTSETCMD'" "E"
 	runVortSetCmd
@@ -11321,7 +11349,7 @@ function startVortex {
 	if [ "$USEVORTEX" -eq 1 ]; then
 		if [ ! -f "$VORTEXEXE" ]; then
 			writelog "WARN" "${FUNCNAME[0]} - VORTEXEXE '$VORTEXEXE' does not exist - installing now"
-			installVortex X
+			StatusWindow "$(strFix "$NOTY_INSTSTART" "${VTX^}")" "installVortex"
 		fi
 
 		if [ "$RUN_VORTEX_WINETRICKS" -eq 1 ]; then
@@ -11341,9 +11369,9 @@ function startVortex {
 			setVortexConfigVdf
 
 			if [ -n "$2" ] && [ "$2" -eq "$2" ] 2>/dev/null; then
-				prepareVortexGame "$2"
+				StatusWindow "${VTX^}" "prepareVortexGame $2"
 			elif [ -n "$AID" ] && [ "$AID" != "$PLACEHOLDERAID" ]; then
-				prepareVortexGame "$AID"
+				StatusWindow "${VTX^}" "prepareVortexGame $AID"
 			fi
 
 			if [ -n "$NEXUSGAMEID" ]; then
@@ -11539,7 +11567,7 @@ function setDotNetWine {
 			DLURL="$(printf "%s\n" "${ProtonDLList[@]}" | grep -m1 "$USEDNPROTON")"
 			if [ -n "$DLURL" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Downloading: '$DLURL'" "E"
-				dlCustomProton "${DLURL//|/\"}"
+				StatusWindow "$GUI_DLCUSTPROT" "dlCustomProton ${DLURL//|/\"}"
 				DNPROTON="$(getProtPathFromCSV "$USEDNPROTON")"
 			else
 				writelog "SKIP" "${FUNCNAME[0]} - No download URL found for requested '$USEDNPROTON' - skipping" "E"
@@ -11586,7 +11614,7 @@ function setVortexVars {
 }
 
 function installVortex {
-	dlLatestVortex
+	dlLatestVortex "S"
 	if [ -f "$VSPATH" ]; then
 		setVortexVars
 		if [ -f "$VORTEXEXE" ]; then
@@ -11595,14 +11623,17 @@ function installVortex {
 			writelog "INFO" "${FUNCNAME[0]} - Using '$VORTEXWINE' for installation" "E"
 			WINEDEBUG="-all" WINEPREFIX="$VORTEXPFX" "$VORTEXWINE" wineboot -i 2>/dev/null
 			sleep 3
+			notiShow "$(strFix "$NOTY_INSTSTART" "${DOTN^}")" "S"
 			installDotNet "$VORTEXPFX" "$VORTEXWINE" "48"
+			notiShow "$GUI_DONE" "S"
 			sleep 3
 			writelog "INFO" "${FUNCNAME[0]} - Installing '$VSPATH' into '$VORTEXPFX'" E
-			notiShow "$(strFix "$NOTY_INSTSTART" "${VSPATH##*/}")"
+			notiShow "$(strFix "$NOTY_INSTSTART" "${VSPATH##*/}")" "S"
 			WINEDEBUG="-all" WINEPREFIX="$VORTEXPFX" "$VORTEXWINE" "$VSPATH" "/S"
-			notiShow "$(strFix "$NOTY_INSTSTOP" "${VSPATH##*/}")" 
+			notiShow "$(strFix "$NOTY_INSTSTOP" "${VSPATH##*/}")" "S"
 			writelog "INFO" "${FUNCNAME[0]} - Base ${VTX^} installation finished" E
 			setVortexDLMime
+			notiShow "$GUI_DONE" "S"
 		fi
 	else
 		writelog "SKIP" "${FUNCNAME[0]} - '$VSPATH' not found - nothing to install - skipping"
@@ -11649,7 +11680,7 @@ function installVortexGui {
 			2)	{
 					mapfile -d "|" -t -O "${#VTARR[@]}" VTARR < <(printf '%s' "$VTXINSTARGS")
 					USEVORTEXPROTON="${VTARR[0]}"
-					installVortex
+					StatusWindow "$(strFix "$NOTY_INSTSTART" "${VTX^}")" "installVortex"
 				}
 			;;	
 		esac
@@ -11719,10 +11750,16 @@ function dlLatestMO2 {
 			MO2VERSION="${MO2VRAW%.exe}"
 			DLURL="$MO2DLURL/download/v$MO2VERSION/$MO2SETUP"
 			writelog "INFO" "${FUNCNAME[0]} - Downloading $MO2SETUP to $MO2DLDIR from '$DLURL'"
-			notiShow "$(strFix "$NOTY_DLCUSTOMPROTON" "$MO2SETUP")"
-			wgetGui "$DLURL" "$MO2SPATH"
-			notiShow "$(strFix "$NOTY_DLCUSTOMPROTON2" "$MO2SETUP")"
-
+			
+			if [ -n "$1" ]; then
+				notiShow "$(strFix "$NOTY_DLCUSTOMPROTON" "$MO2SETUP")" "S"
+				wgetGui "$DLURL" "$MO2SPATH"
+				notiShow "$(strFix "$NOTY_DLCUSTOMPROTON2" "$MO2SETUP")" "S"
+			else
+				notiShow "$(strFix "$NOTY_DLCUSTOMPROTON" "$MO2SETUP")"
+				wgetGui "$DLURL" "$MO2SPATH"
+				notiShow "$(strFix "$NOTY_DLCUSTOMPROTON2" "$MO2SETUP")"	
+			fi
 			if [ -f "$MO2SPATH" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Download succeeded - continuing installation"
 			else
@@ -11748,7 +11785,7 @@ function setMO2Vars {
 }
 
 function installMO2 {
-	dlLatestMO2
+	dlLatestMO2 "S"
 	if [ -f "$MO2SPATH" ]; then
 		setMO2Vars
 		if [ -f "$MO2EXE" ]; then
@@ -11757,13 +11794,16 @@ function installMO2 {
 			writelog "INFO" "${FUNCNAME[0]} - Using '$MO2WINE' for installation" "E"
 			WINEDEBUG="-all" WINEPREFIX="$MO2PFX" "$MO2WINE" wineboot -i 2>/dev/null
 			sleep 3
+			notiShow "$(strFix "$NOTY_INSTSTART" "${DOTN^}")" "S"
 			installDotNet "$MO2PFX" "$MO2WINE" "48"
+			notiShow "$GUI_DONE" "S"
 			sleep 3
 			writelog "INFO" "${FUNCNAME[0]} - Installing '$MO2SPATH' into '$MO2PFX'"
 			notiShow "$(strFix "$NOTY_INSTSTART" "${MO2SPATH##*/}")"
 			WINEDEBUG="-all" WINEPREFIX="$MO2PFX" "$MO2WINE" "$MO2SPATH" "/VERYSILENT"
-			notiShow "$(strFix "$NOTY_INSTSTOP" "${MO2SPATH##*/}")" 
-			writelog "INFO" "${FUNCNAME[0]} - Base ${MO} installation finished" E
+			notiShow "$(strFix "$NOTY_INSTSTOP" "${MO2SPATH##*/}")" "S"
+			writelog "INFO" "${FUNCNAME[0]} - Base ${MO} installation finished"
+			notiShow "$GUI_DONE" "S"
 		fi
 	else
 		writelog "SKIP" "${FUNCNAME[0]} - '$MO2SETUP' not found - nothing to install - skipping"
@@ -11819,7 +11859,7 @@ function listMO2Games {
 function manageMO2GInstance {
 	setMO2Vars
 	if [ ! -f "$MO2EXE" ]; then
-		installMO2
+		StatusWindow "$(strFix "$NOTY_INSTSTART" "$MO")" "installMO2"
 	fi
 	
 	if [ -z "$1" ]; then
@@ -11904,7 +11944,7 @@ function prepareMO2 {
 		fi
 	else
 		if [ ! -f "$MO2EXE" ]; then
-			installMO2
+			StatusWindow "$(strFix "$NOTY_INSTSTART" "$MO")" "installMO2"
 		fi
 
 		writelog "INFO" "${FUNCNAME[0]} - Updating/creating $MO instances"
@@ -11914,7 +11954,7 @@ function prepareMO2 {
 
 	if [ "$STAMO2" -eq 1 ] && [ "$2" != "disabled" ]; then
 		if [ ! -f "$MO2EXE" ]; then
-			installMO2
+			StatusWindow "$(strFix "$NOTY_INSTSTART" "$MO")" "installMO2"
 		fi
 
 		prepAllMO2Games "set"
@@ -12160,9 +12200,9 @@ function dlLatestDepsProg {
 			if [ ! -f "$DEPS64ZPATH" ]; then	
 				DLURL="$DEPURL/download/$LATDEPSV/$DEPS64ZIP"
 				writelog "INFO" "${FUNCNAME[0]} - Downloading $DEPS64ZIP to '$DLDIR' from '$DLURL'"
-				notiShow "$(strFix "$NOTY_DLCUSTOMPROTON" "$DEPS64ZIP")"
+				notiShow "$(strFix "$NOTY_DLCUSTOMPROTON" "$DEPS64ZIP")" "S"
 				wgetGui "$DLURL" "$DEPS64ZPATH"
-				notiShow "$(strFix "$NOTY_DLCUSTOMPROTON2" "$DEPS64ZIP")"
+				notiShow "$(strFix "$NOTY_DLCUSTOMPROTON2" "$DEPS64ZIP")" "S"
 			else
 				writelog "SKIP" "${FUNCNAME[0]} - Already have '$DEPS64ZIP' in '$DLDIR'"
 			fi
@@ -12170,9 +12210,9 @@ function dlLatestDepsProg {
 			if [ ! -f "$DEPS32ZPATH" ]; then	
 				DLURL="$DEPURL/download/$LATDEPSV/$DEPS32ZIP"
 				writelog "INFO" "${FUNCNAME[0]} - Downloading $DEPS32ZIP to '$DLDIR' from '$DLURL'"
-				notiShow "$(strFix "$NOTY_DLCUSTOMPROTON" "$DEPS64ZIP")"
+				notiShow "$(strFix "$NOTY_DLCUSTOMPROTON" "$DEPS64ZIP")" "S"
 				wgetGui "$DLURL" "$DEPS32ZPATH"
-				notiShow "$(strFix "$NOTY_DLCUSTOMPROTON2" "$DEPS64ZIP")"
+				notiShow "$(strFix "$NOTY_DLCUSTOMPROTON2" "$DEPS64ZIP")" "S"
 			else
 				writelog "SKIP" "${FUNCNAME[0]} - Already have '$DEPS32ZIP' in '$DLDIR'"
 			fi
@@ -12184,11 +12224,13 @@ function dlLatestDepsProg {
 			if [ ! -f "$DEPSL64" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Extracting $DEPS64ZIP to '$DLDIR/64'"
 				"$UNZIP" -q "$DEPS64ZPATH" -d "$DLDIR/64"
+				notiShow "$GUI_DONE" "S"
 			fi
 
 			if [ ! -f "$DEPSL32" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Extracting $DEPS32ZIP to '$DLDIR/32'"
 				"$UNZIP" -q "$DEPS32ZPATH" -d "$DLDIR/32"
+				notiShow "$GUI_DONE" "S"
 			fi 		
 		fi
 	else
@@ -12200,7 +12242,7 @@ function checkDepsLaunch {
 	if [ "$RUN_DEPS" -eq 1 ] && [ "$ISGAME" -eq 2 ] && [ "$USEWINE" -eq 0 ]; then
 
 		if [ "$DEPSAUTOUP" -eq 1 ] || [ ! -f "$DEPSL64" ]; then
-			dlLatestDepsProg
+			StatusWindow "$(strFix "$NOTY_DLCUSTOMPROTON" "$$DEPS")" "dlLatestDepsProg"
 		fi
 
 		writelog "INFO" "${FUNCNAME[0]} - Starting '$DEPS' for '$GE ($AID)'"
@@ -12435,7 +12477,7 @@ function setYadBin {
 	elif [ "$1" == "conty" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Using conty as yad binary"
 		if [ ! -f "$CONTYDLDIR/$CONTY" ]; then
-			USEWGETGUI=0 dlConty
+			USEWGETGUI=0 StatusWindow "$(strFix "$NOTY_DLCUSTOMPROTON" "${CONTY%%.*}")" "dlConty"
 		else
 			writelog "INFO" "${FUNCNAME[0]} - Found Conty binary in '$CONTYDLDIR/$CONTY'"
 		fi
@@ -13046,7 +13088,7 @@ function switchProton {
 			DLURL="$(printf "%s\n" "${ProtonDLList[@]}" | grep -m1 "$1")"
 			if [ -n "$DLURL" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Download for requested '$1' found: '$DLURL'"
-				dlCustomProton "${DLURL//|/\"}"
+				StatusWindow "$GUI_DLCUSTPROT" "dlCustomProton ${DLURL//|/\"}"
 			else
 				writelog "SKIP" "${FUNCNAME[0]} - No download URL found for requested '$1' - skipping"
 			fi
@@ -13263,12 +13305,14 @@ function dlConty {
 
 	if grep -q "$CONTY" <<< "$CONTYDLVERS"; then
 		writelog "INFO" "${FUNCNAME[0]} - Downloading '$CONTYRELURL/$CONTYDLVERS' to '$CONTYDLDIR'"
-		notiShow "$(strFix "$NOTY_DLCONTY" "$CONTYRELURL/$CONTYDLVERS")"
+		notiShow "$(strFix "$NOTY_DLCONTY" "$CONTYRELURL/$CONTYDLVERS")" "S"
 		wgetGui "$CONTYRELURL/$CONTYDLVERS" "$CONTYDLDIR/$CONTY"
+		notiShow "$GUI_DONE" "S"
 		if [ -f "$CONTYDLDIR/$CONTY" ]; then
 			DLSHA="$(sha256sum "$CONTYDLDIR/$CONTY" | cut -d ' ' -f1)"
 			if "$WGET" -q "$CONTYRELURL" -O - | grep -q "$DLSHA"; then
-				writelog "INFO" "${FUNCNAME[0]} - The sha256 checksum of the downloaded file is correct: '$DLSHA' - continuing"
+				writelog "INFO" "${FUNCNAME[0]} - : $(strFix "$NOTY_CHECKSUM_OK" "$DLSHA")"
+				notiShow "$(strFix "$NOTY_CHECKSUM_OK" "$DLSHA")" "S"
 				chmod +x "$CONTYDLDIR/$CONTY"
 				export RUNCONTY="$CONTYDLDIR/$CONTY"
 				CONTYVERS="$(cut -d '/' -f3 <<< "$CONTYDLVERS")";
@@ -13279,7 +13323,8 @@ function dlConty {
 					writelog "SKIP" "${FUNCNAME[0]} - No version found in Url - not writing '$CONTYDLDIR/version.txt'"
 				fi
 			else
-				writelog "ERROR" "${FUNCNAME[0]} - The sha256 checksum of the downloaded file is wrong: '$DLSHA' - removing the download"
+				writelog "ERROR" "${FUNCNAME[0]} - $(strFix "$NOTY_CHECKSUM_NOK" "$DLSHA") - removing the download"
+				notiShow "$(strFix "$NOTY_CHECKSUM_NOK" "$DLSHA")" "S"
 				rm "$CONTYDLDIR/$CONTY"
 			fi
 		fi
@@ -13295,14 +13340,14 @@ function updateConty {
 	if [ "$UPDATECONTY" -eq 1 ]; then
 		if [ ! -f "$CONTYDLDIR/version.txt" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - No Conty version file found in - so simply downloading latest release"
-			dlConty
+			StatusWindow "$(strFix "$NOTY_DLCUSTOMPROTON" "${CONTY%%.*}")" "dlConty"
 		else
 			LATESTCONTY="$("$WGET" -q "$CONTYRELURL" -O - | grep -m1 "download.*.$CONTY" | grep -oP 'releases\K[^"]+' | cut -d '/' -f3)"
 			DLVERS="$(cat "$CONTYDLDIR/version.txt")"
 			if [ "$(printf '%s\n' "$DLVERS" "$LATESTCONTY" | sort -V | head -n1)" != "$LATESTCONTY" ]; then 
 				writelog "INFO" "${FUNCNAME[0]} - $(strFix "$NOTY_UPDATECONTY" "$LATESTCONTY" "$DLVERS")"
 				notiShow "$(strFix "$NOTY_UPDATECONTY" "$LATESTCONTY" "$DLVERS")"
-				dlConty
+				StatusWindow "$(strFix "$NOTY_DLCUSTOMPROTON" "${CONTY%%.*}")" "dlConty"
 			else
 				writelog "INFO" "${FUNCNAME[0]} - Conty already at newest version '$DLVERS'"
 			fi
@@ -13330,7 +13375,7 @@ function askConty {
 		case $? in
 			0)  {
 					writelog "INFO" "${FUNCNAME[0]} - Selected to download Conty"
-					dlConty
+					StatusWindow "$(strFix "$NOTY_DLCUSTOMPROTON" "${CONTY%%.*}")" "dlConty"
 				}
 			;;
 			2)  {
@@ -14002,13 +14047,12 @@ function dlWineGUI {
 		if grep -q "^http" <<< "${DLDISPWINE//|/\"}"; then
 			DLURL="${DLDISPWINE//|/\"}"
 			writelog "INFO" "${FUNCNAME[0]} - The URL '$DLURL' was entered manually - downloading directly"
-			dlWine "${DLURL//|/\"}"
 		else
 			DLWINEVERSION="${DLDISPWINE//|/}"
 			DLURL="$(printf "%s\n" "${WineDLList[@]}" | grep -m1 "${DLDISPWINE//|}")"
 			writelog "INFO" "${FUNCNAME[0]} - '${DLDISPWINE//|}' was selected - downloading '$DLURL'"
-			dlWine "${DLURL//|/\"}"
 		fi
+		StatusWindow "$(strFix "$NOTY_DLCUSTOMPROTON" "Wine")" "dlWine ${DLURL//|/\"}"
 	fi
 }
 
@@ -14085,12 +14129,12 @@ function dlWine {
 	DSTDL="$WINEDLDIR/$WURLFILE"
 	if [ ! -f "$DSTDL" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Downloading '$WURL' to '$WINEDLDIR'"
-		notiShow "$(strFix "$NOTY_DLCUSTOMPROTON" "$WURL")"
+		notiShow "$(strFix "$NOTY_DLCUSTOMPROTON" "$WURL")" "S"
 		wgetGui "$WURL" "$DSTDL"
-		notiShow "$(strFix "$NOTY_DLCUSTOMPROTON2" "$WURL")"
+		notiShow "$(strFix "$NOTY_DLCUSTOMPROTON2" "$WURL")" "S"
 	else
 		writelog "INFO" "${FUNCNAME[0]} - File '$DSTDL' already exists - nothing to download"
-		notiShow "$(strFix "$NOTY_DLCUSTOMPROTON4" "${WURL##*/}")"
+		notiShow "$(strFix "$NOTY_DLCUSTOMPROTON4" "${WURL##*/}")" "S"
 	fi
 	extractWine "$DSTDL"
 }
@@ -14101,11 +14145,11 @@ function dlWineGate {
 	else
 		if grep -q "^http" <<< "$1"; then
 			writelog "INFO" "${FUNCNAME[0]} - '$1' is an URL - sending directly to dlWine"
-			dlWine "$@"
+			StatusWindow "$(strFix "$NOTY_DLCUSTOMPROTON" "Wine")" "dlWine $*"
 		elif [ "$1" == "latest" ] || [ "$1" == "l" ]; then
 			createDLWineList
 			writelog "INFO" "${FUNCNAME[0]} - Downloading latest custom Wine ${WineDLList[0]//\"/}" "E"
-			dlWine "${WineDLList[0]//\"/}"
+			StatusWindow "$(strFix "$NOTY_DLCUSTOMPROTON" "Wine")" "dlWine ${WineDLList[0]//\"/}"
 		else
 			writelog "SKIP" "${FUNCNAME[0]} - Don't know what to do with argument '$1'"
 		fi
@@ -14122,8 +14166,9 @@ function extractWine {
 			writelog "INFO" "${FUNCNAME[0]} - Directory '$WINEEXTDIR/$WDIR' already exists - nothing to extract"
 		else
 			writelog "INFO" "${FUNCNAME[0]} - Extracting archive '$WURLFILE' to '$WINEEXTDIR'"
-			notiShow "$(strFix "$NOTY_DLCUSTOMPROTON3" "$1")"
+			notiShow "$(strFix "$NOTY_DLCUSTOMPROTON3" "$1")" "S"
 			"$TAR" xf "$1" -C "$WINEEXTDIR" 2>/dev/null
+			notiShow "$GUI_DONE" "S"
 		fi
 	fi
 }
@@ -14206,7 +14251,7 @@ function setWineVersion {
 				writelog "INFO" "${FUNCNAME[0]} - Configured wine version '$WINEVERSION' is not installed yet, but was found detected as downloadable - trying to install it automatically"
 				DLURL="$(grep "$WINEVERSION" "$WINEDLLIST" | head -n1)"
 				writelog "INFO" "${FUNCNAME[0]} - Downloading '$WINEVERSION' from '$DLURL'"
-				dlWine "${DLURL//|/\"}"
+				StatusWindow "$(strFix "$NOTY_DLCUSTOMPROTON" "Wine")" "dlWine ${DLURL//|/\"}"
 				if [ -d "$WINEEXTDIR/${WINEVERSION}" ]; then
 					writelog "INFO" "${FUNCNAME[0]} - Downloading and extracting '$WINEVERSION' was successful"
 				else
@@ -15039,7 +15084,7 @@ function commandline {
 			if [ "$2" == "download" ] || [ "$2" == "d" ]; then
 				dlLatestMO2
 			elif [ "$2" == "install" ] || [ "$2" == "i" ]; then
-				installMO2
+				StatusWindow "$(strFix "$NOTY_INSTSTART" "$MO")" "installMO2"
 			elif [ "$2" == "start" ] || [ "$2" == "s" ]; then
 				startMO2
 			elif [ "$2" == "list-supported" ] || [ "$2" == "ls" ]; then
@@ -15164,7 +15209,7 @@ function commandline {
 			elif [ "$2" == "allgamedata" ]; then
 				getDataForAllGamesinSharedConfig
 			elif [ "$2" == "shader" ] || [ "$2" == "shaders" ]; then
-				dlShaders "$3"
+				StatusWindow "$GUI_DLSHADER" "dlShaders $3"
 			elif [ "$2" == "gameshaders" ]; then
 				if [ -z "$3" ]; then
 					writelog "INFO" "${FUNCNAME[0]} - No game directory in argument 3 provided - using last game!"
@@ -15194,7 +15239,7 @@ function commandline {
 				if [ -n "$3" ] && [ "$3" == "gui" ]; then
 					installVortexGui
 				else
-					installVortex X
+					StatusWindow "$(strFix "$NOTY_INSTSTART" "${VTX^}")" "installVortex"
 				fi
 			elif [ "$2" == "start" ]; then
 				startVortex "noask" "$3"
@@ -15603,18 +15648,19 @@ function dlX64Dbg {
 		X64ZIP="$(getLatestX64dbgSnap)"
 
 		if [ ! -f "$DLDST/$X64ZIP" ]; then
-			notiShow "$(strFix "$NOTY_DLCUSTOMPROTON" "$X64ZIP")"
+			notiShow "$(strFix "$NOTY_DLCUSTOMPROTON" "$X64ZIP")" "S"
 			wgetGui "${X64DBGURL//tag/download}/$X64ZIP" "$DLDST/$X64ZIP"
-			notiShow "$(strFix "$NOTY_DLCUSTOMPROTON2" "$X64ZIP")"
+			notiShow "$(strFix "$NOTY_DLCUSTOMPROTON2" "$X64ZIP")" "S"
 		fi
 	
 		if [ ! -s "$DLDST/$X64ZIP" ]; then
 			writelog "SKIP" "${FUNCNAME[0]} - Downloaded file '$DLDST/$X64ZIP' is empty - removing"
 			rm "$DLDST/$X64ZIP" 2>/dev/null
 		else
-			notiShow "$(strFix "$NOTY_DLCUSTOMPROTON3" "$X64ZIP")"
+			notiShow "$(strFix "$NOTY_DLCUSTOMPROTON3" "$X64ZIP")" "S"
 			writelog "INFO" "${FUNCNAME[0]} - Download of '$X64ZIP' to '$DLDST' was successful"
 			"$UNZIP" -q "$DLDST/$X64ZIP" -d "$DLDST" 2>/dev/null
+			notiShow "$GUI_DONE" "S"
 			if [ -f "$DLCH" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Extracted '$X64ZIP' to '$DLDST'"
 			else
@@ -15644,7 +15690,7 @@ function checkX64dbgLaunch {
 		
 		if [ ! -f "$XDBFPATH" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - File '$X64EXE' does not exit - starting installer"
-			dlX64Dbg
+			StatusWindow "$(strFix "$NOTY_DLCUSTOMPROTON" "$X64D")" "dlX64Dbg"
 		fi
 
 		if [ ! -f "$XDBFPATH" ]; then
