@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v7.211113"
+PROGVERS="v7.211114"
 PROGCMD="${0##*/}"
 GHURL="https://github.com"
 PROJECTPAGE="$GHURL/frostworx/steamtinkerlaunch"
@@ -2120,7 +2120,7 @@ function setDefaultCfgValues {
 		if [ -z "$USEPROTON" ]							; then	USEPROTON="$(getDefaultProton)"; fi
 		if [ -z "$REDIRCOMPDATA" ]						; then	REDIRCOMPDATA="disabled"; fi
 		if [ -z "$REDIRSTEAMUSER" ]						; then	REDIRSTEAMUSER="disabled"; fi
-		if [ -z "$PROTONCHECK" ]						; then	PROTONCHECK="disabled"; fi
+		if [ -z "$AUTOBUMPGE" ]							; then	AUTOBUMPGE="0"; fi
 		if [ -z "$USECUSTOMCMD" ]						; then	USECUSTOMCMD="0"; fi
 		if [ -z "$CUSTOMCMD" ]							; then	CUSTOMCMD="$DUMMYBIN"; fi
 		if [ -z "$CUSTOMCMD_ARGS" ]						; then	CUSTOMCMD_ARGS="$NON"; fi
@@ -2548,8 +2548,8 @@ function saveCfg {
 			echo "REDIRCOMPDATA=\"$REDIRCOMPDATA\""
 			echo "## $DESC_REDIRSTEAMUSER"
 			echo "REDIRSTEAMUSER=\"$REDIRSTEAMUSER\""
-			echo "## $DESC_PROTONCHECK"
-			echo "PROTONCHECK=\"$PROTONCHECK\""
+			echo "## $DESC_AUTOBUMPGE"
+			echo "AUTOBUMPGE=\"$AUTOBUMPGE\""
 			echo "## $DESC_USECUSTOMCMD"
 			echo "USECUSTOMCMD=\"$USECUSTOMCMD\""
 			echo "## $DESC_CUSTOMCMD"
@@ -2854,17 +2854,6 @@ function setRunWineServer {
 			setRunProtonFromUseProton
 		fi
 
-		if [ "$PROTONCHECK" == "disabled" ] || [ "$PROTONCHECK" == "ask_before_menu" ] || [ "$PROTONCHECK" == "only_notify" ]; then
-			if [ "$ISGAME" -eq 2 ] && [ "$USEWINE" -eq 0 ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Entering checkProtonBump"
-				checkProtonBump "$USEPROTON"
-			fi
-		fi
-
-		if [ ! -f "$RUNPROTON" ] || [ -z "$RUNPROTON" ]; then
-			setRunProtonFromUseProton 
-		fi
-		
 		CHECKWINED="$(dirname "$RUNPROTON")/$DBW"
 		CHECKWINEF="$(dirname "$RUNPROTON")/$FBW"
 		if [ -f "$CHECKWINED" ]; then
@@ -3160,28 +3149,6 @@ function dlCustomProtonGUI {
 	fi
 }
 
-function dlNewCustomProt {
-	NEWESTPROT="$1"
-	DLURL="$(grep "$NEWESTPROT" <<< "$(printf "%s\n" "${ProtonDLList[@]}")")"
-	StatusWindow "$GUI_DLCUSTPROT" "dlCustomProton ${DLURL}"
-}
-
-function dlUpCustomProton {
-	NEWESTPROT="$1"
-	dlNewCustomProt "$NEWESTPROT"
-	NEWMINORPROT="$(printProtonArr | grep "^${NEWESTPROT%-*}" | cut -d ';' -f1 | sort -nr | head -n1)"
-	NEWMINORRUN="$(getProtPathFromCSV "${NEWMINORPROT//\"/}")"
-	if [ -f "$NEWMINORRUN" ]; then
-		switchProton "$NEWMINORPROT"
-		writelog "INFO" "${FUNCNAME[0]} - $(strFix "$NOTY_NEWPROTON2" "$CURPROTON" "$NEWMINORPROT")"
-		notiShow "$(strFix "$NOTY_NEWPROTON2" "$CURPROTON" "$NEWMINORPROT")"
-		updateConfigEntry "USEPROTON" "$NEWMINORPROT" "$STLGAMECFG"
-		loadCfg "$STLGAMECFG"
-	else
-		writelog "SKIP" "${FUNCNAME[0]} - File '$NEWMINORRUN' couldn't be found - skipping version change"
-	fi
-}
-
 function CustomFallbackPicture {
 	if [ "$USECUSTOMFALLBACKPIC" -eq 1 ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Using custom fallback picture if possible and required"
@@ -3241,41 +3208,6 @@ function setShowPic {
 	fi	
 }
 
-function dlCustomProtonAsk {
-	NEWESTPROT="$1"
-
-	writelog "INFO" "${FUNCNAME[0]} - Asking if proton version '$NEWESTPROT' should be updated"
-
-	setShowPic
-	export CURWIKI="$PPW/Download-Custom-Proton"
-	TITLE="${PROGNAME}-NewProtonAvailable"
-	pollWinRes "$TITLE"
-	
-	"$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --scroll --center "$WINDECO" \
-	--title="$TITLE" \
-	--text="$(spanFont "$(strFix "$NOTY_NEWPROTON" "$NEWESTPROT" "$CURPROTON")\n$(strFix "$GUI_DLCUSTPROTASK" "$NEWESTPROT")" "H")" \
-	"$GEOM" \
-	--button="$ASKPROTBUTC":0 \
-	--button="$ASKPROTBUTD":1 \
-	--button="$ASKPROTBUTU":2
-	case $? in
-		0)  {
-				writelog "INFO" "${FUNCNAME[0]} - Selected cancel - doing dothing"
-			}
-		;;
-		1) 	{
-				writelog "INFO" "${FUNCNAME[0]} - Selected to only download '$NEWESTPROT'"
-				dlNewCustomProt "$NEWESTPROT"
-			}
-		;;
-		2) 	{
-				writelog "INFO" "${FUNCNAME[0]} - Selected to download and use '$NEWESTPROT'"
-				dlUpCustomProton "$NEWESTPROT"
-			}
-		;;
-	esac
-}
-
 function addCustomProtonToList {
 	if [ -f "$1" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Received directly the file as argument"
@@ -3324,6 +3256,16 @@ function addCustomProtonToList {
 	fi
 }
 
+function dlLatestGE {
+	createDLProtList
+	if [ "$1" == "latestge" ] || [ "$1" == "lge" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Downloading latest Proton GE"
+	else
+		writelog "INFO" "${FUNCNAME[0]} - Downloading latest custom Proton ${ProtonDLDispList[0]//\"/}"
+	fi
+	StatusWindow "$GUI_DLCUSTPROT" "dlCustomProton ${ProtonDLList[0]//\"/}"
+}
+
 function dlCustomProtonGate {
 	if [ -z "$1" ]; then
 		dlCustomProtonGUI
@@ -3333,13 +3275,7 @@ function dlCustomProtonGate {
 			StatusWindow "$GUI_DLCUSTPROT" "dlCustomProton $*"
 		else
 			if [ "$1" == "latest" ] || [ "$1" == "l" ] || [ "$1" == "latestge" ] || [ "$1" == "lge" ]; then
-				createDLProtList
-				if [ "$1" == "latestge" ] || [ "$1" == "lge" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - Downloading latest Proton GE"
-				else
-					writelog "INFO" "${FUNCNAME[0]} - Downloading latest custom Proton ${ProtonDLDispList[0]//\"/}"
-				fi
-				StatusWindow "$GUI_DLCUSTPROT" "dlCustomProton ${ProtonDLList[0]//\"/}"
+				dlLatestGE "$1"
 			elif [ "$1" == "latesttkg" ] || [ "$1" == "ltkg" ]; then
 				createDLProtList
 				writelog "INFO" "${FUNCNAME[0]} - Downloading latest Proton TKG"
@@ -4222,7 +4158,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_AUTOPULLPROTON!$DESC_AUTOPULLPROTON ('AUTOPULLPROTON')":CHK "${AUTOPULLPROTON/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_REDIRCOMPDATA!$DESC_REDIRCOMPDATA ('REDIRCOMPDATA')":CB "$(cleanDropDown "${REDIRCOMPDATA/#-/ -}" "disabled!single-proton!global-proton")" `#CAT_Proton` `#MENU_GAME` \
 --field="     $GUI_REDIRSTEAMUSER!$DESC_REDIRSTEAMUSER ('REDIRSTEAMUSER')":CB "$(cleanDropDown "${REDIRSTEAMUSER/#-/ -}" "disabled!symlink!restore-backup")" `#CAT_Proton` `#MENU_GAME` \
---field="     $GUI_PROTONCHECK!$DESC_PROTONCHECK ('PROTONCHECK')":CB "$(cleanDropDown "${PROTONCHECK/#-/ -}" "disabled!ask_before_menu!ask_before_game!auto_download!auto_download_and_use!only_notify")" `#CAT_Proton` `#MENU_GAME` \
+--field="     $GUI_AUTOBUMPGE!$DESC_AUTOBUMPGE ('AUTOBUMPGE')":CHK "${AUTOBUMPGE/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_PROTON_LOG!$DESC_PROTON_LOG $HOME/steam-$AID.log ('PROTON_LOG')":CHK "${PROTON_LOG/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_PROTON_LOG_DIR!$DESC_PROTON_LOG_DIR ('PROTON_LOG_DIR')":DIR "${PROTON_LOG_DIR/#-/ -}" `#CAT_Proton` `#SUB_Directories` `#MENU_GAME` \
 --field="     $GUI_USEWINEDEBUGPROTON!$DESC_USEWINEDEBUGPROTON ('USEWINEDEBUGPROTON')":CHK "${USEWINEDEBUGPROTON/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
@@ -4414,15 +4350,6 @@ function prepareMenu {
 	loadCfg "$STLGAMECFG"
 	loadCfg "$STLURLCFG"
 
-	if [ -z "$2" ]; then
-		if [ "$PROTONCHECK" == "disabled" ] || [ "$PROTONCHECK" == "ask_before_menu" ] || [ "$PROTONCHECK" == "only_notify" ]; then
-			if [ "$ISGAME" -eq 2 ] && [ "$USEWINE" -eq 0 ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Entering checkProtonBump"
-				checkProtonBump "$USEPROTON"
-			fi
-		fi
-	fi
-
 	resetAID "$1"
 	createGameCfg
 	setGN "$1"
@@ -4492,15 +4419,6 @@ function openCustMenu {
 	MYFUNC="$5"
 
 	prepareMenu "$@"
-
-	if [ -z "$2" ]; then
-		if [ "$PROTONCHECK" == "disabled" ] || [ "$PROTONCHECK" == "ask_before_menu" ] || [ "$PROTONCHECK" == "only_notify" ]; then
-			if [ "$ISGAME" -eq 2 ] && [ "$USEWINE" -eq 0 ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Entering checkProtonBump"
-				checkProtonBump "$USEPROTON" 
-			fi
-		fi
-	fi
 
 	createGameCfg
 	createDropdownLists
@@ -5143,15 +5061,6 @@ function openMenu {
 	ARGTITLE="${10}"
 	ARGSPAT="${11}"
 	 
-	if [ "$ARGPCMD" == "$NON" ]; then
-		if [ "$PROTONCHECK" == "disabled" ] || [ "$PROTONCHECK" == "ask_before_menu" ] || [ "$PROTONCHECK" == "only_notify" ]; then
-			if [ "$ISGAME" -eq 2 ] && [ "$USEWINE" -eq 0 ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Entering checkProtonBump"
-				checkProtonBump "$USEPROTON" 
-			fi
-		fi
-	fi
-
 	resetAID "$ARGID"
 	createGameCfg
 	setGN "$ARGID"
@@ -12633,13 +12542,6 @@ function prepareProton {
 				writelog "INFO" "${FUNCNAME[0]} - Using '$STLWINEDLLOVERRIDES' as 'WINEDLLOVERRIDES' parameter"
 				export WINEDLLOVERRIDES="$WINEDLLOVERRIDES;$STLWINEDLLOVERRIDES"
 			fi
-			
-			if [ "$HAVEINPROTON" -eq 0 ]; then
-				if [ "$PROTONCHECK" == "ask_before_game" ] || [ "$PROTONCHECK" == "auto_download" ] || [ "$PROTONCHECK" == "auto_download_and_use" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - Entering checkProtonBump"
-					checkProtonBump "$USEPROTON" 
-				fi
-			fi
 		fi
 		
 		# export DXVK_CONFIG_FILE if STLDXVKCFG was found:
@@ -12810,6 +12712,25 @@ function setMangoHudCfg {
 	fi
 }
 
+function autoBumpGE {
+	if [ "$AUTOBUMPGE" -eq 1 ] && grep -q "\-GE" <<< "$USEPROTON"; then
+		writelog "INFO" "${FUNCNAME[0]} - Current Proton version is $USEPROTON"
+		dlLatestGE "lge"
+		getAvailableProtonVersions "up"
+		NEWESTGE="$(grep "\-GE" "$PROTONCSV" | sort -n | tail -n1)"
+		NEWESTGE="${NEWESTGE%%;*}"
+		if [ "$NEWESTGE" == "$USEPROTON" ]; then
+			writelog "SKIP" "${FUNCNAME[0]} - $USEPROTON is already the newest Proton-GE version"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - $(strFix "$NOTY_BUMP" "$USEPROTON" "$USEPROTON" "$NEWESTGE")"
+			notiShow "$(strFix "$NOTY_BUMP" "$USEPROTON" "$USEPROTON" "$NEWESTGE")"
+			USEPROTON="$NEWESTGE"
+			touch "$FUPDATE"
+			updateConfigEntry "USEPROTON" "$USEPROTON" "$STLGAMECFG"
+		fi
+	fi
+}
+
 function prepareLaunch {
 	rm "$CLOSETMP" 2>/dev/null
 	rm "$KILLSWITCH" 2>/dev/null
@@ -12836,6 +12757,9 @@ function prepareLaunch {
 
 	writelog "INFO" "${FUNCNAME[0]} - First LoadCfg: $STLGAMECFG"
 	loadCfg "$STLGAMECFG"
+	
+	autoBumpGE
+	
 	if [ "$ISGAME" -eq 2 ] && [ "$HAVEINPROTON" -eq 0 ]; then
 		FIRSTGAMEUSEPROTON="$USEPROTON"
 		writelog "INFO" "${FUNCNAME[0]} - Initial Proton version from the game config: '$FIRSTGAMEUSEPROTON'"
@@ -13213,62 +13137,6 @@ function fixProtonVersionMismatch {
 				touch "$FUPDATE"
 				updateConfigEntry "USEPROTON" "$USEPROTON" "$2"
 				setInternalProtonVars
-			fi
-		fi
-	fi
-}
-
-function checkProtonBump {
-
-	if [ -z "$1" ]; then
-		writelog "SKIP" "${FUNCNAME[0]} - Need Proton version as argument 1"
-	else
-		CURPROTON="$1"
-
-		if [ "$PROTONCHECK" == "disabled" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - PROTONCHECK is '$PROTONCHECK' - nothing to do"
-		else
-			if [ "$HAVEINPROTON" -eq 1 ]; then
-				writelog "INFO" "${FUNCNAME[0]} - '$PROGCMD' was used as '$SLO', so currently set '$USEPROTON' isn't used anyway - nothing to do"
-			else		
-				if [ -z "${ProtonDLList[0]}" ]; then
-					createDLProtList
-				fi
-
-				if [ -z "${ProtonDLDispList[0]}" ]; then
-					writelog "SKIP" "${FUNCNAME[0]} - ProtonDLList is empty, so createDLProtList failed here!"
-				else
-					writelog "INFO" "${FUNCNAME[0]} - Searching in created Proton Download List for possible updates"
-
-					if grep -q -Eo '[0-9]$' <<< "$CURPROTON"; then
-						NEWESTPROTR1="$(grep "^${CURPROTON%-*}" <<< "$(printf "%s\n" "${ProtonDLDispList[@]//\"/}")" | sort -Vr | head -n1)"
-					else
-						MINV="$(grep -Eo "[0-9]*" <<< "$CURPROTON" | tail -n1)"
-						SEARCHPAT="${CURPROTON//$MINV/[0-9]}"
-						NEWESTPROTR1="$(grep "^$SEARCHPAT" <<< "$(printf "%s\n" "${ProtonDLDispList[@]//\"/}")" | sort -Vr | head -n1)"
-					fi
-				
-					NEWESTPROTR2="${NEWESTPROTR1//.tar.gz/}"
-					NEWESTPROT="${NEWESTPROTR2//.zip/}"
-
-					if [ "$(printf '%s\n' "$NEWESTPROT" "$CURPROTON" | sort -V | head -n1)" != "$NEWESTPROT" ]; then 
-						writelog "INFO" "${FUNCNAME[0]} - Found an update for '$CURPROTON' to version '$NEWESTPROT'"
-					
-						notiShow "$(strFix "$NOTY_NEWPROTON" "$NEWESTPROT" "$CURPROTON")"
-					
-						writelog "INFO" "${FUNCNAME[0]} - PROTONCHECK is currently set to '$PROTONCHECK'"
-					
-						if [ "$PROTONCHECK" == "ask_before_menu" ] || [ "$PROTONCHECK" == "ask_before_game" ]; then
-							dlCustomProtonAsk "$NEWESTPROT"
-						elif [ "$PROTONCHECK" == "auto_download" ]; then
-							dlNewCustomProt "$NEWESTPROT"
-						elif [ "$PROTONCHECK" == "auto_download_and_use" ]; then
-							dlUpCustomProton "$NEWESTPROT"
-						elif [ "$PROTONCHECK" == "only_notify" ]; then
-							writelog "INFO" "${FUNCNAME[0]} - Only opening a notifier about the new version"
-						fi
-					fi
-				fi
 			fi
 		fi
 	fi
