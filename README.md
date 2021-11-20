@@ -9,23 +9,28 @@
 
 # Summary
 
-<img align="left" width="64" height="64" src="https://github.com/frostworx/repo-assets/blob/master/pics/steamtinkerlaunch-logo_64px.png" alt="**SteamTinkerLaunch** (short **stl**) is a Linux wrapper tool for use with the Steam client">
+<img align="left" width="64" height="64" src="https://github.com/frostworx/repo-assets/blob/master/pics/steamtinkerlaunch-logo_64px.png" alt="**SteamTinkerLaunch** is a Linux wrapper tool for use with the Steam client">
 
-**Steam Tinker Launch** (short **stl**) is a Linux wrapper tool for use with the Steam client
+**Steam Tinker Launch** is a Linux wrapper tool for use with the Steam client
 which allows customizing and start tools and options for games quickly on the fly *(see [Features](#Features))*
 
 By using a versatile configuration structure it is both easy to set up and flexible.
 
 ## How to use
 
+⚠ **Read [this](https://github.com/frostworx/steamtinkerlaunch/issues/350) if you're using steamtinkerlaunch with the `stl` executable**
+
 ### General usage
-**stl works with Linux native games and with games using Proton!**
+**steamtinkerlaunch works with Linux native games and with games using Proton!**
 *(Some features (f.e. [ReShade](https://github.com/frostworx/steamtinkerlaunch/wiki/ReShade)) are only available for games using Proton)*
 *(Non-Steam games added to Steam are supported as well)*
 
-There are two ways to use **stl** with Steam.
+There are two ways to use **steamtinkerlaunch** with Steam.
 Either as [Steam Launch Option](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam-Launch-Option) or as [Steam Compatibility Tool](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam-Compatibility-Tool)
 *(simply enabling it as global default [Steam Compatibility Tool](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam-Compatibility-Tool) works fine as well)*
+
+**I recommend the [Steam Compatibility Tool](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam-Compatibility-Tool) for all Proton games and
+the [Steam Launch Option](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam-Launch-Option) only for native Linux games.**
 
 *(of course you're using this tool at your own risk and you're responsible which 3rd party programs you launch with it)*
 
@@ -46,13 +51,13 @@ Solus has an official package:
 [![Packaging status](https://repology.org/badge/vertical-allrepos/steamtinkerlaunch.svg)](https://repology.org/project/steamtinkerlaunch/versions)
 
 ### Manual Installation:
-If **stl** is not in your package management yet, just `sudo make install`
+If **steamtinkerlaunch** is not in your package management yet, just `sudo make install`
 
-**stl** depends on several other programs which need to be installed as well.
+**steamtinkerlaunch** depends on several other programs which need to be installed as well.
 Check the [Installation wiki](https://github.com/frostworx/steamtinkerlaunch/wiki/Installation)
 
 ## Press
-Several great people already mentioned **stl** on their platforms/channels.
+Several great people already mentioned **steamtinkerlaunch** on their platforms/channels.
 
 **Thanks a lot to you all!** 👍
 
@@ -82,7 +87,7 @@ Feel free to contribute to the project - there are many possibilities to do so:
 - Github discussions: https://github.com/frostworx/steamtinkerlaunch/discussions
 
 ## Quick start
-When **stl** is started for the first time it will create its default [configuration](#Configuration) structure.
+When **steamtinkerlaunch** is started for the first time it will create its default [configuration](#Configuration) structure.
 Almost everything can be configured with the built-in [Main Menu](https://github.com/frostworx/steamtinkerlaunch/wiki/Main-Menu), but optionally also with a graphical text editor.
 It might be a good idea to start with configuring everything in the [Main Menu](https://github.com/frostworx/steamtinkerlaunch/wiki/Main-Menu) to your needs
 
@@ -122,5 +127,5 @@ in the same location.
 There are several logfiles, those which are written mostly are the game specific ones *($SteamAppId.log)*
 
 ## Command Line
-**stl** also has several [command line](https://github.com/frostworx/steamtinkerlaunch/wiki/Command-Line) which can also be useful outside steam.
-For available options please check `stl help`
+**steamtinkerlaunch** also has several [command line](https://github.com/frostworx/steamtinkerlaunch/wiki/Command-Line) which can also be useful outside steam.
+For available options please check `steamtinkerlaunch help`
