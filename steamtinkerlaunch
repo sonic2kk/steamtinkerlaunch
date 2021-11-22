@@ -68,6 +68,7 @@ CLOSETMP="$STLSHM/${PROGNAME,,}-closing.tmp"
 PROTBUMPTEMP="$STLSHM/protonbump.tmp"
 KILLSWITCH="$STLSHM/KillSwitch"
 TEMPLOG="$STLSHM/${PROGNAME,,}.log"
+PRELOG="$STLSHM/prelog.log"
 WINRESLOG="$STLSHM/winres.log"
 GWIDFILE="$STLSHM/${PROGNAME,,}-sbsgwid"
 PIDLOCK="$STLSHM/pid.lock"
@@ -281,29 +282,29 @@ NOGAMES=",70_2260196511,228980,858280,961940,1054830,1070560,1113280,1245040,139
 function initAID {
 	if [ -n "$STEAM_COMPAT_APP_ID" ]; then
 		AID="$STEAM_COMPAT_APP_ID"
+		writelog "INFO" "${FUNCNAME[0]} - Set AID from STEAM_COMPAT_APP_ID to '$AID'" "P"
 	fi
 
 	if [ -z "$AID" ] || [ "$AID" -eq "0" ]; then
 		# shellcheck disable=SC2154		# SteamAppId comes from Steam
 		if [ -z "$SteamAppId" ]; then
 			AID="$PLACEHOLDERAID"
+			writelog "INFO" "${FUNCNAME[0]} - Set AID to PLACEHOLDERAID '$AID'" "P"
 		else
 			if [ "$SteamAppId" -eq "0" ]; then
 				AID="${STEAM_COMPAT_DATA_PATH##*/}"
+				writelog "INFO" "${FUNCNAME[0]} - Set AID from STEAM_COMPAT_DATA_PATH '$STEAM_COMPAT_DATA_PATH' to '${STEAM_COMPAT_DATA_PATH##*/}', because SteamAppId is '$SteamAppId'" "P"
 			else
 				AID="$SteamAppId"
+				writelog "INFO" "${FUNCNAME[0]} - Set AID to SteamAppId '$SteamAppId' coming from Steam" "P"
 			fi
 		fi
 	fi
 
 	if [ -n "$STEAM_COMPAT_DATA_PATH" ]; then
 		OSCDP="$STEAM_COMPAT_DATA_PATH"
+		writelog "INFO" "${FUNCNAME[0]} - Set OSCDP to STEAM_COMPAT_DATA_PATH '$STEAM_COMPAT_DATA_PATH'" "P"
 	fi
-}
-
-function setSTLPath {
-	STLPATH="$(tr ':' '\n' <<< "$PATH" | grep -v "$STERU" | tr '\n' ':')"
-	PATH="$STLPATH"
 }
 
 STLFAVMENUCFG="$STLCFGDIR/$FACO"															# optional config (in fact just a list with variables) which holds all entries for the individual favorites menu
@@ -1737,7 +1738,7 @@ function getGameOS {
 				setWin "$@"
 			fi
 		else
-			writelog "INFO" "${FUNCNAME[0]} - STEAM_COMPAT_DATA_PATH is dot defined, so this is (very likely) a Linux Game"
+			writelog "INFO" "${FUNCNAME[0]} - STEAM_COMPAT_DATA_PATH is dot defined, so this is (very likely) either a Linux Game or no game was started at all"
 			setLin "$@"
 		fi
 	else
@@ -1799,7 +1800,7 @@ function loadLangFile {
 		fi
 
 		if [ -f "$LANGFILENAME" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Loading commandline langfile"
+			writelog "INFO" "${FUNCNAME[0]} - Loading commandline langfile" "P"
 			source "$LANGFILENAME"
 			STLLANG="$(cut -d '.' -f1 <<< "${LANGFILENAME##*/}")"
 			LAFI="$STLLANGDIR/${STLLANG}.txt"
@@ -1811,16 +1812,16 @@ function loadLangFile {
 			LAFI="$STLLANGDIR/${LANGFILENAME}.txt"
 
 			if [ -f "$LAFI" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Loading user-installed $LAFI"
+				writelog "INFO" "${FUNCNAME[0]} - Loading user-installed $LAFI" "P"
 				source "$LAFI"
 			else
 				LAFI="$GLOBLANG/${LANGFILENAME}.txt"
 
 				if [ -f "$LAFI" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - Loading system wide $LAFI"
+					writelog "INFO" "${FUNCNAME[0]} - Loading system wide $LAFI" "P"
 					source "$LAFI"
 				else
-					writelog "ERROR" "${FUNCNAME[0]} - Language file '$LAFI' missing"
+					writelog "ERROR" "${FUNCNAME[0]} - Language file '$LAFI' missing" "P"
 				fi
 			fi
 		fi
@@ -5151,14 +5152,6 @@ function openMenu {
 }
 
 function writelog {
-	if [ -n "$3" ] && grep -q ".log" <<< "$3"; then
-		WRITELOG="$3"
-	elif [ "$AID" == "$PLACEHOLDERAID" ] || [ -z "$AID" ]; then
-		WRITELOG="$TEMPLOG"
-	else
-		WRITELOG="$LOGFILE"
-	fi
-
 #DBGMS "IN - $2"
 # LOGLEVEL=0: disable log
 
@@ -5171,20 +5164,32 @@ LOGONE="404,ERROR,SKIP,WARN,CREATE"
 	if [ -z "$LOGLEVEL" ]; then
 		LOGLEVEL=2
 	fi
-	
+
 	if [ "$LOGLEVEL" -eq 1 ]; then
 		if grep -q "$1" <<< "$LOGONE"; then
-			echo "$(date) $1 - $2" >> "$WRITELOG"
+			if [ -z "$LOGFILE" ]; then
+				echo "$(date) $1 - $2" | tee -a "$TEMPLOG" >/dev/null
+			else
+				echo "$(date) $1 - $2" | tee -a "$TEMPLOG" "$LOGFILE" >/dev/null
+			fi
 		fi
 	fi
 
 	if [ "$LOGLEVEL" -eq 2 ]; then
-		echo "$(date) $1 - $2" >> "$WRITELOG"
+		if [ -z "$LOGFILE" ]; then
+			echo "$(date) $1 - $2" | tee -a "$TEMPLOG" >/dev/null
+		else
+			echo "$(date) $1 - $2" | tee -a "$TEMPLOG" "$LOGFILE" >/dev/null
+		fi
 	fi
 
 	if [ -n "$3" ]; then
 		if [ "$3" == "E" ]; then
 			echo "$(date) $1 - $2"
+		elif [ "$3" == "P" ] && [ -f "$PRELOG" ]; then
+			echo "$(date) $1 - $2" | tee -a "$PRELOG" >/dev/null
+		elif grep -q ".log" <<< "$3"; then
+			echo "$(date) $1 - $2" | tee -a "$3" >/dev/null
 		fi
 	fi
 #DBGMS "OUT - $2"
@@ -7420,6 +7425,7 @@ function setInitWinXY {
 	DEFRESSHM="$STLSHM/defres.txt"
 	if [ -f "$DEFRESSHM" ] ; then
 		loadCfg "$DEFRESSHM" X
+		writelog "INFO" "${FUNCNAME[0]} - Using '${WINX}x${WINY}' from config '$DEFRESSHM'"
 	else
 		SCRW="$(getScreenRes w)"
 		SCRH="$(getScreenRes h)"
@@ -7799,8 +7805,6 @@ function createDefaultCfgs {
 	writelog "INFO" "${FUNCNAME[0]} - START"
 
 	createProjectDirs
-
-	rm "$TEMPLOG" "$WINRESLOG" 2>/dev/null
 
 	loadLanguage "$@"
 
@@ -12783,8 +12787,6 @@ function prepareLaunch {
 	loadCfg "$STLDEFGLOBALCFG" X
 	writelog "START" "######### Game Launch: $SGNAID #########"
 
-#	createDefaultCfgs "${ORGGCMD[@]}"
-
 	getGameData "$AID"
 
 	writelog "INFO" "${FUNCNAME[0]} - Game launch args '${ORGGCMD[*]}'"
@@ -16129,7 +16131,11 @@ function closeSTL {
 
 	delMenuTemps
 	delWinetricksTemps
-	echo "log can be found under: $WRITELOG"
+	if [ "$AID" != "$PLACEHOLDERAID" ]; then
+		echo "log can be found under: '$TEMPLOG' and '$LOGFILE'"
+	else
+		echo "log can be found under: '$TEMPLOG'"
+	fi
 #	emptyVars "A" "$1"
 }
 #ENDCLOSESTL ###
@@ -16137,7 +16143,7 @@ function closeSTL {
 # main:#################
 
 function saveOrgVars {
-	# Storing some original Variables to restore them later
+	writelog "INFO" "${FUNCNAME[0]} - Storing some original variables to restore them later" "P"
 
 	env | grep "=" | sort -o "$VARSIN"
 
@@ -16152,13 +16158,17 @@ function emptyVars {
 
 	if [ "$1" == "O" ] ; then
 		LC_ALL="" 
-		setSTLPath
+		STLPATH="$(tr ':' '\n' <<< "$PATH" | grep -v "$STERU" | tr '\n' ':')"
+		PATH="$STLPATH"
 		LD_LIBRARY_PATH=""
 		LD_PRELOAD=""
-
+		if [ -z "$2" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Emptied some original variables as they slowdown several system calls when started from steam" "P"
+			writelog "INFO" "${FUNCNAME[0]} - Set \$PATH to '$PATH'" "P"
+		fi
 #	# empty "some" internal variables created by ${PROGNAME,,} (before starting the game)
 	elif [ "$1" == "S" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - Clearing some '${PROGNAME,,}' internal Variables before the game starts"
+		writelog "INFO" "${FUNCNAME[0]} - Clearing some '${PROGNAME,,}' internal variables before the game starts"
 
 		TIEXV="$STLSHM/TrayIconVars.txt"
 		TIEXF="$STLSHM/TrayIconFuncs.txt"
@@ -16241,7 +16251,7 @@ function rmOldLog {
 		if test "$(find "$LOGFILE" -mmin -3 2>/dev/null)"; then
 			rm "$LOGFILE" 2>/dev/null
 		fi
-	fi	
+	fi
 }
 
 function CreateCustomEvaluatorScript {
@@ -16906,6 +16916,7 @@ function checkFirstTimeRun {
 function getCurrentCommandline {
 	# filter $ISCRI commands
 	if grep -q "$ISCRI" <<< "$@"; then
+		writelog "INFO" "${FUNCNAME[0]} - Running checkFirstTimeRun with arguments '${*}'" "P"
 		checkFirstTimeRun "$@"
 		exit
 	else
@@ -16913,8 +16924,10 @@ function getCurrentCommandline {
 		INPROSTR="proton $WFEAR"
 		if grep -q "$INPROSTR" <<< "$@"; then
 			HAVEINPROTON=1
+			writelog "INFO" "${FUNCNAME[0]} - Found Proton in command line arguments '${*}'" "P"
 		else
 			HAVEINPROTON=0
+			writelog "INFO" "${FUNCNAME[0]} - No Proton in command line arguments '${*}'" "P"
 		fi
 	fi
 }
@@ -16922,7 +16935,7 @@ function getCurrentCommandline {
 function initShmStl {
 	mkProjDir "$MTEMP"
 	SHMVERS="$STLSHM/version"
-
+	
 	if [ -f "$SHMVERS" ]; then
 		if [ "$PROGVERS" != "$(cat "$SHMVERS")" ]; then
 			mv "${STLSHM}" "${STLSHM}-$((100 + RANDOM % 100))"
@@ -17001,34 +17014,45 @@ function migrateCfgs {
 function main {
 
 	initShmStl
+	rm "$TEMPLOG" "$WINRESLOG" "$PRELOG" 2>/dev/null
+	touch "$PRELOG"
 	initAID "$@"
 	setAIDCfgs
 	loadLangFile "$STLDEFLANG"
-
 	getCurrentCommandline "$@"
 	saveOrgVars
 	emptyVars "O"
 
-	writelog "START" "######### Initializing Game Launch $AID #########"
+	writelog "START" "######### Initializing Game Launch $AID #########" "P"
 
 	if [ -f "$STLDEFGLOBALCFG" ] && grep -q "^RESETLOG=\"1\"" "$STLDEFGLOBALCFG"; then
-		rmOldLog
-		writelog "INFO" "Starting with a clean log"
+		if [ -f "$PRELOG" ]; then
+			mv "$PRELOG" "$LOGFILE"
+		else
+			rmOldLog
+			rm "$PRELOG" 2>/dev/null
+		fi
+		# from here the '$LOGFILE' is written directly
+		writelog "INFO" "${FUNCNAME[0]} - Starting with a clean log"
 	fi
 
-	writelog "INFO" "emptyVars - Emptied some original Variables as they slowdown several system calls when started from steam"
-
+	writelog "INFO" "${FUNCNAME[0]} - Start creating default configs"
 	createDefaultCfgs "$@"
 
+	writelog "INFO" "${FUNCNAME[0]} - Checking internal dependencies:"
 	checkIntDeps "$@"
 
+	writelog "INFO" "${FUNCNAME[0]} - Initializing first Proton:"
 	initFirstProton
 
+	writelog "INFO" "${FUNCNAME[0]} - Initializing default window resolution"
 	setInitWinXY
 
 	if [ -z "$1" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - No arguments provided. See '$PROGCMD --help' for possible command line parameters" "E"
 	else
+		writelog "INFO" "${FUNCNAME[0]} - Checking command line: incoming arguments '${*}'"
+
 		if [ -n "$SteamAppId" ] && [ "$SteamAppId" -eq "0" ]; then
 			setCustomGameVars "$@"
 			if [ -n "$ISGAME" ]; then
