@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v7.211120"
+PROGVERS="v7.211122"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -391,7 +391,6 @@ CE="Cheat Engine"
 HEADLINEFONT="larger"
 FONTSIZES="!xx-small!x-small!small!smaller!medium!large!larger!!x-large!xx-large!"
 HAVEINNO="1"
-FOUNDPROTONMM="0"
 SREG="system.reg"
 NSGA="non-steam game"
 BTVP="$DRC/Program Files/Black Tree Gaming Ltd/${VTX^}"
@@ -2412,8 +2411,6 @@ function saveCfg {
 			echo "WINEDLDIR=\"$WINEDLDIR\""
 			echo "## $DESC_WINEEXTDIR"
 			echo "WINEEXTDIR=\"$WINEEXTDIR\""			
-			echo "## $DESC_AUTOPULLPROTON"
-			echo "AUTOPULLPROTON=\"$AUTOPULLPROTON\""
 			echo "## $DESC_AUTOLASTPROTON"
 			echo "AUTOLASTPROTON=\"$AUTOLASTPROTON\""
 			echo "## $DESC_STRACEDIR"
@@ -4171,7 +4168,6 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_USEREAP!$DESC_USEREAP ('USEREAP')":CHK "${USEREAP/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_FORCEREAP!$DESC_FORCEREAP ('FORCEREAP')":CHK "${FORCEREAP/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_AUTOLASTPROTON!$DESC_AUTOLASTPROTON ('AUTOLASTPROTON')":CHK "${AUTOLASTPROTON/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GLOBAL` \
---field="     $GUI_AUTOPULLPROTON!$DESC_AUTOPULLPROTON ('AUTOPULLPROTON')":CHK "${AUTOPULLPROTON/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_REDIRCOMPDATA!$DESC_REDIRCOMPDATA ('REDIRCOMPDATA')":CB "$(cleanDropDown "${REDIRCOMPDATA/#-/ -}" "disabled!single-proton!global-proton")" `#CAT_Proton` `#MENU_GAME` \
 --field="     $GUI_REDIRSTEAMUSER!$DESC_REDIRSTEAMUSER ('REDIRSTEAMUSER')":CB "$(cleanDropDown "${REDIRSTEAMUSER/#-/ -}" "disabled!symlink!restore-backup")" `#CAT_Proton` `#MENU_GAME` \
 --field="     $GUI_AUTOBUMPGE!$DESC_AUTOBUMPGE ('AUTOBUMPGE')":CHK "${AUTOBUMPGE/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
@@ -4796,10 +4792,9 @@ function MainMenu {
 	
 	createProtonList X
 
-	WANTPROTON="$("$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --center --window-icon="$STLICON" --form --center "$WINDECO" --title="$TITLE" \
+	"$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --center --window-icon="$STLICON" --form --center "$WINDECO" --title="$TITLE" \
 	--text="$SETHEAD" \
 	--columns="$COLCOUNT" --f1-action="$F1ACTIONCG" --separator="" \
-	--field="$FBUT_GUISET_OTP":CB "$(cleanDropDown "${USEPROTON/#-/ -}" "$PROTYADLIST")" \
 	--field="$FBUT_GUISET_DCP":FBTN "$PROGCMD dcp" \
 	--field="$FBUT_GUISET_DW":FBTN "$PROGCMD dw" \
 	--field="$FBUT_GUISET_RECREATEPFX":FBTN "$PROGCMD ccd \"$AID\" \"s\"" \
@@ -4828,7 +4823,7 @@ function MainMenu {
 	--button="$BUT_FAV":12 \
 	--button="$BUT_EDITORMENU":14 \
 	--button="$BUT_PLAY":16 \
-	"$GEOM")"
+	"$GEOM"
 	case $? in
 	0)  {
 			clickInfo "${FUNCNAME[0]}" "$?" "$BUT_EXIT" "$SETMENU" "Exit"
@@ -7883,10 +7878,6 @@ function updateConfigEntry {
 						else
 							writelog "INFO" "${FUNCNAME[0]} - Option '$CFGCAT' is updated with the new value '$CFGVALUE' in config '${CFGFILE##*/}'"
 							sed -i "/^${CFGCAT}=/c$CFGCAT=\"$CFGVALUE\"" "$CFGFILE"
-							if [ "$CFGCAT" == "USEPROTON" ]; then
-								writelog "INFO" "${FUNCNAME[0]} - Updating One Time Proton for this launch to the updated USEPROTON value '$CFGVALUE'"
-								WANTPROTON="$CFGVALUE"
-							fi
 						fi
 						rm "$FUPDATE" 2>/dev/null
 					fi
@@ -9013,18 +9004,15 @@ function redirectSCDP {
 	}
 
 	if [ -n "$STEAM_COMPAT_DATA_PATH" ]; then # should be enough
-		if [ -n "$WANTPROTON" ] && [ "$WANTPROTON" != "$USEPROTON" ]; then
-			DESTPROT1="${WANTPROTON//proton-}"
+		VERSFIX="$(grep "${USEPROTON%-*}" "$PROTONCSV" | cut -d ';' -f1 | sort -nr | head -n1)"
+		if [ -n "$VERSFIX" ]; then
+			DESTPROT1="${VERSFIX//proton-}"
+			writelog "INFO" "${FUNCNAME[0]} - Using Proton version with minor version fix '$DESTPROT1' for $CODA directory name"
 		else
-			VERSFIX="$(grep "${USEPROTON%-*}" "$PROTONCSV" | cut -d ';' -f1 | sort -nr | head -n1)"
-			if [ -n "$VERSFIX" ]; then
-				DESTPROT1="${VERSFIX//proton-}"
-				writelog "INFO" "${FUNCNAME[0]} - Using Proton version with minor version fix '$DESTPROT1' for $CODA directory name"
-			else
-				DESTPROT1="${USEPROTON//proton-}"
-				writelog "INFO" "${FUNCNAME[0]} - Using Proton version '$DESTPROT1' for '$CODA' directory name"
-			fi
+			DESTPROT1="${USEPROTON//proton-}"
+			writelog "INFO" "${FUNCNAME[0]} - Using Proton version '$DESTPROT1' for '$CODA' directory name"
 		fi
+
 		DESTPROT="${DESTPROT1//Proton}"
 		# above might have to be expanded later, depending on proton names
 		
@@ -13160,7 +13148,6 @@ function fixProtonVersionMismatch {
 				if [ -f "$NEWMINORRUN" ]; then
 					writelog "INFO" "${FUNCNAME[0]} - found '$NEWMINORRUN'"
 					echo "$NEWMINORRUN"
-					FOUNDPROTONMM=1
 				fi
 			else
 				if [ -f "$NEWMINORRUN" ]; then
@@ -13180,31 +13167,6 @@ function fixProtonVersionMismatch {
 				touch "$FUPDATE"
 				updateConfigEntry "USEPROTON" "$USEPROTON" "$2"
 				setInternalProtonVars
-			fi
-		fi
-	fi
-}
-
-function OneTimeProton {
-	if { [ -n "$WANTPROTON" ] && [ -n "$USEPROTON" ];} || [ "$FOUNDPROTONMM" -eq 1 ]; then
-		if [ "$HAVEINPROTON" -eq 1 ]; then
-			writelog "SKIP" "${FUNCNAME[0]} - Skipping OneTimeProton, because '$SLO' is used"
-		else
-			if [ "$WANTPROTON" != "$USEPROTON" ]; then
-				if [ -z "$USEPROTON" ]; then
-					DISPPROT="$NON"
-				else
-					DISPPROT="$USEPROTON"
-				fi
-				writelog "INFO" "${FUNCNAME[0]} - One time Proton version '$WANTPROTON' selected, but '$DISPPROT' is set"
-				notiShow "$(strFix "$NOTY_WANTPROTON" "$WANTPROTON" "$DISPPROT")"
-			
-				if [ -f "$(getProtPathFromCSV "$WANTPROTON")" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - One time Proton version '$WANTPROTON' does exist - switching"
-					switchProton "$WANTPROTON"
-				else
-					fixProtonVersionMismatch "WANTPROTON" "$STLGAMECFG"
-				fi
 			fi
 		fi
 	fi
@@ -14422,7 +14384,6 @@ function launchSteamGame {
 		# Proton:
 		else
 			# proton variants start here:
-			OneTimeProton
 		
 			if [ "$HAVEINPROTON" -eq 1 ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Not overriding Proton and using Proton provided by steam commandline '${INPROTCMD[*]}'"
