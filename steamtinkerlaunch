@@ -69,6 +69,8 @@ PROTBUMPTEMP="$STLSHM/protonbump.tmp"
 KILLSWITCH="$STLSHM/KillSwitch"
 TEMPLOG="$STLSHM/${PROGNAME,,}.log"
 PRELOG="$STLSHM/prelog.log"
+APPMALOG="$STLSHM/listAppManifests.log"
+GGDLOG="$STLSHM/${FUNCNAME[0]}.log"
 WINRESLOG="$STLSHM/winres.log"
 GWIDFILE="$STLSHM/${PROGNAME,,}-sbsgwid"
 PIDLOCK="$STLSHM/pid.lock"
@@ -697,8 +699,6 @@ function writeDesktopFile {
 		getGameName "$1"
 
 		if [ -n "$GAMENAME" ] && [ "$GAMENAME" != "$NON" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Creating $DESTDTF"
-
 			{
 				echo "[Desktop Entry]"
 				echo "Name=${GAMENAME//\"/}"
@@ -736,6 +736,7 @@ function createDesktopIconFile {
 
 		# create desktop file internally for optionally using it on the desktop
 		if [ -f "$WANTGPNG" ] && [ ! -f "$INTDTFILE" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Creating $INTDTFILE"
 			writeDesktopFile "$AID" "$INTDTFILE" "$WANTGPNG"
 		fi
 	fi
@@ -1064,8 +1065,17 @@ function getGameIcon {
 
 function getGameData {
 	if ! grep -q ",${1}," <<< "$NOGAMES" ; then
-		getGamePic "$STLGHEADD/$1.jpg" "$STASSURL/$1/header.jpg"
-		writeDesktopFile "$1" "$STLGDESKD/$1.desktop" "$STLGHEADD/$1.jpg"
+		DLPIC="$STLGHEADD/$1.jpg"
+		if [ ! -f "$DLPIC" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Downloading picture '$DLPIC' from '$STASSURL/$1/header.jpg'" "X" "$GGDLOG"
+			getGamePic "$DLPIC" "$STASSURL/$1/header.jpg"
+		fi
+
+		DESTDTF="$STLGDESKD/$1.desktop"
+		if [ ! -f "$DESTDTF" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Creating desktopfile '$DESTDTF'" "X" "$GGDLOG"
+			writeDesktopFile "$1" "$DESTDTF" "$DLPIC"
+		fi
 	fi
 }
 
@@ -1224,7 +1234,6 @@ function createCategoryMenus {
 	fi
 }
 
-#XXXXXXXXXXXXXXX
 function listAppManifests {
 	function findAppMa {
 		if [ -d "$1" ]; then
@@ -1239,7 +1248,7 @@ function listAppManifests {
 	fi
 
 	if [ -f "$CFGVDF" ] || [ -f "$LFVDF" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - Searching appmanifest files in '$CFGVDF' and '$LFVDF'"
+		writelog "INFO" "${FUNCNAME[0]} - Searching appmanifest files in '$CFGVDF' and '$LFVDF'" "X" "$APPMALOG"
 		while read -r BIF; do
 			findAppMa "${BIF//\"/}/$SA"
 		done <<< "$(grep "BaseInstallFolder\|\"path\"" "$CFGVDF" "$LFVDF" 2>/dev/null | awk '{print $3}' | sort -u)"
@@ -5158,35 +5167,39 @@ LOGONE="404,ERROR,SKIP,WARN,CREATE"
 # LOGLEVEL=2: log also - including:
 #LOGTWO="HACK,INFO,NEW,UPDATE,WAIT"
 
-	if [ -z "$LOGLEVEL" ]; then
-		LOGLEVEL=2
-	fi
+	if [ -n "$4" ] && [ "$3" == "X" ] && grep -q ".log" <<< "$4"; then
+		echo "$(date) $1 - $2" | tee -a "$4" >/dev/null
+	else
+		if [ -z "$LOGLEVEL" ]; then
+			LOGLEVEL=2
+		fi
 
-	if [ "$LOGLEVEL" -eq 1 ]; then
-		if grep -q "$1" <<< "$LOGONE"; then
+		if [ "$LOGLEVEL" -eq 1 ]; then
+			if grep -q "$1" <<< "$LOGONE"; then
+				if [ -z "$LOGFILE" ]; then
+					echo "$(date) $1 - $2" | tee -a "$TEMPLOG" >/dev/null
+				else
+					echo "$(date) $1 - $2" | tee -a "$TEMPLOG" "$LOGFILE" >/dev/null
+				fi
+			fi
+		fi
+
+		if [ "$LOGLEVEL" -eq 2 ]; then
 			if [ -z "$LOGFILE" ]; then
 				echo "$(date) $1 - $2" | tee -a "$TEMPLOG" >/dev/null
 			else
 				echo "$(date) $1 - $2" | tee -a "$TEMPLOG" "$LOGFILE" >/dev/null
 			fi
 		fi
-	fi
 
-	if [ "$LOGLEVEL" -eq 2 ]; then
-		if [ -z "$LOGFILE" ]; then
-			echo "$(date) $1 - $2" | tee -a "$TEMPLOG" >/dev/null
-		else
-			echo "$(date) $1 - $2" | tee -a "$TEMPLOG" "$LOGFILE" >/dev/null
-		fi
-	fi
-
-	if [ -n "$3" ]; then
-		if [ "$3" == "E" ]; then
-			echo "$(date) $1 - $2"
-		elif [ "$3" == "P" ] && [ -f "$PRELOG" ]; then
-			echo "$(date) $1 - $2" | tee -a "$PRELOG" >/dev/null
-		elif grep -q ".log" <<< "$3"; then
-			echo "$(date) $1 - $2" | tee -a "$3" >/dev/null
+		if [ -n "$3" ]; then
+			if [ "$3" == "E" ]; then
+				echo "$(date) $1 - $2"
+			elif [ "$3" == "P" ] && [ -f "$PRELOG" ]; then
+				echo "$(date) $1 - $2" | tee -a "$PRELOG" >/dev/null
+			elif grep -q ".log" <<< "$3"; then
+				echo "$(date) $1 - $2" | tee -a "$3" >/dev/null
+			fi
 		fi
 	fi
 #DBGMS "OUT - $2"
@@ -16585,27 +16598,27 @@ function createModifiedEvalsc {
 
 	STESHA="$STEAM_COMPAT_CLIENT_INSTALL_PATH$SAC/$STEWOS"
 	if [ ! -d "$STESHA" ]; then
-		writelog "WARN" "${FUNCNAME[0]} - '$STESHA' not found - packages expected there won't be found" "E" | tee -a "$ISCRILOG"
+		writelog "WARN" "${FUNCNAME[0]} - '$STESHA' not found - packages expected there won't be found" "X" "$ISCRILOG"
 	fi
 
 	SOURCEEVALSC="$1"
 	DSTEVALSC="$2"
 
 	if [ ! -f "$SOURCEEVALSC" ]; then
-		writelog "SKIP" "${FUNCNAME[0]} - '$SOURCEEVALSC' does not exists" "E" | tee -a "$ISCRILOG"
+		writelog "SKIP" "${FUNCNAME[0]} - '$SOURCEEVALSC' does not exists" "X" "$ISCRILOG"
 	elif [ ! -f "$DSTEVALSC" ]; then
 		SCCILECO="$STEAM_COMPAT_CLIENT_INSTALL_PATH/$LECO"
 
 		# creating a temporary copy of the evaluatorscript in $SCCILECO:
-		writelog "INFO" "${FUNCNAME[0]} - Copying '$SOURCEEVALSC' to '$SCCILECO'" "E" | tee -a "$ISCRILOG"
+		writelog "INFO" "${FUNCNAME[0]} - Copying '$SOURCEEVALSC' to '$SCCILECO'" "X" "$ISCRILOG"
 		cp "$SOURCEEVALSC" "$DSTEVALSC"
 		
 		# replace placeholders with real paths
-		writelog "INFO" "${FUNCNAME[0]} - Replacing placeholders with real paths in '$DSTEVALSC'" "E" | tee -a "$ISCRILOG"
+		writelog "INFO" "${FUNCNAME[0]} - Replacing placeholders with real paths in '$DSTEVALSC'" "X" "$ISCRILOG"
 		sed "s:STESHA:$STESHA:g" -i "$DSTEVALSC"
 		sed "s:STLDLDIR:$STLDLDIR:g" -i "$DSTEVALSC"
 	else
-		writelog "SKIP" "${FUNCNAME[0]} - '$DSTEVALSC' already exists" "E" | tee -a "$ISCRILOG"
+		writelog "SKIP" "${FUNCNAME[0]} - '$DSTEVALSC' already exists" "X" "$ISCRILOG"
 	fi
 }
 
@@ -16640,7 +16653,7 @@ function doneEvacInstall {
 function runEvacInstall {
 	INSTPROT="$1"
 	# call $ISCRI via proton with the modified evaluatorscript as parameter:
-	writelog "INFO" "${FUNCNAME[0]} - '$EVALSC' - START - STEAM_COMPAT_DATA_PATH=\"$STEAM_COMPAT_DATA_PATH\" '$INSTPROT run $ISCEXE $EVSC'" "E" | tee -a "$ISCRILOG"
+	writelog "INFO" "${FUNCNAME[0]} - '$EVALSC' - START - STEAM_COMPAT_DATA_PATH=\"$STEAM_COMPAT_DATA_PATH\" '$INSTPROT run $ISCEXE $EVSC'" "X" "$ISCRILOG"
 	STEAM_COMPAT_DATA_PATH="$STEAM_COMPAT_DATA_PATH" "$INSTPROT" run "$ISCEXE" "$EVSC"
 	# move the temporary modified evaluatorscript into '$STMSHM'
 	mv "$DSTEVSC" "$STLSHM/${DSTEVSC##*/}_$RANDOM"
@@ -16659,18 +16672,18 @@ function checkFirstTimeRun {
 		
 		ISCRILOG="$2"
 		EVALVDF="$SCCILECO/$1"
-		writelog "INFO" "${FUNCNAME[0]} - Waiting for '$EVALVDF' to appear" "E" | tee -a "$ISCRILOG"
+		writelog "INFO" "${FUNCNAME[0]} - Waiting for '$EVALVDF' to appear" "X" "$ISCRILOG"
 		while [ ! -f "$EVALVDF" ]; do 
 			sleep 0.1
 		done
 		cp "$EVALVDF" "$EVMETAID"
-		writelog "INFO" "${FUNCNAME[0]} - Copied '$EVALVDF' to '$EVMETAID/$1'" "E" | tee -a "$ISCRILOG"
+		writelog "INFO" "${FUNCNAME[0]} - Copied '$EVALVDF' to '$EVMETAID/$1'" "X" "$ISCRILOG"
 	}
 	
 	function findEarlyProt {
 		if [ -n "$2" ]; then
 			ISCRILOG="$2"
-			writelog "INFO" "${FUNCNAME[0]} - Trying to get a proton version from '$1'" "E" | tee -a "$ISCRILOG"
+			writelog "INFO" "${FUNCNAME[0]} - Trying to get a proton version from '$1'" "X" "$ISCRILOG"
 			if grep -q "^USEPROTON" "$1"; then
 				CONFPROTRAW="$(grep "^USEPROTON" "$1" | cut -d '=' -f2)"
 				CONFPROT="${CONFPROTRAW//\"}"
@@ -16682,29 +16695,29 @@ function checkFirstTimeRun {
 				createProtonList
 				
 				if [ -f "$PROTONCSV" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - Searching '$CONFPROT' in '$PROTONCSV'" "E" | tee -a "$ISCRILOG"
+					writelog "INFO" "${FUNCNAME[0]} - Searching '$CONFPROT' in '$PROTONCSV'" "X" "$ISCRILOG"
 
 					if grep -q "^${CONFPROT}" "$PROTONCSV"; then
-						writelog "INFO" "${FUNCNAME[0]} - Found '$CONFPROT' in '$PROTONCSV'" "E" | tee -a "$ISCRILOG"
+						writelog "INFO" "${FUNCNAME[0]} - Found '$CONFPROT' in '$PROTONCSV'" "X" "$ISCRILOG"
 						EARLYPROT="$(grep "^${CONFPROT}" "$PROTONCSV" | cut -d ';' -f2)"
 						export EARLYPROT
 					else
-						writelog "INFO" "${FUNCNAME[0]} - '$CONFPROT' not found in '$PROTONCSV'" "E" | tee -a "$ISCRILOG"
+						writelog "INFO" "${FUNCNAME[0]} - '$CONFPROT' not found in '$PROTONCSV'" "X" "$ISCRILOG"
 						# if configured USEPROTON proton binary was not found, try to find a minor version bump instead:
 						TESTEARLYPROT="$(fixProtonVersionMismatch "CONFPROT" "$STLGAMECFG" "X")"
 						if [ -f "$TESTEARLYPROT" ]; then
-							writelog "INFO" "${FUNCNAME[0]} - Found a minor version mismatch binary for '$CONFPROT':'$TESTEARLYPROT'" "E" | tee -a "$ISCRILOG"
+							writelog "INFO" "${FUNCNAME[0]} - Found a minor version mismatch binary for '$CONFPROT':'$TESTEARLYPROT'" "X" "$ISCRILOG"
 							EARLYPROT="$TESTEARLYPROT"
 							export EARLYPROT
 						else
-							writelog "SKIP" "${FUNCNAME[0]} - Found '$TESTEARLYPROT' does not exist" "E" | tee -a "$ISCRILOG"
+							writelog "SKIP" "${FUNCNAME[0]} - Found '$TESTEARLYPROT' does not exist" "X" "$ISCRILOG"
 						fi
 					fi
 				else
-					writelog "ERROR" "${FUNCNAME[0]} - Could not create '$PROTONCSV'" "E" | tee -a "$ISCRILOG"
+					writelog "ERROR" "${FUNCNAME[0]} - Could not create '$PROTONCSV'" "X" "$ISCRILOG"
 				fi
 			else
-				writelog "SKIP" "${FUNCNAME[0]} - No USEPROTON entry found in '$1'" "E" | tee -a "$ISCRILOG"
+				writelog "SKIP" "${FUNCNAME[0]} - No USEPROTON entry found in '$1'" "X" "$ISCRILOG"
 			fi
 		fi	
 	}
@@ -16717,12 +16730,12 @@ function checkFirstTimeRun {
 	
 	if [ -f "$(find "$LOGFILE" -not -newermt '-5 seconds' 2>/dev/null)" ]; then
 		if ! grep -q "$ISCRI" <<< "$(tail -n1 "$LOGFILE")"; then
-			writelog "START" "######### '$ISCRI' #########" "E" | tee -a "$ISCRILOG"
+			writelog "START" "######### '$ISCRI' #########" "X" "$ISCRILOG"
 		fi
 	fi
 	# skip $ISCRI completely if a SKIP file exists for $STEAM_COMPAT_APP_ID
 	if [ -f "$EVMETASKIPID/${EVALSC}_${STEAM_COMPAT_APP_ID}.vdf" ]; then
-		writelog "SKIP" "${FUNCNAME[0]} - Skipping '$ISCRI' line '$*' because '$EVMETASKIPID/${EVALSC}_${STEAM_COMPAT_APP_ID}.vdf' exists" "E" | tee -a "$ISCRILOG"
+		writelog "SKIP" "${FUNCNAME[0]} - Skipping '$ISCRI' line '$*' because '$EVMETASKIPID/${EVALSC}_${STEAM_COMPAT_APP_ID}.vdf' exists" "X" "$ISCRILOG"
 	else
 		# filter evaluatorscript command
 		if grep -q "$EVALSC" <<< "$@"; then
@@ -16748,13 +16761,13 @@ function checkFirstTimeRun {
 
 				# if everything else failed, check for a "static proton version" just for the base install - either from file or from system variable:
 				if [ -z "$EARLYPROT" ] && [ ! -f "$EVALPROTCONF" ] && [ -f "$STLEARLYPROTCONF" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - Trying to get a proton version from '$STLEARLYPROTCONF'" "E" | tee -a "$ISCRILOG"
+					writelog "INFO" "${FUNCNAME[0]} - Trying to get a proton version from '$STLEARLYPROTCONF'" "X" "$ISCRILOG"
 					source "$STLEARLYPROTCONF"
 				fi
 
 				# fallback if for whatever reason USEPROTON is empty everywhere - trying to get NOP
 				if [ -z "$EARLYPROT" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - Last try - trying to get Newest Official Proton" "E" | tee -a "$ISCRILOG"
+					writelog "INFO" "${FUNCNAME[0]} - Last try - trying to get Newest Official Proton" "X" "$ISCRILOG"
 					CONFPROT="$(getDefaultProton)"
 					createProtonList
 					EARLYPROT="$(grep "^${CONFPROT}" "$PROTONCSV" | cut -d ';' -f2)"
@@ -16762,7 +16775,7 @@ function checkFirstTimeRun {
 				
 				# write found protonversion into temp config, so below GECUST runs can use it as well:
 				if [ -n "$EARLYPROT" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - Writing 'EARLYPROT=$EARLYPROT' into '$EVALPROTCONF'" "E" | tee -a "$ISCRILOG"
+					writelog "INFO" "${FUNCNAME[0]} - Writing 'EARLYPROT=$EARLYPROT' into '$EVALPROTCONF'" "X" "$ISCRILOG"
 					echo "EARLYPROT=\"$EARLYPROT\"" > "$EVALPROTCONF"
 					echo "TEVSC=\"$EVSC\"" >> "$EVALPROTCONF"
 				fi			
@@ -16786,28 +16799,28 @@ function checkFirstTimeRun {
 						TEVALSC="${STLSHM}/${EVALSC}_${STEAM_COMPAT_APP_ID}_temp.vdf"
 						if [ -f "$TEVALSC" ]; then
 							SRCEVSC="$TEVALSC"
-							writelog "INFO" "${FUNCNAME[0]} - Using '$SRCEVSC' as source" "E" | tee -a "$ISCRILOG"
+							writelog "INFO" "${FUNCNAME[0]} - Using '$SRCEVSC' as source" "X" "$ISCRILOG"
 						fi
 						
 						if [ -z "$SRCEVSC" ]; then
 							if [ ! -f "$SRCORIGEVSC" ] && [ ! -f "$SRCCUSTEVSC" ]; then
 								SRCEVSC="$SRCORIGEVSC"
-								writelog "INFO" "${FUNCNAME[0]} - Both the copy '$SRCORIGEVSC' of the original and a custom '$SRCCUSTEVSC' are missing - trying to get the original'" "E" | tee -a "$ISCRILOG"
+								writelog "INFO" "${FUNCNAME[0]} - Both the copy '$SRCORIGEVSC' of the original and a custom '$SRCCUSTEVSC' are missing - trying to get the original'" "X" "$ISCRILOG"
 							elif [ -f "$SRCORIGEVSC" ] && [ ! -f "$SRCCUSTEVSC" ]; then
 								SRCEVSC="$SRCORIGEVSC"
-								writelog "INFO" "${FUNCNAME[0]} - Using '$SRCEVSC' as source" "E" | tee -a "$ISCRILOG"
+								writelog "INFO" "${FUNCNAME[0]} - Using '$SRCEVSC' as source" "X" "$ISCRILOG"
 							elif [ -f "$SRCORIGEVSC" ] && [ -f "$SRCCUSTEVSC" ]; then
 								SRCEVSC="$SRCCUSTEVSC"
-								writelog "INFO" "${FUNCNAME[0]} - Using custom '$SRCCUSTEVSC' as source, as it overrides the original '$SRCORIGEVSC' which also does exist" "E" | tee -a "$ISCRILOG"
+								writelog "INFO" "${FUNCNAME[0]} - Using custom '$SRCCUSTEVSC' as source, as it overrides the original '$SRCORIGEVSC' which also does exist" "X" "$ISCRILOG"
 							elif [ ! -f "$SRCORIGEVSC" ] && [ -f "$SRCCUSTEVSC" ]; then
 								SRCEVSC="$SRCCUSTEVSC"
-								writelog "INFO" "${FUNCNAME[0]} - Using custom '$SRCCUSTEVSC' as source, and the original '$SRCORIGEVSC' does not exist" "E" | tee -a "$ISCRILOG"
+								writelog "INFO" "${FUNCNAME[0]} - Using custom '$SRCCUSTEVSC' as source, and the original '$SRCORIGEVSC' does not exist" "X" "$ISCRILOG"
 							fi
 						fi
 					
 						if [ -n "$EVSC" ] && [ ! -f "$SRCEVSC" ] && [ "$SRCEVSC" == "$SRCORIGEVSC" ]; then
 							waitForEvaluatorscript "$EVSC" "$ISCRILOG" &
-							writelog "INFO" "${FUNCNAME[0]} - '$EVALSC' START - '$EARLYPROT run ${RUNISCCMD[*]}'" "E" | tee -a "$ISCRILOG"
+							writelog "INFO" "${FUNCNAME[0]} - '$EVALSC' START - '$EARLYPROT run ${RUNISCCMD[*]}'" "X" "$ISCRILOG"
 							"$EARLYPROT" run "${RUNISCCMD[@]}"
 							while [ ! -f "$SRCEVSC" ]; do 
 								sleep 0.1
@@ -16830,7 +16843,7 @@ function checkFirstTimeRun {
 							runEvacInstall "$EARLYPROT"
 							SRCADDONEVSC="$EVMETAADDONID/$EVSC"
 							if [ -f "$SRCADDONEVSC" ]; then
-								writelog "INFO" "${FUNCNAME[0]} - Found additional install script in '$SRCADDONEVSC'" "E" | tee -a "$ISCRILOG"
+								writelog "INFO" "${FUNCNAME[0]} - Found additional install script in '$SRCADDONEVSC'" "X" "$ISCRILOG"
 								
 								DSTEVSC="$STEAM_COMPAT_CLIENT_INSTALL_PATH/$EVSC"
 								createModifiedEvalsc "$SRCADDONEVSC" "$DSTEVSC"
@@ -16840,12 +16853,12 @@ function checkFirstTimeRun {
 				
 							if [ "$SRCEVSC" == "$TEVALSC" ]; then
 								rm "$TEVALSC" 2>/dev/null
-								writelog "INFO" "${FUNCNAME[0]} - Removed temporary '$TEVALSC'" "E" | tee -a "$ISCRILOG"
+								writelog "INFO" "${FUNCNAME[0]} - Removed temporary '$TEVALSC'" "X" "$ISCRILOG"
 							fi
 
-							writelog "INFO" "${FUNCNAME[0]} - '$EVALSC' - STOP - '$EARLYPROT run $ISCEXE $EVSC'" "E" | tee -a "$ISCRILOG"
+							writelog "INFO" "${FUNCNAME[0]} - '$EVALSC' - STOP - '$EARLYPROT run $ISCEXE $EVSC'" "X" "$ISCRILOG"
 						else
-							writelog "INFO" "${FUNCNAME[0]} - '$EVALSC' - SKIP - '$SRCEVSC' not found" "E" | tee -a "$ISCRILOG"
+							writelog "INFO" "${FUNCNAME[0]} - '$EVALSC' - SKIP - '$SRCEVSC' not found" "X" "$ISCRILOG"
 						fi
 					# filter get-current-step command - this only updates the steam install gui process.
 					elif grep -q "$GECUST" <<< "$@"; then
@@ -16865,15 +16878,15 @@ function checkFirstTimeRun {
 						printf '\n%s\n' "$STINFO"	# heh, hello Steam Gui
 					# should not happen, but better log it anyway just in case:
 					else
-						writelog "SKIP" "${FUNCNAME[0]} - Skipping '$ISCRI' command '$*' - Exiting" "E" | tee -a "$ISCRILOG"
+						writelog "SKIP" "${FUNCNAME[0]} - Skipping '$ISCRI' command '$*' - Exiting" "X" "$ISCRILOG"
 					fi
 			else
 				if ! grep -q "$GECUST" <<< "$@"; then
-					writelog "SKIP" "${FUNCNAME[0]} - No usable Proton version found - ignoring '$ISCRI' command '$*' - Exiting" "E" | tee -a "$ISCRILOG"
+					writelog "SKIP" "${FUNCNAME[0]} - No usable Proton version found - ignoring '$ISCRI' command '$*' - Exiting" "X" "$ISCRILOG"
 				fi
 			fi
 		else
-			writelog "SKIP" "${FUNCNAME[0]} - Skipping '$ISCRI' command '$*' - Exiting" "E" | tee -a "$ISCRILOG"
+			writelog "SKIP" "${FUNCNAME[0]} - Skipping '$ISCRI' command '$*' - Exiting" "X" "$ISCRILOG"
 		fi
 	fi
 }
@@ -16976,7 +16989,7 @@ function migrateCfgs {
 	if [ ! -f "$STLCFGDIR/OK2" ]; then
 		sed "s:$SHOSTL:${PROGNAME,,}:g" -i "${STLGDESKD}/"*".desktop" 2>/dev/null
 		sed "s:$SHOSTL:${PROGNAME,,}:g" -i "${STLIDFD}/"*".desktop" 2>/dev/null
-		touch "$STLCFGDIR/OK2"
+		touch "$STLCFGDIR/OK2" 2>/dev/null
 	fi
 }
 
@@ -16985,8 +16998,9 @@ function migrateCfgs {
 function main {
 
 	initShmStl
-	rm "$TEMPLOG" "$WINRESLOG" "$PRELOG" 2>/dev/null
+	rm "$TEMPLOG" "$WINRESLOG" "$PRELOG" "$APPMALOG" "$GGDLOG" 2>/dev/null
 	touch "$PRELOG"
+	mkProjDir "$LOGDIRID"
 	initAID "$@"
 	setAIDCfgs
 	loadLangFile "$STLDEFLANG"
