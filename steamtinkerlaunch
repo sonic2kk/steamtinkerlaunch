@@ -616,10 +616,14 @@ function dlCheck {
 		if [ -f "$DLDST" ] && [ "$FLCHK" != "X" ]; then
 			chkFile
 		else
-			writelog "INFO" "${FUNCNAME[0]} - $DLTITLE"
-			notiShow "$(strFix "$NOTY_DLCUSTOMPROTON" "$DLDST")" "S"
-			writelog "INFO" "${FUNCNAME[0]} - '$WGET -q --show-progress $DLSRC -O $DLDST'"
-			"$WGET" -q --show-progress "$DLSRC" -O "$DLDST" 2>&1 | sed -u -e "s:\.::g;s:.*K::g;s:^[[:space:]]*::g"
+			if [ "$DLTITLE" != "$NON" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - $DLTITLE"
+				notiShow "$(strFix "$NOTY_DLCUSTOMPROTON" "$DLDST")" "S"
+				writelog "INFO" "${FUNCNAME[0]} - '$WGET -q --show-progress $DLSRC -O $DLDST'"
+				"$WGET" -q --show-progress "$DLSRC" -O "$DLDST" 2>&1 | sed -u -e "s:\.::g;s:.*K::g;s:^[[:space:]]*::g"
+			else
+				"$WGET" -q "$DLSRC" -O "$DLDST" 1>/dev/null 2>&1 
+			fi
 		fi
 	else
 		writelog "INFO" "${FUNCNAME[0]} - Only checking already downloaded file '$DLTITLE'"
@@ -13125,7 +13129,7 @@ function getProtonDBRating {
 			PDBAJ="$PDBDLDIR/${AID}.json"
 			if [ ! -f "$PDBAJ" ] || test "$(find "$PDBAJ" -mmin +"$(( DMIN * PDBRATINGCACHE ))")"; then
 				rm "$PDBAJ" 2>/dev/null
-				dlCheck "${PDBAPI//XXX/$AID}" "$PDBAJ" "X" "Downloading '$PDBAJ'"
+				dlCheck "${PDBAPI//XXX/$AID}" "$PDBAJ" "X" "$NON"
 			fi
 
 			if [ -f "$PDBAJ" ]; then
