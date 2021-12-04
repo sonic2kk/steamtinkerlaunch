@@ -7721,25 +7721,33 @@ function updateConfigFile {
 				sed "1s/^/## config Version: $PROGVERS\n/" -i "$CFGFILE"
 			fi
 
-			while read -r RAWLINE; do
+			UPFROMTMPL=0
+			if [ "$CFGFILE" == "$STLGAMECFG" ] && [ -f "$STLDEFGAMECFG" ]; then
+				UPFROMTMPL=1
+			fi
 
+			while read -r RAWLINE; do
 				LCAT="$(cut -d '=' -f1 <<< "$RAWLINE")"
 				LVAL="$(cut -d '=' -f2 <<< "$RAWLINE")"
 				if ! grep "^${LCAT}=" "$CFGFILE" >/dev/null ; then
 					writelog "UPDATE" "${FUNCNAME[0]} - Entry '$LCAT' is missing in '$CFGFILE' - adding it now!"
-					if grep -q "\\$" <<< "$LVAL"; then
-						if grep -q "WINX$\|WINY\|POSX\|POSY$" <<< "$LVAL"; then
-							VARNAM=${LVAL//\$/DEF}
-						else
-							VARNAM=${LVAL//\$/}
-#							VARNAM=${VARNAM//\\} # the formatting of the lines the incoming sed command reads needs to be 100% correct (f.e. no trainling whitespace)
-#							so maybe rewrite it here later
-						fi
-						OUTVAL=${!VARNAM}
+					if [ "$UPFROMTMPL" -eq 1 ]; then
+						OUTVAL="$(grep "^${LCAT}=" "$STLDEFGAMECFG" | cut -d '=' -f2)"
+						OUTVAL="${OUTVAL//\"}"
 					else
-						OUTVAL="$LVAL"
+						if grep -q "\\$" <<< "$LVAL"; then
+							if grep -q "WINX$\|WINY\|POSX\|POSY$" <<< "$LVAL"; then
+								VARNAM=${LVAL//\$/DEF}
+							else
+								VARNAM=${LVAL//\$/}
+#								VARNAM=${VARNAM//\\} # the formatting of the lines the incoming sed command reads needs to be 100% correct (f.e. no trainling whitespace)
+#								so maybe rewrite it here later
+							fi
+							OUTVAL=${!VARNAM}
+						else
+							OUTVAL="$LVAL"
+						fi
 					fi
-
 					ADDLINE="$LCAT=\"$OUTVAL\""
 					writelog "UPDATE" "${FUNCNAME[0]} - Adding line '$ADDLINE'"
 					echo "$ADDLINE" >> "$CFGFILE"
