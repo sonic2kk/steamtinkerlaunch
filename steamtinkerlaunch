@@ -635,8 +635,11 @@ function dlCheck {
 			fi
 		fi
 	else
-		writelog "INFO" "${FUNCNAME[0]} - Only checking already downloaded file '$DLTITLE'"
-		FLCHK="$1"	
+		FLCHK="$1"
+		DLDST="$2"
+		INCHK="$4"
+		writelog "INFO" "${FUNCNAME[0]} - Only checking already downloaded file '$DLDST'"
+		chkFile
 	fi
 
 	if [ -n "$INCHK" ] && [ "$INCHK" != "$NON" ]; then
@@ -3095,8 +3098,16 @@ function dlCustomProton {
 	PROTNAME="${PROTNAMERAW//.zip/}"
 
 	if [ -d "$CUPROEXTDIR/$PROTNAME" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - Directory '$CUPROEXTDIR/$PROTNAME' already exists - nothing to extract"
+		writelog "INFO" "${FUNCNAME[0]} - directory '$CUPROEXTDIR/$PROTNAME' already exists - nothing to extract"
 	else
+		# only "-STL" and "-GE" proton have a sha512sum
+		if grep -q "\-GE" <<< "$CPURLFILE" || grep -q "\-STL" <<< "$CPURLFILE"; then
+			DLCHK="sha512sum"
+			writelog "INFO" "${FUNCNAME[0]} - checking if the checksum of the already downloaded file is correct '${CPURL%%.tar*}.${DLCHK}'"
+			INCHK="$("$WGET" -q "${CPURL%%.tar*}.${DLCHK}" -O - | cut -d ' ' -f1)"
+			dlCheck "$DLCHK" "$DSTDL" "C" "$INCHK"
+		fi
+
 		if grep -q "\.tar\." <<< "$DSTDL"; then
 			notiShow "$(strFix "$NOTY_DLCUSTOMPROTON5" "$CPURLFILE")" "S"
 
