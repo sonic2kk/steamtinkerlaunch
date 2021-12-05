@@ -1152,7 +1152,7 @@ function checkSGDbApi {
 function getGrid {
 	if checkSGDbApi; then
 
-		URLSTR="$("$WGET" --header="Authorization: Bearer $SGDBAPIKEY" -q "${STEAMGRIDDBAPI}/${1}?styles=${SGDBSTYLES}&dimensions=${SGDBDIMS}&types=${SGDBTYPES}&nsfw=${SGDBNSFW}&humor=${SGDBHUMOR}" -O - | "$JQ" -r '.data' | "$JQ" '.[0].url')"
+		URLSTR="$("$WGET" --header="Authorization: Bearer $SGDBAPIKEY" -q "${STEAMGRIDDBAPI}/${1}?styles=${SGDBSTYLES}&dimensions=${SGDBDIMS}&types=${SGDBTYPES}&nsfw=${SGDBNSFW}&humor=${SGDBHUMOR}" -O - 2> >(grep -v "SSL_INIT")| "$JQ" -r '.data' | "$JQ" '.[0].url')"
 
 		GRIDDLURL="${URLSTR//\"}"
 		if grep -q "^https" <<< "$GRIDDLURL"; then
@@ -3084,7 +3084,7 @@ function dlCustomProton {
 		# only "-STL" and "-GE" proton have a sha512sum
 		if grep -q "\-GE" <<< "$CPURLFILE" || grep -q "\-STL" <<< "$CPURLFILE"; then
 			DLCHK="sha512sum"
-			INCHK="$("$WGET" -q "${CPURL%%.tar*}.${DLCHK}" -O - | cut -d ' ' -f1)"
+			INCHK="$("$WGET" -q "${CPURL%%.tar*}.${DLCHK}" -O - 2> >(grep -v "SSL_INIT") | cut -d ' ' -f1)"
 		fi
 		dlCheck "$CPURL" "$DSTDL" "$DLCHK" "Downloading '$CPURL' to '$CUSTPROTDLDIR'" "$INCHK"
 	else
@@ -3104,7 +3104,7 @@ function dlCustomProton {
 		if grep -q "\-GE" <<< "$CPURLFILE" || grep -q "\-STL" <<< "$CPURLFILE"; then
 			DLCHK="sha512sum"
 			writelog "INFO" "${FUNCNAME[0]} - checking if the checksum of the already downloaded file is correct '${CPURL%%.tar*}.${DLCHK}'"
-			INCHK="$("$WGET" -q "${CPURL%%.tar*}.${DLCHK}" -O - | cut -d ' ' -f1)"
+			INCHK="$("$WGET" -q "${CPURL%%.tar*}.${DLCHK}" -O - 2> >(grep -v "SSL_INIT") | cut -d ' ' -f1)"
 			dlCheck "$DLCHK" "$DSTDL" "C" "$INCHK"
 		fi
 
@@ -3177,7 +3177,7 @@ function createDLProtList {
 		rm "$PROTDLLIST" 2>/dev/null
 		while read -r CPURL; do
 			if grep -q "$GHURL" <<< "${!CPURL}"; then
-				"$WGET" -q "${!CPURL}" -O - | grep "tar.gz\|zip\|tar.xz" | grep "releases" | grep -oE '\"/[^\\"]+' | sed "s|^\"|$GHURL|g" >> "$PROTDLLIST"
+				"$WGET" -q "${!CPURL}" -O - 2> >(grep -v "SSL_INIT") | grep "tar.gz\|zip\|tar.xz" | grep "releases" | grep -oE '\"/[^\\"]+' | sed "s|^\"|$GHURL|g" >> "$PROTDLLIST"
 			fi
 		done <<< "$(grep "^CP_" "$STLURLCFG" | cut -d '=' -f1)"
 	fi
@@ -5540,7 +5540,7 @@ function initSteamVR {
 
 function dlOvrFSR {
 	function getLatestOVRFSR {
-		basename "$("$WGET" -q "$OVRFSRURL" -O - | grep -E 'releases.*download.*zip' | cut -d '"' -f2 | head -n1)"
+		basename "$("$WGET" -q "$OVRFSRURL" -O - 2> >(grep -v "SSL_INIT") | grep -E 'releases.*download.*zip' | cut -d '"' -f2 | head -n1)"
 	}
 
 	DLDST="$STLDLDIR/$OVFS"
@@ -6547,7 +6547,7 @@ function createShaderRepoList {
 
 	if [ ! -f "$SHADREPOLIST" ] || test "$(find "$SHADREPOLIST" -mmin +"$MAXAGE")"; then	
 		# if this breaks, we'll use bundled static url list instead
-		"$WGET" -q "$SHADREPOURL" -O - | sed -n '/Repository</,/table>/p' | grep "^<td>" | awk 'ORS=NR%3?FS:RS' | grep -v "https://blues" | sed "s:<td><a rel=\"nofollow\" class=\"external text\" href=::; s:</a></td> <td>:;:; s:</td> <td>:;:; s:\">:\";:; s:<br />: :; s: ;:;:; s:/tree/master::; s:/reshade/Shaders::" > "$SHADREPOLIST"
+		"$WGET" -q "$SHADREPOURL" -O - 2> >(grep -v "SSL_INIT") | sed -n '/Repository</,/table>/p' | grep "^<td>" | awk 'ORS=NR%3?FS:RS' | grep -v "https://blues" | sed "s:<td><a rel=\"nofollow\" class=\"external text\" href=::; s:</a></td> <td>:;:; s:</td> <td>:;:; s:\">:\";:; s:<br />: :; s: ;:;:; s:/tree/master::; s:/reshade/Shaders::" > "$SHADREPOLIST"
 	fi
 
 	RCL="repocustomlist.txt"
@@ -9508,7 +9508,7 @@ function dlFWS {
 	fi
 	DLCHK="md5sum"
 
-	INCHK="$("$WGET" -q "${FWSURL%%/fws*}" -O - | grep -A1 "x${SPAT} ZIP Package" | grep MD5 | grep -oP '> \K[^<]+')"
+	INCHK="$("$WGET" -q "${FWSURL%%/fws*}" -O - 2> >(grep -v "SSL_INIT") | grep -A1 "x${SPAT} ZIP Package" | grep MD5 | grep -oP '> \K[^<]+')"
 	DLDST="$FWSDLDIR/$FWSARCH/$DSTFILE"
 	
 	if [ ! -f "$DLDST" ]; then
@@ -10795,7 +10795,7 @@ function setVortexDLMime {
 function getLatestVortVer {
 	VSET="$VTX-setup"
 	writelog "INFO" "${FUNCNAME[0]} - Search for latest ${VTX^} stable Release"
-	VORTEXSETUP="$("$WGET" -q "${VORTEXRELURL}/latest" -O - | grep -m1 "$VSET" | grep -oE "${VSET}[^\"]+")"
+	VORTEXSETUP="$("$WGET" -q "${VORTEXRELURL}/latest" -O - 2> >(grep -v "SSL_INIT") | grep -m1 "$VSET" | grep -oE "${VSET}[^\"]+")"
 	writelog "INFO" "${FUNCNAME[0]} - Found '$VORTEXSETUP'"
 	echo "VORTEXSETUP=$VORTEXSETUP" > "$VTST"
 }
@@ -10818,7 +10818,7 @@ function dlLatestVortex {
 			DLURL="$VORTEXRELURL/download/v$VORTEXVERSION/$VORTEXSETUP"
 			# no idea how the sha512 is formatted in the yaml, so simply checking the size
 			DLCHK="stat"
-			INCHK="$("$WGET" -q "${DLURL//$VORTEXSETUP/latest.yml}" -O - | grep "size:" | gawk -F': ' '{print $2}')"
+			INCHK="$("$WGET" -q "${DLURL//$VORTEXSETUP/latest.yml}" -O - 2> >(grep -v "SSL_INIT") | grep "size:" | gawk -F': ' '{print $2}')"
 
 			writelog "INFO" "${FUNCNAME[0]} - Downloading $VORTEXSETUP to $VORTEXDLDIR from '$DLURL'"
 			if [ -n "$1" ]; then
@@ -11522,7 +11522,7 @@ function VortexOptions {
 	if [ -f "${VORTEXINSTDIR}/${VTXRAA}" ]; then
 		TT_CODA="$(printf '%s\n%s\n' "${TT_CODA}" "Version installed: $(getInstVtxVers)")"
 	fi
-
+	mkProjDir "$VORTEXDLDIR"
 	VTXDLV="$(find "${VORTEXDLDIR}" -name "${VTX}-setup*" | sort -V | tail -n1 | awk -F'${VTX}-setup' '{print $NF}')"
 	if [ -n "$VTXDLV" ]; then
 		VSD1="${VTXDLV//${VORTEXDLDIR}\/${VTX}-setup-}"
@@ -11677,7 +11677,7 @@ function installVortexGui {
 	if [ -f "${VORTEXINSTDIR}/${VTXRAA}" ]; then
 		GUI_VTXINST="$(printf '%s\n%s\n' "${GUI_VTXINST}" "Version installed: $(getInstVtxVers)")"
 	fi
-
+	mkProjDir "$VORTEXDLDIR"
 	VTXDLV="$(find "${VORTEXDLDIR}" -name "${VTX}-setup*" | sort -V | tail -n1 | awk -F'${VTX}-setup' '{print $NF}')"
 	if [ -n "$VTXDLV" ]; then
 		VSD1="${VTXDLV//${VORTEXDLDIR}\/${VTX}-setup-}"
@@ -11763,7 +11763,7 @@ function getLatestMO2Ver {
 	MO2SET="Mod.Organizer"
 
 	writelog "INFO" "${FUNCNAME[0]} - Search for latest '$MO2SET' Release"
-	MO2SETUP="$("$WGET" -q "${MO2DLURL}" -O - | grep "exe" | grep -m1 "$MO2SET" | grep -oE "${MO2SET}[^\"]+")"
+	MO2SETUP="$("$WGET" -q "${MO2DLURL}" -O - 2> >(grep -v "SSL_INIT") | grep "exe" | grep -m1 "$MO2SET" | grep -oE "${MO2SET}[^\"]+")"
 }
 
 function dlLatestMO2 {
@@ -12188,7 +12188,7 @@ function checkMO2 {
 # dprs:
 function dlLatestDprs {
 	writelog "INFO" "${FUNCNAME[0]} - Search for latest $DPRS version online"
-	LATDPRS="$("$WGET" -q "${DPRSRELURL}/latest" -O - | grep -m1 "${DPRS}-v*.*.exe" | grep -oE "${DPRS}-v[^\"]+")"
+	LATDPRS="$("$WGET" -q "${DPRSRELURL}/latest" -O - 2> >(grep -v "SSL_INIT") | grep -m1 "${DPRS}-v*.*.exe" | grep -oE "${DPRS}-v[^\"]+")"
 
 	if [ -n "$LATDPRS" ]; then
 		DSPATH="$DPRSDLDIR/$LATDPRS"
@@ -12215,7 +12215,7 @@ function dlLatestDepsProg {
 	DEPS64ZIP="${DEPS}_x64_Release.zip"
 	DEPS32ZIP="${DEPS64ZIP//64/86}"
 
-	LATDEPSR1="$("$WGET" -q "${DEPURL}/latest" -O - | grep -m1 "$DEPS64ZIP")"
+	LATDEPSR1="$("$WGET" -q "${DEPURL}/latest" -O - 2> >(grep -v "SSL_INIT") | grep -m1 "$DEPS64ZIP")"
 	LATDEPSR2="${LATDEPSR1%/*}"
 	LATDEPSV="${LATDEPSR2##*/}"
 
@@ -13264,7 +13264,7 @@ function getProtonDBRating {
 				"$JQ" -r '. | "\(.confidence);\(.score);\(.total);\(.trendingTier);\(.bestReportedTier)"' "$PDBAJ"
 			fi
 		else
-			"$WGET" -q "${PDBAPI//XXX/$AID}" -O - | "$JQ" -r '. | "\(.confidence);\(.score);\(.total);\(.trendingTier);\(.bestReportedTier)"'
+			"$WGET" -q "${PDBAPI//XXX/$AID}" -O - 2> >(grep -v "SSL_INIT") | "$JQ" -r '. | "\(.confidence);\(.score);\(.total);\(.trendingTier);\(.bestReportedTier)"'
 		fi
 	fi
 }
@@ -13343,11 +13343,11 @@ function dlConty {
 	}
 
 	mkProjDir "$CONTYDLDIR"
-	CONTYDLVERS="$("$WGET" -q "$CONTYRELURL" -O - | grep -m1 "download.*.$CONTY" | grep -oP 'releases\K[^"]+')"
+	CONTYDLVERS="$("$WGET" -q "$CONTYRELURL" -O - 2> >(grep -v "SSL_INIT") | grep -m1 "download.*.$CONTY" | grep -oP 'releases\K[^"]+')"
 	CONTYVERS="${CONTYDLVERS%/*}"
 	CONTYVERS="${CONTYVERS##*/}"
 	
-	INCHK="$("$WGET" -q "${CONTYRELURL}/tag/${CONTYVERS}" -O - | grep "SHA256" -A10 | grep -m1 "${CONTY}" | cut -d ' ' -f1)"
+	INCHK="$("$WGET" -q "${CONTYRELURL}/tag/${CONTYVERS}" -O - 2> >(grep -v "SSL_INIT")| grep "SHA256" -A10 | grep -m1 "${CONTY}" | cut -d ' ' -f1)"
 		
 	if [ -f "$CONTYDLDIR/$CONTY" ]; then
 		if [ "$UPDATECONTY" -eq 1 ]; then
@@ -13399,7 +13399,7 @@ function updateConty {
 			writelog "INFO" "${FUNCNAME[0]} - No Conty version file found in - so simply downloading latest release"
 			StatusWindow "$(strFix "$NOTY_DLCUSTOMPROTON" "${CONTY%%.*}")" "dlConty" "DownloadContyStatus"
 		else
-			CONTYDLVERS="$("$WGET" -q "$CONTYRELURL" -O - | grep -m1 "download.*.$CONTY" | grep -oP 'releases\K[^"]+')"
+			CONTYDLVERS="$("$WGET" -q "$CONTYRELURL" -O - 2> >(grep -v "SSL_INIT") | grep -m1 "download.*.$CONTY" | grep -oP 'releases\K[^"]+')"
 			CONTYVERS="${CONTYDLVERS%/*}"
 			CONTYVERS="${CONTYVERS##*/}"
 			if [ -f "$CONTYDLDIR/version.txt" ]; then
@@ -14068,7 +14068,7 @@ function createDLWineList {
 		rm "$WINEDLLIST" 2>/dev/null
 		while read -r CWURL; do
 		if grep -q "$GHURL" <<< "${!CWURL}"; then
-			"$WGET" -q "${!CWURL}" -O - | grep "tar.gz\|zip\|tar.xz" | grep "releases" | grep -oE '\"/[^\\"]+' | sed "s|^\"|$GHURL|g" >> "$WINEDLLIST"
+			"$WGET" -q "${!CWURL}" -O - 2> >(grep -v "SSL_INIT") | grep "tar.gz\|zip\|tar.xz" | grep "releases" | grep -oE '\"/[^\\"]+' | sed "s|^\"|$GHURL|g" >> "$WINEDLLIST"
 		fi
 		done <<< "$(grep "^CW_" "$STLURLCFG" | cut -d '=' -f1)"
 	fi
@@ -15706,7 +15706,7 @@ function createMetaData {
 }
 
 function getLatestX64dbgSnap {
-	basename "$("$WGET" -q "$X64DBGURL" -O - | grep -E 'releases.*download.*snapshot.*zip' | cut -d '"' -f2 | head -n1)"
+	basename "$("$WGET" -q "$X64DBGURL" -O - 2> >(grep -v "SSL_INIT") | grep -E 'releases.*download.*snapshot.*zip' | cut -d '"' -f2 | head -n1)"
 }
 
 function dlX64Dbg {
