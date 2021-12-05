@@ -3122,7 +3122,7 @@ function dlCustomProton {
 					touch "$PROTBUMPTEMP"
 				fi
 			else
-				notiShow "$(strFix "$NOTY_DLCUSTOMPROTON6" "$CPURL")" "S"
+				notiShow "$(strFix "$NOTY_DLCUSTOMPROTON6" "$DSTDL")" "S"
 				writelog "SKIP" "${FUNCNAME[0]} - Archive doesn't seem to contain a 'proton' file"
 			fi
 		elif grep -q "\.zip$" <<< "$DSTDL"; then
@@ -11574,7 +11574,7 @@ function setDotNetWine {
 		fi
 	fi
 
-	if [ -f "$DNPROTON" ]; then
+	if [ -n "$DNPROTON" ] && [ -f "$DNPROTON" ]; then
 		export "$2"="$DNPROTON"
 		CHECKDNWINED="$(dirname "$DNPROTON")/$DBW"
 		CHECKDNWINEF="$(dirname "$DNPROTON")/$FBW"
@@ -11596,7 +11596,7 @@ function setDotNetWine {
 			updateConfigEntry "$USEDNPROTONVAR" "$USEDNPROTON" "$STLDEFGLOBALCFG"
 		fi
 	else
-		writelog "ERROR" "${FUNCNAME[0]} - DNPROTON '$DNPROTON' was not found - can't continue" "E"
+		writelog "ERROR" "${FUNCNAME[0]} - DNPROTON was not found - can't continue" "E"
 	fi
 }
 
@@ -11629,22 +11629,26 @@ function installVortex {
 		if [ -f "$VORTEXEXE" ]; then
 			writelog "SKIP" "${FUNCNAME[0]} - '$VORTEXEXE' does already exists - nothing to install - skipping" "E"
 		else
-			writelog "INFO" "${FUNCNAME[0]} - Using '$VORTEXPROTON' for installation" "E"
-			STEAM_COMPAT_CLIENT_INSTALL_PATH="$SROOT" STEAM_COMPAT_DATA_PATH="$VORTEXCOMPDATA" "$VORTEXPROTON" "run"
-			writelog "INFO" "${FUNCNAME[0]} - STEAM_COMPAT_CLIENT_INSTALL_PATH=\"$SROOT\" STEAM_COMPAT_DATA_PATH=\"$VORTEXCOMPDATA\" \"$VORTEXPROTON\" \"run\""
-#			WINEDEBUG="-all" WINEPREFIX="$VORTEXPFX" "$VORTEXWINE" wineboot -i 2>/dev/null
-			sleep 3
-			notiShow "$(strFix "$NOTY_INSTSTART" "${DOTN^}")" "S"
-			installDotNet "$VORTEXPFX" "$VORTEXWINE" "48"
-			notiShow "$GUI_DONE" "S"
-			sleep 3
-			writelog "INFO" "${FUNCNAME[0]} - Installing '$VSPATH' into '$VORTEXPFX'" E
-			notiShow "$(strFix "$NOTY_INSTSTART" "${VSPATH##*/}")" "S"
-			WINEDEBUG="-all" WINEPREFIX="$VORTEXPFX" "$VORTEXWINE" "$VSPATH" "/S"
-			notiShow "$(strFix "$NOTY_INSTSTOP" "${VSPATH##*/}")" "S"
-			writelog "INFO" "${FUNCNAME[0]} - Base ${VTX^} installation finished" E
-			setVortexDLMime
-			notiShow "$GUI_DONE" "S"
+			if [ ! -f "$VORTEXPROTON" ]; then
+				writelog "SKIP" "${FUNCNAME[0]} - VORTEXPROTON '$VORTEXPROTON' not found - can't continue" "E"
+			else
+				writelog "INFO" "${FUNCNAME[0]} - Using '$VORTEXPROTON' for installation" "E"
+				STEAM_COMPAT_CLIENT_INSTALL_PATH="$SROOT" STEAM_COMPAT_DATA_PATH="$VORTEXCOMPDATA" "$VORTEXPROTON" "run"
+				writelog "INFO" "${FUNCNAME[0]} - STEAM_COMPAT_CLIENT_INSTALL_PATH=\"$SROOT\" STEAM_COMPAT_DATA_PATH=\"$VORTEXCOMPDATA\" \"$VORTEXPROTON\" \"run\""
+#				WINEDEBUG="-all" WINEPREFIX="$VORTEXPFX" "$VORTEXWINE" wineboot -i 2>/dev/null
+				sleep 3
+				notiShow "$(strFix "$NOTY_INSTSTART" "${DOTN^}")" "S"
+				installDotNet "$VORTEXPFX" "$VORTEXWINE" "48"
+				notiShow "$GUI_DONE" "S"
+				sleep 3
+				writelog "INFO" "${FUNCNAME[0]} - Installing '$VSPATH' into '$VORTEXPFX'" E
+				notiShow "$(strFix "$NOTY_INSTSTART" "${VSPATH##*/}")" "S"
+				WINEDEBUG="-all" WINEPREFIX="$VORTEXPFX" "$VORTEXWINE" "$VSPATH" "/S"
+				notiShow "$(strFix "$NOTY_INSTSTOP" "${VSPATH##*/}")" "S"
+				writelog "INFO" "${FUNCNAME[0]} - Base ${VTX^} installation finished" E
+				setVortexDLMime
+				notiShow "$GUI_DONE" "S"
+			fi
 		fi
 	else
 		writelog "SKIP" "${FUNCNAME[0]} - '$VSPATH' not found - nothing to install - skipping"
