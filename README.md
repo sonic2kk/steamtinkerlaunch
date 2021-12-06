@@ -83,7 +83,7 @@ Feel free to contribute to the project - there are many possibilities to do so:
 ### Community Platforms:
 
 - Reddit: https://www.reddit.com/r/SteamTinkerLaunch
-- Discord: https://discord.gg/sE52kB7a
+- Discord: https://discord.gg/Y7ApcwnUcm
 - Matrix: https://matrix.to/#/#steamtinkerlaunch:matrix.org
 - Github discussions: https://github.com/frostworx/steamtinkerlaunch/discussions
 
