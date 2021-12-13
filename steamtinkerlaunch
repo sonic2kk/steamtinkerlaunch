@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v8.1.20211213"
+PROGVERS="v8.1.20211214"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -138,6 +138,8 @@ F1ACTION="bash -c OpenWiki"
 F1ACTIONCG="bash -c setColGui"
 BTS="backup-timestamp"
 DUMMYBIN="echo"
+YADAPPIMAGE="Yad-8418e37-x86_64.AppImage"
+
 ### default vars ###
 
 if [ -z "$XDG_CONFIG_HOME" ]; then
@@ -2100,6 +2102,7 @@ function setDefaultCfgValues {
 		if [ -z "$SPEKURL" ]							; then	SPEKURL="https://sk-data.special-k.info/";fi
 		if [ -z "$SPEKCOMPURL" ]						; then	SPEKCOMPURL="https://www.pcgamingwiki.com/wiki/List_of_games_compatible_with_Special_K#Compatibility_list";fi
 		if [ -z "$FWSURL" ]								; then	FWSURL="https://www.${FWS,,}.org/fws";fi
+		if [ -z "$YAIURL" ]								; then	YAIURL="$GHURL/frostworx/steamtinkerlaunch-tweaks/releases/download"; fi
 	}
 
 	function setDefaultCfgValuesglobal {
@@ -2393,6 +2396,8 @@ function saveCfg {
 			echo "SPEKCOMPURL=\"$SPEKCOMPURL\""
 			echo "## $FWS DL URL"
 			echo "FWSURL=\"$FWSURL\""
+			echo "## $YAD appimage url"
+			echo "YAIURL=\"$YAIURL\""
 			} >> "$1"
 			#ENDsaveCfgurl
 		fi
@@ -12535,29 +12540,25 @@ function setYadBin {
 		fi
 
 	elif [ "$1" == "ai" ] || [ "$1" == "appimage" ]; then
-		writelog "ERROR" "${FUNCNAME[0]} - The 3rd party Yad AppImage used before is broken unfortunately" "E"
-		exit
-		{
-		YAI="$STLDLDIR/Yad-313ada9-x86_64.AppImage"
-		if [ -f "$YAI" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Found Yad AppImage under '$YAI'"
+		YAIDL="$YAIURL/$YADAPPIMAGE/$YADAPPIMAGE"
+		if [ -f "$YAIDST" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Found Yad AppImage under '$YAIDST'"
 		else
-			YAZ="yad-appimage.zip"
-			YAIURL="$PROJECTPAGE/files/5451226/$YAZ"
-			dlCheck "$YAIURL" "$STLDLDIR/$YAZ" "X" "Downloading AppImage from '$YAIURL'"
-			"$UNZIP" -q "$STLDLDIR/$YAZ" -d "$STLDLDIR"
-			rm "$STLDLDIR/$YAZ" 2>/dev/null
+			YAIDST="$STLDLDIR/$YADAPPIMAGE"
+			DLCHK="sha512sum"
+			INCHK="$("$WGET" -q "${YAIDL}.${DLCHK}" -O - 2> >(grep -v "SSL_INIT") | cut -d ' ' -f1)"
+			dlCheck "$YAIDL" "$YAIDST" "$DLCHK" "Downloading '$YAIDL' to '$YAIDST'" "$INCHK"
 		fi
-		if [ -f "$YAI" ]; then
-			YADFILE="$YAI"
+		if [ -f "$YAIDST" ]; then
+			YADFILE="$YAIDST"
 		fi
-		}
 	else
 		writelog "ERROR" "${FUNCNAME[0]} - '$1' is no valid option"
 	fi
 	
 	if [ -n "$YADFILE" ]; then
 		MINYAD="7.2"
+		chmod +x "$YADFILE"
 		YADVER="$("$YADFILE" --version | tail -n1 | cut -d ' ' -f1)"
 		if [ "$(printf '%s\n' "$MINYAD" "$YADVER" | sort -V | head -n1)" != "$MINYAD" ] || grep -qi "[A-Z]" <<< "$YADVER" ; then
 			writelog "ERROR" "${FUNCNAME[0]} - Version for '$YADFILE' is invalid. You need to at least version '$MINYAD'"
@@ -15155,7 +15156,7 @@ function howto {
 	echo "                                       <yad binary> can be either"
 	echo "                                       <absolute/path>"
 	echo "                                       <conty>"
-#	echo "                                       <ai> or <appimage>"
+	echo "                                       <ai> or <appimage>"
 	echo "                                       (see Wiki for details)"
 }
 
