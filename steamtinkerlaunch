@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v8.1.20211208"
+PROGVERS="v8.1.20211213"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -743,7 +743,7 @@ function createDesktopIconFile {
 	INTDTFILE="$STLIDFD/$AID.desktop"
 
 	if [ -f "$INTDTFILE" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - Already have an internal desktop file '$INTDTFILE' - skipping"
+		writelog "INFO" "${FUNCNAME[0]} - Already have an internal desktop file '$INTDTFILE'"
 	else
 		if [ -n "$AID" ] && [ ! -f "$WANTGPNG" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Don't have a desktop icon yet - trying to create it"
@@ -3712,7 +3712,7 @@ function EditorDialog {
 	fi
 	
 	if [ "$UUUSEPATCH" -eq 1 ] || [ "$UUUSEVR" -eq 1 ]; then
-		UUUPATCHFILE="$(find "$GAMEDIR" -name "$UUUPATCH")"
+		UUUPATCHFILE="$(find "$MEGAMEDIR" -name "$UUUPATCH")"
 		if	[ -f "$UUUPATCHFILE" ]; then
 			CfgFiles+=("$UUUPATCHFILE")
 		fi
@@ -4812,6 +4812,7 @@ function MainMenu {
 
 	TT_OPENURL="Help Url Gui"
 
+	fixCustomMeta "$CUMETA/$AID.conf" # will be removed again later
 	loadCfg "$CUMETA/$AID.conf" X
 	loadCfg "$GEMETA/$AID.conf" X
 
@@ -5748,25 +5749,29 @@ function getGameWindowPID {
 				SYMCWD="$(readlink "/proc/$TESTPID/cwd")"
 				SYMEXE="$(readlink "/proc/$TESTPID/exe")"
 				
-				if [ -n "$EXECUTABLE" ] && [ "$EXECUTABLE" == "$(cat "/proc/$TESTPID/comm")" ]; then
-					writelog "WAIT" "${FUNCNAME[0]} - Found PID '$TESTPID' for game 'EXECUTABLE' '$EXECUTABLE' - leaving loop"
-					FOUNDWIN="$YES"
-					break;
-				elif [ -n "$GE" ] && [ "$GE" == "$(cut -d '.' -f1 < "/proc/$TESTPID/comm")" ]; then
-					writelog "WAIT" "${FUNCNAME[0]} - Found PID '$TESTPID' for game executable 'GE' '$GE' - leaving loop"
-					FOUNDWIN="$YES"
+				if [ -z "$TESTPID" ]; then
 					break;
 				else
-					# might not even be required anymore - maybe remove later:
-					if [[ "$SYMCWD" == "$EFD" ]] && [[ "$SYMEXE" != *"$YAD"* ]]; then
-						writelog "WAIT" "${FUNCNAME[0]} - Found PID '$TESTPID' for CWD '$SYMCWD' with EXE '$SYMEXE' - leaving loop"
+					if [ -n "$EXECUTABLE" ] && [ "$EXECUTABLE" == "$(cat "/proc/$TESTPID/comm")" ]; then
+						writelog "WAIT" "${FUNCNAME[0]} - Found PID '$TESTPID' for game 'EXECUTABLE' '$EXECUTABLE' - leaving loop"
 						FOUNDWIN="$YES"
 						break;
-					fi
-					if [ -n "$STEAM_COMPAT_CLIENT_INSTALL_PATH" ] && [[ "$SYMCWD" == "$STEAM_COMPAT_CLIENT_INSTALL_PATH" ]] && [[ "$SYMEXE" != *"$YAD"* ]]; then
-						writelog "WAIT" "${FUNCNAME[0]} - Found PID '$TESTPID' for STEAM_COMPAT_CLIENT_INSTALL_PATH '$SYMCWD' with EXE '$SYMEXE' - leaving loop"
+					elif [ -n "$GE" ] && [ "$GE" == "$(cut -d '.' -f1 < "/proc/$TESTPID/comm")" ]; then
+						writelog "WAIT" "${FUNCNAME[0]} - Found PID '$TESTPID' for game executable 'GE' '$GE' - leaving loop"
 						FOUNDWIN="$YES"
 						break;
+					else
+						# might not even be required anymore - maybe remove later:
+						if [[ "$SYMCWD" == "$EFD" ]] && [[ "$SYMEXE" != *"$YAD"* ]]; then
+							writelog "WAIT" "${FUNCNAME[0]} - Found PID '$TESTPID' for CWD '$SYMCWD' with EXE '$SYMEXE' - leaving loop"
+							FOUNDWIN="$YES"
+							break;
+						fi
+						if [ -n "$STEAM_COMPAT_CLIENT_INSTALL_PATH" ] && [[ "$SYMCWD" == "$STEAM_COMPAT_CLIENT_INSTALL_PATH" ]] && [[ "$SYMEXE" != *"$YAD"* ]]; then
+							writelog "WAIT" "${FUNCNAME[0]} - Found PID '$TESTPID' for STEAM_COMPAT_CLIENT_INSTALL_PATH '$SYMCWD' with EXE '$SYMEXE' - leaving loop"
+							FOUNDWIN="$YES"
+							break;
+						fi
 					fi
 				fi
 				writelog "WAIT" "${FUNCNAME[0]} - Sec $COUNTER/$MAXWAIT Game Window with pwd '$EFD' not yet in front"
@@ -5900,7 +5905,7 @@ function getGameDir {
 					TEST="$(find "$CUMETA" | grep "$1")"
 					if [ -f "$TEST" ]; then
 						source "$TEST"
-						FGDIR="$(basename "${TEST//.conf/}");$GAMEDIR"
+						FGDIR="$(basename "${TEST//.conf/}");$MEGAMEDIR"
 					fi
 				else
 					echo "No Game Dir found for '$1'"
@@ -5910,7 +5915,7 @@ function getGameDir {
 					TEST="$(find "$TICUMETA" | grep "$1")"
 					if [ -f "$TEST" ]; then
 						source "$TEST"
-						FGDIR="$(basename "${TEST//.conf/}");$GAMEDIR"
+						FGDIR="$(basename "${TEST//.conf/}");$MEGAMEDIR"
 					fi
 				else
 					echo "No Game Dir found for '$1'"
@@ -8445,6 +8450,7 @@ function OneTimeRunGui {
 		METCFG="$CUMETA/${AID}.conf"
 		if [ -f "$METCFG" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Loading Metadata '$METCFG'"
+			fixCustomMeta "$METCFG" # will be removed again later
 			loadCfg "$METCFG"
 		fi
 		if [ -n "$WINEPREFIX" ]; then
@@ -12529,6 +12535,9 @@ function setYadBin {
 		fi
 
 	elif [ "$1" == "ai" ] || [ "$1" == "appimage" ]; then
+		writelog "ERROR" "${FUNCNAME[0]} - The 3rd party Yad AppImage used before is broken unfortunately" "E"
+		exit
+		{
 		YAI="$STLDLDIR/Yad-313ada9-x86_64.AppImage"
 		if [ -f "$YAI" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Found Yad AppImage under '$YAI'"
@@ -12542,6 +12551,7 @@ function setYadBin {
 		if [ -f "$YAI" ]; then
 			YADFILE="$YAI"
 		fi
+		}
 	else
 		writelog "ERROR" "${FUNCNAME[0]} - '$1' is no valid option"
 	fi
@@ -12959,6 +12969,7 @@ function prepareLaunch {
 	writelog "INFO" "${FUNCNAME[0]} - OpenTrayIcon:"
 	openTrayIcon X
 
+	fixCustomMeta "$CUMETA/$AID.conf" # will be removed again later
 	loadCfg "$CUMETA/$AID.conf" X
 	loadCfg "$GEMETA/$AID.conf" X
 	
@@ -14059,6 +14070,163 @@ function gameArgs {
 	fi
 }
 
+function fixCustomMeta {
+	if grep -q "^GAMEDIR=" "$1"; then
+		writelog "INFO" "${FUNCNAME[0]} - Renaming variable 'GAMEDIR' to 'MEGAMEDIR' in '$1', because 'GAMEDIR' also exists in the generic metadata, coming from steam" "E"
+		sed "s:^GAMEDIR=:MEGAMEDIR=:" -i "$1"
+	fi	
+}
+
+function initPlay {
+	#XXXXXXXXXXXXXXXXX - far from being functional - early wip
+	HAVESLR=0
+	HAVESLRCT=0
+	HAVEREAP=0
+	HAVESCTP=0
+
+	if [ "$1" -eq "$1" ] 2>/dev/null; then
+		writelog "INFO" "${FUNCNAME[0]} - Assuming incoming argument '$1' is a SteamAppId" "E"
+		HAVID="$1"
+	elif [ -f "$1" ]; then
+		if ! grep -q ".conf$" <<< "$1"; then
+			writelog "INFO" "${FUNCNAME[0]} - Assuming incoming argument '$1' is an absolute path to a game exe" "E"
+			HAVPA="$1"
+		else
+			if grep -q "$GEMETA" <<< "$(readlink "$1")"; then
+				writelog "INFO" "${FUNCNAME[0]} - Assuming incoming argument '$1' is a generic metadata file for the requested game" "E"
+				HAVGEME="$1"
+			elif grep -q "$CUMETA" <<< "$(readlink "$1")"; then
+				writelog "INFO" "${FUNCNAME[0]} - Assuming incoming argument '$1' is a custom metadata file for the requested game" "E"
+				HAVCUME="$1"
+			else
+				writelog "WARN" "${FUNCNAME[0]} - Argument '$1' seems to be a config, but it is not inside a ${PROGNAME} meta directory - loading anyway, maybe it has useful vars" "E"
+				loadCfg "$1"
+			fi
+		fi
+	else
+		writelog "INFO" "${FUNCNAME[0]} - Assuming incoming argument '$1' is a game title" "E"
+		HAVTI="$1"
+	fi
+	
+	if [ -n "$HAVTI" ]; then
+		CKHAVGEME="$(find "$TIGEMETA" -iname "$HAVTI.conf")"
+		if [ -f "$CKHAVGEME" ]; then
+			HAVGEME="$CKHAVGEME"
+		fi
+
+		CKHAVCUME="$(find "$TICUMETA" -iname "$HAVTI.conf")"
+		if [ -f "$CKHAVCUME" ]; then
+			HAVCUME="$CKHAVCUME"
+		fi
+		
+		if [ -z "$HAVGEME" ]; then
+			HAVGEMECFG="$(grep -Ri "NAME=\"$HAVTI" "$GEMETA/" | head -n1 | cut -d ':' -f1)"
+			CKHAVGEME="$GEMETA/$HAVGEMECFG"
+			if [ -f "$CKHAVGEME" ]; then
+				HAVGEME="$CKHAVGEME"
+			fi
+
+			CKHAVCUME="$(find "$CUMETA" -iname "$HAVGEMECFG")"
+			if [ -f "$CKHAVCUME" ]; then
+				HAVCUME="$CKHAVCUME"
+			fi
+		fi
+		
+	fi
+	
+	if [ -n "$HAVID" ]; then
+		HAVCUME="$CUMETA/$1.conf"
+		HAVGEME="$GEMETA/$1.conf"
+		HAVGACO="$STLGAMEDIRID/$1.conf"
+	fi
+
+#XXXXXXXXXXXXXXX
+
+	if [ -f "$HAVGEME" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Loading custom metadata for '$1' found under '$HAVGEME'" "E"
+		loadCfg "$HAVGEME"
+	fi
+
+	if [ -n "$GAMEID" ] && [ -z "$HAVID" ]; then
+		HAVID="$GAMEID"
+		writelog "INFO" "${FUNCNAME[0]} - Found SteamAppId '$HAVID'" "E"
+
+		if [ -z "$HAVCUME" ]; then
+			HAVCUME="$CUMETA/$HAVID.conf"
+		fi
+
+		if [ -z "$HAVGACO" ]; then
+			HAVGACO="$STLGAMEDIRID/$HAVID.conf"
+		fi
+	fi
+	
+	if [ -f "$HAVCUME" ]; then
+		fixCustomMeta "$HAVCUME"
+		writelog "INFO" "${FUNCNAME[0]} - Loading custom metadata for '$1' found under '$HAVCUME'" "E"
+		loadCfg "$HAVCUME"
+	fi
+
+	if [ -f "$HAVGACO" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Loading game config '$1' found under '$HAVGACO'" "E"
+		loadCfg "$HAVGACO"
+	fi
+
+	if [ -z "$EXECUTABLE" ] && [ -f "$HAVPA" ]; then
+		EXECUTABLE="${HAVPA##*/}"
+	fi
+
+	if [ -z "$HAVPA" ] && [ -n "$MEGAMEDIR" ] && [ -n "$EXECUTABLE" ]; then
+		CHKHAVPA="$MEGAMEDIR/$EXECUTABLE"
+		if [ -f "$CHKHAVPA" ]; then
+			HAVPA="$CHKHAVPA"
+		fi
+	fi
+	if [ -n "$MEGAMEDIR" ]; then
+		GFD="$MEGAMEDIR"
+	fi
+
+	if [ -n "$GAMEID" ] && { [ -z "$AID" ] || [ "$AID" == "$PLACEHOLDERAID" ];}; then
+		writelog "INFO" "${FUNCNAME[0]} - Setting AID to '$GAMEID'" "E"
+		AID="$GAMEID"
+		# and AID paths
+		#gamecfgs/id/31337.conf
+#	else
+#		writelog "INFO" "${FUNCNAME[0]} - Already have AID '$AID'" "E"
+	fi
+
+	if [ -z "$HAVGACO" ] && [ -n "$AID" ]; then
+		HAVGACO="$STLGAMEDIRID/$AID.conf"
+	fi
+
+	if [ -f "$HAVGACO" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Loading game config '$1' found under '$HAVGACO'" "E"
+		loadCfg "$HAVGACO"
+	fi
+
+#	if [ -z "$GAMEID" ]; then
+#
+#		skip autoCategorySettings
+#	fi
+# ORIGINAL INCOMING LAUNCH COMMAND: ''
+
+	if [ -f "$HAVPA" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Game executable used is '$HAVPA'" "E"
+		if grep -q "POSIX shell script" <<< "$(file "$OSCHECKGAMEEXE")" || grep -q "ELF.*.LSB" <<< "$(file "$HAVPA")" ; then
+			writelog "INFO" "${FUNCNAME[0]} - Assuming this is a linux binary" "E"
+			ISGAME=3
+			ORGGCMD=( "$HAVPA" )
+#			launchSteamGame
+			prepareLaunch
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Assuming this is a windows binary" "E"
+			ISGAME=2
+#			launchSteamGame
+#"$WINEPREFIX"
+#"$GAMEDIR"
+		fi
+	fi
+}
+
 function createDLWineList {
 	writelog "INFO" "${FUNCNAME[0]} - Generating list of online available Wine archives"
 	WINEDLLIST="$STLSHM/WineDL.txt"
@@ -14987,7 +15155,7 @@ function howto {
 	echo "                                       <yad binary> can be either"
 	echo "                                       <absolute/path>"
 	echo "                                       <conty>"
-	echo "                                       <ai> or <appimage>"
+#	echo "                                       <ai> or <appimage>"
 	echo "                                       (see Wiki for details)"
 }
 
@@ -15185,6 +15353,12 @@ function commandline {
 		getProtonDBRating "$2"
 	elif [ "$1" == "pickwin" ] || [ "$1" == "pw" ]; then
 		pickGameWindowNameMeta "$2" "$3"
+	elif [ "$1" == "play" ]; then
+		if [ -z "$2" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - need at a valid game name or SteamAppId of an installed game or an absolute path to a game exe as arg2 '$2'" "E"
+		else
+			echo XXXXXXXXXXXXXXXX WIP initPlay "$2"
+		fi
 	elif [ "$1" == "proton" ] || [ "$1" == "p" ]; then
 		StandaloneProtonGame "$2" "$3"
 	elif [ "$1" == "set" ]; then
@@ -15446,7 +15620,7 @@ function storeMetaData {
 	fi
 	loadCfg "$CUMETA/$MAID.conf" X
 	updateConfigEntry "WINEPREFIX" "$MPFX" "$CUMETA/$MAID.conf"
-	updateConfigEntry "GAMEDIR" "$GDIR" "$CUMETA/$MAID.conf"
+	updateConfigEntry "MEGAMEDIR" "$GDIR" "$CUMETA/$MAID.conf"
 
 	createSymLink "${FUNCNAME[0]}" "$GEMETA/$MAID.conf" "$TIGEMETA/${MGNA}.conf" X
 	createSymLink "${FUNCNAME[0]}" "$CUMETA/$MAID.conf" "$TICUMETA/${MGNA}.conf" X
@@ -16659,8 +16833,8 @@ function reCreateCompatdata {
 					writelog "INFO" "${FUNCNAME[0]} - Destination $CODA is '$STEAM_COMPAT_DATA_PATH'"
 
 					if [ -z "$STEAM_COMPAT_INSTALL_PATH" ]; then
-						if [ -n "$GAMEDIR" ]; then
-							export STEAM_COMPAT_INSTALL_PATH="$GAMEDIR"
+						if [ -n "$MEGAMEDIR" ]; then
+							export STEAM_COMPAT_INSTALL_PATH="$MEGAMEDIR"
 						elif [ -n "$EFD" ]; then
 							export STEAM_COMPAT_INSTALL_PATH="$EFD"
 						else
@@ -17199,7 +17373,7 @@ function main {
 				writelog "ERROR" "${FUNCNAME[0]} - Unknown command '$*'" "E"
 			fi
 		elif grep -q "$SAC" <<< "$@" || grep -q "$L2EA" <<< "$@"; then
-			if grep -q "update" <<< "$@"; then
+			if grep -q "update" <<< "$@" || grep -q "^play" <<< "$@" ; then
 				commandline "$@"
 			else
 				setGameVars "$@"
