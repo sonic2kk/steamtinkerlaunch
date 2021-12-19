@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v8.1.20211214"
+PROGVERS="v8.1.20211219"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -58,6 +58,7 @@ PESCAN="pescan"
 PESEC="pesec"
 PESTR="pestr"
 READPE="readpe"
+GDB="gdb"
 
 CHECKHMD=1
 X32D="x32dbg"
@@ -82,6 +83,8 @@ GGDLOG="$STLSHM/getGameData.log"
 WINRESLOG="$STLSHM/winres.log"
 GWIDFILE="$STLSHM/${PROGNAME,,}-sbsgwid"
 PIDLOCK="$STLSHM/pid.lock"
+GDBGAMERUN="$STLSHM/gdbgamerun.sh"
+GDBRUN="$STLSHM/gdbrun.sh"
 VRINITLOCK="$STLSHM/vrinit.lock"
 IGCSINITLOCK="$STLSHM/igcsinit.lock"
 VRINITRESULT="$STLSHM/vrinit.conf"
@@ -138,7 +141,6 @@ F1ACTION="bash -c OpenWiki"
 F1ACTIONCG="bash -c setColGui"
 BTS="backup-timestamp"
 DUMMYBIN="echo"
-YADAPPIMAGE="Yad-8418e37-x86_64.AppImage"
 
 ### default vars ###
 
@@ -231,6 +233,7 @@ SPEK="SpecialK"
 SPEKDLDIR="$STLDLDIR/${SPEK,,}"
 FWS="FlawlessWidescreen"
 FWSDLDIR="$STLDLDIR/${FWS,,}"
+YADAIDLDIR="$STLDLDIR/yadappimage"
 DISC="discord"
 DOTN="dotnet"
 MO2="mo2"
@@ -2103,6 +2106,7 @@ function setDefaultCfgValues {
 		if [ -z "$SPEKCOMPURL" ]						; then	SPEKCOMPURL="https://www.pcgamingwiki.com/wiki/List_of_games_compatible_with_Special_K#Compatibility_list";fi
 		if [ -z "$FWSURL" ]								; then	FWSURL="https://www.${FWS,,}.org/fws";fi
 		if [ -z "$YAIURL" ]								; then	YAIURL="$GHURL/frostworx/steamtinkerlaunch-tweaks/releases/download"; fi
+		if [ -z "$WINERELOADURL" ]						; then	WINERELOADURL="https://gist.githubusercontent.com/rbernon/cdbdc1b0e892f91e7449fcf3dda80bb7/raw/d8cf549bf751d99ed0fe515e36f99ff5c01b7287"; fi
 		if [ -z "$CEWAYBACKURL" ]						; then	CEWAYBACKURL="https://web.archive.org/web/20210118065254if_"; fi
 	}
 
@@ -2193,6 +2197,8 @@ function setDefaultCfgValues {
 		if [ -z "$DEPSAUTOUP" ]							; then	DEPSAUTOUP="0"; fi
 		if [ -z "$MO2COMPDATA" ]						; then	MO2COMPDATA="$STLMO2DIR/$CODA"; fi
 		if [ -z "$USEMO2PROTON" ]						; then	USEMO2PROTON="$DEFDOTNETPROTON"; fi
+		if [ -z "$USETERM" ]							; then	USETERM="$(command -v "xterm")"; fi
+		if [ -z "$TERMARGS" ]							; then	TERMARGS="-e"; fi
 	}
 
 	function setDefaultCfgValuesdefault_template {
@@ -2231,6 +2237,7 @@ function setDefaultCfgValues {
 		if [ -z "$RUN_CHEATENGINE" ]					; then	RUN_CHEATENGINE="0"; fi
 		if [ -z "$GAMCONWAITEXE" ]						; then	GAMCONWAITEXE="$DUMMYBIN"; fi
 		if [ -z "$RUN_X64DBG" ]							; then	RUN_X64DBG="0";	fi
+		if [ -z "$RUN_GDB" ]							; then	RUN_GDB="0";	fi
 		if [ -z "$USEVORTEX" ]							; then	USEVORTEX="0"; fi
 		if [ -z "$WAITVORTEX" ]							; then	WAITVORTEX="2"; fi
 		if [ -z "$RUN_VORTEX_WINETRICKS" ]				; then	RUN_VORTEX_WINETRICKS="0"; fi
@@ -2606,6 +2613,11 @@ function saveCfg {
 			echo "MO2COMPDATA=\"$MO2COMPDATA\""
 			echo "## $DESC_USEMO2PROTON"
 			echo "USEMO2PROTON=\"$USEMO2PROTON\""
+			echo "## $DESC_USETERM"
+			echo "USETERM=\"$USETERM\""
+			echo "## $DESC_TERMARGS"
+			echo "TERMARGS=\"$TERMARGS\""
+
 			} >> "$1"
 			#ENDsaveCfgglobal
 		fi
@@ -2693,6 +2705,8 @@ function saveCfg {
 			echo "GAMCONWAITEXE=\"$GAMCONWAITEXE\""
 			echo "## $DESC_RUN_X64DBG"
 			echo "RUN_X64DBG=\"$RUN_X64DBG\""
+			echo "## $DESC_RUN_GDB"
+			echo "RUN_GDB=\"$RUN_GDB\""
 			echo "## $DESC_USEVORTEX"
 			echo "USEVORTEX=\"$USEVORTEX\""
 			echo "## $DESC_WAITVORTEX"
@@ -4229,6 +4243,8 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_USESPECIALK!$DESC_USESPECIALK ('USESPECIALK')":CHK "${USESPECIALK/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_SPEKVERS!$DESC_SPEKVERS ('SPEKVERS')":CB "$(cleanDropDown "${SPEKVERS/#-/ -}" "test!stable!old!$DISC")" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_USEFWS!$DESC_USEFWS ('USEFWS')":CHK "${USEFWS/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_USETERM!$DESC_USETERM ('USETERM')":FL "${USETERM/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GLOBAL` \
+--field="     $GUI_TERMARGS!$DESC_TERMARGS ('TERMARGS')" "${TERMARGS/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="$(spanFont "$GUI_OPTSPROTON" "H")":LBL "SKIP" `#CAT_Proton` `#HEAD_Proton` `#MENU_GAME` `#MENU_GLOBAL` \
 --field="     $GUI_USEPROTON!$DESC_USEPROTON ('USEPROTON')":CB "$(cleanDropDown  "${USEPROTON/#-/ -}" "$PROTYADLIST")" `#CAT_Proton` `#MENU_GAME` \
 --field="     $GUI_USESLR!$DESC_USESLR ('USESLR')":CHK "${USESLR/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
@@ -4335,6 +4351,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_CUSTCONTY!$DESC_CUSTCONTY ('CUSTCONTY')":FL "${CUSTCONTY/#-/ -}" `#CAT_Tools` `#MENU_GLOBAL` \
 --field="     $GUI_UPDATECONTY!$DESC_UPDATECONTY ('UPDATECONTY')":CHK "${UPDATECONTY/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_RUN_X64DBG!$DESC_RUN_X64DBG ('RUN_X64DBG')":CHK "${RUN_X64DBG/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_RUN_GDB!$DESC_RUN_GDB ('RUN_GDB')":CHK "${RUN_GDB/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_DPRSCOMPDATA!$DESC_DPRSCOMPDATA ('DPRSCOMPDATA')":DIR "${DPRSCOMPDATA/#-/ -}" `#CAT_Tools` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_USEDPRSPROTON!$DESC_USEDPRSPROTON ('USEDPRSPROTON')":CB "$(cleanDropDown "${USEDPRSPROTON/#-/ -}" "$PROTYADLIST")" `#CAT_Tools` `#MENU_GLOBAL` \
 --field="     $GUI_DPRSUSEVDFSYMLINKS!$DESC_DPRSUSEVDFSYMLINKS ('DPRSUSEVDFSYMLINKS')":CHK "${DPRSUSEVDFSYMLINKS/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GLOBAL` \
@@ -12542,13 +12559,40 @@ function setYadBin {
 		fi
 
 	elif [ "$1" == "ai" ] || [ "$1" == "appimage" ]; then
-		YAIDL="$YAIURL/$YADAPPIMAGE/$YADAPPIMAGE"
+		YADSTLIMAGE="Yad-8418e37-x86_64.AppImage"
+		YAIDL="$YAIURL/$YADSTLIMAGE/$YADSTLIMAGE"
+		YADAPPIMAGE="$YADSTLIMAGE"
+		DLCHK="sha512sum"
+		mkProjDir "$YADAIDLDIR"
+
+		if [ -n "$2" ] && grep -q "^http" <<< "$2"; then
+			YAIDL="$2"
+			DLCHK="X"
+			if grep -q "AppImage$" <<< "$YAIDL"; then
+				YADAPPIMAGE="${YAIDL##*/}"
+			else
+				YADAPPIMAGE="Yad-$(date +%Y%m%d)-x86_64.AppImage"
+			fi
+
+			writelog "INFO" "${FUNCNAME[0]} - Trying to download $YAD from provided url '$YAIDL'"
+		elif [ -n "$2" ] && [ -f "$2" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Trying to use provided file '$2' for yad"
+			YAIDST="$2"
+			DLCHK="X"
+		elif [ -n "$2" ] && [ ! -f "$2" ]; then
+			writelog "WARN" "${FUNCNAME[0]} - Provided string '$2' is neither a http download url nor a valid absolute path to a file - downloading and using the default instead"
+		fi
+
 		if [ -f "$YAIDST" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Found Yad AppImage under '$YAIDST'"
+			writelog "INFO" "${FUNCNAME[0]} - Using Yad AppImage under '$YAIDST'"
 		else
-			YAIDST="$STLDLDIR/$YADAPPIMAGE"
-			DLCHK="sha512sum"
-			INCHK="$("$WGET" -q "${YAIDL}.${DLCHK}" -O - 2> >(grep -v "SSL_INIT") | cut -d ' ' -f1)"
+			YAIDST="$YADAIDLDIR/$YADAPPIMAGE"
+			if [ "$DLCHK" == "sha512sum" ]; then
+				INCHK="$("$WGET" -q "${YAIDL}.${DLCHK}" -O - 2> >(grep -v "SSL_INIT") | cut -d ' ' -f1)"
+			else
+				INCHK="$NON"
+			fi
+
 			dlCheck "$YAIDL" "$YAIDST" "$DLCHK" "Downloading '$YAIDL' to '$YAIDST'" "$INCHK"
 		fi
 		if [ -f "$YAIDST" ]; then
@@ -12560,7 +12604,7 @@ function setYadBin {
 	
 	if [ -n "$YADFILE" ]; then
 		MINYAD="7.2"
-		chmod +x "$YADFILE"
+		chmod +x "$YADFILE" 2>/dev/null
 		YADVER="$("$YADFILE" --version | tail -n1 | cut -d ' ' -f1)"
 		if [ "$(printf '%s\n' "$MINYAD" "$YADVER" | sort -V | head -n1)" != "$MINYAD" ] || grep -qi "[A-Z]" <<< "$YADVER" ; then
 			writelog "ERROR" "${FUNCNAME[0]} - Version for '$YADFILE' is invalid. You need to at least version '$MINYAD'"
@@ -14074,7 +14118,7 @@ function gameArgs {
 }
 
 function fixCustomMeta {
-	if grep -q "^GAMEDIR=" "$1"; then
+	if [ -f "$1" ] && grep -q "^GAMEDIR=" "$1"; then
 		writelog "INFO" "${FUNCNAME[0]} - Renaming variable 'GAMEDIR' to 'MEGAMEDIR' in '$1', because 'GAMEDIR' also exists in the generic metadata, coming from steam" "E"
 		sed "s:^GAMEDIR=:MEGAMEDIR=:" -i "$1"
 	fi	
@@ -14717,7 +14761,9 @@ function launchSteamGame {
 		else
 			# proton variants start here:
 		
-			if [ "$HAVEINPROTON" -eq 1 ]; then
+			if [ "$RUN_GDB" -eq 1 ]; then
+				GDBGAMESTARTCMD=("${ORGGCMD[@]}" "${GAMEARGSARR[@]}")
+			elif [ "$HAVEINPROTON" -eq 1 ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Not overriding Proton and using Proton provided by steam commandline '${INPROTCMD[*]}'"
 				GAMESTARTCMD=("${INPROTCMD[@]}" "$WFEAR" "${GAMESTARTCMD[@]}")
 			else
@@ -14775,6 +14821,17 @@ function launchSteamGame {
 			# start with x64dbg:
 			if [ "$RUN_X64DBG" -eq 1 ]; then
 				checkX64dbgLaunch "${GAMESTARTCMD[@]}"
+			elif [ "$RUN_GDB" -eq 1 ]; then
+				if [ -f "$(command -v "$USETERM")" ]; then
+					prepareGdb
+					injectGdb &
+					writelog "INFO" "${FUNCNAME[0]} - Starting '$SGNAID' using '$GDBGAMERUN' and attaching gdb to the running process"
+					writelog "WARN" "${FUNCNAME[0]} - This function might not always work as expected - not sure yet if it is worth to maintain"
+					notiShow "$(strFix "$NOTY_STARTPROTGDB" "$PROTONVERSION" "$GN" "$AID")"
+					"$GDBGAMERUN"
+				else
+					writelog "ERROR" "${FUNCNAME[0]} - '$GDB' was enabled, but configured terminal '$USETERM' was not found"
+				fi
 			elif [ "$RUN_DEPS" -eq 1 ]; then
 				checkDepsLaunch "${GAMESTARTCMD[@]}"
 			# start with gamemoderun:
@@ -15154,11 +15211,14 @@ function howto {
 	echo "                                       and game <SteamAppID>"
 	echo "                                       's'ave windowname for the game"
 	echo "    wiki <page>                      Opens the wiki <page> in yad"
-	echo "    yad <yad binary>                 Configure the used Yad binary"
+	echo "    yad <yad binary> <opt>           Configure the used Yad binary"
 	echo "                                       <yad binary> can be either"
 	echo "                                       <absolute/path>"
 	echo "                                       <conty>"
-	echo "                                       <ai> or <appimage>"
+	echo "                                       <ai> or <appimage> plus optional <opt>:"
+	echo "                                       <opt> can be either"
+	echo "                                         <absolute/path/to/a/yad/appimage>"
+	echo "                                         <http/s/yad/appimage/download/url>"
 	echo "                                       (see Wiki for details)"
 }
 
@@ -15555,7 +15615,7 @@ function commandline {
 		SetWineDebugChannels "$USEID"
 	elif [ "$1" == "yad" ]; then
 		if [ -n "$2" ]; then
-			setYadBin "$2"
+			setYadBin "$2" "$3"
 		else
 			writelog "INFO" "${FUNCNAME[0]} ------------------------"
 			writelog "INFO" "${FUNCNAME[0]} - arg2 '$2' needs to be a valid yad parameter"
@@ -15952,6 +16012,90 @@ function checkX64dbgLaunch {
 			writelog "INFO" "${FUNCNAME[0]} - Starting '$XDBFPATH' using extWine64Run for the game '$WGP'"
 			extWine64Run "$RUNWINE" "$XDBFPATH" "$WGP"
 		fi
+	fi
+}
+
+function prepareGdb {
+	GDBOPTS="$STLSHM/gdb.conf"
+	WIREPY="WineReload.py"
+	WINEREL="$STLSHM/$WIREPY"
+	WIREURL="$WINERELOADURL/$WIREPY"
+	GST10="gstreamer-1.0"
+
+	if [ ! -f "$WINEREL" ]; then
+		dlCheck "$WIREURL" "$WINEREL" "X" "Downloading '$DLSRC' to '$DLDST'"
+	fi
+	
+	if [ ! -f "$GDBOPTS" ]; then
+		{
+		echo "set confirm off"
+		echo "set pagination off"
+		echo "handle SIGUSR1 noprint nostop"
+		echo "handle SIGSYS noprint nostop"
+		echo "source $WINEREL"
+		} > "$GDBOPTS"
+	fi
+
+	if [ -z "$RUNPROTON" ]; then
+		setRunProtonFromUseProton
+	fi
+
+	PROTONBASEPATH="$(dirname "$RUNPROTON")/files"
+	if [ ! -d "$PROTONBASEPATH" ]; then
+		PROTONBASEPATH="$(dirname "$RUNPROTON")/dist"
+	fi
+
+	setRunWineServer "${FUNCNAME[0]}"
+
+	PBIPA="$PROTONBASEPATH/bin"
+	PLIPA="$PROTONBASEPATH/lib"
+	PLIPA64="$PROTONBASEPATH/lib64"
+
+
+	if [ -n "$(GETALTEXEPATH)" ]; then
+		WORKDIR="$(GETALTEXEPATH)"
+	else
+		WORKDIR="$EFD"
+	fi
+
+	{
+	head -n1 "$0"
+	echo "PATH=\"$PATH=:$PBIPA\" WINEDEBUG=\"-all\" WINEDLLPATH=\"${PLIPA64}/wine:${PLIPA}/wine:$WINEDLLPATH\" LD_LIBRARY_PATH=\"$LD_LIBRARY_PATH:${PLIPA64}:${PLIPA}:$WORKDIR\" \
+	WINEPREFIX=\"$GPFX\" WINEESYNC=1 WINEFSYNC=1 WINEDLLOVERRIDES=\"$WINEDLLOVERRIDES;steam.exe=b;dotnetfx35.exe=b;dxvk_config=n;d3d11=n;d3d10=n;d3d10core=n;d3d10_1=n;d3d9=n;dxgi=n\" \
+	WINE_LARGE_ADDRESS_AWARE=1 GST_PLUGIN_SYSTEM_PATH_1_0=\"${PLIPA64}/${GST10}:${PLIPA}/${GST10}:$GST_PLUGIN_SYSTEM_PATH_1_0\" WINE_GST_REGISTRY_DIR=\"${WINEPREFIX}/${GST10}/\" \
+	\"$RUNWINE\" \"steam.exe\" \"${GDBGAMESTARTCMD[*]}\""
+	} > "$GDBGAMERUN"	
+	chmod +x "$GDBGAMERUN"
+}
+
+#start gdb
+function injectGdb {
+	function setgampi {
+		GAMPI="$("$PGREP" -a "" | grep -i "${GP##*/}"  | grep "Z:" | grep -v "$PROGCMD" | cut -d ' ' -f1 | tail -n1)"
+	}
+	
+	MAXWAIT=5
+	COUNTER=0
+	
+	while ! [ "$GAMPI" -eq "$GAMPI" ] 2>/dev/null; do
+		writelog "INFO" "${FUNCNAME[0]} - setgampi"
+		setgampi
+		if [[ "$COUNTER" -ge "$MAXWAIT" ]]; then
+			writelog "ERROR" "${FUNCNAME[0]} - Timeout waiting for game pid $GAMPI - Skipping '$GDB'"
+			return 
+		fi
+		COUNTER=$((COUNTER+1))
+		sleep 1
+	done
+
+	if [ -n "$GAMPI" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Found GamePid '$GAMPI' - Starting '$GDB'"
+		{
+		head -n1 "$0"
+		echo "\"$GDB\" \"-x\" \"$GDBOPTS\" \"-p\" \"$GAMPI\""
+		} > "$GDBRUN"
+		chmod +x "$GDBRUN"
+		"$USETERM" "$TERMARGS" "bash -c \"$GDBRUN\""
 	fi
 }
 
