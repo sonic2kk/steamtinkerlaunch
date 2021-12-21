@@ -6955,76 +6955,74 @@ function installRSdll {
 
 # install reshade:
 function installReshade {
-	if [ -n "$INSTALL_RESHADE" ]; then
-		if [ "$INSTALL_RESHADE" -eq 1 ]; then
+	if [ "$INSTALL_RESHADE" -eq 1 ]; then
 
-			prepareReshadeFiles
-			setShadDestDir
+		prepareReshadeFiles
+		setShadDestDir
 
-			if [ -n "$(GETALTEXEPATH)" ]; then
-				INSTDESTDIR="$(GETALTEXEPATH)"
-			else
-				INSTDESTDIR="$SHADDESTDIR"
-			fi
+		if [ -n "$(GETALTEXEPATH)" ]; then
+			INSTDESTDIR="$(GETALTEXEPATH)"
+		else
+			INSTDESTDIR="$SHADDESTDIR"
+		fi
 
-			presetReShade "$INSTDESTDIR"
+		presetReShade "$INSTDESTDIR"
 
-			# checking for previous dll conficts between $D3D47 and $RS_D9_DEST
-			if [ -f "$INSTDESTDIR/${RS_DX_DEST//.dll/.log}" ]; then
-				if grep -q "Another ${RESH} instance was already loaded" "$INSTDESTDIR/${RS_DX_DEST//.dll/.log}"; then
-					writelog "INFO" "${FUNCNAME[0]} - Found $RS_DX_DEST conflict with $RS_D9_DEST"
-					if [ -f "$INSTDESTDIR/$RS_D9_DEST" ]; then
-						writelog "INFO" "${FUNCNAME[0]} - Removing $RS_D9_DEST"
-						rm "$INSTDESTDIR/$RS_D9_DEST"
-					else
-						writelog "SKIP" "${FUNCNAME[0]} - $RS_D9_DEST not found"
-					fi
-					
-					if [ -z "$NOD3D9" ]; then
-						writelog "INFO" "${FUNCNAME[0]} - Blocking re-installation of '$RS_D9_DEST' by setting NOD3D9=1 in '$STLGAMECFG'"
-						updateConfigEntry "NOD3D9" "1" "$STLGAMECFG"
-						export NOD3D9=1
-					fi
+		# checking for previous dll conficts between $D3D47 and $RS_D9_DEST
+		if [ -f "$INSTDESTDIR/${RS_DX_DEST//.dll/.log}" ]; then
+			if grep -q "Another ${RESH} instance was already loaded" "$INSTDESTDIR/${RS_DX_DEST//.dll/.log}"; then
+				writelog "INFO" "${FUNCNAME[0]} - Found $RS_DX_DEST conflict with $RS_D9_DEST"
+				if [ -f "$INSTDESTDIR/$RS_D9_DEST" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Removing $RS_D9_DEST"
+					rm "$INSTDESTDIR/$RS_D9_DEST"
 				else
-					writelog "INFO" "${FUNCNAME[0]} - No conflict found in old logfile ${RS_DX_DEST//.dll/.log}"
-				fi				
+					writelog "SKIP" "${FUNCNAME[0]} - $RS_D9_DEST not found"
+				fi
+				
+				if [ -z "$NOD3D9" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Blocking re-installation of '$RS_D9_DEST' by setting NOD3D9=1 in '$STLGAMECFG'"
+					updateConfigEntry "NOD3D9" "1" "$STLGAMECFG"
+					export NOD3D9=1
+				fi
 			else
-				writelog "INFO" "${FUNCNAME[0]} - No old logfile ${RS_DX_DEST//.dll/.log} found"
-			fi
-			if [ -n "$ARCHALTEXE" ] && [[ ! "$ARCHALTEXE" =~ ${DUMMYBIN}$ ]]; then
-				CHARCH="$ARCHALTEXE"
-			else
-				CHARCH="$GP"
-			fi
+				writelog "INFO" "${FUNCNAME[0]} - No conflict found in old logfile ${RS_DX_DEST//.dll/.log}"
+			fi				
+		else
+			writelog "INFO" "${FUNCNAME[0]} - No old logfile ${RS_DX_DEST//.dll/.log} found"
+		fi
+		if [ -n "$ARCHALTEXE" ] && [[ ! "$ARCHALTEXE" =~ ${DUMMYBIN}$ ]]; then
+			CHARCH="$ARCHALTEXE"
+		else
+			CHARCH="$GP"
+		fi
 
-			#32bit:
-			if [ "$(getArch "$CHARCH")" == "32" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Installing 32bit ${RESH} as '$CHARCH' is 32bit" 
-				#d3d47
-				installd3d47dll "$D3D47_32" "$INSTDESTDIR"
-				#dxgi:
-				installRSdll "$RS_DX_DEST" "0" "$RS_32"
-				#d3d9:
-				installRSdll "$RS_D9_DEST" "$NOD3D9" "$RS_32"
+		#32bit:
+		if [ "$(getArch "$CHARCH")" == "32" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Installing 32bit ${RESH} as '$CHARCH' is 32bit" 
+			#d3d47
+			installd3d47dll "$D3D47_32" "$INSTDESTDIR"
+			#dxgi:
+			installRSdll "$RS_DX_DEST" "0" "$RS_32"
+			#d3d9:
+			installRSdll "$RS_D9_DEST" "$NOD3D9" "$RS_32"
 
-			# 64bit:
-			elif [ "$(getArch "$CHARCH")" == "64" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Installing 64bit ${RESH} as '$CHARCH' is 64bit" 
-				#d3d47
-				installd3d47dll "$D3D47_64" "$INSTDESTDIR"
-				#dxgi:
-				installRSdll "$RS_DX_DEST" "0" "$RS_64"
-				#d3d9:
-				installRSdll "$RS_D9_DEST" "$NOD3D9" "$RS_64"
-			else
-				writelog "SKIP" "${FUNCNAME[0]} - ERROR in ${RESH} installation - no file information detected for '$CHARCH' or any 'neighbor file' - setting USERESHADE=0 for this session"
-				export USERESHADE=0
-			fi
+		# 64bit:
+		elif [ "$(getArch "$CHARCH")" == "64" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Installing 64bit ${RESH} as '$CHARCH' is 64bit" 
+			#d3d47
+			installd3d47dll "$D3D47_64" "$INSTDESTDIR"
+			#dxgi:
+			installRSdll "$RS_DX_DEST" "0" "$RS_64"
+			#d3d9:
+			installRSdll "$RS_D9_DEST" "$NOD3D9" "$RS_64"
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - ERROR in ${RESH} installation - no file information detected for '$CHARCH' or any 'neighbor file' - setting USERESHADE=0 for this session"
+			export USERESHADE=0
 		fi
 	fi
 }
 
-function installReshadeDepth3D {
+function installDepth3DReshade {
 	SHADERPOOL="depth3d"
 	
 	if [ -n "$RESHADE_DEPTH3D" ]; then
@@ -7062,7 +7060,7 @@ function installReshadeDepth3D {
 	fi
 }
 
-function useReshade {
+function checkReshade {
 	setShadDestDir
 
 	if [ "$USERESHADE" -eq 1 ]; then
@@ -13116,15 +13114,15 @@ function prepareLaunch {
 		installReshade
 
 		# install Depth3D Shader if RESHADE_DEPTH3D is 1
-		writelog "INFO" "${FUNCNAME[0]} - InstallReshadeDepth3D:"
-		installReshadeDepth3D
+		writelog "INFO" "${FUNCNAME[0]} - installDepth3DReshade:"
+		installDepth3DReshade
 
 		# start game with ${RESH} if USERESHADE is 1
-		writelog "INFO" "${FUNCNAME[0]} - UseReshade:"
-		useReshade
+		writelog "INFO" "${FUNCNAME[0]} - checkReshade:"
+		checkReshade
 
 		# start game with ${RESH} if USERESHADE is 1
-		writelog "INFO" "${FUNCNAME[0]} - UseSpecialK:"
+		writelog "INFO" "${FUNCNAME[0]} - useSpecialK:"
 		useSpecialK
 		
 		# open Shader Menu if CHOOSESHADERS is 1
