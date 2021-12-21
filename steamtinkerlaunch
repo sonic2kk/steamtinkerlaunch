@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v8.1.20211221"
+PROGVERS="v8.1.20211222"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -2301,6 +2301,7 @@ function setDefaultCfgValues {
 		if [ -z "$PROTON_NO_FSYNC" ]					; then	PROTON_NO_FSYNC="0"; fi
 		if [ -z "$PROTON_ENABLE_NVAPI" ]				; then	PROTON_ENABLE_NVAPI="0"; fi
 		if [ -z "$PROTON_HIDE_NVIDIA_GPU" ]				; then	PROTON_HIDE_NVIDIA_GPU="0"; fi
+		if [ -z "$USEDLSS" ]							; then	USEDLSS="0"; fi
 		if [ -z "$PROTON_FORCE_LARGE_ADDRESS_AWARE" ]	; then	PROTON_FORCE_LARGE_ADDRESS_AWARE="1"; fi
 		if [ -z "$PROTON_DUMP_DEBUG_COMMANDS" ]			; then	PROTON_DUMP_DEBUG_COMMANDS="0"; fi
 		if [ -z "$CLEANPROTONTEMP" ]					; then	CLEANPROTONTEMP="0"; fi
@@ -2830,6 +2831,8 @@ function saveCfg {
 			echo "PROTON_ENABLE_NVAPI=\"$PROTON_ENABLE_NVAPI\""
 			echo "## $DESC_PROTON_HIDE_NVIDIA_GPU"
 			echo "PROTON_HIDE_NVIDIA_GPU=\"$PROTON_HIDE_NVIDIA_GPU\""
+			echo "## $DESC_USEDLSS"
+			echo "USEDLSS=\"$USEDLSS\""
 			echo "## $DESC_PROTON_FORCE_LARGE_ADDRESS_AWARE"
 			echo "PROTON_FORCE_LARGE_ADDRESS_AWARE=\"$PROTON_FORCE_LARGE_ADDRESS_AWARE\""
 			echo "## $DESC_WINE_FULLSCREEN_INTEGER_SCALING"
@@ -4267,6 +4270,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_PROTON_NO_FSYNC!$DESC_PROTON_NO_FSYNC ('PROTON_NO_FSYNC')":CHK "${PROTON_NO_FSYNC/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_PROTON_ENABLE_NVAPI!$DESC_PROTON_ENABLE_NVAPI ('PROTON_ENABLE_NVAPI')":CHK "${PROTON_ENABLE_NVAPI/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_PROTON_PROTON_HIDE_NVIDIA_GPU!$DESC_PROTON_HIDE_NVIDIA_GPU ('PROTON_HIDE_NVIDIA_GPU')":CHK "${PROTON_HIDE_NVIDIA_GPU/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_USEDLSS!$DESC_USEDLSS ('USEDLSS')":CHK "${USEDLSS/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_PROTON_USE_WINED3D!$DESC_PROTON_USE_WINED3D ('PROTON_USE_WINED3D')":CHK "${PROTON_USE_WINED3D/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_PROTON_DEBUG_DIR!$DESC_PROTON_DEBUG_DIR ('PROTON_DEBUG_DIR')":DIR "${PROTON_DEBUG_DIR/#-/ -}" `#CAT_Proton` `#SUB_Directories` `#MENU_GAME` \
 --field="     $GUI_PROTON_DUMP_DEBUG_COMMANDS!$DESC_PROTON_DUMP_DEBUG_COMMANDS ('PROTON_DUMP_DEBUG_COMMANDS')":CHK "${PROTON_DUMP_DEBUG_COMMANDS/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
@@ -12726,9 +12730,16 @@ function prepareProton {
 			fi
 		fi
 		
-		# export DXVK_CONFIG_FILE if STLDXVKCFG was found:
+		# export DXVK_CONFIG_FILE if STLDXVKCFG was found or if USEDLSS is enabled:
+		DXDLSSCFG="$GLOBALMISCDIR/dxvk-no-nvapiHack.conf"
+
 		if [ -f "$STLDXVKCFG" ]; then
 			export DXVK_CONFIG_FILE="$STLDXVKCFG"
+		elif [ "$USEDLSS" -eq 1 ] && [ -f "$DXDLSSCFG" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - DLSS is enabled and '$DXDLSSCFG' was found - enabling all options required for DLSS"
+			export DXVK_CONFIG_FILE="$DXDLSSCFG"
+			export PROTON_ENABLE_NVAPI=1
+			export PROTON_HIDE_NVIDIA_GPU=0
 		fi
 
 		# shortcut to enable all required flags for SBSVR with ${RESH}
