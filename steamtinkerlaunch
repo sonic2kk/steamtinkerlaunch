@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v8.1.20211222"
+PROGVERS="v8.1.20211223"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -166,6 +166,7 @@ STLPROTONIDLOGDIR="$STLPROTONLOGDIR/id"														# proton id logfile dir
 STLPROTONTILOGDIR="$STLPROTONLOGDIR/title"													# proton title logfile dir
 STLDXVKLOGDIR="$BASELOGDIR/dxvk"
 STLWINELOGDIR="$BASELOGDIR/wine"															# wine logfile dir
+STLVKD3DLOGDIR="$BASELOGDIR/vkd3d"
 STLPVLOGDIR="$BASELOGDIR/pv"																# pressure vessel logfile dir
 PLAYTIMELOGDIR="$BASELOGDIR/playtime"
 STLGAMEDIR="$STLCFGDIR/gamecfgs"															# default basedir for game the gamespecific configs
@@ -2300,8 +2301,22 @@ function setDefaultCfgValues {
 		if [ -z "$PROTON_NO_ESYNC" ]					; then	PROTON_NO_ESYNC="0"; fi
 		if [ -z "$PROTON_NO_FSYNC" ]					; then	PROTON_NO_FSYNC="0"; fi
 		if [ -z "$PROTON_ENABLE_NVAPI" ]				; then	PROTON_ENABLE_NVAPI="0"; fi
-		if [ -z "$PROTON_HIDE_NVIDIA_GPU" ]				; then	PROTON_HIDE_NVIDIA_GPU="0"; fi
+		if [ -z "$PROTON_HIDE_NVIDIA_GPU" ]				; then	PROTON_HIDE_NVIDIA_GPU="1"; fi
+		if [ -z "$STL_VKD3D_CONFIG" ]					; then	STL_VKD3D_CONFIG="$NON"; fi
+		if [ -z "$STL_VKD3D_DEBUG" ]					; then	STL_VKD3D_DEBUG="$NON"; fi
+		if [ -z "$STL_VKD3D_SHADER_DEBUG" ]				; then	STL_VKD3D_SHADER_DEBUG="$NON"; fi
+		if [ -z "$STL_VKD3D_LOG_FILE" ]					; then	STL_VKD3D_LOG_FILE="$NON"; fi
+		if [ -z "$STL_VKD3D_VULKAN_DEVICE" ]			; then	STL_VKD3D_VULKAN_DEVICE="$NON"; fi
+		if [ -z "$STL_VKD3D_FILTER_DEVICE_NAME" ]		; then	STL_VKD3D_FILTER_DEVICE_NAME="$NON"; fi
+		if [ -z "$STL_VKD3D_DISABLE_EXTENSIONS" ]		; then	STL_VKD3D_DISABLE_EXTENSIONS="$NON"; fi
+		if [ -z "$STL_VKD3D_TEST_DEBUG" ]				; then	STL_VKD3D_TEST_DEBUG="0"; fi
+		if [ -z "$STL_VKD3D_TEST_FILTER" ]				; then	STL_VKD3D_TEST_FILTER="$NON"; fi
+		if [ -z "$STL_VKD3D_TEST_EXCLUDE" ]				; then	STL_VKD3D_TEST_EXCLUDE="$NON"; fi
+		if [ -z "$STL_VKD3D_TEST_PLATFORM" ]			; then	STL_VKD3D_TEST_PLATFORM="$NON"; fi
+		if [ -z "$STL_VKD3D_TEST_BUG" ]					; then	STL_VKD3D_TEST_BUG="$NON"; fi
+		if [ -z "$STL_VKD3D_PROFILE_PATH" ]				; then	STL_VKD3D_PROFILE_PATH="$NON"; fi
 		if [ -z "$USEDLSS" ]							; then	USEDLSS="0"; fi
+		if [ -z "$USERAYTRACING" ]						; then	USERAYTRACING="0"; fi
 		if [ -z "$PROTON_FORCE_LARGE_ADDRESS_AWARE" ]	; then	PROTON_FORCE_LARGE_ADDRESS_AWARE="1"; fi
 		if [ -z "$PROTON_DUMP_DEBUG_COMMANDS" ]			; then	PROTON_DUMP_DEBUG_COMMANDS="0"; fi
 		if [ -z "$CLEANPROTONTEMP" ]					; then	CLEANPROTONTEMP="0"; fi
@@ -2833,6 +2848,8 @@ function saveCfg {
 			echo "PROTON_HIDE_NVIDIA_GPU=\"$PROTON_HIDE_NVIDIA_GPU\""
 			echo "## $DESC_USEDLSS"
 			echo "USEDLSS=\"$USEDLSS\""
+			echo "## $DESC_USERAYTRACING"
+			echo "USERAYTRACING=\"$USERAYTRACING\""
 			echo "## $DESC_PROTON_FORCE_LARGE_ADDRESS_AWARE"
 			echo "PROTON_FORCE_LARGE_ADDRESS_AWARE=\"$PROTON_FORCE_LARGE_ADDRESS_AWARE\""
 			echo "## $DESC_WINE_FULLSCREEN_INTEGER_SCALING"
@@ -2909,6 +2926,32 @@ function saveCfg {
 			echo "USEPEV_PESTR=\"$USEPEV_PESTR\""
 			echo "## $(strFix "$DESC_USEPEV" "$READPE")"
 			echo "USEPEV_READPE=\"$USEPEV_READPE\""
+			echo "## $DESC_STL_VKD3D_CONFIG"
+			echo "STL_VKD3D_CONFIG=\"$STL_VKD3D_CONFIG\""
+			echo "## $DESC_STL_VKD3D_DEBUG"
+			echo "STL_VKD3D_DEBUG=\"$STL_VKD3D_DEBUG\""
+			echo "## $DESC_STL_VKD3D_SHADER_DEBUG"
+			echo "STL_VKD3D_SHADER_DEBUG=\"$STL_VKD3D_SHADER_DEBUG\""
+			echo "## $DESC_STL_VKD3D_LOG_FILE"
+			echo "STL_VKD3D_LOG_FILE=\"$STL_VKD3D_LOG_FILE\""
+			echo "## $DESC_STL_VKD3D_VULKAN_DEVICE"
+			echo "STL_VKD3D_VULKAN_DEVICE=\"$STL_VKD3D_VULKAN_DEVICE\""
+			echo "## $DESC_STL_VKD3D_FILTER_DEVICE_NAME"
+			echo "STL_VKD3D_FILTER_DEVICE_NAME=\"$STL_VKD3D_FILTER_DEVICE_NAME\""
+			echo "## $DESC_STL_VKD3D_DISABLE_EXTENSIONS"
+			echo "STL_VKD3D_DISABLE_EXTENSIONS=\"$STL_VKD3D_DISABLE_EXTENSIONS\""
+			echo "## $DESC_STL_VKD3D_TEST_DEBUG"
+			echo "STL_VKD3D_TEST_DEBUG=\"$STL_VKD3D_TEST_DEBUG\""
+			echo "## $DESC_STL_VKD3D_TEST_FILTER"
+			echo "STL_VKD3D_TEST_FILTER=\"$STL_VKD3D_TEST_FILTER\""
+			echo "## $DESC_STL_VKD3D_TEST_EXCLUDE"
+			echo "STL_VKD3D_TEST_EXCLUDE=\"$STL_VKD3D_TEST_EXCLUDE\""
+			echo "## $DESC_STL_VKD3D_TEST_PLATFORM"
+			echo "STL_VKD3D_TEST_PLATFORM=\"$STL_VKD3D_TEST_PLATFORM\""
+			echo "## $DESC_STL_VKD3D_TEST_BUG"
+			echo "STL_VKD3D_TEST_BUG=\"$STL_VKD3D_TEST_BUG\""
+			echo "## $DESC_STL_VKD3D_PROFILE_PATH"
+			echo "STL_VKD3D_PROFILE_PATH=\"$STL_VKD3D_PROFILE_PATH\""	
 			} >> "$1"
 
 			#ENDsaveCfgdefault_template
@@ -4292,7 +4335,22 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_CLEANPROTONTEMP!$DESC_CLEANPROTONTEMP ('CLEANPROTONTEMP')":CHK "${CLEANPROTONTEMP/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_USEPDBRATING!$DESC_USEPDBRATING ('USEPDBRATING')":CHK "${USEPDBRATING/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_PDBRATINGCACHE!$DESC_PDBRATINGCACHE ('PDBRATINGCACHE')":NUM "${PDBRATINGCACHE/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GLOBAL` \
---field="$(spanFont "$GUI_OPTSSHADER" "H")":LBL "SKIP" `#CAT_Shader` `#HEAD_Shader` `#MENU_GAME` `#MENU_GLOBAL`  \
+--field="$(spanFont "$GUI_OPTSVKD3D" "H")":LBL "SKIP" `#CAT_VKD3D` `#HEAD_VKD3D` `#MENU_GAME` \
+--field="     $GUI_USERAYTRACING!$DESC_USERAYTRACING ('USERAYTRACING')":CHK "${USERAYTRACING/#-/ -}" `#CAT_VKD3D` `#MENU_GAME` \
+--field="     $GUI_STL_VKD3D_CONFIG!$DESC_STL_VKD3D_CONFIG ('STL_VKD3D_CONFIG')":CB "$(cleanDropDown "${STL_VKD3D_CONFIG/#-/ -}" "$NON!vk_debug!skip_application_workarounds!dxr!dxr11!force_static_cbv!single_queue!no_upload_hvv!force_host_cached!no_invariant_position")" `#CAT_VKD3D` `#MENU_GAME` \
+--field="     $GUI_STL_VKD3D_DEBUG!$DESC_STL_VKD3D_DEBUG ('STL_VKD3D_DEBUG')":CB "$(cleanDropDown "${STL_VKD3D_DEBUG/#-/ -}" "$NON!err!info!fixme!warn!trace")" `#CAT_VKD3D` `#MENU_GAME` \
+--field="     $GUI_STL_VKD3D_SHADER_DEBUG!$DESC_STL_VKD3D_SHADER_DEBUG ('STL_VKD3D_SHADER_DEBUG')":CB "$(cleanDropDown "${STL_VKD3D_SHADER_DEBUG/#-/ -}" "$NON!err!info!fixme!warn!trace")" `#CAT_VKD3D` `#MENU_GAME` \
+--field="     $GUI_STL_VKD3D_LOG_FILE!$DESC_STL_VKD3D_LOG_FILE ('STL_VKD3D_LOG_FILE')":CBE "$(cleanDropDown "${STL_VKD3D_LOG_FILE/#-/ -}" "$NON!$STLVKD3DLOGDIR")" `#CAT_VKD3D` `#MENU_GAME` \
+--field="     $GUI_STL_VKD3D_VULKAN_DEVICE!$DESC_STL_VKD3D_VULKAN_DEVICE ('STL_VKD3D_VULKAN_DEVICE')":CBE "$(cleanDropDown "${STL_VKD3D_VULKAN_DEVICE/#-/ -}")" `#CAT_VKD3D` `#MENU_GAME` \
+--field="     $GUI_STL_VKD3D_FILTER_DEVICE_NAME!$DESC_STL_VKD3D_FILTER_DEVICE_NAME ('STL_VKD3D_FILTER_DEVICE_NAME')":CBE "$(cleanDropDown "${STL_VKD3D_FILTER_DEVICE_NAME/#-/ -}")" `#CAT_VKD3D` `#MENU_GLOBAL` \
+--field="     $GUI_STL_VKD3D_DISABLE_EXTENSIONS!$DESC_STL_VKD3D_DISABLE_EXTENSIONS ('STL_VKD3D_DISABLE_EXTENSIONS')":CBE "$(cleanDropDown "${STL_VKD3D_DISABLE_EXTENSIONS/#-/ -}")" `#CAT_VKD3D` `#MENU_GAME` \
+--field="     $GUI_STL_VKD3D_TEST_DEBUG!$DESC_STL_VKD3D_TEST_DEBUG ('STL_VKD3D_TEST_DEBUG')":NUM "${STL_VKD3D_TEST_DEBUG}!0..2" `#CAT_VKD3D` `#MENU_GAME` \
+--field="     $GUI_STL_VKD3D_TEST_FILTER!$DESC_STL_VKD3D_TEST_FILTER ('STL_VKD3D_TEST_FILTER')":CB "$(cleanDropDown "${STL_VKD3D_TEST_FILTER/#-/ -}" "$NON!clear_render_target")" `#CAT_VKD3D` `#MENU_GAME` \
+--field="     $GUI_STL_VKD3D_TEST_EXCLUDE!$DESC_STL_VKD3D_TEST_EXCLUDE ('STL_VKD3D_TEST_EXCLUDE')":CB "$(cleanDropDown "${STL_VKD3D_TEST_EXCLUDE/#-/ -}" "$NON!test_root_signature_priority,test_conservative_rasterization_dxil")" `#CAT_VKD3D` `#MENU_GAME` \
+--field="     $GUI_STL_VKD3D_TEST_PLATFORM!$DESC_STL_VKD3D_TEST_PLATFORM ('STL_VKD3D_TEST_PLATFORM')":CB "$(cleanDropDown "${STL_VKD3D_TEST_PLATFORM/#-/ -}" "$NON!wine!windows!other")" `#CAT_VKD3D` `#MENU_GAME` \
+--field="     $GUI_STL_VKD3D_TEST_BUG!$DESC_STL_VKD3D_TEST_BUG ('STL_VKD3D_TEST_BUG')":CBE "$(cleanDropDown "${STL_VKD3D_TEST_BUG/#-/ -}" "$NON!0")" `#CAT_VKD3D` `#MENU_GAME` \
+--field="     $GUI_STL_VKD3D_PROFILE_PATH!$DESC_STL_VKD3D_PROFILE_PATH ('STL_VKD3D_PROFILE_PATH')":DIR "${STL_VKD3D_PROFILE_PATH/#-/ -}" `#CAT_VKD3D` `#MENU_GAME` \
+--field="$(spanFont "$GUI_OPTSSHADER" "H")":LBL "SKIP" `#CAT_Shader` `#HEAD_Shader` `#MENU_GAME` `#MENU_GLOBAL` \
 --field="     $GUI_USERESHADE!$DESC_USERESHADE ('USERESHADE')":CHK "${USERESHADE/#-/ -}" `#CAT_Shader` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_DOWNLOAD_RESHADE!$DESC_DOWNLOAD_RESHADE ('DOWNLOAD_RESHADE')":CHK "${DOWNLOAD_RESHADE/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_INSTALL_RESHADE!$DESC_INSTALL_RESHADE ('INSTALL_RESHADE')":CHK "${INSTALL_RESHADE/#-/ -}" `#CAT_Shader` `#SUB_Checkbox` `#MENU_GAME` \
@@ -7735,6 +7793,7 @@ function createProjectDirs {
 	mkProjDir "$VORTEXCOMPDATA"
 	mkProjDir "$GEMETA"
 	mkProjDir "$MO2COMPDATA"
+	mkProjDir "$STLVKD3DLOGDIR"
 }
 
 # add missing config entries to configfile $1 using seperator $2:
@@ -7797,7 +7856,7 @@ function updateConfigFile {
 					writelog "UPDATE" "${FUNCNAME[0]} - Adding line '$ADDLINE'"
 					echo "$ADDLINE" >> "$CFGFILE"
 				fi
-			done <<< "$(sed -n "/#START$SEP/,/#END$SEP/p;/#END$SEP/q" "$0" | awk -F 'echo ' '{print $2}' | grep -v "\"##" | sed '/^[[:space:]]*$/d'| sed 's/\"//g' | sed 's/=\\/=/g' | sed 's/\\$//g')"
+			done <<< "$(sed -n "/#START$SEP/,/#END$SEP/p;/#END$SEP/q" "$0" | awk -F 'echo ' '{print $2}' | grep -v "\"##" | awk '{$1=$1};1' | sed '/^[[:space:]]*$/d'| sed 's/\"//g' | sed 's/=\\/=/g' | sed 's/\\$//g')"
 		fi
 
 		# re-enable logging
@@ -12742,6 +12801,60 @@ function prepareProton {
 			export PROTON_HIDE_NVIDIA_GPU=0
 		fi
 
+		# set VKD3D variables, if it's STL_ variant is != "$NON"
+
+		if [ "$STL_VKD3D_CONFIG" != "$NON" ]; then
+			export VKD3D_CONFIG="$STL_VKD3D_CONFIG"
+		fi
+
+		if [ "$STL_VKD3D_DEBUG" != "$NON" ]; then
+			export VKD3D_DEBUG="$STL_VKD3D_DEBUG"
+		fi
+
+		if [ "$STL_VKD3D_SHADER_DEBUG" != "$NON" ]; then
+			export VKD3D_SHADER_DEBUG="$STL_VKD3D_SHADER_DEBUG"	
+		fi
+
+		if [ "$STL_VKD3D_LOG_FILE" != "$NON" ]; then
+			export VKD3D_LOG_FILE="$STL_VKD3D_LOG_FILE"
+		fi
+
+		if [ "$STL_VKD3D_VULKAN_DEVICE" != "$NON" ]; then
+			export VKD3D_VULKAN_DEVICE="$STL_VKD3D_VULKAN_DEVICE"
+		fi
+
+		if [ "$STL_VKD3D_FILTER_DEVICE_NAME" != "$NON" ]; then
+			export VKD3D_FILTER_DEVICE_NAME="$STL_VKD3D_FILTER_DEVICE_NAME"
+		fi
+
+		if [ "$STL_VKD3D_DISABLE_EXTENSIONS" != "$NON" ]; then
+			export VKD3D_DISABLE_EXTENSIONS="$STL_VKD3D_DISABLE_EXTENSIONS"
+		fi
+
+		if [ "$STL_VKD3D_TEST_DEBUG" != "$NON" ]; then
+			export VKD3D_TEST_DEBUG="$STL_VKD3D_TEST_DEBUG"
+		fi
+
+		if [ "$STL_VKD3D_TEST_FILTER" != "$NON" ]; then
+			export VKD3D_TEST_FILTER="$STL_VKD3D_TEST_FILTER"
+		fi
+
+		if [ "$STL_VKD3D_TEST_EXCLUDE" != "$NON" ]; then
+			export VKD3D_TEST_EXCLUDE="$STL_VKD3D_TEST_EXCLUDE"
+		fi
+
+		if [ "$STL_VKD3D_TEST_PLATFORM" != "$NON" ]; then
+			export VKD3D_TEST_PLATFORM="$STL_VKD3D_TEST_PLATFORM"
+		fi
+
+		if [ "$STL_VKD3D_TEST_BUG" != "$NON" ]; then
+			export VKD3D_TEST_BUG="$STL_VKD3D_TEST_BUG"
+		fi
+
+		if [ "$STL_VKD3D_PROFILE_PATH" != "$NON" ]; then
+			export VKD3D_PROFILE_PATH="$STL_VKD3D_PROFILE_PATH"
+		fi	
+
 		# shortcut to enable all required flags for SBSVR with ${RESH}
 		if [ -n "$SBSVRRS" ]; then
 			if [ "$SBSVRRS" -eq 1 ]; then
@@ -14824,6 +14937,12 @@ function launchSteamGame {
 					fi
 				
 					writelog "INFO" "${FUNCNAME[0]} - UPDATED game start command is: ${GAMESTARTCMD[*]}"
+				fi
+
+				if [ "$USERAYTRACING" != "$NON" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Raytracing is enabled with the variable 'USERAYTRACING' - exporting 'VKD3D_CONFIG=dxr11' and appending '-dx12' to the game command line parameters"
+					export VKD3D_CONFIG=dxr11
+					GAMESTARTCMD=("${GAMESTARTCMD[@]}" "-dx12")
 				fi
 			fi
 		
