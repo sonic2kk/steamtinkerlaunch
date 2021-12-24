@@ -48,6 +48,10 @@ Arch Linux [via AUR](https://aur.archlinux.org/packages/steamtinkerlaunch) *(f.e
 Solus has an official package:
 `sudo eopkg install steamtinkerlaunch`
 
+Fedora has an unoffical package:
+https://copr.fedorainfracloud.org/coprs/capucho/steamtinkerlaunch/
+
+
 [![Packaging status](https://repology.org/badge/vertical-allrepos/steamtinkerlaunch.svg)](https://repology.org/project/steamtinkerlaunch/versions)
 
 ### Manual Installation:
