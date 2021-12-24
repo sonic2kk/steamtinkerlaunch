@@ -42,15 +42,17 @@ When done with configuring (or when the requester timeouts) the game will be sta
 ## Installation
 ### Installation via Package Management
 
-Arch Linux [via AUR](https://aur.archlinux.org/packages/steamtinkerlaunch) *(f.e. using yay)*:
+**Arch Linux** [via AUR](https://aur.archlinux.org/packages/steamtinkerlaunch) *(f.e. using yay)*:
 `yay -S steamtinkerlaunch`
 
-Solus has an official package:
+**Solus** has an official package:
 `sudo eopkg install steamtinkerlaunch`
 
-Fedora has an unoffical package:
+**Fedora** has an unoffical package:
 https://copr.fedorainfracloud.org/coprs/capucho/steamtinkerlaunch/
 
+**ansible playbook**:
+https://github.com/tofu114/ansible_playbooks
 
 [![Packaging status](https://repology.org/badge/vertical-allrepos/steamtinkerlaunch.svg)](https://repology.org/project/steamtinkerlaunch/versions)
 
