@@ -1259,6 +1259,25 @@ function listAppManifests {
 		fi
 	}
 
+	# getBIF takes a string containing a BaseInstallFolder or path and returns the 
+	function getBIF {
+		# REGEX needs to be a variable, quoted string literals are not treated as regexps by test
+		# BASH_REMATCH[1] will be the key (BaseInstallFolder* or path)
+		# BASH_REMATCH[2] will be the value (the actual steam library folder)
+		local REGEX='"(BaseInstallFolder[^"]*|path)"\s+"(.*)"\s*$'
+
+		# Use either first arg, or stdin if arg is empty
+		local in=$1
+		if [ -z "$in" ]; then read in; fi
+
+		# Test the regex against input, then print the extracted path to stdout
+		if [ $in =~ $REGEX ] && [ ! -z ${BASH_REMATCH[2]} ]; then
+			echo "${BASH_REMATCH[2]}"
+		else
+			writelog "WARN" "${FUNCNAME[0]} - Failed to parse Base Install Folder from '$in'"
+		fi
+	}
+
 	if [ -d "$DEFSTEAMAPPS" ]; then
 		findAppMa "$DEFSTEAMAPPS"
 	else
@@ -1269,7 +1288,7 @@ function listAppManifests {
 		writelog "INFO" "${FUNCNAME[0]} - Searching appmanifest files in '$CFGVDF' and '$LFVDF'" "X" "$APPMALOG"
 		while read -r BIF; do
 			findAppMa "${BIF//\"/}/$SA"
-		done <<< "$(grep "BaseInstallFolder\|\"path\"" "$CFGVDF" "$LFVDF" 2>/dev/null | awk '{print $3}' | sort -u)"
+		done <<< "$(grep "\"BaseInstallFolder\|\"path\"" "$CFGVDF" "$LFVDF" 2>/dev/null | getBIF | sort -u)"
 	else
 		writelog "SKIP" "${FUNCNAME[0]} - Neither file CFGVDF '$CFGVDF' nor file LFVDF '$LFVDF' found - this should not happen! - skipping"
 	fi
