@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v8.1.20211228"
+PROGVERS="v8.1.20211229"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -2251,6 +2251,7 @@ function setDefaultCfgValues {
 		if [ -z "$WINEDEFAULT" ]						; then	WINEDEFAULT="$DUMMYBIN"; fi
 		if [ -z "$USEWICO" ]							; then	USEWICO="0"; fi
 		if [ -z "$VIRTUALDESKTOP" ]						; then	VIRTUALDESKTOP="0"; fi
+		if [ -z "$VDRES" ]								; then	VDRES="$NON"; fi
 		if [ -z "$USEBOXTRON" ]							; then	USEBOXTRON="0"; fi
 		if [ -z "$USEROBERTA" ]							; then	USEROBERTA="0"; fi
 		if [ -z "$USELUXTORPEDA" ]						; then	USELUXTORPEDA="0"; fi
@@ -2750,6 +2751,8 @@ function saveCfg {
 			echo "WINEDEFAULT=\"$WINEDEFAULT\""
 			echo "## $DESC_VIRTUALDESKTOP"
 			echo "VIRTUALDESKTOP=\"$VIRTUALDESKTOP\""
+			echo "## $DESC_VDRES"
+			echo "VDRES=\"$VDRES\""
 			echo "## $DESC_USEBOXTRON"
 			echo "USEBOXTRON=\"$USEBOXTRON\""
 			echo "## $DESC_USEROBERTA"
@@ -4283,7 +4286,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_CRASHGUESS!$DESC_CRASHGUESS ('CRASHGUESS')":NUM "${CRASHGUESS/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_HELPURL!$DESC_HELPURL ('HELPURL')":CB "$(cleanDropDown "${HELPURL}" "${HUYLIST}${NON}")" `#CAT_Misc` `#MENU_GAME` \
 --field="     $GUI_CREATEDESKTOPICON!$DESC_CREATEDESKTOPICON ('CREATEDESKTOPICON')":NUM "${CREATEDESKTOPICON}!0..3" `#CAT_Misc` `#MENU_GAME` \
---field="     $GUI_GAMESCREENRES!$DESC_GAMESCREENRES ('GAMESCREENRES')":CBE "$(cleanDropDown "${GAMESCREENRES/#-/ -}" "$(printf "%s\n" "$("$XRANDR" --current | grep "[0-9]x" | awk '{print $1}' | grep "^[0-9]" | tr '\n' '!')")$NON")" `#CAT_Misc` `#MENU_GAME` \
+--field="     $GUI_GAMESCREENRES!$DESC_GAMESCREENRES ('GAMESCREENRES')":CBE "$(cleanDropDown "${GAMESCREENRES/#-/ -}" "$(printf "%s\n" "$(listScreenRes | tr '\n' '!')")$NON")" `#CAT_Misc` `#MENU_GAME` \
 --field="     $GUI_TOGSTEAMWEBHELPER!$DESC_TOGSTEAMWEBHELPER ('TOGSTEAMWEBHELPER')":CHK "${TOGSTEAMWEBHELPER/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_STL_PV_VERBOSE!$DESC_STL_PV_VERBOSE ('STL_PV_VERBOSE')":CHK "${STL_PV_VERBOSE/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_STL_PV_SHELL!$DESC_STL_PV_SHELL ('STL_PV_SHELL')":CB "$(cleanDropDown "${STL_PV_SHELL/#-/ -}" "none!after!fail!instead")" `#CAT_Misc` `#MENU_GAME` \
@@ -4480,6 +4483,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_RUN_WINECFG!$DESC_RUN_WINECFG ('RUN_WINECFG')":CHK "${RUN_WINECFG/#-/ -}" `#CAT_Wine` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_REGEDIT!$DESC_REGEDIT ('REGEDIT')":CHK "${REGEDIT/#-/ -}" `#CAT_Wine` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_VIRTUALDESKTOP!$DESC_VIRTUALDESKTOP ('VIRTUALDESKTOP')":CHK "${VIRTUALDESKTOP/#-/ -}" `#CAT_Wine` `#SUB_Checkbox` `#MENU_GAME`  \
+--field="     $GUI_VDRES!$DESC_VDRES ('VDRES')":CBE "$(cleanDropDown "${VDRES/#-/ -}" "$(printf "%s\n" "$(listScreenRes | tr '\n' '!')")$NON")" `#CAT_Wine` `#MENU_GAME` \
 --field="     $GUI_USEWICO!$DESC_USEWICO ('USEWICO')":CHK "${USEWICO/#-/ -}" `#CAT_Wine` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_STLWINEDEBUG!$DESC_STLWINEDEBUG ('STLWINEDEBUG')":CBE "$(cleanDropDown "${STLWINEDEBUG/#-/ -}" "$SOMEWINEDEBUGOPTIONS")" `#CAT_Wine` `#MENU_GAME` \
 --field="     $GUI_STLWINEDLLOVERRIDES!$DESC_STLWINEDLLOVERRIDES ('STLWINEDLLOVERRIDES')":CBE "$(cleanDropDown "${STLWINEDLLOVERRIDES/#-/ -}" "$SOMEWINEDLLOVERRIDES")" `#CAT_Wine` `#MENU_GAME` \
@@ -7615,6 +7619,12 @@ function getScreenRes {
 	fi
 }
 
+function listScreenRes {
+	while read -r lres; do
+		echo "${lres%*[[:blank:]]}" | cut -d ' ' -f1
+	done <<< "$("$XRANDR" --verbose | grep "+VSync$")" | sort -nur
+}
+
 function setInitWinXY {
 	DEFRESSHM="$STLSHM/defres.txt"
 	if [ -f "$DEFRESSHM" ] ; then
@@ -10129,9 +10139,22 @@ function customRegs {
 	TEMPREG="$GPFX/VirtualDesktop.reg"
 
 	if [ "$VIRTUALDESKTOP" -eq 1 ]; then
+		SETVD=1
+		if [ -z "$VDRES" ] || [ "$VDRES" == "$NON" ]; then
+			VDRES="$(getScreenRes r)"
+		fi
+				
 		if [ -f "$TEMPREG" ]; then
-			writelog "SKIP" "${FUNCNAME[0]} - Looks like virtual desktop was already applied before"
-		else
+			writelog "INFO" "${FUNCNAME[0]} - Looks like virtual desktop was already applied before"
+			if grep -q "$VDRES" "$TEMPREG"; then
+				writelog "SKIP" "${FUNCNAME[0]} - The configured resolution in '$TEMPREG' did not change - nothing to do"
+				SETVD=0
+			else
+				writelog "INFO" "${FUNCNAME[0]} - The configured resolution in '$TEMPREG' changed - updating to '$VDRES'"
+			fi
+		fi
+
+		if [ "$SETVD" -eq 1 ]; then
 			if touch "$TEMPREG"; then
 				writelog "INFO" "${FUNCNAME[0]} - VIRTUALDESKTOP is set to 1 - enabling virtual desktop"
 				{
@@ -10139,7 +10162,7 @@ function customRegs {
 				echo "[HKEY_CURRENT_USER\Software\Wine\Explorer]"
 				echo "\"Desktop\"=\"Default\""
 				echo "[HKEY_CURRENT_USER\Software\Wine\Explorer\Desktops]"
-				echo "\"Default\"=\"$(getScreenRes r)\""
+				echo "\"Default\"=\"$VDRES\""
 				} >> "$TEMPREG"
 				if [ -f "$TEMPREG" ]; then
 					regEdit "$TEMPREG"
