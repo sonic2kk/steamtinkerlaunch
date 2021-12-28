@@ -362,7 +362,6 @@ BIWI="bin/wine"
 DBW="dist/$BIWI"
 FBW="files/$BIWI"
 STLPROTDIR="$STLCFGDIR/proton"
-STLPROTCOMPDATDIR="$STLPROTDIR/$CODA"
 STLPROTSTUSDIR="$STLPROTDIR/$STUS"
 STLEARLYPROTCONF="$STLPROTDIR/earlyproton.conf"
 PROCU="proton/custom"
@@ -2205,8 +2204,6 @@ function setDefaultCfgValues {
 		if [ -z "$USEREAP" ]							; then	USEREAP="1"; fi
 		if [ -z "$FORCEREAP" ]							; then	FORCEREAP="0"; fi
 		if [ -z "$USEPROTON" ]							; then	USEPROTON="$(getDefaultProton)"; fi
-		if [ -z "$REDIRCOMPDATA" ]						; then	REDIRCOMPDATA="disabled"; fi
-		if [ -z "$REDIRSTEAMUSER" ]						; then	REDIRSTEAMUSER="disabled"; fi
 		if [ -z "$AUTOBUMPGE" ]							; then	AUTOBUMPGE="0"; fi
 		if [ -z "$USECUSTOMCMD" ]						; then	USECUSTOMCMD="0"; fi
 		if [ -z "$CUSTOMCMD" ]							; then	CUSTOMCMD="$DUMMYBIN"; fi
@@ -2659,10 +2656,6 @@ function saveCfg {
 			echo "FORCEREAP=\"$FORCEREAP\""
 			echo "## $DESC_USEPROTON"
 			echo "USEPROTON=\"$USEPROTON\""
-			echo "## $DESC_REDIRCOMPDATA"
-			echo "REDIRCOMPDATA=\"$REDIRCOMPDATA\""
-			echo "## $DESC_REDIRSTEAMUSER"
-			echo "REDIRSTEAMUSER=\"$REDIRSTEAMUSER\""
 			echo "## $DESC_AUTOBUMPGE"
 			echo "AUTOBUMPGE=\"$AUTOBUMPGE\""
 			echo "## $DESC_USECUSTOMCMD"
@@ -4303,8 +4296,6 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_USEREAP!$DESC_USEREAP ('USEREAP')":CHK "${USEREAP/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_FORCEREAP!$DESC_FORCEREAP ('FORCEREAP')":CHK "${FORCEREAP/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_AUTOLASTPROTON!$DESC_AUTOLASTPROTON ('AUTOLASTPROTON')":CHK "${AUTOLASTPROTON/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GLOBAL` \
---field="     $GUI_REDIRCOMPDATA!$DESC_REDIRCOMPDATA ('REDIRCOMPDATA')":CB "$(cleanDropDown "${REDIRCOMPDATA/#-/ -}" "disabled!single-proton!global-proton")" `#CAT_Proton` `#MENU_GAME` \
---field="     $GUI_REDIRSTEAMUSER!$DESC_REDIRSTEAMUSER ('REDIRSTEAMUSER')":CB "$(cleanDropDown "${REDIRSTEAMUSER/#-/ -}" "disabled!symlink!restore-backup")" `#CAT_Proton` `#MENU_GAME` \
 --field="     $GUI_AUTOBUMPGE!$DESC_AUTOBUMPGE ('AUTOBUMPGE')":CHK "${AUTOBUMPGE/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_PROTON_LOG!$DESC_PROTON_LOG $HOME/steam-$AID.log ('PROTON_LOG')":CHK "${PROTON_LOG/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_PROTON_LOG_DIR!$DESC_PROTON_LOG_DIR ('PROTON_LOG_DIR')":DIR "${PROTON_LOG_DIR/#-/ -}" `#CAT_Proton` `#SUB_Directories` `#MENU_GAME` \
@@ -9060,199 +9051,6 @@ function symlinkSteamUser {
 			fi
 		else
 			writelog "SKIP" "${FUNCNAME[0]} - '$SteamUserDir' is no symlink - nothing to do"
-		fi
-	fi
-}
-
-# XXXXXXXXXXXXXXXXXXXXX to be removed
-function redirectSCDP {
-	function checkCompatdataSteamUser {
-		if [ "$REDIRSTEAMUSER" == "symlink" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Checking creation of a '$STUS' symlink, as REDIRSTEAMUSER is '$REDIRSTEAMUSER'"
-			symlinkSteamUser 1
-		elif [ "$REDIRSTEAMUSER" == "restore-backup" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Calling restoreSteamUser to migrate '$STUS', as REDIRSTEAMUSER is '$REDIRSTEAMUSER'"
-			restoreSteamUser
-		else
-			writelog "INFO" "${FUNCNAME[0]} - Leaving '$STUS' directory untouched, as REDIRSTEAMUSER is '$REDIRSTEAMUSER'"
-		fi
-	}
-	
-	function SetCompatdataSymlink {
-		DIR="$1"
-		SYM="$2"
-		writelog "INFO" "${FUNCNAME[0]} - Using '$DIR' as new $CODA dir and '$SYM' as symlink pointing to it"
-
-		if [ ! -f "${DIR}/version" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - New $CODA '$DIR' does not exist yet"
-			if [ -d "${STEAM_COMPAT_DATA_PATH}_SAC" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Moving found backed autocloud $CODA '${STEAM_COMPAT_DATA_PATH}_SAC' to '$DIR'"
-				mkProjDir "${DIR%/*}"
-				mv "${STEAM_COMPAT_DATA_PATH}_SAC" "$DIR"
-			else
-				writelog "INFO" "${FUNCNAME[0]} - Creating new $CODA dir '$DIR'"
-				mkProjDir "$DIR"
-			fi
-		else
-			writelog "INFO" "${FUNCNAME[0]} - Using existing $CODA '$DIR'"
-			if [ -d "${STEAM_COMPAT_DATA_PATH}_SAC" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Found backed autocloud $CODA '${STEAM_COMPAT_DATA_PATH}_SAC'"
-			fi
-		fi
-		
-		if [ -L "$SYM" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Removing old symlink '$SYM'"
-			rm "$SYM" 2>/dev/null #remove old symlink
-		elif [ -d "$SYM" ]; then
-			BACKSCDP="${SYM}-BAK$((100 + RANDOM % 100))"
-			writelog "WARN" "${FUNCNAME[0]} - '$SYM' does still exist as directory - renaming to '$BACKSCDP'"
-			mv "$SYM" "$BACKSCDP"		
-		fi
-		
-		writelog "INFO" "${FUNCNAME[0]} - Creating symlink via 'ln -s \"$DIR\" \"$SYM\"'"
-		ln -s "$DIR" "$SYM"
-		notiShow "$(strFix "$NOTY_GLOBALTWEAK" "$DIR")"
-
-		SPVF="$STEAM_COMPAT_DATA_PATH/${SHOSTL}-version"
-		if [ ! -f "$SPVF" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Creating '$SPVF' with version '$DESTPROT'"
-			echo "$DESTPROT" > "$SPVF"
-		else
-			SCDPSPV="$(cat "$SPVF")"
-			if [ "$SCDPSPV" == "$DESTPROT" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Found '$SPVF' with version '$DESTPROT'"
-			else
-				writelog "INFO" "${FUNCNAME[0]} - Proton version '$SCDPSPV' in '$SPVF' doesn't match expected version '$DESTPROT' DEBUG"
-			fi
-		fi
-
-		if [ "$REDIRCOMPDATA" == "global-proton" ]; then
-			UBAID="${STEAM_COMPAT_DATA_PATH}/used_by-$AID"
-			if [ ! -f "$UBAID" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Creating '$UBAID'" # and trying to trigger Steam First Time Setup"
-				touch "$UBAID"
-#				reCreateCompatdata "ccd" "$AID" - probably requires a rewrite if possible at all
-			fi
-		fi
-		
-		checkCompatdataSteamUser
-	}
-	
-	function checkCompatdataSymlink {
-		if [ -L "$STEAM_COMPAT_DATA_PATH" ] || [ -d "$STEAM_COMPAT_DATA_PATH" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Using $CODA '$REDIRCOMPDATA' mode"
-
-			PVF="$STEAM_COMPAT_DATA_PATH/version"
-			SCDPPV="$(cat "$PVF")"
-			
-			SPVF="$STEAM_COMPAT_DATA_PATH/${PROGNAME,,}-version"
-			SCDPSPV="$(cat "$SPVF")"
-			
-			if [ -f "$SPVF" ]; then
-				if [ "$SCDPSPV" == "$DESTPROT" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - Proton version '$SCDPSPV' in '$SPVF' matches expected version '$DESTPROT' (allowing minor version mismatch)"
-					CDPVOK=1
-				else
-					writelog "INFO" "${FUNCNAME[0]} - Proton version '$SCDPSPV' in '$SPVF' is not the expected version '$DESTPROT'"
-					CDPVOK=0
-				fi
-			else
-				if [ ! -f "$PVF" ] && [ -d "$STEAM_COMPAT_DATA_PATH" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - STEAM_COMPAT_DATA_PATH doesn't have a proton version file '$PVF'"
-					writelog "INFO" "${FUNCNAME[0]} - Steam probably just re-created the $CODA by creating the steam_autocloud.vdf"
-					writelog "INFO" "${FUNCNAME[0]} - Moving the $CODA out of the way"
-					mv "$STEAM_COMPAT_DATA_PATH" "${STEAM_COMPAT_DATA_PATH}_SAC"
-					SCDPPV=0
-				elif [ ! -f "$PVF" ] && [ -L "$STEAM_COMPAT_DATA_PATH" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - STEAM_COMPAT_DATA_PATH is a symlink - it should have a '$PVF' though - $(ls -la "$PVF") DEBUG"
-					SCDPPV=0
-				fi
-				
-				if [ "$SCDPPV" == "$DESTPROT" ] || [ "$SCDPPV" == "${ORGUSEPROTON//proton-}" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - Proton in $CODA '$STEAM_COMPAT_DATA_PATH' matches the expected version '$DESTPROT' (allowing minor version mismatch)"
-					CDPVOK=1
-				else
-					writelog "INFO" "${FUNCNAME[0]} - Proton in $CODA '$STEAM_COMPAT_DATA_PATH' has not the expected version '$DESTPROT' but '$SCDPPV'"
-					CDPVOK=0
-				fi
-			fi
-		fi
-
-		if [ -L "$STEAM_COMPAT_DATA_PATH" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - '$STEAM_COMPAT_DATA_PATH' is already a symbolic link - comparing versions"
-
-			if [ "$(readlink "$STEAM_COMPAT_DATA_PATH")" == "$DESTCOMPDATA" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Symlink '$STEAM_COMPAT_DATA_PATH' points correctly to the expected directory '$DESTCOMPDATA'"
-				CDSYMOK=1
-			else
-				writelog "WARN" "${FUNCNAME[0]} - Symlink '$STEAM_COMPAT_DATA_PATH' does not point correctly to the expected directory '$DESTCOMPDATA', but instead to '$(readlink "$STEAM_COMPAT_DATA_PATH")'"
-				CDSYMOK=0
-			fi
-
-			if [ "$CDSYMOK" -eq 1 ] && [ "$CDPVOK" -eq 1 ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Both $CODA symlink '$STEAM_COMPAT_DATA_PATH' and Proton version are correct - nothing to do here"
-			elif [ "$CDSYMOK" -eq 1 ] && [ "$CDPVOK" -eq 0 ]; then
-				writelog "INFO" "${FUNCNAME[0]} - $CODA symlink '$STEAM_COMPAT_DATA_PATH' is correct, but Proton version is not - this is unusual but continuing anyway"
-			elif [ "$CDSYMOK" -eq 0 ] && [ "$CDPVOK" -eq 1 ]; then
-				writelog "INFO" "${FUNCNAME[0]} - $CODA symlink '$STEAM_COMPAT_DATA_PATH' is not the expected one, but Proton version matches - assuming manual configuration from the user and using it"
-			elif [ "$CDSYMOK" -eq 0 ] && [ "$CDPVOK" -eq 0 ]; then
-				writelog "INFO" "${FUNCNAME[0]} - $CODA symlink '$STEAM_COMPAT_DATA_PATH' is not the expected one and Proton version doesn't match as well, assuming the Proton version was changed - redirecting $CODA to '$DESTCOMPDATA'"
-				SetCompatdataSymlink "$DESTCOMPDATA" "$STEAM_COMPAT_DATA_PATH"
-			fi				
-		elif [ -d "$STEAM_COMPAT_DATA_PATH" ]; then		
-			writelog "INFO" "${FUNCNAME[0]} - '$STEAM_COMPAT_DATA_PATH' is the original directory"
-			if [ -d "$DESTCOMPDATA" ]; then # probably not worth to check the proton version in $DESTCOMPDATA here as well(?)
-				BACKSCDP="${STEAM_COMPAT_DATA_PATH}-BAK$((100 + RANDOM % 100))"
-				writelog "INFO" "${FUNCNAME[0]} - '$DESTCOMPDATA' does already exist - moving '$STEAM_COMPAT_DATA_PATH' to '$BACKSCDP' and setting symlink"
-				mv "$STEAM_COMPAT_DATA_PATH" "$BACKSCDP"
-				SetCompatdataSymlink "$DESTCOMPDATA" "$STEAM_COMPAT_DATA_PATH"
-			else
-				if [ "$CDPVOK" -eq 1 ]; then
-					writelog "INFO" "${FUNCNAME[0]} - '$DESTCOMPDATA' does not yet exist, moving '$STEAM_COMPAT_DATA_PATH' as the Proton version is correct and creating symlink"
-					mv "$STEAM_COMPAT_DATA_PATH" "$DESTCOMPDATA"
-					SetCompatdataSymlink "$DESTCOMPDATA" "$STEAM_COMPAT_DATA_PATH"
-				else
-					writelog "INFO" "${FUNCNAME[0]} - '$DESTCOMPDATA' does not yet exist, creating a new one, because '$STEAM_COMPAT_DATA_PATH' uses an incorrect Proton version"
-					BACKSCDP="${STEAM_COMPAT_DATA_PATH}-BAK$((100 + RANDOM % 100))"
-					writelog "INFO" "${FUNCNAME[0]} - Renaming '$STEAM_COMPAT_DATA_PATH' to '$BACKSCDP' and setting symlink"
-					mv "$STEAM_COMPAT_DATA_PATH" "$BACKSCDP"
-					SetCompatdataSymlink "$DESTCOMPDATA" "$STEAM_COMPAT_DATA_PATH"
-				fi
-			fi
-		else
-			writelog "INFO" "${FUNCNAME[0]} - '$STEAM_COMPAT_DATA_PATH' is neither a directory nor a symbolic link - creating it"
-			SetCompatdataSymlink "$DESTCOMPDATA" "$STEAM_COMPAT_DATA_PATH"
-		fi		
-	}
-
-	if [ -n "$STEAM_COMPAT_DATA_PATH" ]; then # should be enough
-		VERSFIX="$(grep "${USEPROTON%-*}" "$PROTONCSV" | cut -d ';' -f1 | sort -nr | head -n1)"
-		if [ -n "$VERSFIX" ]; then
-			DESTPROT1="${VERSFIX//proton-}"
-			writelog "INFO" "${FUNCNAME[0]} - Using Proton version with minor version fix '$DESTPROT1' for $CODA directory name"
-		else
-			DESTPROT1="${USEPROTON//proton-}"
-			writelog "INFO" "${FUNCNAME[0]} - Using Proton version '$DESTPROT1' for '$CODA' directory name"
-		fi
-
-		DESTPROT="${DESTPROT1//Proton}"
-		# above might have to be expanded later, depending on proton names
-		
-		if [ "$REDIRCOMPDATA" == "single-proton" ]; then
-			DESTCOMPDATA="${STEAM_COMPAT_DATA_PATH//${STEAM_COMPAT_DATA_PATH##*/}/${PROGNAME,,}\/${STEAM_COMPAT_DATA_PATH##*/}-proton-${DESTPROT}}"
-			checkCompatdataSymlink
-		elif [ "$REDIRCOMPDATA" == "global-proton" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Using global 'STEAM_COMPAT_DATA_PATH'"
-			DESTCOMPDATA="$STLPROTCOMPDATDIR/${CODA}-proton-${DESTPROT}"
-			checkCompatdataSymlink
-		else
-			writelog "INFO" "${FUNCNAME[0]} - Using regular $CODA '$STEAM_COMPAT_DATA_PATH'"
-			if [ -L "$STEAM_COMPAT_DATA_PATH" ]; then
-				rm "${STEAM_COMPAT_DATA_PATH}/used_by-$AID" 2>/dev/null
-				writelog "INFO" "${FUNCNAME[0]} - '$STEAM_COMPAT_DATA_PATH' is a symlink. Removing it, as REDIRCOMPDATA is $REDIRCOMPDATA"
-				rm "$STEAM_COMPAT_DATA_PATH"
-				mkProjDir "$STEAM_COMPAT_DATA_PATH"
-			fi
 		fi
 	fi
 }
