@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v8.1.20211223"
+PROGVERS="v8.1.20211228"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -81,6 +81,7 @@ PRELOG="$STLSHM/prelog.log"
 APPMALOG="$STLSHM/listAppManifests.log"
 GGDLOG="$STLSHM/getGameData.log"
 WINRESLOG="$STLSHM/winres.log"
+SHADLOG="$STLSHM/shaderupdate.log"
 GWIDFILE="$STLSHM/${PROGNAME,,}-sbsgwid"
 PIDLOCK="$STLSHM/pid.lock"
 GDBGAMERUN="$STLSHM/gdbgamerun.sh"
@@ -206,8 +207,7 @@ STUS="steamuser"
 SUBADIR="$STLBACKDIR/$STUS"
 SUBADIRID="$SUBADIR/id"
 SUBADIRTI="$SUBADIR/title"
-RSP="reshadepresets"
-STLRSPRESETDIR="$STLCFGDIR/$RSP"
+RSSUB="reshade-shaders"
 WTDLDIR="$STLDLDIR/winetricks"
 DLWT="$WTDLDIR/src/winetricks"
 STLSHADDIR="$STLDLDIR/shaders"
@@ -393,12 +393,9 @@ RS_D9_DEST="$D3D9"
 RESH="ReShade"
 RSSU="${RESH}_Setup"
 RSINI="${RESH}.ini"
-RSPINI="${RESH}Preset.ini"
+RSTXT="${RESH}.txt"
 IGCS="IGCSInjector"
 UUU="UniversalUE4Unlocker"
-SD3DVR="SuperDepth3D_VR+"
-RSENABLED="${RESH}-${PROGNAME,,}-enabled.txt"
-RSDISABLED="${RESH}-${PROGNAME,,}-disabled.txt"
 LFM="launchFavMenu"
 LGAM="launchGameMenu"
 LGATM="launchGameTemplateMenu"
@@ -2122,6 +2119,7 @@ function setDefaultCfgValues {
 		if [ -z "$MAXASK" ]								; then	MAXASK="3"; fi
 		if [ -z "$BROWSER" ]							; then	BROWSER="$(command -v "firefox")"; fi
 		if [ -z "$NOTY" ]								; then	NOTY="$(command -v "notify-send")"; fi
+		if [ -z "$NOTYARGS" ]							; then	NOTYARGS="-i $STLICON"; fi
 		if [ -z "$USENOTIFIER" ]						; then	USENOTIFIER="1"; fi
 		if [ -z "$NETMON" ]								; then	NETMON="$(command -v "netstat")"; fi
 		if [ -z "$NETOPTS" ]							; then	NETOPTS="-taucp -W"; fi
@@ -2134,7 +2132,6 @@ function setDefaultCfgValues {
 		if [ -z "$GLOBALTWEAKS" ]						; then	GLOBALTWEAKS="$SYSTEMSTLCFGDIR/tweaks"; fi
 		if [ -z "$GLOBALEVALDIR" ]						; then	GLOBALEVALDIR="$SYSTEMSTLCFGDIR/eval"; fi
 		if [ -z "$GLOBALSTLLANGDIR" ]					; then	GLOBALSTLLANGDIR="$SYSTEMSTLCFGDIR/lang"; fi
-		if [ -z "$GLOBALRSPRESETDIR" ]					; then	GLOBALRSPRESETDIR="$GLOBALMISCDIR/$RSP"; fi
 		if [ -z "$GLOBALSTLGUIDIR" ]					; then	GLOBALSTLGUIDIR="$SYSTEMSTLCFGDIR/guicfgs"; fi
 		if [ -z "$BOXTRONCMD" ]							; then	BOXTRONCMD="/usr/share/boxtron/run-dosbox"; fi
 		if [ -z "$BOXTRONARGS" ]						; then	BOXTRONARGS="--wait-before-run"; fi
@@ -2262,7 +2259,6 @@ function setDefaultCfgValues {
 		if [ -z "$RESHADE_DEPTH3D" ]					; then	RESHADE_DEPTH3D="0"; fi
 		if [ -z "$USERESHADE" ]							; then	USERESHADE="0"; fi
 		if [ -z "$RESHADEUPDATE" ]						; then	RESHADEUPDATE="0"; fi
-		if [ -z "$RESHADEPRESET" ]						; then	RESHADEPRESET="$NON"; fi
 		if [ -z "$CHOOSESHADERS" ]						; then	CHOOSESHADERS="0"; fi
 		if [ -z "$ALTEXEPATH" ]							; then	ALTEXEPATH="/tmp"; fi
 		if [ -z "$ARCHALTEXE" ]							; then	ARCHALTEXE="$DUMMYBIN"; fi
@@ -2496,6 +2492,8 @@ function saveCfg {
 			echo "USENOTIFIER=\"$USENOTIFIER\""
 			echo "## $DESC_NOTY"
 			echo "NOTY=\"$NOTY\""
+			echo "## $DESC_NOTYARGS"
+			echo "NOTYARGS=\"$NOTYARGS\""
 			echo "## $DESC_NETMON"
 			echo "NETMON=\"$NETMON\""
 			echo "## $DESC_NETOPTS"
@@ -2512,8 +2510,6 @@ function saveCfg {
 			echo "GLOBALTWEAKS=\"$GLOBALTWEAKS\""
 			echo "## $DESC_GLOBALCATEGORYDIR"
 			echo "GLOBALCATEGORYDIR=\"$GLOBALCATEGORYDIR\""
-			echo "## $DESC_GLOBALRSPRESETDIR"
-			echo "GLOBALRSPRESETDIR=\"$GLOBALRSPRESETDIR\""
 			echo "## $DESC_GLOBALMISCDIR"
 			echo "GLOBALMISCDIR=\"$GLOBALMISCDIR\""
 			echo "## $DESC_GLOBALEVALDIR"
@@ -2770,8 +2766,6 @@ function saveCfg {
 			echo "USERESHADE=\"$USERESHADE\""
 			echo "## $DESC_RESHADEUPDATE"
 			echo "RESHADEUPDATE=\"$RESHADEUPDATE\""
-			echo "## $DESC_RESHADEPRESET"
-			echo "RESHADEPRESET=\"$RESHADEPRESET\""
 			echo "## $DESC_CHOOSESHADERS"
 			echo "CHOOSESHADERS=\"$CHOOSESHADERS\""
 			echo "## $DESC_ALTEXEPATH"
@@ -2964,15 +2958,21 @@ function saveCfg {
 
 function notiShow {
 	if [ -n "$2" ] && [ "$2" == "X" ]; then
-		NOTY="$(command -v "notify-send")"
+		if [ -z "$NOTY" ]; then
+			NOTY="$(command -v "notify-send")"
+		fi
 	fi
-	
+
 	if [ -n "$USENOTIFIER" ] && [ "$USENOTIFIER" -eq 1 ] && { [ -z "$2" ] || { [ -n "$2" ] && [ "$2" != "S" ]; };} || { [ -n "$2" ] && [ "$2" == "X" ]; }; then
-		if [ ! -x "$(command -v "$NOTY")" ]; then
+
+		if [ -x "$(command -v "$NOTY")" ]; then
+			if [ -z "${NOTYARGSARR[0]}" ]; then
+				mapfile -d " " -t -O "${#NOTYARGSARR[@]}" NOTYARGSARR < <(printf '%s' "$NOTYARGS")
+			fi
+			"$NOTY" "${NOTYARGSARR[@]}" "$1"
+		else
 			writelog "INFO" "${FUNCNAME[0]} - Warning - '$NOTY' not found - disabling notifier"
 			USENOTIFIER=0
-		else
-			"$NOTY" "$1"
 		fi
 	fi
 	
@@ -4103,7 +4103,6 @@ function createDropdownLists {
 	createProtonList
 	createWineList
 	createLanguageList
-	createReShadePresetList
 }
 
 function favoritesMenuEntries {
@@ -4362,7 +4361,6 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_D3D47_64!$DESC_D3D47_64 ('D3D47_64')" "${D3D47_64/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#MENU_GLOBAL` \
 --field="     $GUI_ARCHALTEXE!$DESC_ARCHALTEXE ('ARCHALTEXE')":FL "${ARCHALTEXE/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#MENU_GAME` \
 --field="     $GUI_ALTEXEPATH!$DESC_ALTEXEPATH ('ALTEXEPATH')":DIR "${ALTEXEPATH/#-/ -}" `#CAT_Shader` `#SUB_Directories` `#MENU_GAME` \
---field="     $GUI_RESHADEPRESET!$DESC_RESHADEPRESET ('RESHADEPRESET')":CB "$(cleanDropDown "${RESHADEPRESET/#-/ -}" "$RSPRESETLIST")" `#CAT_Shader` `#MENU_GAME` \
 --field="     $GUI_RESHADESRCDIR!$DESC_RESHADESRCDIR ('RESHADESRCDIR')":DIR "${RESHADESRCDIR/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_RESHADE_DEPTH3D!$DESC_RESHADE_DEPTH3D ('RESHADE_DEPTH3D')":CHK "${RESHADE_DEPTH3D/#-/ -}" `#CAT_Shader` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_DLSHADER!$DESC_DLSHADER ('DLSHADER')":CHK "${DLSHADER/#-/ -}" `#CAT_Shader` `#SUB_Checkbox` `#MENU_GLOBAL`  \
@@ -4371,7 +4369,6 @@ function AllSettingsEntriesDummyFunction {
 --field="$(spanFont "$PROGNAME $GUI_PATHS" "H")":LBL "SKIP" `#CAT_Paths` `#HEAD_Stl` `#MENU_GLOBAL`  \
 --field="     $GUI_GLOBALCATEGORYDIR!$DESC_GLOBALCATEGORYDIR ('GLOBALCATEGORYDIR')":DIR "${GLOBALCATEGORYDIR/#-/ -}" `#CAT_Paths` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_GLOBALMISCDIR!$DESC_GLOBALMISCDIR ('GLOBALMISCDIR')":DIR "${GLOBALMISCDIR/#-/ -}" `#CAT_Paths` `#SUB_Directories` `#MENU_GLOBAL` \
---field="     $GUI_GLOBALRSPRESETDIR!$DESC_GLOBALRSPRESETDIR ('GLOBALRSPRESETDIR')":DIR "${GLOBALRSPRESETDIR/#-/ -}" `#CAT_Paths` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_GLOBALSBSTWEAKS!$DESC_GLOBALSBSTWEAKS ('GLOBALSBSTWEAKS')":DIR "${GLOBALSBSTWEAKS/#-/ -}" `#CAT_Paths` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_GLOBALTWEAKS!$DESC_GLOBALTWEAKS ('GLOBALTWEAKS')":DIR "${GLOBALTWEAKS/#-/ -}" `#CAT_Paths` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_GLOBALSTLLANGDIR!$DESC_GLOBALSTLLANGDIR ('GLOBALSTLLANGDIR')":DIR "${GLOBALSTLLANGDIR/#-/ -}" `#CAT_Paths` `#SUB_Directories` `#MENU_GLOBAL` \
@@ -4402,6 +4399,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_STLEDITOR!$DESC_STLEDITOR ('STLEDITOR')":FL "${STLEDITOR/#-/ -}" `#CAT_Tools` `#MENU_GLOBAL` \
 --field="     $GUI_BROWSER!$DESC_BROWSER ('BROWSER')":FL "${BROWSER/#-/ -}" `#CAT_Tools` `#MENU_GLOBAL` \
 --field="     $GUI_NOTY!$DESC_NOTY ('NOTY')":FL "${NOTY/#-/ -}" `#CAT_Tools` `#MENU_GLOBAL` \
+--field="     $GUI_NOTYARGS!$DESC_NOTYARGS ('NOTYARGS')" "${NOTYARGS/#-/ -}" `#CAT_Tools` `#MENU_GLOBAL` \
 --field="     $GUI_USENETMON!$DESC_USENETMON ('USENETMON')":CHK "${USENETMON/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_NETMON!$DESC_NETMON ('NETMON')":FL "${NETMON/#-/ -}" `#CAT_Tools` `#MENU_GLOBAL` \
 --field="     $GUI_NETOPTS!$DESC_NETOPTS ('NETOPTS')" "${NETOPTS/#-/ -}" `#CAT_Tools` `#MENU_GLOBAL` \
@@ -5540,7 +5538,6 @@ function initSteamVR {
 				if ! "$STEAM" "${STEAMVRARGS[@]}" 2>/dev/null >/dev/null ; then
 					writelog "SKIP" "${FUNCNAME[0]} - Starting SteamVR FAILED - skipping SBS-VR"
 					echo "RUNSBSVR=\"0\"" > "$VRINITLOCK"
-					checkDepth3DUse
 				else
 					writelog "INFO" "${FUNCNAME[0]} - Started SteamVR"
 					SVRJUSTSTARTED=1
@@ -5565,7 +5562,6 @@ function initSteamVR {
 				else
 					writelog "SKIP" "${FUNCNAME[0]} - Vrstartup found, but we didn't start SteamVR before! - skipping SBS-VR - just in case"
 					echo "RUNSBSVR=\"0\"" > "$VRINITLOCK"
-					checkDepth3DUse
 				fi
 			fi
 
@@ -5595,7 +5591,6 @@ function initSteamVR {
 						writelog "SKIP" "${FUNCNAME[0]} - ERROR - timeout waiting for SteamVR - exit"
 						"$PKILL" -f "$VRVIDEOPLAYER"
 						echo "RUNSBSVR=\"0\"" > "$VRINITLOCK"
-						checkDepth3DUse
 						exit 1
 					fi
 					writelog "WAIT" "${FUNCNAME[0]} - Sec $COUNTER/$MAXWAIT waiting for vrcompositor"
@@ -5622,7 +5617,6 @@ function initSteamVR {
 			else
 				writelog "SKIP" "${FUNCNAME[0]} - SteamVR start failed - vrcompositor still not running - skipping SBS-VR!"
 				echo "RUNSBSVR=\"0\"" > "$VRINITLOCK"
-				checkDepth3DUse
 			fi
 		fi
 	fi
@@ -5771,6 +5765,7 @@ function GAMEPID {
 				GAMPI="$("$XWININFO" -name "${GAMEWINDOW//\"/}" -wm | grep "Process id:" | awk -F 'Process id: ' '{print $2}' | cut -d ' ' -f1)"
 				writelog "INFO" "${FUNCNAME[0]} - Found gamewindow '$GAMEWINDOW' PID $GAMPI"
 			else
+				# very likely this needs to be improved/changed
 				GAMPI="$("$PGREP" -a "" | grep "$GE" | grep "Z:" | grep "\.exe" | grep -v "CrashHandler" | cut -d ' ' -f1 | tail -n1)"
 			fi
 		fi
@@ -6112,14 +6107,12 @@ function SBSrunVRVideoPlayer {
 					writelog "SKIP" "${FUNCNAME[0]} - ERROR - timeout waiting for '$VRVIDEOPLAYER' - exit"
 					"$PKILL" -f "$VRVIDEOPLAYER"
 					RUNSBSVR=0
-					checkDepth3DUse
 					exit 1
 				fi
 				if ! "$PGREP" -f "$VRVIDEOPLAYER" ; then
 					if [ "$COUNTER" -ge 3 ]; then
 						writelog "SKIP" "${FUNCNAME[0]} - ERROR - '$VRVIDEOPLAYER' not running (crashed?) no need to wait for its window to appear - exit"
 						RUNSBSVR=0
-						checkDepth3DUse
 						exit 1
 					else
 						writelog "WARN" "${FUNCNAME[0]} - '$VRVIDEOPLAYER' not running yet - waiting a bit longer"
@@ -6155,7 +6148,6 @@ function SBSinitVRVideoPlayer {
 			if [ "$GAMEWINXID" == "0x0" ]; then
 				writelog "SKIP" "${FUNCNAME[0]} GAMEWINXID '$GAMEWINXID' is invalid - skipping VR"
 				RUNSBSVR=0
-				checkDepth3DUse
 			else
 				writelog "INFO" "${FUNCNAME[0]} Using the gamewindow id '$GAMEWINXID' for stereoscopic 3D VR"
 				SBSrunVRVideoPlayer	"$GAMEWINXID" 2>/dev/null &
@@ -6413,7 +6405,6 @@ function checkHMDPresent {
 				writelog "SKIP" "${FUNCNAME[0]} - No $SVR hardware found using '$LSUSB' - cancelling the SteamVR start"
 				RUNSBSVR=0
 				echo "RUNSBSVR=\"0\"" > "$VRINITLOCK"
-				checkDepth3DUse
 			fi
 		else
 			writelog "SKIP" "${FUNCNAME[0]} - Skipping, as '$LSUSB' was not found"
@@ -6456,7 +6447,6 @@ function checkSBSVRLaunch {
 			else
 				writelog "SKIP" "${FUNCNAME[0]} - ERROR - RUNSBSVR is '$RUNSBSVR' which is invalid - setting to 0"
 				RUNSBSVR=0
-				checkDepth3DUse
 			fi
 		fi
 	fi
@@ -6495,66 +6485,14 @@ function installd3d47dll {
 			writelog "INFO" "${FUNCNAME[0]} - Copied '$D3D47DLDIR/$1' to '$2/$D3D47'"
 			if [ "$USESPECIALK" -eq 1 ]; then
 				echo "$2/$D3D47" >> "$SPEKENA"
+			else
+				echo "$D3D47" >> "$2/$RSTXT"
+				sort "$2/$RSTXT" -u -o "$2/$RSTXT"
 			fi
 		fi
 	else
 		writelog "SKIP" "${FUNCNAME[0]} - Destfile '$2/$D3D47' already exists - skipping this file" 
 	fi
-}
-
-function RSiniToGameDir {
-	DESTINIABS="$1"
-	DESTINI="${1##*/}"
-	GSRSINI="$GLOBALRSPRESETDIR/$RESHADEPRESET/$DESTINI"
-	USRSINI="$STLRSPRESETDIR/$RESHADEPRESET/$DESTINI"
-
-	if [ ! -f "$DESTINIABS" ]; then
-		if [ -f "$GSRSINI" ] && [ -f "$USRSINI" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Both global and user '$DESTINI' exist for '$RESHADEPRESET'- copying user file into gamedir"
-			cp "$USRSINI" "$DESTINIABS"
-		elif [ ! -f "$GSRSINI" ] && [ -f "$USRSINI" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - User '$DESTINI' exist for '$RESHADEPRESET'- copying into gamedir"
-			cp "$USRSINI" "$DESTINIABS"
-		elif [ -f "$GSRSINI" ] && [ ! -f "$USRSINI" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Global '$DESTINI' exist for '$RESHADEPRESET'- copying into gamedir"
-			cp "$GSRSINI" "$DESTINIABS"
-		elif [ ! -f "$GSRSINI" ] && [ ! -f "$USRSINI" ]; then
-			writelog "SKIP" "${FUNCNAME[0]} - Neither global nor user '$DESTINI' exist - nothing to copy - skipping"
-		fi	
-	else
-		writelog "SKIP" "${FUNCNAME[0]} - '$DESTINIABS' already exists - nothing to do - skipping"
-	fi
-
-}
-
-function presetReShade {
-
-	if [ -n "$RESHADEPRESET" ] && [ "$RESHADEPRESET" != "$NON" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - RESHADEPRESET is set to '$RESHADEPRESET'"
-		DRSINI="$1/$RSINI"
-		DRSPINI="$1/$RSPINI"
-
-		RSiniToGameDir "$DRSINI"
-		RSiniToGameDir "$DRSPINI"
-	else
-		writelog "SKIP" "${FUNCNAME[0]} - No specific ${RESH} preset configured - skipping"
-	fi
-}
-
-function createReShadePresetList {
-
-	function listRSP {
-		if [ -d "$GLOBALRSPRESETDIR" ]; then
-		while read -r RSPF; do
-			echo "${RSPF##*/}"
-		done <<< "$(find "$GLOBALRSPRESETDIR" -mindepth 1 -maxdepth 1 -type d)"
-		fi
-
-		while read -r RSPF; do
-			echo "${RSPF##*/}"
-		done <<< "$(find "$STLRSPRESETDIR" -mindepth 1 -maxdepth 1 -type d)"
-	}
-	RSPRESETLIST="$(listRSP | sort -u | tr '\n' '!' | sed "s:^!::" | sed "s:!$::")"
 }
 
 function dlReShade {
@@ -6753,19 +6691,6 @@ function ShaderRepoDialog {
 	esac
 }
 
-function getAvailableShaders {
-	unset ShaderFiles
-	touch "$SHADERREPOBLOCKLIST"
-	while read -r shadfx; do
-		ShaderFiles+=("${shadfx//$STLSHADDIR\//}")
-	done <<< "$(find "$STLSHADDIR" -name "*.fx" | grep -vFf "$SHADERREPOBLOCKLIST")"
-
-	unset BlockedShaderFiles
-	while read -r shadfx; do
-		BlockedShaderFiles+=("${shadfx//$STLSHADDIR\//}")
-	done <<< "$(find "$STLSHADDIR" -name "*.fx" -o -name "*.png" -o -name "*.fxh" -o -name "*.cfg" | grep -Ff "$SHADERREPOBLOCKLIST")"
-}
-
 function setFullGameExePath {
 	if [ "$USECUSTOMCMD" -eq 1 ] && [ -f "$CUSTOMCMD" ]; then
 		FGEP="${CUSTOMCMD%/*}"
@@ -6798,15 +6723,11 @@ function setFullGameExePath {
 	fi
 }
 
-function GameShaderDialog {
-	touch "$SHADERREPOBLOCKLIST"
-
+function setShaderDest {
 	if [ -n "$(GETALTEXEPATH)" ]; then
 		SHADDESTDIR="$(GETALTEXEPATH)"
 		writelog "INFO" "${FUNCNAME[0]} - Overriding SHADDESTDIR to '$SHADDESTDIR' because ALTEXEPATH is set to '$ALTEXEPATH'"
 	fi
-
-	writelog "INFO" "${FUNCNAME[0]} - Using Shader destination directory '$SHADDESTDIR'"
 
 	if [ -z "$SHADDESTDIR" ]; then
 		if [ -z "$1" ]; then		
@@ -6838,14 +6759,131 @@ function GameShaderDialog {
 				fi
 			fi
 		fi
+
+		if [ -n "$SHADDESTDIR" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Using Shader destination directory '$SHADDESTDIR'"
+		fi
+	fi	
+}
+
+function disableThisGameShaderRepo {
+	RMREP="$1"
+	if [ -n "$2" ]; then
+		SHADDESTDIR="$2"
+	else
+		setShaderDest
 	fi
 
-	if [ "$SHADDESTDIR" != "$NON" ] && [ ! -d "$SHADDESTDIR" ]; then
-		mkProjDir "$SHADDESTDIR"
+	if [ -z "$RSDSTS" ]; then
+		RSDST="$SHADDESTDIR/$RSSUB"
+		RSDSTS="$RSDST/Shaders"
+		RSDSTT="$RSDST/Textures"
+		RSDSTE="$RSDST/enabled"
 	fi
 
-	if [ -d "$SHADDESTDIR" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - Opening Shader Selection Dialog for dir '$SHADDESTDIR'"
+	if [ -n "$RMREP" ] && [ -f "$RSDSTE/$RMREP" ]; then
+		notiShow "$(strFix "$NOTY_SHADDIS" "$RMREP")"
+
+		# removed disabled shaders
+		if [ -d "$RSDSTS" ]; then
+			while read -r syml; do
+				if [[ "$(readlink "$syml")" =~ $RMREP ]]; then
+					writelog "INFO" "${FUNCNAME[0]} - Removing shader symlink '$syml' from deactivated repo '$RMREP'" "X" "$SHADLOG"
+					rm "$syml"
+				fi
+			done <<< "$(find -L "$RSDSTS")"
+		fi
+		# removed disabled textures
+		if [ -d "$RSDSTT" ]; then
+			while read -r syml; do
+				if [[ "$(readlink "$syml")" =~ $RMREP ]]; then
+					writelog "INFO" "${FUNCNAME[0]} - Removing texture symlink '$syml' from deactivated repo '$RMREP'" "X" "$SHADLOG"
+					rm "$syml"
+				fi
+			done <<< "$(find -L "$RSDSTT")"
+		fi
+		rm "$RSDSTE/$RMREP" 
+	fi
+}
+
+function enableThisGameShaderRepo {
+	SELREPO="$1"
+	REPDIR="$STLSHADDIR/$SELREPO"
+
+	if grep -q "^${SELREPO}$" "$SHADERREPOBLOCKLIST"; then
+		writelog "SKIP" "${FUNCNAME[0]} - The selected repo '$SELREPO' is in the block list '$SHADERREPOBLOCKLIST'" "X" "$SHADLOG"
+	else
+		if [ -n "$2" ]; then
+			SHADDESTDIR="$2"
+		else
+			setShaderDest
+		fi
+
+		if [ ! -d "$REPDIR" ]; then
+			writelog "SKIP" "${FUNCNAME[0]} - The directory '$REPDIR' for the selected repo '$SELREPO' does not exist" "X" "$SHADLOG"
+		else
+			if [ -z "$RSDSTS" ]; then
+				RSDST="$SHADDESTDIR/$RSSUB"
+				RSDSTS="$RSDST/Shaders"
+				RSDSTT="$RSDST/Textures"
+				RSDSTE="$RSDST/enabled"
+
+				mkProjDir "$RSDSTS"
+				mkProjDir "$RSDSTT"
+				mkProjDir "$RSDSTE"
+			fi
+
+			if [ -f "$RSDSTE/$SELREPO" ]; then
+				writelog "SKIP" "${FUNCNAME[0]} - Repo '$SELREPO' is already activated for the game" "X" "$SHADLOG"
+			else
+				notiShow "$(strFix "$NOTY_SHADENA" "$SELREPO")"
+				# updating shaders
+				writelog "INFO" "${FUNCNAME[0]} - Updating shaders for activated repo '$SELREPO'" "X" "$SHADLOG"
+				SHADERSRC="$(find "$REPDIR" -type d -iname "Shaders")"
+				if [ -n "$SHADERSRC" ]; then
+					while read -r shaderfile; do
+						writelog "INFO" "${FUNCNAME[0]} - Creating symlink '$RSDSTS/${shaderfile##*/}' for shader '$shaderfile'" "X" "$SHADLOG"
+						ln -s "$shaderfile" "$RSDSTS/${shaderfile##*/}" 2>/dev/null
+					done <<< "$(find "$SHADERSRC" -mindepth 1 -maxdepth 1)"
+					touch "$RSDSTE/$SELREPO"
+				fi
+
+				# updating textures
+				writelog "INFO" "${FUNCNAME[0]} - Updating textures for activated repo '$SELREPO'" "X" "$SHADLOG"
+				TEXTURESRC="$(find "$REPDIR" -type d -iname "Textures")"			
+				if [ -n "$TEXTURESRC" ]; then
+					while read -r texfile; do
+						writelog "INFO" "${FUNCNAME[0]} - Creating symlink '$RSDSTT/${texfile##*/}' for texture '$texfile'" "X" "$SHADLOG"
+						ln -s "$texfile" "$RSDSTT/${texfile##*/}" 2>/dev/null
+					done <<< "$(find "$TEXTURESRC" -mindepth 1 -maxdepth 1)"		
+				fi
+			fi
+		fi
+	fi
+}
+
+function GameShaderDialog {
+	touch "$SHADERREPOBLOCKLIST"
+
+	setShaderDest "$1"
+
+	RSDST="$SHADDESTDIR/$RSSUB"
+	RSDSTS="$RSDST/Shaders"
+	RSDSTT="$RSDST/Textures"
+	RSDSTE="$RSDST/enabled"
+
+	if [ -f "$SHADLOG" ]; then
+		rm "$SHADLOG" 2>/dev/null
+	fi
+
+	if [ "$SHADDESTDIR" != "$NON" ]; then
+		mkProjDir "$RSDSTS"
+		mkProjDir "$RSDSTT"
+		mkProjDir "$RSDSTE"
+	fi
+
+	if [ -d "$RSDST" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Opening Shader Selection Dialog for dir '$RSDST'"
 
 		SHADDLLAST="$STLSHADDIR/lastdl.txt"
 		MAXAGE=1440
@@ -6855,86 +6893,65 @@ function GameShaderDialog {
 			echo "$(date) - ${FUNCNAME[0]}" > "$SHADDLLAST"
 		fi
 
-		getAvailableShaders
-		writelog "INFO" "${FUNCNAME[0]} - Found ${#ShaderFiles[@]} available Shader Files from the enabled Shader Repos - opening Selection"
 		export CURWIKI="$PPW/Shader-Management"
 		TITLE="${PROGNAME}-Shader"
 		pollWinRes "$TITLE"
 
 		setShowPic
 
-		SHADFILES="$(while read -r f; do if [ ! -f "$SHADDESTDIR/${f##*/}" ]; then 	echo FALSE ; echo "$f"; else echo TRUE ; echo "$f" ;fi ; done <<< "$(printf "%s\n" "${ShaderFiles[@]}")" | \
-		"$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center "$WINDECO" --list --checklist --column="$GUI_ADD" --column=Shader --separator=" " --print-column="2" \
-		--text="$(spanFont "$(strFix "$GUI_SHADERDIALOG" "${SHADDESTDIR##*/}")" "H")" --title="$TITLE" "$GEOM")"
+		unset AVAILREPOS
+		unset SELREPOS
+		unset UNSELREPOS
+
+		# appending a ';' to the reponames to prevent cutting the wrong, similar filename
+		mapfile -d "|" -t -O "${#AVAILREPOS[@]}" AVAILREPOS <<< "$(find "$STLSHADDIR" -mindepth 1 -maxdepth 1 -not -empty -type d -printf "%p;\n")"
+
+		SELREPOS="$(while read -r repo; do REPONAME="${repo##*/}"; if [ -f "$RSDSTE/${REPONAME//;}" ]; then	echo TRUE ; echo "${REPONAME//;}"; else echo FALSE ; echo "${REPONAME//;}" ;fi ; done <<< "$(printf "%s\n" "${AVAILREPOS[@]}")" | \
+		"$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center "$WINDECO" --list --checklist --column="$GUI_ADD" --column=Shader-Repo --separator=" " --print-column="2" \
+		--text="$(spanFont "$(strFix "$GUI_SHADERDIALOG" "${RSDST##*/}")" "H")" --title="$TITLE" "$GEOM")"
 		case $? in
 			0)  {
-					writelog "INFO" "${FUNCNAME[0]} - Updating selected shaders"
-	
-					while read -r upshad; do
-						if [ -f "$SHADDESTDIR/${upshad##*/}" ]; then
-							if ! grep -q "$upshad" <<< "$SHADFILES"; then
-								writelog "INFO" "${FUNCNAME[0]} - File '$SHADDESTDIR/${upshad##*/}' exists, but is unchecked - removing"
-								rm "$SHADDESTDIR/${upshad##*/}"
-							fi
-						else
-							if grep -q "$upshad" <<< "$SHADFILES"; then
-								writelog "INFO" "${FUNCNAME[0]} - File '$SHADDESTDIR/${upshad##*/}' does not exist, but is checked - installing"
-								cp "$STLSHADDIR/$upshad" "$SHADDESTDIR"
+					UNSELREPO=( "${AVAILREPOS[@]}" )
+									
+					if [ -n "${SELREPOS[0]}" ]; then
+						writelog "INFO" "${FUNCNAME[0]} - At least one repo was enabled, so automatically enabling required repo '$RSSUB'" "X" "$SHADLOG"
+						SELREPOS=( "${SELREPOS[@]}" "$RSSUB" )
 
-								if grep -q "\.jpg\|\.png" "$STLSHADDIR/$upshad"; then
-									while read -r texture; do
-										TNAM="${texture##*/}"
-										if grep -q "$TNAM" "$STLSHADDIR/$upshad"; then
-											writelog "INFO" "${FUNCNAME[0]} - Shader '${upshad##*/}' uses texture '$TNAM'"
-											if [ ! -f "$SHADDESTDIR/$TNAM" ]; then
-												writelog "INFO" "${FUNCNAME[0]} - Copying texture '$TNAM' into the gamedir"
-												cp "$texture" "$SHADDESTDIR"
-											else
-												writelog "SKIP" "${FUNCNAME[0]} - Texture '$TNAM' already exists in the gamedir"
-											fi
-										fi
-									done <<< "$(while read -r tdir; do find "$tdir" -type f ; done <<< "$(find "$STLSHADDIR" -type d -name "*Textures*")")"	
-								fi
+						writelog "INFO" "${FUNCNAME[0]} - Activating shaders for enabled repos" "X" "$SHADLOG"
 
-								while read -r shadadd; do
-									if [ ! -f "$SHADDESTDIR/${shadadd##*/}" ]; then
-										SUBDIRPATH="${shadadd//$(dirname "$STLSHADDIR/$upshad")/}"
-										writelog "INFO" "${FUNCNAME[0]} - Installing shader helper file '$SUBDIRPATH' into '$SHADDESTDIR'"
-										mkProjDir "$SHADDESTDIR/$(dirname "$SUBDIRPATH")"
-										cp "$shadadd" "$SHADDESTDIR/$(dirname "$SUBDIRPATH")"
-									fi
-								done <<< "$(find "$(dirname "$STLSHADDIR/$upshad")" -name "*.fxh" -o -name "*.txt")"
-							fi
-						fi
-					
-					done <<< "$(printf "%s\n" "${ShaderFiles[@]//\"/}")"
+						while read -r SELREPO; do
+							writelog "INFO" "${FUNCNAME[0]} - Enabled: $SELREPO" "X" "$SHADLOG"
+							unset REPDIR
+							enableThisGameShaderRepo "$SELREPO"
+							REPDIR="$STLSHADDIR/${SELREPO};"
+							UNSELREPO=( "${UNSELREPO[@]/$REPDIR}" )
 
-					writelog "INFO" "${FUNCNAME[0]} - Removing shaders from blocked repos if found in '$SHADDESTDIR'"
-					
-					while read -r blockshad; do
-						if [ -f "$SHADDESTDIR/${blockshad##*/}" ]; then
-							# chance to have a false positive here is very low, removing anyway only if found one matching file in the repos:
-							if [ "$(find "$STLSHADDIR" -name "*.fx" -o -name "*.png" -o -name "*.fxh" -o -name "*.cfg" | grep -c "${blockshad##*/}")" -eq 1 ]; then
-								writelog "INFO" "${FUNCNAME[0]} - Shader '$SHADDESTDIR/${blockshad##*/}' from blocked repo found - removing"
-								rm "$SHADDESTDIR/${blockshad##*/}"
-							fi
-						fi
-					done <<< "$(printf "%s\n" "${BlockedShaderFiles[@]//\"/}")"
-					
-					if grep -qi "include*.*Reshade" "${SHADDESTDIR}"/*.fx ; then
-						writelog "INFO" "${FUNCNAME[0]} - Installing ${RESH} helper files"
-						RESHASHA="reshade-shaders/Shaders"
-
-						RFXHF="ReShade.fxh"
-						if [ ! -f "$SHADDESTDIR/$RFXHF" ]; then
-							cp "$STLSHADDIR/$RESHASHA/$RFXHF" "$SHADDESTDIR" 2>/dev/null
-						fi
-						
-						RUFXHF="ReShadeUI.fxh"
-						if [ ! -f "$SHADDESTDIR/$RUFXHF" ]; then
-							cp "$STLSHADDIR/$RESHASHA/$RUFXHF" "$SHADDESTDIR" 2>/dev/null
-						fi
+						done <<< "$(printf "%s\n" "${SELREPOS[@]}")"
 					fi
+
+					writelog "INFO" "${FUNCNAME[0]} - Deactivating shaders for disabled repos" "X" "$SHADLOG"
+
+					while read -r UNSEL; do
+						if [ -n "$UNSEL" ] && [ "$UNSEL" != ";" ]; then
+							unset RMREP
+							RMREP="${UNSEL//;}"
+							RMREP="${RMREP##*/}"
+							if [ "$RMREP" != "$RSSUB" ]; then
+								writelog "INFO" "${FUNCNAME[0]} - Disabled: $RMREP" "X" "$SHADLOG"
+								disableThisGameShaderRepo "$RMREP"
+							fi
+						fi
+					done <<< "$(printf "%s\n" "${UNSELREPO[@]}")"
+
+					if [ -z "${SELREPOS[0]}" ] && [ -f "$RSDSTE/$RSSUB" ]; then
+						writelog "INFO" "${FUNCNAME[0]} - No repo was enabled, so also disabling the repo '$RSSUB'" "X" "$SHADLOG"
+						disableThisGameShaderRepo "$RSSUB"
+					fi
+
+					writelog "INFO" "${FUNCNAME[0]} - Deactivating shaders for blocked repos" "X" "$SHADLOG"
+					while read -r BLOCKREP; do
+						disableThisGameShaderRepo "$BLOCKREP"
+					done < "$SHADERREPOBLOCKLIST"
 				}
 			;;
 			1)  writelog "INFO" "${FUNCNAME[0]} - Selected CANCEL"
@@ -7001,7 +7018,8 @@ function installRSdll {
 				writelog "SKIP" "${FUNCNAME[0]} - Sourcefile '$RESHADESRCDIR/$3' missing - skipping this file" 
 			else
 				cp "$RESHADESRCDIR/$3" "$INSTDESTDIR/$1" >/dev/null 2>/dev/null
-				echo "$1" > "$INSTDESTDIR/$RSENABLED"
+				echo "$1" >> "$INSTDESTDIR/$RSTXT"
+				sort "$INSTDESTDIR/$RSTXT" -u -o "$INSTDESTDIR/$RSTXT"
 				writelog "INFO" "${FUNCNAME[0]} - Copied '$RESHADESRCDIR/$3' to '$INSTDESTDIR/$1'" 
 			fi
 		fi
@@ -7032,8 +7050,7 @@ function installReshade {
 			INSTDESTDIR="$SHADDESTDIR"
 		fi
 
-		presetReShade "$INSTDESTDIR"
-
+		function maybedrop { # TODO remove?
 		# checking for previous dll conficts between $D3D47 and $RS_D9_DEST
 		if [ -f "$INSTDESTDIR/${RS_DX_DEST//.dll/.log}" ]; then
 			if grep -q "Another ${RESH} instance was already loaded" "$INSTDESTDIR/${RS_DX_DEST//.dll/.log}"; then
@@ -7056,6 +7073,8 @@ function installReshade {
 		else
 			writelog "INFO" "${FUNCNAME[0]} - No old logfile ${RS_DX_DEST//.dll/.log} found"
 		fi
+		}
+
 		if [ -n "$ARCHALTEXE" ] && [[ ! "$ARCHALTEXE" =~ ${DUMMYBIN}$ ]]; then
 			CHARCH="$ARCHALTEXE"
 		else
@@ -7091,45 +7110,67 @@ function installReshade {
 function installDepth3DReshade {
 	SHADERPOOL="depth3d"
 	
-	if [ -n "$RESHADE_DEPTH3D" ]; then
-		if [ "$RESHADE_DEPTH3D" -eq 1 ]; then
-			StatusWindow "$GUI_DLSHADER" "dlShaders $SHADERPOOL" "DownloadCustomProtonStatus"
-			setShadDestDir
-			if [ -n "$(GETALTEXEPATH)" ]; then
-				INSTDESTDIR="$(GETALTEXEPATH)"
-			else
-				INSTDESTDIR="$SHADDESTDIR"
-			fi
-
-			RESHADEPRESET="$SD3DVR"
-			OLDSD3DVR="${SD3DVR//+/}.fx"
-			if [ -f "$INSTDESTDIR"/"$OLDSD3DVR" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - '$OLDSD3DVR' was renamed to '$SD3DVR' upstream - removing the old file"
-				rm "$INSTDESTDIR"/"$OLDSD3DVR" 2>/dev/null
-			fi
-
-			presetReShade "$INSTDESTDIR"
-
-			writelog "INFO" "${FUNCNAME[0]} - Copying shaders into gamedir"
-			while read -r file; do
-				writelog "INFO" "${FUNCNAME[0]} - CHECKING '$INSTDESTDIR/${file##*/}'"
-
-				if [ -f "$INSTDESTDIR"/"${file##*/}" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - '$INSTDESTDIR/${file##*/}' already exists - updating"
-					cp "$file" "$INSTDESTDIR"
-				else
-					writelog "INFO" "${FUNCNAME[0]} - Copying new file '$file' to '$SHADDESTDIR'"
-					cp "$file" "$INSTDESTDIR"
-				fi
-			done <<< "$(find "$(SHADSRC "$SHADERPOOL")/Shaders/" -maxdepth 1 -name "*.fx*")"
-		fi
+	if [ "$RESHADE_DEPTH3D" -eq 1 ]; then
+		StatusWindow "$GUI_DLSHADER" "dlShaders $SHADERPOOL" "DownloadCustomProtonStatus"
+		setShadDestDir
+		enableThisGameShaderRepo "$SHADERPOOL"
 	fi
 }
 
 function checkReshade {
 	setShadDestDir
+	RSLIST="$SHADDESTDIR/$RSTXT"
+	RSOLIST="${RSLIST}_off"
+	FRSINI="$SHADDESTDIR/$RSINI"
+	FRSOINI="$SHADDESTDIR/${RSINI}_off"
 
+	# TODO remove later:
+	RSENABLED="${RESH}-${PROGNAME,,}-enabled.txt"
+	RSDISABLED="${RESH}-${PROGNAME,,}-disabled.txt"
+	# this doesn't cover all migration constellations, but better than nothing
+	if [ "$USERESHADE" -eq 1 ] && [ -f "$SHADDESTDIR/$RSENABLED" ]; then
+		mv "$SHADDESTDIR/$RSENABLED" "$RSLIST"
+		if [ -f "$SHADDESTDIR/$RS_DX_DEST" ] && grep -q "$RESH" "$SHADDESTDIR/$RS_DX_DEST"; then
+			echo "$RS_DX_DEST" >> "$RSLIST"
+		fi
+
+		if [ -f "$SHADDESTDIR/$RS_D9_DEST" ] && grep -q "$RESH" "$SHADDESTDIR/$RS_D9_DEST"; then
+			echo "$RS_D9_DEST" >> "$RSLIST"
+		fi
+		sort "$RSLIST" -u -o "$RSLIST"
+	elif [ "$USERESHADE" -eq 1 ] && [ -f "$SHADDESTDIR/$RSDISABLED" ]; then
+		mv "$SHADDESTDIR/$RSDISABLED" "$RSOLIST"
+		if [ -f "$SHADDESTDIR/$RS_DX_DEST" ] && grep -q "$RESH" "$SHADDESTDIR/$RS_DX_DEST"; then
+			echo "$RS_DX_DEST" >> "$RSOLIST"
+		fi
+
+		if [ -f "$SHADDESTDIR/$RS_D9_DEST" ] && grep -q "$RESH" "$SHADDESTDIR/$RS_D9_DEST"; then
+			echo "$RS_D9_DEST" >> "$RSOLIST"
+		fi
+		sort "$RSOLIST" -u -o "$RSOLIST"
+	fi
+	#
+	
 	if [ "$USERESHADE" -eq 1 ]; then
+		if [ -f "$FRSINI" ]; then
+			if grep -q "EffectSearchPaths=.\$RSSUB\Shaders" "$FRSINI"; then
+				writelog "SKIP" "${FUNCNAME[0]} - Already have '$FRSINI' with default paths pointing to '$RSSUB'"
+			else
+				writelog "SKIP" "${FUNCNAME[0]} - Found a '$FRSINI' without default paths pointing to '$RSSUB' - not touching it"
+			fi
+		else
+			if [ -f "$FRSOINI" ] && grep -q "EffectSearchPaths=.\$RSSUB\Shaders" "$FRSOINI"; then
+				writelog "INFO" "${FUNCNAME[0]} - Re-enabling previously disabled '$FRSOINI'"
+				mv "$FRSOINI" "$FRSINI"
+			else
+				writelog "INFO" "${FUNCNAME[0]} - Creating initial '$FRSINI' with default paths pointing to '$RSSUB'"
+				{
+					echo "[GENERAL]"
+					echo "EffectSearchPaths=.\\$RSSUB\Shaders"
+					echo "TextureSearchPaths=.\\$RSSUB\Textures"
+				} > "$FRSINI"
+			fi
+		fi
 
 #XXXXXXXXXXXXX
 		if [ "$USESPECIALK" -eq 1 ]; then
@@ -7151,12 +7192,16 @@ function checkReshade {
 		fi
 
 #		else
-			if [ -f "$SHADDESTDIR/$RSDISABLED" ]; then
+			if [ -f "$RSOLIST" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - ${RESH} has been disabled previously using '${PROGNAME,,}' - enabling it now"
-				RSDLL="$(cat "$SHADDESTDIR/$RSDISABLED")" 
-				mv "$SHADDESTDIR/$RSDLL" "$SHADDESTDIR/${RSDLL//_disabled/}"
-				rm "$SHADDESTDIR/$RSDISABLED" 2>/dev/null
-				echo "${RSDLL//_disabled/}" > "$SHADDESTDIR/$RSENABLED"
+				while read -r rsdll; do
+					if [ -f "$SHADDESTDIR/${rsdll}_off" ]; then
+						mv "$SHADDESTDIR/${rsdll}_off" "$SHADDESTDIR/$rsdll"
+					else
+						writelog "WARN" "${FUNCNAME[0]} - '$SHADDESTDIR/${rsdll}_off' was supposed to be reenabled, but the file is missing"
+					fi
+				done < "$SHADDESTDIR/${RSTXT}_off"
+				mv "$RSOLIST" "$RSLIST"
 			fi
 
 			if [ ! -f "$SHADDESTDIR/$D3D47" ]; then
@@ -7164,8 +7209,8 @@ function checkReshade {
 				INSTALL_RESHADE=1 installReshade
 			fi
 
-			if [ -f "$SHADDESTDIR/$RSINI" ] && [ ! -f "$SHADDESTDIR/$RSENABLED" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Looks like ${RESH} was installed previously using '${PROGNAME,,}' without creating '$RSENABLED' - recreating it now"
+			if [ -f "$FRSINI" ] && [ ! -f "$RSLIST" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Looks like ${RESH} was installed previously using '${PROGNAME,,}' without creating '$RSLIST' - recreating it now"
 				INSTALL_RESHADE=1 installReshade F
 			fi
 
@@ -7173,16 +7218,21 @@ function checkReshade {
 			export WINEDLLOVERRIDES="$WINEDLLOVERRIDES;dxgi=n,b;d3d9=n,b;${D3D47//.dll}=n,b"
 #		fi
 	else	
-		if [ -f "$SHADDESTDIR/$RSINI" ]; then
-			mv "$SHADDESTDIR/$RSINI" "$SHADDESTDIR/${RSINI}_disabled"
+		if [ -f "$FRSINI" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - ${RESH} has been disabled by the user, so renaming '$FRSINI' to '$FRSOINI'"
+			mv "$FRSINI" "$FRSOINI"
 		fi
 
-		if [ -f "$SHADDESTDIR/$RSENABLED" ]; then
+		if [ -f "$RSLIST" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - ${RESH} has been installed previously with '${PROGNAME,,}' - disabling it now"
-			RSDLL="$(cat "$SHADDESTDIR/$RSENABLED")" 
-			mv "$SHADDESTDIR/$RSDLL" "$SHADDESTDIR/${RSDLL}_disabled"
-			rm "$SHADDESTDIR/$RSENABLED" 2>/dev/null
-			echo "${RSDLL}_disabled" > "$SHADDESTDIR/$RSDISABLED"
+			while read -r rsdll; do
+				if [ -f "$SHADDESTDIR/${rsdll}" ]; then
+					mv "$SHADDESTDIR/$rsdll" "$SHADDESTDIR/${rsdll}_off"
+				else
+					writelog "WARN" "${FUNCNAME[0]} - '$SHADDESTDIR/${rsdll}' was supposed to be disabled, but the file is already missing"
+				fi
+			done < "$RSLIST"
+			mv "$RSLIST" "$RSOLIST"
 		fi
 		
 		if [ "$USESPECIALK" -eq 0 ]; then
@@ -7503,23 +7553,6 @@ function useSpecialK {
 	fi
 }
 
-function checkDepth3DUse {
-	if [ -d "$EFD" ]; then
-		SPIDIS="$EFD/${RSPINI}_disabled"
-		
-		if [ "$RUNSBSVR" -eq 0 ] && [ -f "$EFD/$RSPINI" ]; then
-			if grep -q "Techniques=${SD3DVR//+/}" "$EFD/$RSPINI"; then
-				writelog "INFO" "${FUNCNAME[0]} - Deactivating '$SD3DVR' because VR is disabled"
-				mv "$EFD/$RSPINI" "$SPIDIS"
-			fi
-		fi
-		if [ "$RUNSBSVR" -eq 1 ] && [ ! -f "$EFD/$RSPINI" ] && [ -f "$SPIDIS" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Reactivating '$SD3DVR' because VR is enabled"
-			mv "$SPIDIS" "$EFD/$RSPINI"
-		fi
-	fi
-}
-
 function getUsedVars {
 	while read -r line; do 
 		if grep -q -v "^#" <<< "$line"; then
@@ -7787,7 +7820,6 @@ function createProjectDirs {
 	mkProjDir "$STLGZIP"
 	mkProjDir "$STLGPNG"
 	mkProjDir "$STLAPPINFOIDDIR"
-	mkProjDir "$STLRSPRESETDIR"
 	mkProjDir "$CEDLDIR"
 	mkProjDir "$HIDEDIR"
 	mkProjDir "$VORTEXCOMPDATA"
@@ -10350,6 +10382,11 @@ function checkCheatEngineLaunch {
 			if [ ! -f "$CEEXE" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Installing failed - can't start '$CE' - skipping"
 			else
+				if [ "$USEGAMEMODERUN" -eq 1 ]; then
+					writelog "WARN" "${FUNCNAME[0]} - Disabling '$GMR' for '$CE', because function 'GAMEPID' doesn't find the game pid with it in the current state"
+					USEGAMEMODERUN=0
+				fi
+			
 				writelog "INFO" "${FUNCNAME[0]} - Starting '$CEEXE' in the backgound"
 				extProtonRun "F" "$CEEXE" "$CUSTOMCMD_ARGS"
 				killPrefixOnGameExit &
@@ -12699,6 +12736,20 @@ function checkIntDeps {
 			YAD="$(command -v "yad")"
 		fi
 
+		if [ -n "$YAD" ] && [ ! -f "$YAD" ]; then
+			OYAD="$YAD"
+			writelog "WARN" "${FUNCNAME[0]} - Configured YAD '$YAD' was not found!  Trying to find in in a new location" "E"
+			NYAD="$(command -v "yad")"
+			if [ -n "$NYAD" ] && [ "$NYAD" != "$OYAD" ];then
+				writelog "INFO" "${FUNCNAME[0]} - Updating YAD from '$OYAD' to '$NYAD'" "E"
+				YAD="$NYAD"
+				touch "$FUPDATE"
+				updateConfigEntry "YAD" "$NYAD" "$STLDEFGLOBALCFG"
+			else
+				writelog "WARN" "${FUNCNAME[0]} - Could not find a new $YAD version" "E"
+			fi
+		fi
+
 		if [ ! -x "$(command -v "$YAD")" ]; then
 			DEPSMISSING=1
 			writelog "ERROR" "${FUNCNAME[0]} - '$YAD' was not found! Check '${PROGCMD} --help' for alternatives and/or read '$PROJECTPAGE/wiki/Yad'" "E"
@@ -13275,12 +13326,6 @@ function prepareLaunch {
 	# start game with side-by-side VR if RUNSBSVR is not 0 
 	writelog "INFO" "${FUNCNAME[0]} - CheckSBSVRLaunch:"
 	checkSBSVRLaunch "$NON"
-
-	if [ "$ISGAME" -eq 2 ]; then
-		# disable side-by-side Depth3D Shader if RUNSBSVR is 0 
-		writelog "INFO" "${FUNCNAME[0]} - CheckDepth3DUse:"
-		checkDepth3DUse
-	fi
 
 	# start Vortex if USEVORTEX is 1
 	if [ "$USEVORTEX" -eq 1 ]; then
@@ -15320,8 +15365,14 @@ function howto {
 	echo "           shaders <shadername>        all enabled shaders or <shadername>"
 	echo "                                       'list' to list shaders"
 	echo "                                       'repos' to update used shader repos"
-	echo "           gameshaders <gamedir>       open shader selection for <gamedir>"
-	echo "                                       or for last gamedir"
+	echo "           gameshaders <opt1> <opt2|3> open shader selection for dir <opt1>,"
+	echo "                                       for last gamedir when <opt1> is empty"
+	echo "                                       enable repo <opt1> for dir <opt2>"
+	echo "                                        with empty <opt3> or <opt3>=enable"
+	echo "                                       disable repo <opt1> for dir <opt2>"
+	echo "                                        with  <opt3>=disable"
+	echo "                                       block repo <opt1> with <opt2>=block"
+	echo "                                       unblock repo <opt1> with <opt2>=unblock"
 	echo "           reshade <version>           (re)-download ReShade (version)"
 	echo "    version                          Output the program version"
 	echo "    ${VTX} <value>                   ${VTX^} commandline options"
@@ -15541,6 +15592,13 @@ function commandline {
 			echo "need arg2"
 			howto
 		fi
+	elif [ "$1" == "noty" ]; then
+		if [ -n "$2" ]; then
+			NTEXT="$2"
+		else
+			NTEXT="notifier test"
+		fi
+		notiShow "$NTEXT"
 	elif [ "$1" == "onetimerun" ] || [ "$1" == "otr" ]; then
 		FUSEID "$2"
 		OneTimeRunGui "$USEID"
@@ -15649,7 +15707,7 @@ function commandline {
 				getDataForAllGamesinSharedConfig
 			elif [ "$2" == "shader" ] || [ "$2" == "shaders" ]; then
 				StatusWindow "$GUI_DLSHADER" "dlShaders $3"  "DownloadShadersStatus"
-			elif [ "$2" == "gameshaders" ]; then
+			elif [ "$2" == "gameshader" ] || [ "$2" == "gameshaders" ]; then
 				if [ -z "$3" ]; then
 					writelog "INFO" "${FUNCNAME[0]} - No game directory in argument 3 provided - using last game!"
 					GameShaderDialog
@@ -15658,7 +15716,25 @@ function commandline {
 						writelog "INFO" "${FUNCNAME[0]} - command line: GameShaderDialog \"$3\""
 						GameShaderDialog "$3"
 					else
-						writelog "SKIP" "${FUNCNAME[0]} - Game directory '$3' does not exist - exit"
+						if [ -n "$4" ]; then
+							if [ -d "$4" ]; then
+								if [ -n "$5" ] && [ "$5" == "disable" ]; then
+									disableThisGameShaderRepo "$3" "$4"
+								else
+									enableThisGameShaderRepo "$3" "$4"
+								fi
+							elif [ "$4" == "block" ]; then
+								echo "$3" >> "$SHADERREPOBLOCKLIST"
+								sort -u "$SHADERREPOBLOCKLIST" -o "$SHADERREPOBLOCKLIST"
+							elif [ "$4" == "unblock" ]; then
+								grep -v "^${3}$" "$SHADERREPOBLOCKLIST" > "$STLSHM/SHADERREPOBLOCKLIST_tmp.txt"
+								mv "$STLSHM/SHADERREPOBLOCKLIST_tmp.txt" "$SHADERREPOBLOCKLIST"
+							else
+								writelog "SKIP" "${FUNCNAME[0]} - Invalid argument '$4' - exit"
+							fi
+						else
+							writelog "SKIP" "${FUNCNAME[0]} - Game directory '$3' does not exist - exit"
+						fi
 					fi
 				fi
 			elif [ "$2" == "reshade" ]; then
@@ -17528,75 +17604,6 @@ function initShmStl {
 	fi
 }
 
-# temporary function for config migration, will be removed later
-function migrateCfgs {
-	if [ ! -f "$STLCFGDIR/OK" ]; then
-		if [ -z "$XDG_CONFIG_HOME" ]; then
-			SHOSTLCFGDIR="$HOME/.config/$SHOSTL"
-		else
-			SHOSTLCFGDIR="$XDG_CONFIG_HOME/$SHOSTL"
-		fi
-
-		# first basic name migration
-		if [ ! -d "$STLCFGDIR" ] && [ -d "$SHOSTLCFGDIR" ]; then
-			sed "s:$SHOSTL:${PROGNAME,,}:g" -i "${SHOSTLCFGDIR}/protonlist.txt"
-			sed "s:$SHOSTL:${PROGNAME,,}:g" -i "${SHOSTLCFGDIR}/"*".conf"
-			sed "s:$SHOSTL:${PROGNAME,,}:g" -i "${SHOSTLCFGDIR}/${VTX}/stages.txt" 2>/dev/null
-			mv "$MAHUCFGDIR/$MAHU-${SHOSTL}-template.conf" "$MAHUTMPL" 2>/dev/null
-			sed "s:$SHOSTL:${PROGNAME,,}:g" -i "$MAHUTMPL" 2>/dev/null
-			sed "s:$SHOSTL:${PROGNAME,,}:g" -i "${SHOSTLCFGDIR}/${MAHU}/id/"*".conf"
-			sed "s:$SHOSTL:${PROGNAME,,}:g" -i "${SHOSTLCFGDIR}/gamecfgs/id/"*".conf"
-			mv "$SHOSTLCFGDIR" "$STLCFGDIR"
-			mv "$BASELOGDIR/$SHOSTL" "$DEFLOGDIR" 2>/dev/null
-		fi
-
-		# then recreate compatdata if required
-		mkProjDir "$STLSHM"
-		setSteamPaths
-
-		SCTS="$STEAMCOMPATOOLS/$PROGNAME"
-		if [ -L "$SCTS/$SHOSTL" ]; then
-			rm "$SCTS/$SHOSTL"
-			rm "$SCTS/"*".vdf"
-			rmdir "$SCTS"
-			CompatTool "add"
-		fi
-
-		# finally fix broken symlinks
-		if [ -d "$STLCFGDIR" ]; then
-			cd "$STLCFGDIR" >/dev/null || return
-			while read -r syml; do
-				target="$(readlink "$syml")"
-				if [ -n "$target" ] && [ ! -f "$target" ] && [[ $target == *"$SHOSTL"* ]]; then
-					rm "$syml"
-					ln -s "${target//$SHOSTL/${PROGNAME,,}}" "$STLCFGDIR/$syml"
-				fi
-			done <<< "$(find . -type l -name "*.conf" -o -name "*.vdf" -o -name "*.log")"
-
-			if [ -d "$MAHULTI" ]; then
-				while read -r syml; do
-					target="$(readlink "$syml")"
-					if [ -n "$target" ] && [ ! -f "$target" ] && [[ $target == *"$SHOSTL"* ]]; then
-						rm "$syml"
-					fi
-				done <<< "$(find "$MAHULTI" -type l)"
-			fi
-
-			if [[ "$(readlink "$DEPSLATDIR")" == *"$SHOSTL"* ]]; then
-				rm "$DEPSLATDIR" 2>/dev/null
-			fi
-			cd - >/dev/null || return
-			touch "$STLCFGDIR/OK"
-		fi
-	fi
-
-	if [ ! -f "$STLCFGDIR/OK2" ]; then
-		sed "s:$SHOSTL:${PROGNAME,,}:g" -i "${STLGDESKD}/"*".desktop" 2>/dev/null
-		sed "s:$SHOSTL:${PROGNAME,,}:g" -i "${STLIDFD}/"*".desktop" 2>/dev/null
-		touch "$STLCFGDIR/OK2" 2>/dev/null
-	fi
-}
-
 ##################
 
 function main {
@@ -17672,6 +17679,5 @@ function main {
 if [ "$EUID" = 0 ]; then
 	echo "'$PROGCMD' is not meant to be run as root - Exiting"
 else
-	migrateCfgs
 	main "$@"
 fi
