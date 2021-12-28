@@ -18,8 +18,6 @@ By using a versatile configuration structure it is both easy to set up and flexi
 
 ## How to use
 
-⚠ **Read [this](https://github.com/frostworx/steamtinkerlaunch/issues/350) if you're using steamtinkerlaunch with the `stl` executable**
-
 ### General usage
 **steamtinkerlaunch works with Linux native games and with games using Proton!**
 *(Some features (f.e. [ReShade](https://github.com/frostworx/steamtinkerlaunch/wiki/ReShade)) are only available for games using Proton)*
