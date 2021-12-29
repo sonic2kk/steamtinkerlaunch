@@ -9224,6 +9224,15 @@ function redirectSCDP {
 		fi		
 	}
 
+	function fixDestCompat {
+		DESTCOMPDATA2="${DESTCOMPDATA//--/-}"
+		if [ -d "$DESTCOMPDATA" ] && [ ! -d "$DESTCOMPDATA2" ] && [ "$DESTCOMPDATA" != "$DESTCOMPDATA2" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Renaming old '${DESTCOMPDATA##*/}' to '${DESTCOMPDATA2##*/}'"
+			mv "$DESTCOMPDATA" "$DESTCOMPDATA2"
+			DESTCOMPDATA="$DESTCOMPDATA2"
+		fi		
+	}
+
 	if [ -n "$STEAM_COMPAT_DATA_PATH" ]; then # should be enough
 		VERSFIX="$(grep "${USEPROTON%-*}" "$PROTONCSV" | cut -d ';' -f1 | sort -nr | head -n1)"
 		if [ -n "$VERSFIX" ]; then
@@ -9239,10 +9248,12 @@ function redirectSCDP {
 		
 		if [ "$REDIRCOMPDATA" == "single-proton" ]; then
 			DESTCOMPDATA="${STEAM_COMPAT_DATA_PATH//${STEAM_COMPAT_DATA_PATH##*/}/${PROGNAME,,}\/${STEAM_COMPAT_DATA_PATH##*/}-proton-${DESTPROT}}"
+			fixDestCompat
 			checkCompatdataSymlink
 		elif [ "$REDIRCOMPDATA" == "global-proton" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Using global 'STEAM_COMPAT_DATA_PATH'"
 			DESTCOMPDATA="$STLPROTCOMPDATDIR/${CODA}-proton-${DESTPROT}"
+			fixDestCompat
 			checkCompatdataSymlink
 		else
 			writelog "INFO" "${FUNCNAME[0]} - Using regular $CODA '$STEAM_COMPAT_DATA_PATH'"
