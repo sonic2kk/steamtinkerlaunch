@@ -1260,6 +1260,25 @@ function listAppManifests {
 		fi
 	}
 
+	# getBIF takes a string containing a BaseInstallFolder or path and returns the 
+	function getBIF {
+		# REGEX needs to be a variable, quoted string literals are not treated as regexps by test
+		# BASH_REMATCH[1] will be the key (BaseInstallFolder* or path)
+		# BASH_REMATCH[2] will be the value (the actual steam library folder)
+		local REGEX='"(BaseInstallFolder[^"]*|path)"\s+"(.*)"\s*$'
+
+		# Use either first arg, or stdin if arg is empty
+		local in=$1
+		if [ -z "$in" ]; then read in; fi
+
+		# Test the regex against input, then print the extracted path to stdout
+		if [ $in =~ $REGEX ] && [ ! -z ${BASH_REMATCH[2]} ]; then
+			echo "${BASH_REMATCH[2]}"
+		else
+			writelog "WARN" "${FUNCNAME[0]} - Failed to parse Base Install Folder from '$in'"
+		fi
+	}
+
 	if [ -d "$DEFSTEAMAPPS" ]; then
 		findAppMa "$DEFSTEAMAPPS"
 	else
@@ -1270,7 +1289,7 @@ function listAppManifests {
 		writelog "INFO" "${FUNCNAME[0]} - Searching appmanifest files in '$CFGVDF' and '$LFVDF'" "X" "$APPMALOG"
 		while read -r BIF; do
 			findAppMa "${BIF//\"/}/$SA"
-		done <<< "$(grep "BaseInstallFolder\|\"path\"" "$CFGVDF" "$LFVDF" 2>/dev/null | awk '{print $3}' | sort -u)"
+		done <<< "$(grep "\"BaseInstallFolder\|\"path\"" "$CFGVDF" "$LFVDF" 2>/dev/null | getBIF | sort -u)"
 	else
 		writelog "SKIP" "${FUNCNAME[0]} - Neither file CFGVDF '$CFGVDF' nor file LFVDF '$LFVDF' found - this should not happen! - skipping"
 	fi
@@ -10646,12 +10665,12 @@ function setModGameReg {
 }
 
 function setModGameSyms {
-	SYMODE="$1"
-	SRCPFX="$2"
-	MODGNA="$3"
-	MODGID="$4"
-	DSTPFX="$5"
-	CHKAPMA="$6"
+	SYMODE="$1" # MODE - either 'li' or 'set'
+	SRCPFX="$2" # Game prefix
+	MODGNA="$3" # Game name
+	MODGID="$4" # Game Steam ID
+	DSTPFX="$5" # Mod manager prefix
+	CHKAPMA="$6" # Game app-manifest (.acf)
 
 	if [ ! -d "$SRCPFX" ]; then
 		writelog "SKIP" "${FUNCNAME[0]} - '$SRCPFX' missing - looks like the game was removed or never started yet"
@@ -10675,7 +10694,7 @@ function setModGameSyms {
 				while read -r gdir; do
 					DSTL="$DSTPFX/$DRCU/$STUS/$DOCS/$MYGAMES/${gdir##*/}"
 					prepModGameSym "$DSTL" "$gdir"
-				done <<< "$(find "$SRCPFX/$DRCU/$STUS/$DOCS/$MYGAMES" -mindepth 1 -maxdepth 1 -type d)"
+				done <<< "$(find -L "$SRCPFX/$DRCU/$STUS/$DOCS/$MYGAMES" -mindepth 1 -maxdepth 1 '(' -type d -o -type l -xtype d ')')"
 			fi
 
 			if [ -d "$SRCPFX/$DRCU/$STUS/$DOCS" ]; then
@@ -10684,30 +10703,30 @@ function setModGameSyms {
 						while read -r gsdir; do
 							DSTL="$DSTPFX/$DRCU/$STUS/$DOCS/$MYGAMES/${gsdir##*/}"
 							prepModGameSym "$DSTL" "$gsdir"
-						done <<< "$(find "$SRCPFX/$DRCU/$STUS/$DOCS/$MYGAMES" -mindepth 1 -maxdepth 1 -type d)"
+						done <<< "$(find -L "$SRCPFX/$DRCU/$STUS/$DOCS/$MYGAMES" -mindepth 1 -maxdepth 1 '(' -type d -o -type l -xtype d ')')"
 					elif [ "${gdir##*/}" == "$EAGA" ]; then
 						mkProjDir "$DSTPFX/$DRCU/$STUS/$DOCS/$EAGA"
 						while read -r geadir; do
 							DSTL="$DSTPFX/$DRCU/$STUS/$DOCS/$EAGA/${geadir##*/}"
 							prepModGameSym "$DSTL" "$geadir"
-						done <<< "$(find "$SRCPFX/$DRCU/$STUS/$DOCS/$EAGA" -mindepth 1 -maxdepth 1 -type d)"
+						done <<< "$(find -L "$SRCPFX/$DRCU/$STUS/$DOCS/$EAGA" -mindepth 1 -maxdepth 1 '(' -type d -o -type l -xtype d ')')"
 					elif [ "${gdir##*/}" == "$LAGA" ]; then
 						mkProjDir "$DSTPFX/$DRCU/$STUS/$DOCS/$LAGA"
 						while read -r gladir; do
 							DSTL="$DSTPFX/$DRCU/$STUS/$DOCS/$LAGA/${gladir##*/}"
 							prepModGameSym "$DSTL" "$gladir"
-						done <<< "$(find "$SRCPFX/$DRCU/$STUS/$DOCS/$LAGA" -mindepth 1 -maxdepth 1 -type d)"
+						done <<< "$(find -L "$SRCPFX/$DRCU/$STUS/$DOCS/$LAGA" -mindepth 1 -maxdepth 1 '(' -type d -o -type l -xtype d ')')"
 					elif [ "${gdir##*/}" == "$BIOW" ]; then
 						mkProjDir "$DSTPFX/$DRCU/$STUS/$DOCS/$BIOW"
 						while read -r gbiodir; do
 							DSTL="$DSTPFX/$DRCU/$STUS/$DOCS/$BIOW/${gbiodir##*/}"
 							prepModGameSym "$DSTL" "$gbiodir"
-						done <<< "$(find "$SRCPFX/$DRCU/$STUS/$DOCS/$BIOW" -mindepth 1 -maxdepth 1 -type d)"
+						done <<< "$(find -L "$SRCPFX/$DRCU/$STUS/$DOCS/$BIOW" -mindepth 1 -maxdepth 1 '(' -type d -o -type l -xtype d ')')"
 					else
 						DSTL="$DSTPFX/$DRCU/$STUS/$DOCS/${gdir##*/}"
 						prepModGameSym "$DSTL" "$gdir"
 					fi
-				done <<< "$(find "$SRCPFX/$DRCU/$STUS/$DOCS" -mindepth 1 -maxdepth 1 -type d -not -empty)"
+				done <<< "$(find -L "$SRCPFX/$DRCU/$STUS/$DOCS" -mindepth 1 -maxdepth 1 -not -empty '(' -type d -o -type l -xtype d ')')"
 			fi
 
 			if [ -d "$SRCPFX/$DRCU/$STUS/$MYDOCS" ] && [ ! -L "$SRCPFX/$DRCU/$STUS/$MYDOCS" ]; then
@@ -10716,30 +10735,30 @@ function setModGameSyms {
 						while read -r gsdir; do
 							DSTL="$DSTPFX/$DRCU/$STUS/$DOCS/$MYGAMES/${gsdir##*/}"
 							prepModGameSym "$DSTL" "$gsdir"
-						done <<< "$(find "$SRCPFX/$DRCU/$STUS/$MYDOCS/$MYGAMES" -mindepth 1 -maxdepth 1 -type d)"
+						done <<< "$(find -L "$SRCPFX/$DRCU/$STUS/$MYDOCS/$MYGAMES" -mindepth 1 -maxdepth 1 '(' -type d -o -type l -xtype d ')')"
 					elif [ "${gdir##*/}" == "$EAGA" ]; then
 						mkProjDir "$DSTPFX/$DRCU/$STUS/$DOCS/$EAGA"
 						while read -r geadir; do
 							DSTL="$DSTPFX/$DRCU/$STUS/$DOCS/$EAGA/${geadir##*/}"
 							prepModGameSym "$DSTL" "$geadir"
-						done <<< "$(find "$SRCPFX/$DRCU/$STUS/$MYDOCS/$EAGA" -mindepth 1 -maxdepth 1 -type d)"
+						done <<< "$(find -L "$SRCPFX/$DRCU/$STUS/$MYDOCS/$EAGA" -mindepth 1 -maxdepth 1 '(' -type d -o -type l -xtype d ')')"
 					elif [ "${gdir##*/}" == "$LAGA" ]; then
 						mkProjDir "$DSTPFX/$DRCU/$STUS/$DOCS/$LAGA"
 						while read -r gladir; do
 							DSTL="$DSTPFX/$DRCU/$STUS/$DOCS/$LAGA/${gladir##*/}"
 							prepModGameSym "$DSTL" "$gladir"
-						done <<< "$(find "$SRCPFX/$DRCU/$STUS/$MYDOCS/$LAGA" -mindepth 1 -maxdepth 1 -type d)"
+						done <<< "$(find -L "$SRCPFX/$DRCU/$STUS/$MYDOCS/$LAGA" -mindepth 1 -maxdepth 1 '(' -type d -o -type l -xtype d ')')"
 					elif [ "${gdir##*/}" == "$BIOW" ]; then
 						mkProjDir "$DSTPFX/$DRCU/$STUS/$DOCS/$BIOW"
 						while read -r gbiodir; do
 							DSTL="$DSTPFX/$DRCU/$STUS/$DOCS/$BIOW/${gbiodir##*/}"
 							prepModGameSym "$DSTL" "$gbiodir"
-						done <<< "$(find "$SRCPFX/$DRCU/$STUS/$DOCS/$BIOW" -mindepth 1 -maxdepth 1 -type d)"
+						done <<< "$(find -L "$SRCPFX/$DRCU/$STUS/$DOCS/$BIOW" -mindepth 1 -maxdepth 1 '(' -type d -o -type l -xtype d ')')"
 					else
 						DSTL="$DSTPFX/$DRCU/$STUS/$DOCS/${gdir##*/}"
 						prepModGameSym "$DSTL" "$gdir"
 					fi
-				done <<< "$(find "$SRCPFX/$DRCU/$STUS/$MYDOCS" -mindepth 1 -maxdepth 1 -type d -not -empty)"
+				done <<< "$(find -L "$SRCPFX/$DRCU/$STUS/$MYDOCS" -mindepth 1 -maxdepth 1 -not -empty '(' -type d -o -type l -xtype d ')')"
 			fi
 
 			if [ -d "$SRCPFX/$DRCU/$STUS/$APDA" ]; then
@@ -10748,7 +10767,7 @@ function setModGameSyms {
 						DSTL="$DSTPFX/$DRCU/$STUS/$ADRO/${gdir##*/}"
 						prepModGameSym "$DSTL" "$gdir"
 					fi
-				done <<< "$(find "$SRCPFX/$DRCU/$STUS/$APDA" -mindepth 1 -maxdepth 1 -type d -not -empty)"
+				done <<< "$(find -L "$SRCPFX/$DRCU/$STUS/$APDA" -mindepth 1 -maxdepth 1 -not -empty '(' -type d -o -type l -xtype d ')')"
 			fi
 
 			if [ -d "$SRCPFX/$DRCU/$STUS/$ADLO" ]; then
@@ -10762,7 +10781,7 @@ function setModGameSyms {
 							prepModGameSym "$DSTL" "$gdir"
 						fi
 					fi
-				done <<< "$(find "$SRCPFX/$DRCU/$STUS/$ADLO" -mindepth 1 -maxdepth 1 -type d -not -empty)"
+				done <<< "$(find -L "$SRCPFX/$DRCU/$STUS/$ADLO" -mindepth 1 -maxdepth 1 -not -empty '(' -type d -o -type l -xtype d ')')"
 			fi
 
 			if [ -d "$SRCPFX/$DRCU/$STUS/$ADLOLO" ]; then
@@ -10776,14 +10795,14 @@ function setModGameSyms {
 							prepModGameSym "$DSTL" "$gdir"
 						fi
 					fi
-				done <<< "$(find "$SRCPFX/$DRCU/$STUS/$ADLOLO" -mindepth 1 -maxdepth 1 -type d -not -empty)"
+				done <<< "$(find -L "$SRCPFX/$DRCU/$STUS/$ADLOLO" -mindepth 1 -maxdepth 1 -not -empty '(' -type d -o -type l -xtype d ')')"
 			fi
 						
 			if [ -d "$SRCPFX/$DRCU/$STUS/$ADLO/LOOT" ]; then
 				while read -r gdir; do
 					DSTL="$MODLOOT/${gdir##*/}"
 					prepModGameSym "$DSTL" "$gdir"
-				done <<< "$(find "$SRCPFX/$DRCU/$STUS/$ADLO/LOOT" -mindepth 1 -maxdepth 1 -type d -not -empty)"
+				done <<< "$(find -L "$SRCPFX/$DRCU/$STUS/$ADLO/LOOT" -mindepth 1 -maxdepth 1 -not -empty '(' -type d -o -type l -xtype d ')')"
 			fi
 			
 			if [ -d "$SRCPFX/$DRCU/$STUS/$LSAD" ]; then
@@ -10792,7 +10811,7 @@ function setModGameSyms {
 						DSTL="$DSTPFX/$DRCU/$STUS/$ADLO/${gdir##*/}"
 						prepModGameSym "$DSTL" "$gdir"
 					fi
-				done <<< "$(find "$SRCPFX/$DRCU/$STUS/$LSAD" -mindepth 1 -maxdepth 1 -type d -not -empty)"
+				done <<< "$(find -L "$SRCPFX/$DRCU/$STUS/$LSAD" -mindepth 1 -maxdepth 1 -not -empty '(' -type d -o -type l -xtype d ')')"
 			fi
 
 			if [ -d "$SRCPFX/$DRCU/$STUS/$SAGE/$CDPR" ]; then
@@ -10800,7 +10819,7 @@ function setModGameSyms {
 				while read -r gdir; do
 						DSTL="$DSTPFX/$DRCU/$STUS/$SAGE/$CDPR/${gdir##*/}"
 						prepModGameSym "$DSTL" "$gdir"
-				done <<< "$(find "$SRCPFX/$DRCU/$STUS/$SAGE/$CDPR" -mindepth 1 -maxdepth 1 -type d -not -empty)"
+				done <<< "$(find -L "$SRCPFX/$DRCU/$STUS/$SAGE/$CDPR" -mindepth 1 -maxdepth 1 -not -empty '(' -type d -o -type l -xtype d ')')"
 			fi
 
 			MSREG="$SRCPFX/$SREG"
@@ -11173,6 +11192,7 @@ function getVortexSupported {
 		fi
 	}
 
+	setVortexVars
 	VGPDIR="$VORTEXINSTDIR/$RABP"
 	VUPDIR="$VORTEXPFX/$DRCU/$STUS/$APDA/Vortex/plugins"
 
