@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v8.1.20211229"
+PROGVERS="v8.1.20211231"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -142,6 +142,7 @@ F1ACTION="bash -c OpenWiki"
 F1ACTIONCG="bash -c setColGui"
 BTS="backup-timestamp"
 DUMMYBIN="echo"
+STLAIDSIZE="12"
 
 ### default vars ###
 
@@ -296,6 +297,44 @@ NOGAMES=",70_2260196511,228980,858280,961940,1054830,1070560,1113280,1245040,139
 #PROTON50="1245040"
 #PROTON513="1420170"
 
+function setGNID {
+	# only keep alphabet chars
+	INGN="$(tr -cd '[:alnum:]' <<< "${1^^}")"
+	INGN="${INGN//[[:digit:]]/}"
+	MIDNUMSIZE=$((STLAIDSIZE -4))
+
+	if [ "${#INGN}" -gt "$MIDNUMSIZE" ]; then
+		INGN="${INGN:0:MIDNUMSIZE}"
+	fi
+
+	while [ "${#INGN}" -lt "$MIDNUMSIZE" ]; do
+		INGN="${INGN}A"
+	done
+
+	ALPHARR=(A B C D E F G H I J K L M N O P Q R S T U V W X Y Z)
+
+	function numberOut {
+		for n in "${!ALPHARR[@]}"; do
+			if [ "${ALPHARR[$n]}" == "$1" ]; then
+				NUM="$((n +1))"
+				printf "%s" "${NUM:1:1}"
+			fi
+		done
+	}
+
+	function outNum {
+		i=0
+		while [ "$i" -lt "${#1}" ]; do
+			numberOut "${1:$i:1}"
+			i=$((i+1))
+		done
+		printf "\n"
+	}
+
+	MIDNUM="$(outNum "$INGN")"
+	echo "$(wc -c <<< "$PROGNAME")$MIDNUM$(wc -c <<< "$PROGNAME")"
+}
+
 function initAID {
 	if [ -n "$STEAM_COMPAT_APP_ID" ]; then
 		AID="$STEAM_COMPAT_APP_ID"
@@ -305,8 +344,14 @@ function initAID {
 	if [ -z "$AID" ] || [ "$AID" -eq "0" ]; then
 		# shellcheck disable=SC2154		# SteamAppId comes from Steam
 		if [ -z "$SteamAppId" ]; then
-			AID="$PLACEHOLDERAID"
-			writelog "INFO" "${FUNCNAME[0]} - Set AID to PLACEHOLDERAID '$AID'" "P"
+			if grep -q "^play" <<< "$@" && [ -f "$2" ]; then
+				GN="${2##*/}"
+				AID="$(setGNID "$GN")"
+				writelog "INFO" "${FUNCNAME[0]} - Set AID to '$PROGCMD' ID '$AID'" "P"
+			else
+				AID="$PLACEHOLDERAID"
+				writelog "INFO" "${FUNCNAME[0]} - Set AID to PLACEHOLDERAID '$AID'" "P"
+			fi
 		else
 			if [ "$SteamAppId" -eq "0" ]; then
 				AID="${STEAM_COMPAT_DATA_PATH##*/}"
@@ -658,7 +703,7 @@ function dlCheck {
 function getGamePic {
 	if [ "$DLGAMEDATA" -eq 1 ]; then
 		DLPIC="$1"
-		if [ ! -f "$DLPIC" ]; then
+		if [ ! -f "$DLPIC" ]  && [ "${#AID}" -lt "$STLAIDSIZE" ]; then
 			DLTITLE="Downloading picture for game '$(basename "${1//.jpg/}")'"
 			dlCheck "$2" "$DLPIC" "X" "$DLTITLE"
 		fi
@@ -1083,7 +1128,7 @@ function getGameIcon {
 }
 
 function getGameData {
-	if ! grep -q ",${1}," <<< "$NOGAMES" ; then
+	if ! grep -q ",${1}," <<< "$NOGAMES" && [ "${#AID}" -lt "$STLAIDSIZE" ]; then
 		DLPIC="$STLGHEADD/$1.jpg"
 		if [ ! -f "$DLPIC" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Downloading picture '$DLPIC' from '$STASSURL/$1/header.jpg'" "X" "$GGDLOG"
@@ -1153,7 +1198,7 @@ function checkSGDbApi {
 }
 
 function getGrid {
-	if checkSGDbApi; then
+	if checkSGDbApi && [ "${#AID}" -lt "$STLAIDSIZE" ]; then
 
 		URLSTR="$("$WGET" --header="Authorization: Bearer $SGDBAPIKEY" -q "${STEAMGRIDDBAPI}/${1}?styles=${SGDBSTYLES}&dimensions=${SGDBDIMS}&types=${SGDBTYPES}&nsfw=${SGDBNSFW}&humor=${SGDBHUMOR}" -O - 2> >(grep -v "SSL_INIT")| "$JQ" -r '.data' | "$JQ" '.[0].url')"
 
@@ -5856,7 +5901,11 @@ function getGameWindowPID {
 				if [ -z "$TESTPID" ]; then
 					break;
 				else
-					if [ -n "$EXECUTABLE" ] && [ "$EXECUTABLE" == "$(cat "/proc/$TESTPID/comm")" ]; then
+					if [ -n "$HAVPA" ]; then
+						writelog "WAIT" "${FUNCNAME[0]} - Found PID '$TESTPID' for game 'HAVPA' '$HAVPA' - leaving loop"
+						FOUNDWIN="$YES"
+						break;
+					elif [ -n "$EXECUTABLE" ] && [ "$EXECUTABLE" == "$(cat "/proc/$TESTPID/comm")" ]; then
 						writelog "WAIT" "${FUNCNAME[0]} - Found PID '$TESTPID' for game 'EXECUTABLE' '$EXECUTABLE' - leaving loop"
 						FOUNDWIN="$YES"
 						break;
@@ -12234,7 +12283,7 @@ function startMO2 {
 
 function dlMod2nexurl {
 	setMO2Vars
-	# XXXXXXXXX improvable - feel free to open a PR
+	# improvable - feel free to open a PR
 	MONGUR1="${1//nxm:\/\/}"
 	MONGURL="${MONGUR1%%/*}"
 	MODLER="$STLSHM/dlNexMod-$MONGURL"
@@ -12253,7 +12302,6 @@ function dlMod2nexurl {
 				writelog "INFO" "${FUNCNAME[0]} - Download Url '$1' for game '$MONGURL'" "E"
 				writelog "INFO" "${FUNCNAME[0]} - STEAM_COMPAT_CLIENT_INSTALL_PATH=\"$SROOT\" STEAM_COMPAT_DATA_PATH=\"$MO2COMPDATA\" \"$MO2RUNPROT\" \"run\" \"${MO}.exe\" \"\$1\""
 				STEAM_COMPAT_CLIENT_INSTALL_PATH="$SROOT" STEAM_COMPAT_DATA_PATH="$MO2COMPDATA" "$MO2RUNPROT" "run" "${MO}.exe" "$1"
-				#LC_ALL=C WINEDEBUG="-all" WINEDEBUG="-all" WINEPREFIX="$MO2PFX" "$MO2WINE" "${MO}.exe" -i "${MONINST//\"}" "$1" >"$STLSHM/${FUNCNAME[0]}_$MONGURL.log" 2>"$STLSHM/${FUNCNAME[0]}_$MONGURL.log"
 			cd - >/dev/null || return
 		else
 			writelog "SKIP" "${FUNCNAME[0]} - Download Url is for game '$MONGURL', which does not have an instance in '$MO2PFX/$DRCU/$STUS/$ADLO/$MO'"
@@ -13121,7 +13169,7 @@ function setMangoHudCfg {
 }
 
 function autoBumpGE {
-	if [ "$AUTOBUMPGE" -eq 1 ] && grep -q "\-GE" <<< "$USEPROTON"; then
+	if [ "$AUTOBUMPGE" -eq 1 ] && grep -q "\-GE" <<< "$USEPROTON" && [ "$ISGAME" -eq 2 ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Current Proton version is $USEPROTON"
 		dlLatestGE "lge" "X"
 		getAvailableProtonVersions "up"
@@ -13204,6 +13252,7 @@ function checkAllPev {
 function prepareLaunch {
 	rm "$CLOSETMP" 2>/dev/null
 	rm "$KILLSWITCH" 2>/dev/null
+
 	linkLog
 
 	createProjectDirs
@@ -13453,7 +13502,7 @@ function prepareLaunch {
 	checkSteamAppIDFile
 
 	# Automatic Grid Update Check before_game
-	if [ "$SGDBAUTODL" == "before_game" ] ; then
+	if [ "$SGDBAUTODL" == "before_game" ] && [ "${#AID}" -lt "$STLAIDSIZE" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Automatic Grid Update Check '$SGDBAUTODL'"
 		getGrid "$AID" &
 	fi
@@ -14110,7 +14159,7 @@ function startGame {
 			GMO2EXE="$GPFX/$MOERPATH"
 		fi
 
-# XXXXXXXXX - silent mode doesn't work, feel free to create a PR
+# silent mode doesn't work, feel free to create a PR
 		if [ "$MO2MODE" == "silent" ]; then
 MO2MODE="gui"
 function disabledWIPSilentMode {
@@ -14291,7 +14340,7 @@ function disabledWIPSilentMode {
 #	if [ "$ISGAME" -eq 2 ] && [ "$USEWINE" -eq 0 ]; then
 		RLRUNWINESERVER="$(readlink -f "$RUNWINESERVER")"
 		WSPID="$("$PGREP" -a "" | grep "$RLRUNWINESERVER" | grep -v grep | cut -d ' ' -f1 | tail -n1)"
-		if [ "$WSPID" -eq "$WSPID" ]; then
+		if [ -n "$WSPID" ] && [ "$WSPID" -eq "$WSPID" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Proton '$USEPROTON' forks its command into background, so waited for the wineserver RUNWINESERVER '$RLRUNWINESERVER' with pid '$WSPID' to finish instead"
 			tail --pid="$WSPID" -f /dev/null
 			writelog "INFO" "${FUNCNAME[0]} - wineserver process '$WSPID' finished - closing"
@@ -14403,7 +14452,6 @@ function initPlay {
 				HAVCUME="$CKHAVCUME"
 			fi
 		fi
-		
 	fi
 	
 	if [ -n "$HAVID" ]; then
@@ -14411,8 +14459,6 @@ function initPlay {
 		HAVGEME="$GEMETA/$1.conf"
 		HAVGACO="$STLGAMEDIRID/$1.conf"
 	fi
-
-#XXXXXXXXXXXXXXX
 
 	if [ -f "$HAVGEME" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Loading custom metadata for '$1' found under '$HAVGEME'" "E"
@@ -14422,16 +14468,22 @@ function initPlay {
 	if [ -n "$GAMEID" ] && [ -z "$HAVID" ]; then
 		HAVID="$GAMEID"
 		writelog "INFO" "${FUNCNAME[0]} - Found SteamAppId '$HAVID'" "E"
+	fi
 
+	if [ -n "$HAVID" ]; then
 		if [ -z "$HAVCUME" ]; then
 			HAVCUME="$CUMETA/$HAVID.conf"
 		fi
 
+		if [ -z "$HAVGEME" ]; then
+			HAVGEME="$GEMETA/$HAVID.conf"
+		fi
+		
 		if [ -z "$HAVGACO" ]; then
 			HAVGACO="$STLGAMEDIRID/$HAVID.conf"
 		fi
 	fi
-	
+
 	if [ -f "$HAVCUME" ]; then
 		fixCustomMeta "$HAVCUME"
 		writelog "INFO" "${FUNCNAME[0]} - Loading custom metadata for '$1' found under '$HAVCUME'" "E"
@@ -14453,49 +14505,83 @@ function initPlay {
 			HAVPA="$CHKHAVPA"
 		fi
 	fi
+
 	if [ -n "$MEGAMEDIR" ]; then
 		GFD="$MEGAMEDIR"
+	fi
+
+	if [ -z "$HAVID" ] &&  [ -z "$GAMEID" ] && [ -n "$HAVPA" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Don't have a 'HAVID' or a GAMEID, so creating one from binary name '${HAVPA##*/}'" "E"
+		HAVID="$(setGNID "${HAVPA##*/}")"
+		if [ -z "$GFD" ]; then
+			GFD="${HAVPA%/*}"
+		fi
+		if [ -z "$EFD" ]; then
+			EFD="${HAVPA%/*}"
+		fi
+	fi
+
+	if [ -n "$HAVID" ] &&  [ -z "$GAMEID" ] && { [ -z "$AID" ] || [ "$AID" == "$PLACEHOLDERAID" ];}; then
+		writelog "INFO" "${FUNCNAME[0]} - Setting AID to '$HAVID'" "E"
+		AID="$HAVID"
 	fi
 
 	if [ -n "$GAMEID" ] && { [ -z "$AID" ] || [ "$AID" == "$PLACEHOLDERAID" ];}; then
 		writelog "INFO" "${FUNCNAME[0]} - Setting AID to '$GAMEID'" "E"
 		AID="$GAMEID"
-		# and AID paths
-		#gamecfgs/id/31337.conf
-#	else
-#		writelog "INFO" "${FUNCNAME[0]} - Already have AID '$AID'" "E"
 	fi
 
-	if [ -z "$HAVGACO" ] && [ -n "$AID" ]; then
-		HAVGACO="$STLGAMEDIRID/$AID.conf"
-	fi
+	if [ -n "$AID" ]; then
+		if [ -z "$HAVGACO" ]; then
+			HAVGACO="$STLGAMEDIRID/$AID.conf"
+		fi
 
-	if [ -f "$HAVGACO" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - Loading game config '$1' found under '$HAVGACO'" "E"
-		loadCfg "$HAVGACO"
-	fi
+		if [ -f "$HAVGACO" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Loading game config '$1' found under '$HAVGACO'" "E"
+			loadCfg "$HAVGACO"
+		fi
 
-#	if [ -z "$GAMEID" ]; then
-#
-#		skip autoCategorySettings
-#	fi
-# ORIGINAL INCOMING LAUNCH COMMAND: ''
+		if [ -f "$HAVPA" ]; then
+			if [ -z "$GP" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Set 'GP' to '$HAVPA'" "E"
+				GP="$HAVPA"
+			else
+				writelog "INFO" "${FUNCNAME[0]} - Already have 'GP' '$GP'" "E"
+			fi
 
-	if [ -f "$HAVPA" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - Game executable used is '$HAVPA'" "E"
-		if grep -q "POSIX shell script" <<< "$(file "$OSCHECKGAMEEXE")" || grep -q "ELF.*.LSB" <<< "$(file "$HAVPA")" ; then
-			writelog "INFO" "${FUNCNAME[0]} - Assuming this is a linux binary" "E"
-			ISGAME=3
-			ORGGCMD=( "$HAVPA" )
-#			launchSteamGame
-			prepareLaunch
-		else
-			writelog "INFO" "${FUNCNAME[0]} - Assuming this is a windows binary" "E"
-			ISGAME=2
-#			launchSteamGame
+			while read -r INGARG; do
+				mapfile -t -O "${#INGCMD[@]}" INGCMD <<< "$INGARG"
+			done <<< "$(printf "%s\n" "$@")"
+
+			FOUNDORGGCMD=0
+			while read -r ORGARG; do
+				if [ "$FOUNDORGGCMD" -eq 0 ]; then
+					mapfile -t -O "${#ORGGCMD[@]}" ORGGCMD <<< "$ORGARG"
+					if [[ "$ORGARG" =~ $GP ]]; then
+						FOUNDORGGCMD=1
+					fi
+				else
+					mapfile -t -O "${#ORGCMDARGS[@]}" ORGCMDARGS <<< "$ORGARG"
+				fi
+			done <<< "$(printf "%s\n" "${INGCMD[@]}")"
+
+
+			writelog "INFO" "${FUNCNAME[0]} - Game executable used is '$HAVPA'" "E"
+
+			if grep -q "POSIX shell script" <<< "$(file "$OSCHECKGAMEEXE")" || grep -q "ELF.*.LSB" <<< "$(file "$HAVPA")" ; then
+				writelog "INFO" "${FUNCNAME[0]} - Assuming this is a linux binary" "E"
+				ISGAME=3
+				prepareLaunch
+			else
+				writelog "INFO" "${FUNCNAME[0]} - Assuming this is a windows binary" "E"
+				ISGAME=2
+				prepareLaunch
 #"$WINEPREFIX"
 #"$GAMEDIR"
+			fi
 		fi
+	else
+		writelog "ERROR" "${FUNCNAME[0]} - Could not determine an AppID - can't continue" "E"
 	fi
 }
 
@@ -15664,7 +15750,7 @@ function commandline {
 		if [ -z "$2" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - need at a valid game name or SteamAppId of an installed game or an absolute path to a game exe as arg2 '$2'" "E"
 		else
-			echo XXXXXXXXXXXXXXXX WIP initPlay "$2"
+			initPlay "${@:2}"
 		fi
 	elif [ "$1" == "proton" ] || [ "$1" == "p" ]; then
 		StandaloneProtonGame "$2" "$3"
