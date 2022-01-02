@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v8.1.20220101"
+PROGVERS="v8.1.20220102"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -1804,41 +1804,42 @@ function getGameOS {
 		writelog "INFO" "${FUNCNAME[0]} - '$GE' determined to be a Windows Game"
 		ISGAME=2		
 	}
-	
-	if [ "$ISGAME" -eq 0 ]; then 
-		writelog "INFO" "${FUNCNAME[0]} - Starting game OS detection"
+	if [ "$STLPLAY" -eq 0 ]; then
+		if [ "$ISGAME" -eq 0 ]; then 
+			writelog "INFO" "${FUNCNAME[0]} - Starting game OS detection"
 
-		while read -r INGARG; do
-			if grep -q "$STEAM_COMPAT_INSTALL_PATH" <<< "$INGARG"; then
-				OSCHECKGAMEEXE="$INGARG"
-			fi
-			mapfile -t -O "${#OSCHECKINGCMD[@]}" OSCHECKINGCMD <<< "$INGARG"
-		done <<< "$(printf "%s\n" "$@")"
+			while read -r INGARG; do
+				if grep -q "$STEAM_COMPAT_INSTALL_PATH" <<< "$INGARG"; then
+					OSCHECKGAMEEXE="$INGARG"
+				fi
+				mapfile -t -O "${#OSCHECKINGCMD[@]}" OSCHECKINGCMD <<< "$INGARG"
+			done <<< "$(printf "%s\n" "$@")"
 
-		if [ -n "$STEAM_COMPAT_DATA_PATH" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - STEAM_COMPAT_DATA_PATH is defined - This is no longer necessarily a reliable indication that this is a Windows game."
-			if [ -f "$OSCHECKGAMEEXE" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Making some more checks on '$OSCHECKGAMEEXE' to determine the OS version of the game"
-				if grep -q "POSIX shell script" <<< "$(file "$OSCHECKGAMEEXE")" || grep -q "ELF.*.LSB" <<< "$(file "$OSCHECKGAMEEXE")" ; then
-					writelog "INFO" "${FUNCNAME[0]} - Looks like this is a Linux game!"
-					setLin "$@"
-				elif grep -q "PE32" <<< "$(file "$OSCHECKGAMEEXE")"; then
-					writelog "INFO" "${FUNCNAME[0]} - Looks like this is a Windows game!"
-					setWin "$@"
+			if [ -n "$STEAM_COMPAT_DATA_PATH" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - STEAM_COMPAT_DATA_PATH is defined - This is no longer necessarily a reliable indication that this is a Windows game."
+				if [ -f "$OSCHECKGAMEEXE" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Making some more checks on '$OSCHECKGAMEEXE' to determine the OS version of the game"
+					if grep -q "POSIX shell script" <<< "$(file "$OSCHECKGAMEEXE")" || grep -q "ELF.*.LSB" <<< "$(file "$OSCHECKGAMEEXE")" ; then
+						writelog "INFO" "${FUNCNAME[0]} - Looks like this is a Linux game!"
+						setLin "$@"
+					elif grep -q "PE32" <<< "$(file "$OSCHECKGAMEEXE")"; then
+						writelog "INFO" "${FUNCNAME[0]} - Looks like this is a Windows game!"
+						setWin "$@"
+					else
+						writelog "WARN" "${FUNCNAME[0]} - Could not determine OS version of '$OSCHECKGAMEEXE' (add check?), so assuming this is a Windows game"
+						setWin "$@"
+					fi
 				else
-					writelog "WARN" "${FUNCNAME[0]} - Could not determine OS version of '$OSCHECKGAMEEXE' (add check?), so assuming this is a Windows game"
+					writelog "WARN" "${FUNCNAME[0]} - Could not extract the full game binary path from the incoming game launch command, so assuming this is a Windows game!"
 					setWin "$@"
 				fi
 			else
-				writelog "WARN" "${FUNCNAME[0]} - Could not extract the full game binary path from the incoming game launch command, so assuming this is a Windows game!"
-				setWin "$@"
+				writelog "INFO" "${FUNCNAME[0]} - STEAM_COMPAT_DATA_PATH is dot defined, so this is (very likely) either a Linux Game or no game was started at all"
+				setLin "$@"
 			fi
 		else
-			writelog "INFO" "${FUNCNAME[0]} - STEAM_COMPAT_DATA_PATH is dot defined, so this is (very likely) either a Linux Game or no game was started at all"
-			setLin "$@"
+			writelog "SKIP" "${FUNCNAME[0]} - ISGAME is already set to '$ISGAME' - nothing to determine"
 		fi
-	else
-		writelog "SKIP" "${FUNCNAME[0]} - ISGAME is already set to '$ISGAME' - nothing to determine"
 	fi
 }
 
@@ -7329,6 +7330,9 @@ function extSpek {
 	if [ -f "$SPEXT64" ]; then
 		writelog "SKIP" "${FUNCNAME[0]} - Already have '$SPEXT64' - skipping extraction" "E"
 	else
+		if [ ! -f "$SRCARCH" ]; then
+			SRCARCH="${SRCARCH//lK/l_K}"
+		fi
 		if [ -f "$SRCARCH" ]; then
 			if [ -x "$(command -v "$SEVZA")" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Extracting '$SRCARCH' to '$SPEKDLDIR/$SPEKVERS'" "E"
@@ -7372,7 +7376,12 @@ function dlSpecialK {
 
 	if [ ! -f "$SPEKDL" ]; then
 		if [ "$SPEKVERS" == "$DISC" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - The $SPEKVERS package needs to be downloaded manually to '$SPEKDL'" "E"
+			if [ -f "${SPEKDL//lK/l_K}" ]; then
+				SPEKDL="${SPEKDL//lK/l_K}"
+				writelog "INFO" "${FUNCNAME[0]} - Already have the archive '$SPEKDL'" "E"
+			else
+				writelog "INFO" "${FUNCNAME[0]} - The $SPEKVERS package needs to be downloaded manually to '$SPEKDL'" "E"
+			fi
 		else
 			notiShow "$(strFix "$NOTY_DLCUSTOMPROTON" "$SPEK")"
 			dlCheck "$SPEKDLURL" "$SPEKDL" "X" "Downloading '$SPEKARC' from '$SPEKURL' to '$SPEKDLDIR'"
@@ -7447,14 +7456,28 @@ function prepareSpecialKReshade {
 function prepareDiscordSpecialK {
 	SPEKARC="${SPEK}.7z"
 	SPEKDISCSRC="$SPEKDLDIR/$DISC/$SPEKARC"
+	FOUNDNEWSPEC=0
 
-	if [ "$SPEKVERS" != "$DISC" ] && [ -f "$SPEKDISCSRC" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - Found the '$DISC' package under '$SPEKDISCSRC'" "E"
-		writelog "INFO" "${FUNCNAME[0]} - Continuing using '$DISC' instead of '$SPEKVERS'" "E"
-		SPEKVERS="$DISC"
+	if [ "$SPEKVERS" != "$DISC" ]; then
+		if [ -f "$SPEKDISCSRC" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Found the '$DISC' package under '$SPEKDISCSRC'" "E"
+			writelog "INFO" "${FUNCNAME[0]} - Continuing using '$DISC' instead of '$SPEKVERS'" "E"
+			SPEKVERS="$DISC"
+		fi
+		if [ -f "${SPEKDISCSRC//lK/l_K}" ]; then
+			SPEKDISCSRC="${SPEKDISCSRC//lK/l_K}"	
+			writelog "INFO" "${FUNCNAME[0]} - Found an archive with the a new name under '$SPEKDISCSRC' - using that" "E"
+			SPEKVERS="$DISC"
+			FOUNDNEWSPEC=1
+		fi
 	fi
 
 	if [ "$SPEKVERS" == "$DISC" ]; then
+		if [ "$FOUNDNEWSPEC" -eq 0 ] && [ -f "${SPEKDISCSRC//lK/l_K}" ]; then
+			SPEKDISCSRC="${SPEKDISCSRC//lK/l_K}"
+			writelog "INFO" "${FUNCNAME[0]} - Found an archive with the a new name under '$SPEKDISCSRC' - using that" "E"
+		fi
+
 		mkProjDir "$SPEKDLDIR/$DISC"
 
 		if [ ! -f "$SPEKDISCSRC" ]; then
@@ -8186,7 +8209,7 @@ function updateConfigEntry {
 
 # autoapply configuration settings based on the steam categories the game is in:
 function autoCategorySettings {
-	if [ "$CHECKCATEGORIES" -eq 1 ]; then
+	if [ "$CHECKCATEGORIES" -eq 1 ] && [ "$STLPLAY" -eq 0 ]; then
 		if [ -z "$SUSDA" ] || [ -z "$STUIDPATH" ]; then
 			setSteamPaths
 		fi
@@ -12064,7 +12087,7 @@ function installMO2 {
 		else
 			if [ -f "$MO2RUNPROT" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Using '$MO2RUNPROT' for installation" "E"
-				STEAM_COMPAT_CLIENT_INSTALL_PATH="$SROOT" STEAM_COMPAT_DATA_PATH="$MO2COMPDATA" "$MO2RUNPROT" "run"
+				STEAM_COMPAT_CLIENT_INSTALL_PATH="$SROOT" STEAM_COMPAT_DATA_PATH="$MO2COMPDATA" "$MO2RUNPROT" "run" 2> "$STLSHM/installMO2_protonrun.log"
 				writelog "INFO" "${FUNCNAME[0]} - STEAM_COMPAT_CLIENT_INSTALL_PATH=\"$SROOT\" STEAM_COMPAT_DATA_PATH=\"$MO2COMPDATA\" \"$MO2RUNPROT\" \"run\""
 #			WINEDEBUG="-all" WINEPREFIX="$MO2PFX" "$MO2WINE" wineboot -i 2>/dev/null
 				sleep 3
@@ -14417,6 +14440,7 @@ function initPlay {
 	HAVEREAP=0
 	HAVESCTP=0
 	INCOPATH=0
+	STLPLAY=1
 
 	if [ "$1" -eq "$1" ] 2>/dev/null; then
 		writelog "INFO" "${FUNCNAME[0]} - Assuming incoming argument '$1' is a SteamAppId" "E"
@@ -16066,7 +16090,10 @@ function storeMetaData {
 
 	createSymLink "${FUNCNAME[0]}" "$GEMETA/$MAID.conf" "$TIGEMETA/${MGNA}.conf" X
 	createSymLink "${FUNCNAME[0]}" "$CUMETA/$MAID.conf" "$TICUMETA/${MGNA}.conf" X
-	createSymLink "${FUNCNAME[0]}" "$EVMETAID/${EVALSC}_${MAID}.vdf" "$EVMETATITLE/${EVALSC}_${MGNA}.vdf"
+
+	if [ "$STLPLAY" -eq 0 ]; then
+		createSymLink "${FUNCNAME[0]}" "$EVMETAID/${EVALSC}_${MAID}.vdf" "$EVMETATITLE/${EVALSC}_${MGNA}.vdf"
+	fi
 }
 
 function delMenuTemps {
