@@ -89,7 +89,6 @@ Feel free to contribute to the project - there are many possibilities to do so:
 - Reddit: https://www.reddit.com/r/SteamTinkerLaunch
 - Discord: https://discord.gg/Y7ApcwnUcm
 - Matrix: https://matrix.to/#/#steamtinkerlaunch:matrix.org
-- Github discussions: https://github.com/frostworx/steamtinkerlaunch/discussions
 
 ## Quick start
 When **steamtinkerlaunch** is started for the first time it will create its default [configuration](#Configuration) structure.
