@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v8.1.20220105"
+PROGVERS="v8.1.20220106"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -351,11 +351,14 @@ function initAID {
 		if [ -z "$SteamAppId" ]; then
 			if grep -q "^play" <<< "$@" && [ -f "$2" ]; then
 				STLPLAY=1
-				if [ -f "$2" ]; then
-					GN="${2##*/}"
-					AID="$(setGNID "$GN")"
-					writelog "INFO" "${FUNCNAME[0]} - Set AID to '$PROGCMD' ID '$AID'" "P"
-				fi
+				GN="${2##*/}"
+				AID="$(setGNID "$GN")"
+				writelog "INFO" "${FUNCNAME[0]} - Set AID to '$PROGCMD' ID '$AID'" "P"
+			elif grep -q "^play" <<< "$@" && [ -f "$3" ]; then
+				STLPLAY=1
+				GN="${3##*/}"
+				AID="$2"
+				writelog "INFO" "${FUNCNAME[0]} - Set AID to '$PROGCMD' ID '$AID'" "P"
 			else
 				AID="$PLACEHOLDERAID"
 				writelog "INFO" "${FUNCNAME[0]} - Set AID to PLACEHOLDERAID '$AID'" "P"
@@ -14567,6 +14570,8 @@ function initPlay {
 	
 	if [ -n "$EXECUTABLE" ] && [ -n "$HAVPA" ] && [ "$EXECUTABLE" != "${HAVPA##*/}" ]; then
 		EXECUTABLE="${HAVPA##*/}"
+		touch "$FUPDATE"
+		updateConfigEntry "EXECUTABLE" "$EXECUTABLE" "$HAVGEME"
 	fi
 
 	if [ -n "$MEGAMEDIR" ]; then
@@ -14587,6 +14592,8 @@ function initPlay {
 		MEGAMEDIR="${HAVPA%/*}"
 		GFD="${HAVPA%/*}"
 		EFD="${HAVPA%/*}"
+		touch "$FUPDATE"
+		updateConfigEntry "MEGAMEDIR" "$MEGAMEDIR" "$HAVCUME"		
 	fi
 
 	setHaveConfs
@@ -14671,7 +14678,7 @@ function initPlay {
 				fi
 
 				if [ -z "$STL_COMPAT_DATA_PATH" ]; then
-					STL_COMPAT_DATA_PATH="$STLCOMPDAT/${HAVPA##*/}"
+					STL_COMPAT_DATA_PATH="$STLCOMPDAT/$AID"
 				fi
 
 				if [ -n "$STL_COMPAT_DATA_PATH" ]; then
