@@ -74,22 +74,6 @@ Several great people already mentioned **steamtinkerlaunch** on their platforms/
 - **Linux Game Cast** already mentioned **stl** in their [casts](https://www.youtube.com/watch?v=djuZdnE83fE&t=436s) [several](https://www.youtube.com/watch?v=yVsTMhx8E7c&t=983s) [times](https://www.youtube.com/watch?v=qhybhTGV3mA&t=1279s)
   and still [counting](https://linuxgamecast.com/2021/11/linux-game-cast-484-yami-pedro)
 
-## Community
-Feel free to contribute to the project - there are many possibilities to do so:
-- implement new features
-- make good bug reports
-- suggest new features
-- maintain a package for your distribution
-- add translations
-- find out how cool it is and tell others :)
-- help others if you can!
-
-### Community Platforms:
-
-- Reddit: https://www.reddit.com/r/SteamTinkerLaunch
-- Discord: https://discord.gg/Y7ApcwnUcm
-- Matrix: https://matrix.to/#/#steamtinkerlaunch:matrix.org
-
 ## Quick start
 When **steamtinkerlaunch** is started for the first time it will create its default [configuration](#Configuration) structure.
 Almost everything can be configured with the built-in [Main Menu](https://github.com/frostworx/steamtinkerlaunch/wiki/Main-Menu), but optionally also with a graphical text editor.

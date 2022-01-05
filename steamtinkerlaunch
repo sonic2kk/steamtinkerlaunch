@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v8.1.20220102"
+PROGVERS="v8.1.20220105"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -351,9 +351,11 @@ function initAID {
 		if [ -z "$SteamAppId" ]; then
 			if grep -q "^play" <<< "$@" && [ -f "$2" ]; then
 				STLPLAY=1
-				GN="${2##*/}"
-				AID="$(setGNID "$GN")"
-				writelog "INFO" "${FUNCNAME[0]} - Set AID to '$PROGCMD' ID '$AID'" "P"
+				if [ -f "$2" ]; then
+					GN="${2##*/}"
+					AID="$(setGNID "$GN")"
+					writelog "INFO" "${FUNCNAME[0]} - Set AID to '$PROGCMD' ID '$AID'" "P"
+				fi
 			else
 				AID="$PLACEHOLDERAID"
 				writelog "INFO" "${FUNCNAME[0]} - Set AID to PLACEHOLDERAID '$AID'" "P"
@@ -3025,6 +3027,7 @@ function saveCfg {
 
 	SCFG="$(basename "${1//.conf/}")"
 	"${FUNCNAME[0]}$SCFG" "$1" "$SCFG" "$2"
+	sed "s:$STLCFGDIR:STLCFGDIR:g" -i "$1"
 }
 
 function notiShow {
@@ -5454,7 +5457,9 @@ function loadCfg {
 
 		while read -r line; do
 			if [ -n "$line" ]; then
-				export "${line//\"/}"
+				EXPORTLINE="${line//\"/}"
+				EXPORTLINE="${EXPORTLINE//STLCFGDIR/$STLCFGDIR}"
+				export "${EXPORTLINE?}"
 			fi
 		done <<< "$(grep -v "^#\|^$" "$CFGFILE")"
 
@@ -5959,7 +5964,7 @@ function getGameWindowPID {
 
 function storeGameWindowNameMeta {
 	GAMEWINDOW="$1"
-	if [ -n "$GAMEWINDOW" ] && [ "$GAMEWINDOW" != "$NON" ]; then
+	if [ -n "$GAMEWINDOW" ] && [ "$GAMEWINDOW" != "$NON" ] && [ "$STLPLAY" -eq 0 ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Found game window name '$GAMEWINDOW' - saving into metadata file '$GEMETA/$AID.conf' for game '$MGNA ($AID)'"
 		touch "$FUPDATE"
 		touch "$GEMETA/$AID.conf"
@@ -7950,8 +7955,13 @@ function updateConfigFile {
 			ORGLOGLEVEL="$LOGLEVEL"
 			LOGLEVEL=0
 		fi
+
+		if grep "$STLCFGDIR" "$CFGFILE" >/dev/null ; then
+			writelog "UPDATE" "${FUNCNAME[0]} - Replacing '$STLCFGDIR' with 'STLCFGDIR' in '$CFGFILE'"
+			sed "s:$STLCFGDIR:STLCFGDIR:g" -i "$CFGFILE"
+		fi
 		
-		if grep -q "config Version: $PROGVERS" "$1"; then
+		if grep -q "config Version: $PROGVERS" "$CFGFILE"; then
 			writelog "SKIP" "${FUNCNAME[0]} - Config file '$CFGFILE' already at version '$PROGVERS'"
 		else
 			OLDVERS="$(grep "config Version" "$CFGFILE" | awk -F ': ' '{print $2}')"
@@ -7992,6 +8002,7 @@ function updateConfigFile {
 							OUTVAL="$LVAL"
 						fi
 					fi
+					OUTVAL="${OUTVAL//$STLCFGDIR/STLCFGDIR}"
 					ADDLINE="$LCAT=\"$OUTVAL\""
 					writelog "UPDATE" "${FUNCNAME[0]} - Adding line '$ADDLINE'"
 					echo "$ADDLINE" >> "$CFGFILE"
@@ -8184,7 +8195,8 @@ function updateConfigEntry {
 					fi
 
 					# only save value if it changed
-					if [ "${!CFGCAT}" != "$CFGVALUE" ] || [ -f "$FUPDATE" ]; then
+					if { [ "${!CFGCAT}" != "$CFGVALUE" ] && [ "${!CFGCAT}" != "${CFGVALUE//$STLCFGDIR/STLCFGDIR}" ];} || [ -f "$FUPDATE" ]; then
+						CFGVALUE="${CFGVALUE//$STLCFGDIR/STLCFGDIR}"
 						if [ "$(grep -c "#${CFGCAT}=" "$CFGFILE")" -eq 1 ]; then
 							writelog "INFO" "${FUNCNAME[0]} - Option '$CFGCAT' commented out in config '${CFGFILE##*/}' - activating it with the new value '$CFGVALUE'"
 							sed -i "/^#${CFGCAT}=/c$CFGCAT=\"$CFGVALUE\"" "$CFGFILE"
@@ -14161,8 +14173,11 @@ function startGame {
 #	emptyVars "S" # unset some internal variables before the game starts
 
 	loadCfg "$GEMETA/$AID.conf"
-	writelog "INFO" "${FUNCNAME[0]} - Getting the Game Window name:"
-	getGameWindowName &
+
+	if [ "$STLPLAY" -eq 0 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Getting the Game Window name:"
+		getGameWindowName &
+	fi
 	touch "$PIDLOCK"
 	startSBSVR &
 
@@ -14442,29 +14457,57 @@ function initPlay {
 	INCOPATH=0
 	STLPLAY=1
 
+	function setHaveConfs {
+		if [ -n "$HAVID" ]; then
+			if [ -z "$HAVCUME" ]; then
+				HAVCUME="$CUMETA/$HAVID.conf"
+			fi
+
+			if [ -z "$HAVGEME" ]; then
+				HAVGEME="$GEMETA/$HAVID.conf"
+			fi
+			
+			if [ -z "$HAVGACO" ]; then
+				HAVGACO="$STLGAMEDIRID/$HAVID.conf"
+			fi
+		fi	
+	}
+
+	function loadHaveConfs {
+		if [ -f "$HAVGEME" ] && [ -z "$LOADEDHAVGEME" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Loading generic metadata found under '$HAVGEME'" "E"
+			loadCfg "$HAVGEME"
+			LOADEDHAVGEME=1
+		fi
+
+		if [ -f "$HAVCUME" ] && [ -z "$LOADEDHAVCUME" ]; then
+			fixCustomMeta "$HAVCUME"
+			writelog "INFO" "${FUNCNAME[0]} - Loading custom metadata found under '$HAVCUME'" "E"
+			loadCfg "$HAVCUME"
+			LOADEDHAVCUME=1
+		fi
+
+		if [ -f "$HAVGACO" ] && [ -z "$LOADEDHAVGACO" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Loading game config '$HAVGACO'" "E"
+			loadCfg "$HAVGACO"
+			LOADEDHAVGACO=1
+		fi
+	}
+
 	if [ "$1" -eq "$1" ] 2>/dev/null; then
 		writelog "INFO" "${FUNCNAME[0]} - Assuming incoming argument '$1' is a SteamAppId" "E"
 		HAVID="$1"
 	elif [ -f "$1" ]; then
-		if ! grep -q ".conf$" <<< "$1"; then
-			writelog "INFO" "${FUNCNAME[0]} - Assuming incoming argument '$1' is an absolute path to a game exe" "E"
-			HAVPA="$1"
-			INCOPATH=1
-		else
-			if grep -q "$GEMETA" <<< "$(readlink "$1")"; then
-				writelog "INFO" "${FUNCNAME[0]} - Assuming incoming argument '$1' is a generic metadata file for the requested game" "E"
-				HAVGEME="$1"
-			elif grep -q "$CUMETA" <<< "$(readlink "$1")"; then
-				writelog "INFO" "${FUNCNAME[0]} - Assuming incoming argument '$1' is a custom metadata file for the requested game" "E"
-				HAVCUME="$1"
-			else
-				writelog "WARN" "${FUNCNAME[0]} - Argument '$1' seems to be a config, but it is not inside a ${PROGNAME} meta directory - loading anyway, maybe it has useful vars" "E"
-				loadCfg "$1"
-			fi
-		fi
+		writelog "INFO" "${FUNCNAME[0]} - Assuming incoming argument '$1' is an absolute path to a game exe" "E"
+		HAVPA="$1"
+		INCOPATH=1
 	else
 		writelog "INFO" "${FUNCNAME[0]} - Assuming incoming argument '$1' is a game title" "E"
 		HAVTI="$1"
+	fi
+	
+	if [ -n "$HAVTI" ] || [ -n "$HAVID" ] && { [ -n "$2" ] && [ -f "$2" ];}; then
+		HAVPA="$2"
 	fi
 	
 	if [ -n "$HAVTI" ]; then
@@ -14492,46 +14535,16 @@ function initPlay {
 		fi
 	fi
 	
-	if [ -n "$HAVID" ]; then
-		HAVCUME="$CUMETA/$1.conf"
-		HAVGEME="$GEMETA/$1.conf"
-		HAVGACO="$STLGAMEDIRID/$1.conf"
-	fi
-
-	if [ -f "$HAVGEME" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - Loading custom metadata for '$1' found under '$HAVGEME'" "E"
-		loadCfg "$HAVGEME"
-	fi
+	setHaveConfs
+	loadHaveConfs
 
 	if [ -n "$GAMEID" ] && [ -z "$HAVID" ]; then
 		HAVID="$GAMEID"
 		writelog "INFO" "${FUNCNAME[0]} - Found SteamAppId '$HAVID'" "E"
 	fi
 
-	if [ -n "$HAVID" ]; then
-		if [ -z "$HAVCUME" ]; then
-			HAVCUME="$CUMETA/$HAVID.conf"
-		fi
-
-		if [ -z "$HAVGEME" ]; then
-			HAVGEME="$GEMETA/$HAVID.conf"
-		fi
-		
-		if [ -z "$HAVGACO" ]; then
-			HAVGACO="$STLGAMEDIRID/$HAVID.conf"
-		fi
-	fi
-
-	if [ -f "$HAVCUME" ]; then
-		fixCustomMeta "$HAVCUME"
-		writelog "INFO" "${FUNCNAME[0]} - Loading custom metadata for '$1' found under '$HAVCUME'" "E"
-		loadCfg "$HAVCUME"
-	fi
-
-	if [ -f "$HAVGACO" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - Loading game config '$1' found under '$HAVGACO'" "E"
-		loadCfg "$HAVGACO"
-	fi
+	setHaveConfs
+	loadHaveConfs
 
 	if [ -z "$EXECUTABLE" ] && [ -f "$HAVPA" ]; then
 		EXECUTABLE="${HAVPA##*/}"
@@ -14546,6 +14559,10 @@ function initPlay {
 		if [ -f "$CHKHAVPA" ]; then
 			HAVPA="$CHKHAVPA"
 		fi
+	fi
+	
+	if [ -n "$EXECUTABLE" ] && [ -n "$HAVPA" ] && [ "$EXECUTABLE" != "${HAVPA##*/}" ]; then
+		EXECUTABLE="${HAVPA##*/}"
 	fi
 
 	if [ -n "$MEGAMEDIR" ]; then
@@ -14562,6 +14579,15 @@ function initPlay {
 		fi
 	fi
 
+	if [ -n "$MEGAMEDIR" ] && [ -n "$HAVPA" ] && [ "$MEGAMEDIR" != "${HAVPA%/*}" ]; then
+		MEGAMEDIR="${HAVPA%/*}"
+		GFD="${HAVPA%/*}"
+		EFD="${HAVPA%/*}"
+	fi
+
+	setHaveConfs
+	loadHaveConfs
+
 	if [ -n "$HAVID" ] &&  [ -z "$GAMEID" ] && { [ -z "$AID" ] || [ "$AID" == "$PLACEHOLDERAID" ];}; then
 		writelog "INFO" "${FUNCNAME[0]} - Setting AID to '$HAVID'" "E"
 		AID="$HAVID"
@@ -14577,10 +14603,7 @@ function initPlay {
 			HAVGACO="$STLGAMEDIRID/$AID.conf"
 		fi
 
-		if [ -f "$HAVGACO" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Loading game config '$1' found under '$HAVGACO'" "E"
-			loadCfg "$HAVGACO"
-		fi
+		loadHaveConfs
 
 		if [ -f "$HAVPA" ]; then
 			if [ -z "$GP" ]; then
@@ -14611,11 +14634,15 @@ function initPlay {
 			fi
 
 			if [ -z "$GE" ] && [ -n "$HAVPA" ]; then
-				GE="${HAVPA##*/}"
+				GE="${HAVPA##*/}" 
 			fi
 
 			if [ -z "$GP" ] && [ -n "$HAVPA" ]; then
 				GP="$HAVPA"
+			fi
+
+			if [ -z "$GN" ] && [ -n "$HAVPA" ]; then
+				GN="${HAVPA##*/}" 
 			fi
 
 			writelog "INFO" "${FUNCNAME[0]} - Game executable used is '$HAVPA'" "E"
@@ -14627,10 +14654,31 @@ function initPlay {
 				prepareLaunch
 			else
 				writelog "INFO" "${FUNCNAME[0]} - Assuming this is a windows binary" "E"
-				ISGAME=2
-				prepareLaunch
-#"$WINEPREFIX"
-#"$GAMEDIR"
+
+				if [ -z "$STEAM_COMPAT_INSTALL_PATH" ]; then
+					if [ -n "$MEGAMEDIR" ]; then
+						export STEAM_COMPAT_INSTALL_PATH="$MEGAMEDIR"
+					elif [ -n "$EFD" ]; then
+						export STEAM_COMPAT_INSTALL_PATH="$EFD"
+					else
+						writelog "INFO" "${FUNCNAME[0]} - STEAM_COMPAT_INSTALL_PATH (game dir) is unknown - setting it at least to '${STLDLDIR}'"
+						export STEAM_COMPAT_INSTALL_PATH="$STLDLDIR"
+					fi
+				fi
+
+				if [ -z "$STL_COMPAT_DATA_PATH" ]; then
+					STL_COMPAT_DATA_PATH="$STLCOMPDAT/${HAVPA##*/}"
+				fi
+
+				if [ -n "$STL_COMPAT_DATA_PATH" ]; then
+					mkProjDir "$STL_COMPAT_DATA_PATH"
+					writelog "INFO" "${FUNCNAME[0]} - Using '$STL_COMPAT_DATA_PATH' as STEAM_COMPAT_DATA_PATH" "E"
+					export STEAM_COMPAT_DATA_PATH="$STL_COMPAT_DATA_PATH"
+					ISGAME=2
+					prepareLaunch
+				else
+					writelog "ERROR" "${FUNCNAME[0]} - STEAM_COMPAT_DATA_PATH was not defined"
+				fi
 			fi
 		fi
 	else
@@ -16088,6 +16136,10 @@ function storeMetaData {
 
 	updateConfigEntry "MEGAMEDIR" "$GDIR" "$CUMETA/$MAID.conf"
 
+	if [ "$STLPLAY" -eq 1 ]; then
+		touch "$FUPDATE"
+		updateConfigEntry "STL_COMPAT_DATA_PATH" "$STEAM_COMPAT_DATA_PATH" "$CUMETA/$MAID.conf"
+	fi
 	createSymLink "${FUNCNAME[0]}" "$GEMETA/$MAID.conf" "$TIGEMETA/${MGNA}.conf" X
 	createSymLink "${FUNCNAME[0]}" "$CUMETA/$MAID.conf" "$TICUMETA/${MGNA}.conf" X
 
