@@ -45,11 +45,9 @@ When done with configuring (or when the requester timeouts) the game will be sta
 **Solus** has an official package:
 `sudo eopkg install steamtinkerlaunch`
 
-**Fedora** has an unoffical package:
-https://copr.fedorainfracloud.org/coprs/capucho/steamtinkerlaunch/
+Fedora: **[unoffical package](https://copr.fedorainfracloud.org/coprs/capucho/steamtinkerlaunch/)**
 
-**ansible playbook**:
-https://github.com/tofu114/ansible_playbooks
+Ansible: **[playbook](https://github.com/tofu114/ansible_playbooks)**
 
 [![Packaging status](https://repology.org/badge/vertical-allrepos/steamtinkerlaunch.svg)](https://repology.org/project/steamtinkerlaunch/versions)
 
