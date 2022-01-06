@@ -5,7 +5,6 @@
 [![GitHub license](https://img.shields.io/github/license/frostworx/steamtinkerlaunch.svg?style=flat-square)](https://github.com/frostworx/steamtinkerlaunch/blob/dev/LICENSE)
 [![reddit](https://img.shields.io/reddit/subreddit-subscribers/SteamTinkerLaunch?style=flat-square&label=Reddit)](https://www.reddit.com/r/SteamTinkerLaunch)
 [![discord](https://img.shields.io/discord/900037707349250088?style=flat-square&label=Discord)](https://discord.gg/Y7ApcwnUcm)
-[![matrix](https://img.shields.io/matrix/steamtinkerlaunch:matrix.org)](https://matrix.to/#/#steamtinkerlaunch:matrix.org)
 
 # Summary
 
@@ -39,6 +38,7 @@ When done with configuring (or when the requester timeouts) the game will be sta
 
 ## Installation
 ### Installation via Package Management
+**Thanks to all package maintainers!** 👍
 
 **Arch Linux** [via AUR](https://aur.archlinux.org/packages/steamtinkerlaunch) *(f.e. using yay)*:
 `yay -S steamtinkerlaunch`
