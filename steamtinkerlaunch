@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v8.1.20220107"
+PROGVERS="v8.1.20220109"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -272,6 +272,7 @@ SOMEPOPULARWINEPAKS="dotnet4 quartz xact"
 SOMEWINEDEBUGOPTIONS="-all,+steam,+vrclient,+vulkan"
 SGDBDIMOPTS="460x215,920x430,600x900,342x482,660x930"
 SGDBSTYOPTS="alternate,blurred,white_logo,material,no_logo"
+GETSTAID="99[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]99"
 
 STLGAMES="$STLCFGDIR/games"
 STLGDESKD="$STLGAMES/desktop"
@@ -349,16 +350,22 @@ function initAID {
 
 	if [ -z "$AID" ] || [ "$AID" -eq "0" ]; then
 		# shellcheck disable=SC2154		# SteamAppId comes from Steam
+
 		if [ -z "$SteamAppId" ]; then
-			if grep -q "^play" <<< "$@" && [ -f "$2" ]; then
+			if grep -q "^play" <<< "$@" && [ -n "$2" ] && [ -z "$3" ] && [ "$2" != "gui" ] && [ "$2" != "ed" ]; then
 				STLPLAY=1
-				GN="${2##*/}"
-				AID="$(setGNID "$GN")"
+				if [ "$2" -eq "$2" ] 2>/dev/null ; then
+					AID="$2"
+				elif [ -f "$2" ]; then
+					GN="${2##*/}"
+					AID="$(setGNID "$GN")"
+				fi
 				writelog "INFO" "${FUNCNAME[0]} - Set AID to '$PROGCMD' ID '$AID'" "P"
 			elif grep -q "^play" <<< "$@" && [ -f "$3" ]; then
 				STLPLAY=1
 				GN="${3##*/}"
-				AID="$2"
+				AID="$2"	
+
 				writelog "INFO" "${FUNCNAME[0]} - Set AID to '$PROGCMD' ID '$AID'" "P"
 			else
 				AID="$PLACEHOLDERAID"
@@ -1425,7 +1432,7 @@ function pollWinRes {
 		echo "WINY=\"$WINY\"" >> "$GAMEGUICFG"
 
 		if [ -z "$GEOM" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Using harmless '--center' as '$GEOM', because there are multiple side-effects in yad if the string is empty"
+			writelog "INFO" "${FUNCNAME[0]} - Using harmless '--center' as variable 'GEOM', because there are multiple side-effects in yad if the string is empty"
 			GEOM="--center"
 		fi
 
@@ -1866,7 +1873,7 @@ function getGameOS {
 					setWin "$@"
 				fi
 			else
-				writelog "INFO" "${FUNCNAME[0]} - STEAM_COMPAT_DATA_PATH is dot defined, so this is (very likely) either a Linux Game or no game was started at all"
+				writelog "INFO" "${FUNCNAME[0]} - STEAM_COMPAT_DATA_PATH is dot defined, so this is either a Linux Game or no game was started at all"
 				setLin "$@"
 			fi
 		else
@@ -7128,7 +7135,7 @@ function chooseShaders {
 
 function installRSdll {
 	if [ ! -f "$INSTDESTDIR/$1" ] || [ "$1" == "F" ]; then
-		if [ "$2" -eq 1 ]; then
+		if [ -n "$2" ] && [ "$2" -eq 1 ]; then
 			writelog "SKIP" "${FUNCNAME[0]} - Skipping installation of $1 because 'NOD3D9' is enabled"
 		else
 			if [ ! -f "$RESHADESRCDIR/$3" ]; then
@@ -14534,7 +14541,7 @@ function initPlay {
 	}
 
 	function saveHaveCuMe {
-		if [ ! -f "$HAVCUME" ]; then
+		if [ -n "$HAVCUME" ] && [ ! -f "$HAVCUME" ]; then
 			touch "$HAVCUME"
 		fi
 		
@@ -14545,7 +14552,7 @@ function initPlay {
 	}
 
 	function saveHaveGeMe {
-		if [ ! -f "$HAVGEME" ]; then
+		if [ -n "$HAVGEME" ] && [ ! -f "$HAVGEME" ]; then
 			touch "$HAVGEME"
 		fi
 
@@ -14687,12 +14694,12 @@ function initPlay {
 
 	if [ -n "$HAVID" ] &&  [ -z "$GAMEID" ] && { [ -z "$AID" ] || [ "$AID" == "$PLACEHOLDERAID" ];}; then
 		writelog "INFO" "${FUNCNAME[0]} - Setting AID to '$HAVID'" "E"
-		AID="$HAVID"
+		export AID="$HAVID"
 	fi
 
 	if [ -n "$GAMEID" ] && { [ -z "$AID" ] || [ "$AID" == "$PLACEHOLDERAID" ];}; then
 		writelog "INFO" "${FUNCNAME[0]} - Setting AID to '$GAMEID'" "E"
-		AID="$GAMEID"
+		export AID="$GAMEID"
 	fi
 
 	saveHaveCuMe
@@ -14764,7 +14771,9 @@ function initPlay {
 				writelog "INFO" "${FUNCNAME[0]} - Assuming this is a linux binary" "E"
 				ISGAME=3
 				GPFX="$NON"
+				cd "$MEGAMEDIR" || return
 				prepareLaunch
+				cd - || return
 			else
 				writelog "INFO" "${FUNCNAME[0]} - Assuming this is a windows binary" "E"
 
@@ -14787,8 +14796,11 @@ function initPlay {
 					mkProjDir "$STL_COMPAT_DATA_PATH"
 					writelog "INFO" "${FUNCNAME[0]} - Using '$STL_COMPAT_DATA_PATH' as STEAM_COMPAT_DATA_PATH" "E"
 					export STEAM_COMPAT_DATA_PATH="$STL_COMPAT_DATA_PATH"
+					export GPFX="${STL_COMPAT_DATA_PATH}/pfx"
 					ISGAME=2
+					cd "$STEAM_COMPAT_INSTALL_PATH" || return
 					prepareLaunch
+					cd - || return
 				else
 					writelog "ERROR" "${FUNCNAME[0]} - STEAM_COMPAT_DATA_PATH was not defined"
 				fi
@@ -14827,10 +14839,18 @@ function standaloneGames {
 			else
 				echo "$line"
 			fi
-		done <<< "$(find "$GEMETA" -name "99[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]99.conf")"
+		done <<< "$(find "$GEMETA" -name "${GETSTAID}.conf")"
 	else
 		writelog "ERROR" "${FUNCNAME[0]} - Directory GEMETA '$GEMETA' could not be found" "E"
  	fi
+}
+
+function standaloneDefGameIcon {
+	if [ -x "$(command -v "$CONVERT" 2>/dev/null)" ]; then
+		"$CONVERT" "$STLICON" -resize "128x128!" "$WANTGPNG"
+	else
+		cp "$STLICON" "$WANTGPNG"
+	fi
 }
 
 function standaloneGameIcon {
@@ -14857,11 +14877,7 @@ function standaloneGameIcon {
 					fi
 				else
 					writelog "INFO" "${FUNCNAME[0]} - Did not find a default icon for '$GAMENAME' using '$STLICON' as default for '$WANTGPNG'"
-					if [ -x "$(command -v "$CONVERT" 2>/dev/null)" ]; then
-						"$CONVERT" "$STLICON" -resize "128x128!" "$WANTGPNG"
-					else
-						cp "$STLICON" "$WANTGPNG"
-					fi
+					standaloneDefGameIcon
 				fi
 			fi
 		else
@@ -14876,22 +14892,23 @@ function standaloneGameIcon {
 				cd - >/dev/null || return
 			fi
 			
-			FIRSTICO="$(find "$PEVDSTI/resources/icons" -type f -name "*.ico" -printf "%s %p\n" | sort -nr | head -n1 | cut -d ' ' -f2)"
-
-			if [ -f "$FIRSTICO" ]; then
-				if [ -x "$(command -v "$CONVERT" 2>/dev/null)" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - Converting '$FIRSTICO', extracted from '${HAVEPA##*/}' to '$WANTGPNG'"
-					"$CONVERT" "$FIRSTICO" -resize "128x128!" "$WANTGPNG"
-				else
-					writelog "INFO" "${FUNCNAME[0]} - Could not convert '$FIRSTICO', because '$CONVERT' was not found - using '$STLICON' as default for '$WANTGPNG'"
-					cp "$STLICON" "$WANTGPNG"
-				fi
+			PRI="$PEVDSTI/resources/icons"
+			if [ ! -d "$PRI" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - directory for alternative icon location not found - using '$STLICON' as default for '$WANTGPNG'"
+				standaloneDefGameIcon
 			else
-				writelog "INFO" "${FUNCNAME[0]} - Could not extract icon from '${HAVEPA##*/}' - using '$STLICON' as default for '$WANTGPNG'"
-				if [ -x "$(command -v "$CONVERT" 2>/dev/null)" ]; then
-					"$CONVERT" "$STLICON" -resize "128x128!" "$WANTGPNG"
+				FIRSTICO="$(find "$PRI" -type f -name "*.ico" -printf "%s %p\n" | sort -nr | head -n1 | cut -d ' ' -f2)"
+				if [ -f "$FIRSTICO" ]; then
+					if [ -x "$(command -v "$CONVERT" 2>/dev/null)" ]; then
+						writelog "INFO" "${FUNCNAME[0]} - Converting '$FIRSTICO', extracted from '${HAVEPA##*/}' to '$WANTGPNG'"
+						"$CONVERT" "$FIRSTICO" -resize "128x128!" "$WANTGPNG"
+					else
+						writelog "INFO" "${FUNCNAME[0]} - Could not convert '$FIRSTICO', because '$CONVERT' was not found - using '$STLICON' as default for '$WANTGPNG'"
+						cp "$STLICON" "$WANTGPNG"
+					fi
 				else
-					cp "$STLICON" "$WANTGPNG"
+					writelog "INFO" "${FUNCNAME[0]} - Could not extract icon from '${HAVEPA##*/}' - using '$STLICON' as default for '$WANTGPNG'"
+					standaloneDefGameIcon
 				fi
 			fi
 		fi	
@@ -14928,7 +14945,7 @@ function standaloneLaunch {
 	export CURWIKI="$PPW/$STLA"
 	TITLE="${PROGNAME}-$STLA"
 	pollWinRes "$TITLE"
-	
+	echo "STLISLDFD $STLISLDFD"
 	if [ -d "$STLISLDFD" ] && [ "$(find "$STLISLDFD" -name "*.desktop" | wc -l)" -ge 1 ]; then
 		"$YAD" --f1-action="$F1ACTION" --icons --window-icon="$STLICON" --read-dir="$STLISLDFD" "$WINDECO" --title="$TITLE" --single-click --keep-icon-size --center --compact --sort-by-name "$GEOM"
 	else
@@ -14937,7 +14954,133 @@ function standaloneLaunch {
 }
 
 function standaloneEd {
-	writelog "INFO" "${FUNCNAME[0]} - Not implemented " "E"
+	if [ -z "$1" ]; then
+		writelog "ERROR" "${FUNCNAME[0]} - Need a valid AppID or title for an installed standalone program" "E"
+	else
+		if [ "$1" -eq "$1" ] 2>/dev/null; then
+			AID="$1"
+			HAVID="$AID"
+		else
+			if [ -d "$STLISLDFD" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Looking for AppID for title '$1'" "E"
+				TSTAID="$(grep "^Name=$1$" -h -A5 -R "$STLISLDFD" | grep -m1 "Exec=" | grep -o "$GETSTAID")"
+				if [ -n "$TSTAID" ] && [ "$TSTAID" -eq "$TSTAID" ] 2>/dev/null; then
+					AID="$TSTAID"
+					HAVID="$AID"
+				fi
+			else
+				writelog "ERROR" "${FUNCNAME[0]} - directory '$STLISLDFD' missing - can't search for '$1'" "E"
+			fi
+		fi
+		
+		if [ -n "$AID" ] && [ "$AID" != "$PLACEHOLDERAID" ]; then
+			
+			unset MEGAMEDIR GAMENAME KEEPGAMENAME STL_COMPAT_DATA_PATH 
+			writelog "INFO" "${FUNCNAME[0]} - Looking for configs for AppID '$AID'" "E"
+			HAVGEME="$GEMETA/${AID}.conf"
+			if [ -f "$HAVGEME" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Loading found config '$HAVGEME'" "E"
+				loadCfg "$HAVGEME"
+			fi 
+
+			HAVCUME="$CUMETA/${AID}.conf"
+			if [ -f "$HAVCUME" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Loading found config '$HAVCUME'" "E"
+				loadCfg "$HAVCUME"
+			fi 
+			
+			WANTGPNG="$STLGPNG/${AID}.png"
+			CPICKPROG="$MEGAMEDIR/$EXECUTABLE"
+
+			STED="Standalone-Editor"
+			STLA="Standalone-Launcher"
+			export CURWIKI="$PPW/$STLA"
+			TITLE="${PROGNAME}-$STED"
+			pollWinRes "$TITLE"
+			
+			NEWSTDAT="$("$YAD" --f1-action="$F1ACTION" --image "$WANTGPNG" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
+			--title="$TITLE" --separator="|" \
+			--text="$STED" \
+			--field=" ":LBL " " \
+			--field="     $GUI_PICKPROG!$DESC_PICKPROG":FL "$CPICKPROG" \
+			--field="     $GUI_GAMENAME!$DESC_GAMENAME" "${GAMENAME/#-/ -}" \
+			--field="     $GUI_KEEPGAMENAME!$DESC_KEEPGAMENAME":CHK "${KEEPGAMENAME/#-/ -}" \
+			--field="     $GUI_STL_COMPAT_DATA_PATH!$DESC_STL_COMPAT_DATA_PATH":DIR "${STL_COMPAT_DATA_PATH/#-/ -}" \
+			--field="     $GUI_PICKICON!$DESC_PICKICON":FL "${WANTGPNG/#-/ -}" \
+			--button="$BUT_DONE":0 --button="$BUT_CAN":2  "$GEOM")"
+			case $? in
+			0)  {
+					writelog "INFO" "${FUNCNAME[0]} - Selected $BUT_DONE"
+					unset NSTARR
+					mapfile -d "|" -t -O "${#NSTARR[@]}" NSTARR < <(printf '%s' "$NEWSTDAT")
+					NPICKPROG="${NSTARR[1]}"
+					NGAMENAME="${NSTARR[2]}"
+					NKEEPGAMENAME="${NSTARR[3]}"
+					NSTL_COMPAT_DATA_PATH="${NSTARR[4]}"
+					NPICKICON="${NSTARR[5]}"
+					
+					NEWIC=0
+					
+					if [ "$NPICKPROG" != "$CPICKPROG" ]; then
+						NMEGAMEDIR="${NPICKPROG%/*}"
+						NEXECUTABLE="${NPICKPROG##*/}"
+
+						if [ "$NMEGAMEDIR" != "$MEGAMEDIR" ]; then
+							touch "$FUPDATE"
+							updateConfigEntry "MEGAMEDIR" "$NMEGAMEDIR" "$HAVCUME"
+							NEWIC=1
+						fi
+						if [ "$NEXECUTABLE" != "$EXECUTABLE" ]; then
+							touch "$FUPDATE"
+							updateConfigEntry "EXECUTABLE" "$NEXECUTABLE" "$HAVGEME"
+							NEWIC=1
+						fi
+					fi
+
+					if [ "$NGAMENAME" != "$GAMENAME" ]; then
+						touch "$FUPDATE"
+						updateConfigEntry "GAMENAME" "$NGAMENAME" "$HAVGEME"
+						NEWIC=1
+					fi
+
+					updateConfigEntry "KEEPGAMENAME" "$NKEEPGAMENAME" "$HAVGEME"	
+
+					if [ "$NSTL_COMPAT_DATA_PATH" != "$STL_COMPAT_DATA_PATH" ]; then
+						touch "$FUPDATE"
+						updateConfigEntry "STL_COMPAT_DATA_PATH" "$NSTL_COMPAT_DATA_PATH" "$HAVGEME"
+						NEWIC=1
+					fi
+
+					if [ "$NPICKICON" != "$WANTGPNG" ]; then
+						if [ -x "$(command -v "$CONVERT" 2>/dev/null)" ]; then
+							"$CONVERT" "$NPICKICON" -resize "128x128!" "$WANTGPNG"
+						else
+							cp "$NPICKICON" "$WANTGPNG"
+						fi
+						NEWIC=1
+					fi
+
+					if [ "$NEWIC" -eq 1 ]; then
+						loadCfg "$HAVGEME"
+						loadCfg "$HAVCUME"
+						WANTGPNG="$STLGPNG/${AID}.png"
+						HAVEPA="$MEGAMEDIR/$EXECUTABLE"
+						INTDTFILE="$STLISLDFD/$AID.desktop"
+						rm "$INTDTFILE"
+						standaloneDesktopFile "$INTDTFILE" "$WANTGPNG" "$AID" "$GAMENAME" "$HAVEPA"
+					fi
+				}
+			;;
+			2) 	{
+					writelog "INFO" "${FUNCNAME[0]} - Selected $BUT_CAN"
+
+				}
+			;;
+			esac 
+		else
+			writelog "ERROR" "${FUNCNAME[0]} - No data found for '$1'" "E"
+		fi
+	fi
 }
 
 function createDLWineList {
@@ -16108,7 +16251,9 @@ function commandline {
 			if [ "$2" == "gui" ]; then
 				standaloneLaunch
 			elif [ "$2" == "ed" ]; then
-				standaloneEd "${@:2}"
+				standaloneEd "${@:3}"
+			elif [ "$2" == "list" ]; then
+				standaloneGames l
 			else
 				initPlay "${@:2}"
 			fi
