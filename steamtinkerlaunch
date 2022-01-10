@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v8.1.20220109"
+PROGVERS="v8.1.20220110"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -16043,6 +16043,7 @@ function howto {
 	echo "                                       (see Wiki for details)"
 }
 
+#STARTCMDLINE
 function commandline {
 	if [ "$1" == "addcustomproton" ] || [ "$1" == "acp" ]; then
 		addCustomProton "$2" "$3"
@@ -16483,6 +16484,8 @@ function commandline {
 		fi
 	fi
 }
+#ENDCMDLINE
+
 
 ### COMMAND LINE END ###
 
@@ -18309,13 +18312,18 @@ function main {
 		writelog "INFO" "${FUNCNAME[0]} - Checking command line: incoming arguments '${*}'"
 
 		if [ -n "$SteamAppId" ] && [ "$SteamAppId" -eq "0" ]; then
-			setCustomGameVars "$@"
-			if [ -n "$ISGAME" ]; then
-				if [ "$ISGAME" -eq 2 ] || [ "$ISGAME" -eq 3 ]; then
-					prepareLaunch
-				fi
+			if grep -q "\"$1\"" <<< "$(sed -n "/^#STARTCMDLINE/,/^#ENDCMDLINE/p;/^#ENDCMDLINE/q" "$0" | grep if)"; then
+				writelog "INFO" "${FUNCNAME[0]} - Seems like a '$PROGCMD'-internal command was started - checking the command line"
+				commandline "$@"
 			else
-				writelog "ERROR" "${FUNCNAME[0]} - Unknown command '$*'" "E"
+				setCustomGameVars "$@"
+				if [ -n "$ISGAME" ]; then
+					if [ "$ISGAME" -eq 2 ] || [ "$ISGAME" -eq 3 ]; then
+						prepareLaunch
+					fi
+				else
+					writelog "ERROR" "${FUNCNAME[0]} - Unknown command '$*'" "E"
+				fi
 			fi
 		elif grep -q "$SAC" <<< "$@" || grep -q "$L2EA" <<< "$@"; then
 			if grep -q "update" <<< "$@" || grep -q "^play" <<< "$@" ; then
