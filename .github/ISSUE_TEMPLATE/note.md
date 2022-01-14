@@ -7,4 +7,5 @@ assignees: ''
 
 ---
 
-# Please see [this sticky](https://github.com/frostworx/steamtinkerlaunch/issues/93) note for what is required for a good issue
+# Please see this sticky note for what is required for a good issue
+# https://github.com/frostworx/steamtinkerlaunch/issues/93
