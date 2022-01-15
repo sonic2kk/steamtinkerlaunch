@@ -110,6 +110,8 @@ Logs are written into the `LOGDIR` defined in the [Global Menu](https://github.c
 The verbosity of the logfile depends on `WRITELOG` *(write logfile if not 0, increase verbosity from 1-2 (1:less, 2:all))*
 in the same location.
 There are several logfiles, those which are written mostly are the game specific ones *($SteamAppId.log)*
+Besides some other (possibly relevant) log files, the log file of the last run can also be found here:
+`/dev/shm/steamtinkerlaunch/steamtinkerlaunch.log`
 
 ## Command Line
 **steamtinkerlaunch** also has several [command line](https://github.com/frostworx/steamtinkerlaunch/wiki/Command-Line) which can also be useful outside steam.
