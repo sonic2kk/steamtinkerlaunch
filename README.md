@@ -47,6 +47,8 @@ When done with configuring (or when the requester timeouts) the game will be sta
 
 Fedora: **[unoffical package](https://copr.fedorainfracloud.org/coprs/capucho/steamtinkerlaunch/)**
 
+Gentoo: [guru overlay](https://gitweb.gentoo.org/repo/proj/guru.git/commit/?h=dev&id=be7d1a2afbcc767c65dcfc3e57a42e87aa3f79f7)
+
 Ansible: **[playbook](https://github.com/tofu114/ansible_playbooks)**
 
 [![Packaging status](https://repology.org/badge/vertical-allrepos/steamtinkerlaunch.svg)](https://repology.org/project/steamtinkerlaunch/versions)
