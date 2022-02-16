@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v9.1.20220201"
+PROGVERS="v9.1.20220216"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -13697,6 +13697,17 @@ function getProtonDBRating {
 function fixProtonVersionMismatch {
 	if [ "$ISGAME" -eq 2 ]; then
 
+		# WIP (incomplete; FIXRUN is never created currently) idea for fixing a possible but rare loop, but no logs in #406 # TODO maybe remove later	#XXXXXXXXXXXXXXXXXXX
+		
+		FIXRUN="$STLSHM/${FUNCNAME[0]}-${AID}.txt"
+		
+		if [ -f "$FIXRUN" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - A search for a minor version bump was already running previously - recreating list of available Proton versions to restart from scratch"
+			rm "$FIXRUN"
+			rm "$PROTONCSV"
+			createProtonList X
+		fi
+
 		ORGPROTCAT="$1"
 		MIMAPROT="${!1}"
 
@@ -15606,6 +15617,11 @@ function launchSteamGame {
 					if [ ! -f "${RUNPROTON//\"/}" ]; then
 						writelog "WARN" "${FUNCNAME[0]} - '$USEPROTON' seems outdated as the executable ${RUNPROTON//\"/} wasn't found"
 						fixProtonVersionMismatch "USEPROTON" "$STLGAMECFG"
+					fi
+
+					if [ "${GAMESTARTCMD[0]}" == "$WFEAR" ]; then
+						# removing first ORGGCMD element as it is '$WFEAR'
+						unset "GAMESTARTCMD[0]"
 					fi
 					
 					if [ -f "${RUNPROTON//\"/}" ]; then
