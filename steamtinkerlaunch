@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v9.1.20220217"
+PROGVERS="v9.1.20220219"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -11438,80 +11438,86 @@ function setVortexDLPath {
 
 function setGameVortexStaging {
 	VGAMEDIR="$1"
-	# find matching Staging Directory:
-	GAMEMP="$(df -P "$VGAMEDIR" | awk 'END{print $NF}')"
-	writelog "INFO" "${FUNCNAME[0]} - Mount point of partition where the game is installed: '$GAMEMP'"
-	unset CONFSTAGE VORTEXSTAGING
 
-	if [ -f "$VORTEXSTAGELIST" ]; then
-		CONFSTAGE="$(grep "${GAMEMP}/" "$VORTEXSTAGELIST")"
-	fi
+	if [ ! -d  "$VGAMEDIR" ]; then
+		writelog "ERROR" "${FUNCNAME[0]} - argument 1 '$1' is no valid directory - can't continue"
+	else
+		writelog "INFO" "${FUNCNAME[0]} - Looking for the mount point of the partition where the game dir '$VGAMEDIR' is"
+		# find matching Staging Directory:
+		GAMEMP="$(df -P "$VGAMEDIR" | awk 'END{print $NF}')"
+		writelog "INFO" "${FUNCNAME[0]} - Mount point of partition where the game is installed: '$GAMEMP'"
+		unset CONFSTAGE VORTEXSTAGING
 
-	if [ -n "$CONFSTAGE" ]; then
-		if [ -d "$CONFSTAGE" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Configured VORTEXSTAGING dir found: '$CONFSTAGE'"
-			VORTEXSTAGING="$CONFSTAGE"
-		else
-			writelog "ERROR" "${FUNCNAME[0]} - Configured entry '$CONFSTAGE' found in '$VORTEXSTAGELIST', but this isn't a useable directory"
+		if [ -f "$VORTEXSTAGELIST" ]; then
+			CONFSTAGE="$(grep "${GAMEMP}/" "$VORTEXSTAGELIST")"
 		fi
-	fi
 
-	if [ -z "$VORTEXSTAGING" ]; then
-		if [ "$DISABLE_AUTOSTAGES" -eq 1 ]; then
-			writelog "SKIP" "${FUNCNAME[0]} - VORTEXSTAGING is empty and autostages was disabled by the user - skipping vortex"
-			USEVORTEX="0"
-		else
-			PARTLOG=" - using that as VORTEXSTAGING dir for all games on partition' $GAMEMP'"
-			HOMEMP="$(df -P "${STLVORTEXDIR%/*}" | awk 'END{print $NF}')"
-			writelog "INFO" "${FUNCNAME[0]} - HOMEMP is $HOMEMP and GAMEMP is $GAMEMP"
-
-			# don't pollute base steam installation with a ~/.steam/steam/Vortex dir, so default to $STLVORTEXDIR/stageing
-			if [ "$GAMEMP" == "$HOMEMP" ]; then	
-				getVortexStage "$STLVORTEXDIR/staging"
+		if [ -n "$CONFSTAGE" ]; then
+			if [ -d "$CONFSTAGE" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Configured VORTEXSTAGING dir found: '$CONFSTAGE'"
+				VORTEXSTAGING="$CONFSTAGE"
+			else
+				writelog "ERROR" "${FUNCNAME[0]} - Configured entry '$CONFSTAGE' found in '$VORTEXSTAGELIST', but this isn't a useable directory"
 			fi
+		fi
 
-			# try in base directory of the partition:
-			getVortexStage "$GAMEMP/${VTX^}"
+		if [ -z "$VORTEXSTAGING" ]; then
+			if [ "$DISABLE_AUTOSTAGES" -eq 1 ]; then
+				writelog "SKIP" "${FUNCNAME[0]} - VORTEXSTAGING is empty and autostages was disabled by the user - skipping vortex"
+				USEVORTEX="0"
+			else
+				PARTLOG=" - using that as VORTEXSTAGING dir for all games on partition' $GAMEMP'"
+				HOMEMP="$(df -P "${STLVORTEXDIR%/*}" | awk 'END{print $NF}')"
+				writelog "INFO" "${FUNCNAME[0]} - HOMEMP is $HOMEMP and GAMEMP is $GAMEMP"
 
-			# then try in the current SteamLibrary dir besides steamapps, as it should be writeable by the user and is unused from steam(?):
-			getVortexStage "$(awk -F 'steamapps' '{print $1}' <<< "$VGAMEDIR")${VTX^}"
+				# don't pollute base steam installation with a ~/.steam/steam/Vortex dir, so default to $STLVORTEXDIR/stageing
+				if [ "$GAMEMP" == "$HOMEMP" ]; then	
+					getVortexStage "$STLVORTEXDIR/staging"
+				fi
 
-			# updating Vortex config with the new found VORTEXSTAGING dir:
-			touch "$VORTEXSTAGELIST"
-			if [ -n "$VORTEXSTAGING" ]; then
-				if ! grep -q "$VORTEXSTAGING" < "$VORTEXSTAGELIST"; then
-					writelog "INFO" "${FUNCNAME[0]} - Adding '$VORTEXSTAGING' to the ${VTX^} Stage List '$VORTEXSTAGELIST'"
-					addVortexStage "$VORTEXSTAGING"
+				# try in base directory of the partition:
+				getVortexStage "$GAMEMP/${VTX^}"
+
+				# then try in the current SteamLibrary dir besides steamapps, as it should be writeable by the user and is unused from steam(?):
+				getVortexStage "$(awk -F 'steamapps' '{print $1}' <<< "$VGAMEDIR")${VTX^}"
+
+				# updating Vortex config with the new found VORTEXSTAGING dir:
+				touch "$VORTEXSTAGELIST"
+				if [ -n "$VORTEXSTAGING" ]; then
+					if ! grep -q "$VORTEXSTAGING" < "$VORTEXSTAGELIST"; then
+						writelog "INFO" "${FUNCNAME[0]} - Adding '$VORTEXSTAGING' to the ${VTX^} Stage List '$VORTEXSTAGELIST'"
+						addVortexStage "$VORTEXSTAGING"
+					fi
 				fi
 			fi
 		fi
-	fi
 
-	if [ -z "$VORTEXSTAGING" ]; then
-		writelog "SKIP" "${FUNCNAME[0]} - No useable staging directory autodetected - giving up"
-		USEVORTEX="0"
-	fi
-
-	if [ -n "$VORTEXSTAGING" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - VORTEXSTAGING set to '$VORTEXSTAGING' - configuring '$NEXUSGAMEID' Staging folder installPath"
-		VGSGM="$VORTEXSTAGING/$NEXUSGAMEID/mods"
-
-		writelog "INFO" "${FUNCNAME[0]} - Creating ${VTX^} Staging folder '$VGSGM'"
-		mkProjDir "$VGSGM"
-
-		VGSGMSF="$VGSGM/__vortex_staging_folder"
-		if [ ! -f "$VGSGMSF" ]; then
-			echo "{\"instance\":\"empty\",\"game\":\"NEXUSGAMEID\"}" > "$VGSGMSF"
+		if [ -z "$VORTEXSTAGING" ]; then
+			writelog "SKIP" "${FUNCNAME[0]} - No useable staging directory autodetected - giving up"
+			USEVORTEX="0"
 		fi
 
-		GAMESTAGINGWINFOLDER="Z:${VGSGM//\//\\\\}"
-		GAMESTAGINGWINFOLDER="${GAMESTAGINGWINFOLDER//$NEXUSGAMEID/\{GAME\}}"
-		writelog "INFO" "${FUNCNAME[0]} - Setting Staging folder '$GAMESTAGINGWINFOLDER' in Vortex"
+		if [ -n "$VORTEXSTAGING" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - VORTEXSTAGING set to '$VORTEXSTAGING' - configuring '$NEXUSGAMEID' Staging folder installPath"
+			VGSGM="$VORTEXSTAGING/$NEXUSGAMEID/mods"
 
-		setVortSet "settings.mods.installPath.$NEXUSGAMEID=true"
-		setVortSet "settings.mods.installPath.$NEXUSGAMEID=\\\"$GAMESTAGINGWINFOLDER\\\""
-		setVortSet "settings.mods.activator.$NEXUSGAMEID=\\\"hardlink_activator\\\""
-	fi	
+			writelog "INFO" "${FUNCNAME[0]} - Creating ${VTX^} Staging folder '$VGSGM'"
+			mkProjDir "$VGSGM"
+
+			VGSGMSF="$VGSGM/__vortex_staging_folder"
+			if [ ! -f "$VGSGMSF" ]; then
+				echo "{\"instance\":\"empty\",\"game\":\"NEXUSGAMEID\"}" > "$VGSGMSF"
+			fi
+
+			GAMESTAGINGWINFOLDER="Z:${VGSGM//\//\\\\}"
+			GAMESTAGINGWINFOLDER="${GAMESTAGINGWINFOLDER//$NEXUSGAMEID/\{GAME\}}"
+			writelog "INFO" "${FUNCNAME[0]} - Setting Staging folder '$GAMESTAGINGWINFOLDER' in Vortex"
+
+			setVortSet "settings.mods.installPath.$NEXUSGAMEID=true"
+			setVortSet "settings.mods.installPath.$NEXUSGAMEID=\\\"$GAMESTAGINGWINFOLDER\\\""
+			setVortSet "settings.mods.activator.$NEXUSGAMEID=\\\"hardlink_activator\\\""
+		fi
+	fi
 }
 
 function setupGameVortex {
@@ -11621,6 +11627,7 @@ function prepareVortexGame {
 			if [ -d "$GPFXSTUS" ]; then
 				setModGameSyms "set" "$VGPFX" "$VGNAME" "$VAID" "$VORTEXPFX" "$VAPPMAFE"
 				VGAMEDIR="$(getGameDirFromAID "$VAID")"
+				writelog "INFO" "${FUNCNAME[0]} - Game dir for '$VAID' found is: '$VGAMEDIR')"
 				setInstPathReg
 				checkVortexRegs "HKEY_LOCAL_MACHINE\\Software\\\Wow6432Node\\\Valve\\\Steam\\\Apps\\$VAID" "Installed Path" "Z:${VGAMEDIR//\//\\\\}"
 				setModGameReg "$VORTEXPFX" "$VORTEXWINE"
@@ -11628,7 +11635,15 @@ function prepareVortexGame {
 #			setupGameVortex "Z:${VGAMEDIR//\//\\\\}"
 			grep "\"$VAID\"" "$VORTEXGAMES" >> "$SEENVORTEXGAMES"
 			rmDupLines "$SEENVORTEXGAMES"
-			setGameVortexStaging "$VGAMEDIR"
+			
+			if [ ! -d  "$VGAMEDIR" ]; then
+				writelog "ERROR" "${FUNCNAME[0]} - variable VGAMEDIR '$VGAMEDIR' is no valid directory - can't continue"
+			elif [ -z  "$VGAMEDIR" ]; then
+				writelog "ERROR" "${FUNCNAME[0]} - variable VGAMEDIR does not exist - can't continue"
+			else
+				setGameVortexStaging "$VGAMEDIR"
+			fi
+
 			if [ -z "$2" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - $(strFix "$NOTY_APPLVTX" "$NEXUSGAMEID" "$VORTSETCMD")"
 				notiShow "$(strFix "$NOTY_APPLVTX" "$NEXUSGAMEID" "$VORTSETCMD")" "S" 
