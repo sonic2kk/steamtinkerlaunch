@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v9.1.20220219"
+PROGVERS="v9.1.20220220"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -3776,11 +3776,15 @@ function setGPfxFromAppMa {
 		echo "${2%/*}/$CODA/$1/pfx"
 	else
 		if [ -z "$GPFX" ]; then
-			APPMAFE="$(listAppManifests | grep "${1}.acf")"
+			APPMAFE="$(listAppManifests | grep -m1 "${1}.acf")"
 			if [ -n "$APPMAFE" ]; then
-				AMF="${APPMAFE##*/}"
-				GPFX="${APPMAFE%/*}/$CODA/$1/pfx"
-				writelog "INFO" "${FUNCNAME[0]} - Found WINEPREFIX '$GPFX' in '$AMF'"
+				if [ ! -d "$APPMAFE" ]; then
+					writelog "ERROR" "${FUNCNAME[0]} - '$APPMAFE' is no valid directory - probably function 'listAppManifests' requires a fix here!"
+				else
+					AMF="${APPMAFE##*/}"
+					GPFX="${APPMAFE%/*}/$CODA/$1/pfx"
+					writelog "INFO" "${FUNCNAME[0]} - Found WINEPREFIX '$GPFX' in '$AMF'"
+				fi
 			fi
 		fi
 	fi
@@ -8998,7 +9002,7 @@ function getGameFiles {
 	AID="$1"
 
 	if [ -z "$APPMAFE" ]; then
-		APPMAFE="$(listAppManifests | grep "${AID}.acf")"
+		APPMAFE="$(listAppManifests | grep -m1 "${AID}.acf")"
 	fi
 
 	if [ -f "$APPMAFE" ]; then
@@ -10669,7 +10673,7 @@ function getGameDirFromAM {
 }
 
 function getGameDirFromAID {
-	APPMAFE="$(listAppManifests | grep "appmanifest_${1}.acf")"
+	APPMAFE="$(listAppManifests | grep -m1 "appmanifest_${1}.acf")"
 	getGameDirFromAM "$APPMAFE"
 }
 
@@ -11620,7 +11624,7 @@ function prepareVortexGame {
 			writelog "INFO" "${FUNCNAME[0]} - $(strFix "$NOTY_PREPVTX" "$VGNAME" "$VAID" "$NEXUSGAMEID")"
 			notiShow "$(strFix "$NOTY_PREPVTX" "$VGNAME" "$VAID" "$NEXUSGAMEID")" "S" 
 			# prepare symlinks in VORTEXPFX
-			VAPPMAFE="$(listAppManifests | grep "${VAID}.acf")"
+			VAPPMAFE="$(listAppManifests | grep -m1 "${VAID}.acf")"
 			VGPFX="$(setGPfxFromAppMa "$VAID" "$VAPPMAFE")"
 
 			GPFXSTUS="$VGPFX/$DRCU/$STUS"
@@ -12352,7 +12356,7 @@ function prepareMO2 {
 						manageMO2GInstance "${MO2AID//\"}" "X"
 						if [ -z "$EFD" ]; then
 							if [ -z "$APPMAFE" ]; then
-								APPMAFE="$(listAppManifests | grep "${MO2AID//\"}.acf")"
+								APPMAFE="$(listAppManifests | grep -m1 "${MO2AID//\"}.acf")"
 							fi
 							EFD="$(getGameDirFromAM "$APPMAFE")"
 						fi
