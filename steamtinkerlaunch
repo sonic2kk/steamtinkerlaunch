@@ -270,7 +270,7 @@ APIN="appinfo"
 SLO="Steam Launch Option"
 SOMEPOPULARWINEPAKS="dotnet4 quartz xact"
 SOMEWINEDEBUGOPTIONS="-all,+steam,+vrclient,+vulkan"
-SGDBDIMOPTS="460x215,920x430,600x900,342x482,660x930"
+SGDBDIMOPTS="600x900,342x482,660x930"
 SGDBSTYOPTS="alternate,blurred,white_logo,material,no_logo"
 GETSTAID="99[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]99"
 
@@ -1242,61 +1242,98 @@ function checkSGDbApi {
 	fi	
 }
 
-function getGrid {
+# Takes a list of appids separated by newlines
+function getGrids {
 	if checkSGDbApi && [ "$STLPLAY" -eq 0 ]; then
 
-		URLSTR="$("$WGET" --header="Authorization: Bearer $SGDBAPIKEY" -q "${STEAMGRIDDBAPI}/${1}?styles=${SGDBSTYLES}&dimensions=${SGDBDIMS}&types=${SGDBTYPES}&nsfw=${SGDBNSFW}&humor=${SGDBHUMOR}" -O - 2> >(grep -v "SSL_INIT")| "$JQ" -r '.data' | "$JQ" '.[0].url')"
+		# Split into batches of 100 games - too many and cloudflare blocks requests because of a too big header file
+		while mapfile -t -n 100 ary && ((${#ary[@]})); do
+			PART=$(printf '%s\n' "${ary[@]}")
 
-		GRIDDLURL="${URLSTR//\"}"
-		if grep -q "^https" <<< "$GRIDDLURL"; then
-			DLSRC="${GRIDDLURL//\"}"
+			# If the whole batch has no grids we get a 404 and wget gives an error. --content-on-error ensures we still get the response json and the following logic still works
+			RESPONSE="$("$WGET" --content-on-error --header="Authorization: Bearer $SGDBAPIKEY" -q "${STEAMGRIDDBAPI}/$(echo "$PART" | awk '{print $1}' | paste -s -d, -)?styles=${SGDBSTYLES}&dimensions=${SGDBDIMS}&types=${SGDBTYPES}&nsfw=${SGDBNSFW}&humor=${SGDBHUMOR}" -O - 2> >(grep -v "SSL_INIT"))"
 
-			if [ "$SGDBDLTOSTEAM" -eq 1 ]; then
-				if [ -z "$SUSDA" ]; then
-					setSteamPaths
-				fi
-
-				if [ -d "$SUIC" ]; then
-					GRIDDLDIR="${SUIC}/grid"
-				fi
-			else
-				GRIDDLDIR="$STLDLDIR/steamgriddb"
+			if ! "$JQ" -e '.success' 1> /dev/null <<< "$RESPONSE"; then
+				writelog "INFO" "${FUNCNAME[0]} - The server response wasn't 'success' for this batch of requested games."
+				continue
 			fi
 
-			mkProjDir "$GRIDDLDIR"
-	
-			DLDST="$GRIDDLDIR/${1}p.${GRIDDLURL##*.}"
-			STARTDL=1
+			RESPONSE_LENGTH=$("$JQ" '.data | length' <<< "$RESPONSE")
+
+			# TODO: This could be handled by the http return value - 200 is single-part - 207 is multi-part
+			# FIXME: This assumes a url field is available for the first grid object
+			# Rewrite response object to fit the following loop if the response isn't multi-part
+			if "$JQ" -e ".data[0].url" 1> /dev/null <<< "$RESPONSE"; then
+				RESPONSE="{\"success\":true,\"data\":[$RESPONSE]}"
+				RESPONSE_LENGTH=1
+			fi
+
+			for i in $(seq 0 $(("$RESPONSE_LENGTH" - 1))); do
+
+				# match the current json array member against the appid list
+				# this assumes we get the same order back we put in before
+				APPID=$(sed "$((i + 1))q;d" <<< "$PART")
+
+				if ! "$JQ" -e ".data[$i].success" 1> /dev/null <<< "$RESPONSE"; then
+					writelog "INFO" "${FUNCNAME[0]} - The server response for '$APPID' wasn't 'success'"
+					continue
+				fi
+
+				if ! URLSTR=$("$JQ" -e -r ".data[$i].data[0].url" <<< "$RESPONSE"); then
+					writelog "INFO" "${FUNCNAME[0]} - No grid found to download for '$APPID' - maybe loosen filters?"
+					continue
+				fi
+
+				GRIDDLURL="${URLSTR//\"}"
+				if grep -q "^https" <<< "$GRIDDLURL"; then
+					DLSRC="${GRIDDLURL//\"}"
+
+					if [ "$SGDBDLTOSTEAM" -eq 1 ]; then
+						if [ -z "$SUSDA" ]; then
+							setSteamPaths
+						fi
+
+						if [ -d "$SUIC" ]; then
+							GRIDDLDIR="${SUIC}/grid"
+						fi
+					else
+						GRIDDLDIR="$STLDLDIR/steamgriddb"
+					fi
+
+					mkProjDir "$GRIDDLDIR"
 			
-			if [ -f "$DLDST" ]; then
-				if [ "$SGDBHASFILE" == "skip" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - Download of existing file is set to '$SGDBHASFILE' - doing nothing"
-					STARTDL=0
-				elif [ "$SGDBHASFILE" == "backup" ]; then
-					BACKDIR="${GRIDDLDIR}/backup"
-					mkProjDir "$BACKDIR"
-					writelog "INFO" "${FUNCNAME[0]} - Backup existing file into '$BACKDIR', because SGDBHASFILE is set to '$SGDBHASFILE'"
-					mv "$DLDST" "$BACKDIR"
-				elif [ "$SGDBHASFILE" == "replace" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - Replacing existing file '$DLDST', because SGDBHASFILE is set to '$SGDBHASFILE'"
-					rm "$DLDST" 2>/dev/null
+					DLDST="$GRIDDLDIR/${APPID}p.${GRIDDLURL##*.}"
+					STARTDL=1
+					
+					if [ -f "$DLDST" ]; then
+						if [ "$SGDBHASFILE" == "skip" ]; then
+							writelog "INFO" "${FUNCNAME[0]} - Download of existing file is set to '$SGDBHASFILE' - doing nothing"
+							STARTDL=0
+						elif [ "$SGDBHASFILE" == "backup" ]; then
+							BACKDIR="${GRIDDLDIR}/backup"
+							mkProjDir "$BACKDIR"
+							writelog "INFO" "${FUNCNAME[0]} - Backup existing file into '$BACKDIR', because SGDBHASFILE is set to '$SGDBHASFILE'"
+							mv "$DLDST" "$BACKDIR"
+						elif [ "$SGDBHASFILE" == "replace" ]; then
+							writelog "INFO" "${FUNCNAME[0]} - Replacing existing file '$DLDST', because SGDBHASFILE is set to '$SGDBHASFILE'"
+							rm "$DLDST" 2>/dev/null
+						fi
+					fi
+					
+					if [ "$STARTDL" -eq 1 ]; then
+						dlCheck "$DLSRC" "$DLDST" "X" "Downloading '$DLSRC' to '$DLDST'"
+					fi
+				else
+					writelog "INFO" "${FUNCNAME[0]} - No grid found to download for '$APPID' - maybe loosen filters?"
 				fi
-			fi
-			
-			if [ "$STARTDL" -eq 1 ]; then
-				dlCheck "$DLSRC" "$DLDST" "X" "Downloading '$DLSRC' to '$DLDST'"
-			fi
-		else
-			writelog "INFO" "${FUNCNAME[0]} - No grid found to download for '$1' - maybe loosen filters?"
-		fi
+			done
+		done <<< "${1}"
 	fi
 }
 
-function getGridsForInstalledGames {
+function getGridsForOwnedGames {
 	if checkSGDbApi; then
-		while read -r CATAID; do
-			getGrid "$CATAID"
-		done <<< "$(listInstalledGameIDs)"
+		getGrids "$(getOwnedAids)"
 	fi
 }
 
@@ -13621,7 +13658,7 @@ function prepareLaunch {
 	# Automatic Grid Update Check before_game
 	if [ "$SGDBAUTODL" == "before_game" ] && [ "$STLPLAY" -eq 0 ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Automatic Grid Update Check '$SGDBAUTODL'"
-		getGrid "$AID" &
+		getGrids "$AID" &
 	fi
 
 	if [ "$ISGAME" -eq 2 ]; then
@@ -16394,9 +16431,9 @@ function commandline {
 				fi
 			elif [ "$2" == "grid" ]; then
 				if [ -z "$3" ]; then
-					getGridsForInstalledGames
+					getGridsForOwnedGames
 				else
-					getGrid "$3"
+					getGrids "$3"
 				fi
 			elif [ "$2" == "allgamedata" ]; then
 				getDataForAllGamesinSharedConfig
@@ -16561,7 +16598,7 @@ function storeMetaData {
 	if [ ! -f "$GEMETA/$MAID.conf" ]; then
 		if [ "$SGDBAUTODL" == "no_meta" ] ; then
 			writelog "INFO" "${FUNCNAME[0]} - Automatic Grid Update Check '$SGDBAUTODL'"
-			getGrid "$MAID"
+			getGrids "$MAID"
 		fi
 		touch "$GEMETA/$MAID.conf"
 	fi
@@ -17403,7 +17440,7 @@ function closeSTL {
 
 	if [ "$SGDBAUTODL" == "after_game" ] ; then
 		writelog "INFO" "${FUNCNAME[0]} - Automatic Grid Update Check '$SGDBAUTODL'"
-		getGrid "$AID"
+		getGrids "$AID"
 	fi
 
 	if [ "$ISGAME" -eq 2 ] && [ "$PROTON_LOG" -eq 1 ]; then
