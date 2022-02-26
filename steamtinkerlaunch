@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v9.1.20220225"
+PROGVERS="v9.1.20220226"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -1225,11 +1225,15 @@ function listInstalledGameIDs {
 }
 
 function getGameDataForInstalledGames {
-	while read -r CATAID; do
-		if [ -n "$CATAID" ]; then
-			getGameData "$CATAID"
-		fi
-	done <<< "$(listInstalledGameIDs)"
+	if [ "$(listInstalledGameIDs | wc -l)" -eq 0 ]; then
+		writelog "SKIP" "${FUNCNAME[0]} - No installed games found!"
+	else
+		while read -r CATAID; do
+			if [ -n "$CATAID" ]; then
+				getGameData "$CATAID"
+			fi
+		done <<< "$(listInstalledGameIDs)"
+	fi
 }
 
 function checkSGDbApi {
@@ -1344,7 +1348,11 @@ function getGridsForOwnedGames {
 
 function getGridsForInstalledGames {
 	if checkSGDbApi; then
-		getGrids "$(listInstalledGameIDs)"
+		if [ "$(listInstalledGameIDs | wc -l)" -eq 0 ]; then
+			writelog "SKIP" "${FUNCNAME[0]} - No installed games found!"
+		else
+			getGrids "$(listInstalledGameIDs)"
+		fi
 	fi
 }
 
@@ -11227,10 +11235,14 @@ function getVortexStage {
 
 function getInstalledGamesWithVortexSupport {
 	getVortexSupported
-	mapfile -t -O "${#INSTGAMES[@]}" INSTGAMES <<< "$(listInstalledGameIDs)"
-	mapfile -t -O "${#INSTVGAMES[@]}" INSTVGAMES <<< "$(comm -12 <(printf "%s\n" "${VOSTIDS[@]}" | sort -u) <(printf "%s\n" "${INSTGAMES[@]}" | sort -u))"
-	if [ -n "$1" ]; then
-		printf "%s\n" "${INSTVGAMES[@]}"
+	if [ "$(listInstalledGameIDs | wc -l)" -eq 0 ]; then
+		writelog "SKIP" "${FUNCNAME[0]} - No installed games found!"
+	else
+		mapfile -t -O "${#INSTGAMES[@]}" INSTGAMES <<< "$(listInstalledGameIDs)"
+		mapfile -t -O "${#INSTVGAMES[@]}" INSTVGAMES <<< "$(comm -12 <(printf "%s\n" "${VOSTIDS[@]}" | sort -u) <(printf "%s\n" "${INSTGAMES[@]}" | sort -u))"
+		if [ -n "$1" ]; then
+			printf "%s\n" "${INSTVGAMES[@]}"
+		fi
 	fi
 }
 
@@ -16195,18 +16207,26 @@ function commandline {
 		reCreateCompatdata "$1" "$USEID" "$3"
 	elif [ "$1" == "createdesktopicon" ] || [ "$1" == "cdi" ]; then
 		if [ "$2" == "all" ]; then
-			while read -r CATAID; do
-				createDesktopIconFile "$CATAID" "$3"
-			done <<< "$(listInstalledGameIDs)"
+			if [ "$(listInstalledGameIDs | wc -l)" -eq 0 ]; then
+				writelog "SKIP" "${FUNCNAME[0]} - No installed games found!" "E"
+			else
+				while read -r CATAID; do
+					createDesktopIconFile "$CATAID" "$3"
+				done <<< "$(listInstalledGameIDs)"
+			fi
 		else
 			FUSEID "$2"
 			createDesktopIconFile "$USEID" "$3"
 		fi
 	elif [ "$1" == "createappinfo" ] || [ "$1" == "cai" ]; then
 		if [ "$2" == "installed" ] || [ "$2" == "i" ]; then
-			while read -r CATAID; do
-				getRawAppIDInfo "$CATAID" "$3"
-			done <<< "$(listInstalledGameIDs)"
+			if [ "$(listInstalledGameIDs | wc -l)" -eq 0 ]; then
+				writelog "SKIP" "${FUNCNAME[0]} - No installed games found!" "E"
+			else
+				while read -r CATAID; do
+					getRawAppIDInfo "$CATAID" "$3"
+				done <<< "$(listInstalledGameIDs)"
+			fi
 		elif [ "$2" == "owned" ] || [ "$2" == "o" ]; then
 			while read -r CATAID; do
 				getRawAppIDInfo "$CATAID" "$3"
@@ -16218,9 +16238,13 @@ function commandline {
 	elif [ "$1" == "createappinfometa" ] || [ "$1" == "caim" ]; then
 		if [ -n "$2" ]; then
 			if [ "$2" == "installed" ] || [ "$2" == "i" ]; then
-				while read -r CATAID; do
-					writeAllAIMeta "$CATAID" "$3"
-				done <<< "$(listInstalledGameIDs)"
+				if [ "$(listInstalledGameIDs | wc -l)" -eq 0 ]; then
+					writelog "SKIP" "${FUNCNAME[0]} - No installed games found!" "E"
+				else
+					while read -r CATAID; do
+						writeAllAIMeta "$CATAID" "$3"
+					done <<< "$(listInstalledGameIDs)"
+				fi
 			elif [ "$2" == "owned" ] || [ "$2" == "o" ]; then
 				while read -r CATAID; do
 					writeAllAIMeta "$CATAID" "$3"
@@ -16295,7 +16319,11 @@ function commandline {
 		if [ "$2" == "owned" ] || [ "$2" == "o" ]; then
 			getOwnedAids
 		elif [ "$2" == "installed" ] || [ "$2" == "i" ]; then
-			listInstalledGameIDs
+			if [ "$(listInstalledGameIDs | wc -l)" -eq 0 ]; then
+				writelog "SKIP" "${FUNCNAME[0]} - No installed games found!" "E"
+			else
+				listInstalledGameIDs
+			fi
 		elif [ "$2" == "appmanifests" ] || [ "$2" == "am" ]; then
 			listAppManifests
 		fi
