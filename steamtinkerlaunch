@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v9.1.20220226"
+PROGVERS="v9.1.20220227"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -1382,9 +1382,21 @@ function getActiveSteamCategories {
 }
 
 function createCategoryMenus {
+	# create launcher menu for all installed games
 	DFIDIR="$DFDIR/installed"
 	mkProjDir "$DFIDIR"
 
+	if [ "$(listInstalledGameIDs | wc -l)" -eq 0 ]; then
+		writelog "SKIP" "${FUNCNAME[0]} - No installed games found!"
+	else
+		while read -r CATGAME; do
+			if [ -n "$CATGAME" ] && [ ! -h "$DFIDIR/$CATGAME.desktop" ] && [ -f "$STLGDESKD/$CATGAME.desktop" ]; then
+				ln -s "$STLGDESKD/$CATGAME.desktop" "$DFIDIR"
+			fi
+		done <<< "$(listInstalledGameIDs)"
+	fi
+
+	# create launcher menu for all category '$1'
 	if [ -n "$1" ] && [ "$1" == "update" ] && [ "$(find "$DFDIR" -name "*.desktop" | wc -l)" -gt 0 ]; then
 		find "$DFDIR" -name "*.desktop" -exec rm {} \;
 	fi
@@ -1398,10 +1410,6 @@ function createCategoryMenus {
 					if [ ! -h "$DFCDIR/$CATGAME.desktop" ]; then
 						ln -s "$STLGDESKD/$CATGAME.desktop" "$DFCDIR"
 					fi
-
-					if [ ! -h "$DFIDIR/$CATGAME.desktop" ]; then
-						ln -s "$STLGDESKD/$CATGAME.desktop" "$DFIDIR"
-					fi	
 				fi
 			done <<< "$(getInstalledGamesFromCategory "$CAT")"
 		done < <(getActiveSteamCategories)
