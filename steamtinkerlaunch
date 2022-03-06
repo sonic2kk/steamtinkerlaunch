@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v9.2"
+PROGVERS="v9.3.20220306"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -4837,62 +4837,65 @@ function openCustMenu {
 	} >"$MYMENU"
 	
 	source "$MYMENU"
-	"$MYFUNC" > "$MKCFG"
-	case $? in
-	0)  {
-			clickInfo "${FUNCNAME[0]}" "$?" "$BUT0" "Category '$MYCAT' Menu" "$GOTO"
-			if [ "$GOTO" == "Exit" ]; then
+	
+	if [ -z "$MYFUNC" ]; then
+		writelog "SKIP" "${FUNCNAME[0]} - Seems like some arguments are missing - got '$*'"
+	else
+		"$MYFUNC" > "$MKCFG"
+		case $? in
+		0)  {
+				clickInfo "${FUNCNAME[0]}" "$?" "$BUT0" "Category '$MYCAT' Menu" "$GOTO"
+				if [ "$GOTO" == "Exit" ]; then
+					GOBACK=0
+					closeSTL " ######### STOP EARLY $PROGNAME $PROGVERS #########"
+					exit
+				else
+					rmCfgTemp "${FUNCNAME[0]}"
+				fi
+			}
+		;;
+		2) 	{
+				clickInfo "${FUNCNAME[0]}" "$?" "$BUT2" "Category '$MYCAT' Menu" "$SETMENU"
+				MainMenu "$AID" "${FUNCNAME[0]}"
+			}
+		;;
+		4) 	{
+				clickInfo "${FUNCNAME[0]}" "$?" "$BUT4" "Category '$MYCAT' Menu" "restart Menu"
 				GOBACK=0
-				closeSTL " ######### STOP EARLY $PROGNAME $PROGVERS #########"
-				exit
-			else
-				rmCfgTemp "${FUNCNAME[0]}"
-			fi
-		}
-	;;
-	2) 	{
-			clickInfo "${FUNCNAME[0]}" "$?" "$BUT2" "Category '$MYCAT' Menu" "$SETMENU"
-			MainMenu "$AID" "${FUNCNAME[0]}"
-		}
-	;;
-	4) 	{
-			clickInfo "${FUNCNAME[0]}" "$?" "$BUT4" "Category '$MYCAT' Menu" "restart Menu"
-			GOBACK=0
-			writelog "INFO" "${FUNCNAME[0]} - Reload Configs and restart Category '$MYCAT' Menu"
-			if [ "$SAVESETSIZE" -eq 1 ] ; then	sleep 1;	fi
-			"${FUNCNAME[0]}" "$@"
-		}
-	;;
-	6) {
-			clickInfo "${FUNCNAME[0]}" "$?" "$BUT6" "Category '$MYCAT' Menu" "restart Menu"
-			GOBACK=0
-			saveMenuEntries "$MYMENU"
-			if [ "$SAVESETSIZE" -eq 1 ] ; then	sleep 1;	fi
-			
-			if [ "$MYCAT" == "$GCD" ];then
-				setGameCfgDiffs
-			fi
-			"${FUNCNAME[0]}" "$@"
-		}
-	;;
-	8) 	{
-			clickInfo "${FUNCNAME[0]}" "$?" "$BUT8" "Category '$MYCAT' Menu" "Game Start"
-			GOBACK=0
-			saveMenuEntries "$MYMENU"
-			startSteamGame
-		}
-	;;
-	10)	{
-			clickInfo "${FUNCNAME[0]}" "$?" "$BUT10" "Category '$MYCAT' Menu" "Game Start"
-			GOBACK=0
-			startSteamGame
-		}
-	;;
-	esac
-
-	rmCfgTemp "${FUNCNAME[0]}"
-	goBackToPrevFunction "${FUNCNAME[0]}" "$2" "$GOBACK"
-
+				writelog "INFO" "${FUNCNAME[0]} - Reload Configs and restart Category '$MYCAT' Menu"
+				if [ "$SAVESETSIZE" -eq 1 ] ; then	sleep 1;	fi
+				"${FUNCNAME[0]}" "$@"
+			}
+		;;
+		6) {
+				clickInfo "${FUNCNAME[0]}" "$?" "$BUT6" "Category '$MYCAT' Menu" "restart Menu"
+				GOBACK=0
+				saveMenuEntries "$MYMENU"
+				if [ "$SAVESETSIZE" -eq 1 ] ; then	sleep 1;	fi
+				
+				if [ "$MYCAT" == "$GCD" ];then
+					setGameCfgDiffs
+				fi
+				"${FUNCNAME[0]}" "$@"
+			}
+		;;
+		8) 	{
+				clickInfo "${FUNCNAME[0]}" "$?" "$BUT8" "Category '$MYCAT' Menu" "Game Start"
+				GOBACK=0
+				saveMenuEntries "$MYMENU"
+				startSteamGame
+			}
+		;;
+		10)	{
+				clickInfo "${FUNCNAME[0]}" "$?" "$BUT10" "Category '$MYCAT' Menu" "Game Start"
+				GOBACK=0
+				startSteamGame
+			}
+		;;
+		esac
+		rmCfgTemp "${FUNCNAME[0]}"
+		goBackToPrevFunction "${FUNCNAME[0]}" "$2" "$GOBACK"
+	fi
 }
 
 function setGuiSortOrder {
