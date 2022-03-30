@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v9.3.20220329"
+PROGVERS="v9.3.20220330"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -14,6 +14,7 @@ PROJECTPAGE="$GHURL/frostworx/${PROGNAME,,}"
 PPW="$PROJECTPAGE/wiki"
 CURWIKI="$PPW"
 STARTDEBUG=0
+ONSTEAMDECK=0
 
 ### internal dependencies ###
 #STARTINTDEPS
@@ -1479,44 +1480,55 @@ function pollWinRes {
 	POSY=0
 	unset COLCOUNT
 
-	SCREENRES="$(getScreenRes r)"
-
+	if [ "$ONSTEAMDECK" -eq 1 ]; then
+		SCREENRES="1280x800"
+		WINX=1280
+		WINY=800
+		setGeom
+	else
+		SCREENRES="$(getScreenRes r)"
+	fi
+	
 	if [ -z "$SCREENRES" ]; then
 		SCREENRES="any"
 	fi
-	TEMPL="template"
-	GAMEGUICFG="$STLGUIDIR/$SCREENRES/${AID}/${TITLE}.conf"
-	TEMPLGUICFG="$STLGUIDIR/$SCREENRES/${TEMPL}/${TITLE}.conf"
-	GLOBTEMPLGUICFG="$GLOBALSTLGUIDIR/$SCREENRES/${TEMPL}/${TITLE}.conf"
 
-	mkProjDir "${GAMEGUICFG%/*}"
-	mkProjDir "${TEMPLGUICFG%/*}"
-	
-	if [ -f "$TEMPLGUICFG" ] && [ ! -f "$GAMEGUICFG" ]; then
-		loadCfg "$TEMPLGUICFG" X
-		setGeom
-		writelog "INFO" "${FUNCNAME[0]} - Using GEOM '$GEOM' from '$TEMPLGUICFG'" "$WINRESLOG"
-	elif [ -f "$GLOBTEMPLGUICFG" ] && [ ! -f "$GAMEGUICFG" ]; then
-		loadCfg "$GLOBTEMPLGUICFG" X
-		setGeom
-		writelog "INFO" "${FUNCNAME[0]} - Using GEOM '$GEOM' from '$GLOBTEMPLGUICFG'" "$WINRESLOG"
-	elif [ -f "$GAMEGUICFG" ]; then
-		loadCfg "$GAMEGUICFG" X
-		setGeom
-		writelog "INFO" "${FUNCNAME[0]} - Using GEOM '$GEOM' from '$GAMEGUICFG'" "$WINRESLOG"
-	else
-		touch "$GAMEGUICFG"
-		echo "WINX=\"$WINX\"" > "$GAMEGUICFG"
-		echo "WINY=\"$WINY\"" >> "$GAMEGUICFG"
+	if [ "$ONSTEAMDECK" -eq 0 ]; then
+		# XXXXXXXXXXX? maybe disable even more for the SteamDeck. in theory it is not necessary to save the resolution configs, as they are always 1280x800
+		TEMPL="template"
+		GAMEGUICFG="$STLGUIDIR/$SCREENRES/${AID}/${TITLE}.conf"
+		TEMPLGUICFG="$STLGUIDIR/$SCREENRES/${TEMPL}/${TITLE}.conf"
+		GLOBTEMPLGUICFG="$GLOBALSTLGUIDIR/$SCREENRES/${TEMPL}/${TITLE}.conf"
 
-		if [ -z "$GEOM" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Using harmless '--center' as variable 'GEOM', because there are multiple side-effects in yad if the string is empty"
-			GEOM="--center"
+		mkProjDir "${GAMEGUICFG%/*}"
+		mkProjDir "${TEMPLGUICFG%/*}"
+		
+		if [ -f "$TEMPLGUICFG" ] && [ ! -f "$GAMEGUICFG" ]; then
+			loadCfg "$TEMPLGUICFG" X
+			setGeom
+			writelog "INFO" "${FUNCNAME[0]} - Using GEOM '$GEOM' from '$TEMPLGUICFG'" "$WINRESLOG"
+		elif [ -f "$GLOBTEMPLGUICFG" ] && [ ! -f "$GAMEGUICFG" ]; then
+			loadCfg "$GLOBTEMPLGUICFG" X
+			setGeom
+			writelog "INFO" "${FUNCNAME[0]} - Using GEOM '$GEOM' from '$GLOBTEMPLGUICFG'" "$WINRESLOG"
+		elif [ -f "$GAMEGUICFG" ]; then
+			loadCfg "$GAMEGUICFG" X
+			setGeom
+			writelog "INFO" "${FUNCNAME[0]} - Using GEOM '$GEOM' from '$GAMEGUICFG'" "$WINRESLOG"
+		else
+			touch "$GAMEGUICFG"
+			echo "WINX=\"$WINX\"" > "$GAMEGUICFG"
+			echo "WINY=\"$WINY\"" >> "$GAMEGUICFG"
+
+			if [ -z "$GEOM" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Using harmless '--center' as variable 'GEOM', because there are multiple side-effects in yad if the string is empty"
+				GEOM="--center"
+			fi
+
+			writelog "INFO" "${FUNCNAME[0]} - Creating initial '$GAMEGUICFG' with unused default values" "$WINRESLOG"
 		fi
-
-		writelog "INFO" "${FUNCNAME[0]} - Creating initial '$GAMEGUICFG' with unused default values" "$WINRESLOG"
 	fi
-	
+
 	if [ -n "$2" ]; then
 		DEFCOL="$2"
 	else
@@ -1524,14 +1536,18 @@ function pollWinRes {
 	fi
 	
 	if [ -z "$COLCOUNT" ]; then
-		updateConfigEntry "COLCOUNT" "$DEFCOL" "$GAMEGUICFG"
+		if [ "$ONSTEAMDECK" -eq 0 ]; then
+			updateConfigEntry "COLCOUNT" "$DEFCOL" "$GAMEGUICFG"
+		fi
 		COLCOUNT="$DEFCOL"
 	fi
 	
 	CURGUICFG="$GAMEGUICFG"
 	export CURGUICFG="$CURGUICFG"
-	
-	updateWinRes "$TITLE" "$GAMEGUICFG" "$TEMPLGUICFG" &
+
+	if [ "$ONSTEAMDECK" -eq 0 ]; then
+		updateWinRes "$TITLE" "$GAMEGUICFG" "$TEMPLGUICFG" &
+	fi
 }
 
 function openGameLauncher {
@@ -3153,28 +3169,33 @@ function saveCfg {
 }
 
 function notiShow {
-	if [ -n "$2" ] && [ "$2" == "X" ]; then
-		if [ -z "$NOTY" ]; then
-			NOTY="$(command -v "notify-send")"
-		fi
-	fi
-
-	if [ -n "$USENOTIFIER" ] && [ "$USENOTIFIER" -eq 1 ] && { [ -z "$2" ] || { [ -n "$2" ] && [ "$2" != "S" ]; };} || { [ -n "$2" ] && [ "$2" == "X" ]; }; then
-
-		if [ -x "$(command -v "$NOTY")" ]; then
-			if [ -z "${NOTYARGSARR[0]}" ]; then
-				mapfile -d " " -t -O "${#NOTYARGSARR[@]}" NOTYARGSARR < <(printf '%s' "$NOTYARGS")
+	if [ "$ONSTEAMDECK" -eq 1 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Skipping notifier on SteamDeck"
+		USENOTIFIER=0 # might avoid a 2nd try during this session
+	else
+		if [ -n "$2" ] && [ "$2" == "X" ]; then
+			if [ -z "$NOTY" ]; then
+				NOTY="$(command -v "notify-send")"
 			fi
-			"$NOTY" "${NOTYARGSARR[@]}" "$1"
-		else
-			writelog "INFO" "${FUNCNAME[0]} - Warning - '$NOTY' not found - disabling notifier"
-			USENOTIFIER=0
 		fi
-	fi
-	
-	if [ -n "$2" ] && [ "$2" == "S" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - Message '$1' should go to StatusWindow"
-		echo "$1"
+
+		if [ -n "$USENOTIFIER" ] && [ "$USENOTIFIER" -eq 1 ] && { [ -z "$2" ] || { [ -n "$2" ] && [ "$2" != "S" ]; };} || { [ -n "$2" ] && [ "$2" == "X" ]; }; then
+
+			if [ -x "$(command -v "$NOTY")" ]; then
+				if [ -z "${NOTYARGSARR[0]}" ]; then
+					mapfile -d " " -t -O "${#NOTYARGSARR[@]}" NOTYARGSARR < <(printf '%s' "$NOTYARGS")
+				fi
+				"$NOTY" "${NOTYARGSARR[@]}" "$1"
+			else
+				writelog "INFO" "${FUNCNAME[0]} - Warning - '$NOTY' not found - disabling notifier"
+				USENOTIFIER=0
+			fi
+		fi
+		
+		if [ -n "$2" ] && [ "$2" == "S" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Message '$1' should go to StatusWindow"
+			echo "$1"
+		fi
 	fi
 }
 
@@ -3745,6 +3766,10 @@ function updateWinRes {
 		SAVESETSIZE=0
 	fi
 	
+	if [ "$ONSTEAMDECK" -eq 1 ]; then
+		SAVESETSIZE=0
+	fi
+	
 	if [ "$SAVESETSIZE" -eq 1 ] ; then
 		WNAM="$1"
 		CFG="$2"
@@ -4199,93 +4224,97 @@ function openTrayIcon {
 		writelog "INFO" "${FUNCNAME[0]} - LoadCfg: $STLGAMECFG"
 		loadCfg "$STLGAMECFG"
 	fi
-	
-	if [ -z "$YADTRAYPID" ] && [ "$USETRAYICON" -eq 1 ]; then
-		writelog "INFO" "${FUNCNAME[0]} - Opening trayIcon:" "X"
 
-		# variables and functions used by exported functions below
+	if [ "$ONSTEAMDECK" -eq 1 ]; then
+		writelog "SKIP" "${FUNCNAME[0]} - Skipping TrayIcon on SteamDeck" "X"
+	else
+		if [ -z "$YADTRAYPID" ] && [ "$USETRAYICON" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Opening trayIcon:" "X"
 
-		# functions for the trayIcon Menu
-		function killProtonGame {
-			"$KILLSWITCH"
-		}
+			# variables and functions used by exported functions below
 
-		function PauseGame {
-			GAMEPID="$(sleep 5 && "$XDO" getactivewindow getwindowpid)"
-			# idea taken with friendly permission from $GHURL/Ilazki:
-			GAMESTATE="$(ps -q "$GAMEPID" -o state --no-headers)"
-			GAMESIG="-STOP"
+			# functions for the trayIcon Menu
+			function killProtonGame {
+				"$KILLSWITCH"
+			}
 
-			if [ "$GAMESTATE" = "T" ] ; then
-				GAMESIG="-CONT"
-			fi
+			function PauseGame {
+				GAMEPID="$(sleep 5 && "$XDO" getactivewindow getwindowpid)"
+				# idea taken with friendly permission from $GHURL/Ilazki:
+				GAMESTATE="$(ps -q "$GAMEPID" -o state --no-headers)"
+				GAMESIG="-STOP"
 
-			kill "$GAMESIG" "$GAMEPID"
-		}
+				if [ "$GAMESTATE" = "T" ] ; then
+					GAMESIG="-CONT"
+				fi
 
-		function TrayShaderMenu {
-			"$PROGCMD" update gameshaders "$SHADDESTDIR"
-		}
+				kill "$GAMESIG" "$GAMEPID"
+			}
 
-		function TrayVR {
-			if [ -z "$GAMEWINDOW" ]; then
-				GAMEWINDOW="$(sleep 2 && "$XWI" -stats | grep ^"$XWI" | tail -n1 | cut -d '"' -f2)";
-			fi
+			function TrayShaderMenu {
+				"$PROGCMD" update gameshaders "$SHADDESTDIR"
+			}
 
-			if [ -n "$GAMEWINDOW" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - TrayIcon: picked '$PICKWINDOWNAME'"
-				"$PROGCMD" "vr" "$PICKWINDOWNAME" "$AID" "s"
-			else
-				writelog "SKIP" "${FUNCNAME[0]} - TrayIcon: Didn't find a game window name to open in vr"
-			fi
-		}
+			function TrayVR {
+				if [ -z "$GAMEWINDOW" ]; then
+					GAMEWINDOW="$(sleep 2 && "$XWI" -stats | grep ^"$XWI" | tail -n1 | cut -d '"' -f2)";
+				fi
+
+				if [ -n "$GAMEWINDOW" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - TrayIcon: picked '$PICKWINDOWNAME'"
+					"$PROGCMD" "vr" "$PICKWINDOWNAME" "$AID" "s"
+				else
+					writelog "SKIP" "${FUNCNAME[0]} - TrayIcon: Didn't find a game window name to open in vr"
+				fi
+			}
+				
+			function TrayPickWin {
+				writelog "INFO" "${FUNCNAME[0]} - TrayIcon: Executing Window Pick command for game '$GN '$AID'"
+				"$PROGCMD" "pw" "$AID" "$GN"
+			}	
+
+			function TraySRC {
+				writelog "INFO" "${FUNCNAME[0]} - TrayIcon: Executing command '$STEAM ${STEAM}://${RECO}'"
+				"$PROGCMD" "src"
+			}
+
+			function TrayUWT {
+				writelog "INFO" "${FUNCNAME[0]} - TrayIcon: Triggering Window Template Update"
+				touch "$UPWINTMPL"
+			}
+
+			function TrayLCS {
+				writelog "INFO" "${FUNCNAME[0]} - TrayIcon: Triggering Launch custom script"
+				"$TRAYCUSC"
+			}
+
+			function TrayGameFiles {
+				writelog "INFO" "${FUNCNAME[0]} - TrayIcon: Executing Game Files command for game '$GN '$AID'"
+				"$PROGCMD" "gf" "$AID"
+			}	
 			
-		function TrayPickWin {
-			writelog "INFO" "${FUNCNAME[0]} - TrayIcon: Executing Window Pick command for game '$GN '$AID'"
-			"$PROGCMD" "pw" "$AID" "$GN"
-		}	
-
-		function TraySRC {
-			writelog "INFO" "${FUNCNAME[0]} - TrayIcon: Executing command '$STEAM ${STEAM}://${RECO}'"
-			"$PROGCMD" "src"
-		}
-
-		function TrayUWT {
-			writelog "INFO" "${FUNCNAME[0]} - TrayIcon: Triggering Window Template Update"
-			touch "$UPWINTMPL"
-		}
-
-		function TrayLCS {
-			writelog "INFO" "${FUNCNAME[0]} - TrayIcon: Triggering Launch custom script"
-			"$TRAYCUSC"
-		}
-
-		function TrayGameFiles {
-			writelog "INFO" "${FUNCNAME[0]} - TrayIcon: Executing Game Files command for game '$GN '$AID'"
-			"$PROGCMD" "gf" "$AID"
-		}	
-		
-		function TrayMO2 {
-			writelog "INFO" "${FUNCNAME[0]} - TrayIcon: Starting standalone $MO instance"
-			"$PROGCMD" "mo2" "start"
-		}	
+			function TrayMO2 {
+				writelog "INFO" "${FUNCNAME[0]} - TrayIcon: Starting standalone $MO instance"
+				"$PROGCMD" "mo2" "start"
+			}	
+				
+			TrayIconExports
 			
-		TrayIconExports
-		
-		# actually open the actual trayIcon	
-		"$YAD" --image="$STLICON" --notification --item-separator=","\
-		--menu="$TRAY_KILLSWITCH,bash -c killProtonGame \
-		|$TRAY_PAUSE,bash -c PauseGame \
-		|$TRAY_SHADER,bash -c TrayShaderMenu \
-		|$TRAY_VR,bash -c TrayVR \
-		|$TRAY_PICKWINDOW,bash -c TrayPickWin \
-		|$TRAY_SRC,bash -c TraySRC \
-		|$TRAY_UWT,bash -c TrayUWT \
-		|$TRAY_LCS,bash -c TrayLCS \
-		|$GUI_GAFI,bash -c TrayGameFiles \
-		|$FBUT_GUISET_MO,bash -c TrayMO2 " \
-		--text="$TRAY_TOOLTIP" >/dev/null 2>/dev/null &
-		YADTRAYPID="$!"
+			# actually open the actual trayIcon	
+			"$YAD" --image="$STLICON" --notification --item-separator=","\
+			--menu="$TRAY_KILLSWITCH,bash -c killProtonGame \
+			|$TRAY_PAUSE,bash -c PauseGame \
+			|$TRAY_SHADER,bash -c TrayShaderMenu \
+			|$TRAY_VR,bash -c TrayVR \
+			|$TRAY_PICKWINDOW,bash -c TrayPickWin \
+			|$TRAY_SRC,bash -c TraySRC \
+			|$TRAY_UWT,bash -c TrayUWT \
+			|$TRAY_LCS,bash -c TrayLCS \
+			|$GUI_GAFI,bash -c TrayGameFiles \
+			|$FBUT_GUISET_MO,bash -c TrayMO2 " \
+			--text="$TRAY_TOOLTIP" >/dev/null 2>/dev/null &
+			YADTRAYPID="$!"
+		fi
 	fi
 }
 
@@ -5098,7 +5127,11 @@ function MainMenu {
 
 	export CURWIKI="$PPW/Main-Menu"
 	TITLE="${PROGNAME}-MainMenu"
-	pollWinRes "$TITLE" 4
+	if [ "$ONSTEAMDECK" -eq 1 ]; then
+		pollWinRes "$TITLE" 2
+	else
+		pollWinRes "$TITLE" 4
+	fi
 	fixShowGnAid
 
 	LAPL="$(getLaPl)"
@@ -5160,26 +5193,26 @@ function MainMenu {
 	"$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --center --window-icon="$STLICON" --form --center "$WINDECO" --title="$TITLE" \
 	--text="$SETHEAD" \
 	--columns="$COLCOUNT" --f1-action="$F1ACTIONCG" --separator="" \
-	--field="$FBUT_GUISET_DCP":FBTN "$PROGCMD dcp" \
-	--field="$FBUT_GUISET_DW":FBTN "$PROGCMD dw" \
-	--field="$FBUT_GUISET_RECREATEPFX":FBTN "$PROGCMD ccd \"$AID\" \"s\"" \
-	--field="$FBUT_GUISET_WDC":FBTN "$PROGCMD wdc \"$AID\"" \
-	--field="$FBUT_GUISET_WTSEL":FBTN "$PROGCMD wt \"$AID\"" \
-	--field="$FBUT_GUISET_ADDNSGA":FBTN "$PROGCMD ansg" \
-	--field="$FBUT_GUISET_CREATEEVALSC":FBTN "$PROGCMD cfi \"$AID\"" \
-	--field="$FBUT_GUISET_OTR":FBTN "$PROGCMD otr \"$AID\"" \
-	--field="$FBUT_GUISET_DXHSEL":FBTN "$PROGCMD dxh \"$AID\"" \
-	--field="$FBUT_GUISET_SHADERREPOS":FBTN "$PROGCMD update shaders repos" \
-	--field="$FBUT_GUISET_UPSHADER":FBTN "$PROGCMD update gameshaders \"$SHADDESTDIR\"" \
-	--field="$FBUT_GUISET_FAVSEL":FBTN "$PROGCMD fav \"$AID\" set"\
-	--field="$FBUT_GUISET_BLOCKCAT":FBTN "$PROGCMD block" \
-	--field="$FBUT_GUISET_SORTCAT":FBTN "$PROGCMD sort" \
-	--field="$FBUT_GUISET_OPURL!$TT_OPENURL":FBTN "$PROGCMD hu \"$AID\" X" \
-	--field="$FBUT_GUISET_GASCO":FBTN "$PROGCMD gs \"$AID\" \"$GN\"" \
-	--field="$FBUT_GUISET_VORTEX":FBTN "$PROGCMD vortex gui" \
-	--field="$FBUT_GUISET_MO":FBTN "$PROGCMD mo2 start" \
-	--field="$FBUT_GUISET_WIKI":FBTN "$PROGCMD wiki" \
-	--field="$GUI_GAFI!$TT_GAFI":FBTN "$PROGCMD gf \"$AID\"" \
+	--field="$FBUT_GUISET_DCP":FBTN "$(realpath "$0") dcp" \
+	--field="$FBUT_GUISET_DW":FBTN "$(realpath "$0") dw" \
+	--field="$FBUT_GUISET_RECREATEPFX":FBTN "$(realpath "$0") ccd \"$AID\" \"s\"" \
+	--field="$FBUT_GUISET_WDC":FBTN "$(realpath "$0") wdc \"$AID\"" \
+	--field="$FBUT_GUISET_WTSEL":FBTN "$(realpath "$0") wt \"$AID\"" \
+	--field="$FBUT_GUISET_ADDNSGA":FBTN "$(realpath "$0") ansg" \
+	--field="$FBUT_GUISET_CREATEEVALSC":FBTN "$(realpath "$0") cfi \"$AID\"" \
+	--field="$FBUT_GUISET_OTR":FBTN "$(realpath "$0") otr \"$AID\"" \
+	--field="$FBUT_GUISET_DXHSEL":FBTN "$(realpath "$0") dxh \"$AID\"" \
+	--field="$FBUT_GUISET_SHADERREPOS":FBTN "$(realpath "$0") update shaders repos" \
+	--field="$FBUT_GUISET_UPSHADER":FBTN "$(realpath "$0") update gameshaders \"$SHADDESTDIR\"" \
+	--field="$FBUT_GUISET_FAVSEL":FBTN "$(realpath "$0") fav \"$AID\" set"\
+	--field="$FBUT_GUISET_BLOCKCAT":FBTN "$(realpath "$0") block" \
+	--field="$FBUT_GUISET_SORTCAT":FBTN "$(realpath "$0") sort" \
+	--field="$FBUT_GUISET_OPURL!$TT_OPENURL":FBTN "$(realpath "$0") hu \"$AID\" X" \
+	--field="$FBUT_GUISET_GASCO":FBTN "$(realpath "$0") gs \"$AID\" \"$GN\"" \
+	--field="$FBUT_GUISET_VORTEX":FBTN "$(realpath "$0") vortex gui" \
+	--field="$FBUT_GUISET_MO":FBTN "$(realpath "$0") mo2 start" \
+	--field="$FBUT_GUISET_WIKI":FBTN "$(realpath "$0") wiki" \
+	--field="$GUI_GAFI!$TT_GAFI":FBTN "$(realpath "$0") gf \"$AID\"" \
 	--button="$BUT_EXIT":0 \
 	--button="$BUT_GUISET_CATMENUSHORT":4 \
 	--button="$BUT_GM":6 \
@@ -7867,11 +7900,16 @@ function setInitWinXY {
 		loadCfg "$DEFRESSHM" X
 		writelog "INFO" "${FUNCNAME[0]} - Using '${WINX}x${WINY}' from config '$DEFRESSHM'"
 	else
-		SCRW="$(getScreenRes w)"
-		SCRH="$(getScreenRes h)"
-		
-		WINX=$(( SCRW * 3 / 4))
-		WINY=$(( SCRH * 3 / 4))
+		if [ "$ONSTEAMDECK" -eq 1 ]; then
+			WINX="1280"
+			WINY="800"
+		else
+			SCRW="$(getScreenRes w)"
+			SCRH="$(getScreenRes h)"
+			WINX=$(( SCRW * 3 / 4))
+			WINY=$(( SCRH * 3 / 4))
+		fi
+
 		{
 		echo "WINX=\"$WINX\""
 		echo "WINY=\"$WINY\""
@@ -10080,7 +10118,8 @@ function checkWinetricksLaunch {
 
 function chooseWinetricks {
 	if [ -z "$WINETRICKS" ]; then
-		if [ "$DLWINETRICKS" -eq 1 ]; then
+		
+		if [ "$DLWINETRICKS" -eq 1 ] || [ "$ONSTEAMDECK" -eq 1 ]; then
 
 			WTDLLAST="${WTDLDIR}.txt"
 			MAXAGE=1440
@@ -10337,11 +10376,15 @@ function chooseWinetricksPrefix {
 						RUNWTPROTON="$(fixProtonVersionMismatch "WTPROTON" "$STLGAMECFG" X)"
 					fi
 
+					writelog "INFO" "${FUNCNAME[0]} - using proton binary '$RUNWTPROTON' for '$WTPROTON'"
+
 					if [ -f "$(dirname "$RUNWTPROTON")/$DBW" ]; then
 						RUNWTWINE="$(dirname "$RUNWTPROTON")/$DBW"
 					elif [ -f "$(dirname "$RUNWTPROTON")/$FBW" ]; then
 						RUNWTWINE="$(dirname "$RUNWTPROTON")/$FBW"
 					fi
+					
+					writelog "INFO" "${FUNCNAME[0]} - Using wine '$RUNWTWINE' for winetricks"
 
 					WTPROTONSAVE="$(cut -d ';' -f4 <<< "$WTCATPFX")"
 					if [ "$WTPROTONSAVE" == "TRUE" ];then
@@ -11103,6 +11146,8 @@ function installDotNet {
 	ILOG="$STLSHM/installDotNet.log"
 	rm "$ILOG" 2>/dev/null
 	writelog "INFO" "${FUNCNAME[0]} - Starting $DOTN$DNVER install - check $ILOG"
+	writelog "INFO" "${FUNCNAME[0]} - WINEDEBUG=\"-all\" WINEPREFIX=\"$INSTPFX\" WINE=\"$INSTWINE\" \"$WINETRICKS\" --unattended \"$DOTN$DNVER\""
+
 	WINEDEBUG="-all" WINEPREFIX="$INSTPFX" WINE="$INSTWINE" "$WINETRICKS" --unattended "$DOTN$DNVER" >> "$ILOG"
 	writelog "INFO" "${FUNCNAME[0]} - Stopped $DOTN$DNVER install - check $ILOG"
 }
@@ -11943,7 +11988,13 @@ function getInstVtxVers {
 function VortexOptions {
 	export CURWIKI="$PPW/Vortex"
 	TITLE="${PROGNAME}-${FUNCNAME[0]}"
-	pollWinRes "$TITLE" 4
+
+	if [ "$ONSTEAMDECK" -eq 1 ]; then
+		pollWinRes "$TITLE" 1
+	else
+		pollWinRes "$TITLE" 4
+	fi
+
 	setShowPic
 
 	VTXHEAD="${VTX^} Options"
@@ -11974,14 +12025,20 @@ function VortexOptions {
 		TT_DL="$(printf '%s\n%s\n' "$TT_DL" "Newest setup online: ${VSO}")"
 	fi
 	
+	if [ "$ONSTEAMDECK" -eq 1 ]; then
+		INVTX="$(realpath "$0") $VTX install"
+	else
+		INVTX="$(realpath "$0") $VTX install gui"
+	fi
+	
 	"$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --center --window-icon="$STLICON" --form --center "$WINDECO" --title="$TITLE" \
 	--text="$VTXHEAD" --columns="$COLCOUNT" --f1-action="$F1ACTIONCG" --separator="" \
-	--field="$FBUT_GUISET_VTXINST!$TT_CODA":FBTN "$PROGCMD $VTX install gui" \
-	--field="$FBUT_GUISET_VTXSTART":FBTN "$PROGCMD $VTX start" \
-	--field="$FBUT_GUISET_VTXSTAGE!$TT_STAGES":FBTN "$PROGCMD $VTX stage" \
-	--field="$FBUT_GUISET_VTXGAMES":FBTN "$PROGCMD $VTX games" \
-	--field="$FBUT_GUISET_VTXSYMS":FBTN "$PROGCMD $VTX symlinks" \
-	--field="$FBUT_GUISET_VTXDL!$TT_DL":FBTN "$PROGCMD $VTX download" \
+	--field="$FBUT_GUISET_VTXINST!$TT_CODA":FBTN "$INVTX" \
+	--field="$FBUT_GUISET_VTXSTART":FBTN "$(realpath "$0") $VTX start" \
+	--field="$FBUT_GUISET_VTXSTAGE!$TT_STAGES":FBTN "$(realpath "$0") $VTX stage" \
+	--field="$FBUT_GUISET_VTXGAMES":FBTN "$(realpath "$0") $VTX games" \
+	--field="$FBUT_GUISET_VTXSYMS":FBTN "$(realpath "$0") $VTX symlinks" \
+	--field="$FBUT_GUISET_VTXDL!$TT_DL":FBTN "$(realpath "$0") $VTX download" \
 	--button="$BUT_DONE:0" "$GEOM"
 
 	writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_DONE' - Closing Menu"
@@ -12081,16 +12138,17 @@ function installVortex {
 				writelog "SKIP" "${FUNCNAME[0]} - VORTEXPROTON '$VORTEXPROTON' not found - can't continue" "E"
 			else
 				writelog "INFO" "${FUNCNAME[0]} - Using '$VORTEXPROTON' for installation" "E"
-				STEAM_COMPAT_CLIENT_INSTALL_PATH="$SROOT" STEAM_COMPAT_DATA_PATH="$VORTEXCOMPDATA" "$VORTEXPROTON" "run"
-				writelog "INFO" "${FUNCNAME[0]} - STEAM_COMPAT_CLIENT_INSTALL_PATH=\"$SROOT\" STEAM_COMPAT_DATA_PATH=\"$VORTEXCOMPDATA\" \"$VORTEXPROTON\" \"run\""
+#				STEAM_COMPAT_CLIENT_INSTALL_PATH="$SROOT" STEAM_COMPAT_DATA_PATH="$VORTEXCOMPDATA" "$VORTEXPROTON" "run"
+#				writelog "INFO" "${FUNCNAME[0]} - STEAM_COMPAT_CLIENT_INSTALL_PATH=\"$SROOT\" STEAM_COMPAT_DATA_PATH=\"$VORTEXCOMPDATA\" \"$VORTEXPROTON\" \"run\""
 #				WINEDEBUG="-all" WINEPREFIX="$VORTEXPFX" "$VORTEXWINE" wineboot -i 2>/dev/null
-				sleep 3
+#				sleep 3
 				notiShow "$(strFix "$NOTY_INSTSTART" "${DOTN^}")" "S"
 				installDotNet "$VORTEXPFX" "$VORTEXWINE" "48"
 				notiShow "$GUI_DONE" "S"
 				sleep 3
 				writelog "INFO" "${FUNCNAME[0]} - Installing '$VSPATH' into '$VORTEXPFX'" E
 				notiShow "$(strFix "$NOTY_INSTSTART" "${VSPATH##*/}")" "S"
+				writelog "INFO" "${FUNCNAME[0]} - 'WINEDEBUG=\"-all\" WINEPREFIX=\"$VORTEXPFX\" \"$VORTEXWINE\" \"$VSPATH\" \"/S\"'" E
 				WINEDEBUG="-all" WINEPREFIX="$VORTEXPFX" "$VORTEXWINE" "$VSPATH" "/S"
 				notiShow "$(strFix "$NOTY_INSTSTOP" "${VSPATH##*/}")" "S"
 				writelog "INFO" "${FUNCNAME[0]} - Base ${VTX^} installation finished" E
@@ -12250,33 +12308,38 @@ function setMO2Vars {
 
 function installMO2 {
 	dlLatestMO2 "S"
-	if [ -f "$MO2SPATH" ]; then
-		setMO2Vars
-		if [ -f "$MO2EXE" ]; then
-			writelog "SKIP" "${FUNCNAME[0]} - '$MO2EXE' does already exists - nothing to install - skipping"
-		else
-			if [ -f "$MO2RUNPROT" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Using '$MO2RUNPROT' for installation" "E"
-				STEAM_COMPAT_CLIENT_INSTALL_PATH="$SROOT" STEAM_COMPAT_DATA_PATH="$MO2COMPDATA" "$MO2RUNPROT" "run" 2> "$STLSHM/installMO2_protonrun.log"
-				writelog "INFO" "${FUNCNAME[0]} - STEAM_COMPAT_CLIENT_INSTALL_PATH=\"$SROOT\" STEAM_COMPAT_DATA_PATH=\"$MO2COMPDATA\" \"$MO2RUNPROT\" \"run\""
-#			WINEDEBUG="-all" WINEPREFIX="$MO2PFX" "$MO2WINE" wineboot -i 2>/dev/null
-				sleep 3
-				notiShow "$(strFix "$NOTY_INSTSTART" "${DOTN^}")" "S"
-				installDotNet "$MO2PFX" "$MO2WINE" "48"
-				notiShow "$GUI_DONE" "S"
-				sleep 3
-				writelog "INFO" "${FUNCNAME[0]} - Installing '$MO2SPATH' into '$MO2PFX'"
-				notiShow "$(strFix "$NOTY_INSTSTART" "${MO2SPATH##*/}")"
-				WINEDEBUG="-all" WINEPREFIX="$MO2PFX" "$MO2WINE" "$MO2SPATH" "/VERYSILENT"
-				notiShow "$(strFix "$NOTY_INSTSTOP" "${MO2SPATH##*/}")" "S"
-				writelog "INFO" "${FUNCNAME[0]} - Base ${MO} installation finished"
-				notiShow "$GUI_DONE" "S"
-			else
-				writelog "SKIP" "${FUNCNAME[0]} - MO2RUNPROT '$MO2RUNPROT' not found, can't continue with $MO installion"
-			fi
-		fi
+
+	if [ "$ONSTEAMDECK" -eq 1 ]; then
+		writelog "SKIP" "${FUNCNAME[0]} - '$MO' installer hangs on SteamDeck - maybe debug later" #XXXXXXXXXXXX TODO?
 	else
-		writelog "SKIP" "${FUNCNAME[0]} - '$MO2SETUP' not found - nothing to install - skipping"
+		if [ -f "$MO2SPATH" ]; then
+			setMO2Vars
+			if [ -f "$MO2EXE" ]; then
+				writelog "SKIP" "${FUNCNAME[0]} - '$MO2EXE' does already exists - nothing to install - skipping"
+			else
+				if [ -f "$MO2RUNPROT" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Using '$MO2RUNPROT' for installation" "E"
+					STEAM_COMPAT_CLIENT_INSTALL_PATH="$SROOT" STEAM_COMPAT_DATA_PATH="$MO2COMPDATA" "$MO2RUNPROT" "run" 2> "$STLSHM/installMO2_protonrun.log"
+					writelog "INFO" "${FUNCNAME[0]} - STEAM_COMPAT_CLIENT_INSTALL_PATH=\"$SROOT\" STEAM_COMPAT_DATA_PATH=\"$MO2COMPDATA\" \"$MO2RUNPROT\" \"run\""
+#					WINEDEBUG="-all" WINEPREFIX="$MO2PFX" "$MO2WINE" wineboot -i 2>/dev/null
+					sleep 3
+					notiShow "$(strFix "$NOTY_INSTSTART" "${DOTN^}")" "S"
+					installDotNet "$MO2PFX" "$MO2WINE" "48"
+					notiShow "$GUI_DONE" "S"
+					sleep 3
+					writelog "INFO" "${FUNCNAME[0]} - Installing '$MO2SPATH' into '$MO2PFX'"
+					notiShow "$(strFix "$NOTY_INSTSTART" "${MO2SPATH##*/}")"
+					WINEDEBUG="-all" WINEPREFIX="$MO2PFX" "$MO2WINE" "$MO2SPATH" "/VERYSILENT"
+					notiShow "$(strFix "$NOTY_INSTSTOP" "${MO2SPATH##*/}")" "S"
+					writelog "INFO" "${FUNCNAME[0]} - Base ${MO} installation finished"
+					notiShow "$GUI_DONE" "S"
+				else
+					writelog "SKIP" "${FUNCNAME[0]} - MO2RUNPROT '$MO2RUNPROT' not found, can't continue with $MO installion"
+				fi
+			fi
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - '$MO2SETUP' not found - nothing to install - skipping"
+		fi
 	fi
 }
 
@@ -12986,7 +13049,17 @@ function setYadBin {
 			YAIDST="$2"
 			DLCHK="X"
 		elif [ -n "$2" ] && [ ! -f "$2" ]; then
-			writelog "WARN" "${FUNCNAME[0]} - Provided string '$2' is neither a http download url nor a valid absolute path to a file - downloading and using the default instead"
+			if [ "$2" == "sd" ]; then
+				export ONSTEAMDECK=1
+				YADAIDLDIR="$STLSDPATH"
+				YAIDST="$YADAIDLDIR/$YADAPPIMAGE"
+				YAIURL="$GHURL/frostworx/steamtinkerlaunch-tweaks/releases/download"
+				YAIDL="$YAIURL/$YADSTLIMAGE/$YADSTLIMAGE"
+				YADAPPIMAGE="$YADSTLIMAGE"
+				writelog "INFO" "${FUNCNAME[0]} - Downloading default AppImage for SteamDeck to '$YADAIDLDIR'"
+			else
+				writelog "WARN" "${FUNCNAME[0]} - Provided string '$2' is neither a http download url nor a valid absolute path to a file - downloading and using the default instead"
+			fi
 		fi
 
 		if [ -f "$YAIDST" ]; then
@@ -13011,12 +13084,21 @@ function setYadBin {
 	if [ -n "$YADFILE" ]; then
 		MINYAD="7.2"
 		chmod +x "$YADFILE" 2>/dev/null
-		YADVER="$("$YADFILE" --version | tail -n1 | cut -d ' ' -f1)"
-		if [ "$(printf '%s\n' "$MINYAD" "$YADVER" | sort -V | head -n1)" != "$MINYAD" ] || grep -qi "[A-Z]" <<< "$YADVER" ; then
-			writelog "ERROR" "${FUNCNAME[0]} - Version for '$YADFILE' is invalid. You need to at least version '$MINYAD'"
+		if [ "$ONSTEAMDECK" -eq 1 ]; then
+			# skipping version check on SteamDeck, because the program might have been started via ssh, and yad requires a display
+			writelog "INFO" "${FUNCNAME[0]} - Using '$YADFILE' on SteamDeck"
+			if [ ! -f "$YADAIDLDIR/$YAD" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Creating symlink from '$YADFILE' to '$YADAIDLDIR/$YAD'"
+				ln -s "$YADFILE" "$YADAIDLDIR/yad"
+			fi
 		else
-			writelog "INFO" "${FUNCNAME[0]} - configuring yad binary to '$YADFILE'"
-			updateConfigEntry "YAD" "$YADFILE" "$STLDEFGLOBALCFG"
+			YADVER="$("$YADFILE" --version | tail -n1 | cut -d ' ' -f1)"
+			if [ "$(printf '%s\n' "$MINYAD" "$YADVER" | sort -V | head -n1)" != "$MINYAD" ] || grep -qi "[A-Z]" <<< "$YADVER" ; then
+				writelog "ERROR" "${FUNCNAME[0]} - Version for '$YADFILE' is invalid. You need to at least version '$MINYAD'"
+			else
+				writelog "INFO" "${FUNCNAME[0]} - configuring yad binary to '$YADFILE'"
+				updateConfigEntry "YAD" "$YADFILE" "$STLDEFGLOBALCFG"
+			fi
 		fi
 	fi
 }
@@ -13062,19 +13144,23 @@ function checkIntDeps {
 
 		setAwkBin
 		
-		MINYAD="7.2"
-		YADVER="0"
+		if [ "$ONSTEAMDECK" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Skipping yad version check on SteamDeck"
+		else
+			MINYAD="7.2"
+			YADVER="0"
 
-		if [ -f "$YAD" ]; then
-			YADVER="$("$YAD" --version | tail -n1 | cut -d ' ' -f1)"
-			writelog "INFO" "${FUNCNAME[0]} - Result of version check for yad binary '$YAD' is '$YADVER'"
-		fi
+			if [ -f "$YAD" ]; then
+				YADVER="$("$YAD" --version | tail -n1 | cut -d ' ' -f1)"
+				writelog "INFO" "${FUNCNAME[0]} - Result of version check for yad binary '$YAD' is '$YADVER'"
+			fi
 
-		if [ "$(printf '%s\n' "$MINYAD" "$YADVER" | sort -V | head -n1)" != "$MINYAD" ]; then 
-			writelog "ERROR" "${FUNCNAME[0]} - Yad version '$YADVER' is too old. You need to update to at least '$MINYAD'" "E"
-			notiShow "$(strFix "$NOTY_NOTFOUND2" "$YADVER" "$MINYAD")"
-			if [ "$1" != "--help" ] && [ "$1" != "-h" ]; then
-				exit
+			if [ "$(printf '%s\n' "$MINYAD" "$YADVER" | sort -V | head -n1)" != "$MINYAD" ]; then 
+				writelog "ERROR" "${FUNCNAME[0]} - Yad version '$YADVER' is too old. You need to update to at least '$MINYAD'" "E"
+				notiShow "$(strFix "$NOTY_NOTFOUND2" "$YADVER" "$MINYAD")"
+				if [ "$1" != "--help" ] && [ "$1" != "-h" ]; then
+					exit
+				fi
 			fi
 		fi
 
@@ -13567,6 +13653,7 @@ function prepareLaunch {
 	# check dependencies - disable functions if dependency programs are missing and/or warn
 	writelog "INFO" "${FUNCNAME[0]} - checkExtDeps:"
 	checkExtDeps
+	writelog "INFO" "${FUNCNAME[0]} - checkExtDeps done"
 
 	if [ "$ISGAME" -eq 2 ]; then
 		writelog "INFO" "${FUNCNAME[0]} - setWineVars:"
@@ -15534,6 +15621,18 @@ function setWineVars {
 
 function launchSteamGame {
 ########################
+	if [ "$ONSTEAMDECK" -eq 1 ]; then
+		if [ "$USEGAMESCOPE" -eq 1 ]; then
+			writelog "SKIP" "${FUNCNAME[0]} - Disabling own gamescope on SteamDeck" "X"
+			USEGAMESCOPE=0
+		fi
+
+		if [ "$USEGAMEMODERUN" -eq 1 ]; then
+			writelog "SKIP" "${FUNCNAME[0]} - Disabling own gamemode on SteamDeck" "X"
+			USEGAMEMODERUN=0
+		fi
+	fi
+	
 	if [ "$USEGAMEMODERUN" -eq 1 ]; then
 		GMR="$(command -v "$GAMEMODERUN")"
 	fi
@@ -15541,7 +15640,7 @@ function launchSteamGame {
 	if [ "$USEGAMESCOPE" -eq 1 ]; then
 		GSC="$(command -v "$GAMESCOPE")"
 	fi
-
+	
 	if [ "$USEZINK" -eq 1 ]; then
 		export __GLX_VENDOR_LIBRARY_NAME=mesa
 		export MESA_LOADER_DRIVER_OVERRIDE=zink
@@ -15844,6 +15943,16 @@ function CompatTool {
 				mkProjDir "$STEAMCOMPATOOLS"
 			fi
 
+			if [ "$ONSTEAMDECK" -eq 1 ]; then
+				if [ -n "$2" ]; then
+					STLBIN="$2"
+				else
+					STLBIN="$PREFIX/$PROGCMD"
+				fi
+			else
+				STLBIN="$0"
+			fi
+
 			if [ ! -d "$SCTS" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Creating dir '$SCTS'"
 				mkProjDir "$SCTS"
@@ -15877,16 +15986,16 @@ function CompatTool {
 				echo "}"
 				} >> "$TVDF"
 
-				writelog "INFO" "${FUNCNAME[0]} - Creating symlink '$SCTS/$PROGCMD' pointing to '$0'" "E"
-				ln -s "$(realpath "$0")" "$SCTS/$PROGCMD"
+				writelog "INFO" "${FUNCNAME[0]} - Creating symlink '$SCTS/$PROGCMD' pointing to '$STLBIN'" "E"
+				ln -s "$(realpath "$STLBIN")" "$SCTS/$PROGCMD"
 			else
 				writelog "INFO" "${FUNCNAME[0]} - '$SCTS' already exists - checking if '$PROGCMD' symlink needs to be updated"
-				if [ "$(readlink "$SCTS/$PROGCMD")" == "$(realpath "$0")" ]; then
-					writelog "SKIP" "${FUNCNAME[0]} - Nothing to do the '$SCTS/$PROGCMD' symlink still points to '$0'" "E"
+				if [ "$(readlink "$SCTS/$PROGCMD")" == "$(realpath "$STLBIN")" ]; then
+					writelog "SKIP" "${FUNCNAME[0]} - Nothing to do the '$SCTS/$PROGCMD' symlink still points to '$STLBIN'" "E"
 				else
 					rm "$SCTS/$PROGCMD"
-					ln -s "$(realpath "$0")" "$SCTS/$PROGCMD"
-					writelog "SKIP" "${FUNCNAME[0]} - Updated the '$SCTS/$PROGCMD' symlink to '$0'" "E"
+					ln -s "$(realpath "$STLBIN")" "$SCTS/$PROGCMD"
+					writelog "SKIP" "${FUNCNAME[0]} - Updated the '$SCTS/$PROGCMD' symlink to '$STLBIN'" "E"
 				fi
 			fi
 		else
@@ -17509,6 +17618,8 @@ function closeSTL {
 	setPrevRes
 	customUserScriptStop	# USERSTOP
 
+	steamdeckclose
+
 	checkPlayTime "$duration"
 
 	if [ -f "$STLSHM/KillBrowser-$AID.txt" ]; then
@@ -18437,6 +18548,81 @@ function initShmStl {
 	fi
 }
 
+function steamdeckclose {
+	if [ "$ONSTEAMDECK" -eq 1 ]; then
+		GTKCSSFILE="$HOME/.config/gtk-3.0/gtk.css"
+		if [ -f "${GTKCSSFILE}_ORIGNAL" ] ; then
+			writelog "INFO" "${FUNCNAME[0]} - recovering original gtk.css from '${GTKCSSFILE}_ORIGNAL'"
+			mv "${GTKCSSFILE}_ORIGNAL" "$GTKCSSFILE"
+		fi
+	fi
+}
+
+function steamdedeckt {
+	# a bit rough (f.e. hardcoded wget version), but should be enough for the beginning
+
+	if [ -f "/etc/os-release" ] && grep -q "steamdeck" "/etc/os-release"; then
+		# if this really changes, it could be grepped directly from /etc/pacman.d/mirrorlist as well:
+		SDREPO="https://steamdeck-packages.steamos.cloud/archlinux-mirror/extra/os/x86_64/"
+		ONSTEAMDECK=1
+
+		writelog "INFO" "${FUNCNAME[0]} - Seems like we have a Steam Deck here - making some specific settings"
+
+		STLBASE="/home/deck/$SHOSTL"
+		export PREFIX="$STLBASE/prefix"
+		SYSTEMSTLCFGDIR="$PREFIX"
+		STLDEPS="$STLBASE/deps"
+
+		mkProjDir "$PREFIX"
+		mkProjDir "$STLDEPS"
+
+		if [ -z "$SUSDA" ]; then
+			setSteamPaths
+		fi
+
+		gitUpdate "$PREFIX" "$PROJECTPAGE"
+
+		if [ -f "$(command -v "wget")" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Using yad binary found in path: '$(command -v "yad")'"
+		else
+			curl -Lq "$SDREPO/wget-1.21.2-1-x86_64.pkg.tar.zst" -o "$STLDEPS/wget-latest-x86_64.pkg.tar.zst" 2>/dev/null
+			tar xf "$STLDEPS/wget-latest-x86_64.pkg.tar.zst" -C "$STLDEPS"
+		fi
+		export STLSDPATH="${STLDEPS}/usr/bin"
+		export PATH="$PATH:$STLSDPATH"
+
+		if [ -f "$(command -v "yad")" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Using yad binary found in path: '$(command -v "yad")'"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Using yad app image"
+			setYadBin "ai" "sd"
+		fi
+		
+		# update/set compatibility tool to git stl:
+ 		CompatTool "add" "$PREFIX/$PROGCMD"
+
+		GTKCSSFILE="$HOME/.config/gtk-3.0/gtk.css"
+
+		if [ ! -f "$GTKCSSFILE" ] ; then
+			writelog "SKIP" "${FUNCNAME[0]} - '$GTKCSSFILE' does not exist - skipping"
+		else
+			if grep -q "scrollbar" "$GTKCSSFILE"; then
+				writelog "SKIP" "${FUNCNAME[0]} - found a scrollbar entry in '$GTKCSSFILE'"
+			else
+				writelog "INFO" "${FUNCNAME[0]} - backup '$GTKCSSFILE' to '${GTKCSSFILE}_ORIGNAL'"
+				cp "$GTKCSSFILE" "${GTKCSSFILE}_ORIGNAL"
+				writelog "INFO" "${FUNCNAME[0]} - adding bigger scrollbar to '$GTKCSSFILE'"
+				{
+					echo ".scrollbar.vertical slider,"
+					echo "scrollbar.vertical slider {"
+					echo "min-width: 30px;"
+					echo "}"
+				} >> "$GTKCSSFILE"
+			fi
+		fi
+	fi
+}
+
 ##################
 
 function main {
@@ -18445,6 +18631,7 @@ function main {
 	rm "$TEMPLOG" "$WINRESLOG" "$PRELOG" "$APPMALOG" "$GGDLOG" 2>/dev/null
 	touch "$PRELOG"
 	mkProjDir "$LOGDIRID"
+	steamdedeckt
 	initAID "$@"
 	setAIDCfgs
 	loadLangFile "$STLDEFLANG"
