@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v9.3.20220330"
+PROGVERS="v9.3.20220331"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -6843,9 +6843,20 @@ function createShaderRepoList {
 	sed '/^$/d' -i "$SHADREPOLIST"
 }
 
+function unblockrssub {
+	if grep -q "^${RSSUB}$" "$SHADERREPOBLOCKLIST"; then
+		writelog "INFO" "${FUNCNAME[0]} - Removing essential '${RSSUB}' from the shader blocklist '$SHADERREPOBLOCKLIST'"
+		grep -v "^${RSSUB}$" "$SHADERREPOBLOCKLIST" > "$STLSHM/SHADERREPOBLOCKLIST_tmp.txt"
+		mv "$STLSHM/SHADERREPOBLOCKLIST_tmp.txt" "$SHADERREPOBLOCKLIST"					
+	else
+		writelog "INFO" "${FUNCNAME[0]} - XXXXXXXXXXX 'grep -q \"^${RSSUB}$\" \"$SHADERREPOBLOCKLIST\"'"
+	fi
+}
+
 function dlShaders {
 	createShaderRepoList
 	touch "$SHADERREPOBLOCKLIST"
+	unblockrssub
 
 	if [ -z "$1" ]; then
 		if [ "$DLSHADER" -eq 1 ]; then
@@ -6883,6 +6894,7 @@ function dlShaders {
 
 function ShaderRepoDialog {
 	createShaderRepoList
+	unblockrssub
 	fixShowGnAid
 	export CURWIKI="$PPW/Shader-Repositories"
 	TITLE="${PROGNAME}-${FUNCNAME[0]}"
@@ -6897,7 +6909,7 @@ function ShaderRepoDialog {
 		SHADAUT="$(cut -d ';' -f3 <<< "$SHADLINE")"
 		SHADDES="$(cut -d ';' -f4 <<< "$SHADLINE")"
 
-		if grep -qi "$SHADNAM" "$SHADERREPOBLOCKLIST"; then
+		if grep -qi "^${SHADNAM}$" "$SHADERREPOBLOCKLIST"; then
 			echo FALSE
 		else
 			echo TRUE
@@ -6931,6 +6943,7 @@ function ShaderRepoDialog {
 					done < "$SHADREPOLIST"
 					touch "$SHADERREPOBLOCKLIST"
 					sort -u "$SHADERREPOBLOCKLIST" -o "$SHADERREPOBLOCKLIST"
+					unblockrssub
 				fi
 			}
 		;;
@@ -16667,6 +16680,7 @@ function commandline {
 							elif [ "$4" == "block" ]; then
 								echo "$3" >> "$SHADERREPOBLOCKLIST"
 								sort -u "$SHADERREPOBLOCKLIST" -o "$SHADERREPOBLOCKLIST"
+								unblockrssub
 							elif [ "$4" == "unblock" ]; then
 								grep -v "^${3}$" "$SHADERREPOBLOCKLIST" > "$STLSHM/SHADERREPOBLOCKLIST_tmp.txt"
 								mv "$STLSHM/SHADERREPOBLOCKLIST_tmp.txt" "$SHADERREPOBLOCKLIST"
