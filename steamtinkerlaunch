@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v9.3.20220331"
+PROGVERS="v9.3.20220404"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -231,7 +231,6 @@ STLVORTEXDIR="$STLCFGDIR/$VTX"
 VORTEXDLDIR="$STLDLDIR/$VTX"
 VORTSETCMD="$STLSHM/vortset.cmd"
 VTST="$STLSHM/vsetup.txt"
-DEFDOTNETPROTON="Proton-6.17-STL-1"
 SPEK="SpecialK"
 SPEKDLDIR="$STLDLDIR/${SPEK,,}"
 FWS="FlawlessWidescreen"
@@ -289,6 +288,7 @@ STLGPNG="$STLGICONS/png"
 STLGSAPD="$STLGSAD/titles"
 STLGSACD="$STLGSAD/$CODA"
 STLGPEVKD="$STLGAMES/pev"
+MO2INSTFAIL="$STLSHM/${MO}-failed.txt"
 
 #STLGSCPTD="$STLGAMES/scripts"
 NOGAMES=",70_2260196511,228980,858280,961940,1054830,1070560,1113280,1245040,1391110,1420170,"
@@ -395,6 +395,10 @@ STLMENUBLOCKCFG="$STLCFGDIR/$MENUBLOCK"
 #STARTEDITORCFGLIST
 STLDEFGLOBALCFG="$STLCFGDIR/global.conf"													# global config
 STLDEFGAMECFG="$STLCFGDIR/default_template.conf"											# the default config template used to create new per game configs - will be auto created if not found
+
+function setSDCfg {
+STLSDLCFG="$STLCFGDIR/steamdeck.conf"														# Steam Deck config
+}
 
 function setAIDCfgs {
 STLGAMECFG="$STLGAMEDIRID/$AID.conf"														# the game specific config file which is used by the launched game - created from $STLDEFGAMECFG if not found
@@ -2367,7 +2371,7 @@ function setDefaultCfgValues {
 		if [ -z "$CUPROTOCOMPAT" ]						; then	CUPROTOCOMPAT="0"; fi
 		if [ -z "$WINEDLDIR" ]							; then	WINEDLDIR="$STLDLDIR/wine"; fi
 		if [ -z "$WINEEXTDIR" ]							; then	WINEEXTDIR="$STLCFGDIR/wine"; fi
-		if [ -z "$USEVORTEXPROTON" ]					; then	USEVORTEXPROTON="$DEFDOTNETPROTON"; fi
+		if [ -z "$USEVORTEXPROTON" ]					; then	USEVORTEXPROTON="$NON"; fi
 		if [ -z "$VORTEXCOMPDATA" ]						; then	VORTEXCOMPDATA="$STLVORTEXDIR/$CODA"; fi
 		if [ -z "$VORTEXDOWNLOADPATH" ]					; then	VORTEXDOWNLOADPATH="$STLVORTEXDIR/downloads"; fi
 		if [ -z "$USEVORTEXPRERELEASE" ]				; then	USEVORTEXPRERELEASE="0"; fi
@@ -2395,7 +2399,7 @@ function setDefaultCfgValues {
 		if [ -z "$DPRSPAUTOUP" ]						; then	DPRSPAUTOUP="0"; fi
 		if [ -z "$DEPSAUTOUP" ]							; then	DEPSAUTOUP="0"; fi
 		if [ -z "$MO2COMPDATA" ]						; then	MO2COMPDATA="$STLMO2DIR/$CODA"; fi
-		if [ -z "$USEMO2PROTON" ]						; then	USEMO2PROTON="$DEFDOTNETPROTON"; fi
+		if [ -z "$USEMO2PROTON" ]						; then	USEMO2PROTON="$NON"; fi
 		if [ -z "$USETERM" ]							; then	USETERM="$(command -v "xterm")"; fi
 		if [ -z "$TERMARGS" ]							; then	TERMARGS="-e"; fi
 	}
@@ -2470,6 +2474,7 @@ function setDefaultCfgValues {
 		if [ -z "$VRVIDEOPLAYERARGS" ]					; then	VRVIDEOPLAYERARGS="--flat"; fi
 		if [ -z "$SBSZOOM" ]							; then	SBSZOOM="1.0"; fi
 		if [ -z "$SBSVRRS" ]							; then	SBSVRRS="0"; fi
+		if [ -z "$SBSRS" ]								; then	SBSRS="0"; fi
 		if [ -z "$MINVRWINH" ] 							; then	MINVRWINH="640"; fi
 		if [ -z "$WAITFORTHISPID" ]						; then	WAITFORTHISPID="$NON"; fi
 		if [ -z "$WAITEDITOR" ]							; then	WAITEDITOR="2"; fi
@@ -2989,6 +2994,8 @@ function saveCfg {
 			echo "SBSZOOM=\"$SBSZOOM\""
 			echo "## $DESC_SBSVRRS"
 			echo "SBSVRRS=\"$SBSVRRS\""
+			echo "## $DESC_SBSRS"
+			echo "SBSRS=\"$SBSRS\""
 			echo "## $DESC_MINVRWINH"
 			echo "MINVRWINH=\"$MINVRWINH\""
 			echo "## $DESC_WAITFORTHISPID"
@@ -4597,6 +4604,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_DLSHADER!$DESC_DLSHADER ('DLSHADER')":CHK "${DLSHADER/#-/ -}" `#CAT_Shader` `#SUB_Checkbox` `#MENU_GLOBAL`  \
 --field="     $GUI_CHOOSESHADERS!$DESC_CHOOSESHADERS ('CHOOSESHADERS')":CHK "${CHOOSESHADERS/#-/ -}" `#CAT_Shader` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_ENABLE_VKBASALT!$DESC_ENABLE_VKBASALT ('ENABLE_VKBASALT')":CHK "${ENABLE_VKBASALT/#-/ -}" `#CAT_Shader` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_SBSRS!$DESC_SBSRS ('SBSRS')":CHK "${SBSRS/#-/ -}" `#CAT_Shader` `#SUB_Checkbox` `#SUB_ReShade` `#MENU_GAME` \
 --field="$(spanFont "$PROGNAME $GUI_PATHS" "H")":LBL "SKIP" `#CAT_Paths` `#HEAD_Stl` `#MENU_GLOBAL`  \
 --field="     $GUI_GLOBALCATEGORYDIR!$DESC_GLOBALCATEGORYDIR ('GLOBALCATEGORYDIR')":DIR "${GLOBALCATEGORYDIR/#-/ -}" `#CAT_Paths` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_GLOBALMISCDIR!$DESC_GLOBALMISCDIR ('GLOBALMISCDIR')":DIR "${GLOBALMISCDIR/#-/ -}" `#CAT_Paths` `#SUB_Directories` `#MENU_GLOBAL` \
@@ -6848,8 +6856,6 @@ function unblockrssub {
 		writelog "INFO" "${FUNCNAME[0]} - Removing essential '${RSSUB}' from the shader blocklist '$SHADERREPOBLOCKLIST'"
 		grep -v "^${RSSUB}$" "$SHADERREPOBLOCKLIST" > "$STLSHM/SHADERREPOBLOCKLIST_tmp.txt"
 		mv "$STLSHM/SHADERREPOBLOCKLIST_tmp.txt" "$SHADERREPOBLOCKLIST"					
-	else
-		writelog "INFO" "${FUNCNAME[0]} - XXXXXXXXXXX 'grep -q \"^${RSSUB}$\" \"$SHADERREPOBLOCKLIST\"'"
 	fi
 }
 
@@ -11013,7 +11019,9 @@ function setModGameSyms {
 	DSTPFX="$5" # Mod manager prefix
 	CHKAPMA="$6" # Game app-manifest (.acf)
 
-	if [ ! -d "$SRCPFX" ]; then
+	if [ -f "$MO2INSTFAIL" ]; then
+		writelog "SKIP" "${FUNCNAME[0]} - '$MO2INSTFAIL' found - seems like installation failed previously - skipping ${FUNCNAME[0]}"
+	elif [ ! -d "$SRCPFX" ]; then
 		writelog "SKIP" "${FUNCNAME[0]} - '$SRCPFX' missing - looks like the game was removed or never started yet"
 	else
 		if [ "$SYMODE" == "li" ]; then
@@ -12114,7 +12122,7 @@ function VortexOptions {
 	writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_DONE' - Closing Menu"
 }
 
-function setDotNetWine {
+function setModWine {
 	USEDNPROTONVAR="$1"
 	USEDNPROTON="${!1}"
 #	DNPROTONVAR="$2"
@@ -12122,11 +12130,6 @@ function setDotNetWine {
 	DNWINEVAR="$3"
 	INUVP="$USEDNPROTON"
 
-	if [ -z "$USEDNPROTON" ] || [ "$USEDNPROTON" == "$NON" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - '$USEDNPROTONVAR' not configured - using default '$DEFDOTNETPROTON'" "E"
-		USEDNPROTON="$DEFDOTNETPROTON"
-	fi
-	
 	if [ -z "$DNPROTON" ] || [ ! -f "$DNPROTON" ]; then
 		if [ -z "${ProtonCSV[0]}" ]; then
 			getAvailableProtonVersions "up" X
@@ -12182,9 +12185,25 @@ function setVortexVars {
 		VORTEXEXE="$VORTEXINSTDIR/${VTX^}.exe"
 	fi
 
+	if [ "$USEVORTEXPROTON" == "$NON" ]; then
+		getAvailableProtonVersions "up" X
+		dlLatestGE "lge" "X"
+		getAvailableProtonVersions "up" X
+		SETVTXPROT="$(grep "^GE" "$PROTONCSV" | sort -V | tail -n1)"
+		SETVTXPROT="${SETVTXPROT%%;*}"
+		USEVORTEXPROTON="$SETVTXPROT"
+		touch "$FUPDATE"
+		updateConfigEntry "USEVORTEXPROTON" "$USEVORTEXPROTON" "$STLDEFGLOBALCFG"
+		writelog "INFO" "${FUNCNAME[0]} - USEVORTEXPROTON is '$NON', so using latest Proton-GE '$SETVTXPROT' automatically" "E"
+	else
+		SETVTXPROT="$USEVORTEXPROTON"
+	fi
+
+	writelog "INFO" "${FUNCNAME[0]} - Using $USEVORTEXPROTON for $VTX"
+
 	VORTEXGAMES="$GLOBALMISCDIR/$VOGAT"
 	if [ -z "$VORTEXWINE" ] || [ ! -f "$VORTEXWINE" ]; then
-		setDotNetWine "USEVORTEXPROTON" "VORTEXPROTON" "VORTEXWINE"
+		setModWine "SETVTXPROT" "VORTEXPROTON" "VORTEXWINE"
 	fi
 }
 
@@ -12208,12 +12227,11 @@ function installVortex {
 				writelog "SKIP" "${FUNCNAME[0]} - VORTEXPROTON '$VORTEXPROTON' not found - can't continue" "E"
 			else
 				writelog "INFO" "${FUNCNAME[0]} - Using '$VORTEXPROTON' for installation" "E"
-#				STEAM_COMPAT_CLIENT_INSTALL_PATH="$SROOT" STEAM_COMPAT_DATA_PATH="$VORTEXCOMPDATA" "$VORTEXPROTON" "run"
-#				writelog "INFO" "${FUNCNAME[0]} - STEAM_COMPAT_CLIENT_INSTALL_PATH=\"$SROOT\" STEAM_COMPAT_DATA_PATH=\"$VORTEXCOMPDATA\" \"$VORTEXPROTON\" \"run\""
-#				WINEDEBUG="-all" WINEPREFIX="$VORTEXPFX" "$VORTEXWINE" wineboot -i 2>/dev/null
-#				sleep 3
+				mkProjDir "$VORTEXCOMPDATA"
 				notiShow "$(strFix "$NOTY_INSTSTART" "${DOTN^}")" "S"
 				installDotNet "$VORTEXPFX" "$VORTEXWINE" "48"
+				touch "${VORTEXCOMPDATA}/tracked_files"
+				STEAM_COMPAT_CLIENT_INSTALL_PATH="$SROOT" STEAM_COMPAT_DATA_PATH="$VORTEXCOMPDATA" "$VORTEXPROTON" "run" 2> "$STLSHM/${FUNCNAME[0]}_protonrun.log"
 				notiShow "$GUI_DONE" "S"
 				sleep 3
 				writelog "INFO" "${FUNCNAME[0]} - Installing '$VSPATH' into '$VORTEXPFX'" E
@@ -12372,69 +12390,104 @@ function setMO2Vars {
 	fi
 	MO2GAMES="$GLOBALMISCDIR/mo2games.txt"
 	if [ -z "$MO2WINE" ] || [ ! -f "$MO2WINE" ]; then
-		setDotNetWine "USEMO2PROTON" "MO2RUNPROT" "MO2WINE"
+		if [ "$USEMO2PROTON" == "$NON" ]; then
+			getAvailableProtonVersions "up" X
+			dlLatestGE "lge" "X"
+			getAvailableProtonVersions "up" X
+			SETMO2PROT="$(grep "^GE" "$PROTONCSV" | sort -V | tail -n1)"
+			SETMO2PROT="${SETMO2PROT%%;*}"
+			USEMO2PROTON="$SETMO2PROT"
+			touch "$FUPDATE"
+			updateConfigEntry "USEMO2PROTON" "$USEMO2PROTON" "$STLDEFGLOBALCFG"
+			writelog "INFO" "${FUNCNAME[0]} - USEMO2PROTON is '$NON', so using latest Proton-GE '$SETMO2PROT' automatically" "E"
+		else
+			SETMO2PROT="$USEMO2PROTON"
+		fi
+
+		writelog "INFO" "${FUNCNAME[0]} - Using $USEMO2PROTON for $MO"
+		setModWine "SETMO2PROT" "MO2RUNPROT" "MO2WINE"
 	fi
 }
 
 function installMO2 {
 	dlLatestMO2 "S"
 
-	if [ "$ONSTEAMDECK" -eq 1 ]; then
-		writelog "SKIP" "${FUNCNAME[0]} - '$MO' installer hangs on SteamDeck - maybe debug later" #XXXXXXXXXXXX TODO?
-	else
-		if [ -f "$MO2SPATH" ]; then
-			setMO2Vars
-			if [ -f "$MO2EXE" ]; then
-				writelog "SKIP" "${FUNCNAME[0]} - '$MO2EXE' does already exists - nothing to install - skipping"
-			else
-				if [ -f "$MO2RUNPROT" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - Using '$MO2RUNPROT' for installation" "E"
-					STEAM_COMPAT_CLIENT_INSTALL_PATH="$SROOT" STEAM_COMPAT_DATA_PATH="$MO2COMPDATA" "$MO2RUNPROT" "run" 2> "$STLSHM/installMO2_protonrun.log"
-					writelog "INFO" "${FUNCNAME[0]} - STEAM_COMPAT_CLIENT_INSTALL_PATH=\"$SROOT\" STEAM_COMPAT_DATA_PATH=\"$MO2COMPDATA\" \"$MO2RUNPROT\" \"run\""
-#					WINEDEBUG="-all" WINEPREFIX="$MO2PFX" "$MO2WINE" wineboot -i 2>/dev/null
-					sleep 3
-					notiShow "$(strFix "$NOTY_INSTSTART" "${DOTN^}")" "S"
-					installDotNet "$MO2PFX" "$MO2WINE" "48"
-					notiShow "$GUI_DONE" "S"
-					sleep 3
-					writelog "INFO" "${FUNCNAME[0]} - Installing '$MO2SPATH' into '$MO2PFX'"
-					notiShow "$(strFix "$NOTY_INSTSTART" "${MO2SPATH##*/}")"
-					WINEDEBUG="-all" WINEPREFIX="$MO2PFX" "$MO2WINE" "$MO2SPATH" "/VERYSILENT"
-					notiShow "$(strFix "$NOTY_INSTSTOP" "${MO2SPATH##*/}")" "S"
-					writelog "INFO" "${FUNCNAME[0]} - Base ${MO} installation finished"
-					notiShow "$GUI_DONE" "S"
-				else
-					writelog "SKIP" "${FUNCNAME[0]} - MO2RUNPROT '$MO2RUNPROT' not found, can't continue with $MO installion"
-				fi
-			fi
+	if [ -f "$MO2SPATH" ]; then
+		setMO2Vars
+		if [ -f "$MO2EXE" ]; then
+			writelog "SKIP" "${FUNCNAME[0]} - '$MO2EXE' does already exists - nothing to install - skipping"
+		elif [ -f "$MO2INSTFAIL" ]; then
+			writelog "SKIP" "${FUNCNAME[0]} - '$MO2INSTFAIL' found - seems like installation failed previously - skipping further attempts to avoid loops"
 		else
-			writelog "SKIP" "${FUNCNAME[0]} - '$MO2SETUP' not found - nothing to install - skipping"
+			if [ -f "$MO2RUNPROT" ]; then 
+				writelog "INFO" "${FUNCNAME[0]} - Using '$MO2RUNPROT' for installation" "E"
+				mkProjDir "$MO2COMPDATA"
+#				notiShow "$(strFix "$NOTY_INSTSTART" "${DOTN^}")" "S"
+#				installDotNet "$MO2PFX" "$MO2WINE" "48"
+#				notiShow "$GUI_DONE" "S"
+				touch "${MO2COMPDATA}/tracked_files"
+				STEAM_COMPAT_CLIENT_INSTALL_PATH="$SROOT" STEAM_COMPAT_DATA_PATH="$MO2COMPDATA" "$MO2RUNPROT" "run" 2> "$STLSHM/${FUNCNAME[0]}_protonrun.log"
+				writelog "INFO" "${FUNCNAME[0]} - Installing '$MO2SPATH' into '$MO2PFX'"
+				notiShow "$(strFix "$NOTY_INSTSTART" "${MO2SPATH##*/}")"
+				# the '$MO2SPATH' installer at least fails on the Steam Deck, so using $INNOEXTRACT for the installation if available
+				if [ "$HAVEINNO" -eq 1 ]; then
+					MO2DST="$MO2PFX/$MORDIR"
+					mkProjDir "$MO2DST"
+					"$INNOEXTRACT" -m -s -d "$MO2DST" "$MO2SPATH"
+					if [ -d "$MO2DST/app" ]; then
+						mv "$MO2DST/app" "$MO2DST/${MO2^^}"
+						writelog "INFO" "${FUNCNAME[0]} - Installed '$MO' into '$MO2DST/${MO2^^}' using '$INNOEXTRACT'"
+					else
+						writelog "WARN" "${FUNCNAME[0]} - Extraction of '$CEDLDIR/$CESET' into '$CEDIR' using $INNOEXTRACT failed or the output directory is called differently"
+					fi
+				else
+					writelog "INFO" "${FUNCNAME[0]} - '$INNOEXTRACT' not found, trying to use the installer '$MO2SPATH' regularly"
+					sleep 3
+					WINEDEBUG="-all" WINEPREFIX="$MO2PFX" "$MO2WINE" "$MO2SPATH" "/VERYSILENT"
+				fi
+
+				if [ ! -f "$MO2EXE" ]; then
+					writelog "WARN" "${FUNCNAME[0]} - '$MO2EXE' not found after installation, creating '$MO2INSTFAIL' to avoid further attempts"
+					date > "$MO2INSTFAIL"
+				fi
+				notiShow "$(strFix "$NOTY_INSTSTOP" "${MO2SPATH##*/}")" "S"
+				writelog "INFO" "${FUNCNAME[0]} - Base ${MO} installation finished"
+				notiShow "$GUI_DONE" "S"
+			else
+				writelog "SKIP" "${FUNCNAME[0]} - MO2RUNPROT '$MO2RUNPROT' not found, can't continue with $MO installion"
+			fi
 		fi
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - '$MO2SETUP' not found - nothing to install - skipping"
 	fi
 }
 
 function checkInstalledMO2Games {
-	if [ -n "$1" ]; then
-		SYMODE="$1"
-	else
-		SYMODE="set"
+	if [ -f "$MO2INSTFAIL" ]; then
+		writelog "SKIP" "${FUNCNAME[0]} - '$MO2INSTFAIL' found - seems like installation failed previously - skipping ${FUNCNAME[0]}"
+	elif [ ! -d "$SRCPFX" ]; then
+		if [ -n "$1" ]; then
+			SYMODE="$1"
+		else
+			SYMODE="set"
+		fi
+
+		while read -r line; do
+			MGID="$(cut -d ';' -f2 <<< "$line")"
+			MGID="${MGID//\"}"
+
+			while read -r sl; do
+				CHKAPMA="$sl/$SA/appmanifest_${MGID}.acf"
+				if [ -f "$CHKAPMA" ]; then
+					MGNA1="$(cut -d ';' -f1 <<< "$line")"
+					MGNA="${MGNA1//\"}"
+					MGPFX="$(dirname "$CHKAPMA")/$CODA/${MGID}/pfx"
+					setModGameSyms "$SYMODE" "$MGPFX" "$MGNA" "$MGID" "$MO2PFX" "$CHKAPMA"
+				fi
+			done <<< "$(printf "%s\n" "${SLARR[@]}")"
+		done < "$MO2GAMES"
+		setModGameReg "$MO2PFX" "$MO2WINE"
 	fi
-
-	while read -r line; do
-		MGID="$(cut -d ';' -f2 <<< "$line")"
-		MGID="${MGID//\"}"
-
-		while read -r sl; do
-			CHKAPMA="$sl/$SA/appmanifest_${MGID}.acf"
-			if [ -f "$CHKAPMA" ]; then
-				MGNA1="$(cut -d ';' -f1 <<< "$line")"
-				MGNA="${MGNA1//\"}"
-				MGPFX="$(dirname "$CHKAPMA")/$CODA/${MGID}/pfx"
-				setModGameSyms "$SYMODE" "$MGPFX" "$MGNA" "$MGID" "$MO2PFX" "$CHKAPMA"
-			fi
-		done <<< "$(printf "%s\n" "${SLARR[@]}")"
-	done < "$MO2GAMES"
-	setModGameReg "$MO2PFX" "$MO2WINE"
 }
 
 function prepAllMO2Games {
@@ -12464,63 +12517,67 @@ function manageMO2GInstance {
 	if [ ! -f "$MO2EXE" ]; then
 		StatusWindow "$(strFix "$NOTY_INSTSTART" "$MO")" "installMO2" "InstallMO2Status"
 	fi
-	
-	if [ -z "$1" ]; then
-		writelog "SKIP" "${FUNCNAME[0]} - argument 1 '$1' is invalid"
-	else
-		if grep -q "$1" "$MO2GAMES"; then
-			MO2AID="$1"
-			MO2GA1="$(grep -m1 "\"$MO2AID\"" "$MO2GAMES" | cut -d ';' -f1)"
-			MO2GAM="${MO2GA1//\"}"
 
-			MO2GAMIN1="$(grep -m1 "\"$MO2AID\"" "$MO2GAMES" | cut -d ';' -f3)"
-			MO2GAMINI="${MO2GAMIN1//\"}"
-			
-			if [ -n "$MO2GAM" ]; then
-				MOIN="$MO2PFX/$DRCU/$STUS/$ADLO/$MO/$MO2GAM"
-				MODPRDE="$MOIN/profiles/Default"
-				MODLIST="$MODPRDE/modlist.txt"
-				MOININI="$MOIN/${MO}.ini"
-				MOINEW=0
-				if [ ! -f "$MOININI" ]; then
-					MO2GADI="$(getGameDirFromAID "$MO2AID")"
-					
-					if [ -d "$MO2GADI" ]; then
-						MO2GAZDI="Z:${MO2GADI//\//\\\\}"
-						mkProjDir "$MOIN"
-						touch "$MOININI"
-						{
-						echo "[General]"
-						echo "gameName=$MO2GAMINI"
-						echo "selected_profile=@ByteArray(Default)"
-						echo "gamePath=@ByteArray($MO2GAZDI)"
-						} >> "$MOININI"
-						MOINEW=1
-					else
-						writelog "SKIP" "${FUNCNAME[0]} - '$MO2AID' is a supported Id, but the game installation could not be found"
-					fi
-				fi
-				if [ -d "$MOIN" ]; then
-					if [ -n "$2" ]; then
-						writelog "INFO" "${FUNCNAME[0]} - Using $MO instance '$MO2GAM'"
-						MO2INST="$MO2GAM"
-					else
-						if [ "$MOINEW" -eq 1 ]; then
-							writelog "INFO" "${FUNCNAME[0]} - Created initial $MO instance '$MO2GAM'"
+	if [ -f "$MO2INSTFAIL" ]; then
+		writelog "SKIP" "${FUNCNAME[0]} - '$MO2INSTFAIL' found - seems like installation failed previously - skipping ${FUNCNAME[0]}"
+	else
+		if [ -z "$1" ]; then
+			writelog "SKIP" "${FUNCNAME[0]} - argument 1 '$1' is invalid"
+		else
+			if grep -q "$1" "$MO2GAMES"; then
+				MO2AID="$1"
+				MO2GA1="$(grep -m1 "\"$MO2AID\"" "$MO2GAMES" | cut -d ';' -f1)"
+				MO2GAM="${MO2GA1//\"}"
+
+				MO2GAMIN1="$(grep -m1 "\"$MO2AID\"" "$MO2GAMES" | cut -d ';' -f3)"
+				MO2GAMINI="${MO2GAMIN1//\"}"
+				
+				if [ -n "$MO2GAM" ]; then
+					MOIN="$MO2PFX/$DRCU/$STUS/$ADLO/$MO/$MO2GAM"
+					MODPRDE="$MOIN/profiles/Default"
+					MODLIST="$MODPRDE/modlist.txt"
+					MOININI="$MOIN/${MO}.ini"
+					MOINEW=0
+					if [ ! -f "$MOININI" ]; then
+						MO2GADI="$(getGameDirFromAID "$MO2AID")"
+						
+						if [ -d "$MO2GADI" ]; then
+							MO2GAZDI="Z:${MO2GADI//\//\\\\}"
+							mkProjDir "$MOIN"
+							touch "$MOININI"
+							{
+							echo "[General]"
+							echo "gameName=$MO2GAMINI"
+							echo "selected_profile=@ByteArray(Default)"
+							echo "gamePath=@ByteArray($MO2GAZDI)"
+							} >> "$MOININI"
+							MOINEW=1
 						else
-							writelog "SKIP" "${FUNCNAME[0]} - $MO instance '$MO2GAM' already exists"
+							writelog "SKIP" "${FUNCNAME[0]} - '$MO2AID' is a supported Id, but the game installation could not be found"
 						fi
 					fi
+					if [ -d "$MOIN" ]; then
+						if [ -n "$2" ]; then
+							writelog "INFO" "${FUNCNAME[0]} - Using $MO instance '$MO2GAM'"
+							MO2INST="$MO2GAM"
+						else
+							if [ "$MOINEW" -eq 1 ]; then
+								writelog "INFO" "${FUNCNAME[0]} - Created initial $MO instance '$MO2GAM'"
+							else
+								writelog "SKIP" "${FUNCNAME[0]} - $MO instance '$MO2GAM' already exists"
+							fi
+						fi
+					fi
+				else
+					writelog "INFO" "${FUNCNAME[0]} - Could not find game name for '$MO2AID' - starting regularly with default instance"
 				fi
 			else
-				writelog "INFO" "${FUNCNAME[0]} - Could not find game name for '$MO2AID' - starting regularly with default instance"
+				STAMO2=0
+				writelog "SKIP" "${FUNCNAME[0]} - '$MO2AID' is no supported $MO game"
+				listMO2Games
 			fi
-		else
-			STAMO2=0
-			writelog "SKIP" "${FUNCNAME[0]} - '$MO2AID' is no supported $MO game"
-			listMO2Games
 		fi
-	fi	
+	fi
 }
 
 function createAllMO2Instances {
@@ -12550,9 +12607,13 @@ function prepareMO2 {
 			StatusWindow "$(strFix "$NOTY_INSTSTART" "$MO")" "installMO2" "InstallMO2Status"
 		fi
 
-		writelog "INFO" "${FUNCNAME[0]} - Updating/creating $MO instances"
-		createAllMO2Instances
-		STAMO2=1
+		if [ -f "$MO2INSTFAIL" ]; then
+			writelog "SKIP" "${FUNCNAME[0]} - '$MO2INSTFAIL' found - seems like installation failed previously - skipping ${FUNCNAME[0]}"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Updating/creating $MO instances"
+			createAllMO2Instances
+			STAMO2=1
+		fi
 	fi
 
 	if [ "$STAMO2" -eq 1 ] && [ "$2" != "disabled" ]; then
@@ -12597,6 +12658,8 @@ function prepareMO2 {
 			fi
 
 			setMO2DLMime
+		else
+			writelog "ERROR" "${FUNCNAME[0]} - No '$MO2EXE' found - can't continue"
 		fi
 	fi
 }
@@ -12614,6 +12677,8 @@ function startMO2 {
 				WINEDEBUG="-all" WINEPREFIX="$MO2PFX" "$MO2WINE" "$MO2EXE" >"$STLSHM/${FUNCNAME[0]}_${IFILE##*/}.log" 2>"$STLSHM/${FUNCNAME[0]}_${IFILE##*/}.log"
 			fi
 		cd - >/dev/null || return
+	elif [ -f "$MO2INSTFAIL" ]; then
+		writelog "ERROR" "${FUNCNAME[0]} - '$MO2INSTFAIL' found - seems like installation failed previously - can't start '$MO'"
 	else
 		writelog "SKIP" "${FUNCNAME[0]} - Could not find '$MO2EXE' - can't start $MO - this should not happen" E
 	fi
@@ -13378,6 +13443,16 @@ function prepareProton {
 				export ENABLE_VKBASALT=0
 			fi
 		fi
+
+		if [ -n "$SBSRS" ]; then
+			if [ "$SBSRS" -eq 1 ]; then
+				writelog "INFO" "${FUNCNAME[0]} - $PROGNAME - SBSRS enabled - starting game in SBS using ${RESH}"
+				export INSTALL_RESHADE=1
+				export RESHADE_DEPTH3D=1
+				export USERESHADE=1
+				export ENABLE_VKBASALT=0
+			fi
+		fi
 	else
 		writelog "SKIP" "${FUNCNAME[0]} - No Proton game"
 	fi	
@@ -13661,6 +13736,11 @@ function prepareLaunch {
 	
 	writelog "INFO" "${FUNCNAME[0]} - sortGameArgs:"
 	sortGameArgs
+
+	if [ "$ONSTEAMDECK" -eq 1 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - steamdeckControl:"
+		steamdeckControl
+	fi
 
 	if [ -z "$1" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - AskSettings:"
@@ -15691,17 +15771,7 @@ function setWineVars {
 
 function launchSteamGame {
 ########################
-	if [ "$ONSTEAMDECK" -eq 1 ]; then
-		if [ "$USEGAMESCOPE" -eq 1 ]; then
-			writelog "SKIP" "${FUNCNAME[0]} - Disabling own gamescope on SteamDeck" "X"
-			USEGAMESCOPE=0
-		fi
-
-		if [ "$USEGAMEMODERUN" -eq 1 ]; then
-			writelog "SKIP" "${FUNCNAME[0]} - Disabling own gamemode on SteamDeck" "X"
-			USEGAMEMODERUN=0
-		fi
-	fi
+	steamdeckBeforeGame
 	
 	if [ "$USEGAMEMODERUN" -eq 1 ]; then
 		GMR="$(command -v "$GAMEMODERUN")"
@@ -17689,7 +17759,11 @@ function closeSTL {
 	setPrevRes
 	customUserScriptStop	# USERSTOP
 
-	steamdeckclose
+	steamdeckClose
+
+	if [ -f "$MO2INSTFAIL" ]; then
+		rm "$MO2INSTFAIL" 2>/dev/null
+	fi
 
 	checkPlayTime "$duration"
 
@@ -18619,12 +18693,80 @@ function initShmStl {
 	fi
 }
 
-function steamdeckclose {
+function steamdeckClose {
 	if [ "$ONSTEAMDECK" -eq 1 ]; then
 		GTKCSSFILE="$HOME/.config/gtk-3.0/gtk.css"
 		if [ -f "${GTKCSSFILE}_ORIGNAL" ] ; then
 			writelog "INFO" "${FUNCNAME[0]} - recovering original gtk.css from '${GTKCSSFILE}_ORIGNAL'"
 			mv "${GTKCSSFILE}_ORIGNAL" "$GTKCSSFILE"
+		fi
+		
+		if [ -n "$STLCTLID" ] && [ "$STLCTLID" != "$PLACEHOLDERAID" ]; then
+			VTAPP="769"
+			writelog "INFO" "${FUNCNAME[0]} - Loading controller configuration of ValveTestApp769 '$VTAPP' to map the controller to the default Steam Deck settings via 'steam steam://forceinputappid/$VTAPP'"
+			steam steam://forceinputappid/"$VTAPP"
+		fi
+	fi
+}
+
+function steamdeckBeforeGame {
+
+	if [ "$ONSTEAMDECK" -eq 1 ]; then
+		if [ "$USEGAMESCOPE" -eq 1 ]; then
+			writelog "SKIP" "${FUNCNAME[0]} - Disabling own gamescope on SteamDeck" "X"
+			USEGAMESCOPE=0
+		fi
+
+		if [ "$USEGAMEMODERUN" -eq 1 ]; then
+			writelog "SKIP" "${FUNCNAME[0]} - Disabling own gamemode on SteamDeck" "X"
+			USEGAMEMODERUN=0
+		fi
+		
+		if [ -n "$STLCTLID" ] && [ "$STLCTLID" != "$PLACEHOLDERAID" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Loading controller configuration for the current game via 'steam steam://forceinputappid/$AID'"
+			steam steam://forceinputappid/"$AID"
+		fi
+	fi
+}
+
+function steamdeckControl {
+	if [ "$ONSTEAMDECK" -eq 1 ]; then
+		setSDCfg
+		export STLCTLID="$PLACEHOLDERAID"
+
+		if [ ! -f "$STLSDLCFG" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Creating initial '$STLSDLCFG'"
+			touch "$STLSDLCFG"
+			echo "STLCTLID=\"$PLACEHOLDERAID\"" > "$STLSDLCFG"
+		fi
+		
+		if [ -f "$STLSDLCFG" ]; then
+			loadCfg "$STLSDLCFG" X
+		fi
+	
+		if [ "$STLCTLID" != "$PLACEHOLDERAID" ]; then
+			writelog "WARN" "${FUNCNAME[0]} - This function is WIP, currently undocumented and hopefully can be improved/fully automated!"
+			#XXXXXXXXXXXXXXXX
+			STLCNTRLD="$DEFSTEAMAPPSCOMMON/Steam Controller Configs/${STEAMUSERID}/config/${STLCTLID}"
+			STLCNTRLF="$STLCNTRLD/controller_neptune.vdf"
+
+			if [ -f "$STLCNTRLF" ] && ! grep -q "$NICEPROGNAME"; then
+				mv "$STLCNTRLF" "${STLCNTRLF}_ORG"
+			fi
+
+			if [ ! -f "$STLCNTRLF" ]; then
+				SRCCTRLF="${PREFIX}/misc/stl-steamdeck-control.vdf"
+				mkProjDir "$STLCNTRLD"
+				writelog "INFO" "${FUNCNAME[0]} - Copying '$SRCCTRLF' to '$STLCNTRLF'"
+				cp "$SRCCTRLF" "$STLCNTRLF"
+				sed "s:XXXXXX:$STEAMUSERID:g" -i "$STLCNTRLF"
+				sed "s:YYYYYY:$STLCTLID:g" -i "$STLCNTRLF"
+			fi
+			writelog "INFO" "${FUNCNAME[0]} - Loading controller configuration of SteamAppId '$STLCTLID' to allow joypad controls in $PROGNAME via 'steam steam://forceinputappid/$STLCTLID'"
+			steam steam://forceinputappid/"$STLCTLID" > "$STLSHM/${FUNCNAME[0]}_stdout.txt" 2> "$STLSHM/${FUNCNAME[0]}_stderr.txt"
+			writelog "INFO" "${FUNCNAME[0]} - controller settings for '$STLCTLID' loaded "
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - Skipping loading controller mapping for Steam Deck, because STLCTLID is not configured: '$STLCTLID'"
 		fi
 	fi
 }
@@ -18654,11 +18796,19 @@ function steamdedeckt {
 		gitUpdate "$PREFIX" "$PROJECTPAGE"
 
 		if [ -f "$(command -v "wget")" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Using yad binary found in path: '$(command -v "yad")'"
+			writelog "INFO" "${FUNCNAME[0]} - Using wget binary found in path: '$(command -v "wget")'"
 		else
 			curl -Lq "$SDREPO/wget-1.21.2-1-x86_64.pkg.tar.zst" -o "$STLDEPS/wget-latest-x86_64.pkg.tar.zst" 2>/dev/null
 			tar xf "$STLDEPS/wget-latest-x86_64.pkg.tar.zst" -C "$STLDEPS"
 		fi
+
+#		maybe later:
+#		if [ -f "$(command -v "$INNOEXTRACT")" ]; then
+#			writelog "INFO" "${FUNCNAME[0]} - Using $INNOEXTRACT binary found in path: '$(command -v "$INNOEXTRACT")'"
+#		else
+#			writelog "INFO" "${FUNCNAME[0]} - TODO - download $INNOEXTRACT automatically from trustworthy source"
+#		fi
+
 		export STLSDPATH="${STLDEPS}/usr/bin"
 		export PATH="$PATH:$STLSDPATH"
 
