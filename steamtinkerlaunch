@@ -2471,6 +2471,7 @@ function setDefaultCfgValues {
 		if [ -z "$ARCHALTEXE" ]							; then	ARCHALTEXE="$DUMMYBIN"; fi
 		if [ -z "$USEOPENVRFSR" ]						; then	USEOPENVRFSR="0"; fi
 		if [ -z "$RUNSBSVR" ]							; then	RUNSBSVR="0"; fi
+		if [ -z "$RUNSBS" ]								; then	RUNSBS="0"; fi
 		if [ -z "$VRVIDEOPLAYERARGS" ]					; then	VRVIDEOPLAYERARGS="--flat"; fi
 		if [ -z "$SBSZOOM" ]							; then	SBSZOOM="1.0"; fi
 		if [ -z "$SBSVRRS" ]							; then	SBSVRRS="0"; fi
@@ -4531,6 +4532,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_USEFWS!$DESC_USEFWS ('USEFWS')":CHK "${USEFWS/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_USETERM!$DESC_USETERM ('USETERM')":FL "${USETERM/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_TERMARGS!$DESC_TERMARGS ('TERMARGS')" "${TERMARGS/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GLOBAL` \
+--field="     $GUI_RUNSBS!$DESC_RUNSBS ('RUNSBS')":CHK "${RUNSBS/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="$(spanFont "$GUI_OPTSPROTON" "H")":LBL "SKIP" `#CAT_Proton` `#HEAD_Proton` `#MENU_GAME` `#MENU_GLOBAL` \
 --field="     $GUI_USEPROTON!$DESC_USEPROTON ('USEPROTON')":CB "$(cleanDropDown  "${USEPROTON/#-/ -}" "$PROTYADLIST")" `#CAT_Proton` `#MENU_GAME` \
 --field="     $GUI_USESLR!$DESC_USESLR ('USESLR')":CHK "${USESLR/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
@@ -6702,6 +6704,22 @@ function checkSBSVRLaunch {
 				writelog "SKIP" "${FUNCNAME[0]} - ERROR - RUNSBSVR is '$RUNSBSVR' which is invalid - setting to 0"
 				RUNSBSVR=0
 			fi
+		fi
+	fi
+}
+
+function checkSBSLaunch {
+	if [ "$RUNSBS" -eq 1 ]; then
+	# first look for a global tweak:
+		if [ -f "$GLOBALSBSTWEAKCFG" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Using SBS overrides found in '$GLOBALSBSTWEAKCFG'"
+			loadCfg "$GLOBALSBSTWEAKCFG"
+		fi
+
+	# then for a user tweak - (overriding the global one):
+		if [ -f "$SBSTWEAKCFG" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Using SBS overrides found in '$SBSTWEAKCFG'"
+			loadCfg "$SBSTWEAKCFG"
 		fi
 	fi
 }
@@ -13866,6 +13884,11 @@ function prepareLaunch {
 	# start game with side-by-side VR if RUNSBSVR is not 0 
 	writelog "INFO" "${FUNCNAME[0]} - CheckSBSVRLaunch:"
 	checkSBSVRLaunch "$NON"
+
+	if [ "$RUNSBS" -eq 1 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - CheckSBSLaunch:"
+		checkSBSLaunch
+	fi
 
 	# start Vortex if USEVORTEX is 1
 	if [ "$USEVORTEX" -eq 1 ]; then
