@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v9.3.20220405"
+PROGVERS="v9.3.20220406"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -18765,26 +18765,34 @@ function steamdeckControl {
 		fi
 	
 		if [ "$STLCTLID" != "$PLACEHOLDERAID" ]; then
-			writelog "WARN" "${FUNCNAME[0]} - This function is WIP, currently undocumented and hopefully can be improved/fully automated!"
-			#XXXXXXXXXXXXXXXX
+			writelog "WARN" "${FUNCNAME[0]} - As documented you're on your own if mappings fail and you need to fix it manually via ssh"
 			STLCNTRLD="$DEFSTEAMAPPSCOMMON/Steam Controller Configs/${STEAMUSERID}/config/${STLCTLID}"
 			STLCNTRLF="$STLCNTRLD/controller_neptune.vdf"
 
-			if [ -f "$STLCNTRLF" ] && ! grep -q "$NICEPROGNAME"; then
+			if [ -f "$STLCNTRLF" ] && ! grep -q "$NICEPROGNAME" "$STLCNTRLF"; then
+				writelog "INFO" "${FUNCNAME[0]} - Good - found an original controller config under '$STLCNTRLF' - creating backup under ${STLCNTRLF}_ORG"
 				mv "$STLCNTRLF" "${STLCNTRLF}_ORG"
 			fi
 
-			if [ ! -f "$STLCNTRLF" ]; then
+			if [ -f "${STLCNTRLF}_ORG" ] && [ ! -f "$STLCNTRLF" ]; then
 				SRCCTRLF="${PREFIX}/misc/stl-steamdeck-control.vdf"
 				mkProjDir "$STLCNTRLD"
-				writelog "INFO" "${FUNCNAME[0]} - Copying '$SRCCTRLF' to '$STLCNTRLF'"
+				writelog "INFO" "${FUNCNAME[0]} - Copying $NICEPROGNAME '$SRCCTRLF' to '$STLCNTRLF'"
 				cp "$SRCCTRLF" "$STLCNTRLF"
+				# might not be even required, but the data is ready anyway, so make it as complete as possible
 				sed "s:XXXXXX:$STEAMUSERID:g" -i "$STLCNTRLF"
 				sed "s:YYYYYY:$STLCTLID:g" -i "$STLCNTRLF"
 			fi
-			writelog "INFO" "${FUNCNAME[0]} - Loading controller configuration of SteamAppId '$STLCTLID' to allow joypad controls in $PROGNAME via 'steam steam://forceinputappid/$STLCTLID'"
-			steam steam://forceinputappid/"$STLCTLID" > "$STLSHM/${FUNCNAME[0]}_stdout.txt" 2> "$STLSHM/${FUNCNAME[0]}_stderr.txt"
-			writelog "INFO" "${FUNCNAME[0]} - controller settings for '$STLCTLID' loaded "
+
+			if grep -q "$NICEPROGNAME" "$STLCNTRLF"; then
+# TODO config update here XXXXXXXXXXXXXXX grep revision
+
+				writelog "INFO" "${FUNCNAME[0]} - Loading controller configuration of SteamAppId '$STLCTLID' to allow joypad controls in $PROGNAME via 'steam steam://forceinputappid/$STLCTLID'"
+				steam steam://forceinputappid/"$STLCTLID" > "$STLSHM/${FUNCNAME[0]}_stdout.txt" 2> "$STLSHM/${FUNCNAME[0]}_stderr.txt"
+				writelog "INFO" "${FUNCNAME[0]} - controller settings for '$STLCTLID' loaded "
+			else
+				writelog "SKIP" "${FUNCNAME[0]} - Found controller config '', but it doesn't contain '$NICEPROGNAME' - not loading"
+			fi
 		else
 			writelog "SKIP" "${FUNCNAME[0]} - Skipping loading controller mapping for Steam Deck, because STLCTLID is not configured: '$STLCTLID'"
 		fi
