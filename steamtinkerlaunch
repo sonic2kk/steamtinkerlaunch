@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v9.3.20220406"
+PROGVERS="v9.3.20220408"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -2345,7 +2345,7 @@ function setDefaultCfgValues {
 		if [ -z "$ROBERTAARGS" ]						; then	ROBERTAARGS="--wait-before-run"; fi
 		if [ -z "$LUXTORPEDACMD" ]						; then	LUXTORPEDACMD="$STEAMCOMPATOOLS/luxtorpeda/luxtorpeda"; fi
 		if [ -z "$LUXTORPEDAARGS" ]						; then	LUXTORPEDAARGS="wait-before-run"; fi
-		if [ -z "$RSVERS" ]								; then	RSVERS="5.0.0"; fi
+		if [ -z "$RSVERS" ]								; then	RSVERS="5.0.2"; fi
 		if [ -z "$DOWNLOAD_RESHADE" ]					; then	DOWNLOAD_RESHADE="1"; fi
 		if [ -z "$RESHADESRCDIR" ]						; then	RESHADESRCDIR="$STLDLDIR/reshade"; fi
 		if [ -z "$D3D47_64" ]							; then	D3D47_64="${D3D47//./_64.}"; fi
@@ -2434,7 +2434,12 @@ function setDefaultCfgValues {
 		if [ -z "$GAMESCOPE_ARGS" ]						; then	GAMESCOPE_ARGS="--"; fi
 		if [ -z "$USEZINK" ]							; then	USEZINK="0"; fi
 		if [ -z "$TOGSTEAMWEBHELPER" ]					; then	TOGSTEAMWEBHELPER="0"; fi
-		if [ -z "$MANGOHUD" ]							; then	MANGOHUD="0";	fi
+		if [ -z "$USEMANGOHUD" ]						; then	USEMANGOHUD="0"; fi
+		if [ -z "$MAHUBIN" ]							; then	MAHUBIN="$(command -v "$MAHU")"; fi
+		if [ -z "$MAHUARGS" ]							; then	MAHUARGS="$NON"; fi
+		if [ -z "$LDPMAHU" ]							; then	LDPMAHU="0"; fi
+		if [ -z "$MAHUVAR" ]							; then	MAHUVAR="0"; fi
+		if [ -z "$USEMANGOHUDSTLCFG" ]					; then	USEMANGOHUDSTLCFG="0";	fi
 		if [ -z "$ENABLE_VKBASALT" ]					; then	ENABLE_VKBASALT="0"; fi
 		if [ -z "$RUN_NYRNA" ]							; then	RUN_NYRNA="0"; fi
 		if [ -z "$RUN_REPLAY" ]							; then	RUN_REPLAY="0";	fi
@@ -2548,7 +2553,6 @@ function setDefaultCfgValues {
 		if [ -z "$SORTGARGS" ]							; then	SORTGARGS="0"; fi
 		if [ -z "$MO2MODE" ]							; then	MO2MODE="disabled"; fi
 		if [ -z "$WAITMO2" ]							; then	WAITMO2="2"; fi
-		if [ -z "$USEMANGOHUDSTLCFG" ]					; then	USEMANGOHUDSTLCFG="0";	fi
 		if [ -z "$USESPECIALK" ]						; then	USESPECIALK="0"; fi
 		if [ -z "$SPEKVERS" ]							; then	SPEKVERS="old"; fi
 		if [ -z "$USEFWS" ]								; then	USEFWS="0"; fi
@@ -2914,8 +2918,18 @@ function saveCfg {
 			echo "USEZINK=\"$USEZINK\""
 			echo "## $DESC_TOGSTEAMWEBHELPER"
 			echo "TOGSTEAMWEBHELPER=\"$TOGSTEAMWEBHELPER\""
-			echo "## $DESC_MANGOHUD"
-			echo "MANGOHUD=\"$MANGOHUD\""
+			echo "## $DESC_USEMANGOHUD"
+			echo "USEMANGOHUD=\"$USEMANGOHUD\""
+			echo "## $DESC_MAHUBIN"
+			echo "MAHUBIN=\"$MAHUBIN\""
+			echo "## $DESC_MAHUARGS"
+			echo "MAHUARGS=\"$MAHUARGS\""
+			echo "## $DESC_LDPMAHU"
+			echo "LDPMAHU=\"$LDPMAHU\""
+			echo "## $DESC_MAHUVAR"
+			echo "MAHUVAR=\"$MAHUVAR\""
+			echo "## $DESC_USEMANGOHUDSTLCFG"
+			echo "USEMANGOHUDSTLCFG=\"$USEMANGOHUDSTLCFG\""
 			echo "## $DESC_ENABLE_VKBASALT"
 			echo "ENABLE_VKBASALT=\"$ENABLE_VKBASALT\""
 			echo "## $DESC_RUN_NYRNA"
@@ -3114,8 +3128,6 @@ function saveCfg {
 			echo "WAITMO2=\"$WAITMO2\""
 			echo "## $DESC_MO2MODE"
 			echo "MO2MODE=\"$MO2MODE\""
-			echo "## $DESC_USEMANGOHUDSTLCFG"
-			echo "USEMANGOHUDSTLCFG=\"$USEMANGOHUDSTLCFG\""
 			echo "## $DESC_USESPECIALK"
 			echo "USESPECIALK=\"$USESPECIALK\""
 			echo "## $DESC_SPEKVERS"
@@ -3708,7 +3720,7 @@ function saveMenuEntries {
 	SAVMENUCAT="$1"
 	writelog "INFO" "${FUNCNAME[0]} - Saving changed Settings"
 	writelog "INFO" "${FUNCNAME[0]} - Clearing Results array with '${#Results[@]}' elements"
-	writelog "INFO" "${FUNCNAME[0]} - Pulling values from tempfile '$MKCFG' $(ls -la "$MKCFG")"
+	writelog "INFO" "${FUNCNAME[0]} - Pulling values from tempfile '$MKCFG'"
 	unset Results
 	mapfile -t -O "${#Results[@]}" Results < "$MKCFG"
 
@@ -4619,7 +4631,11 @@ function AllSettingsEntriesDummyFunction {
 --field="     $PROGNAME $GUI_LOGDIR!$(strFix "$DESC_LOGDIR" "$PROGNAME") ('LOGDIR')":DIR "${LOGDIR/#-/ -}" `#CAT_Paths` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="$(spanFont "$GUI_OPTSTOOLS" "H")":LBL "SKIP" `#CAT_Tools` `#HEAD_Tools` `#MENU_GAME` `#MENU_GLOBAL`  \
 --field="     $GUI_USEGAMEMODERUN!$DESC_USEGAMEMODERUN ('USEGAMEMODERUN')":CHK "${USEGAMEMODERUN/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
---field="     $GUI_MANGOHUD!$DESC_MANGOHUD ('MANGOHUD')":CHK "${MANGOHUD/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_USEMANGOHUD!$DESC_USEMANGOHUD ('USEMANGOHUD')":CHK "${USEMANGOHUD/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_MAHUVAR!$DESC_MAHUVAR ('MAHUVAR')":CHK "${MAHUVAR/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_MAHUBIN!$DESC_MAHUBIN ('MAHUBIN')":FL "${MAHUBIN/#-/ -}" `#CAT_Tools` `#MENU_GAME` \
+--field="     $GUI_MAHUARGS!$DESC_MAHUARGS ('MAHUARGS')":CBE "${MAHUARGS/#-/ -}!--dlsym" `#CAT_Tools` `#MENU_GAME` \
+--field="     $GUI_LDPMAHU!$DESC_LDPMAHU ('LDPMAHU')":CHK "${LDPMAHU/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_USEMANGOHUDSTLCFG!$DESC_USEMANGOHUDSTLCFG ('USEMANGOHUDSTLCFG')":CHK "${USEMANGOHUDSTLCFG/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_USEGAMESCOPE!$DESC_USEGAMESCOPE ('USEGAMESCOPE')":CHK "${USEGAMESCOPE/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_GAMESCOPE_ARGS!$DESC_GAMESCOPE_ARGS ('GAMESCOPE_ARGS')":CBE "${GAMESCOPE_ARGS/#-/ -}!--" `#CAT_Tools` `#MENU_GAME` \
@@ -13868,10 +13884,15 @@ function prepareLaunch {
 		chooseShaders
 	fi
 
-	# use internal $MAHU config if enabled
-	if [ "$MANGOHUD" -eq 1 ]; then
-		writelog "INFO" "${FUNCNAME[0]} - setMangoHudCfg:"
-		setMangoHudCfg
+	# configure $MAHU
+	if [ "$USEMANGOHUD" -eq 1 ]; then
+		if [ -f "$MAHUBIN" ] || [ "$MAHUVAR" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - setMangoHudCfg:"
+			setMangoHudCfg
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - USEMANGOHUD is enabled, but $MAHU binary '$MAHUBIN' not found - disabling USEMANGOHUD"
+			USEMANGOHUD=0
+		fi
 	fi
 
 	# start $NYRNA if RUN_NYRNA is 1
@@ -15807,6 +15828,40 @@ function launchSteamGame {
 		export MESA_LOADER_DRIVER_OVERRIDE=zink
 		export GALLIUM_DRIVER=zink
 	fi
+
+	MAHUCMD=()
+
+	if [ "$USEMANGOHUD" -eq 1 ]; then
+		if [ "$MAHUVAR" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Exporting MANHOGUD variable and skipping all $MAHU binary settings, because MAHUVAR is '$MAHUVAR'"
+			export MANGOHUD=1
+		else
+			if [ -f "$MAHUBIN" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - $MAHU is enabled"
+				if [ "$LDPMAHU" -eq 1 ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Preloading $MAHU"
+					export LD_PRELOAD="$LD_PRELOAD $MAHUBIN"
+				fi
+
+				mapfile -d " " -t -O "${#MAHUCMD[@]}" MAHUCMD < <(printf '%s' "$MAHUBIN")
+
+				if [ "$MAHUARGS" != "$NON" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Using $MAHU arguments ''"
+					mapfile -d " " -t -O "${#MAHUCMD[@]}" MAHUCMD < <(printf '%s' "$MAHUARGS")
+				fi
+			else
+				writelog "WARN" "${FUNCNAME[0]} - $MAHU binary not found - disabling"
+				USEMANGOHUD=0
+			fi
+		fi
+	fi
+	
+	if [ -z "${MAHUCMD[0]}" ]; then
+		writelog "WARN" "${FUNCNAME[0]} - unset MAHUCMD"
+		unset MAHUCMD
+	else
+		writelog "INFO" "${FUNCNAME[0]} - $MAHU command '${MAHUCMD[*]}' will be added to the game launch command"
+	fi
 	
 	if [ "$USEBOXTRON" -eq 1 ] || [ "$USEROBERTA" -eq 1 ] || [ "$USELUXTORPEDA" -eq 1 ]; then
 		ISGAME=3
@@ -15901,28 +15956,28 @@ function launchSteamGame {
 					writelog "INFO" "${FUNCNAME[0]} - Starting native game '$SGNAID' with '$GAMEMODERUN' and '$GAMESCOPE'"
 					notiShow "$(strFix "$NOTY_STARTNATGAMOSC" "$GN" "$AID")"
 					gameArgs "$GAMESCOPE_ARGS"
-					writelog "INFO" "${FUNCNAME[0]} - Full start command is '$GAMEMODERUN $GAMESCOPE ${GAMEARGSARR[*]} ${GAMESTARTCMD[*]}'"
-					startGame "$GMR" "$GSC" "${GAMEARGSARR[@]}" "${GAMESTARTCMD[@]}"
+					writelog "INFO" "${FUNCNAME[0]} - Full start command is '$GAMEMODERUN $GAMESCOPE ${GAMEARGSARR[*]} ${MAHUCMD[*]} ${GAMESTARTCMD[*]}'"
+					startGame "$GMR" "$GSC" "${GAMEARGSARR[@]}" "${MAHUCMD[@]}" "${GAMESTARTCMD[@]}"
 				else
 					writelog "INFO" "${FUNCNAME[0]} - Starting native game '$SGNAID' with '$GAMEMODERUN' - ${GAMESTARTCMD[*]}"
 					notiShow "$(strFix "$NOTY_STARTNATGAMO" "$GN" "$AID")"
-					writelog "INFO" "${FUNCNAME[0]} - Full start command is '$GAMEMODERUN ${GAMESTARTCMD[*]}'"
-					startGame "$GMR" "${GAMESTARTCMD[@]}"	
+					writelog "INFO" "${FUNCNAME[0]} - Full start command is '$GAMEMODERUN ${MAHUCMD[*]} ${GAMESTARTCMD[*]}'"
+					startGame "$GMR" "${MAHUCMD[@]}" "${GAMESTARTCMD[@]}"	
 				fi
 			# start with gamescope:
 			elif [ "$USEGAMESCOPE" -eq 1 ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Starting native game '$SGNAID' with $GAMESCOPE arguments '$GAMESCOPE_ARGS'"
 				notiShow "$(strFix "$NOTY_STARTNATGAMSCO" "$GN" "$AID")"
 				gameArgs "$GAMESCOPE_ARGS"
-				writelog "INFO" "${FUNCNAME[0]} - Full start command is '$GAMESCOPE ${GAMEARGSARR[*]} ${GAMESTARTCMD[*]}'"
-				startGame "$GSC" "${GAMEARGSARR[@]}" "${GAMESTARTCMD[@]}"
+				writelog "INFO" "${FUNCNAME[0]} - Full start command is '$GAMESCOPE ${GAMEARGSARR[*]} ${MAHUCMD[*]} ${GAMESTARTCMD[*]}'"
+				startGame "$GSC" "${GAMEARGSARR[@]}" "${MAHUCMD[@]}" "${GAMESTARTCMD[@]}"
 
 			# regular start:
 			else
 				writelog "INFO" "${FUNCNAME[0]} - Starting native game '$SGNAID'"
 				notiShow "$(strFix "$NOTY_STARTNAT" "$GN" "$AID")"
-				writelog "INFO" "${FUNCNAME[0]} - Full start command is '${GAMESTARTCMD[*]}'"
-				startGame "${GAMESTARTCMD[@]}"
+				writelog "INFO" "${FUNCNAME[0]} - Full start command is '${MAHUCMD[*]} ${GAMESTARTCMD[*]}'"
+				startGame "${MAHUCMD[@]}" "${GAMESTARTCMD[@]}"
 			fi
 		fi
 
@@ -16059,26 +16114,26 @@ function launchSteamGame {
 					writelog "INFO" "${FUNCNAME[0]} - Starting '$SGNAID' with Proton: '$PROTONVERSION' with '$GAMEMODERUN' and '$GAMESCOPE'"
 					gameArgs "$GAMESCOPE_ARGS"
 					notiShow "$(strFix "$NOTY_STARTPROTGAMOSC" "$PROTONVERSION" "$GN" "$AID")"
-					writelog "INFO" "${FUNCNAME[0]} - Full start command is '$GAMEMODERUN $GAMESCOPE ${GAMEARGSARR[*]} ${GAMESTARTCMD[*]}'"
-					startGame "$GMR" "$GSC" "${GAMEARGSARR[@]}" "${GAMESTARTCMD[@]}"		
+					writelog "INFO" "${FUNCNAME[0]} - Full start command is '$GAMEMODERUN $GAMESCOPE ${GAMEARGSARR[*]} ${MAHUCMD[*]} ${GAMESTARTCMD[*]}'"
+					startGame "$GMR" "$GSC" "${GAMEARGSARR[@]}" "${MAHUCMD[@]}" "${GAMESTARTCMD[@]}"		
 				else
 					writelog "INFO" "${FUNCNAME[0]} - Starting '$SGNAID' with Proton: '$PROTONVERSION' with '$GAMEMODERUN'"
 					notiShow "$(strFix "$NOTY_STARTPROTGAMO" "$PROTONVERSION" "$GN" "$AID")"
-					writelog "INFO" "${FUNCNAME[0]} - Full start command is '$GAMEMODERUN ${GAMESTARTCMD[*]}'"
-					startGame "$GMR" "${GAMESTARTCMD[@]}"
+					writelog "INFO" "${FUNCNAME[0]} - Full start command is '$GAMEMODERUN ${MAHUCMD[*]} ${GAMESTARTCMD[*]}'"
+					startGame "$GMR" "${MAHUCMD[@]}" "${GAMESTARTCMD[@]}"
 				fi
 			# start with gamescope:
 			elif [ "$USEGAMESCOPE" -eq 1 ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Starting '$SGNAID' with Proton: '$PROTONVERSION' with $GAMESCOPE arguments '$GAMESCOPE_ARGS'"
 				notiShow "$(strFix "$NOTY_STARTPROTGAMSCO" "$PROTONVERSION" "$GN" "$AID")"
 				gameArgs "$GAMESCOPE_ARGS"
-				writelog "INFO" "${FUNCNAME[0]} - Full start command is '$GAMESCOPE ${GAMEARGSARR[*]} ${GAMESTARTCMD[*]}'"
-				startGame "$GSC" "${GAMEARGSARR[@]}" "${GAMESTARTCMD[@]}"		
+				writelog "INFO" "${FUNCNAME[0]} - Full start command is '$GAMESCOPE ${GAMEARGSARR[*]} ${MAHUCMD[*]} ${GAMESTARTCMD[*]}'"
+				startGame "$GSC" "${GAMEARGSARR[@]}" "${MAHUCMD[@]}" "${GAMESTARTCMD[@]}"		
 			# regular start:
 			else
 				writelog "INFO" "${FUNCNAME[0]} - Starting '$SGNAID' with Proton: '$PROTONVERSION'"
 				notiShow "$(strFix "$NOTY_STARTPROT" "$PROTONVERSION" "$GN" "$AID")"
-				writelog "INFO" "${FUNCNAME[0]} - Full start command is '${GAMESTARTCMD[*]}'"
+				writelog "INFO" "${FUNCNAME[0]} - Full start command is '${MAHUCMD[*]} ${GAMESTARTCMD[*]}'"
 				startGame "${GAMESTARTCMD[@]}"
 			fi
 		fi
