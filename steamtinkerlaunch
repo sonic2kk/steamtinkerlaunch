@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v9.3.20220408"
+PROGVERS="v9.3.20220409"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -14085,18 +14085,6 @@ function getProtonDBRating {
 
 function fixProtonVersionMismatch {
 	if [ "$ISGAME" -eq 2 ]; then
-
-		# WIP (incomplete; FIXRUN is never created currently) idea for fixing a possible but rare loop, but no logs in #406 # TODO maybe remove later	#XXXXXXXXXXXXXXXXXXX
-		
-		FIXRUN="$STLSHM/${FUNCNAME[0]}-${AID}.txt"
-		
-		if [ -f "$FIXRUN" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - A search for a minor version bump was already running previously - recreating list of available Proton versions to restart from scratch"
-			rm "$FIXRUN"
-			rm "$PROTONCSV"
-			createProtonList X
-		fi
-
 		ORGPROTCAT="$1"
 		MIMAPROT="${!1}"
 
@@ -14441,6 +14429,7 @@ function checkPlayTime {
 	else
 		if [ -n "$CRASHGUESS" ] && [ "$1" -lt "$CRASHGUESS" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - The game stopped after '$1' seconds - opening CrashGuess Requester"
+			steamdeckControl
 			fixShowGnAid
 			export CURWIKI="$PPW/Crash-Guess"
 			TITLE="${PROGNAME}-CrashGuess"
@@ -17835,13 +17824,13 @@ function closeSTL {
 	setPrevRes
 	customUserScriptStop	# USERSTOP
 
-	steamdeckClose
-
 	if [ -f "$MO2INSTFAIL" ]; then
 		rm "$MO2INSTFAIL" 2>/dev/null
 	fi
 
 	checkPlayTime "$duration"
+
+	steamdeckClose
 
 	if [ -f "$STLSHM/KillBrowser-$AID.txt" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - '$BROWSER' instance was created, so closing it now, to exit the game session"
@@ -18786,7 +18775,6 @@ function steamdeckClose {
 }
 
 function steamdeckBeforeGame {
-
 	if [ "$ONSTEAMDECK" -eq 1 ]; then
 		if [ "$USEGAMESCOPE" -eq 1 ]; then
 			writelog "SKIP" "${FUNCNAME[0]} - Disabling own gamescope on SteamDeck" "X"
@@ -18830,6 +18818,15 @@ function steamdeckControl {
 				mv "$STLCNTRLF" "${STLCNTRLF}_ORG"
 			fi
 
+			if  [ -f "$STLCNTRLF" ] && grep -q "$NICEPROGNAME" "$STLCNTRLF"; then
+				if [ "$(grep -m1 "revision" "$SRCCTRLF" | grep -oE "[0-9]")" -gt "$(grep -m1 "revision" "$STLCNTRLF" | grep -oE "[0-9]")" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Updating '$STLCNTRLF'"
+					cp "$SRCCTRLF" "$STLCNTRLF"
+				else
+					writelog "INFO" "${FUNCNAME[0]} - '$STLCNTRLF' is already up-to-date"
+				fi
+			fi
+			
 			if [ -f "${STLCNTRLF}_ORG" ] && [ ! -f "$STLCNTRLF" ]; then
 				SRCCTRLF="${PREFIX}/misc/stl-steamdeck-control.vdf"
 				mkProjDir "$STLCNTRLD"
@@ -18841,8 +18838,6 @@ function steamdeckControl {
 			fi
 
 			if grep -q "$NICEPROGNAME" "$STLCNTRLF"; then
-# TODO config update here XXXXXXXXXXXXXXX grep revision
-
 				writelog "INFO" "${FUNCNAME[0]} - Loading controller configuration of SteamAppId '$STLCTLID' to allow joypad controls in $PROGNAME via 'steam steam://forceinputappid/$STLCTLID'"
 				steam steam://forceinputappid/"$STLCTLID" > "$STLSHM/${FUNCNAME[0]}_stdout.txt" 2> "$STLSHM/${FUNCNAME[0]}_stderr.txt"
 				writelog "INFO" "${FUNCNAME[0]} - controller settings for '$STLCTLID' loaded "
