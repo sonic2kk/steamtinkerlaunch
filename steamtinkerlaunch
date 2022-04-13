@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v9.3.20220411"
+PROGVERS="v9.3.20220413"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -12472,12 +12472,16 @@ function installMO2 {
 						mv "$MO2DST/app" "$MO2DST/${MO2^^}"
 						writelog "INFO" "${FUNCNAME[0]} - Installed '$MO' into '$MO2DST/${MO2^^}' using '$INNOEXTRACT'"
 					else
-						writelog "WARN" "${FUNCNAME[0]} - Extraction of '$CEDLDIR/$CESET' into '$CEDIR' using $INNOEXTRACT failed or the output directory is called differently"
+						writelog "WARN" "${FUNCNAME[0]} - Extraction of '$MO' into '$MO2DST/${MO2^^}' using $INNOEXTRACT failed or the output directory is called differently"
 					fi
 				else
-					writelog "INFO" "${FUNCNAME[0]} - '$INNOEXTRACT' not found, trying to use the installer '$MO2SPATH' regularly"
-					sleep 3
-					WINEDEBUG="-all" WINEPREFIX="$MO2PFX" "$MO2WINE" "$MO2SPATH" "/VERYSILENT"
+					if [ "$ONSTEAMDECK" -eq 1 ]; then
+						writelog "WARN" "${FUNCNAME[0]} - Unfortunately '$INNOEXTRACT' is required to install $MO on the Steam Deck, but it wasn't found"
+					else
+						writelog "INFO" "${FUNCNAME[0]} - '$INNOEXTRACT' not found, trying to use the installer '$MO2SPATH' regularly"
+						sleep 3
+						WINEDEBUG="-all" WINEPREFIX="$MO2PFX" "$MO2WINE" "$MO2SPATH" "/VERYSILENT"
+					fi
 				fi
 
 				if [ ! -f "$MO2EXE" ]; then
@@ -18858,6 +18862,9 @@ function steamdedeckt {
 	if [ -f "/etc/os-release" ] && grep -q "steamdeck" "/etc/os-release"; then
 		# if this really changes, it could be grepped directly from /etc/pacman.d/mirrorlist as well:
 		SDREPO="https://steamdeck-packages.steamos.cloud/archlinux-mirror/extra/os/x86_64/"
+
+		ARCHURL="https://archlinux.org/packages/community/x86_64"
+
 		ONSTEAMDECK=1
 
 		writelog "INFO" "${FUNCNAME[0]} - Seems like we have a Steam Deck here - making some specific settings"
@@ -18876,22 +18883,27 @@ function steamdedeckt {
 
 		gitUpdate "$PREFIX" "$PROJECTPAGE"
 
+		export STLSDPATH="${STLDEPS}/usr/bin"
+		export PATH="$PATH:$STLSDPATH"
+
 		if [ -f "$(command -v "wget")" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Using wget binary found in path: '$(command -v "wget")'"
 		else
-			curl -Lq "$SDREPO/wget-1.21.2-1-x86_64.pkg.tar.zst" -o "$STLDEPS/wget-latest-x86_64.pkg.tar.zst" 2>/dev/null
+			LD_PRELOAD="/usr/lib/libcurl.so.4" curl -Lq "$SDREPO/wget-1.21.2-1-x86_64.pkg.tar.zst" -o "$STLDEPS/wget-latest-x86_64.pkg.tar.zst" 2>/dev/null
 			tar xf "$STLDEPS/wget-latest-x86_64.pkg.tar.zst" -C "$STLDEPS"
 		fi
 
-#		maybe later:
-#		if [ -f "$(command -v "$INNOEXTRACT")" ]; then
-#			writelog "INFO" "${FUNCNAME[0]} - Using $INNOEXTRACT binary found in path: '$(command -v "$INNOEXTRACT")'"
-#		else
-#			writelog "INFO" "${FUNCNAME[0]} - TODO - download $INNOEXTRACT automatically from trustworthy source"
-#		fi
+		if [ ! -f "$(command -v "$INNOEXTRACT")" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Downloading $INNOEXTRACT automatically from official Arch Linux URL '$ARCHURL'"
+			writelog "INFO" "${FUNCNAME[0]} - curl -Lq \"$ARCHURL/$INNOEXTRACT/download\" -o \"$STLDEPS/$INNOEXTRACT-latest-x86_64.pkg.tar.zst\""
+			LD_PRELOAD="/usr/lib/libcurl.so.4" curl -Lq "$ARCHURL/$INNOEXTRACT/download" -o "$STLDEPS/$INNOEXTRACT-latest-x86_64.pkg.tar.zst" 2>/tmp/curl.txt
+			tar xf "$STLDEPS/$INNOEXTRACT-latest-x86_64.pkg.tar.zst" -C "$STLDEPS"
+		fi
 
-		export STLSDPATH="${STLDEPS}/usr/bin"
-		export PATH="$PATH:$STLSDPATH"
+		if [ -f "$(command -v "$INNOEXTRACT")" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Using $INNOEXTRACT binary found in path: '$(command -v "$INNOEXTRACT")'"
+			HAVEINNO=1
+		fi
 
 		if [ -f "$(command -v "yad")" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Using yad binary found in path: '$(command -v "yad")'"
