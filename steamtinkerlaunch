@@ -60,6 +60,8 @@ PESEC="pesec"
 PESTR="pestr"
 READPE="readpe"
 GDB="gdb"
+XDGMIME="xdg-mime"
+XDGO="xdg-open"
 
 CHECKHMD=1
 X32D="x32dbg"
@@ -3876,31 +3878,36 @@ function updateWinRes {
 
 function updateEditor {
 	CFG="$1"
-	XDGO="xdg-open"
 
 	loadCfg "$CFG" X
 	if grep -q "$XDGO" <<< "$STLEDITOR" || [ ! -f "$STLEDITOR" ] ; then
 		writelog "WARN" "${FUNCNAME[0]} - '$XDGO' selected as editor or configured editor not found - trying to find an installed editor installed"
-		XDGED="$(command -v "$(xdg-mime query default text/plain | cut -d '.' -f1)" 2>/dev/null)"
-		if [ -x "$XDGED" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - xdg-mime points to '$XDGED', which also exists"
-			FOUNDEDITOR="$XDGED"
-		elif [ -x "$(command -v "geany")" ]; then
-			FOUNDEDITOR="$(command -v "geany")"
-		elif [ -x "$(command -v "gedit")" ]; then
-			FOUNDEDITOR="$(command -v "gedit")"
-		elif [ -x "$(command -v "leafpad")" ]; then
-			FOUNDEDITOR="$(command -v "leafpad")"
-		elif [ -x "$(command -v "kwrite")" ]; then
-			FOUNDEDITOR="$(command -v "kwrite")"
-		else
-			writelog "SKIP" "${FUNCNAME[0]} - No valid editor found - leaving '$XDGO'"
+		if [ -x "$(command -v "$XDGMIME" 2>/dev/null)" ]; then
+			XDGED="$(command -v "$("$XDGMIME" query default text/plain | cut -d '.' -f1)" 2>/dev/null)"
+			if [ -x "$XDGED" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - $XDGMIME points to '$XDGED', which also exists"
+				FOUNDEDITOR="$XDGED"
+			fi
+		fi
+
+		if [ -z "$FOUNDEDITOR" ]; then
+			if [ -x "$(command -v "geany")" ]; then
+				FOUNDEDITOR="$(command -v "geany")"
+			elif [ -x "$(command -v "gedit")" ]; then
+				FOUNDEDITOR="$(command -v "gedit")"
+			elif [ -x "$(command -v "leafpad")" ]; then
+				FOUNDEDITOR="$(command -v "leafpad")"
+			elif [ -x "$(command -v "kwrite")" ]; then
+				FOUNDEDITOR="$(command -v "kwrite")"
+			fi
 		fi
 
 		if [ -n "$FOUNDEDITOR" ]; then
 			writelog "INFO" "${FUNCNAME[0]} -changing STLEDITOR to '$FOUNDEDITOR' in '$CFG'"
 			updateConfigEntry "STLEDITOR" "$FOUNDEDITOR" "$CFG"
 			loadCfg "$CFG"
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - No valid editor found - leaving '$XDGO'"	
 		fi
 	fi
 }
@@ -4119,10 +4126,15 @@ function EditorDialog {
 				fi
 			}
 		;;
-		4)  writelog "INFO" "${FUNCNAME[0]} - Selected Open Directory - Opening the directory containing the first selected file using '$XDGO'"
-			mapfile -t -O "${#EdArr[@]}" EdArr <<< "$EDFILES"
-			"$XDGO" "$(dirname "${EdArr[0]}")"
-			unset EdArr
+		4)  
+			if [ -x "$(command -v "$XDGO" 2>/dev/null)" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Selected Open Directory - Opening the directory containing the first selected file using '$XDGO'"
+				mapfile -t -O "${#EdArr[@]}" EdArr <<< "$EDFILES"
+				"$XDGO" "$(dirname "${EdArr[0]}")"
+				unset EdArr
+			else
+				writelog "SKIP" "${FUNCNAME[0]} - '$XDGO' not found - can't open the directory"
+			fi
 		;;
 		6)  writelog "INFO" "${FUNCNAME[0]} - Selected Delete"
 			RSEL="$(confirmReq "Ask_Delete_Selected_Files" "$GUI_DELSEL")"
@@ -9347,17 +9359,22 @@ function GameFilesMenu {
 		case $? in
 			0) writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_CAN' - Cancelling selection"
 			;;
-			2) writelog "INFO" "${FUNCNAME[0]} - Selected Open - Opening selected files and directories using '$XDGO'"
-				mapfile -t -O "${#OpArr[@]}" OpArr <<< "$OPFILES"
-				if [ "${#OpArr[@]}" -ge 1 ]; then
-					while read -r gafi; do
-						if [ -n "$gafi" ]; then
-							"$XDGO" "$gafi"
-						fi
-					done <<< "$(printf "%s\n" "${OpArr[@]}")"
-					unset OpArr
+			2) 
+				if [ -x "$(command -v "$XDGO" 2>/dev/null)" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Selected Open - Opening selected files and directories using '$XDGO'"
+					mapfile -t -O "${#OpArr[@]}" OpArr <<< "$OPFILES"
+					if [ "${#OpArr[@]}" -ge 1 ]; then
+						while read -r gafi; do
+							if [ -n "$gafi" ]; then
+								"$XDGO" "$gafi"
+							fi
+						done <<< "$(printf "%s\n" "${OpArr[@]}")"
+						unset OpArr
+					else
+						writelog "SKIP" "${FUNCNAME[0]} - Nothing selected"
+					fi
 				else
-					writelog "SKIP" "${FUNCNAME[0]} - Nothing selected"
+					writelog "SKIP" "${FUNCNAME[0]} - '$XDGO' not found - can't open the directory"
 				fi
 			;;
 		esac
@@ -9979,18 +9996,21 @@ function checkIGCSInjector {
 					mkProjDir "$UUUDL"	
 					writelog "INFO" "${FUNCNAME[0]} - 'UUUSEIGCS' is enabled, but '$EFD/$IGCSDLL' is not available - checking if '$UUUSRC' is available"
 					if [ ! -f "$UUUSRC" ]; then
-						writelog "WARN" "${FUNCNAME[0]} -'$UUUSRC' was not found - opening Info requester, because it needs to be downloaded manually from '$UUUURL' and extracted to '$UUUDL'"
-						export CURWIKI="$PPW/$UUU"
-						TITLE="${PROGNAME}-$UUU-Info"
-						pollWinRes "$TITLE"
-						setShowPic
-						XDGO="xdg-open"
+						if [ -x "$(command -v "$XDGO" 2>/dev/null)" ]; then
+							writelog "WARN" "${FUNCNAME[0]} - '$UUUSRC' was not found - opening Info requester, because it needs to be downloaded manually from '$UUUURL' and extracted to '$UUUDL'"
+							export CURWIKI="$PPW/$UUU"
+							TITLE="${PROGNAME}-$UUU-Info"
+							pollWinRes "$TITLE"
+							setShowPic
 
-						"$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
-						--title="$TITLE" --text="$(spanFont "$(strFix "$GUI_UUUINFO1" "$UUU")" "H")" \
-						--field="Url: :RW" "$UUUURL" \
-						--field="$GUI_UUUINFO2:LBL" " " \
-						--field="$UUUDL":FBTN "$XDGO $UUUDL" "$GEOM"
+							"$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
+							--title="$TITLE" --text="$(spanFont "$(strFix "$GUI_UUUINFO1" "$UUU")" "H")" \
+							--field="Url: :RW" "$UUUURL" \
+							--field="$GUI_UUUINFO2:LBL" " " \
+							--field="$UUUDL":FBTN "$XDGO $UUUDL" "$GEOM"
+						else
+							writelog "SKIP" "${FUNCNAME[0]} - '$UUUSRC' was not found, but can't open the Info requester, because '$XDGO' was not found"
+						fi
 					fi
 					
 					if [ -f "$UUUSRC" ]; then
@@ -11399,7 +11419,6 @@ function setVortexDLMime {
 	fi
 
 	# setting mime types for nxm
-	XDGMIME="xdg-mime"
 
 	if [ -x "$(command -v "$XDGMIME" 2>/dev/null)" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Setting download defaults for nexusmod protocol via $XDGMIME pointing at $VD"
@@ -12835,7 +12854,6 @@ function setMO2DLMime {
 	fi
 
 	# setting mime types for nxm
-	XDGMIME="xdg-mime"
 
 	if [ -x "$(command -v "$XDGMIME" 2>/dev/null)" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Setting download defaults for nexusmod protocol via $XDGMIME pointing at $MO2D"
