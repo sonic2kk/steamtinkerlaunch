@@ -175,6 +175,8 @@ PLAYTIMELOGDIR="$BASELOGDIR/playtime"
 STLGAMEDIR="$STLCFGDIR/gamecfgs"															# default basedir for game the gamespecific configs
 STLGUIDIR="$STLCFGDIR/guicfgs"
 STLGAMEDIRID="$STLGAMEDIR/id"
+STLCUSTVARSDIR="$STLGAMEDIR/customvars"
+GLOBCUSTVARS="$STLCUSTVARSDIR/global-custom-vars.conf"
 STLGAMEDIRTI="$STLGAMEDIR/title"
 STLCATEGORYDIR="$STLCFGDIR/categories"														# the directory holding config files with preconfigured settings for games in specific steamcategories
 STLREGDIR="$STLCFGDIR/regs"																	# the directory holding registry files
@@ -405,7 +407,9 @@ STLGAMECFG="$STLGAMEDIRID/$AID.conf"														# the game specific config fil
 TWEAKCFG="$USERTWEAKDIR/$AID.conf"															# the game specific shareable config tweak overrides
 SBSTWEAKCFG="$SBSTWEAKDIR/$AID.conf"														# the game specific shareable config sbs tweak overrides
 LOGFILE="$LOGDIRID/$AID.log"																	
+GAMECUSTVARS="$STLCUSTVARSDIR/$AID.conf"													# game specific config file for user defined custom variables
 }
+
 STLURLCFG="$STLCFGDIR/url.conf"																# url config
 CUSTOMPROTONLIST="$STLCFGDIR/protonlist.txt"												# plain textfile with additional user proton versions
 VORTEXSTAGELIST="$STLVORTEXDIR/stages.txt"													# plain textfile with Vortex Stage directories - one per Steam Library partition
@@ -8171,6 +8175,7 @@ function createProjectDirs {
 	mkProjDir "$CUMETA"
 	mkProjDir "$TIGEMETA"
 	mkProjDir "$TICUMETA"
+	mkProjDir "$STLCUSTVARSDIR"
 }
 
 # add missing config entries to configfile $1 using seperator $2:
@@ -9257,6 +9262,35 @@ function getGameFiles {
 	fi
 }
 
+function createCustomCfgs {
+	if [ ! -f "$GAMECUSTVARS" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Creating emtpy game-specific config '$GAMECUSTVARS' for user defined custom variables"
+		touch "$GAMECUSTVARS"
+	fi
+
+	if [ ! -f "$GLOBCUSTVARS" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Creating emtpy global config '$GLOBCUSTVARS' for user defined custom variables"
+		touch "$GLOBCUSTVARS"
+	fi
+
+}
+
+function loadCustomVars {
+	if [ -s "$GLOBCUSTVARS" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Loading user defined custom variables from global config '$GLOBCUSTVARS'"
+		loadCfg "$GLOBCUSTVARS"
+	else
+		writelog "INFO" "${FUNCNAME[0]} - Empty global config '$GLOBCUSTVARS' for user defined custom variables not loaded"
+	fi
+	
+	if [ -s "$GAMECUSTVARS" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Loading user defined custom variables from game-specific config '$GAMECUSTVARS'"
+		loadCfg "$GAMECUSTVARS"
+	else
+		writelog "INFO" "${FUNCNAME[0]} - Empty game-specific config '$GAMECUSTVARS' for user defined custom variables not loaded"
+	fi	
+}
+
 function setGameFilesArray {
 	unset GamDesc
 	unset GamFiles
@@ -9279,15 +9313,14 @@ function setGameFilesArray {
 		GamDesc+=("$GUI_SP")
 		GamFiles+=("$STECOSHAPA")
 	fi
-	
-	if [ -d "$STLGAMEDIRID" ]; then
-		GamDesc+=("$GUI_STLCFGFILE")
-		GamFiles+=("$STLGAMEDIRID/$AID.conf")
-	fi
-	
-	# should always exist, no check needed
-	GamDesc+=("$GUI_STLGLBCFGFILE")
-	GamFiles+=("$STLCFGDIR/global.conf")
+
+	createCustomCfgs
+
+	GamDesc+=("$GUI_STLCVFILE")
+	GamFiles+=("$GAMECUSTVARS")
+
+	GamDesc+=("$GUI_STLGLBCVFILE")
+	GamFiles+=("$GLOBCUSTVARS")
 }
 
 function GameFilesMenu {
@@ -13968,6 +14001,9 @@ function prepareLaunch {
 	# start '$FWS' if USEFWS is enabled
 	writelog "INFO" "${FUNCNAME[0]} - CheckFWS:"
 	checkFWS
+
+	# load custom variables if available
+	loadCustomVars
 
 	# start a custom program if USECUSTOMCMD is enabled
 	writelog "INFO" "${FUNCNAME[0]} - CheckCustomLaunch:"
