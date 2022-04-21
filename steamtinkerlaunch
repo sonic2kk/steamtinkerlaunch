@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v9.3.20220420"
+PROGVERS="v9.3.20220421"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -146,6 +146,8 @@ F1ACTIONCG="bash -c setColGui"
 BTS="backup-timestamp"
 DUMMYBIN="echo"
 STLAIDSIZE="12"
+FPBIN="/app/utils/bin"
+INFLATPAK=0
 
 ### default vars ###
 
@@ -18991,8 +18993,10 @@ function steamdedeckt {
 		fi
 		
 		# update/set compatibility tool to git stl:
- 		CompatTool "add" "$PREFIX/$PROGCMD"
-
+		if [ "$INFLATPAK" -eq 0 ]; then
+			CompatTool "add" "$PREFIX/$PROGCMD"
+		fi
+		
 		GTKCSSFILE="$HOME/.config/gtk-3.0/gtk.css"
 
 		if [ ! -f "$GTKCSSFILE" ] ; then
@@ -19015,6 +19019,17 @@ function steamdedeckt {
 	fi
 }
 
+function setflatpak {
+#	if [ -d "$FPBIN" ]; then
+	if [ "$0" == "$FPBIN/$PROGCMD" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - seems like flatpak is used"
+		INFLATPAK=1
+		CompatTool "add" "$FPBIN/$PROGCMD"
+#	else
+#		writelog "SKIP" "${FUNCNAME[0]} - '$0' is not equal '$FPBIN/$PROGCMD' - not using flatpak"
+	fi
+}
+
 ##################
 
 function main {
@@ -19023,6 +19038,7 @@ function main {
 	rm "$TEMPLOG" "$WINRESLOG" "$PRELOG" "$APPMALOG" "$GGDLOG" 2>/dev/null
 	touch "$PRELOG"
 	mkProjDir "$LOGDIRID"
+	setflatpak
 	steamdedeckt
 	initAID "$@"
 	setAIDCfgs
