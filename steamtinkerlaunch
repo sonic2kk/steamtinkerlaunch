@@ -5648,11 +5648,19 @@ function gitUpdate {
 	GITURL="$2"
 	if [ -d "$GITDIR/.git" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Pulling '$GITURL' update in '$GITDIR'"
-		"$GIT" --work-tree="$GITDIR" --git-dir="$GITDIR/.git" pull --rebase=false &> "$STLSHM/${FUNCNAME[0]}-${GITDIR##*/}"
+		if [ "$ONSTEAMDECK" -eq 1 ]; then
+			LD_PRELOAD="/usr/lib/libcurl.so.4" "$GIT" --work-tree="$GITDIR" --git-dir="$GITDIR/.git" pull --rebase=false &> "$STLSHM/${FUNCNAME[0]}-SteamDeck-${GITDIR##*/}"
+		else
+			"$GIT" --work-tree="$GITDIR" --git-dir="$GITDIR/.git" pull --rebase=false &> "$STLSHM/${FUNCNAME[0]}-${GITDIR##*/}"
+		fi
 	else
 		mkProjDir "$GITDIR"
 		writelog "INFO" "${FUNCNAME[0]} - Cloning '$GITURL' in '$GITDIR'"
-		"$GIT" clone "$GITURL" "$GITDIR" &> "$STLSHM/${FUNCNAME[0]}-${GITDIR##*/}"
+		if [ "$ONSTEAMDECK" -eq 1 ]; then
+			LD_PRELOAD="/usr/lib/libcurl.so.4" "$GIT" clone "$GITURL" "$GITDIR" &> "$STLSHM/${FUNCNAME[0]}-SteamDeck-${GITDIR##*/}"
+		else
+			"$GIT" clone "$GITURL" "$GITDIR" &> "$STLSHM/${FUNCNAME[0]}-${GITDIR##*/}"
+		fi
 	fi
 }
 
@@ -18978,7 +18986,7 @@ function steamdedeckt {
 			setSteamPaths
 		fi
 
-		LD_PRELOAD="/usr/lib/libcurl.so.4" gitUpdate "$PREFIX" "$PROJECTPAGE"
+		gitUpdate "$PREFIX" "$PROJECTPAGE"
 
 		export STLSDPATH="${STLDEPS}/usr/bin"
 		export PATH="$PATH:$STLSDPATH"
