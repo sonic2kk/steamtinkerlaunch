@@ -2036,6 +2036,8 @@ function createLanguageList {
 
 function loadLangFile {
 	if [ -n "$1" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Languagefile from command line is '$1'" "P"
+
 		LANGFILENAME="$1"
 		if [ -z "$GLOBALSTLLANGDIR" ]; then
 			GLOBLANG="$SYSTEMSTLCFGDIR/lang/"
@@ -2044,7 +2046,7 @@ function loadLangFile {
 		fi
 
 		if [ -f "$LANGFILENAME" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Loading commandline langfile" "P"
+			writelog "INFO" "${FUNCNAME[0]} - Loading command line langfile '$LANGFILENAME'" "P"
 			source "$LANGFILENAME"
 			STLLANG="$(cut -d '.' -f1 <<< "${LANGFILENAME##*/}")"
 			LAFI="$STLLANGDIR/${STLLANG}.txt"
@@ -2053,6 +2055,8 @@ function loadLangFile {
 				cp "$LANGFILENAME" "$LAFI"
 			fi
 		else
+			writelog "INFO" "${FUNCNAME[0]} - Command line langfile '$LANGFILENAME' does not exist" "P"
+
 			LAFI="$STLLANGDIR/${LANGFILENAME}.txt"
 
 			if [ -f "$LAFI" ]; then
@@ -2074,19 +2078,23 @@ function loadLangFile {
 
 function loadLanguage {
 #	if [ ! -f "$STLSHM/lola-$AID.txt" ] ;then
-		writelog "INFO" "${FUNCNAME[0]} - First load the default language to make sure all variables are filled"
+		writelog "INFO" "${FUNCNAME[0]} - First load the default language '$STLDEFLANG' to make sure all variables are filled"
 		loadLangFile "$STLDEFLANG"
 
 		saveCfg "$STLDEFGLOBALCFG" X
 		loadCfg "$STLDEFGLOBALCFG" X
 
+		writelog "INFO" "${FUNCNAME[0]} - Loading STLLANG from '$STLDEFGLOBALCFG'"
+
 		if [ -f "$STLDEFGLOBALCFG" ]; then
 			STLLRAW="$(grep "^STLLANG" "$STLDEFGLOBALCFG" | cut -d '=' -f2)"
 			STLLANG="${STLLRAW//\"/}"
+			writelog "INFO" "${FUNCNAME[0]} - STLLANG from '$STLDEFGLOBALCFG' is '$STLLANG'"
 		else
 			ARGSLANG="$(awk -F 'lang=' '{print $2}' <<< "$@" | cut -d ' ' -f1)"
 			if [ -n "$ARGSLANG" ]; then
 				STLLANG="$ARGSLANG"
+				writelog "INFO" "${FUNCNAME[0]} - STLLANG from command line' is '$STLLANG'"
 			fi
 		fi
 
