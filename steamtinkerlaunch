@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v9.3.20220423"
+PROGVERS="v9.3.20220424"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -295,6 +295,7 @@ STLGSAPD="$STLGSAD/titles"
 STLGSACD="$STLGSAD/$CODA"
 STLGPEVKD="$STLGAMES/pev"
 MO2INSTFAIL="$STLSHM/${MO}-failed.txt"
+ABSGAMEEXEPATH="$NON"
 
 #STLGSCPTD="$STLGAMES/scripts"
 NOGAMES=",70_2260196511,228980,858280,961940,1054830,1070560,1113280,1245040,1391110,1420170,"
@@ -1934,6 +1935,7 @@ function getGameOS {
 				GP="$GPRAW"
 			fi
 		fi
+		ABSGAMEEXEPATH="$GP"
 		GE="${GP##*/}"																			# the game executable
 		ISGAME=3																				# no STEAM_COMPAT_DATA_PATH, so it is no windows game		
 	}
@@ -1944,13 +1946,14 @@ function getGameOS {
 		else
 			GP="$(printf "%s\n" "$@" | grep -v "proton\|$SLR" | grep -m1 "$SAC")"				# the absolute game path of the windows game exe
 		fi
+		ABSGAMEEXEPATH="$GP"
 		GPFX="$STEAM_COMPAT_DATA_PATH/pfx"														# currently used WINEPREFIX
 		GE="$(awk -F '.exe' '{print $1}' <<< "${GP##*/}")"										# just the windows game exe name
 		writelog "INFO" "${FUNCNAME[0]} - '$GE' determined to be a Windows Game"
 		ISGAME=2		
 	}
 	if [ "$STLPLAY" -eq 0 ]; then
-		if [ "$ISGAME" -eq 0 ]; then 
+		if [ "$ABSGAMEEXEPATH" == "$NON" ]; then 
 			writelog "INFO" "${FUNCNAME[0]} - Starting game OS detection"
 
 			while read -r INGARG; do
@@ -1961,9 +1964,8 @@ function getGameOS {
 			done <<< "$(printf "%s\n" "$@")"
 
 			if [ -n "$STEAM_COMPAT_DATA_PATH" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - STEAM_COMPAT_DATA_PATH is defined - This is no longer necessarily a reliable indication that this is a Windows game."
 				if [ -f "$OSCHECKGAMEEXE" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - Making some more checks on '$OSCHECKGAMEEXE' to determine the OS version of the game"
+					writelog "INFO" "${FUNCNAME[0]} - Making some checks on '$OSCHECKGAMEEXE' to determine the OS version of the game"
 					if grep -q "shell script" <<< "$(file "$(realpath "$OSCHECKGAMEEXE")")" || grep -q "ELF.*.LSB" <<< "$(file "$(realpath "$OSCHECKGAMEEXE")")" ; then
 						writelog "INFO" "${FUNCNAME[0]} - Looks like this is a Linux game!"
 						setLin "$@"
@@ -5143,12 +5145,11 @@ function fixShow {
 
 function setShadDestDir {
 	autoCategorySettings
-
+	
 	if [ "$USESPECIALK" -eq 1 ] && [ "$USERESHADE" -eq 1 ]; then
-	writelog "INFO" "${FUNCNAME[0]} - Both '$SPEK' and '$RESH' are enabled." "E"
-	writelog "INFO" "${FUNCNAME[0]} - Unfortunately the game currently crashes using Proton when both are enabled"
-	writelog "INFO" "${FUNCNAME[0]} - therefore $RESH path redirect to the $SPEK directory is disabled" "E"
-
+		writelog "INFO" "${FUNCNAME[0]} - Both '$SPEK' and '$RESH' are enabled." "E"
+		writelog "INFO" "${FUNCNAME[0]} - Unfortunately the game currently crashes using Proton when both are enabled"
+		writelog "INFO" "${FUNCNAME[0]} - therefore $RESH path redirect to the $SPEK directory is disabled" "E"
 #		SPEKRESHDIR="My Mods/${SPEK}/Plugins/ThirdParty/${RESH}"
 #		SHADDESTDIR="$GPFX/$DRCU/$STUS/$DOCS/$SPEKRESHDIR"
 #	else
@@ -7014,66 +7015,79 @@ function setFullGameExePath {
 		writelog "INFO" "${FUNCNAME[0]} - Using the directory '$FGEP' of the used custom command as absolute game exe path"
 		export "$1"="$FGEP"
 	else
-		loadCfg "$GEMETA/$AID.conf" X
-		if [ -n "$EXECUTABLE" ] && grep -q "\\\\" <<< "$EXECUTABLE"; then
-			RELEX="${EXECUTABLE//\\//}"
-			FGEP="${EFD}/${RELEX%/*}"
-			if [ ! -d "$FGEP" ] && [ -d "$EFD" ]; then
-				if grep -q "/" <<< "${RELEX%/*}"; then
-					FGEP="${EFD}"
-					while read -r subdir; do
-						FGEP="$(find "$FGEP" -iname "$subdir")"
-					done <<< "$(tr '/' '\n' <<< "${RELEX%/*}")"
-				else
-					FGEP="$(find "${EFD}" -iname "${RELEX%/*}")"
+		setShaderDest
+		if [ -n "$SHADDESTDIR" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Using SHADDESTDIR '$SHADDESTDIR' for '$1'"
+			export "$1"="$SHADDESTDIR"
+		elif [ -n "$EFD" ]; then
+			loadCfg "$GEMETA/$AID.conf" X
+			if [ -z "$EXECUTABLE" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Using the base game directory '$EFD' as absolute game exe path - probably never reached?"
+				export "$1"="$EFD"
+			else
+				writelog "WARN" "${FUNCNAME[0]} - Using some weird old function to determine the absolute exe path - please report, this should never be reached"
+				if grep -q "\\\\" <<< "$EXECUTABLE"; then
+					RELEX="${EXECUTABLE//\\//}"
+					FGEP="${EFD}/${RELEX%/*}"
+					if [ ! -d "$FGEP" ] && [ -d "$EFD" ]; then
+						if grep -q "/" <<< "${RELEX%/*}"; then
+							FGEP="${EFD}"
+							while read -r subdir; do
+								FGEP="$(find "$FGEP" -iname "$subdir")"
+							done <<< "$(tr '/' '\n' <<< "${RELEX%/*}")"
+						else
+							FGEP="$(find "${EFD}" -iname "${RELEX%/*}")"
+						fi
+					fi
+					
+					if [ -d "$FGEP" ]; then
+						writelog "INFO" "${FUNCNAME[0]} - Using '$FGEP' as absolute game exe path"
+						export "$1"="$FGEP"	
+					fi
 				fi
 			fi
-			
-			if [ -d "$FGEP" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Using '$FGEP' as absolute game exe path"
-				export "$1"="$FGEP"	
-			fi
-		else
-			writelog "INFO" "${FUNCNAME[0]} - Using the base game directory '$EFD' as absolute game exe path"
-			export "$1"="$EFD"
 		fi
 	fi
 }
 
 function setShaderDest {
+	
+	if [ -z "$SHADLOGGED" ]; then
+		SHADLOGGED=0	
+	fi
+
 	if [ -n "$(GETALTEXEPATH)" ]; then
 		SHADDESTDIR="$(GETALTEXEPATH)"
 		writelog "INFO" "${FUNCNAME[0]} - Overriding SHADDESTDIR to '$SHADDESTDIR' because ALTEXEPATH is set to '$ALTEXEPATH'"
 	fi
 
 	if [ -z "$SHADDESTDIR" ]; then
-		if [ -z "$1" ]; then		
-			if [ ! -d "$SHADDESTDIR" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Determining Shader destination directory SHADDESTDIR"
+		if [ -z "$1" ] || [ "$1" == "last" ]; then		
+			if [ "$ABSGAMEEXEPATH" != "$NON" ]; then
+				SHADDESTDIR="${ABSGAMEEXEPATH%/*}"
+				writelog "INFO" "${FUNCNAME[0]} - Using variable ABSGAMEEXEPATH for Shader destination directory '$SHADDESTDIR'"
+			else
 				resetAID "last"
 				if [ -f "$LASTRUN" ] && grep -q "$AID" "$LASTRUN"; then
-					PREVEFD="$(grep "^PREVEFD" "$LASTRUN" | cut -d '=' -f2)"
-					if [ -d "${PREVEFD//\"/}" ]; then
-						 SHADDESTDIR="${PREVEFD//\"/}"
-					fi
-				fi
-			fi
-		else
-			if [ "$1" == "last" ]; then
-				resetAID "last"
-				if [ -f "$LASTRUN" ] && grep -q "$AID" "$LASTRUN"; then
-					PREVEFD="$(grep "^PREVEFD" "$LASTRUN" | cut -d '=' -f2)"
-					if [ -d "${PREVEFD//\"/}" ]; then
-						 SHADDESTDIR="${PREVEFD//\"/}"
+					ABSGAMEEXEPATH="$(grep "^PREVABSGAMEEXEPATH" "$LASTRUN" | cut -d '=' -f2)"
+					ABSGAMEEXEPATHDIR="${ABSGAMEEXEPATH%/*}"
+					if [ -d "${ABSGAMEEXEPATHDIR//\"/}" ]; then
+						SHADDESTDIR="${ABSGAMEEXEPATHDIR//\"/}"
+						writelog "INFO" "${FUNCNAME[0]} - Using last PREVABSGAMEEXEPATH variable from '$LASTRUN' for Shader destination directory '$SHADDESTDIR'"
+					else
+						writelog "WARN" "${FUNCNAME[0]} - Found PREVABSGAMEEXEPATH variable in '$LASTRUN' but its directory does not exist"
 					fi
 				else
 					notiShow "$NOTY_NOAIDNOPREV"
 				fi
-			else
-				if [ -f "$1" ]; then
-					SHADDESTDIR="$(dirname "$1")"
-				else 
-					SHADDESTDIR="$1"
-				fi
+			fi
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Using argument '$1' for Shader destination directory '$SHADDESTDIR'"
+			if [ -f "$1" ]; then
+				SHADDESTDIR="$(dirname "$1")"
+			else 
+				SHADDESTDIR="$1"
 			fi
 		fi
 
@@ -7081,6 +7095,11 @@ function setShaderDest {
 			writelog "INFO" "${FUNCNAME[0]} - Using Shader destination directory '$SHADDESTDIR'"
 		fi
 	fi	
+
+	if [ -n "$SHADDESTDIR" ] && [ "$SHADLOGGED" -eq 0 ] ; then
+		writelog "INFO" "${FUNCNAME[0]} - Shader destination directory is '$SHADDESTDIR'"
+		SHADLOGGED=1
+	fi
 }
 
 function disableThisGameShaderRepo {
@@ -7361,11 +7380,7 @@ function installReshade {
 		prepareReshadeFiles
 		setShadDestDir
 
-		if [ -n "$(GETALTEXEPATH)" ]; then
-			INSTDESTDIR="$(GETALTEXEPATH)"
-		else
-			INSTDESTDIR="$SHADDESTDIR"
-		fi
+		INSTDESTDIR="$SHADDESTDIR"
 
 		function maybedrop { # TODO remove?
 		# checking for previous dll conficts between $D3D47 and $RS_D9_DEST
@@ -7440,6 +7455,7 @@ function installDepth3DReshade {
 
 function checkReshade {
 	setShadDestDir
+
 	RSLIST="$SHADDESTDIR/$RSTXT"
 	RSOLIST="${RSLIST}_off"
 	FRSINI="$SHADDESTDIR/$RSINI"
@@ -15923,13 +15939,13 @@ function launchSteamGame {
 				USEMANGOHUD=0
 			fi
 		fi
-	fi
 	
-	if [ -z "${MAHUCMD[0]}" ]; then
-		writelog "WARN" "${FUNCNAME[0]} - unset MAHUCMD"
-		unset MAHUCMD
-	else
-		writelog "INFO" "${FUNCNAME[0]} - $MAHU command '${MAHUCMD[*]}' will be added to the game launch command"
+		if [ -z "${MAHUCMD[0]}" ]; then
+			writelog "WARN" "${FUNCNAME[0]} - unset MAHUCMD"
+			unset MAHUCMD
+		else
+			writelog "INFO" "${FUNCNAME[0]} - $MAHU command '${MAHUCMD[*]}' will be added to the game launch command"
+		fi
 	fi
 	
 	if [ "$USEBOXTRON" -eq 1 ] || [ "$USEROBERTA" -eq 1 ] || [ "$USELUXTORPEDA" -eq 1 ]; then
@@ -17063,7 +17079,7 @@ function writeLastRun {
 	echo "PROTONVERSION=\"$PROTONVERSION\""
 	echo "PREVAID=\"$AID\""
 	echo "PREVGAME=\"$GN\""
-	echo "PREVEFD=\"$EFD\""
+	echo "PREVABSGAMEEXEPATH=\"$ABSGAMEEXEPATH\""
 	} >	"$LASTRUN"
 }
 
