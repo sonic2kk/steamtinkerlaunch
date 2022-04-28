@@ -17,14 +17,14 @@ By using a versatile configuration structure it is both easy to set up and flexi
 ## Description 
 _(by TaylorRoyal23 on [r/linux_gaming](https://www.reddit.com/r/linux_gaming/comments/ud58i2/comment/i6i3yf9/?utm_source=share&utm_medium=web2x&context=3))_
 
-`An incredible wrapper with a menu that lets you easily toggle and modify various settings for games on Linux.
+"An incredible wrapper with a menu that lets you easily toggle and modify various settings for games on Linux.
 Anything from proton versions, to startup and exit scripts, proton/dxvk/etc. settings, FSR, reshade,
 and even options for various tools like gamemode, replay-sorcery, gamescope, etc. Tons more too.
 I just set my default proton version to "steam tinker launcher" and then every game launches
 with a 2 second menu that allows you to easily change any of the settings.
 If you don't press any buttons it just goes with the defaults and launches the game.
 The menus can get a little confusing but it consolidates it all in one place and is way more simple
-than trying to remember dozens of commands for various settings that one might need.`
+than trying to remember dozens of commands for various settings that one might need."
 
 ## How to use
 
