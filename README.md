@@ -84,6 +84,7 @@ Several great people already mentioned **steamtinkerlaunch** on their platforms/
 - **tuxfoo**  made a [youtube video](https://www.youtube.com/watch?v=l1KjIANTIKs)
 - **Linux Game Cast** already mentioned **stl** in their [casts](https://www.youtube.com/watch?v=djuZdnE83fE&t=436s) [several](https://www.youtube.com/watch?v=yVsTMhx8E7c&t=983s) [times](https://www.youtube.com/watch?v=qhybhTGV3mA&t=1279s)
   and still [counting](https://linuxgamecast.com/2021/11/linux-game-cast-484-yami-pedro)
+- **Mark Dougherty** on [linuxgamingcentral](https://linuxgamingcentral.com/posts/news-stl-v10-released/)
 
 ## Quick start
 When **steamtinkerlaunch** is started for the first time it will create its default [configuration](#Configuration) structure.
