@@ -63,6 +63,8 @@ Gentoo: [guru overlay](https://gitweb.gentoo.org/repo/proj/guru.git/commit/?h=de
 
 Ansible: **[playbook](https://github.com/tofu114/ansible_playbooks)**
 
+**for Steam Deck check the [Steam Deck](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam-Deck) wiki - no need to install it system wide!**
+
 [![Packaging status](https://repology.org/badge/vertical-allrepos/steamtinkerlaunch.svg)](https://repology.org/project/steamtinkerlaunch/versions)
 
 ### Manual Installation:
