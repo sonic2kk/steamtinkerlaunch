@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v10.0.20220517"
+PROGVERS="v10.0.20220518"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -2430,6 +2430,7 @@ function setDefaultCfgValues {
 		if [ -z "$REDIRCOMPDATA" ]						; then	REDIRCOMPDATA="disabled"; fi
 		if [ -z "$REDIRSTEAMUSER" ]						; then	REDIRSTEAMUSER="disabled"; fi
 		if [ -z "$AUTOBUMPGE" ]							; then	AUTOBUMPGE="0"; fi
+		if [ -z "$AUTOBUMPPROTON" ]						; then	AUTOBUMPPROTON="0"; fi
 		if [ -z "$USECUSTOMCMD" ]						; then	USECUSTOMCMD="0"; fi
 		if [ -z "$CUSTOMCMD" ]							; then	CUSTOMCMD="$DUMMYBIN"; fi
 		if [ -z "$CUSTOMCMD_ARGS" ]						; then	CUSTOMCMD_ARGS="$NON"; fi
@@ -2897,6 +2898,8 @@ function saveCfg {
 			echo "REDIRSTEAMUSER=\"$REDIRSTEAMUSER\""
 			echo "## $DESC_AUTOBUMPGE"
 			echo "AUTOBUMPGE=\"$AUTOBUMPGE\""
+			echo "## $DESC_AUTOBUMPPROTON"
+			echo "AUTOBUMPPROTON=\"$AUTOBUMPPROTON\""
 			echo "## $DESC_USECUSTOMCMD"
 			echo "USECUSTOMCMD=\"$USECUSTOMCMD\""
 			echo "## $DESC_CUSTOMCMD"
@@ -4591,6 +4594,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_REDIRCOMPDATA!$DESC_REDIRCOMPDATA ('REDIRCOMPDATA')":CB "$(cleanDropDown "${REDIRCOMPDATA/#-/ -}" "disabled!single-proton!global-proton")" `#CAT_Proton` `#MENU_GAME` \
 --field="     $GUI_REDIRSTEAMUSER!$DESC_REDIRSTEAMUSER ('REDIRSTEAMUSER')":CB "$(cleanDropDown "${REDIRSTEAMUSER/#-/ -}" "disabled!symlink!restore-backup")" `#CAT_Proton` `#MENU_GAME` \
 --field="     $GUI_AUTOBUMPGE!$DESC_AUTOBUMPGE ('AUTOBUMPGE')":CHK "${AUTOBUMPGE/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_AUTOBUMPPROTON!$DESC_AUTOBUMPPROTON ('AUTOBUMPPROTON')":CHK "${AUTOBUMPPROTON/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_PROTON_LOG!$DESC_PROTON_LOG $HOME/steam-$AID.log ('PROTON_LOG')":CHK "${PROTON_LOG/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_PROTON_LOG_DIR!$DESC_PROTON_LOG_DIR ('PROTON_LOG_DIR')":DIR "${PROTON_LOG_DIR/#-/ -}" `#CAT_Proton` `#SUB_Directories` `#MENU_GAME` \
 --field="     $GUI_USEWINEDEBUGPROTON!$DESC_USEWINEDEBUGPROTON ('USEWINEDEBUGPROTON')":CHK "${USEWINEDEBUGPROTON/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
@@ -13762,6 +13766,23 @@ function autoBumpGE {
 	fi
 }
 
+function autoBumpProton {
+	if [ "$AUTOBUMPPROTON" -eq 1 ] && grep -v -q "^GE" <<< "$USEPROTON" && [ "$ISGAME" -eq 2 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Current Proton version is $USEPROTON"
+		NEWESTPROTON="$(grep -v "^GE" "$PROTONCSV" | sort -V | tail -n1)"
+		NEWESTPROTON="${NEWESTPROTON%%;*}"
+		if [ "$NEWESTPROTON" == "$USEPROTON" ]; then
+			writelog "SKIP" "${FUNCNAME[0]} - $USEPROTON is already the newest official Proton version"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - $(strFix "$NOTY_BUMP" "$USEPROTON" "$USEPROTON" "$NEWESTPROTON")"
+			notiShow "$(strFix "$NOTY_BUMP" "$USEPROTON" "$USEPROTON" "$NEWESTPROTON")"
+			USEPROTON="$NEWESTPROTON"
+			touch "$FUPDATE"
+			updateConfigEntry "USEPROTON" "$USEPROTON" "$STLGAMECFG"
+		fi
+	fi
+}
+
 function checkPev {
 	if [ "$ISGAME" -eq 2 ] && [ -f "$GP" ]; then
 		unset USEPEVA
@@ -13853,6 +13874,7 @@ function prepareLaunch {
 	checkPev
 	
 	autoBumpGE
+	autoBumpProton
 	
 	if [ "$ISGAME" -eq 2 ] && [ "$HAVEINPROTON" -eq 0 ]; then
 		FIRSTGAMEUSEPROTON="$USEPROTON"
