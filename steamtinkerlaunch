@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v10.0.20220518"
+PROGVERS="v10.0.20220525"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -16401,6 +16401,9 @@ function CompatTool {
 			if [ ! -d "$STEAMCOMPATOOLS" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Initially creating dir '$STEAMCOMPATOOLS'"
 				mkProjDir "$STEAMCOMPATOOLS"
+				if [ ! -d "$SCTS" ]; then
+					writelog "ERROR" "${FUNCNAME[0]} - Failed to create the directory '$STEAMCOMPATOOLS'"
+				fi
 			fi
 
 			if [ "$ONSTEAMDECK" -eq 1 ]; then
@@ -16416,6 +16419,10 @@ function CompatTool {
 			if [ ! -d "$SCTS" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Creating dir '$SCTS'"
 				mkProjDir "$SCTS"
+
+				if [ ! -d "$SCTS" ]; then
+					writelog "ERROR" "${FUNCNAME[0]} - Failed to create the directory '$SCTS' - check your write priviledges on '$STEAMCOMPATOOLS'"
+				fi
 
 				CVDF="$SCTS/$CTVDF"
 				writelog "INFO" "${FUNCNAME[0]} - Creating file '$CVDF'"
@@ -16436,6 +16443,10 @@ function CompatTool {
 				echo "}"
 				} >> "$CVDF"
 
+				if [ ! -f "$CVDF" ]; then
+					writelog "ERROR" "${FUNCNAME[0]} - Failed to create the file '$CVDF' - check your write priviledges on '$SCTS'"
+				fi
+
 				TVDF="$SCTS/toolmanifest.vdf"
 				writelog "INFO" "${FUNCNAME[0]} - Creating file '$TVDF'"
 				{
@@ -16446,8 +16457,16 @@ function CompatTool {
 				echo "}"
 				} >> "$TVDF"
 
+				if [ ! -f "$CVDF" ]; then
+					writelog "ERROR" "${FUNCNAME[0]} - Failed to create the file '$TVDF' - check your write priviledges on '$SCTS'"
+				fi
+
 				writelog "INFO" "${FUNCNAME[0]} - Creating symlink '$SCTS/$PROGCMD' pointing to '$STLBIN'" "E"
 				ln -s "$(realpath "$STLBIN")" "$SCTS/$PROGCMD"
+				
+				if [ ! -L "$SCTS/$PROGCMD" ]; then
+					writelog "ERROR" "${FUNCNAME[0]} - Failed to create the symlink '$SCTS/$PROGCMD' - check your write priviledges on '$SCTS'"
+				fi
 			else
 				writelog "INFO" "${FUNCNAME[0]} - '$SCTS' already exists - checking if '$PROGCMD' symlink needs to be updated"
 				if [ "$(readlink "$SCTS/$PROGCMD")" == "$(realpath "$STLBIN")" ]; then
