@@ -8751,6 +8751,14 @@ function GameScopeGui {
 		fi
 	fi
 
+	if [ -z "$GSNIS" ]; then
+		if grep -q "\-Y" <<< "$GAMESCOPE_ARGS"; then
+			GSNIS="1"
+		else
+			GSNIS="0"
+		fi
+	fi
+
 	if [ -z "$GSSE" ]; then 
 		if grep -q "\-e" <<< "$GAMESCOPE_ARGS"; then 
 			GSSE="1"
@@ -8772,6 +8780,7 @@ function GameScopeGui {
 			--field="$GUI_GSFS!$DESC_GSFS ('GSFS')":CHK "$GSFS" \
 			--field="$GUI_GSBW!$DESC_GSBW ('GSBW')":CHK "$GSBW" \
 			--field="$GUI_GSFSR!$DESC_GSFSR ('GSFSR')":CHK "$GSFSR" \
+			--field="$GUI_GSNIS!$DESC_GSNIS ('GSNIS')":CHK "$GSNIS" \
 			--field="$GUI_GSSE!$DESC_GSSE ('GSSE')":CHK "$GSSE" \
 			--field="$GUI_USEGAMESCOPE!$DESC_USEGAMESCOPE ('USEGAMESCOPE')":CHK "${USEGAMESCOPE/#-/ -}" \
 			--button="$BUT_CAN:0" --button="$BUT_DONE:2" "$GEOM"
@@ -8793,8 +8802,9 @@ function GameScopeGui {
 						GSFS="${GSARR[7]}"
 						GSBW="${GSARR[8]}"
 						GSFSR="${GSARR[9]}"
-						GSSE="${GSARR[10]}"
-						USEGAMESCOPE="${GSARR[11]}"
+						GSNIS="${GSARR[10]}"
+						GSSE="${GSARR[11]}"
+						USEGAMESCOPE="${GSARR[12]}"
 
 						unset GAMESCOPE_ARGS
 						GSINTW1="${GSINTRES%x*}"
@@ -8836,11 +8846,15 @@ function GameScopeGui {
 						
 						if [ "$GSFSR" == "TRUE" ]; then
 							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -U"
+						fi
 
-							# FSR Sharpness Value should only be passed if FSR is enabled
-							if [ "$GSFSRS" -eq "$GSFSRS" ] 2>/dev/null; then
-								GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --fsr-sharpness ${GSFSRS}"
-							fi
+						if [ "$GSNIS" == "TRUE" ]; then
+							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -Y"
+						fi
+
+						# Sharpness Value should only be passed if FSR or NIS is enabled
+						if  [ "$GSFSRS" -eq "$GSFSRS" ] 2>/dev/null && [ "$GSFSR" == "TRUE" ] || [ "$GSNIS" == "TRUE" ]; then
+							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --sharpness ${GSFSRS}"
 						fi
 
 						if [ "$GSSE" == "TRUE" ]; then
