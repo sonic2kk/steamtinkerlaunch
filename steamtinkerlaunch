@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v10.0.20220528"
+PROGVERS="v10.0.20220529"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -140,7 +140,7 @@ F1ACTIONCG="bash -c setColGui"
 BTS="backup-timestamp"
 DUMMYBIN="echo"
 STLAIDSIZE="12"
-FPBIN="/app/utils/bin"
+FPBIN="/app/utils/${PROGCMD}/bin"
 INFLATPAK=0
 
 ### default vars ###
@@ -429,8 +429,6 @@ SA="steamapps"
 SAC="$SA/common"
 L2EA="link2ea"
 CTD="compatibilitytools.d"
-USS="${PREFIX}/share/steam"
-SYSSTEAMCOMPATOOLS="$USS/$CTD"
 SLR="SteamLinuxRuntime"
 STERU="steam-runtime"
 BIWI="bin/wine"
@@ -2224,6 +2222,19 @@ function getAvailableProtonVersions {
 					done <<< "$(find -L "$SYSSTEAMCOMPATOOLS" -mindepth 2 -maxdepth 2 -type f -name "proton")"
 				else
 					writelog "SKIP" "${FUNCNAME[0]} - Directory SYSSTEAMCOMPATOOLS '$SYSSTEAMCOMPATOOLS' not found - skipping"
+				fi
+			
+				if [ -n "$STEAM_EXTRA_COMPAT_TOOLS_PATHS" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Adding Proton versions found in STEAM_EXTRA_COMPAT_TOOLS_PATHS '$STEAM_EXTRA_COMPAT_TOOLS_PATHS'"
+					while read -r extrapath; do
+						writelog "INFO" "${FUNCNAME[0]} - Searching for Proton version in '$extrapath'"
+						while read -r PROTBIN; do
+							if [ -f "$PROTBIN" ]; then
+								writelog "INFO" "${FUNCNAME[0]} - Found proton directory: '$PROTBIN'"
+								fillProtonCSV
+							fi
+						done <<< "$(find -L "$extrapath" -mindepth 2 -maxdepth 2 -type f -name "proton")"
+					done <<< "$(tr ':' '\n' <<< "$STEAM_EXTRA_COMPAT_TOOLS_PATHS")"
 				fi
 			
 				# official proton versions installed via Steam in default SteamLibrary 
@@ -19258,6 +19269,14 @@ function main {
 	touch "$PRELOG"
 	mkProjDir "$LOGDIRID"
 	setflatpak
+
+	if [ "$INFLATPAK" -eq 1 ]; then
+		USS="/app/share/steam"
+	else
+		USS="${PREFIX}/share/steam"
+	fi
+	SYSSTEAMCOMPATOOLS="$USS/$CTD"
+
 	steamdedeckt
 	initAID "$@"
 	setAIDCfgs
