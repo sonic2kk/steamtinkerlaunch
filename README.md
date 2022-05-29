@@ -112,7 +112,7 @@ The initial [Wait Requester](https://github.com/frostworx/steamtinkerlaunch/wiki
 If selected within a [timeout](https://github.com/frostworx/steamtinkerlaunch/wiki/Wait-Requester#timeout) the [Start Menu](https://github.com/frostworx/steamtinkerlaunch/wiki/Start-Menu) will open,
 else the game starts seamlessly with all configurations set.
 
-![Wait Requester](https://github.com/frostworx/repo-assets/blob/master/pics/WaitRequester.jpg)
+![Wait Requester](https://github.com/frostworx/repo-assets/blob/master/pics/Wait-Requester.jpg)
 
 ### [Configuration Files](https://github.com/frostworx/steamtinkerlaunch/wiki/Configuration-Files)
 
