@@ -4291,6 +4291,7 @@ function TrayIconExports {
 	export -f TrayLCS
 	export -f TrayGameFiles
 	export -f TrayMO2
+	export -f TrayProtonList
 }
 #ENDIEX
 
@@ -4375,7 +4376,12 @@ function openTrayIcon {
 				writelog "INFO" "${FUNCNAME[0]} - TrayIcon: Starting standalone $MO instance"
 				"$PROGCMD" "mo2" "start"
 			}	
-				
+
+			function TrayProtonList {
+				writelog "INFO" "${FUNCNAME[0]} - TrayIcon: Updating list of available Proton versions"
+				"$PROGCMD" "proton" "list"
+			}
+
 			TrayIconExports
 			
 			# actually open the actual trayIcon	
@@ -4389,6 +4395,7 @@ function openTrayIcon {
 			|$TRAY_UWT,bash -c TrayUWT \
 			|$TRAY_LCS,bash -c TrayLCS \
 			|$GUI_GAFI,bash -c TrayGameFiles \
+			|$TRAY_UPL,bash -c TrayProtonList \
 			|$FBUT_GUISET_MO,bash -c TrayMO2 " \
 			--text="$TRAY_TOOLTIP" >/dev/null 2>/dev/null &
 			YADTRAYPID="$!"
@@ -16748,6 +16755,7 @@ function howto {
  	echo "    proton|p <title> <X>             Start and/or create <title> with proton"
 	echo "                                       without using steam."
 	echo "                                       Optional <X> opens gui"
+ 	echo "    proton|p list                    Update the list of all available proton versions"
 	echo "    set <var> <for> <value>          Change configuration settings"
 	echo "                                       Example:"
 	echo "    set RUN_REPLAY all 1               Set RUN_REPLAY for all games to 1"
@@ -17047,7 +17055,11 @@ function commandline {
 			fi
 		fi
 	elif [ "$1" == "proton" ] || [ "$1" == "p" ]; then
-		StandaloneProtonGame "$2" "$3"
+		if [ -n "$2" ] && [ "$2" == "list" ]; then
+			getAvailableProtonVersions "up" X
+		else
+			StandaloneProtonGame "$2" "$3"
+		fi
 	elif [ "$1" == "set" ]; then
 		if [ -n "$2" ]; then
 				ENTLIST="$(sed -n "/#STARTsaveCfgdefault_template/,/#ENDsaveCfgdefault_template/p;/#ENDsaveCfgdefault_template/q" "$0" | grep "echo" | grep "=" | cut -d '"' -f2 | cut -d '=' -f1 | sed 's/^#//')"
