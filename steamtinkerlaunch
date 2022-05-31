@@ -11909,14 +11909,14 @@ function setGameVortexStaging {
 			writelog "INFO" "${FUNCNAME[0]} - Setting Staging folder '$GAMESTAGINGWINFOLDER' in Vortex"
 
 			setVortSet "settings.mods.installPath.$NEXUSGAMEID=true"
-			setVortSet "settings.mods.installPath.$NEXUSGAMEID=\\\"$GAMESTAGINGWINFOLDER\\\""
-			setVortSet "settings.mods.activator.$NEXUSGAMEID=\\\"hardlink_activator\\\""
+			setVortSet "settings.mods.installPath.$NEXUSGAMEID=\"\\\"$GAMESTAGINGWINFOLDER\\\"\""
+			setVortSet "settings.mods.activator.$NEXUSGAMEID=\"\\\"hardlink_activator\\\"\""
 		fi
 	fi
 }
 
 function setupGameVortex {
-	VZGAMEDIR="$1"
+	VZGAMEDIR="Z:${1//\//\\\\}"
 	VORTGETSET="$STLSHM/vortgetset.txt"
 
 	if [ ! -f "$VORTGETSET" ]; then 
@@ -11926,14 +11926,12 @@ function setupGameVortex {
 	if [ -f "$VORTGETSET" ] && grep -q "$NEXUSGAMEID=\"hardlink_activator\"" "$VORTGETSET"; then
 		writelog "SKIP" "${FUNCNAME[0]} - '$NEXUSGAMEID' is already added to Vortex"
 	else
-		if [ -n "$VZGAMEDIR" ]; then
-#		setVortSet "settings.gameMode.discovered.$NEXUSGAMEID.hidden=false"
-#		setVortSet "settings.gameMode.discovered.$NEXUSGAMEID.path=true"
-#		setVortSet "settings.gameMode.discovered.$NEXUSGAMEID.path=\\\"$VZGAMEDIR\\\""
-#		setVortSet "settings.gameMode.discovered.$NEXUSGAMEID.pathSetManually=true"
-		setVortSet "settings.mods.activator.$NEXUSGAMEID=true"
-		setVortSet "settings.mods.activator.$NEXUSGAMEID=\\\"hardlink_activator\\\""
-		fi
+		writelog "INFO" "${FUNCNAME[0]} - Activating game dir '$VZGAMEDIR' for '$NEXUSGAMEID ($VAID)' in Vortex"
+		setVortSet "settings.gameMode.discovered.$NEXUSGAMEID.environment.SteamAPPId=\"\\\"$VAID\\\"\""
+		setVortSet "settings.gameMode.discovered.$NEXUSGAMEID.hidden=false"
+		setVortSet "settings.gameMode.discovered.$NEXUSGAMEID.path=true"
+		setVortSet "settings.gameMode.discovered.$NEXUSGAMEID.path=\"\\\"$VZGAMEDIR\\\"\""
+		setVortSet "settings.gameMode.discovered.$NEXUSGAMEID.pathSetManually=true"
 	fi
 }
 
@@ -12035,6 +12033,7 @@ function prepareVortexGame {
 			elif [ -z  "$VGAMEDIR" ]; then
 				writelog "ERROR" "${FUNCNAME[0]} - variable VGAMEDIR does not exist - can't continue"
 			else
+				setupGameVortex "$VGAMEDIR"
 				setGameVortexStaging "$VGAMEDIR"
 			fi
 
