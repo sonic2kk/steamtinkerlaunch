@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v10.0.20220531"
+PROGVERS="v10.0.20220601"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -107,6 +107,9 @@ VARSIN="$STLSHM/vars-in.txt"
 FUPDATE="$STLSHM/fupdate.txt"
 STPAVARS="$STLSHM/steampaths.txt"
 PROTONCSV="$STLSHM/ProtonCSV.txt"
+SWRF="$STLSHM/SWR.txt"
+UWRF="$STLSHM/UWR.txt"
+EWRF="$STLSHM/EWR.txt"
 NON="none"
 NOPE="nope"
 TMPL="template"
@@ -8122,78 +8125,100 @@ function editorSkipped {
 	fi
 }
 
+function checkWaitRequester {
+	if [ -f "$EWRF" ] ; then
+		if grep -q "^WAITEDITOR=\"0\"" "$STLGAMECFG"; then
+			writelog "INFO" "${FUNCNAME[0]} - Re-enabling Wait Requester in '$STLGAMECFG', because '$EWRF' was found"
+			updateConfigEntry "WAITEDITOR" "2" "$STLGAMECFG"
+		fi
+		rm "$EWRF"
+	fi
+	
+	if [ -f "$UWRF" ] ; then
+		if [ -f "$SWRF" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Stop skipping Wait Requester, because '$UWRF' was found"
+			rm "$SWRF"
+		fi
+		rm "$UWRF"
+	fi
+}
+
 function askSettings {
 	if ! grep -q "^WAITEDITOR=\"0\"" "$STLGAMECFG"; then
-		# open editor requester 
-		if grep -q "^WAITEDITOR" "$STLGAMECFG"; then
-			WEDGAME="$(grep "^WAITEDITOR" "$STLGAMECFG"| cut -d '=' -f2)"
-			WAITEDITOR="${WEDGAME//\"/}"
-			writelog "INFO" "${FUNCNAME[0]} - Using game specific requester timeout '$WAITEDITOR'"
-		fi
-
-		writeAllAIMeta "$AID" &
-
-		if [ "$WAITEDITOR" -gt 0 ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Opening Requester with timeout '$WAITEDITOR'"
-
-			getAvailableCfgs
-			fixShowGnAid
-			export CURWIKI="$PPW/Wait-Requester"
-			TITLE="${PROGNAME}-OpenSettings"
-			pollWinRes "$TITLE"
-
-			setShowPic
-
-			if [ "$STARTMENU" == "Editor" ]; then
-				REQQEST="$GUI_ASKOPENED"
-				REQBUT="$BUT_EDITORMENU"
-				LAUNCHMENU="EditorDialog"
-			elif [ "$STARTMENU" == "Favorites" ]; then
-				REQQEST="$GUI_ASKOPENFAV"
-				REQBUT="$BUT_FAV"
-				LAUNCHMENU="favoritesMenu"
-			elif [ "$STARTMENU" == "Game" ]; then
-				REQQEST="$GUI_ASKOPENGAM"
-				REQBUT="$BUT_GM"	
-				LAUNCHMENU="openGameMenu"
-			else
-				REQQEST="$GUI_ASKOPENSET"
-				REQBUT="$BUT_MAINMENU"
-				LAUNCHMENU="MainMenu"
+		if [ -f "$SWRF" ]; then
+			writelog "SKIP" "${FUNCNAME[0]} - Skipping Wait-Requester because skip file was found under '$SWRF'"
+		else
+			# open editor requester 
+			if grep -q "^WAITEDITOR" "$STLGAMECFG"; then
+				WEDGAME="$(grep "^WAITEDITOR" "$STLGAMECFG"| cut -d '=' -f2)"
+				WAITEDITOR="${WEDGAME//\"/}"
+				writelog "INFO" "${FUNCNAME[0]} - Using game specific requester timeout '$WAITEDITOR'"
 			fi
+
+			writeAllAIMeta "$AID" &
+
+			if [ "$WAITEDITOR" -gt 0 ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Opening Requester with timeout '$WAITEDITOR'"
+
+				getAvailableCfgs
+				fixShowGnAid
+				export CURWIKI="$PPW/Wait-Requester"
+				TITLE="${PROGNAME}-OpenSettings"
+				pollWinRes "$TITLE"
+
+				setShowPic
+
+				if [ "$STARTMENU" == "Editor" ]; then
+					REQQEST="$GUI_ASKOPENED"
+					REQBUT="$BUT_EDITORMENU"
+					LAUNCHMENU="EditorDialog"
+				elif [ "$STARTMENU" == "Favorites" ]; then
+					REQQEST="$GUI_ASKOPENFAV"
+					REQBUT="$BUT_FAV"
+					LAUNCHMENU="favoritesMenu"
+				elif [ "$STARTMENU" == "Game" ]; then
+					REQQEST="$GUI_ASKOPENGAM"
+					REQBUT="$BUT_GM"	
+					LAUNCHMENU="openGameMenu"
+				else
+					REQQEST="$GUI_ASKOPENSET"
+					REQBUT="$BUT_MAINMENU"
+					LAUNCHMENU="MainMenu"
+				fi
+			
+				LAPL="$(getLaPl)"
+
+				PDBROUT=""
+				prepareProtonDBRating
+				if [ -f "$PDBRASINF" ];then
+					PDBROUT="$(cat "$PDBRASINF")"
+				fi
 		
-			LAPL="$(getLaPl)"
+				"$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
+				--title="$TITLE" \
+				--text="$(spanFont "$SGNAID - $REQQEST" "H")" \
+				--field="<span font=\"italic\">$PDBROUT</span>":LBL \
+				--field="<span font=\"italic\">$LAPL</span>":LBL \
+				--field="<span font=\"italic\">(${#CfgFiles[@]} $GUI_EDITABLECFGS)</span>":LBL \
+				--field="<span font=\"italic\">($GUI_EDITABLEGAMECFGS)</span>":LBL \
+				--button="$REQBUT":0 \
+				--button="$BUT_CAN":1 \
+				--timeout="$WAITEDITOR" \
+				--timeout-indicator=top \
+				"$GEOM"
 
-			PDBROUT=""
-			prepareProtonDBRating
-			if [ -f "$PDBRASINF" ];then
-				PDBROUT="$(cat "$PDBRASINF")"
+				case $? in
+					0)  {
+						"$LAUNCHMENU" "$AID"
+						}
+					;;
+					1)  writelog "INFO" "${FUNCNAME[0]} - Selected CANCEL - Starting game without opening the $SETMENU"
+						editorSkipped
+					;;
+					70) writelog "INFO" "${FUNCNAME[0]} - TIMEOUT - Starting game without opening the $SETMENU"
+					;;
+				esac
 			fi
-	
-			"$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
-			--title="$TITLE" \
-			--text="$(spanFont "$SGNAID - $REQQEST" "H")" \
-			--field="<span font=\"italic\">$PDBROUT</span>":LBL \
-			--field="<span font=\"italic\">$LAPL</span>":LBL \
-			--field="<span font=\"italic\">(${#CfgFiles[@]} $GUI_EDITABLECFGS)</span>":LBL \
-			--field="<span font=\"italic\">($GUI_EDITABLEGAMECFGS)</span>":LBL \
-			--button="$REQBUT":0 \
-			--button="$BUT_CAN":1 \
-			--timeout="$WAITEDITOR" \
-			--timeout-indicator=top \
-			"$GEOM"
-
-			case $? in
-				0)  {
-					"$LAUNCHMENU" "$AID"
-					}
-				;;
-				1)  writelog "INFO" "${FUNCNAME[0]} - Selected CANCEL - Starting game without opening the $SETMENU"
-					editorSkipped
-				;;
-				70) writelog "INFO" "${FUNCNAME[0]} - TIMEOUT - Starting game without opening the $SETMENU"
-				;;
-			esac
 		fi
 	else
 		writelog "SKIP" "${FUNCNAME[0]} - Skipping Wait-Requester because WAITEDITOR is 0 in '$STLGAMECFG'"
@@ -13944,6 +13969,8 @@ function prepareLaunch {
 		steamdeckControl
 	fi
 
+	checkWaitRequester
+
 	if [ -z "$1" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - AskSettings:"
 		askSettings
@@ -16809,6 +16836,10 @@ function howto {
 	echo "    vr <windowname> <SteamAppID> <s> Start SBS-VR mode for <windowname>"
 	echo "                                       and game <SteamAppID>"
 	echo "                                       's'ave windowname for the game"
+	echo "    waitrequester|wr e|s|u           <e>nable the waitrequester for the launched game"
+	echo "                                       (no effect if already enabled)"
+	echo "                                     <s>kip the waitrequester temporarily"
+	echo "                                     <u>nskip the temporary waitrequester skip"
 	echo "    wiki <page>                      Opens the wiki <page> in yad"
 	echo "    yad <yad binary> <opt>           Configure the used Yad binary"
 	echo "                                       <yad binary> can be either"
@@ -17265,6 +17296,27 @@ function commandline {
 			fi
 			checkSBSVRLaunch "$2" 
 		else
+			howto
+		fi
+	elif [ "$1" == "waitrequester" ] || [ "$1" == "wr" ]; then
+		if [ -n "$2" ] && { [ "$2" == "e" ] || [ "$2" == "s" ] || [ "$2" == "u" ];}; then
+			if [ "$2" == "e" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - enabling the Wait Requester for the next launched game"
+				touch "$EWRF"
+			elif [ "$2" == "s" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Skipping the Wait Requester temporarily for the next launched games"
+				touch "$SWRF"
+			elif [ "$2" == "u" ]; then
+				if [ -f "$SWRF" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Disabling the temporary Wait Requester skipping"
+					touch "$UWRF"
+				else
+					writelog "SKIP" "${FUNCNAME[0]} - The temporary Wait Requester skipping is not enabled, nothing to do"
+				fi
+			fi
+		else
+			writelog "INFO" "${FUNCNAME[0]} ------------------------"
+			writelog "INFO" "${FUNCNAME[0]} - need either e,s or u as arg2"
 			howto
 		fi
 	elif [ "$1" == "wiki" ]; then
