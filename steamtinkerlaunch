@@ -2538,6 +2538,7 @@ function setDefaultCfgValues {
 		if [ -z "$DXVK_LOG_LEVEL" ]						; then	DXVK_LOG_LEVEL="$NON"; fi
 		if [ -z "$DXVK_LOG_PATH" ]						; then	DXVK_LOG_PATH="$STLDXVKLOGDIR"; fi
 		if [ -z "$DXVK_SCALE" ]							; then	DXVK_SCALE="1.0"; fi
+		if [ -z "$DXVK_FPSLIMIT" ]                      ; then  DXVK_FPSLIMIT="none"; fi
 		if [ -z "$DXVK_ASYNC" ]							; then	DXVK_ASYNC="0"; fi
 		if [ -z "$PROTON_LOG" ]							; then	PROTON_LOG="0"; fi
 		if [ -z "$PROTON_LOG_DIR" ]						; then	PROTON_LOG_DIR="$STLPROTONIDLOGDIR"; fi
@@ -3081,6 +3082,8 @@ function saveCfg {
 			echo "DXVK_LOG_PATH=\"$DXVK_LOG_PATH\""
 			echo "## $DESC_DXVK_SCALE"
 			echo "DXVK_SCALE=\"$DXVK_SCALE\""
+			echo "## $DESC_DXVK_FPSLIMIT"
+			echo "DXVK_FPSLIMIT=\"$DXVK_FPSLIMIT\""
 			echo "## $DESC_DXVK_ASYNC"
 			echo "DXVK_ASYNC=\"$DXVK_ASYNC\""
 			echo "## $DESC_STRACERUN"
@@ -4640,6 +4643,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_DXVK_LOG_LEVEL!$DESC_DXVK_LOG_LEVEL ('DXVK_LOG_LEVEL')":CB "$(cleanDropDown "${DXVK_LOG_LEVEL/#-/ -}" "none!error!warn!info!debug")" `#CAT_Proton` `#SUB_Dxvk` `#MENU_GAME` \
 --field="     $GUI_DXVK_LOG_PATH!$DESC_DXVK_LOG_PATH ('DXVK_LOG_PATH')":DIR "${DXVK_LOG_PATH/#-/ -}" `#CAT_Proton` `#SUB_Directories` `#MENU_GAME` \
 --field="     $GUI_DXVK_SCALE!$DESC_DXVK_SCALE ('DXVK_SCALE')" "${DXVK_SCALE/#-/ -}" `#CAT_Proton` `#MENU_GAME` \
+--field="     $GUI_DXVK_FPSLIMIT!$DESC_DXVK_FPSLIMIT ('DXVK_FPSLIMIT')":CBE "$(cleanDropDown "${DXVK_FPSLIMIT/#-/ -}" "none!30!60!75!90!120!144!165!240")"  `#CAT_Proton` `#MENU_GAME` \
 --field="     $GUI_DXVK_ASYNC!$DESC_DXVK_ASYNC ('DXVK_ASYNC')":CHK "${DXVK_ASYNC/#-/ -}" `#CAT_Proton` `#SUB_Dxvk` `#MENU_GAME` \
 --field="     $GUI_CUSTPROTDLDIR!$DESC_CUSTPROTDLDIR ('CUSTPROTDLDIR')":DIR "${CUSTPROTDLDIR/#-/ -}" `#CAT_Proton` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_CUSTPROTEXTDIR!$DESC_CUSTPROTEXTDIR ('CUSTPROTEXTDIR')":DIR "${CUSTPROTEXTDIR/#-/ -}" `#CAT_Proton` `#SUB_Directories` `#MENU_GLOBAL` \
@@ -13887,6 +13891,13 @@ function checkAllPev {
 	fi
 }
 
+function setDxvkVars {	
+	if [ "$PROTON_USE_WINED3D" -eq 0 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Exporting variable 'DXVK_FRAME_RATE=$DXVK_FPSLIMIT' to limit game framerate"
+		export DXVK_FRAME_RATE=$DXVK_FPSLIMIT
+	fi
+}
+
 function prepareLaunch {
 	rm "$CLOSETMP" 2>/dev/null
 	rm "$KILLSWITCH" 2>/dev/null
@@ -13954,11 +13965,13 @@ function prepareLaunch {
 	writelog "INFO" "${FUNCNAME[0]} - Second LoadCfg after menus: $STLGAMECFG"
 	loadCfg "$STLGAMECFG"
 
+	# Setup DXVK
 	if [ -n "$DXVK_SCALE" ] && [ "$DXVK_HUD" != "0" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - appending 'scale=$DXVK_SCALE' to the DXVK_HUD variable '$DXVK_HUD'"
 		DXVK_HUD="${DXVK_HUD},scale=$DXVK_SCALE"
 	fi
-		
+	setDxvkVars
+
 	# in case a path changed in between, call createProjectDirs again:
 	createProjectDirs
 
