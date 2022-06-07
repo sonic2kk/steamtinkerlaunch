@@ -68,6 +68,7 @@ If **steamtinkerlaunch** is not in your package management yet, just `sudo make 
 
 **steamtinkerlaunch** depends on several other programs which need to be installed as well.
 Check the [Installation wiki](https://github.com/frostworx/steamtinkerlaunch/wiki/Installation)
+and Ubuntu users also the [Ubuntu wiki](https://github.com/frostworx/steamtinkerlaunch/wiki/Ubuntu)
 
 ## Press
 Several great people already mentioned **steamtinkerlaunch** on their platforms/channels.
