@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v10.0.20220607"
+PROGVERS="v10.0.20220608"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -2267,7 +2267,7 @@ function getAvailableProtonVersions {
 								writelog "INFO" "${FUNCNAME[0]} - Found proton directory: '$protondir'"
 								fillProtonCSV
 							fi
-						done <<< "$(while read -r SLP; do if [ -d "${SLP//\"/}/$SAC" ]; then find "${SLP//\"/}/$SAC" -mindepth 1 -maxdepth 1 -type d -name "Proton*"; fi; done <<< "$(grep "BaseInstallFolder\|\"path\"" "$CFGVDF" "$LFVDF" 2>/dev/null | awk '{print $3}' | sort -u)")"
+						done <<< "$(while read -r SLP; do if [ -d "${SLP//\"/}/$SAC" ]; then find "${SLP//\"/}/$SAC" -mindepth 1 -maxdepth 1 -type d -name "Proton*"; fi; done <<< "$(grep "BaseInstallFolder\|\"path\"" "$CFGVDF" "$LFVDF" 2>/dev/null | rev | cut -f1 | rev | sort -u)")"
 					fi
 				else
 					writelog "SKIP" "${FUNCNAME[0]} - Neither file CFGVDF '$CFGVDF' nor file LFVDF '$LFVDF' found - this should not happen! - skipping"
@@ -8908,9 +8908,12 @@ function GameScopeGui {
 
 						# Sharpness Value should only be passed if FSR or NIS is enabled
 						if  [ "$GSFSRS" -eq "$GSFSRS" ] 2>/dev/null && [ "$GSFSR" == "TRUE" ] || [ "$GSNIS" == "TRUE" ]; then
-							if grep -q "\-\-fsr\-sharpness" <<< "$("$GSC" --help 2>&1)"; then
+							writelog "INFO" "${FUNCNAME[0]} - Adding sharpness parameter to the gamescope arguments:"
+							if grep -q "\-\-fsr\-sharpness" <<< "$("$(command -v "$GAMESCOPE")" --help 2>&1)"; then
+								writelog "INFO" "${FUNCNAME[0]} - using '--fsr-sharpness ${GSFSRS}'"
 								GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --fsr-sharpness ${GSFSRS}"
 							else
+								writelog "INFO" "${FUNCNAME[0]} - using '--sharpness ${GSFSRS}'"
 								GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --sharpness ${GSFSRS}"
 							fi
 						fi
@@ -9448,7 +9451,7 @@ function setGameFilesArray {
 
 	GamDesc+=("$GUI_STLCVFILE")
 	GamFiles+=("$GAMECUSTVARS")
-echo 
+ 
 	GamDesc+=("$GUI_STLGLBCVFILE")
 	GamFiles+=("$GLOBCUSTVARS")
 }
@@ -9484,6 +9487,10 @@ function GameFilesMenu {
 					if [ "${#OpArr[@]}" -ge 1 ]; then
 						while read -r gafi; do
 							if [ -n "$gafi" ]; then
+								if [ "$gafi" == "$STLDXVKCFG" ] && [ ! -f "$STLDXVKCFG" ]; then
+									writelog "INFO" "${FUNCNAME[0]} - Creating blank game-specific DXVK config in '$STLDXVKCFG' for user-defined DXVK configuration options"
+									echo "## $STLDXVKCFG_WARNING" > "$STLDXVKCFG"
+								fi
 								"$XDGO" "$gafi"
 							fi
 						done <<< "$(printf "%s\n" "${OpArr[@]}")"
@@ -10811,7 +10818,7 @@ function useNyrna {
 function useReplay {
 	if [ -n "$RUN_REPLAY" ]; then
 		if [ "$RUN_REPLAY" -eq 1 ]; then
-			if "$PGREP" -f "$REPLAY" >/dev/null; then
+			if "$PGREP" -fx "$(command -v "$REPLAY")" >/dev/null; then
 				writelog "SKIP" "${FUNCNAME[0]} - '$REPLAY' already running - skipping"
 				RUN_REPLAY=0
 			else
@@ -13602,6 +13609,7 @@ function prepareProton {
 
 		if [ -f "$STLDXVKCFG" ]; then
 			export DXVK_CONFIG_FILE="$STLDXVKCFG"
+			writelog "INFO" "${FUNCNAME[0]} - exporting variable 'DXVK_CONFIG_FILE' pointing to '$DXVK_CONFIG_FILE'"
 		elif [ "$USEDLSS" -eq 1 ] && [ -f "$DXDLSSCFG" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - DLSS is enabled and '$DXDLSSCFG' was found - enabling all options required for DLSS"
 			export DXVK_CONFIG_FILE="$DXDLSSCFG"
@@ -14042,7 +14050,7 @@ function prepareLaunch {
 	fi
 ####
 
-	writelog "INFO" "${FUNCNAME[0]} -setLinGameVals :"
+	writelog "INFO" "${FUNCNAME[0]} - setLinGameVals :"
 	setLinGameVals
 
 #################
