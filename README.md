@@ -61,6 +61,8 @@ Fedora: **[unoffical package](https://copr.fedorainfracloud.org/coprs/capucho/st
 
 **for Steam Deck check the [Steam Deck](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam-Deck) wiki - no need to install it system wide!**
 
+**for Flatpak check the [Flatpak](https://github.com/frostworx/steamtinkerlaunch/wiki/Flatpak) wiki**
+
 [![Packaging status](https://repology.org/badge/vertical-allrepos/steamtinkerlaunch.svg)](https://repology.org/project/steamtinkerlaunch/versions)
 
 ### Manual Installation:
