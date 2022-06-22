@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v10.0.20220608"
+PROGVERS="v10.0.20220622"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -478,6 +478,7 @@ LGATM="launchGameTemplateMenu"
 LGLM="launchGlobalMenu"
 LCM="launchCategoryMenu"
 CE="Cheat Engine"
+SCOOPCEURL="https://raw.githubusercontent.com/ScoopInstaller/Binary/master"
 HEADLINEFONT="larger"
 FONTSIZES="!xx-small!x-small!small!smaller!medium!large!larger!!x-large!xx-large!"
 SREG="system.reg"
@@ -2331,7 +2332,7 @@ function setDefaultCfgValues {
 		if [ -z "$XLIVEURL" ]							; then	XLIVEURL="$GHURL/ThirteenAG/Ultimate-ASI-Loader/releases/download/v4.61/Ultimate-ASI-Loader.zip"; fi
 		if [ -z "$STASSURL" ]							; then	STASSURL="https://steamcdn-a.akamaihd.net/steam/apps"; fi
 		if [ -z "$WINETRICKSURL" ]						; then	WINETRICKSURL="$GHURL/Winetricks/winetricks"; fi
-		if [ -z "$CHEATENGINEURL" ]						; then	CHEATENGINEURL="$GHURL/cheat-engine/cheat-engine/releases";fi
+		if [ -z "$CHEATENGINEURL" ]						; then	CHEATENGINEURL="$SCOOPCEURL";fi
 		if [ -z "$X64DBGURL" ]							; then	X64DBGURL="$GHURL/x64dbg/x64dbg/releases/tag/snapshot";fi
 		if [ -z "$STEAMGRIDDBAPI" ]						; then	STEAMGRIDDBAPI="https://www.steamgriddb.com/api/v2/grids/steam";fi
 		if [ -z "$CONTYRELURL" ]						; then	CONTYRELURL="$GHURL/Kron4ek/Conty/releases"; fi
@@ -2348,7 +2349,6 @@ function setDefaultCfgValues {
 		if [ -z "$FWSURL" ]								; then	FWSURL="https://www.${FWS,,}.org/fws";fi
 		if [ -z "$YAIURL" ]								; then	YAIURL="$GHURL/frostworx/steamtinkerlaunch-tweaks/releases/download"; fi
 		if [ -z "$WINERELOADURL" ]						; then	WINERELOADURL="https://gist.githubusercontent.com/rbernon/cdbdc1b0e892f91e7449fcf3dda80bb7/raw/d8cf549bf751d99ed0fe515e36f99ff5c01b7287"; fi
-		if [ -z "$CEWAYBACKURL" ]						; then	CEWAYBACKURL="https://web.archive.org/web/20210118065254if_"; fi
 	}
 
 	function setDefaultCfgValuesglobal {
@@ -2414,8 +2414,8 @@ function setDefaultCfgValues {
 		if [ -z "$VORTEXDOWNLOADPATH" ]					; then	VORTEXDOWNLOADPATH="$STLVORTEXDIR/downloads"; fi
 		if [ -z "$USEVORTEXPRERELEASE" ]				; then	USEVORTEXPRERELEASE="0"; fi
 		if [ -z "$DISABLE_AUTOSTAGES" ]					; then	DISABLE_AUTOSTAGES="0"; fi
-		if [ -z "$CHEATENGINEVERSION" ]					; then	CHEATENGINEVERSION="7.2"; fi
-		if [ -z "$CHEATENGINEMD5SUM" ]					; then	CHEATENGINEMD5SUM="8ce5de1b284bc9f865865902fea09489"; fi
+		if [ -z "$CHEATENGINEVERSION" ]					; then	CHEATENGINEVERSION="7.4"; fi
+		if [ -z "$CHEATENGINEMD5SUM" ]					; then	CHEATENGINEMD5SUM="f4dd84b93a3e2cbfa6bded3a6ed06d54"; fi
 		if [ -z "$NOSTEAMSTLDEF" ]						; then	NOSTEAMSTLDEF="0"; fi
 		if [ -z "$SGDBAPIKEY" ]							; then	SGDBAPIKEY="$NON"; fi
 		if [ -z "$SGDBSTYLES" ]							; then	SGDBSTYLES="$SGDBSTYOPTS"; fi
@@ -5741,10 +5741,10 @@ function loadCfg {
 function extWine64Run {
 	if [ "$USEWINE" -eq 0 ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Command in Proton WINEPREFIX is: WINE=\"$RUNWINE\" WINEARCH=win64 WINEDEBUG=\"$STLWINEDEBUG\" WINEPREFIX=\"$GPFX\" $*"
-		WINE="$RUNWINE" WINEARCH=win64 WINEDEBUG="$STLWINEDEBUG" WINEPREFIX="$GPFX" "$@"
+		WINE="$RUNWINE" WINEARCH=win64 WINEDEBUG="$STLWINEDEBUG" WINEPREFIX="$GPFX" "$@" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log"
 	else
 		writelog "INFO" "${FUNCNAME[0]} - Command in Wine WINEPREFIX is: WINE=\"$RUNWINE\" WINEARCH=\"$RUNWINEARCH\" WINEDEBUG=\"$STLWINEDEBUG\" WINEPREFIX=\"$GWFX\" $*"
-		WINE="$RUNWINE" WINEARCH="$RUNWINEARCH" WINEDEBUG="$STLWINEDEBUG" WINEPREFIX="$GWFX" "$@"
+		WINE="$RUNWINE" WINEARCH="$RUNWINEARCH" WINEDEBUG="$STLWINEDEBUG" WINEPREFIX="$GWFX" "$@" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log"
 	fi
 }
 
@@ -5785,7 +5785,7 @@ function extProtonRun {
 				if [ "$EXTWINERUN" -eq 1 ]; then
 					(extWine64Run "$PROGRAM" "${RUNPROGARGS[@]}") &
 				else
-					("$RUNPROTON" run "$PROGRAM" "${RUNPROGARGS[@]}") &
+					("$RUNPROTON" run "$PROGRAM" "${RUNPROGARGS[@]}" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log") &
 				fi
 				emptyVars "O" "X"
 			else
@@ -5794,7 +5794,7 @@ function extProtonRun {
 				if [ "$EXTWINERUN" -eq 1 ]; then
 					(sleep 2; extWine64Run "$PROGRAM") &
 				else
-					(sleep 2; "$RUNPROTON" run "$PROGRAM") &
+					(sleep 2; "$RUNPROTON" run "$PROGRAM" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log") &
 				fi
 				emptyVars "O" "X"
 			fi
@@ -5805,7 +5805,7 @@ function extProtonRun {
 				if [ "$EXTWINERUN" -eq 1 ]; then
 					(extWine64Run "$RUNWICO" "$PROGRAM" "${RUNPROGARGS[@]}") &
 				else
-					("$RUNPROTON" run "$WICO" "$PROGRAM" "${RUNPROGARGS[@]}") &
+					("$RUNPROTON" run "$WICO" "$PROGRAM" "${RUNPROGARGS[@]}" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log") &
 				fi
 				emptyVars "O" "X"
 			else
@@ -5814,7 +5814,7 @@ function extProtonRun {
 				if [ "$EXTWINERUN" -eq 1 ]; then
 					(extWine64Run "$RUNWICO" "$PROGRAM") &
 				else
-					(sleep 2; "$RUNPROTON" run "$WICO" "$PROGRAM") &
+					(sleep 2; "$RUNPROTON" run "$WICO" "$PROGRAM" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log") &
 				fi
 				emptyVars "O" "X"
 			fi
@@ -5825,7 +5825,7 @@ function extProtonRun {
 				if [ "$EXTWINERUN" -eq 1 ]; then
 					extWine64Run "$PROGRAM" "${RUNPROGARGS[@]}"
 				else
-					"$RUNPROTON" run "$PROGRAM" "${RUNPROGARGS[@]}"
+					"$RUNPROTON" run "$PROGRAM" "${RUNPROGARGS[@]}" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log"
 				fi
 				emptyVars "O" "X"
 			else
@@ -5835,7 +5835,7 @@ function extProtonRun {
 					extWine64Run "$PROGRAM"
 				else
 					writelog "INFO" "${FUNCNAME[0]} - Starting with launch command '$RUNPROTON run $PROGRAM'"
-					"$RUNPROTON" run "$PROGRAM"
+					"$RUNPROTON" run "$PROGRAM" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log"
 				fi
 				emptyVars "O" "X"
 			fi
@@ -5846,7 +5846,7 @@ function extProtonRun {
 				if [ "$EXTWINERUN" -eq 1 ]; then
 					extWine64Run "$RUNWICO" "$PROGRAM" "${RUNPROGARGS[@]}"
 				else
-					"$RUNPROTON" run "$WICO" "$PROGRAM" "${RUNPROGARGS[@]}"
+					"$RUNPROTON" run "$WICO" "$PROGRAM" "${RUNPROGARGS[@]}" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log"
 				fi
 				emptyVars "O" "X"
 			else
@@ -5855,7 +5855,7 @@ function extProtonRun {
 				if [ "$EXTWINERUN" -eq 1 ]; then
 					extWine64Run "$RUNWICO" "$PROGRAM"
 				else
-					"$RUNPROTON" run "$WICO" "$PROGRAM"
+					"$RUNPROTON" run "$WICO" "$PROGRAM" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log"
 				fi
 				emptyVars "O" "X"
 			fi
@@ -10866,37 +10866,44 @@ function checkGamConLaunch {
 # CheatEngine
 
 function downloadCheatEngine {
-	# yes I know 7.3 is released - proper PR accepted, I won't spend more time on CE generally
-	CHEATENGINEURLEVAL="$CHEATENGINEURL/download/$CHEATENGINEVERSION/$CESET"
-	if [ "$CHEATENGINEVERSION" == "7.2" ]; then
-		writelog "WARN" "${FUNCNAME[0]} - Cheat Engine upstream removed version 7.2 - defaulting to wayback machine archive"
-		CHEATENGINEURLEVAL="$CEWAYBACKURL/$CHEATENGINEURLEVAL"
+	# I won't spend more time on CE
+	CEZIP="$1"
+	LCE="${CE// /-}"
+	
+	# maybe remove later again START
+	if [ "$CHEATENGINEURL" != "$SCOOPCEURL" ]; then
+		touch "$FUPDATE"
+		CHEATENGINEURL="$SCOOPCEURL"
+		updateConfigEntry "CHEATENGINEURL" "$CHEATENGINEURL" "$STLURLCFG"
 	fi
-	CESET="$1"
-	writelog "INFO" "${FUNCNAME[0]} - Downloading '$CESET' into '$CEDLDIR'"
-	notiShow "$(strFix "$NOTY_DLCE" "$CESET")" "S"
-	dlCheck "$CHEATENGINEURLEVAL" "$CEDLDIR/$CESET" "X" "Downloading '$CESET'"
+	# maybe remove later again END
+	
+	CHEATENGINEURLEVAL="$CHEATENGINEURL/${LCE,,}/$CEZIP"
+	writelog "INFO" "${FUNCNAME[0]} - Downloading '$CEZIP' into '$CEDLDIR'"
+	notiShow "$(strFix "$NOTY_DLCE" "$CEZIP")" "S"
+	dlCheck "$CHEATENGINEURLEVAL" "$CEDLDIR/$CEZIP" "X" "Downloading '$CEZIP'"
 	notiShow "$GUI_DONE" "S"
 }
 
 function installCheatEngine {
-	CESET="${CE// /}${CHEATENGINEVERSION//./}.exe"
+	CEZIP="${CE// /}${CHEATENGINEVERSION//./}.7z"
+
 	STARTCE=1
 
-	if [ ! -f "$CEDLDIR/$CESET" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - '$CE' Installer '$CEDLDIR/$CESET' does not exist - trying to download"
-		downloadCheatEngine "$CESET"
+	if [ ! -f "$CEDLDIR/$CEZIP" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - '$CE' Installer '$CEDLDIR/$CEZIP' does not exist - trying to download"
+		downloadCheatEngine "$CEZIP"
 	fi
 
-	if [ -f "$CEDLDIR/$CESET" ]; then
-		CURMD5="$(md5sum "$CEDLDIR/$CESET")"
+	if [ -f "$CEDLDIR/$CEZIP" ]; then
+		CURMD5="$(md5sum "$CEDLDIR/$CEZIP")"
 		if [ "${CURMD5%% *}" == "$CHEATENGINEMD5SUM" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - md5sum of installed '$CEDLDIR/$CESET' is correct: '${CURMD5%% *}'"
+			writelog "INFO" "${FUNCNAME[0]} - md5sum of installed '$CEDLDIR/$CEZIP' is correct: '${CURMD5%% *}'"
 		else
-			writelog "WARN" "${FUNCNAME[0]} - md5sum of installed '$CEDLDIR/$CESET' is wrong: '${CURMD5%% *}' - trying download again!"
-			rm "$CEDLDIR/$CESET"
-			downloadCheatEngine "$CESET"
-			CURMD5="$(md5sum "$CEDLDIR/$CESET")"
+			writelog "WARN" "${FUNCNAME[0]} - md5sum of installed '$CEDLDIR/$CEZIP' is wrong: '${CURMD5%% *}' - trying download again!"
+			rm "$CEDLDIR/$CEZIP"
+			downloadCheatEngine "$CEZIP"
+			CURMD5="$(md5sum "$CEDLDIR/$CEZIP")"
 			if [ "${CURMD5%% *}" == "$CHEATENGINEMD5SUM" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - New Download was successful - continuing"
 			else
@@ -10907,39 +10914,18 @@ function installCheatEngine {
 		fi
 	fi
 
-	if [ -f "$CEDLDIR/$CESET" ] && [ "$STARTCE" -eq 1 ]; then
+	if [ -f "$CEDLDIR/$CEZIP" ] && [ "$STARTCE" -eq 1 ]; then
 			CEDIR="$STLCEDIR/${CE} $CHEATENGINEVERSION"
 			CEEXE="$CEDIR/${CE}.exe"
-		if [ -f "$(command -v "$INNOEXTRACT")" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Using $INNOEXTRACT binary found in path: '$(command -v "$INNOEXTRACT")'"
-
-			"$INNOEXTRACT" -m -s -d "$STLCEDIR" "$CEDLDIR/$CESET"
-			if [ -d "$STLCEDIR/app" ]; then
-				mv "$STLCEDIR/app" "$CEDIR"
-				writelog "INFO" "${FUNCNAME[0]} - Installed '$CE' into '$CEDIR' using '$INNOEXTRACT'"
-			else
-				writelog "WARN" "${FUNCNAME[0]} - Extraction of '$CEDLDIR/$CESET' into '$CEDIR' using $INNOEXTRACT failed or the output directory is called differently"
-			fi
-		elif [ -f "$RUNWINE" ]; then
-			CEPFX="$STLCEDIR/wineprefix"
-			mkProjDir "$CEPFX"
-			CEINSTDIR="$CEPFX/$DRC/Program Files/${CE} $CHEATENGINEVERSION"
-			writelog "INFO" "${FUNCNAME[0]} - Installing '$CEDLDIR/$CESET' into '$CEPFX' using '$RUNWINE'"
-			notiShow "$(strFix "$NOTY_INSTCE" "$CESET")" "S"
-			WINE="$RUNWINE" WINEARCH=win64 WINEDEBUG="$STLWINEDEBUG" WINEPREFIX="$CEPFX" "$RUNWINE" "$CEDLDIR/$CESET" "/VERYSILENT"
-			notiShow "$GUI_DONE" "S"
-			if [ -d "$CEINSTDIR" ]; then
-				mv "$CEINSTDIR" "$CEDIR"
-				rm -rf "$CEPFX"
-				writelog "INFO" "${FUNCNAME[0]} - Installed '$CE' into '$CEDIR'"
-			else
-				writelog "WARN" "${FUNCNAME[0]} - Extraction of '$CEDLDIR/$CESET' into '$CEDIR' using '$RUNWINE' failed"
-			fi
+		if [ -x "$(command -v "$SEVZA")" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Using $SEVZA binary found in path: '$(command -v "$SEVZA")'"
+			writelog "INFO" "${FUNCNAME[0]} - Extracting '$CEDLDIR/$CEZIP' to '$CEDIR'" "E"
+			"$SEVZA" x "$CEDLDIR/$CEZIP" -o"$CEDIR" 2>/dev/null
 		else
-			writelog "SKIP" "${FUNCNAME[0]} - Neither '$INNOEXTRACT' nor '$RUNWINE' could be found - can't install '$CESET' - skipping"
+			writelog "SKIP" "${FUNCNAME[0]} -  '$SEVZA' could be found - can't extract '$CEZIP' - skipping"
 		fi
 	else
-		writelog "SKIP" "${FUNCNAME[0]} - Downloading '$CEDLDIR/$CESET' failed - can't install - skipping"	
+		writelog "SKIP" "${FUNCNAME[0]} - Downloading '$CEDLDIR/$CEZIP' failed - can't install - skipping"	
 	fi
 }
 
@@ -11001,7 +10987,7 @@ function checkCheatEngineLaunch {
 			CEEXE="$CEDIR/${CE}.exe"
 			
 			if [ ! -f "$CEEXE" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - File '$CEEXE' does not exit - starting installer"
+				writelog "INFO" "${FUNCNAME[0]} - File '$CEEXE' does not exist - starting installer"
 				StatusWindow "$GUI_RUN_CHEATENGINE" "installCheatEngine" "InstallCheatEngineStatus"
 			fi
 
@@ -12654,19 +12640,34 @@ function installMO2 {
 				writelog "INFO" "${FUNCNAME[0]} - Installing '$MO2SPATH' into '$MO2PFX'"
 				notiShow "$(strFix "$NOTY_INSTSTART" "${MO2SPATH##*/}")"
 				# the '$MO2SPATH' installer at least fails on the Steam Deck, so using $INNOEXTRACT for the installation if available
+				MININNO=1.9
+				WIMOINST=1
 
 				if [ -f "$(command -v "$INNOEXTRACT")" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - Using $INNOEXTRACT binary found in path: '$(command -v "$INNOEXTRACT")'"
-					MO2DST="$MO2PFX/$MORDIR"
-					mkProjDir "$MO2DST"
-					"$INNOEXTRACT" -m -s -d "$MO2DST" "$MO2SPATH"
-					if [ -d "$MO2DST/app" ]; then
-						mv "$MO2DST/app" "$MO2DST/${MO2^^}"
-						writelog "INFO" "${FUNCNAME[0]} - Installed '$MO' into '$MO2DST/${MO2^^}' using '$INNOEXTRACT'"
+					INNOVER="$("$INNOEXTRACT" --version | head -n1 | cut -d ' ' -f2)"
+					if [ "$(printf '%s\n' "$MININNO" "$INNOVER" | sort -V | head -n1)" != "$MININNO" ] || grep -qi "[A-Z]" <<< "$INNOVER" ; then
+						writelog "ERROR" "${FUNCNAME[0]} - Version for '$INNOEXTRACT' is invalid. You need to at least version '$MININNO'"
+						writelog "ERROR" "${FUNCNAME[0]} - Starting $MO2EXE using wine/proton instead"
+						WIMOINST=1
 					else
-						writelog "WARN" "${FUNCNAME[0]} - Extraction of '$MO' into '$MO2DST/${MO2^^}' using $INNOEXTRACT failed or the output directory is called differently"
+						WIMOINST=0
 					fi
-				else
+
+					if [ "$WIMOINST" -eq 0 ]; then
+						writelog "INFO" "${FUNCNAME[0]} - Using $INNOEXTRACT binary found in path: '$(command -v "$INNOEXTRACT")'"
+						MO2DST="$MO2PFX/$MORDIR"
+						mkProjDir "$MO2DST"
+						"$INNOEXTRACT" -m -s -d "$MO2DST" "$MO2SPATH"
+						if [ -d "$MO2DST/app" ]; then
+							mv "$MO2DST/app" "$MO2DST/${MO2^^}"
+							writelog "INFO" "${FUNCNAME[0]} - Installed '$MO' into '$MO2DST/${MO2^^}' using '$INNOEXTRACT'"
+						else
+							writelog "WARN" "${FUNCNAME[0]} - Extraction of '$MO' into '$MO2DST/${MO2^^}' using $INNOEXTRACT failed or the output directory is called differently"
+						fi
+					fi
+				fi
+
+				if [ "$WIMOINST" -eq 1 ]; then
 					if [ "$ONSTEAMDECK" -eq 1 ]; then
 						writelog "WARN" "${FUNCNAME[0]} - Unfortunately '$INNOEXTRACT' is required to install $MO on the Steam Deck, but it wasn't found"
 					else
@@ -13367,6 +13368,7 @@ function checkExtDeps {
 	checkDep "CHECKHMD" "$LSUSB"
 	checkDep "BACKUPSTEAMUSER" "$RSYNC"
 	checkDep "USESPECIALK" "$SEVZA"
+	checkDep "RUN_CHEATENGINE" "$SEVZA"
 }
 
 function setYadBin {
@@ -19269,7 +19271,7 @@ function steamdedeckt {
 		# if this really changes, it could be grepped directly from /etc/pacman.d/mirrorlist as well:
 		SDREPO="https://steamdeck-packages.steamos.cloud/archlinux-mirror/extra/os/x86_64/"
 
-		ARCHURL="https://archlinux.org/packages/community/x86_64"
+		# ARCHURL="https://archlinux.org/packages/community/x86_64"
 		ARCHARCHIVEURL="https://archive.archlinux.org/packages"
 		
 		INNOEXTRACTVERS="1.9-5"
