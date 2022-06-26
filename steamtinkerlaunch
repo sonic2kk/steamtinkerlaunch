@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v10.0.20220625"
+PROGVERS="v10.0.20220626"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -2536,6 +2536,7 @@ function setDefaultCfgValues {
 		if [ -z "$STRACEOPTS" ]							; then	STRACEOPTS="-f -t -e trace=file"; fi
 		if [ -z "$USENETMON" ]							; then	USENETMON="0"; fi
 		if [ -z "$BLOCKINTERNET" ]						; then	BLOCKINTERNET="0"; fi
+		if [ -z "$USE_STLDXVKCFG" ]						; then	USE_STLDXVKCFG="0"; fi
 		if [ -z "$DXVK_HUD" ]							; then	DXVK_HUD="0"; fi
 		if [ -z "$DXVK_LOG_LEVEL" ]						; then	DXVK_LOG_LEVEL="$NON"; fi
 		if [ -z "$DXVK_LOG_PATH" ]						; then	DXVK_LOG_PATH="$STLDXVKLOGDIR"; fi
@@ -3076,6 +3077,8 @@ function saveCfg {
 			echo "USESUSYM=\"$USESUSYM\""
 			echo "## $DESC_USEGLOBSUSYM"
 			echo "USEGLOBSUSYM=\"$USEGLOBSUSYM\""
+			echo "## $DESC_USE_STLDXVKCFG"
+			echo "USE_STLDXVKCFG=\"$USE_STLDXVKCFG\""
 			echo "## $(strFix "$DESC_DXVKVARS" "$DXVKURL")"
 			echo "DXVK_HUD=\"$DXVK_HUD\""
 			echo "## $DESC_DXVK_LOG_LEVEL"
@@ -4641,6 +4644,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_PROTON_DEBUG_DIR!$DESC_PROTON_DEBUG_DIR ('PROTON_DEBUG_DIR')":DIR "${PROTON_DEBUG_DIR/#-/ -}" `#CAT_Proton` `#SUB_Directories` `#MENU_GAME` \
 --field="     $GUI_PROTON_DUMP_DEBUG_COMMANDS!$DESC_PROTON_DUMP_DEBUG_COMMANDS ('PROTON_DUMP_DEBUG_COMMANDS')":CHK "${PROTON_DUMP_DEBUG_COMMANDS/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_PROTON_FORCE_LARGE_ADDRESS_AWARE!$DESC_PROTON_FORCE_LARGE_ADDRESS_AWARE ('PROTON_FORCE_LARGE_ADDRESS_AWARE')":CHK "${PROTON_FORCE_LARGE_ADDRESS_AWARE/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_USE_STLDXVKCFG!$DESC_USE_STLDXVKCFG ('USE_STLDXVKCFG')":CHK "${USE_STLDXVKCFG/#-/ -}" `#CAT_Proton` `#SUB_Dxvk` `#MENU_GAME` \
 --field="     $GUI_DXVK_HUD!$DESC_DXVK_HUD ('DXVK_HUD')":CBE "$(cleanDropDown "${DXVK_HUD/#-/ -}" "0!1")" `#CAT_Proton` `#SUB_Dxvk` `#MENU_GAME` \
 --field="     $GUI_DXVK_LOG_LEVEL!$DESC_DXVK_LOG_LEVEL ('DXVK_LOG_LEVEL')":CB "$(cleanDropDown "${DXVK_LOG_LEVEL/#-/ -}" "none!error!warn!info!debug")" `#CAT_Proton` `#SUB_Dxvk` `#MENU_GAME` \
 --field="     $GUI_DXVK_LOG_PATH!$DESC_DXVK_LOG_PATH ('DXVK_LOG_PATH')":DIR "${DXVK_LOG_PATH/#-/ -}" `#CAT_Proton` `#SUB_Directories` `#MENU_GAME` \
@@ -5709,6 +5713,44 @@ function gitUpdate {
 	fi
 }
 
+function migrateCfgOption {
+	# temporary function to update specific configuration options - will vary depending on the current steamtinkerlaunch version and mostly won't be used at all
+	if [ "$1" == "$STLGAMECFG" ]; then
+		if grep -q "^#STLDXVKCFG" "$STLGAMECFG" && ! grep -q "^STLDXVKCFG" "$STLGAMECFG"; then
+			writelog "INFO" "${FUNCNAME[0]} - Commenting in STLDXVKCFG in '$STLGAMECFG' automatically"
+			sed "s:^#STLDXVKCFG:STLDXVKCFG:g" -i "$STLGAMECFG"
+		fi
+
+		if [ -z "$STLDXVKCFG" ]; then
+			STLDXVKLINE="$(grep "^STLDXVKCFG" "$STLGAMECFG")"
+			STLDXVKLINE="${STLDXVKLINE//\"/}"
+			STLDXVKLINE="${STLDXVKLINE//STLCFGDIR/$STLCFGDIR}"
+			export "${STLDXVKLINE?}"
+		fi
+
+		if [ -z "$STLDXVKCFG" ]; then
+			writelog "SKIP" "${FUNCNAME[0]} - Variable 'STLDXVKCFG' could not be found - giving up"
+		else
+			if grep -q "^STLDXVKCFG" "$STLGAMECFG" && ! grep ! -q "^USE_STLDXVKCFG=\"1\"" "$STLGAMECFG"; then	
+				if [ -f "$STLDXVKCFG" ]; then
+					if [ "$(wc -l < "$STLDXVKCFG")" -eq 1 ] && grep "^NOTE" "$STLDXVKCFG"; then
+						writelog "INFO" "${FUNCNAME[0]} - Empty placeholder config '$STLDXVKCFG' found - not enabling USE_STLDXVKCFG automatically"
+					elif [ "$(wc -l < "$STLDXVKCFG")" -gt 1 ] || { [ "$(wc -l < "$STLDXVKCFG")" -eq 1 ] && ! grep "^NOTE" "$STLDXVKCFG"; }; then
+						writelog "INFO" "${FUNCNAME[0]} - Found STLDXVKCFG in '$STLGAMECFG' being used, so automatically enabling USE_STLDXVKCFG"
+						touch "$FUPDATE"
+						USE_STLDXVKCFG=1
+						updateConfigEntry "USE_STLDXVKCFG" "$USE_STLDXVKCFG" "$STLGAMECFG"
+					else
+						writelog "INFO" "${FUNCNAME[0]} - Uknown constellation - shouldn't happen"
+					fi
+				else
+					writelog "INFO" "${FUNCNAME[0]} - File '$STLDXVKCFG' does not exist - nothing to do"
+				fi	
+			fi
+		fi
+	fi
+}
+
 function loadCfg {
 	CFGFILE="$1"
 
@@ -5730,6 +5772,9 @@ function loadCfg {
 				export "${EXPORTLINE?}"
 			fi
 		done <<< "$(grep -v "^#\|^$" "$CFGFILE")"
+
+		# config migration #XXXXXXXXXXXXXX
+		migrateCfgOption "$CFGFILE"
 
 		# disable logging here when the program just started (cosmetics)
 		if [ -z "$2" ]; then
@@ -9493,6 +9538,12 @@ function GameFilesMenu {
 								if [ "$gafi" == "$STLDXVKCFG" ] && [ ! -f "$STLDXVKCFG" ]; then
 									writelog "INFO" "${FUNCNAME[0]} - Creating blank game-specific DXVK config in '$STLDXVKCFG' for user-defined DXVK configuration options"
 									echo "## $(strFix "$STLDXVKCFG_WARNING" "$DXVKURL")" > "$STLDXVKCFG"
+									if [ "$USE_STLDXVKCFG" -eq 0 ]; then
+										writelog "INFO" "${FUNCNAME[0]} - Enabling USE_STLDXVKCFG automatically, because the user selected to open the config file '$STLDXVKCFG'"
+										USE_STLDXVKCFG=1
+										touch "$FUPDATE"
+										updateConfigEntry "USE_STLDXVKCFG" "$USE_STLDXVKCFG" "$STLGAMECFG"
+									fi
 								fi
 								"$XDGO" "$gafi"
 							fi
@@ -13612,7 +13663,11 @@ function prepareProton {
 		# export DXVK_CONFIG_FILE if STLDXVKCFG was found or if USEDLSS is enabled:
 		DXDLSSCFG="$GLOBALMISCDIR/dxvk-no-nvapiHack.conf"
 
-		if [ -f "$STLDXVKCFG" ]; then
+		if [ "$USE_STLDXVKCFG" -eq 1 ]; then
+			if [ ! -f "$STLDXVKCFG" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - USE_STLDXVKCFG is enabled, but the config '$STLDXVKCFG' does not exist yet - creating a blank one"
+				echo "## $(strFix "$STLDXVKCFG_WARNING" "$DXVKURL")" > "$STLDXVKCFG"
+			fi
 			export DXVK_CONFIG_FILE="$STLDXVKCFG"
 			if [ -n "$DXVK_HUD" ] && [ "$DXVK_HUD" -eq 0 ]; then
 				writelog "INFO" "${FUNCNAME[0]} - disabling variable DXVK_HUD which is set to 0 to make the variable DXVK_CONFIG_FILE functional"
@@ -13622,6 +13677,10 @@ function prepareProton {
 		elif [ "$USEDLSS" -eq 1 ] && [ -f "$DXDLSSCFG" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - DLSS is enabled and '$DXDLSSCFG' was found - enabling all options required for DLSS"
 			export DXVK_CONFIG_FILE="$DXDLSSCFG"
+			if [ -n "$DXVK_HUD" ] && [ "$DXVK_HUD" -eq 0 ]; then
+				writelog "INFO" "${FUNCNAME[0]} - disabling variable DXVK_HUD which is set to 0 to make the variable DXVK_CONFIG_FILE functional"
+				unset DXVK_HUD
+			fi
 			export PROTON_ENABLE_NVAPI=1
 			export PROTON_HIDE_NVIDIA_GPU=0
 		fi
