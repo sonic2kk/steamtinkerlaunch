@@ -188,6 +188,7 @@ STLDLDIR="$STLCFGDIR/downloads"																# the directory holding optional 
 STLBACKDIR="$STLCFGDIR/backup"
 BACKEX="$STLBACKDIR/exclude"
 HIDEDIR="$STLCFGDIR/hide"
+STLTEMPDIR="$STLCFGDIR/temp"
 CODA="compatdata"
 STLCOMPDAT="$STLCFGDIR/$CODA"
 METADIR="$STLCFGDIR/meta"
@@ -5750,12 +5751,20 @@ function migrateCfgOption {
 					if [ "$(wc -l < "$STLDXVKCFG")" -eq 1 ] && grep "^NOTE" "$STLDXVKCFG"; then
 						writelog "INFO" "${FUNCNAME[0]} - Empty placeholder config '$STLDXVKCFG' found - not enabling USE_STLDXVKCFG automatically"
 					elif [ "$(wc -l < "$STLDXVKCFG")" -gt 1 ] || { [ "$(wc -l < "$STLDXVKCFG")" -eq 1 ] && ! grep "^NOTE" "$STLDXVKCFG"; }; then
-						writelog "INFO" "${FUNCNAME[0]} - Found STLDXVKCFG in '$STLGAMECFG' being used, so automatically enabling USE_STLDXVKCFG"
-						touch "$FUPDATE"
-						USE_STLDXVKCFG=1
-						updateConfigEntry "USE_STLDXVKCFG" "$USE_STLDXVKCFG" "$STLGAMECFG"
+						mkProjDir "$STLTEMPDIR"
+						DXVKMIGLIST="$STLTEMPDIR/dxvkcfg.txt"
+						touch "$DXVKMIGLIST"
+						if grep -q "^$AID$" "$DXVKMIGLIST"; then
+							writelog "SKIP" "${FUNCNAME[0]} - STLDXVKCFG was already updated for '$AID' before"
+						else
+							writelog "INFO" "${FUNCNAME[0]} - Found STLDXVKCFG in '$STLGAMECFG' being used, so automatically enabling USE_STLDXVKCFG"
+							touch "$FUPDATE"
+							USE_STLDXVKCFG=1
+							updateConfigEntry "USE_STLDXVKCFG" "$USE_STLDXVKCFG" "$STLGAMECFG"
+							echo "$AID" > "$DXVKMIGLIST"
+						fi
 					else
-						writelog "INFO" "${FUNCNAME[0]} - Uknown constellation - shouldn't happen"
+						writelog "INFO" "${FUNCNAME[0]} - Unknown constellation - shouldn't happen"
 					fi
 				else
 					writelog "INFO" "${FUNCNAME[0]} - File '$STLDXVKCFG' does not exist - nothing to do"
