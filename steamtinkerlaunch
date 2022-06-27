@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v10.0.20220626"
+PROGVERS="v10.0.20220627"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -263,6 +263,7 @@ DEPSLATDIR="$DEPSDLDIR/latest"
 DEPSL64="$DEPSLATDIR/64/$DEPSGE"
 DEPSL32="$DEPSLATDIR/32/$DEPSGE"
 MAHU="mangohud"
+MANGOAPP="mangoapp"
 MAHUCFGDIR="$STLCFGDIR/$MAHU"
 MAHUCID="$MAHUCFGDIR/id"
 MAHUCTI="$MAHUCFGDIR/title"
@@ -2474,6 +2475,7 @@ function setDefaultCfgValues {
 		if [ -z "$USEPRIMERUN" ]						; then	USEPRIMERUN="0"; fi
 		if [ -z "$TOGSTEAMWEBHELPER" ]					; then	TOGSTEAMWEBHELPER="0"; fi
 		if [ -z "$USEMANGOHUD" ]						; then	USEMANGOHUD="0"; fi
+		if [ -z "$USEMANGOAPP" ]						; then	USEMANGOAPP="0"; fi
 		if [ -z "$MAHUBIN" ]							; then	MAHUBIN="$(command -v "$MAHU")"; fi
 		if [ -z "$MAHUARGS" ]							; then	MAHUARGS="$NON"; fi
 		if [ -z "$LDPMAHU" ]							; then	LDPMAHU="0"; fi
@@ -2967,6 +2969,8 @@ function saveCfg {
 			echo "TOGSTEAMWEBHELPER=\"$TOGSTEAMWEBHELPER\""
 			echo "## $DESC_USEMANGOHUD"
 			echo "USEMANGOHUD=\"$USEMANGOHUD\""
+#			echo "## $DESC_USEMANGOAPP"
+#			echo "USEMANGOAPP=\"$USEMANGOAPP\""
 			echo "## $DESC_MAHUBIN"
 			echo "MAHUBIN=\"$MAHUBIN\""
 			echo "## $DESC_MAHUARGS"
@@ -4286,6 +4290,9 @@ function TrayIconExports {
 
 	if [ -n "$KPFX" ]; then
 		echo "WINEPREFIX=\"$KPFX\" \"$RUNWINESERVER\" -k" > "$KILLSWITCH"
+		if [ "$USEMANGOAPP" -eq 1 ]; then
+			echo "\"$PKILL\" -f \"$MANGOAPP\"" >> "$KILLSWITCH"
+		fi
 		echo "touch $CLOSETMP" >> "$KILLSWITCH"
 		chmod +x "$KILLSWITCH"
 	fi
@@ -4546,6 +4553,8 @@ function spanFont {
 	SPOUT="</span>"
 	echo "$SPIN$STRIN$SPOUT"
 }
+
+#--field="     $GUI_USEMANGOAPP!$DESC_USEMANGOAPP ('USEMANGOAPP')":CHK "${USEMANGOAPP/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
 
 function AllSettingsEntriesDummyFunction {
 #STARTSETENTRIES
@@ -13435,6 +13444,7 @@ function checkExtDeps {
 	checkDep "BACKUPSTEAMUSER" "$RSYNC"
 	checkDep "USESPECIALK" "$SEVZA"
 	checkDep "RUN_CHEATENGINE" "$SEVZA"
+	checkDep "USEMANGOAPP" "$MANGOAPP"
 }
 
 function setYadBin {
@@ -15076,8 +15086,26 @@ function startGame {
 			else
 				"${RUNCMD[@]}" 2>&1 | tee "$GRUNLOG"
 			fi
-		else # regular gamestart - COMMENTDEBUG:
-			"${RUNCMD[@]}" 2>&1 | tee "$GRUNLOG"
+		else
+			if [ "$USEMANGOAPP" -eq 1 ]; then
+				# mangoapp gamestart - COMMENTDEBUG:
+				writelog "INFO" "${FUNCNAME[0]} - Using $MANGOAPP"
+				# XXXXXXXXXXXXXXX #478 - broken, using a temp script instead of the mappRun function doesn't have any effect
+				# even if making it start correctly, the follow up functions waiting for the game end might have to be changed as well
+				# (mangoapp is killed on closeSTL and in the KillSwitch function already, but the tail wait loop below also)
+				# happy debugging
+				function mappRun {
+					"${RUNCMD[@]}" &
+#					vkcube & 
+					"$(command -v "$MANGOAPP")"
+				}
+				export -f mappRun
+				"$(command -v "$GAMESCOPE")" -- bash -c mappRun 2>&1 | tee "$GRUNLOG"
+	#			bash -c mappRun 2>&1 | tee "$GRUNLOG"
+			else
+				# regular gamestart - COMMENTDEBUG:
+				"${RUNCMD[@]}" 2>&1 | tee "$GRUNLOG"
+			fi
 		fi
 	fi
 
@@ -16383,9 +16411,19 @@ function launchSteamGame {
 	if [ "$USEGAMEMODERUN" -eq 1 ]; then
 		GMR="$(command -v "$GAMEMODERUN")"
 	fi
-
+	
 	if [ "$USEGAMESCOPE" -eq 1 ]; then
-		GSC="$(command -v "$GAMESCOPE")"
+		if [ "$USEMANGOAPP" -eq 1 ]; then
+			if [ "$ONSTEAMDECK" -eq 1 ]; then
+				writelog "SKIP" "${FUNCNAME[0]} - Disabling USEMANGOAPP variable, because Steam Deck uses $MANGOAPP already by default"
+				USEMANGOAPP=0
+			else
+				writelog "SKIP" "${FUNCNAME[0]} - Not adding $GAMESCOPE to the game launch command, because $MANGOAPP is enabled, which triggers it automatically"
+				USEGAMESCOPE=0
+			fi
+		else
+			GSC="$(command -v "$GAMESCOPE")"
+		fi
 	fi
 	
 	if [ "$USEZINK" -eq 1 ]; then
@@ -16458,9 +16496,6 @@ function launchSteamGame {
 	fi
 	
 	if [ -n "$GSC" ]; then
-#		if [ -n "$GMR" ]; then
-#			writelog "SKIP" "${FUNCNAME[0]} - Skipping $GSC, because $GMR is enabled"
-#		else
 		if [ -n "${FINALSTARTCMD[0]}" ]; then
 			FINALSTARTCMD=("${FINALSTARTCMD[@]}" "$GSC")
 		else
@@ -18311,6 +18346,11 @@ function closeSTL {
 
 	if [ -f "$MO2INSTFAIL" ]; then
 		rm "$MO2INSTFAIL" 2>/dev/null
+	fi
+
+	if [ "$USEMANGOAPP" -eq 1 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Killing '$MANGOAPP'"
+		"$PKILL" -f "$MANGOAPP"
 	fi
 
 	checkPlayTime "$duration"
