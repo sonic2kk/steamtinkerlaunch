@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v10.0.20220630"
+PROGVERS="v10.0.20220701"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -242,7 +242,6 @@ SPEKDLDIR="$STLDLDIR/${SPEK,,}"
 FWS="FlawlessWidescreen"
 FWSDLDIR="$STLDLDIR/${FWS,,}"
 YADAIDLDIR="$STLDLDIR/yadappimage"
-DISC="discord"
 DOTN="dotnet"
 MO2="mo2"
 STLMO2DIR="$STLCFGDIR/$MO2"
@@ -2375,8 +2374,8 @@ function setDefaultCfgValues {
 		if [ -z "$OVRFSRURL" ]							; then	OVRFSRURL="$GHURL/fholger/$OVFS/releases"; fi
 		if [ -z "$DPRSRELURL" ]							; then	DPRSRELURL="$GHURL/${DPRS}/${DPRS}/releases"; fi
 		if [ -z "$DEPURL" ]								; then	DEPURL="$GHURL/lucasg/${DEPS}/releases";fi
-		if [ -z "$SPEKOLDDLURL" ]						; then	SPEKOLDDLURL="https://github.com/Kaldaien/SpecialK/releases/download/sk_0_8_50/SpecialK_0_8_66.7z";fi
 		if [ -z "$SPEKURL" ]							; then	SPEKURL="https://sk-data.special-k.info/";fi
+		if [ -z "$SPEKGHURL" ]							; then	SPEKGHURL="$GHURL/${SPEK}O/${SPEK}/releases";fi
 		if [ -z "$SPEKCOMPURL" ]						; then	SPEKCOMPURL="https://www.pcgamingwiki.com/wiki/List_of_games_compatible_with_Special_K#Compatibility_list";fi
 		if [ -z "$FWSURL" ]								; then	FWSURL="https://www.${FWS,,}.org/fws";fi
 		if [ -z "$YAIURL" ]								; then	YAIURL="$GHURL/frostworx/steamtinkerlaunch-tweaks/releases/download"; fi
@@ -2629,7 +2628,8 @@ function setDefaultCfgValues {
 		if [ -z "$MO2MODE" ]							; then	MO2MODE="disabled"; fi
 		if [ -z "$WAITMO2" ]							; then	WAITMO2="2"; fi
 		if [ -z "$USESPECIALK" ]						; then	USESPECIALK="0"; fi
-		if [ -z "$SPEKVERS" ]							; then	SPEKVERS="old"; fi
+		if [ -z "$SPEKVERS" ]							; then	SPEKVERS="default"; fi
+		if [ -z "$AUTOSPEK" ]							; then	AUTOSPEK="0"; fi
 		if [ -z "$USEFWS" ]								; then	USEFWS="0"; fi
 		if [ -z "$USEPEV_PELDD" ]						; then	USEPEV_PELDD="0"; fi
 		if [ -z "$USEPEV_PEPACK" ]						; then	USEPEV_PEPACK="0"; fi
@@ -2698,10 +2698,10 @@ function saveCfg {
 			echo "DPRSRELURL=\"$DPRSRELURL\""
 			echo "## $DEPS URL"
 			echo "DEPURL=\"$DEPURL\""
-			echo "## $SPEK old DLL URL"
-			echo "SPEKOLDDLURL=\"$SPEKOLDDLURL\""
 			echo "## $SPEK URL"
 			echo "SPEKURL=\"$SPEKURL\""
+			echo "## $SPEK GH URL"
+			echo "SPEKGHURL=\"$SPEKGHURL\""
 			echo "## $SPEK compatibility URL"
 			echo "SPEKCOMPURL=\"$SPEKCOMPURL\""
 			echo "## $FWS DL URL"
@@ -3215,6 +3215,8 @@ function saveCfg {
 			echo "USESPECIALK=\"$USESPECIALK\""
 			echo "## $DESC_SPEKVERS"
 			echo "SPEKVERS=\"$SPEKVERS\""
+			echo "## $DESC_AUTOSPEK"
+			echo "AUTOSPEK=\"$AUTOSPEK\""
 			echo "## $DESC_USEFWS"
 			echo "USEFWS=\"$USEFWS\""
 			echo "## $DESC_USEPEV_PELDD"
@@ -4643,7 +4645,8 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_GAMESCREENRES!$DESC_GAMESCREENRES ('GAMESCREENRES')":CBE "$(cleanDropDown "${GAMESCREENRES/#-/ -}" "$(printf "%s\n" "$(listScreenRes | tr '\n' '!')")$NON")" `#CAT_Misc` `#MENU_GAME` \
 --field="     $GUI_TOGSTEAMWEBHELPER!$DESC_TOGSTEAMWEBHELPER ('TOGSTEAMWEBHELPER')":CHK "${TOGSTEAMWEBHELPER/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_USESPECIALK!$DESC_USESPECIALK ('USESPECIALK')":CHK "${USESPECIALK/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
---field="     $GUI_SPEKVERS!$DESC_SPEKVERS ('SPEKVERS')":CB "$(cleanDropDown "${SPEKVERS/#-/ -}" "test!stable!old!$DISC")" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_SPEKVERS!$DESC_SPEKVERS ('SPEKVERS')":CB "$(cleanDropDown "${SPEKVERS/#-/ -}" "default!$SPEKYADLIST")" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_AUTOSPEK!$DESC_AUTOSPEK ('AUTOSPEK')":CHK "${AUTOSPEK/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_USEFWS!$DESC_USEFWS ('USEFWS')":CHK "${USEFWS/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_USETERM!$DESC_USETERM ('USETERM')":FL "${USETERM/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_TERMARGS!$DESC_TERMARGS ('TERMARGS')" "${TERMARGS/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GLOBAL` \
@@ -5792,6 +5795,14 @@ function migrateCfgOption {
 					writelog "INFO" "${FUNCNAME[0]} - File '$STLDXVKCFG' does not exist - nothing to do"
 				fi	
 			fi
+		fi
+
+		# specialk replace "old" version
+		if [ "$SPEKVERS" == "discord" ] || [ "$SPEKVERS" == "old" ] || [ "$SPEKVERS" == "stable" ] || [ "$SPEKVERS" == "test" ]; then
+			SPEKVERS="default"
+			touch "$FUPDATE"
+			writelog "INFO" "${FUNCNAME[0]} - Automatically updating variable SPEKVERS from 'old' to '$SPEKVERS' in '$STLGAMECFG'"
+			updateConfigEntry "SPEKVERS" "$SPEKVERS" "$STLGAMECFG"	
 		fi
 	fi
 }
@@ -7750,56 +7761,38 @@ function extSpek {
 }
 
 function dlSpecialK {
-
 	if [ -n "$1" ]; then
 		SPEKVERS="$1"
 	fi
 
-	if [ "$SPEKVERS" == "test" ]; then
-		SPEKARC="${SPEK}-${SPEKVERS}.7z"
-	else
-		SPEKARC="${SPEK}.7z"
-	fi
-	mkProjDir "$SPEKDLDIR/$SPEKVERS"
-	mkProjDir "$SPEKDLDIR/$DISC"
-	SPEKDISCSRC="$SPEKDLDIR/$DISC/$SPEKARC"
+	SPEKARC="${SPEK}.7z"
 
-	if [ -f "$SPEKDISCSRC" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - Found the '$DISC' package under '$SPEKDISCSRC'" "E"
-		if [ "$SPEKVERS" != "$DISC" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Continuing using that instead of '$SPEKVERS'" "E"
-			SPEKVERS="$DISC"
-		fi
-	fi
+	mkProjDir "$SPEKDLDIR/$SPEKVERS"
 
 	SPEKDL="$SPEKDLDIR/$SPEKVERS/$SPEKARC"
-	SPEKDLURL="$SPEKURL/$SPEKARC"
-
-	if [ "$SPEKVERS" == "old" ]; then
-		SPEKDLURL="$SPEKOLDDLURL"
+	
+	if [ "$SPEKVERS" == "default" ]; then
+		SPEKDLURL="$SPEKURL/$SPEKARC"
+	elif [ "$SPEKVERS" == "latest" ]; then
+		SPEKDLURL="$SPEKGHURL/$SPEKVERS/download/$SPEKARC"
+	else 
+		SPEKDLURL="$SPEKGHURL/download/SK_${SPEKVERS//./_}/$SPEKARC"
 	fi
-
+	
 	if [ ! -f "$SPEKDL" ]; then
-		if [ "$SPEKVERS" == "$DISC" ]; then
-			if [ -f "${SPEKDL//lK/l_K}" ]; then
-				SPEKDL="${SPEKDL//lK/l_K}"
-				writelog "INFO" "${FUNCNAME[0]} - Already have the archive '$SPEKDL'" "E"
-			else
-				writelog "INFO" "${FUNCNAME[0]} - The $SPEKVERS package needs to be downloaded manually to '$SPEKDL'" "E"
-			fi
-		else
-			notiShow "$(strFix "$NOTY_DLCUSTOMPROTON" "$SPEK")"
-			dlCheck "$SPEKDLURL" "$SPEKDL" "X" "Downloading '$SPEKARC' from '$SPEKURL' to '$SPEKDLDIR'"
-			extSpek "$SPEKDL"
-		fi
+		notiShow "$(strFix "$NOTY_DLCUSTOMPROTON" "$SPEK")"
+		dlCheck "$SPEKDLURL" "$SPEKDL" "X" "Downloading '$SPEKDLURL' to '$SPEKDLDIR'"
+		extSpek "$SPEKDL"
+	elif [ "$AUTOSPEK" -eq 1 ] && { [ "$SPEKVERS" == "default" ] || [ "$SPEKVERS" == "latest" ];}; then
+		writelog "INFO" "${FUNCNAME[0]} - AUTOSPEK is enabled and SPEKVERS is '$SPEKVERS' - so looking for $SPEK updates" "E"
+		# XXXXXX todo remove previous download?
+		notiShow "$(strFix "$NOTY_DLCUSTOMPROTON" "$SPEK")"
+		dlCheck "$SPEKDLURL" "$SPEKDL" "X" "Downloading '$SPEKDLURL' to '$SPEKDLDIR'"
+		extSpek "$SPEKDL"
 	else
 		writelog "INFO" "${FUNCNAME[0]} - Already have the archive '${SPEKDL}'" "E"
 	fi
 	
-	if [ -f "$SPEKDL" ] && [ "$SPEKVERS" == "$DISC" ]; then
-		extSpek "$SPEKDL"
-	fi
-
 	SPEK32SRC="$SPEKDLDIR/$SPEKVERS/${SPEK}32.dll"
 	SPEK64SRC="$SPEKDLDIR/$SPEKVERS/${SPEK}64.dll"
 
@@ -7858,86 +7851,69 @@ function prepareSpecialKReshade {
 	fi
 }
 
-function prepareDiscordSpecialK {
-	SPEKARC="${SPEK}.7z"
-	SPEKDISCSRC="$SPEKDLDIR/$DISC/$SPEKARC"
-	FOUNDNEWSPEC=0
+function prepareSpecialKIni {
+	UWI="UsingWINE"
+	UWIT="$UWI=true"
 
-	if [ "$SPEKVERS" != "$DISC" ]; then
-		if [ -f "$SPEKDISCSRC" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Found the '$DISC' package under '$SPEKDISCSRC'" "E"
-			writelog "INFO" "${FUNCNAME[0]} - Continuing using '$DISC' instead of '$SPEKVERS'" "E"
-			SPEKVERS="$DISC"
-		fi
-		if [ -f "${SPEKDISCSRC//lK/l_K}" ]; then
-			SPEKDISCSRC="${SPEKDISCSRC//lK/l_K}"	
-			writelog "INFO" "${FUNCNAME[0]} - Found an archive with the a new name under '$SPEKDISCSRC' - using that" "E"
-			SPEKVERS="$DISC"
-			FOUNDNEWSPEC=1
-		fi
+	if [ -f "$SPEKDDIR/$DXGI" ]; then
+		FOUNDRAPI="$SPEKDDIR/$DXGI"
+	elif [ -f "$SPEKDDIR/$D3D9" ]; then
+		FOUNDRAPI="$SPEKDDIR/$D3D9"
+	elif [ -f "$SPEKDDIR/$OGL32" ]; then
+		FOUNDRAPI="$SPEKDDIR/$D3D9"
+	else
+		getSpecialKGameRenderApi
+		FOUNDRAPI="$SPEKDST"
 	fi
 
-	if [ "$SPEKVERS" == "$DISC" ]; then
-		if [ "$FOUNDNEWSPEC" -eq 0 ] && [ -f "${SPEKDISCSRC//lK/l_K}" ]; then
-			SPEKDISCSRC="${SPEKDISCSRC//lK/l_K}"
-			writelog "INFO" "${FUNCNAME[0]} - Found an archive with the a new name under '$SPEKDISCSRC' - using that" "E"
-		fi
+	if [ -z "$SPEKINI" ]; then
+		SPEKINI="${FOUNDRAPI//.dll/.ini}"
+	fi
+	
+	COGE="Compatibility.General"
 
-		mkProjDir "$SPEKDLDIR/$DISC"
-
-		if [ ! -f "$SPEKDISCSRC" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - The $SPEKVERS package needs to be downloaded manually to '$SPEKDL'" "E"
-		else
-			extSpek "$SPEKDISCSRC"
-		fi
-
-		UWI="UsingWINE"
-		UWIT="$UWI=true"
-
-		if [ -f "$SPEKDDIR/$DXGI" ]; then
-			FOUNDRAPI="$SPEKDDIR/$DXGI"
-		elif [ -f "$SPEKDDIR/$D3D9" ]; then
-			FOUNDRAPI="$SPEKDDIR/$D3D9"
-		elif [ -f "$SPEKDDIR/$OGL32" ]; then
-			FOUNDRAPI="$SPEKDDIR/$D3D9"
-		else
-			getSpecialKGameRenderApi
-			FOUNDRAPI="$SPEKDST"
-		fi
-
-		if [ -z "$SPEKINI" ]; then
-			SPEKINI="${FOUNDRAPI//.dll/.ini}"
-		fi
-		
-		COGE="Compatibility.General"
-
-		if [ "$SPEKVERS" == "$DISC" ] && [ -n "$SPEKINI" ]; then
-			if [ -f "$SPEKINI" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Found the ini file '$SPEKINI' - enabling '$UWI' function" "E"
-				if grep -q "$UWIT" "$SPEKINI"; then
-					writelog "SKIP" "${FUNCNAME[0]} - nothing to do - '$UWI' is already enabled" "E"
-				elif grep -q "$UWI=false" "$SPEKINI"; then
-					writelog "INFO" "${FUNCNAME[0]} - Enabling '$UWI' in the config" "E"
-					sed "s:$UWI=false:$UWIT:" -i "$SPEKINI"
-				else
-					writelog "INFO" "${FUNCNAME[0]} - Adding a new entry '$UWI' in the ini, because it is missing" "E"
-					if grep -q "$COGE" "$SPEKINI"; then
-						sed "/\[$COGE\]/a $UWIT" -i "$SPEKINI"
-					else
-						sed "1 i $UWIT" -i "$SPEKINI"
-						sed "1 i \[$COGE\]" -i "$SPEKINI"
-					fi
-				fi
-
+	if [ -n "$SPEKINI" ]; then
+		if [ -f "$SPEKINI" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Found the ini file '$SPEKINI' - enabling '$UWI' function" "E"
+			if grep -q "$UWIT" "$SPEKINI"; then
+				writelog "SKIP" "${FUNCNAME[0]} - nothing to do - '$UWI' is already enabled" "E"
+			elif grep -q "$UWI=false" "$SPEKINI"; then
+				writelog "INFO" "${FUNCNAME[0]} - Enabling '$UWI' in the config" "E"
+				sed "s:$UWI=false:$UWIT:" -i "$SPEKINI"
 			else
-				writelog "INFO" "${FUNCNAME[0]} - Creating a minimal ini file '$SPEKINI' with enabled '$UWI' function" "E"
-				{
-					echo "[$COGE]"
-					echo "$UWIT"
-				} >> "$SPEKINI"
+				writelog "INFO" "${FUNCNAME[0]} - Adding a new entry '$UWI' in the ini, because it is missing" "E"
+				if grep -q "$COGE" "$SPEKINI"; then
+					sed "/\[$COGE\]/a $UWIT" -i "$SPEKINI"
+				else
+					sed "1 i $UWIT" -i "$SPEKINI"
+					sed "1 i \[$COGE\]" -i "$SPEKINI"
+				fi
 			fi
+
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Creating a minimal ini file '$SPEKINI' with enabled '$UWI' function" "E"
+			{
+				echo "[$COGE]"
+				echo "$UWIT"
+			} >> "$SPEKINI"
 		fi
-	fi	
+	fi
+}
+
+function createDLSpekList {
+	# maybe improve later
+	USESPECIALK=1
+	echo "USESPECIALK  $USESPECIALK ####SPEKYADLIST $SPEKYADLIST"
+
+	if [ "$USESPECIALK" -eq 1 ]; then
+		while read -r line; do
+			mapfile -t -O "${#SKDLList[@]}" SKDLList <<< "$line"
+		done <<< "$("$WGET" -q "$SPEKGHURL" -O - 2> >(grep -v "SSL_INIT") | grep "download*.*\.7z" | grep -oE '\"/[^\\"]+' | sed "s|^\"/${SPEK}O/${SPEK}/releases/download/SK_||g" | sed "s|/${SPEK}.7z||g" | sed "s|_|.|g")"
+		SPEKYADLIST="latest!$(printf "!%s\n" "${SKDLList[@]//\"/}" | tr -d '\n' | sed "s:^!::" | sed "s:!$::")"
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - Skipping looking for available SpecialK versions, because USESPECIALK is disabled"
+		SPEKYADLIST="latest"
+	fi
 }
 
 function useSpecialK {
@@ -7993,22 +7969,16 @@ function useSpecialK {
 			writelog "SKIP" "${FUNCNAME[0]} - '$SPEK' requires '$REQDLL', which is not available in the WINEPREFIX currently running with '$USEPROTON'" "E"
 			notiShow "$(strFix "$NOTY_MISSDLL" "$SPEK" "$REQDLL" "$USEPROTON")"
 		else
-			prepareDiscordSpecialK
 			prepareSpecialKReshade
+			prepareSpecialKIni
 			UPSPEK=1
-			if [ -f "$SPEKENA" ]; then
-				if [ "$SPEKVERS" != "$DISC" ]; then
-					writelog "SKIP" "${FUNCNAME[0]} - ${SPEK} is already configured - nothing to do"
-					UPSPEK=0
-				else
-					if grep -q "$(stat -c %s "$(grep -v "${SPEK}\|${D3D47}" "$SPEKENA")")" <<< "$(find . -name "$SPEK*.dll" -exec stat -c %s {} \;)"; then
-						writelog "SKIP" "${FUNCNAME[0]} - The installed ${SPEKVERS} dll is identical to the available one"
-						UPSPEK=0
-					else
-						writelog "INFO" "${FUNCNAME[0]} - Updating the '$SPEKVERS' dll"
-						UPSPEK=1
-					fi
-				fi
+			
+			if [ "$AUTOSPEK" -eq 1 ] && { [ "$SPEKVERS" == "default" ] || [ "$SPEKVERS" == "latest" ];}; then
+				writelog "INFO" "${FUNCNAME[0]} - Updating $SPEK in the gamedir because AUTOSPEK is enabled"
+				UPSPEK=1
+			elif [ -f "$SPEKENA" ]; then
+				writelog "SKIP" "${FUNCNAME[0]} - ${SPEK} is already configured - nothing to do"
+				UPSPEK=0
 			fi
 			
 			if [ "$UPSPEK" -eq 1 ]; then
@@ -8017,11 +7987,6 @@ function useSpecialK {
 
 				getSpecialKGameRenderApi
 				
-				#DISABLED XXXXXXXXX stable and testing versions are currently broken in proton - see wiki
-				if [ "$SPEKVERS" == "test" ] || [ "$SPEKVERS" == "stable" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - Disabling '$SPEKDST', because '${SPEK}-${SPEKVERS}' is currently broken in Proton - see wiki"
-					SPEKDST="${SPEKDST}_DISABLED"
-				fi
 				writelog "INFO" "${FUNCNAME[0]} - Using '$SPEKDST' as $SPEK destination dll"
 
 				if [ -f "$GPFX/$DRCW/DirectX.log" ]; then
@@ -8035,10 +8000,11 @@ function useSpecialK {
 				echo "$SPEKDST" > "$SPEKENA"
 
 				if [ -f "$SPEKDST" ]; then
-					if [ "$SPEKVERS" != "$DISC" ]; then
-						writelog "SKIP" "${FUNCNAME[0]} - Already have a '${SPEKDST##*/}' in '$SPEKDDIR' - not installing '$SPEK'" "E"
-					else
+					if [ "$AUTOSPEK" -eq 1 ] && { [ "$SPEKVERS" == "default" ] || [ "$SPEKVERS" == "latest" ];}; then
+						writelog "INFO" "${FUNCNAME[0]} - Updating $SPEK dlls because AUTOSPEK is enabled"
 						installSpekArchDll
+					else
+						writelog "SKIP" "${FUNCNAME[0]} - Already have a '${SPEKDST##*/}' in '$SPEKDDIR' - not installing '$SPEK'" "E"
 					fi
 				else
 					installSpekArchDll
@@ -14092,7 +14058,7 @@ function prepareLaunch {
 	
 	autoBumpGE
 	autoBumpProton
-	
+
 	if [ "$ISGAME" -eq 2 ] && [ "$HAVEINPROTON" -eq 0 ]; then
 		FIRSTGAMEUSEPROTON="$USEPROTON"
 		writelog "INFO" "${FUNCNAME[0]} - Initial Proton version from the game config: '$FIRSTGAMEUSEPROTON'"
@@ -17993,6 +17959,8 @@ function injectGdb {
 
 function startSettings {
 	FUSEID "$1"
+
+	createDLSpekList
 
 	writelog "INFO" "${FUNCNAME[0]} - createProtonList:"
 	createProtonList X
