@@ -171,7 +171,6 @@ STLPROTONTILOGDIR="$STLPROTONLOGDIR/title"													# proton title logfile di
 STLDXVKLOGDIR="$BASELOGDIR/dxvk"
 STLWINELOGDIR="$BASELOGDIR/wine"															# wine logfile dir
 STLVKD3DLOGDIR="$BASELOGDIR/vkd3d"
-STLPVLOGDIR="$BASELOGDIR/pv"																# pressure vessel logfile dir
 STLGLLOGDIR="$BASELOGDIR/gamelaunch"														# gamerlaunch logfile dir
 STLGLLOGDIRID="$STLGLLOGDIR/id"
 STLGLLOGDIRTI="$STLGLLOGDIR/title"
@@ -2617,9 +2616,6 @@ function setDefaultCfgValues {
 		if [ -z "$STLWINEDLLOVERRIDES" ]				; then	STLWINEDLLOVERRIDES="$NON"; fi
 		if [ -z "$USERSTART" ]							; then	USERSTART="$DUMMYBIN"; fi
 		if [ -z "$USERSTOP" ]							; then	USERSTOP="$DUMMYBIN"; fi	
-		if [ -z "$STL_PV_VERBOSE" ]						; then	STL_PV_VERBOSE="0"; fi
-		if [ -z "$STL_PV_SHELL" ]						; then	STL_PV_SHELL="$NON"; fi
-		if [ -z "$STL_PV_TERMINAL" ]					; then	STL_PV_TERMINAL="$NON"; fi
 		if [ -z "$AUTOCONTY" ]							; then	AUTOCONTY="0"; fi
 		if [ -z "$USECONTY" ]							; then	USECONTY="0"; fi
 		if [ -z "$CRASHGUESS" ]							; then	CRASHGUESS="60"; fi
@@ -3187,12 +3183,6 @@ function saveCfg {
 			echo "USERSTART=\"$USERSTART\""
 			echo "## $DESC_USERSTOP"
 			echo "USERSTOP=\"$USERSTOP\""
-			echo "## $DESC_STL_PV_VERBOSE"
-			echo "STL_PV_VERBOSE=\"$STL_PV_VERBOSE\""
-			echo "## $DESC_STL_PV_SHELL"
-			echo "STL_PV_SHELL=\"$STL_PV_SHELL\""
-			echo "## $DESC_STL_PV_TERMINAL"
-			echo "STL_PV_TERMINAL=\"$STL_PV_TERMINAL\""
 			echo "## $DESC_AUTOCONTY"
 			echo "AUTOCONTY=\"$AUTOCONTY\""
 			echo "## $DESC_USECONTY"
@@ -4652,9 +4642,6 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_CREATEDESKTOPICON!$DESC_CREATEDESKTOPICON ('CREATEDESKTOPICON')":NUM "${CREATEDESKTOPICON}!0..3" `#CAT_Misc` `#MENU_GAME` \
 --field="     $GUI_GAMESCREENRES!$DESC_GAMESCREENRES ('GAMESCREENRES')":CBE "$(cleanDropDown "${GAMESCREENRES/#-/ -}" "$(printf "%s\n" "$(listScreenRes | tr '\n' '!')")$NON")" `#CAT_Misc` `#MENU_GAME` \
 --field="     $GUI_TOGSTEAMWEBHELPER!$DESC_TOGSTEAMWEBHELPER ('TOGSTEAMWEBHELPER')":CHK "${TOGSTEAMWEBHELPER/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
---field="     $GUI_STL_PV_VERBOSE!$DESC_STL_PV_VERBOSE ('STL_PV_VERBOSE')":CHK "${STL_PV_VERBOSE/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
---field="     $GUI_STL_PV_SHELL!$DESC_STL_PV_SHELL ('STL_PV_SHELL')":CB "$(cleanDropDown "${STL_PV_SHELL/#-/ -}" "none!after!fail!instead")" `#CAT_Misc` `#MENU_GAME` \
---field="     $GUI_STL_PV_TERMINAL!$DESC_STL_PV_TERMINAL ('STL_PV_TERMINAL')":CB "$(cleanDropDown "${STL_PV_TERMINAL/#-/ -}" "none!auto!tty!xterm")" `#CAT_Misc` `#MENU_GAME` \
 --field="     $GUI_USESPECIALK!$DESC_USESPECIALK ('USESPECIALK')":CHK "${USESPECIALK/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_SPEKVERS!$DESC_SPEKVERS ('SPEKVERS')":CB "$(cleanDropDown "${SPEKVERS/#-/ -}" "test!stable!old!$DISC")" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_USEFWS!$DESC_USEFWS ('USEFWS')":CHK "${USEFWS/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
@@ -8346,7 +8333,6 @@ function createProjectDirs {
 	mkProjDir "$STLPROTONTILOGDIR"
 	mkProjDir "$STLDXVKLOGDIR"
 	mkProjDir "$STLWINELOGDIR"
-	mkProjDir "$STLPVLOGDIR"
 	mkProjDir "$STLGLLOGDIRID"
 	mkProjDir "$STLGLLOGDIRTI"
 	mkProjDir "$STLGAMEDIRID"
@@ -15118,38 +15104,24 @@ function startGame {
 		
 		GRUNLOG="$STLGLLOGDIRID/${AID}.log"
 		
-		if [ "$HAVESLR" -eq 1 ] && [ "$USESLR" -eq 1 ]; then
-			if [ "$STL_PV_VERBOSE" -eq 1 ]; then
-				# logged gamestart
-				PRESSURE_VESSEL_VERBOSE="$STL_PV_VERBOSE" "${RUNCMD[@]}" 2>&1 | tee "$GRUNLOG" | tee "$STLPVLOGDIR/pressure-vessel-${AID}.log"
-				# start PV shell "instead"
-			elif [ "$STL_PV_SHELL" != "$NON" ]; then
-				PRESSURE_VESSEL_SHELL="$STL_PV_SHELL" "${RUNCMD[@]}" 2>&1 | tee "$GRUNLOG"
-			elif [ "$STL_PV_TERMINAL" != "$NON" ]; then
-				PRESSURE_VESSEL_TERMINAL="$STL_PV_TERMINAL" "${RUNCMD[@]}" 2>&1 | tee "$GRUNLOG"
-			else
-				"${RUNCMD[@]}" 2>&1 | tee "$GRUNLOG"
-			fi
-		else
-			if [ "$USEMANGOAPP" -eq 1 ]; then
-				# mangoapp gamestart - COMMENTDEBUG:
-				writelog "INFO" "${FUNCNAME[0]} - Using $MANGOAPP"
-				# XXXXXXXXXXXXXXX #478 - broken, using a temp script instead of the mappRun function doesn't have any effect
-				# even if making it start correctly, the follow up functions waiting for the game end might have to be changed as well
-				# (mangoapp is killed on closeSTL and in the KillSwitch function already, but the tail wait loop below also)
-				# happy debugging
-				function mappRun {
-					"${RUNCMD[@]}" &
+		if [ "$USEMANGOAPP" -eq 1 ]; then
+			# mangoapp gamestart - COMMENTDEBUG:
+			writelog "INFO" "${FUNCNAME[0]} - Using $MANGOAPP"
+			# XXXXXXXXXXXXXXX #478 - broken, using a temp script instead of the mappRun function doesn't have any effect
+			# even if making it start correctly, the follow up functions waiting for the game end might have to be changed as well
+			# (mangoapp is killed on closeSTL and in the KillSwitch function already, but the tail wait loop below also)
+			# happy debugging
+			function mappRun {
+				"${RUNCMD[@]}" &
 #					vkcube & 
-					"$(command -v "$MANGOAPP")"
-				}
-				export -f mappRun
-				"$(command -v "$GAMESCOPE")" -- bash -c mappRun 2>&1 | tee "$GRUNLOG"
-	#			bash -c mappRun 2>&1 | tee "$GRUNLOG"
-			else
-				# regular gamestart - COMMENTDEBUG:
-				"${RUNCMD[@]}" 2>&1 | tee "$GRUNLOG"
-			fi
+				"$(command -v "$MANGOAPP")"
+			}
+			export -f mappRun
+			"$(command -v "$GAMESCOPE")" -- bash -c mappRun 2>&1 | tee "$GRUNLOG"
+#			bash -c mappRun 2>&1 | tee "$GRUNLOG"
+		else
+			# regular gamestart - COMMENTDEBUG:
+			"${RUNCMD[@]}" 2>&1 | tee "$GRUNLOG"
 		fi
 	fi
 
@@ -18427,8 +18399,8 @@ function closeSTL {
 
 # all variables in closeSTL are blocked from being unset before gamestart - dirty list with variables to keep which are not used here:
 #DXVK_HUD DXVK_LOG_LEVEL ENABLE_VKBASALT LOGDIR LOGLEVEL MANGOHUD NETOPTS PROTON_DEBUG_DIR PROTON_DUMP_DEBUG_COMMANDS PROTON_FORCE_LARGE_ADDRESS_AWARE
-#PROTON_LOG PROTON_LOG_DIR PROTON_NO_D3D10 PROTON_NO_D3D11 PROTON_NO_ESYNC PROTON_NO_FSYNC PROTON_ENABLE_NVAPI PROTON_HIDE_NVIDIA_GPU PROTON_USE_WINED3D STL_PV_SHELL STL_PV_TERMINAL
-#STL_PV_VERBOSE USESLR WINEDLLOVERRIDES WINE_FULLSCREEN_INTEGER_SCALING WINE_FULLSCREEN_FSR WINE_FULLSCREEN_FSR_STRENGTH WINE_FULLSCREEN_FSR_MODE WINE_FULLSCREEN_FSR_CUSTOM_MODE
+#PROTON_LOG PROTON_LOG_DIR PROTON_NO_D3D10 PROTON_NO_D3D11 PROTON_NO_ESYNC PROTON_NO_FSYNC PROTON_ENABLE_NVAPI PROTON_HIDE_NVIDIA_GPU PROTON_USE_WINED3D
+#USESLR WINEDLLOVERRIDES WINE_FULLSCREEN_INTEGER_SCALING WINE_FULLSCREEN_FSR WINE_FULLSCREEN_FSR_STRENGTH WINE_FULLSCREEN_FSR_MODE WINE_FULLSCREEN_FSR_CUSTOM_MODE
 
 	# kill $VRVIDEOPLAYER in case it wasn't closed before
 	if [ -n "$RUNSBSVR" ]; then
