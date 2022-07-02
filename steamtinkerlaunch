@@ -5969,6 +5969,30 @@ function getWindowHeight {
 	"$XWININFO" -id "$WINID" -stats | awk '$1=="-geometry" {print $2}' | cut -d '+' -f1 | cut -d 'x' -f2
 }
 
+#XXXXXXXXXXXXXXXXX
+function getLatestGeoElf {
+	GEOELFURL="http://helixmod.blogspot.com/2022/06/announcing-new-geo-11-3d-driver.html"
+	GEOELFDLURL="$("$WGET" -q "$GEOELFURL" -O - 2> >(grep -v "SSL_INIT") | sed $'s/<a href=/\\\n/g' | grep "^\"https" | grep "\.zip" | grep -oP '"\K[^"]+' | grep -m1 https)" # maybe make less fragile later :)
+	GEOELFFILE="${GEOELFDLURL##*/}"
+	CURGEOELF="${GEOELFDLURL##*+v}"
+	CURGEOELF="${CURGEOELF%.*}";
+	
+	GEOELFDLDIR="$STLDLDIR/geo11"
+	mkProjDir "$GEOELFDLDIR/$CURGEOELF"
+
+	GEODSTD="$GEOELFDLDIR/$CURGEOELF/"
+	GEODSTF="$GEODSTD/$GEOELFFILE"
+	
+	if [ -f "$GEODSTF" ]; then
+		writelog "SKIP" "${FUNCNAME[0]} - Already have '$GEODSTF' - skipping download"
+	else
+		writelog "INFO" "${FUNCNAME[0]} - Downloading '$GEOELFDLURL' to '$GEODSTF'"
+		dlCheck "$GEOELFDLURL" "$GEODSTF" "X" "Downloading '$GEOELFFILE'"
+		"$UNZIP" -q "$GEODSTF" -d "$GEODSTD" 2>/dev/null
+		writelog "INFO" "${FUNCNAME[0]} - Extracted '$GEODSTF' to '$GEODSTD'"
+	fi
+}
+
 function initSteamVR {
 	if [ "$RUNSBSVR" -eq 1 ]; then
 		SVRJUSTSTARTED=0
