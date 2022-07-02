@@ -11,7 +11,7 @@ install:
 	install -Dm755 steamtinkerlaunch -t "$(PREFIX)/bin"
 
 	install -d "$(PREFIX)/share/steamtinkerlaunch"
-	cp -r categories eval guicfgs lang misc "$(PREFIX)/share/steamtinkerlaunch"
+	cp -r collections eval guicfgs lang misc "$(PREFIX)/share/steamtinkerlaunch"
 
 	install -Dm644 README.md -t "$(PREFIX)/share/doc/steamtinkerlaunch"
 	install -Dm644 "misc/steamtinkerlaunch.desktop" -t "$(PREFIX)/share/applications"

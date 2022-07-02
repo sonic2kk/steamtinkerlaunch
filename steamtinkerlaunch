@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v10.0.20220702"
+PROGVERS="v10.0.20220703"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -181,7 +181,7 @@ STLGAMEDIRID="$STLGAMEDIR/id"
 STLCUSTVARSDIR="$STLGAMEDIR/customvars"
 GLOBCUSTVARS="$STLCUSTVARSDIR/global-custom-vars.conf"
 STLGAMEDIRTI="$STLGAMEDIR/title"
-STLCATEGORYDIR="$STLCFGDIR/categories"														# the directory holding config files with preconfigured settings for games in specific steamcategories
+STLCOLLECTIONDIR="$STLCFGDIR/collections"													# the directory holding config files with preconfigured settings for games in specific steamcollections
 STLREGDIR="$STLCFGDIR/regs"																	# the directory holding registry files
 STLDLDIR="$STLCFGDIR/downloads"																# the directory holding optional downloads
 STLBACKDIR="$STLCFGDIR/backup"
@@ -1252,7 +1252,7 @@ function getParsableGameList {
 		LISTCNT="$(wc -l <<< "$LIST")"
 		writelog "INFO" "${FUNCNAME[0]} - Found '$LISTCNT' parsable Game Entries in '$SC'"
 		if [ "$LISTCNT" -eq 0 ]; then
-			writelog "SKIP" "${FUNCNAME[0]} - No game found in any Steam category"
+			writelog "SKIP" "${FUNCNAME[0]} - No game found in any Steam collection"
 		fi
 		echo "$LIST"
 	else
@@ -1260,7 +1260,7 @@ function getParsableGameList {
 	fi
 }
 
-function getInstalledGamesFromCategory {
+function getInstalledGamesFromCollection {
 	CAT="$1"
 
 	if [ -n "$CAT" ]; then
@@ -1420,11 +1420,11 @@ function getDataForAllGamesinSharedConfig {
 #	sed -n '/"Apps"/,${p;/"LastPlayedTimesSyncTime"/q}' "$FLCV" | grep "{" -B1 | grep "[0-9]" | tr -cd '[[:digit:]]\n' | sort -n
 #}
 
-function getActiveSteamCategories {
+function getActiveSteamCollections {
 	getParsableGameList | grep "\"tags\"" | awk -F '{+' '{print $NF}' | sed 's/\"/'$'\\\n/g' | sort -u | grep -i "^[a-z]"
 }
 
-function createCategoryMenus {
+function createCollectionMenus {
 	# create launcher menu for all installed games
 	DFIDIR="$DFDIR/installed"
 	mkProjDir "$DFIDIR"
@@ -1439,7 +1439,7 @@ function createCategoryMenus {
 		done <<< "$(listInstalledGameIDs)"
 	fi
 
-	# create launcher menu for all category '$1'
+	# create launcher menu for collection '$1'
 	if [ -n "$1" ] && [ "$1" == "update" ] && [ "$(find "$DFDIR" -name "*.desktop" | wc -l)" -gt 0 ]; then
 		find "$DFDIR" -name "*.desktop" -exec rm {} \;
 	fi
@@ -1454,8 +1454,8 @@ function createCategoryMenus {
 						ln -s "$STLGDESKD/$CATGAME.desktop" "$DFCDIR"
 					fi
 				fi
-			done <<< "$(getInstalledGamesFromCategory "$CAT")"
-		done < <(getActiveSteamCategories)
+			done <<< "$(getInstalledGamesFromCollection "$CAT")"
+		done < <(getActiveSteamCollections)
 	fi
 }
 
@@ -1503,7 +1503,7 @@ function listAppManifests {
 	listAllAppMas | sort -u
 }
 
-function createCategoriesList {
+function createCollectionList {
 	function listCAT {
 		while read -r CATMENU; do
 			echo "${CATMENU##*/}"
@@ -1603,9 +1603,9 @@ function openGameLauncher {
 	}
 
 	if grep -q "update" <<< "$@"; then
-		createCategoryMenus "update"
+		createCollectionMenus "update"
 	else
-		createCategoryMenus "dummy"
+		createCollectionMenus "dummy"
 	fi
 
 	if [ "$(find "$DFDIR" -name "*.desktop" | wc -l)" -eq 0 ]; then
@@ -1614,9 +1614,9 @@ function openGameLauncher {
 			writelog "INFO" "${FUNCNAME[0]} - Found argument 'auto'. Automatically creating/downloading required data for all installed games found"
 			getGameDataForInstalledGames
 			if [ -n "$2" ] && [ "$2" == "update" ]; then
-				createCategoryMenus "$2"
+				createCollectionMenus "$2"
 			else
-				createCategoryMenus "dummy"
+				createCollectionMenus "dummy"
 			fi
 		else
 			writelog "INFO" "${FUNCNAME[0]} - Either add argument 'auto' to automatically create/download required data or check '$PROGCMD --help'"
@@ -1632,7 +1632,7 @@ function openGameLauncher {
 		GLgui "installed"
 	else
 		if [ "$1" == "menu" ]; then
-			createCategoriesList
+			createCollectionList
 			CATMENU="$("$YAD" --f1-action="$F1ACTION" --window-icon="$STLICON" --center "$WINDECO" --form --scroll --separator="\n" --quoted-output \
 			--text="$(spanFont "$GUI_CHOOSECAT" "H")" \
 			--field="$GUI_CHOOSECATS":CB "$(cleanDropDown "installed" "$CATLIST")" \
@@ -1661,7 +1661,7 @@ function openGameLauncher {
 		elif [ -d "$DFDIR/$1" ]; then
 			GLgui "$1"
 		else
-			writelog "SKIP" "${FUNCNAME[0]} - Steam Category '$1' not found in '$DFDIR'"
+			writelog "SKIP" "${FUNCNAME[0]} - Steam Collection '$1' not found in '$DFDIR'"
 			writelog "SKIP" "${FUNCNAME[0]} - Only found '$(ls "$DFDIR")'"
 		fi
 	fi
@@ -2225,7 +2225,7 @@ function getAvailableProtonVersions {
 			writelog "SKIP" "${FUNCNAME[0]} - USEWINE is enabled - skipping this function"
 		elif [ -f "$STLGAMECFG" ] && grep -q "USEWINE=\"1\"" "$STLGAMECFG" ; then
 			writelog "SKIP" "${FUNCNAME[0]} - USEWINE is enabled in the to-be-loaded gameconfig '$STLGAMECFG' - skipping this function"
-			# could still be enabled via steamcategory, but this would be an overkill here, as ${FUNCNAME[0]} is non-fatal
+			# could still be enabled via steamcollection, but this would be an overkill here, as ${FUNCNAME[0]} is non-fatal
 		else
 			delEmptyFile "$PROTONCSV"
 			if [ ! -f "$PROTONCSV" ] || { [ -n "$1" ] && [ "$1" = "up" ]; } || [ "$1" == "F" ]; then
@@ -2400,7 +2400,7 @@ function setDefaultCfgValues {
 		if [ -z "$NETMONDIR" ]							; then	NETMONDIR="$LOGDIR"; fi
 		if [ -z "$VRVIDEOPLAYER" ]						; then	VRVIDEOPLAYER="$(command -v "vr-video-player")"; fi
 		if [ -z "$GAMCON" ]								; then	GAMCON="/usr/share/gameconqueror/GameConqueror.py"; fi
-		if [ -z "$GLOBALCATEGORYDIR" ]					; then	GLOBALCATEGORYDIR="$SYSTEMSTLCFGDIR/categories"; fi
+		if [ -z "$GLOBALCOLLECTIONDIR" ]				; then	GLOBALCOLLECTIONDIR="$SYSTEMSTLCFGDIR/collections"; fi
 		if [ -z "$GLOBALMISCDIR" ]						; then	GLOBALMISCDIR="$SYSTEMSTLCFGDIR/misc"; fi
 		if [ -z "$GLOBALSBSTWEAKS" ]					; then	GLOBALSBSTWEAKS="$SYSTEMSTLCFGDIR/misc/sbstweaks"; fi
 		if [ -z "$GLOBALTWEAKS" ]						; then	GLOBALTWEAKS="$SYSTEMSTLCFGDIR/tweaks"; fi
@@ -2559,7 +2559,7 @@ function setDefaultCfgValues {
 		if [ -z "$HELPURL" ]							; then	HELPURL="$NON"; fi
 		if [ -z "$CREATEDESKTOPICON" ]					; then	CREATEDESKTOPICON="0"; fi
 		if [ -z "$STEAMAPPIDFILE" ]						; then	STEAMAPPIDFILE="0"; fi
-		if [ -z "$CHECKCATEGORIES" ]					; then	CHECKCATEGORIES="1"; fi
+		if [ -z "$CHECKCOLLECTIONS" ]					; then	CHECKCOLLECTIONS="1"; fi
 		if [ -z "$BACKUPSTEAMUSER" ]					; then	BACKUPSTEAMUSER="0"; fi
 		if [ -z "$RESTORESTEAMUSER" ]					; then	RESTORESTEAMUSER="$NON"; fi
 		if [ -z "$USESUSYM" ]							; then	USESUSYM="0"; fi
@@ -2797,8 +2797,8 @@ function saveCfg {
 			echo "GLOBALSBSTWEAKS=\"$GLOBALSBSTWEAKS\""
 			echo "## $DESC_GLOBALTWEAKS"
 			echo "GLOBALTWEAKS=\"$GLOBALTWEAKS\""
-			echo "## $DESC_GLOBALCATEGORYDIR"
-			echo "GLOBALCATEGORYDIR=\"$GLOBALCATEGORYDIR\""
+			echo "## $DESC_GLOBALCOLLECTIONDIR"
+			echo "GLOBALCOLLECTIONDIR=\"$GLOBALCOLLECTIONDIR\""
 			echo "## $DESC_GLOBALMISCDIR"
 			echo "GLOBALMISCDIR=\"$GLOBALMISCDIR\""
 			echo "## $DESC_GLOBALEVALDIR"
@@ -2999,8 +2999,8 @@ function saveCfg {
 			echo "TOGSTEAMWEBHELPER=\"$TOGSTEAMWEBHELPER\""
 			echo "## $DESC_USEMANGOHUD"
 			echo "USEMANGOHUD=\"$USEMANGOHUD\""
-#			echo "## $DESC_USEMANGOAPP"
-#			echo "USEMANGOAPP=\"$USEMANGOAPP\""
+			echo "## $DESC_USEMANGOAPP"
+			echo "USEMANGOAPP=\"$USEMANGOAPP\""
 			echo "## $DESC_MAHUBIN"
 			echo "MAHUBIN=\"$MAHUBIN\""
 			echo "## $DESC_MAHUARGS"
@@ -3101,8 +3101,8 @@ function saveCfg {
 			echo "WAITEDITOR=\"$WAITEDITOR\""
 			echo "## $DESC_STEAMAPPIDFILE"
 			echo "STEAMAPPIDFILE=\"$STEAMAPPIDFILE\""
-			echo "## $DESC_CHECKCATEGORIES"
-			echo "CHECKCATEGORIES=\"$CHECKCATEGORIES\""
+			echo "## $DESC_CHECKCOLLECTIONS"
+			echo "CHECKCOLLECTIONS=\"$CHECKCOLLECTIONS\""
 			echo "## $DESC_BACKUPSTEAMUSER"
 			echo "BACKUPSTEAMUSER=\"$BACKUPSTEAMUSER\""
 			echo "## $DESC_RESTORESTEAMUSER"
@@ -4317,7 +4317,7 @@ function TrayIconExports {
 	if [ -n "$KPFX" ]; then
 		echo "WINEPREFIX=\"$KPFX\" \"$RUNWINESERVER\" -k" > "$KILLSWITCH"
 		if [ "$USEMANGOAPP" -eq 1 ]; then
-			echo "\"$PKILL\" -f \"$MANGOAPP\"" >> "$KILLSWITCH"
+			echo "$PKILL -f \"$MANGOAPP\"" >> "$KILLSWITCH"
 		fi
 		echo "touch $CLOSETMP" >> "$KILLSWITCH"
 		chmod +x "$KILLSWITCH"
@@ -4580,8 +4580,6 @@ function spanFont {
 	echo "$SPIN$STRIN$SPOUT"
 }
 
-#--field="     $GUI_USEMANGOAPP!$DESC_USEMANGOAPP ('USEMANGOAPP')":CHK "${USEMANGOAPP/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
-
 function AllSettingsEntriesDummyFunction {
 #STARTSETENTRIES
 	echo \
@@ -4600,7 +4598,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_USEGAMEPICS!$DESC_USEGAMEPICS ('USEGAMEPICS')":CHK "${USEGAMEPICS/#-/ -}" `#CAT_Gui` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_USECUSTOMFALLBACKPIC!$DESC_USECUSTOMFALLBACKPIC ('USECUSTOMFALLBACKPIC')":CHK "${USECUSTOMFALLBACKPIC/#-/ -}" `#CAT_Gui` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_GITHUBUSER!$DESC_GITHUBUSER ('GITHUBUSER')":CBE "${GITHUBUSER/#-/ -}" `#CAT_Gui` `#MENU_GLOBAL` \
---field="     $GUI_CHECKCATEGORIES!$DESC_CHECKCATEGORIES ('CHECKCATEGORIES')":CHK "${CHECKCATEGORIES/#-/ -}" `#CAT_Gui` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_CHECKCOLLECTIONS!$DESC_CHECKCOLLECTIONS ('CHECKCOLLECTIONS')":CHK "${CHECKCOLLECTIONS/#-/ -}" `#CAT_Gui` `#SUB_Checkbox` `#MENU_GAME` \
 --field="$(spanFont "$GUI_OPTSGRID" "H")":LBL "SKIP" `#CAT_SteamGridDB` `#HEAD_SteamGridDB` `#MENU_GLOBAL` \
 --field="     $GUI_SGDBDLTOSTEAM!$DESC_SGDBDLTOSTEAM ('SGDBDLTOSTEAM')":CHK "${SGDBDLTOSTEAM/#-/ -}" `#CAT_SteamGridDB` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_SGDBAPIKEY!$DESC_SGDBAPIKEY ('SGDBAPIKEY')":CBE "${SGDBAPIKEY/#-/ -}" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
@@ -4731,7 +4729,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_ENABLE_VKBASALT!$DESC_ENABLE_VKBASALT ('ENABLE_VKBASALT')":CHK "${ENABLE_VKBASALT/#-/ -}" `#CAT_Shader` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_SBSRS!$DESC_SBSRS ('SBSRS')":CHK "${SBSRS/#-/ -}" `#CAT_Shader` `#SUB_Checkbox` `#SUB_ReShade` `#MENU_GAME` \
 --field="$(spanFont "$PROGNAME $GUI_PATHS" "H")":LBL "SKIP" `#CAT_Paths` `#HEAD_Stl` `#MENU_GLOBAL`  \
---field="     $GUI_GLOBALCATEGORYDIR!$DESC_GLOBALCATEGORYDIR ('GLOBALCATEGORYDIR')":DIR "${GLOBALCATEGORYDIR/#-/ -}" `#CAT_Paths` `#SUB_Directories` `#MENU_GLOBAL` \
+--field="     $GUI_GLOBALCOLLECTIONDIR!$DESC_GLOBALCOLLECTIONDIR ('GLOBALCOLLECTIONDIR')":DIR "${GLOBALCOLLECTIONDIR/#-/ -}" `#CAT_Paths` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_GLOBALMISCDIR!$DESC_GLOBALMISCDIR ('GLOBALMISCDIR')":DIR "${GLOBALMISCDIR/#-/ -}" `#CAT_Paths` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_GLOBALSBSTWEAKS!$DESC_GLOBALSBSTWEAKS ('GLOBALSBSTWEAKS')":DIR "${GLOBALSBSTWEAKS/#-/ -}" `#CAT_Paths` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_GLOBALTWEAKS!$DESC_GLOBALTWEAKS ('GLOBALTWEAKS')":DIR "${GLOBALTWEAKS/#-/ -}" `#CAT_Paths` `#SUB_Directories` `#MENU_GLOBAL` \
@@ -4742,6 +4740,7 @@ function AllSettingsEntriesDummyFunction {
 --field="$(spanFont "$GUI_OPTSTOOLS" "H")":LBL "SKIP" `#CAT_Tools` `#HEAD_Tools` `#MENU_GAME` `#MENU_GLOBAL`  \
 --field="     $GUI_USEGAMEMODERUN!$DESC_USEGAMEMODERUN ('USEGAMEMODERUN')":CHK "${USEGAMEMODERUN/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_USEMANGOHUD!$DESC_USEMANGOHUD ('USEMANGOHUD')":CHK "${USEMANGOHUD/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_USEMANGOAPP!$DESC_USEMANGOAPP ('USEMANGOAPP')":CHK "${USEMANGOAPP/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_MAHUVAR!$DESC_MAHUVAR ('MAHUVAR')":CHK "${MAHUVAR/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_MAHUBIN!$DESC_MAHUBIN ('MAHUBIN')":FL "${MAHUBIN/#-/ -}" `#CAT_Tools` `#MENU_GAME` \
 --field="     $GUI_MAHUARGS!$DESC_MAHUARGS ('MAHUARGS')":CBE "${MAHUARGS/#-/ -}!--dlsym" `#CAT_Tools` `#MENU_GAME` \
@@ -8303,7 +8302,7 @@ function createProjectDirs {
 	mkProjDir "$STLGLLOGDIRTI"
 	mkProjDir "$STLGAMEDIRID"
 	mkProjDir "$STLGAMEDIRTI"
-	mkProjDir "$STLCATEGORYDIR"
+	mkProjDir "$STLCOLLECTIONDIR"
 	mkProjDir "$TWEAKDIR"
 	mkProjDir "$USERTWEAKDIR"
 	mkProjDir "$TWEAKCMDDIR"
@@ -8616,9 +8615,9 @@ function updateConfigEntry {
 	CFGFILE=""
 }
 
-# autoapply configuration settings based on the steam categories the game is in:
-function autoCategorySettings {
-	if [ "$CHECKCATEGORIES" -eq 1 ] && [ "$STLPLAY" -eq 0 ]; then
+# autoapply configuration settings based on the steam collections the game is in:
+function autoCollectionSettings {
+	if [ "$CHECKCOLLECTIONS" -eq 1 ] && [ "$STLPLAY" -eq 0 ]; then
 		if [ -z "$SUSDA" ] || [ -z "$STUIDPATH" ]; then
 			setSteamPaths
 		fi
@@ -8628,10 +8627,10 @@ function autoCategorySettings {
 			if [ ! -f "$SC" ]; then
 				writelog "SKIP" "${FUNCNAME[0]} - File '${SC##*/}' not found in steam userid dir - skipping"
 			else
-				writelog "INFO" "${FUNCNAME[0]} - Searching categories for game '$AID' in '${SC##*/}'"
+				writelog "INFO" "${FUNCNAME[0]} - Searching collections for game '$AID' in '${SC##*/}'"
 
 				while read -r SCAT; do
-					GLOBALSCATCONF="$GLOBALCATEGORYDIR/$SCAT.conf"
+					GLOBALSCATCONF="$GLOBALCOLLECTIONDIR/$SCAT.conf"
 
 					if [ -f "$GLOBALSCATCONF" ]; then
 						writelog "INFO" "${FUNCNAME[0]} - Config '$GLOBALSCATCONF' found - loading its settings"
@@ -8640,7 +8639,7 @@ function autoCategorySettings {
 						writelog "SKIP" "${FUNCNAME[0]} - Config '$GLOBALSCATCONF' not found - skipping"
 					fi
 
-					SCATCONF="$STLCATEGORYDIR/$SCAT.conf"
+					SCATCONF="$STLCOLLECTIONDIR/$SCAT.conf"
 					if [ -f "$SCATCONF" ]; then
 						writelog "INFO" "${FUNCNAME[0]} - Config '$SCATCONF' found - loading its settings"
 						loadCfg "$SCATCONF"
@@ -8650,7 +8649,7 @@ function autoCategorySettings {
 					
 					SCATCMD="$TWEAKCMDDIR/$SCAT.sh"
 					if [ -f "$SCATCMD" ]; then
-						writelog "INFO" "${FUNCNAME[0]} - Steam-Category user command '$SCATCMD' found - executing"
+						writelog "INFO" "${FUNCNAME[0]} - Steam-Collection user command '$SCATCMD' found - executing"
 						if [ "$USEWINE" -eq 0 ]; then
 							"$SCATCMD" "$AID" "$EFD" "$GPFX"
 						else
@@ -11699,7 +11698,7 @@ function dlVortexSupportedList {
 	rm "${VORTTMPLIST//-temp/-temp2}" "$VORTTMPLIST" 2>/dev/null
 }
 
-function getGameSteamCategories {
+function getGameSteamCollections {
 	SCGAME="$1"
 
 	if [ -z "$SUSDA" ] || [ -z "$STUIDPATH" ]; then
@@ -11711,7 +11710,7 @@ function getGameSteamCategories {
 		if [ ! -f "$SC" ]; then
 			writelog "SKIP" "${FUNCNAME[0]} - File '${SC##*/}' not found in steam userid dir - skipping"
 		else
-			writelog "INFO" "${FUNCNAME[0]} - File '${SC##*/}' found in steam userid dir - searching categories for game '$SCGAME'"
+			writelog "INFO" "${FUNCNAME[0]} - File '${SC##*/}' found in steam userid dir - searching collections for game '$SCGAME'"
 
 			while read -r SCAT; do
 				mapfile -t -O "${#GSCATS[@]}" GSCATS <<< "$SCAT"
@@ -11752,7 +11751,7 @@ function VortexGamesDialog {
 			grep -v "config Version" "$STLDEFGAMECFG" >> "$STLGAMEDIRID/${f}.conf"
 		fi
 
-		if grep -q "Vortex" <<< "$(getGameSteamCategories "$f" "X")"; then
+		if grep -q "Vortex" <<< "$(getGameSteamCollections "$f" "X")"; then
 			echo TRUE
 			echo "$f"
 			echo "$GNAM"
@@ -11772,7 +11771,7 @@ function VortexGamesDialog {
 			fi
 		fi
 	done <<< "$(printf "%s\n" "${INSTVGAMES[@]}")" | \
-	"$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center "$WINDECO" --list --checklist --column="Use Vortex" --column="Game ID" --column="Game Title" --column "Vortex Steam Category" --separator=";" --print-column="2" \
+	"$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center "$WINDECO" --list --checklist --column="Use Vortex" --column="Game ID" --column="Game Title" --column "Vortex Steam Collection" --separator=";" --print-column="2" \
 	--text="$(spanFont "$GUI_VINFO" "H")\n<span font=\"italic\">($GUI_VINFO1)</span>" --title="$TITLE" "$GEOM")"
 	case $? in
 		0)
@@ -11785,7 +11784,7 @@ function VortexGamesDialog {
 					touch "$FUPDATE"
 					updateConfigEntry "USEVORTEX" "0" "$GVCFG"
 					if grep -q "$checkvgame" "$VGNSCLIST" 2>/dev/null; then
-						writelog "WARN" "${FUNCNAME[0]} - To really disable ${VTX^} for '$VGNAM', the game needs to be removed from the ${VTX^} Steam Category manually"
+						writelog "WARN" "${FUNCNAME[0]} - To really disable ${VTX^} for '$VGNAM', the game needs to be removed from the ${VTX^} Steam Collection manually"
 					fi
 				else
 					writelog "INFO" "${FUNCNAME[0]} - Enabling ${VTX^} for '$VGNAM' if not already enabled"
@@ -14109,8 +14108,8 @@ function prepareLaunch {
 
 	
 
-	# autoapply configuration settings based on the steam categories the game is in:
-	autoCategorySettings
+	# autoapply configuration settings based on the steam collections the game is in:
+	autoCollectionSettings
 
 	checkAllPev
 
@@ -15067,24 +15066,32 @@ function startGame {
 		writelog "INFO" "${FUNCNAME[0]} - ## GAMESTART HERE ###"
 
 		restoreOrgVars # restore original LC_ and friends for the game
-		
+
 		GRUNLOG="$STLGLLOGDIRID/${AID}.log"
-		
+
 		if [ "$USEMANGOAPP" -eq 1 ]; then
 			# mangoapp gamestart - COMMENTDEBUG:
 			writelog "INFO" "${FUNCNAME[0]} - Using $MANGOAPP"
-			# XXXXXXXXXXXXXXX #478 - broken, using a temp script instead of the mappRun function doesn't have any effect
-			# even if making it start correctly, the follow up functions waiting for the game end might have to be changed as well
-			# (mangoapp is killed on closeSTL and in the KillSwitch function already, but the tail wait loop below also)
-			# happy debugging
-			function mappRun {
-				"${RUNCMD[@]}" &
-#					vkcube & 
-				"$(command -v "$MANGOAPP")"
+			MRSH="$STLSHM/maprun.sh"
+			printf "\"%s\" " "${RUNCMD[@]}" > "$MRSH"
+			chmod +x "$MRSH"
+			gameScopeArgs "$GAMESCOPE_ARGS"
+
+			function runMA {
+				function mappRun {
+					"$MRSH" & "$MANGOAPP"
+				}
+				export MANGOAPP
+				export MRSH
+				export -f mappRun
+				if [ -n "${GAMESCOPEARGSARR[0]}" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - ## ${MANGOAPP^^} GAMESCOPE LAUNCH COMMAND: '$(command -v "$GAMESCOPE") ${GAMESCOPEARGSARR[*]}'"
+					"$(command -v "$GAMESCOPE")" "${GAMESCOPEARGSARR[@]}" bash -c mappRun 2>&1 | tee "$GRUNLOG"
+				else
+					"$(command -v "$GAMESCOPE")" -- bash -c mappRun 2>&1 | tee "$GRUNLOG"				
+				fi
 			}
-			export -f mappRun
-			"$(command -v "$GAMESCOPE")" -- bash -c mappRun 2>&1 | tee "$GRUNLOG"
-#			bash -c mappRun 2>&1 | tee "$GRUNLOG"
+			runMA &
 		else
 			# regular gamestart - COMMENTDEBUG:
 			"${RUNCMD[@]}" 2>&1 | tee "$GRUNLOG"
@@ -15099,12 +15106,26 @@ function startGame {
 	createSymLink "${FUNCNAME[0]}" "$GRUNLOG" "${STLGLLOGDIRTI}/${GN}.conf"
 
 	if [ "$ISGAME" -eq 2 ] && [ "$USEWINE" -eq 0 ] && { grep -qi "GE\-" <<< "$USEPROTON" || grep -qi "\-TKG" <<< "$USEPROTON";}; then
-		RLRUNWINESERVER="$(readlink -f "$RUNWINESERVER")"
-		WSPID="$("$PGREP" -a "" | grep "$RLRUNWINESERVER" | grep -v grep | cut -d ' ' -f1 | tail -n1)"
+		if [ "$USEMANGOAPP" -eq 1 ]; then
+			# could be used generally, but undecided yet if waitForGamePid should be used always by default
+			waitForGamePid
+			RLRUNWINESERVER="$(readlink -f "$RUNWINESERVER")"
+			WSPID="$("$PGREP" -a "" | grep "$RLRUNWINESERVER" | grep -v grep | cut -d ' ' -f1 | tail -n1)"
+			writelog "INFO" "${FUNCNAME[0]} - $MANGOAPP game launch pid is $WSPID"
+		else
+			RLRUNWINESERVER="$(readlink -f "$RUNWINESERVER")"
+			WSPID="$("$PGREP" -a "" | grep "$RLRUNWINESERVER" | grep -v grep | cut -d ' ' -f1 | tail -n1)"
+		fi
 		if [ -n "$WSPID" ] && [ "$WSPID" -eq "$WSPID" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Proton '$USEPROTON' forks its command into background, so waited for the wineserver RUNWINESERVER '$RLRUNWINESERVER' with pid '$WSPID' to finish instead"
+			writelog "INFO" "${FUNCNAME[0]} - Waiting for the wineserver process '$WSPID' to finish"
 			tail --pid="$WSPID" -f /dev/null
-			writelog "INFO" "${FUNCNAME[0]} - wineserver process '$WSPID' finished - closing"
+
+			if [ "$USEMANGOAPP" -eq 1 ]; then
+				writelog "INFO" "${FUNCNAME[0]} - $MANGOAPP game launch finished - closing"
+				"$PKILL" -f "$MANGOAPP"
+			else
+				writelog "INFO" "${FUNCNAME[0]} - wineserver process '$WSPID' finished - closing"
+			fi
 		else
 			writelog "ERROR" "${FUNCNAME[0]} - Could not determine pid of '$RLRUNWINESERVER'"
 		fi
@@ -16737,7 +16758,7 @@ function checkStartMode {
 			elif grep -q "USEWINE=\"1\"" "$STLGAMECFG" ; then
 				writelog "SKIP" "${FUNCNAME[0]} - USEWINE is enabled in the to-be-loaded gameconfig '$STLGAMECFG' - skipping this function"
 				EARLYUSEWINE=1
-				# could still be enabled via steamcategory, but this would be an overkill here, as ${FUNCNAME[0]} is non-fatal
+				# could still be enabled via steamcollections, but this would be an overkill here, as ${FUNCNAME[0]} is non-fatal
 			else
 				if [ "$HAVEINPROTON" -eq 1 ]; then
 					writelog "INFO" "${FUNCNAME[0]} - Game was started via '$SLO' ('$PROGCMD %command%'),"
@@ -16888,13 +16909,13 @@ function howto {
 	echo "                                       a language file name without suffix"
 	echo "                                       or an path to a valid language file"
  	echo "    launcher <args>                  Start the Game Launcher"
-	echo "             CATEGORY                  Show only installed games"
-	echo "                                       from Steam Category CATEGORY"
-	echo "             menu                      Open Steam Category Menu"
+	echo "             COLLECTION                  Show only installed games"
+	echo "                                       from Steam collection COLLECTION"
+	echo "             menu                      Open Steam Collection Menu"
 	echo "             last                      Open last Game as 'Menu'"
 	echo "             auto                      Create/Download data for all"
 	echo "                                       installed games first"
-	echo "             update                    ReCreate all Category Menus"
+	echo "             update                    ReCreate all Collection Menus"
 	echo "                                       Can be combined with auto"
 	echo "    list <owned|installed>           List ids of <owned|o,installed|i> games"
 	echo "    meta                             Generates/Updates metadata"
@@ -17982,23 +18003,23 @@ function retBool {
 }
 
 function SteamCatSelect {
-	writelog "INFO" "${FUNCNAME[0]} - Steam Category Selection"
-	export CURWIKI="$PPW/Steam-Categories"
-	TITLE="${PROGNAME}-SteamCategorySelection"
+	writelog "INFO" "${FUNCNAME[0]} - Steam Collection Selection"
+	export CURWIKI="$PPW/Steam-Collections"
+	TITLE="${PROGNAME}-SteamCollectionSelection"
 	pollWinRes "$TITLE"
 
 	setShowPic
 	unset VALTAGS
-	mapfile -d "\n" -t -O "${#VALTAGS[@]}" VALTAGS <<< "$(getActiveSteamCategories)"
+	mapfile -d "\n" -t -O "${#VALTAGS[@]}" VALTAGS <<< "$(getActiveSteamCollections)"
 	SCATSELOUT="$(while read -r f; do if [[ ! "${SCATSEL[*]}" =~ $f ]]; then 	echo FALSE ; echo "$f"; else echo TRUE ; echo "$f" ;fi ; done <<< "$(printf "%s\n" "${VALTAGS[@]}")" | \
-	"$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center $WINDECO --list --checklist --column=Choose --column=SteamCategory --separator="\n" --print-column="2" \
+	"$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center $WINDECO --list --checklist --column=Choose --column=SteamCollection --separator="\n" --print-column="2" \
 	--text="$(spanFont "$GUI_STEAMCATSEL" "H")" --title="$TITLE" --button="$BUT_SEL":0 --button="$BUT_CAN":2 "$GEOM")"
 
 	case $? in
 		0)  {
 		writelog "INFO" "${FUNCNAME[0]} - Selected Select"
 				if [ -n "$SCATSELOUT" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - Selected following Categories2: '$(sort -u <<< "$SCATSELOUT" | sed '/^$/d' | tr '\n' ',')'"
+					writelog "INFO" "${FUNCNAME[0]} - Selected following Collections: '$(sort -u <<< "$SCATSELOUT" | sed '/^$/d' | tr '\n' ',')'"
 					unset SCATSEL
 					mapfile -d "\n" -t -O "${#SCATSEL[@]}" SCATSEL <<< "$(sort -u <<< "$SCATSELOUT" | sed '/^$/d')"
 				fi
@@ -18012,21 +18033,21 @@ function SteamCatSelect {
 }
 
 function AutoMarkSCat {
-	writelog "INFO" "${FUNCNAME[0]} - Auto-marking specific Steam Categories"
+	writelog "INFO" "${FUNCNAME[0]} - Auto-marking specific Steam Collections"
 
-	if ! grep -q "$DESC_NOST" <<< "$(printf "%s" "${SCATSEL[@]}" | tr '\n' ',')" && grep -q "$DESC_NOST" <<< "$(getActiveSteamCategories | tr '\n' ',')"; then
-		writelog "INFO" "${FUNCNAME[0]} - Marking '$DESC_NOST' as Category"
+	if ! grep -q "$DESC_NOST" <<< "$(printf "%s" "${SCATSEL[@]}" | tr '\n' ',')" && grep -q "$DESC_NOST" <<< "$(getActiveSteamCollections | tr '\n' ',')"; then
+		writelog "INFO" "${FUNCNAME[0]} - Marking '$DESC_NOST' as Collection"
 		mapfile -d "\n" -t -O "${#SCATSEL[@]}" SCATSEL <<< "$DESC_NOST"
 	fi
 	
 	function maybeLater {
 		if [ -f "$AUTOADDSCATLIST" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Marking everything found in '$AUTOADDSCATLIST' as Steam Category"
+			writelog "INFO" "${FUNCNAME[0]} - Marking everything found in '$AUTOADDSCATLIST' as Steam Collection"
 			while read -r line; do
 				mapfile -d "\n" -t -O "${#SCATSEL[@]}" SCATSEL <<< "$line"
 			done < "$AUTOADDSCATLIST"
 		else
-			writelog "INFO" "${FUNCNAME[0]} - No file '$AUTOADDSCATLIST' containing Steam Categories found for adding"
+			writelog "INFO" "${FUNCNAME[0]} - No file '$AUTOADDSCATLIST' containing Steam Collections found for adding"
 		fi
 	}
 }
@@ -18060,7 +18081,7 @@ function addNonSteamGameGui {
 	NOSTGAO=1
 	NOSTGVR=0
 	unset VALTAGS
-	mapfile -d "\n" -t -O "${#VALTAGS[@]}" VALTAGS <<< "$(getActiveSteamCategories | sed '/^$/d')"
+	mapfile -d "\n" -t -O "${#VALTAGS[@]}" VALTAGS <<< "$(getActiveSteamCollections | sed '/^$/d')"
 	VALIDTAGS="$(printf "%s" "${VALTAGS[@]}" | tr '\n' ',' | sed 's/,*$//g')"
 
 	AutoMarkSCat
@@ -18135,7 +18156,7 @@ function addNonSteamGame {
 	function splitTags {
 		mapfile -d "," -t -O "${#TAGARR[@]}" TAGARR < <(printf '%s' "$1")
 		for i in "${!TAGARR[@]}"; do
-			if grep -q "${TAGARR[$i]}" <<< "$(getActiveSteamCategories)"; then
+			if grep -q "${TAGARR[$i]}" <<< "$(getActiveSteamCollections)"; then
 				printf '\x01%s\x00%s\x00' "$i" "${TAGARR[i]}"
 			fi
 		done
@@ -18330,7 +18351,7 @@ function closeSTL {
 		rm "$MO2INSTFAIL" 2>/dev/null
 	fi
 
-	if [ "$USEMANGOAPP" -eq 1 ]; then
+	if [ "$USEMANGOAPP" -eq 1 ] && "$PGREP" -f "$MANGOAPP" >/dev/null; then
 		writelog "INFO" "${FUNCNAME[0]} - Killing '$MANGOAPP'"
 		"$PKILL" -f "$MANGOAPP"
 	fi
