@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v10.0.20220703"
+PROGVERS="v10.0.20220704"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -229,6 +229,8 @@ CEDLDIR="$STLDLDIR/cheatengine"
 MO2DLDIR="$STLDLDIR/mo2"
 CONTYDLDIR="$STLDLDIR/conty"
 X64DBGDLDIR="$STLDLDIR/$X64D"
+GEOELFDLDIR="$STLDLDIR/geo11"
+LGEOELFSYM="$GEOELFDLDIR/latest"
 CUSTOMFALLBACKPIC="$STLDLDIR/custom-fallback.png"
 STLCEDIR="$STLCFGDIR/cheatengine"
 VTX="vortex"
@@ -296,6 +298,7 @@ STLGSACD="$STLGSAD/$CODA"
 STLGPEVKD="$STLGAMES/pev"
 MO2INSTFAIL="$STLSHM/${MO}-failed.txt"
 ABSGAMEEXEPATH="$NON"
+GEOELF="geo-11"
 
 #STLGSCPTD="$STLGAMES/scripts"
 NOGAMES=",70_2260196511,228980,858280,961940,1054830,1070560,1113280,1245040,1391110,1420170,"
@@ -2380,6 +2383,7 @@ function setDefaultCfgValues {
 		if [ -z "$FWSURL" ]								; then	FWSURL="https://www.${FWS,,}.org/fws";fi
 		if [ -z "$YAIURL" ]								; then	YAIURL="$GHURL/frostworx/steamtinkerlaunch-tweaks/releases/download"; fi
 		if [ -z "$WINERELOADURL" ]						; then	WINERELOADURL="https://gist.githubusercontent.com/rbernon/cdbdc1b0e892f91e7449fcf3dda80bb7/raw/d8cf549bf751d99ed0fe515e36f99ff5c01b7287"; fi
+		if [ -z "$GEOELFURL" ]							; then	GEOELFURL="http://helixmod.blogspot.com/2022/06/announcing-new-geo-11-3d-driver.html"; fi
 	}
 
 	function setDefaultCfgValuesglobal {
@@ -2539,6 +2543,8 @@ function setDefaultCfgValues {
 		if [ -z "$USEROBERTA" ]							; then	USEROBERTA="0"; fi
 		if [ -z "$USELUXTORPEDA" ]						; then	USELUXTORPEDA="0"; fi
 		if [ -z "$REGEDIT" ]							; then	REGEDIT="0"; fi
+		if [ -z "$USEGEOELF" ]							; then	USEGEOELF="0"; fi
+		if [ -z "$AUTOGEOELF" ]							; then	AUTOGEOELF="0"; fi
 		if [ -z "$INSTALL_RESHADE" ]					; then	INSTALL_RESHADE="0"; fi
 		if [ -z "$RESHADE_DEPTH3D" ]					; then	RESHADE_DEPTH3D="0"; fi
 		if [ -z "$USERESHADE" ]							; then	USERESHADE="0"; fi
@@ -2708,6 +2714,10 @@ function saveCfg {
 			echo "FWSURL=\"$FWSURL\""
 			echo "## $YAD appimage url"
 			echo "YAIURL=\"$YAIURL\""
+			echo "## wine reload URL"
+			echo "WINERELOADURL=\"$WINERELOADURL\""
+			echo "## $GEOELF url"
+			echo "GEOELFURL=\"$GEOELFURL\""
 			} >> "$1"
 			#ENDsaveCfgurl
 		fi
@@ -3067,6 +3077,10 @@ function saveCfg {
 			echo "USELUXTORPEDA=\"0\""
 			echo "## $DESC_REGEDIT"
 			echo "REGEDIT=\"$REGEDIT\""
+			echo "## $DESC_USEGEOELF"
+			echo "USEGEOELF=\"$USEGEOELF\""
+			echo "## $DESC_AUTOGEOELF"
+			echo "AUTOGEOELF=\"$AUTOGEOELF\""
 			echo "## $DESC_INSTALL_RESHADE"
 			echo "INSTALL_RESHADE=\"$INSTALL_RESHADE\""
 			echo "## $DESC_RESHADE_DEPTH3D"
@@ -4642,6 +4656,8 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_CREATEDESKTOPICON!$DESC_CREATEDESKTOPICON ('CREATEDESKTOPICON')":NUM "${CREATEDESKTOPICON}!0..3" `#CAT_Misc` `#MENU_GAME` \
 --field="     $GUI_GAMESCREENRES!$DESC_GAMESCREENRES ('GAMESCREENRES')":CBE "$(cleanDropDown "${GAMESCREENRES/#-/ -}" "$(printf "%s\n" "$(listScreenRes | tr '\n' '!')")$NON")" `#CAT_Misc` `#MENU_GAME` \
 --field="     $GUI_TOGSTEAMWEBHELPER!$DESC_TOGSTEAMWEBHELPER ('TOGSTEAMWEBHELPER')":CHK "${TOGSTEAMWEBHELPER/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_USEGEOELF!$DESC_USEGEOELF ('USEGEOELF')":CHK "${USEGEOELF/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_AUTOGEOELF!$DESC_AUTOGEOELF ('AUTOGEOELF')":CHK "${AUTOGEOELF/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_USESPECIALK!$DESC_USESPECIALK ('USESPECIALK')":CHK "${USESPECIALK/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_SPEKVERS!$DESC_SPEKVERS ('SPEKVERS')":CB "$(cleanDropDown "${SPEKVERS/#-/ -}" "default!$SPEKYADLIST")" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_AUTOSPEK!$DESC_AUTOSPEK ('AUTOSPEK')":CHK "${AUTOSPEK/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
@@ -5804,6 +5820,14 @@ function migrateCfgOption {
 			writelog "INFO" "${FUNCNAME[0]} - Automatically updating variable SPEKVERS from 'old' to '$SPEKVERS' in '$STLGAMECFG'"
 			updateConfigEntry "SPEKVERS" "$SPEKVERS" "$STLGAMECFG"	
 		fi
+		
+		# collections update
+		if [ -n "$CHECKCATEGORIES" ] && [ "$CHECKCATEGORIES" -eq 1 ]; then
+			CHECKCOLLECTIONS="$CHECKCATEGORIES"
+			touch "$FUPDATE"
+			writelog "INFO" "${FUNCNAME[0]} - Automatically updating variable CHECKCOLLECTIONS from old variable CHECKCATEGORIES"
+			updateConfigEntry "CHECKCOLLECTIONS" "$CHECKCOLLECTIONS" "$STLGAMECFG"	
+		fi
 	fi
 }
 
@@ -5971,16 +5995,15 @@ function getWindowHeight {
 
 #XXXXXXXXXXXXXXXXX
 function getLatestGeoElf {
-	GEOELFURL="http://helixmod.blogspot.com/2022/06/announcing-new-geo-11-3d-driver.html"
 	GEOELFDLURL="$("$WGET" -q "$GEOELFURL" -O - 2> >(grep -v "SSL_INIT") | sed $'s/<a href=/\\\n/g' | grep "^\"https" | grep "\.zip" | grep -oP '"\K[^"]+' | grep -m1 https)" # maybe make less fragile later :)
 	GEOELFFILE="${GEOELFDLURL##*/}"
 	CURGEOELF="${GEOELFDLURL##*+v}"
 	CURGEOELF="${CURGEOELF%.*}";
 	
-	GEOELFDLDIR="$STLDLDIR/geo11"
-	mkProjDir "$GEOELFDLDIR/$CURGEOELF"
-
-	GEODSTD="$GEOELFDLDIR/$CURGEOELF/"
+	CURGEOELFDIR="$GEOELFDLDIR/$CURGEOELF"
+	mkProjDir "$CURGEOELFDIR"
+	
+	GEODSTD="$CURGEOELFDIR"
 	GEODSTF="$GEODSTD/$GEOELFFILE"
 	
 	if [ -f "$GEODSTF" ]; then
@@ -5990,6 +6013,99 @@ function getLatestGeoElf {
 		dlCheck "$GEOELFDLURL" "$GEODSTF" "X" "Downloading '$GEOELFFILE'"
 		"$UNZIP" -q "$GEODSTF" -d "$GEODSTD" 2>/dev/null
 		writelog "INFO" "${FUNCNAME[0]} - Extracted '$GEODSTF' to '$GEODSTD'"
+		if [ -L "$LGEOELFSYM" ]; then
+			rm "$LGEOELFSYM"
+			writelog "INFO" "${FUNCNAME[0]} - Updating symlink '$LGEOELFSYM' pointing to '$CURGEOELFDIR'"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Creating symlink '$LGEOELFSYM' pointing to '$CURGEOELFDIR'"
+		fi
+		ln -s "$CURGEOELFDIR" "$LGEOELFSYM"
+		cp "$(find "$GEODSTD" -name "*Version*")" "$GEODSTD/${GEOELF}-version.txt"
+	fi
+}
+
+#XXXXXXXXXXXXXXXXX
+function configureGeoElf {
+	function installGeo {
+		function copyGeo {
+			rm "$GEOELFENA" 2>/dev/null
+			while read -r file; do
+				cp "$file" "$GEOELFDDIR"
+				echo "${file##*/}" >> "$GEOELFENA"
+			done <<< "$(find "$LGEOELFSYM/$1" -mindepth 1 -maxdepth 1 -type f)"
+
+			# not sure yet if (ShaderFixes) subdirectory is even required - maybe implement later TODO?
+			#			while read -r dir; do
+			#				mkdir "$GEOELFDDIR/${dir##*/}"
+			#			done <<< "$(find "$LGEOELFSYM/$1" -mindepth 1 -type d)"
+			# ...
+
+			cp "$LGEOELFSYM/${GEOELF}-version.txt" "$GEOELFDDIR"
+			echo "${GEOELF}-version.txt" >> "$GEOELFENA"
+		}
+		
+		if [ ! -d "$LGEOELFSYM/$1" ] || [ "$AUTOGEOELF" -eq 1 ]; then
+			getLatestGeoElf
+		fi
+
+		if [ -d "$LGEOELFSYM/$1" ]; then
+			if [ -f "$GEOELFENA" ]; then
+				if [ "$AUTOGEOELF" -eq 1 ]; then
+					GEOELFVI="$(cat "$GEOELFDDIR/${GEOELF}-version.txt")"
+					GEOELFVA="$(cat "$LGEOELFSYM/${GEOELF}-version.txt")"
+					writelog "INFO" "${FUNCNAME[0]} - Installed $GEOELF version is '$GEOELFVI', latest downloaded version is '$GEOELFVA'"
+					# no need to check the newer version directly, because latest is either equal or newer
+					if [ "$GEOELFVI" != "$GEOELFVA" ]; then
+						writelog "INFO" "${FUNCNAME[0]} - Installing new $GEOELF version '$GEOELFVA'"
+						copyGeo "$1"
+					else
+						writelog "INFO" "${FUNCNAME[0]} - Installed $GEOELF version '$GEOELFVI' is identical to the latest downloaded version '$GEOELFVA' - nothing to do"
+					fi
+				else
+					writelog "SKIP" "${FUNCNAME[0]} - $GEOELF is already installed in the game dir and autoupdate is disabled - nothing to do"
+				fi
+			else
+				writelog "INFO" "${FUNCNAME[0]} - Installing geo-11 drivers from '$LGEOELFSYM/$1' to '$GEOELFDDIR'"
+				copyGeo "$1"
+			fi
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - '$LGEOELFSYM' could not be found - can't enable $GEOELF"
+			USEGEOELF=0
+		fi
+	}
+
+	GEOELFDDIR="$EFD"
+	setFullGameExePath "GEOELFDDIR"	
+	GEOELFENA="$GEOELFDDIR/${GEOELF}_enabled.txt"
+
+	if [ "$USEGEOELF" -eq 1 ]; then	
+		if [ "$USECUSTOMCMD" -eq 1 ] && [ -f "$CUSTOMCMD" ]; then
+			ARCHEXE="$CUSTOMCMD"
+		else
+			ARCHEXE="$GP"
+		fi
+		
+		if [ "$(getArch "$ARCHEXE")" == "32" ]; then
+			installGeo "x32"
+		elif [ "$(getArch "$ARCHEXE")" == "64" ]; then
+			installGeo "x64"
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - Could not determine the architecture of '$GP' - not installing '$GEOELF'" "E"
+		fi
+	else
+		if [ -f "$GEOELFENA" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - $GEOELF was previously enabled, so removing all its files from '$GEOELFDDIR'"
+			while read -r file; do
+				RMFILE="$GEOELFDDIR/$file"
+				if [ -f "$RMFILE" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Removing '$RMFILE'"
+					rm "$GEOELFDDIR/$file"
+				else
+					writelog "SKIP" "${FUNCNAME[0]} - '$RMFILE' missing - nothing to do" "E"
+				fi
+			done < "$GEOELFENA"
+			rm "$GEOELFENA"
+		fi
 	fi
 }
 
@@ -13655,6 +13771,7 @@ function setLinGameVals {
 		IGCSDST="0"
 		USESPECIALK="0"
 		USEFWS="0"
+		USEGEOELF="0"
 	fi
 }
 
@@ -14216,6 +14333,10 @@ function prepareLaunch {
 		# start game with ${RESH} if USERESHADE is 1
 		writelog "INFO" "${FUNCNAME[0]} - useSpecialK:"
 		useSpecialK
+
+		# start game with $GEOELF if USEGEOELF is 1
+		writelog "INFO" "${FUNCNAME[0]} - configureGeoElf:"
+		configureGeoElf
 		
 		# open Shader Menu if CHOOSESHADERS is 1
 		writelog "INFO" "${FUNCNAME[0]} - ChooseShaders:"
@@ -19576,6 +19697,10 @@ function main {
 				fi
 			fi
 		elif grep -q "$SAC" <<< "$@" || grep -q "$L2EA" <<< "$@"; then
+			if grep -q "$L2EA" <<< "$@"; then
+				echo "XXXXXXXX - debug #508 - $L2EA args '$*'" >> /tmp/XXXXXXXXXXXXXX508
+			fi
+			
 			if grep -q "update" <<< "$@" || grep -q "^play" <<< "$@" ; then
 				commandline "$@"
 			else
