@@ -7676,30 +7676,26 @@ function installReshade {
 
 		INSTDESTDIR="$SHADDESTDIR"
 
-		function maybedrop { # TODO remove?
-		# checking for previous dll conficts between $D3D47 and $RS_D9_DEST
-		if [ -f "$INSTDESTDIR/${RS_DX_DEST//.dll/.log}" ]; then
-			if grep -q "Another ${RESH} instance was already loaded" "$INSTDESTDIR/${RS_DX_DEST//.dll/.log}"; then
-				writelog "INFO" "${FUNCNAME[0]} - Found $RS_DX_DEST conflict with $RS_D9_DEST"
-				if [ -f "$INSTDESTDIR/$RS_D9_DEST" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - Removing $RS_D9_DEST"
-					rm "$INSTDESTDIR/$RS_D9_DEST"
-				else
-					writelog "SKIP" "${FUNCNAME[0]} - $RS_D9_DEST not found"
-				fi
-				
-				if [ -z "$NOD3D9" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - Blocking re-installation of '$RS_D9_DEST' by setting NOD3D9=1 in '$STLGAMECFG'"
-					updateConfigEntry "NOD3D9" "1" "$STLGAMECFG"
-					export NOD3D9=1
-				fi
+		# checking for previous dll conficts between $RS_DX_DEST and $RS_D9_DEST
+		# note: modern ReShade uses "ReShade_exenamehere.log", and old versions use "dxgi.log" (if ReShade dll is named dxgi.dll). we support both names.
+		RESHADE_CONFLICTS=$(find "$INSTDESTDIR" -maxdepth 1 \( -name "${RS_DX_DEST//.dll/.log}" -or -name "ReShade_*.log" \) -print0 | xargs -0 -r grep -l "Another ReShade instance was already loaded from" | wc -l)
+		if [ "$RESHADE_CONFLICTS" -ge 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Found $RS_DX_DEST conflict with $RS_D9_DEST"
+			if [ -f "$INSTDESTDIR/$RS_D9_DEST" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Removing $RS_D9_DEST"
+				rm "$INSTDESTDIR/$RS_D9_DEST"
 			else
-				writelog "INFO" "${FUNCNAME[0]} - No conflict found in old logfile ${RS_DX_DEST//.dll/.log}"
-			fi				
+				writelog "SKIP" "${FUNCNAME[0]} - $RS_D9_DEST not found"
+			fi
+
+			if [ -z "$NOD3D9" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Blocking re-installation of '$RS_D9_DEST' by setting NOD3D9=1 in '$STLGAMECFG'"
+				updateConfigEntry "NOD3D9" "1" "$STLGAMECFG"
+				export NOD3D9=1
+			fi
 		else
-			writelog "INFO" "${FUNCNAME[0]} - No old logfile ${RS_DX_DEST//.dll/.log} found"
+			writelog "INFO" "${FUNCNAME[0]} - No conflict found in old logfiles"
 		fi
-		}
 
 		if [ -n "$ARCHALTEXE" ] && [[ ! "$ARCHALTEXE" =~ ${DUMMYBIN}$ ]]; then
 			CHARCH="$ARCHALTEXE"
