@@ -299,6 +299,7 @@ STLGPEVKD="$STLGAMES/pev"
 MO2INSTFAIL="$STLSHM/${MO}-failed.txt"
 ABSGAMEEXEPATH="$NON"
 GEOELF="geo-11"
+ISORIGIN=0
 
 #STLGSCPTD="$STLGAMES/scripts"
 NOGAMES=",70_2260196511,228980,858280,961940,1054830,1070560,1113280,1245040,1391110,1420170,"
@@ -1995,7 +1996,10 @@ function getGameOS {
 			done <<< "$(printf "%s\n" "$@")"
 
 			if [ -n "$STEAM_COMPAT_DATA_PATH" ]; then
-				if [ -f "$OSCHECKGAMEEXE" ]; then
+				if [ "$ISORIGIN" -eq 1 ]; then #XXXXXXXXX WIP for #508 
+						writelog "INFO" "${FUNCNAME[0]} - Found '$L2EA' in the command line, so this is a Windows game!"
+						setWin "$@"
+				elif [ -f "$OSCHECKGAMEEXE" ]; then
 					writelog "INFO" "${FUNCNAME[0]} - Making some checks on '$OSCHECKGAMEEXE' to determine the OS version of the game"
 					if grep -q "shell script" <<< "$(file "$(realpath "$OSCHECKGAMEEXE")")" || grep -q "ELF.*.LSB" <<< "$(file "$(realpath "$OSCHECKGAMEEXE")")" ; then
 						writelog "INFO" "${FUNCNAME[0]} - Looks like this is a Linux game!"
@@ -10916,7 +10920,8 @@ function checkWineCfgLaunch {
 		if [ "$RUN_WINECFG" -eq 1 ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Starting '$WINECFG' before game start:"
 			if [ "$USEWINE" -eq 0 ]; then
-				extWine64Run "$WINECFG"
+				#513
+				WINE="$RUNWINE" WINEARCH=win64 WINEDEBUG="$STLWINEDEBUG" WINEPREFIX="$GPFX" "$RUNWINE" "${WINECFG}.exe" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log"
 			else
 				extWine64Run "$RUNWINECFG"
 			fi
@@ -13570,7 +13575,6 @@ function checkExtDeps {
 	checkDep "RUN_GAMCON" "$GAMCON"
 	checkDep "USENETMON" "$NETMON"
 	checkDep "USENOTIFIER" "$NOTY"
-	checkDep "RUN_WINECFG" "$WINECFG"
 	checkDep "CHECKHMD" "$LSUSB"
 	checkDep "BACKUPSTEAMUSER" "$RSYNC"
 	checkDep "USESPECIALK" "$SEVZA"
@@ -19693,10 +19697,11 @@ function main {
 				fi
 			fi
 		elif grep -q "$SAC" <<< "$@" || grep -q "$L2EA" <<< "$@"; then
+			# is origin 
 			if grep -q "$L2EA" <<< "$@"; then
-				echo "XXXXXXXX - debug #508 - $L2EA args '$*'" >> /tmp/XXXXXXXXXXXXXX508
+				ISORIGIN=1
 			fi
-			
+
 			if grep -q "update" <<< "$@" || grep -q "^play" <<< "$@" ; then
 				commandline "$@"
 			else
