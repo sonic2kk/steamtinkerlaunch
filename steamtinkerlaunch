@@ -6,14 +6,14 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v10.0.20220706"
+PROGVERS="v10.0.20220707"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
 PROJECTPAGE="$GHURL/frostworx/${PROGNAME,,}"
 PPW="$PROJECTPAGE/wiki"
 CURWIKI="$PPW"
-STARTDEBUG=0
+STARTDEBUG=1
 ONSTEAMDECK=0
 
 ### internal dependencies ###
@@ -87,6 +87,7 @@ VRINITLOCK="$STLSHM/vrinit.lock"
 IGCSINITLOCK="$STLSHM/igcsinit.lock"
 VRINITRESULT="$STLSHM/vrinit.conf"
 VWRUN="$STLSHM/vwrun.txt"
+STELILIST="$STLSHM/SteamLibraries.txt"
 UUUPATCH="${PROGNAME,,}-uuu-patch"
 UUUPATCHCOMMAND="$STLSHM/${UUUPATCH}.sh"
 GCD="GameCfgDiffers"
@@ -1463,6 +1464,92 @@ function createCollectionMenus {
 	fi
 }
 
+function listSteamLibraries {
+	function getBIF {
+		local REGEX='"(BaseInstallFolder[^"]*|path)"\s+"(.*)"\s*$'
+		in="$1"
+		if [[ $in =~ $REGEX ]] && [ -n "${BASH_REMATCH[2]}" ]; then
+			echo "${BASH_REMATCH[2]}/$SA"
+		else
+			writelog "WARN" "${FUNCNAME[0]} - Failed to parse Base Install Folder from '$in'"
+		fi
+	}
+
+	function listSLs {
+		if [ -f "$CFGVDF" ] || [ -f "$LFVDF" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Searching appmanifest files in '$CFGVDF' and '$LFVDF'" "X" "$APPMALOG"
+			while read -r BIF; do
+				getBIF "$BIF"
+			done <<< "$(grep "\"BaseInstallFolder\|\"path\"" "$CFGVDF" "$LFVDF" 2>/dev/null)" | sort -u
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - Neither file CFGVDF '$CFGVDF' nor file LFVDF '$LFVDF' found - this should not happen! - skipping"
+		fi
+	}
+	
+	MAXAGE=360
+
+	if [ ! -f "$STELILIST" ] || test "$(find "$STELILIST" -mmin +"$MAXAGE")"; then
+		writelog "INFO" "${FUNCNAME[0]} - (Re-)creating '$STELILIST'"
+		rm "$STELILIST" 2>/dev/null
+		listSLs | sort -u > "$STELILIST"
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - not recreating already available '$STELILIST'"
+	fi
+}
+
+
+# maybe useless function. Just a WIP attempt to get SLR working again, which possibly broke origin compatibility in steamtinkerlaunch - see #508
+
+function setSteamLibraryPaths {
+	while read -r lpath; do
+		if [ -z "$STEAM_COMPAT_LIBRARY_PATHS" ]; then
+			STEAM_COMPAT_LIBRARY_PATHS="$lpath"
+		else
+			if ! grep -q "$lpath" <<< "$STEAM_COMPAT_LIBRARY_PATHS" ; then
+				STEAM_COMPAT_LIBRARY_PATHS="$STEAM_COMPAT_LIBRARY_PATHS:$lpath"
+			fi
+		fi
+
+# XXXXXXXXXXXX todo?:
+# remove Proton here and add it later when the used proton version is known for both variables
+# STEAM_COMPAT_TOOL_PATHS does not need STEWOS so maybe remove later
+
+		while read -r cmpath; do
+			if [ -n "$cmpath" ]; then
+				if [ -z "$STEAM_COMPAT_MOUNTS" ]; then
+					STEAM_COMPAT_MOUNTS="$cmpath"
+				else
+					if ! grep -q "$cmpath" <<< "$STEAM_COMPAT_MOUNTS" ; then
+					STEAM_COMPAT_MOUNTS="$STEAM_COMPAT_MOUNTS:$cmpath"
+					fi
+				fi
+
+				if [ -z "$STEAM_COMPAT_TOOL_PATHS" ]; then
+					STEAM_COMPAT_TOOL_PATHS="$cmpath"
+				else
+					if ! grep -q "$cmpath" <<< "$STEAM_COMPAT_TOOL_PATHS" ; then
+						STEAM_COMPAT_TOOL_PATHS="$STEAM_COMPAT_TOOL_PATHS:$cmpath"
+					fi
+				fi
+			fi
+		done <<< "$(find "$lpath" -mindepth 2 -maxdepth 2 -type d \( -name "Proton" -o -name "$STEWOS" -o -name "${SLR}*" \))"
+	done < "$STELILIST"
+
+	export STEAM_COMPAT_LIBRARY_PATHS
+	export STEAM_COMPAT_MOUNTS
+	export STEAM_COMPAT_TOOL_PATHS
+
+	writelog "INFO" "${FUNCNAME[0]} - STEAM_COMPAT_LIBRARY_PATHS set to '$STEAM_COMPAT_LIBRARY_PATHS'"
+	writelog "INFO" "${FUNCNAME[0]} - STEAM_COMPAT_MOUNTS set to '$STEAM_COMPAT_MOUNTS'"
+	writelog "INFO" "${FUNCNAME[0]} - STEAM_COMPAT_TOOL_PATHS set to '$STEAM_COMPAT_TOOL_PATHS'"
+	
+#	echo "STEAM_COMPAT_LIBRARY_PATHS $STEAM_COMPAT_LIBRARY_PATHS"
+#	echo "STEAM_COMPAT_MOUNTS $STEAM_COMPAT_MOUNTS"
+#	echo "STEAM_COMPAT_TOOL_PATHS $STEAM_COMPAT_TOOL_PATHS"
+
+#	export STEAM_LINUX_RUNTIME_LOG=1
+}
+
 function listAppManifests {
 	function findAppMa {
 		if [ -d "$1" ]; then
@@ -1784,8 +1871,12 @@ function setGameVars {
 		STECOSHAPA="$STEAM_COMPAT_SHADER_PATH"
 	fi
 
-	if [ -n "$STEAM_COMPAT_LIBRARY_PATHS" ]; then
+	# maybe loop through all paths possibly in STEAM_COMPAT_LIBRARY_PATHS?
+	if [ -d "$STEAM_COMPAT_LIBRARY_PATHS" ]; then
 		APPMAFE="${STEAM_COMPAT_LIBRARY_PATHS}/appmanifest_${AID}.acf"
+	else
+	# this should cover it though as well already
+		APPMAFE="$(listAppManifests | grep -m1 "${1}.acf")"
 	fi
 
 	REAPSESTR="reaper SteamLaunch"
@@ -1994,11 +2085,15 @@ function getGameOS {
 				fi
 				mapfile -t -O "${#OSCHECKINGCMD[@]}" OSCHECKINGCMD <<< "$INGARG"
 			done <<< "$(printf "%s\n" "$@")"
-
+		
 			if [ -n "$STEAM_COMPAT_DATA_PATH" ]; then
-				if [ "$ISORIGIN" -eq 1 ]; then #XXXXXXXXX WIP for #508 
-						writelog "INFO" "${FUNCNAME[0]} - Found '$L2EA' in the command line, so this is a Windows game!"
-						setWin "$@"
+				if grep -q "$L2EA" <<< "$@"; then
+					ISORIGIN=1
+				fi
+
+				if [ "$ISORIGIN" -eq 1 ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Found '$L2EA' in the command line, so this is a Windows game!"
+					setWin "$@"
 				elif [ -f "$OSCHECKGAMEEXE" ]; then
 					writelog "INFO" "${FUNCNAME[0]} - Making some checks on '$OSCHECKGAMEEXE' to determine the OS version of the game"
 					if grep -q "shell script" <<< "$(file "$(realpath "$OSCHECKGAMEEXE")")" || grep -q "ELF.*.LSB" <<< "$(file "$(realpath "$OSCHECKGAMEEXE")")" ; then
@@ -11641,16 +11736,19 @@ function listWinSteamLibraries {
 	SL1="${SROOT%*/}"
 	echo "\"$COUNTER\" \"Z:${SL1//\//\\\\}\""
 
+	listSteamLibraries
+	
 	unset SLARR
 	mapfile -t -O "${#SLARR[@]}" SLARR <<< "$SL1"
 
 	while read -r line; do
 		COUNTER=$((COUNTER+1))
 		W1="${line//\"}"
+		W1="${line//\/steamapps/}"
 		mapfile -t -O "${#SLARR[@]}" SLARR <<< "$W1"
 		W2="${W1//\//\\\\}"
 		echo "\"$COUNTER\" \"Z:$W2\""
-	done <<< "$(grep "\"path\"" "$LFVDF" | awk '{print $2}')"
+	done < "$STELILIST"
 }
 
 function installDotNet {
@@ -15229,10 +15327,18 @@ function startGame {
 		writelog "INFO" "${FUNCNAME[0]} - ## GAMESTART HERE ###"
 
 		restoreOrgVars # restore original LC_ and friends for the game
-
+		
+#env > /tmp/XXXXXXXXXXXXXXXXXXXXXXenv # any variable which is set when using proton directly, which triggers SLR?
+ 
 		GRUNLOG="$STLGLLOGDIRID/${AID}.log"
+		if [ "$ISORIGIN" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - ## ${L2EA}  LAUNCH COMMAND: '${RUNCMD[*]}'"
 
-		if [ "$USEMANGOAPP" -eq 1 ]; then
+			function runEA {
+				"${RUNCMD[@]}" 2>&1 | tee "$GRUNLOG"
+			}
+			runEA  &
+		elif [ "$USEMANGOAPP" -eq 1 ]; then
 			# mangoapp gamestart - COMMENTDEBUG:
 			writelog "INFO" "${FUNCNAME[0]} - Using $MANGOAPP"
 			MRSH="$STLSHM/maprun.sh"
@@ -15268,8 +15374,24 @@ function startGame {
 	emptyVars "O" "X" # clear original variables again (mostly for a continous log (date))
 	createSymLink "${FUNCNAME[0]}" "$GRUNLOG" "${STLGLLOGDIRTI}/${GN}.log"
 
-	if [ "$ISGAME" -eq 2 ] && [ "$USEWINE" -eq 0 ] && { grep -qi "GE\-" <<< "$USEPROTON" || grep -qi "\-TKG" <<< "$USEPROTON";}; then
-		if [ "$USEMANGOAPP" -eq 1 ]; then
+	if [ "$ISGAME" -eq 2 ] && [ "$USEWINE" -eq 0 ] && { grep -qi "GE\-" <<< "$USEPROTON" || grep -qi "\-TKG" <<< "$USEPROTON" || [ "$ISORIGIN" -eq 1 ];}; then
+		if [ "$ISORIGIN" -eq 1 ]; then
+#XXXXXXXXXXXXXXXXXXXX
+			writelog "ERROR" "${FUNCNAME[0]} - At least Origin games currently are broken in '$PROGCMD', very likely because the SLR is no longer started automagically with '$PROGCMD'"	
+			writelog "ERROR" "${FUNCNAME[0]} - See https://github.com/frostworx/steamtinkerlaunch/issues/508 if interested. Any help/hints very welcome!"	
+			writelog "ERROR" "${FUNCNAME[0]} - The following code writes some logfiles and closes after 10 seconds. the game doesn't start either way! (try it if you don't believe me ;))"	
+
+			writelog "INFO" "${FUNCNAME[0]} - Waiting for $L2EA process to finish"		
+
+			for i in $(seq 0 10); do
+			sleep 1
+			
+			"$PGREP" -a "" | grep -i "origin\|exe\|wine" > "/tmp/ISORIGIN-getprocesses-$i"
+			done 
+			OE="Origin.exe"
+			WSPID="$("$PGREP" -a "" | grep "$OE" | grep -v grep | cut -d ' ' -f1 | tail -n1)"
+			writelog "INFO" "${FUNCNAME[0]} - $L2EA game launch pid is $WSPID"
+		elif [ "$USEMANGOAPP" -eq 1 ]; then
 			# could be used generally, but undecided yet if waitForGamePid should be used always by default
 			waitForGamePid
 			RLRUNWINESERVER="$(readlink -f "$RUNWINESERVER")"
@@ -19686,6 +19808,9 @@ function main {
 	writelog "INFO" "${FUNCNAME[0]} - Start creating default configs"
 	createDefaultCfgs "$@"
 
+	listSteamLibraries
+	setSteamLibraryPaths
+
 	writelog "INFO" "${FUNCNAME[0]} - Checking internal dependencies:"
 	checkIntDeps "$@"
 
@@ -19715,11 +19840,6 @@ function main {
 				fi
 			fi
 		elif grep -q "$SAC" <<< "$@" || grep -q "$L2EA" <<< "$@"; then
-			# is origin 
-			if grep -q "$L2EA" <<< "$@"; then
-				ISORIGIN=1
-			fi
-
 			if grep -q "update" <<< "$@" || grep -q "^play" <<< "$@" ; then
 				commandline "$@"
 			else
