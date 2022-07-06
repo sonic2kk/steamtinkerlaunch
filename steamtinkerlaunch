@@ -3975,18 +3975,25 @@ function updateEditor {
 
 	loadCfg "$CFG" X
 	if grep -q "$XDGO" <<< "$STLEDITOR" || [ ! -f "$STLEDITOR" ] ; then
-		writelog "WARN" "${FUNCNAME[0]} - '$XDGO' selected as editor or configured editor not found - trying to find an installed editor installed"
-		if [ -x "$(command -v "$XDGMIME" 2>/dev/null)" ]; then
-			XDGED="$(command -v "$("$XDGMIME" query default text/plain | cut -d '.' -f1)" 2>/dev/null)"
-			if [ -x "$XDGED" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - $XDGMIME points to '$XDGED', which also exists"
-				FOUNDEDITOR="$XDGED"
-			else
-				writelog "INFO" "${FUNCNAME[0]} - Using '$XDGO' directly, because $XDGMIME hasn't found anything useful"
-				FOUNDEDITOR="$XDGO"
+		if [ "$INFLATPAK" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Using '$XDGO' directly, because running in flatpak"
+			writelog "WARN" "${FUNCNAME[0]} - This might prevent a started game from stopping!"
+
+			FOUNDEDITOR="$XDGO"
+		else
+			writelog "WARN" "${FUNCNAME[0]} - '$XDGO' selected as editor or configured editor not found - trying to find an installed editor installed"
+			if [ -x "$(command -v "$XDGMIME" 2>/dev/null)" ]; then
+				XDGED="$(command -v "$("$XDGMIME" query default text/plain | cut -d '.' -f1)" 2>/dev/null)"
+				if [ -x "$XDGED" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - $XDGMIME points to '$XDGED', which also exists"
+					FOUNDEDITOR="$XDGED"
+				else
+					writelog "INFO" "${FUNCNAME[0]} - $XDGMIME not found - using '$XDGO' directly"
+					writelog "WARN" "${FUNCNAME[0]} - This might prevent a started game from stopping!"
+					FOUNDEDITOR="$XDGO"
+				fi
 			fi
 		fi
-
 		if [ -z "$FOUNDEDITOR" ]; then
 			if [ -x "$(command -v "geany")" ]; then
 				FOUNDEDITOR="$(command -v "geany")"
@@ -4000,9 +4007,17 @@ function updateEditor {
 		fi
 
 		if [ -n "$FOUNDEDITOR" ]; then
-			writelog "INFO" "${FUNCNAME[0]} -changing STLEDITOR to '$FOUNDEDITOR' in '$CFG'"
-			updateConfigEntry "STLEDITOR" "$FOUNDEDITOR" "$CFG"
-			loadCfg "$CFG"
+			if [ "$FOUNDEDITOR" != "$XDGO" ]; then
+				writelog "INFO" "${FUNCNAME[0]} -changing STLEDITOR to '$FOUNDEDITOR' in '$CFG'"
+				updateConfigEntry "STLEDITOR" "$FOUNDEDITOR" "$CFG"
+				loadCfg "$CFG"
+			else
+				if [ "$STLEDITOR" != "$XDGO" ]; then
+					writelog "INFO" "${FUNCNAME[0]} -Using '$XDGO' as editor instead of configured editor '$STLEDITOR'"
+					writelog "WARN" "${FUNCNAME[0]} - This might prevent a started game from stopping!"
+					STLEDITOR="$XDGO"
+				fi
+			fi
 		else
 			writelog "SKIP" "${FUNCNAME[0]} - No valid editor found - leaving '$XDGO'"	
 		fi
