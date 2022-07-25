@@ -4070,25 +4070,15 @@ function updateEditor {
 
 	loadCfg "$CFG" X
 	if grep -q "$XDGO" <<< "$STLEDITOR" || [ ! -f "$STLEDITOR" ] ; then
-		if [ "$INFLATPAK" -eq 1 ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Using '$XDGO' directly, because running in flatpak"
-			writelog "WARN" "${FUNCNAME[0]} - This might prevent a started game from stopping!"
-
-			FOUNDEDITOR="$XDGO"
-		else
-			writelog "WARN" "${FUNCNAME[0]} - '$XDGO' selected as editor or configured editor not found - trying to find an installed editor installed"
-			if [ -x "$(command -v "$XDGMIME" 2>/dev/null)" ]; then
-				XDGED="$(command -v "$("$XDGMIME" query default text/plain | cut -d '.' -f1)" 2>/dev/null)"
-				if [ -x "$XDGED" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - $XDGMIME points to '$XDGED', which also exists"
-					FOUNDEDITOR="$XDGED"
-				else
-					writelog "INFO" "${FUNCNAME[0]} - $XDGMIME not found - using '$XDGO' directly"
-					writelog "WARN" "${FUNCNAME[0]} - This might prevent a started game from stopping!"
-					FOUNDEDITOR="$XDGO"
-				fi
+		writelog "WARN" "${FUNCNAME[0]} - '$XDGO' selected as editor or configured editor not found - trying to find an installed editor installed"
+		if [ -x "$(command -v "$XDGMIME" 2>/dev/null)" ]; then
+			XDGED="$(command -v "$("$XDGMIME" query default text/plain | cut -d '.' -f1)" 2>/dev/null)"
+			if [ -x "$XDGED" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - $XDGMIME points to '$XDGED', which also exists"
+				FOUNDEDITOR="$XDGED"
 			fi
 		fi
+
 		if [ -z "$FOUNDEDITOR" ]; then
 			if [ -x "$(command -v "geany")" ]; then
 				FOUNDEDITOR="$(command -v "geany")"
@@ -4102,19 +4092,11 @@ function updateEditor {
 		fi
 
 		if [ -n "$FOUNDEDITOR" ]; then
-			if [ "$FOUNDEDITOR" != "$XDGO" ]; then
-				writelog "INFO" "${FUNCNAME[0]} -changing STLEDITOR to '$FOUNDEDITOR' in '$CFG'"
-				updateConfigEntry "STLEDITOR" "$FOUNDEDITOR" "$CFG"
-				loadCfg "$CFG"
-			else
-				if [ "$STLEDITOR" != "$XDGO" ]; then
-					writelog "INFO" "${FUNCNAME[0]} -Using '$XDGO' as editor instead of configured editor '$STLEDITOR'"
-					writelog "WARN" "${FUNCNAME[0]} - This might prevent a started game from stopping!"
-					STLEDITOR="$XDGO"
-				fi
-			fi
+			writelog "INFO" "${FUNCNAME[0]} - changing STLEDITOR to '$FOUNDEDITOR' in '$CFG'"
+			updateConfigEntry "STLEDITOR" "$FOUNDEDITOR" "$CFG"
+			loadCfg "$CFG"
 		else
-			writelog "SKIP" "${FUNCNAME[0]} - No valid editor found - leaving '$XDGO'"	
+			writelog "INFO" "${FUNCNAME[0]} - No valid editor found - will fall back to '$XDGO'."
 		fi
 	fi
 }
@@ -4308,10 +4290,16 @@ function EditorDialog {
 						writelog "INFO" "${FUNCNAME[0]} - Opening the url '$HELPURL' in the browser"
 						checkHelpUrl "$HELPURL"
 					fi
+
+					if [ -z "$STLEDITOR" ] || [ "$STLEDITOR" -eq "$NON" ]; then
+						writelog "INFO" "${FUNCNAME[0]} - No editor found or selected. Falling back to '$XDGO'"
+						writelog "WARN" "${FUNCNAME[0]} - If you find games fail to close try setting an editor manually"
+						STLEDITOR=$XDGO
+					fi
 	
 					writelog "INFO" "${FUNCNAME[0]} - Opening Editor '$STLEDITOR' with selected Config Files"
 					mapfile -t -O "${#EdArr[@]}" EdArr <<< "$EDFILES"
-					"$STLEDITOR" "${EdArr[@]}"
+					"$STLEDITOR" "${EdArr[@]}" &
 					unset EdArr
 					# kill browser if it was opened with the editor:
 					if [ -n "$KILLBROWSER" ]; then
@@ -14954,9 +14942,19 @@ function checkHelpUrl {
 
 		if [ -n "$HELPURL" ]; then
 			HELPURLNQ="${HELPURL//\"}"
+
+			if [ -z "$BROWSER" ] || [ "$BROWSER" -eq "$NON" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - No web browser selected falling back to '$XDGO'"
+				writelog "WARN" "${FUNCNAME[0]} - If issues occur opening web pages try setting a browser manually"
+				BROWSER="$XDGO"
+			fi
+
 			writelog "INFO" "${FUNCNAME[0]} - Selected to open '${HELPURLNQ//AID/$AID}' with '$BROWSER'"
-			if ! "$PGREP" -f "$BROWSER" >/dev/null; then
-				touch "$STLSHM/KillBrowser-$AID.txt"
+			# If $BROWSER is $XDGO we don't want to kill it as it will likely kill something like Steam instead
+			if [ "$BROWSER" != "$XDGO" ]; then
+				if ! "$PGREP" -f "$BROWSER" >/dev/null; then
+					touch "$STLSHM/KillBrowser-$AID.txt"
+				fi
 			fi
 		
 			"$BROWSER" "${HELPURLNQ//AID/$AID}" 2>/dev/null & 
