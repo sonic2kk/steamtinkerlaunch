@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v10.0.20220725"
+PROGVERS="v10.0.20220727"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -16310,6 +16310,8 @@ function setWineVersion {
 		else
 			writelog "INFO" "${FUNCNAME[0]} - Using current wine version '$WINEVERSION'"
 		fi
+	
+		WINEVERSION="${WINEVERSION%%.tar*}"
 
 		if [ ! -d "$WINEEXTDIR/${WINEVERSION}" ]; then
 		
@@ -16322,7 +16324,7 @@ function setWineVersion {
 				DLURL="$(grep "$WINEVERSION" "$WINEDLLIST" | head -n1)"
 				writelog "INFO" "${FUNCNAME[0]} - Downloading '$WINEVERSION' from '$DLURL'"
 				StatusWindow "$(strFix "$NOTY_DLCUSTOMPROTON" "Wine")" "dlWine ${DLURL//|/\"}" "DownloadWineStatus"
-				if [ -d "$WINEEXTDIR/${WINEVERSION}" ]; then
+				if [ -d "$WINEEXTDIR/$WINEVERSION" ]; then
 					writelog "INFO" "${FUNCNAME[0]} - Downloading and extracting '$WINEVERSION' was successful"
 				else
 					writelog "ERROR" "${FUNCNAME[0]} - Downloading and extracting '$WINEVERSION' failed - giving up"
@@ -16342,6 +16344,8 @@ function createWineList {
 }
 
 function setWineVars {
+	WINEVERSION="${WINEVERSION%%.tar*}"
+
 	if [ "$USEWINE" -eq 1 ] && [ "$ISGAME" -eq 2 ] && { [ -z "$RUNWINEVERSION" ] || [ "$RUNWINEVERSION" != "$WINEVERSION" ];}; then
 		writelog "INFO" "${FUNCNAME[0]} - USEWINE is enabled. Creating some wine related variables"
 
@@ -16555,6 +16559,8 @@ function setWineCmd {
 	RUNGAMECMD="${GAMESTARTCMD[*]}"
 	RAWGAMECMD="${RUNGAMECMD#*waitforexitandrun }"
 	mapfile -d " " -t -O "${#FINGAMECMD[@]}" FINGAMECMD < <(printf '%s' "$RAWGAMECMD")
+	
+	writelog "INFO" "${FUNCNAME[0]} - Starting game $GN with '$("$RUNWINE" --version)' and waiting for its PID to exit"
 
 	# start with gamemoderun:
 	if [ "$USEGAMEMODERUN" -eq 1 ]; then
@@ -16562,27 +16568,27 @@ function setWineCmd {
 			gameScopeArgs "$GAMESCOPE_ARGS"
 			notiShow "$(strFix "$NOTY_STARTPROTGAMOSC" "$RUNWINEVERSION" "$GN" "$AID")"
 			startWineGame "$GMR" "$GSC" "${GAMESCOPEARGSARR[@]}"
-			writelog "INFO" "${FUNCNAME[0]} - Started game $GN with '$("$RUNWINE" --version)' using '$GAMEMODERUN' and '$GAMESCOPE' with PID '$WINEPID'"
+			writelog "INFO" "${FUNCNAME[0]} - Started game $GN via wine using '$GAMEMODERUN' and '$GAMESCOPE' with PID '$WINEPID'"
 		else
 			notiShow "$(strFix "$NOTY_STARTPROTGAMO" "$RUNWINEVERSION" "$GN" "$AID")"
 			startWineGame "$GMR"
-			writelog "INFO" "${FUNCNAME[0]} - Started game $GN with '$("$RUNWINE" --version)' using '$GAMEMODERUN' with PID '$WINEPID'"
+			writelog "INFO" "${FUNCNAME[0]} - Started game $GN via wine using '$GAMEMODERUN' with PID '$WINEPID'"
 		fi
 	# start with gamescope:
 	elif [ "$USEGAMESCOPE" -eq 1 ]; then
 		gameScopeArgs "$GAMESCOPE_ARGS"
 		notiShow "$(strFix "$NOTY_STARTPROTGAMSCO" "$RUNWINEVERSION" "$GN" "$AID")"
 		startWineGame "$GSC" "${GAMESCOPEARGSARR[@]}"
-		writelog "INFO" "${FUNCNAME[0]} - Started game $GN with '$("$RUNWINE" --version)' using '$GAMESCOPE' with PID '$WINEPID'"
+		writelog "INFO" "${FUNCNAME[0]} - Started game $GN via wine using '$GAMESCOPE' with PID '$WINEPID'"
 	# regular start:
 	else
 		notiShow "$(strFix "$NOTY_STARTPROT" "$RUNWINEVERSION" "$GN" "$AID")"
 		startWineGame
-		writelog "INFO" "${FUNCNAME[0]} - Started game $GN with '$("$RUNWINE" --version)' with PID '$WINEPID'"
+		writelog "INFO" "${FUNCNAME[0]} - Started game $GN via wine with PID '$WINEPID'"
 	fi
 
-	writelog "INFO" "${FUNCNAME[0]} - Waiting for game PID '$WINEPID' to exit..."
 	wait "$WINEPID"
+	writelog "INFO" "${FUNCNAME[0]} - game PID '$WINEPID' exited..."
 }
 
 function setProtonCmd {
@@ -16778,119 +16784,121 @@ function launchSteamGame {
 		writelog "SKIP" "${FUNCNAME[0]} - With ISGAME '$ISGAME' the game failed to start"
 	fi
 
-	# concatenate final game start command
+	if [ "$USEWINE" -ne 1 ]; then
+		# concatenate final game start command
 
-	if [ -n "$GMR" ]; then
-		FINALSTARTCMD=("$GMR")
-	fi
-	
-	if [ -n "$GSC" ]; then
-		if [ -n "${FINALSTARTCMD[0]}" ]; then
-			FINALSTARTCMD=("${FINALSTARTCMD[@]}" "$GSC")
-		else
-			FINALSTARTCMD=("$GSC")
+		if [ -n "$GMR" ]; then
+			FINALSTARTCMD=("$GMR")
 		fi
 		
-		if [ -n "${GAMESCOPEARGSARR[0]}" ]; then
-			FINALSTARTCMD=("${FINALSTARTCMD[@]}" "${GAMESCOPEARGSARR[@]}")
-		fi
-	fi
-
-	if [ -n "${MAHUCMD[0]}" ]; then
-		if [ -n "${FINALSTARTCMD[0]}" ]; then
-			FINALSTARTCMD=("${FINALSTARTCMD[@]}" "${MAHUCMD[@]}")
-		else
-			FINALSTARTCMD=("${MAHUCMD[@]}")
-		fi	
-	fi
-
-	if [ -n "${SLRCMD[0]}" ]; then
-		if [ -n "${FINALSTARTCMD[0]}" ]; then
-			FINALSTARTCMD=("${FINALSTARTCMD[@]}" "${SLRCMD[@]}")
-		else
-			FINALSTARTCMD=("${SLRCMD[@]}")
-		fi
-	fi
-	
-	if [ -n "${EXTSTARTCMD[0]}" ]; then
-		if [ -n "${FINALSTARTCMD[0]}" ]; then
-			FINALSTARTCMD=("${FINALSTARTCMD[@]}" "${EXTSTARTCMD[@]}")
-		else
-			FINALSTARTCMD=("${EXTSTARTCMD[@]}")
-		fi
-	else
-		if [ -n "${PROTSTARTCMD[0]}" ]; then
+		if [ -n "$GSC" ]; then
 			if [ -n "${FINALSTARTCMD[0]}" ]; then
-				FINALSTARTCMD=("${FINALSTARTCMD[@]}" "${PROTSTARTCMD[@]}")
+				FINALSTARTCMD=("${FINALSTARTCMD[@]}" "$GSC")
 			else
-				FINALSTARTCMD=("${PROTSTARTCMD[@]}")
+				FINALSTARTCMD=("$GSC")
 			fi
-		fi
-		
-		if [ -n "${GAMESTARTCMD[0]}" ]; then
-			if [ -n "${FINALSTARTCMD[0]}" ]; then
-				FINALSTARTCMD=("${FINALSTARTCMD[@]}" "${GAMESTARTCMD[@]}")
-			else
-				FINALSTARTCMD=("${GAMESTARTCMD[@]}")
+			
+			if [ -n "${GAMESCOPEARGSARR[0]}" ]; then
+				FINALSTARTCMD=("${FINALSTARTCMD[@]}" "${GAMESCOPEARGSARR[@]}")
 			fi
 		fi
 
-		if [ -n "${GAMEARGSARR[0]}" ]; then
+		if [ -n "${MAHUCMD[0]}" ]; then
 			if [ -n "${FINALSTARTCMD[0]}" ]; then
-				FINALSTARTCMD=("${FINALSTARTCMD[@]}" "${GAMEARGSARR[@]}")
+				FINALSTARTCMD=("${FINALSTARTCMD[@]}" "${MAHUCMD[@]}")
 			else
-				FINALSTARTCMD=("${GAMEARGSARR[@]}")
+				FINALSTARTCMD=("${MAHUCMD[@]}")
 			fi	
 		fi
-	fi
 
-	if [ "$STARTDEBUG" -eq 1 ]; then
-		{
-			echo "$(date) - $GN ($AID) - ======================"
-			echo "GMR $GMR"
-			echo "GSC $GSC"
-			echo "MAHUCMD '${MAHUCMD[*]}'"
-			echo "SLRCMD '${SLRCMD[*]}'"
-			echo "PROTSTARTCMD '${PROTSTARTCMD[*]}'"
-			echo "GAMESTARTCMD '${GAMESTARTCMD[*]}'"
-			echo "GAMEARGSARR '${GAMEARGSARR[*]}'"
-			echo "-----------"
-			echo "I '${INGCMD[*]}'"
-			echo "X '${FINALSTARTCMD[*]}'"
-			echo "$(date) - $GN ($AID) - ======================"
-			if [ "$HAVESCTP" -eq 0 ] && [ "$HAVEREAP" -eq 0 ]; then
-				echo "$(date) - $GN ($AID) - HAVESCTP='$HAVESCTP', and HAVEREAP='$HAVEREAP' - assuming ${PROGNAME,,} is used as compat tool - using regular base game command to continue"
-			elif [ "$HAVESCTP" -eq 0 ] && [ "$HAVEREAP" -eq 1 ]; then
-				echo "$(date) - $GN ($AID) - HAVESCTP='$HAVESCTP', but also HAVEREAP='$HAVEREAP' - assuming ${PROGNAME,,} is set to both command and compat tool (or compat tool is empty) - steam doesn't provide STEAM_COMPAT_TOOL_PATHS, so have to cut out the reaper line to continue; HAVESLR='$HAVESLR'"
-			elif [ "$HAVESCTP" -eq 1 ] && [ "$HAVEREAP" -eq 1 ]; then
-				echo "$(date) - $GN ($AID) - HAVESCTP='$HAVESCTP', and HAVEREAP='$HAVEREAP' - assuming $PROGCMD is used as command line tool - switching proton version is disabled"
-			elif [ "$HAVESCTP" -eq 1 ] && [ "$HAVEREAP" -eq 0 ]; then
-				echo "$(date) - $GN ($AID) - HAVESCTP='$HAVESCTP', but also HAVEREAP='$HAVEREAP' - something went wrong - never seen this in the wild"
+		if [ -n "${SLRCMD[0]}" ]; then
+			if [ -n "${FINALSTARTCMD[0]}" ]; then
+				FINALSTARTCMD=("${FINALSTARTCMD[@]}" "${SLRCMD[@]}")
+			else
+				FINALSTARTCMD=("${SLRCMD[@]}")
 			fi
-			echo "$(date) - $GN ($AID) - ======================"
-			echo "$(date) - $GN ($AID) - INITIAL LAUNCH COMAND '${INGCMD[*]}'"
-			echo "$(date) - $GN ($AID) - HAVESCTP='$HAVESCTP';HAVEREAP='$HAVEREAP';HAVESLR='$HAVESLR';HAVESLRCT='$HAVESLRCT';HAVEINPROTON='$HAVEINPROTON'"
-			echo "$(date) - $GN ($AID) - REAPCMD '${REAPCMD[*]}'"
-			echo "$(date) - $GN ($AID) - RUNSLR '${RUNSLR[*]}'"
-			echo "$(date) - $GN ($AID) - RUNSLRCT '${RUNSLRCT[*]}'"
-			echo "$(date) - $GN ($AID) - ISGAME '$ISGAME'"
-			echo "$(date) - $GN ($AID) - INPROTCMD '${INPROTCMD[*]}'"
-			echo "$(date) - $GN ($AID) - INSTLCMD '${INSTLCMD[*]}'"
-			echo "$(date) - $GN ($AID) - ORGGCMD '${ORGGCMD[*]}'"
-			echo "$(date) - $GN ($AID) - ORG_STEAM_COMPAT_TOOL_PATHS '${ORG_STEAM_COMPAT_TOOL_PATHS[*]}'"
-			echo "$(date) - $GN ($AID) - USEREAP='$USEREAP'; USESLR=$USESLR'"
-			echo "$(date) - $GN ($AID) - FINAL LAUNCH RUNCMD '${RUNCMD[*]}'"
-			echo "$(date) - $GN ($AID) - ======================"
-		} >> "$STLSHM/${PROGNAME,,}-${FUNCNAME[0]}-STARTDEBUG.txt"
+		fi
+		
+		if [ -n "${EXTSTARTCMD[0]}" ]; then
+			if [ -n "${FINALSTARTCMD[0]}" ]; then
+				FINALSTARTCMD=("${FINALSTARTCMD[@]}" "${EXTSTARTCMD[@]}")
+			else
+				FINALSTARTCMD=("${EXTSTARTCMD[@]}")
+			fi
+		else
+			if [ -n "${PROTSTARTCMD[0]}" ]; then
+				if [ -n "${FINALSTARTCMD[0]}" ]; then
+					FINALSTARTCMD=("${FINALSTARTCMD[@]}" "${PROTSTARTCMD[@]}")
+				else
+					FINALSTARTCMD=("${PROTSTARTCMD[@]}")
+				fi
+			fi
+			
+			if [ -n "${GAMESTARTCMD[0]}" ]; then
+				if [ -n "${FINALSTARTCMD[0]}" ]; then
+					FINALSTARTCMD=("${FINALSTARTCMD[@]}" "${GAMESTARTCMD[@]}")
+				else
+					FINALSTARTCMD=("${GAMESTARTCMD[@]}")
+				fi
+			fi
 
+			if [ -n "${GAMEARGSARR[0]}" ]; then
+				if [ -n "${FINALSTARTCMD[0]}" ]; then
+					FINALSTARTCMD=("${FINALSTARTCMD[@]}" "${GAMEARGSARR[@]}")
+				else
+					FINALSTARTCMD=("${GAMEARGSARR[@]}")
+				fi	
+			fi
+		fi
+
+		if [ "$STARTDEBUG" -eq 1 ]; then
+			{
+				echo "$(date) - $GN ($AID) - ======================"
+				echo "GMR $GMR"
+				echo "GSC $GSC"
+				echo "MAHUCMD '${MAHUCMD[*]}'"
+				echo "SLRCMD '${SLRCMD[*]}'"
+				echo "PROTSTARTCMD '${PROTSTARTCMD[*]}'"
+				echo "GAMESTARTCMD '${GAMESTARTCMD[*]}'"
+				echo "GAMEARGSARR '${GAMEARGSARR[*]}'"
+				echo "-----------"
+				echo "I '${INGCMD[*]}'"
+				echo "X '${FINALSTARTCMD[*]}'"
+				echo "$(date) - $GN ($AID) - ======================"
+				if [ "$HAVESCTP" -eq 0 ] && [ "$HAVEREAP" -eq 0 ]; then
+					echo "$(date) - $GN ($AID) - HAVESCTP='$HAVESCTP', and HAVEREAP='$HAVEREAP' - assuming ${PROGNAME,,} is used as compat tool - using regular base game command to continue"
+				elif [ "$HAVESCTP" -eq 0 ] && [ "$HAVEREAP" -eq 1 ]; then
+					echo "$(date) - $GN ($AID) - HAVESCTP='$HAVESCTP', but also HAVEREAP='$HAVEREAP' - assuming ${PROGNAME,,} is set to both command and compat tool (or compat tool is empty) - steam doesn't provide STEAM_COMPAT_TOOL_PATHS, so have to cut out the reaper line to continue; HAVESLR='$HAVESLR'"
+				elif [ "$HAVESCTP" -eq 1 ] && [ "$HAVEREAP" -eq 1 ]; then
+					echo "$(date) - $GN ($AID) - HAVESCTP='$HAVESCTP', and HAVEREAP='$HAVEREAP' - assuming $PROGCMD is used as command line tool - switching proton version is disabled"
+				elif [ "$HAVESCTP" -eq 1 ] && [ "$HAVEREAP" -eq 0 ]; then
+					echo "$(date) - $GN ($AID) - HAVESCTP='$HAVESCTP', but also HAVEREAP='$HAVEREAP' - something went wrong - never seen this in the wild"
+				fi
+				echo "$(date) - $GN ($AID) - ======================"
+				echo "$(date) - $GN ($AID) - INITIAL LAUNCH COMAND '${INGCMD[*]}'"
+				echo "$(date) - $GN ($AID) - HAVESCTP='$HAVESCTP';HAVEREAP='$HAVEREAP';HAVESLR='$HAVESLR';HAVESLRCT='$HAVESLRCT';HAVEINPROTON='$HAVEINPROTON'"
+				echo "$(date) - $GN ($AID) - REAPCMD '${REAPCMD[*]}'"
+				echo "$(date) - $GN ($AID) - RUNSLR '${RUNSLR[*]}'"
+				echo "$(date) - $GN ($AID) - RUNSLRCT '${RUNSLRCT[*]}'"
+				echo "$(date) - $GN ($AID) - ISGAME '$ISGAME'"
+				echo "$(date) - $GN ($AID) - INPROTCMD '${INPROTCMD[*]}'"
+				echo "$(date) - $GN ($AID) - INSTLCMD '${INSTLCMD[*]}'"
+				echo "$(date) - $GN ($AID) - ORGGCMD '${ORGGCMD[*]}'"
+				echo "$(date) - $GN ($AID) - ORG_STEAM_COMPAT_TOOL_PATHS '${ORG_STEAM_COMPAT_TOOL_PATHS[*]}'"
+				echo "$(date) - $GN ($AID) - USEREAP='$USEREAP'; USESLR=$USESLR'"
+				echo "$(date) - $GN ($AID) - FINAL LAUNCH RUNCMD '${RUNCMD[*]}'"
+				echo "$(date) - $GN ($AID) - ======================"
+			} >> "$STLSHM/${PROGNAME,,}-${FUNCNAME[0]}-STARTDEBUG.txt"
+
+		fi
+
+		writelog "INFO" "${FUNCNAME[0]} - Original incoming start command: '${INGCMD[*]}'"
+		writelog "INFO" "${FUNCNAME[0]} - Final outgoing start command: '${FINALSTARTCMD[*]}'"
+
+		startGame "${FINALSTARTCMD[@]}"
+
+		writelog "STOP" "######### $PROGNAME $PROGVERS #########"
 	fi
-
-	writelog "INFO" "${FUNCNAME[0]} - Original incoming start command: '${INGCMD[*]}'"
-	writelog "INFO" "${FUNCNAME[0]} - Final outgoing start command: '${FINALSTARTCMD[*]}'"
-
-	startGame "${FINALSTARTCMD[@]}"
-
-	writelog "STOP" "######### $PROGNAME $PROGVERS #########"
 }
 
 ### CORE LAUNCH END ###
