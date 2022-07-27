@@ -11296,35 +11296,56 @@ function StateSteamWebHelper {
 	fi
 }
 
+# start wine-discord-ipc-bridge
+function checkWDIB {
+# WIP #511
+WDIB="wine-discord-ipc-bridge"
+EWDIB="${WDIB//-}"
+RUNWDIB="$STLDLDIR/${WDIB}/${EWDIB}.exe"
+#USE_WDIB=1 # comment in for testing #511
+
+	if [ "$USE_WDIB" -eq 1 ] && [ "$ISGAME" -eq 2 ] && [ "$USEWINE" -eq 0 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Starting '$WDIB' process for '$AID'"
+		if [ ! -f "$RUNWDIB" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - File '$RUNWDIB' does not exist - downloading"
+			# dlwdib
+		fi
+
+		if [ ! -f "$RUNWDIB" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - download failed - can't start '$WDIB' - skipping"
+			USE_WDIB=0
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Starting '$RUNWDIB' in the backgound"
+			extProtonRun "F" "$RUNWDIB"
+			killPrefixOnGameExit &
+		fi
+	fi
+}
+
 # start CheatEngine
 function checkCheatEngineLaunch {
 	if [ "$RUN_CHEATENGINE" -eq 1 ] && [ "$ISGAME" -eq 2 ] && [ "$USEWINE" -eq 0 ]; then
 		# start the whole GamCon start/wait/stop/process
 		writelog "INFO" "${FUNCNAME[0]} - Starting '$CE' process for '$AID'"
-		if [ "$RUN_CHEATENGINE" -eq 1 ]; then
-			CEDIR="$STLCEDIR/${CE} $CHEATENGINEVERSION"
-			CEEXE="$CEDIR/${CE}.exe"
-			
-			if [ ! -f "$CEEXE" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - File '$CEEXE' does not exist - starting installer"
-				StatusWindow "$GUI_RUN_CHEATENGINE" "installCheatEngine" "InstallCheatEngineStatus"
-			fi
+		CEDIR="$STLCEDIR/${CE} $CHEATENGINEVERSION"
+		CEEXE="$CEDIR/${CE}.exe"
+		
+		if [ ! -f "$CEEXE" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - File '$CEEXE' does not exist - starting installer"
+			StatusWindow "$GUI_RUN_CHEATENGINE" "installCheatEngine" "InstallCheatEngineStatus"
+		fi
 
-			if [ ! -f "$CEEXE" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Installing failed - can't start '$CE' - skipping"
-			else
-				if [ "$USEGAMEMODERUN" -eq 1 ]; then
-					writelog "WARN" "${FUNCNAME[0]} - Disabling '$GMR' for '$CE', because function 'GAMEPID' doesn't find the game pid with it in the current state"
-					USEGAMEMODERUN=0
-				fi
-			
-				writelog "INFO" "${FUNCNAME[0]} - Starting '$CEEXE' in the backgound"
-				extProtonRun "F" "$CEEXE" "$CUSTOMCMD_ARGS"
-				killPrefixOnGameExit &
-			fi
+		if [ ! -f "$CEEXE" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Installing failed - can't start '$CE' - skipping"
 		else
-			writelog "SKIP" "${FUNCNAME[0]} - ERROR - RUN_CHEATENGINE is '$RUN_CHEATENGINE' which is invalid - setting to 0"
-			RUN_CHEATENGINE=0
+			if [ "$USEGAMEMODERUN" -eq 1 ]; then
+				writelog "WARN" "${FUNCNAME[0]} - Disabling '$GMR' for '$CE', because function 'GAMEPID' doesn't find the game pid with it in the current state"
+				USEGAMEMODERUN=0
+			fi
+		
+			writelog "INFO" "${FUNCNAME[0]} - Starting '$CEEXE' in the backgound"
+			extProtonRun "F" "$CEEXE" "$CUSTOMCMD_ARGS"
+			killPrefixOnGameExit &
 		fi
 	fi
 }
@@ -14546,7 +14567,11 @@ function prepareLaunch {
 	checkGamConLaunch
 
 	if [ "$ISGAME" -eq 2 ]; then
-		# start CheatEngine when game starts if RUN_CHEATENGINE is -ge 1
+		# start wine-discord-ipc-bridge when game starts if USE_WDIB is -eq 1
+		writelog "INFO" "${FUNCNAME[0]} - checkWDIB:"
+		checkWDIB
+
+		# start CheatEngine when game starts if RUN_CHEATENGINE is -eq 1
 		writelog "INFO" "${FUNCNAME[0]} - checkCheatEngineLaunch:"
 		checkCheatEngineLaunch
 	fi
