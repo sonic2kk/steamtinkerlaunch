@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v10.0.20220728"
+PROGVERS="v10.0.20220729"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -6016,43 +6016,49 @@ function extProtonRun {
 			mapfile -d " " -t -O "${#RUNPROGARGS[@]}" RUNPROGARGS < <(printf '%s' "$PROGARGS")
 		fi
 
+		FWAIT="$FORKWAIT"
+
+		if [ "$FORKWAIT" -eq 0 ]; then
+			FWAIT=2
+		fi
+
 		if [ "$MODE" == "F" ]; then
 			if [ -n "${RUNPROGARGS[0]}" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Starting '$PROGRAM' with arguments '${RUNPROGARGS[*]}' forked into the background - waiting '$FORKWAIT' seconds before starting"
+				writelog "INFO" "${FUNCNAME[0]} - Starting '$PROGRAM' with arguments '${RUNPROGARGS[*]}' forked into the background - waiting '$FWAIT' seconds before starting"
 				restoreOrgVars
 				if [ "$EXTWINERUN" -eq 1 ]; then
-					(sleep "$FORKWAIT"; extWine64Run "$PROGRAM" "${RUNPROGARGS[@]}") &
+					(sleep "$FWAIT"; extWine64Run "$PROGRAM" "${RUNPROGARGS[@]}") &
 				else
-					(sleep "$FORKWAIT"; "$RUNPROTON" run "$PROGRAM" "${RUNPROGARGS[@]}" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log") &
+					(sleep "$FWAIT"; "$RUNPROTON" run "$PROGRAM" "${RUNPROGARGS[@]}" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log") &
 				fi
 				emptyVars "O" "X"
 			else
-				writelog "INFO" "${FUNCNAME[0]} - Starting '$PROGRAM' forked into the background - waiting '$FORKWAIT' seconds before starting"
+				writelog "INFO" "${FUNCNAME[0]} - Starting '$PROGRAM' forked into the background - waiting '$FWAIT' seconds before starting"
 				restoreOrgVars
 				if [ "$EXTWINERUN" -eq 1 ]; then
-					(sleep "$FORKWAIT"; extWine64Run "$PROGRAM") &
+					(sleep "$FWAIT"; extWine64Run "$PROGRAM") &
 				else
-					(sleep "$FORKWAIT"; "$RUNPROTON" run "$PROGRAM" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log") &
+					(sleep "$FWAIT"; "$RUNPROTON" run "$PROGRAM" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log") &
 				fi
 				emptyVars "O" "X"
 			fi
 		elif [ "$MODE" == "FC" ]; then
 			if [ -n "${RUNPROGARGS[0]}" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Starting '$WICO $PROGRAM' with arguments '${RUNPROGARGS[*]}' forked into the background - waiting '$FORKWAIT' seconds before starting"
+				writelog "INFO" "${FUNCNAME[0]} - Starting '$WICO $PROGRAM' with arguments '${RUNPROGARGS[*]}' forked into the background - waiting '$FWAIT' seconds before starting"
 				restoreOrgVars
 				if [ "$EXTWINERUN" -eq 1 ]; then
-					(sleep "$FORKWAIT"; extWine64Run "$RUNWICO" "$PROGRAM" "${RUNPROGARGS[@]}") &
+					(sleep "$FWAIT"; extWine64Run "$RUNWICO" "$PROGRAM" "${RUNPROGARGS[@]}") &
 				else
-					(sleep "$FORKWAIT"; "$RUNPROTON" run "$WICO" "$PROGRAM" "${RUNPROGARGS[@]}" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log") &
+					(sleep "$FWAIT"; "$RUNPROTON" run "$WICO" "$PROGRAM" "${RUNPROGARGS[@]}" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log") &
 				fi
 				emptyVars "O" "X"
 			else
-				writelog "INFO" "${FUNCNAME[0]} - Starting '$WICO $PROGRAM' forked into the background - waiting '$FORKWAIT' seconds before starting"
+				writelog "INFO" "${FUNCNAME[0]} - Starting '$WICO $PROGRAM' forked into the background - waiting '$FWAIT' seconds before starting"
 				restoreOrgVars
 				if [ "$EXTWINERUN" -eq 1 ]; then
-					(sleep "$FORKWAIT"; extWine64Run "$RUNWICO" "$PROGRAM") &
+					(sleep "$FWAIT"; extWine64Run "$RUNWICO" "$PROGRAM") &
 				else
-					(sleep "$FORKWAIT"; "$RUNPROTON" run "$WICO" "$PROGRAM" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log") &
+					(sleep "$FWAIT"; "$RUNPROTON" run "$WICO" "$PROGRAM" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log") &
 				fi
 				emptyVars "O" "X"
 			fi
@@ -6106,7 +6112,6 @@ function getWindowHeight {
 	"$XWININFO" -id "$WINID" -stats | awk '$1=="-geometry" {print $2}' | cut -d '+' -f1 | cut -d 'x' -f2
 }
 
-#XXXXXXXXXXXXXXXXX
 function getLatestGeoElf {
 	GEOELFDLURL="$("$WGET" -q "$GEOELFURL" -O - 2> >(grep -v "SSL_INIT") | sed $'s/<a href=/\\\n/g' | grep "^\"https" | grep "\.zip" | grep -oP '"\K[^"]+' | grep -m1 https)" # maybe make less fragile later :)
 	GEOELFFILE="${GEOELFDLURL##*/}"
@@ -6137,7 +6142,6 @@ function getLatestGeoElf {
 	fi
 }
 
-#XXXXXXXXXXXXXXXXX 
 function configureGeoElf {
 	function installGeo {
 		function copyGeo {
@@ -9659,7 +9663,12 @@ function launchCustomProg {
 				writelog "INFO" "${FUNCNAME[0]} - '$CUSTCOM' doesn't seem to be a MS Windows exe - regular start (without further analysing)"
 				if [ "$FORK_CUSTOMCMD" -eq 1 ]; then	
 					writelog "INFO" "${FUNCNAME[0]} - FORK_CUSTOMCMD is set to 1 - forking the custom program in background and continue"
-					(sleep "$FORKWAIT"; "$LACO" "${RUNCUSTOMCMD_ARGS[@]}") &
+					FWAIT="$FORKWAIT"
+
+					if [ "$FORKWAIT" -eq 0 ]; then
+						FWAIT=2
+					fi
+					(sleep "$FWAIT"; "$LACO" "${RUNCUSTOMCMD_ARGS[@]}") &
 				else
 					"$LACO" "${RUNCUSTOMCMD_ARGS[@]}"
 				fi
@@ -14028,7 +14037,7 @@ function prepareProton {
 
 		# shortcut to enable all required flags for SBSVR with $GEOELF
 		if [ "$SBSVRGEOELF" -eq 1 ]; then
-			writelog "INFO" "${FUNCNAME[0]} - $PROGNAME - SBSVRRS enabled - starting game in SBS-VR using $GEOELF"
+			writelog "INFO" "${FUNCNAME[0]} - $PROGNAME - $SBSVRGEOELF enabled - starting game in SBS-VR using $GEOELF"
 			export RUNSBSVR=1
 			export USEGEOELF=1
 		# shortcut to enable all required flags for SBSVR with ${RESH}
