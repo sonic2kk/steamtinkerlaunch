@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v10.0.20220729"
+PROGVERS="v10.0.20220730"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -146,6 +146,7 @@ DUMMYBIN="echo"
 STLAIDSIZE="12"
 FPBIN="/app/utils/bin"
 INFLATPAK=0
+WDIB="wine-discord-ipc-bridge"
 
 ### default vars ###
 
@@ -231,6 +232,9 @@ MO2DLDIR="$STLDLDIR/mo2"
 CONTYDLDIR="$STLDLDIR/conty"
 X64DBGDLDIR="$STLDLDIR/$X64D"
 GEOELFDLDIR="$STLDLDIR/geo11"
+WDIBDLDIR="$STLDLDIR/${WDIB}"
+EWDIB="${WDIB//-}"
+RUNWDIB="$WDIBDLDIR/${EWDIB}.exe"
 LGEOELFSYM="$GEOELFDLDIR/latest"
 CUSTOMFALLBACKPIC="$STLDLDIR/custom-fallback.png"
 STLCEDIR="$STLCFGDIR/cheatengine"
@@ -2483,6 +2487,7 @@ function setDefaultCfgValues {
 		if [ -z "$YAIURL" ]								; then	YAIURL="$GHURL/frostworx/steamtinkerlaunch-tweaks/releases/download"; fi
 		if [ -z "$WINERELOADURL" ]						; then	WINERELOADURL="https://gist.githubusercontent.com/rbernon/cdbdc1b0e892f91e7449fcf3dda80bb7/raw/d8cf549bf751d99ed0fe515e36f99ff5c01b7287"; fi
 		if [ -z "$GEOELFURL" ]							; then	GEOELFURL="http://helixmod.blogspot.com/2022/06/announcing-new-geo-11-3d-driver.html"; fi
+		if [ -z "$WDIBURL" ]							; then	WDIBURL="$GHURL/0e4ef622/$WDIB/releases"; fi
 	}
 
 	function setDefaultCfgValuesglobal {
@@ -2623,6 +2628,7 @@ function setDefaultCfgValues {
 		if [ -z "$GAMCONWAITEXE" ]						; then	GAMCONWAITEXE="$DUMMYBIN"; fi
 		if [ -z "$RUN_X64DBG" ]							; then	RUN_X64DBG="0";	fi
 		if [ -z "$RUN_GDB" ]							; then	RUN_GDB="0";	fi
+		if [ -z "$USE_WDIB" ]							; then	USE_WDIB="0";	fi
 		if [ -z "$USEVORTEX" ]							; then	USEVORTEX="0"; fi
 		if [ -z "$WAITVORTEX" ]							; then	WAITVORTEX="2"; fi
 		if [ -z "$RUN_VORTEX_WINETRICKS" ]				; then	RUN_VORTEX_WINETRICKS="0"; fi
@@ -2819,6 +2825,8 @@ function saveCfg {
 			echo "WINERELOADURL=\"$WINERELOADURL\""
 			echo "## $GEOELF url"
 			echo "GEOELFURL=\"$GEOELFURL\""
+			echo "## $WDIBURL url"
+			echo "WDIBURL=\"$WDIBURL\""
 			} >> "$1"
 			#ENDsaveCfgurl
 		fi
@@ -3140,6 +3148,8 @@ function saveCfg {
 			echo "RUN_X64DBG=\"$RUN_X64DBG\""
 			echo "## $DESC_RUN_GDB"
 			echo "RUN_GDB=\"$RUN_GDB\""
+			echo "## $DESC_USE_WDIB"
+			echo "USE_WDIB=\"$USE_WDIB\""
 			echo "## $DESC_USEVORTEX"
 			echo "USEVORTEX=\"$USEVORTEX\""
 			echo "## $DESC_WAITVORTEX"
@@ -4913,6 +4923,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_UPDATECONTY!$DESC_UPDATECONTY ('UPDATECONTY')":CHK "${UPDATECONTY/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_RUN_X64DBG!$DESC_RUN_X64DBG ('RUN_X64DBG')":CHK "${RUN_X64DBG/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_RUN_GDB!$DESC_RUN_GDB ('RUN_GDB')":CHK "${RUN_GDB/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_USE_WDIB!$DESC_USE_WDIB ('USE_WDIB')":CHK "${USE_WDIB/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_DPRSCOMPDATA!$DESC_DPRSCOMPDATA ('DPRSCOMPDATA')":DIR "${DPRSCOMPDATA/#-/ -}" `#CAT_Tools` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_USEDPRSPROTON!$DESC_USEDPRSPROTON ('USEDPRSPROTON')":CB "$(cleanDropDown "${USEDPRSPROTON/#-/ -}" "$PROTYADLIST")" `#CAT_Tools` `#MENU_GLOBAL` \
 --field="     $GUI_DPRSUSEVDFSYMLINKS!$DESC_DPRSUSEVDFSYMLINKS ('DPRSUSEVDFSYMLINKS')":CHK "${DPRSUSEVDFSYMLINKS/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GLOBAL` \
@@ -11309,26 +11320,30 @@ function StateSteamWebHelper {
 	fi
 }
 
+function dlWDIB {
+	mkProjDir "$WDIBDLDIR"
+	WDIBDSRC="$GHURL/$("$WGET" -q "$WDIBURL" -O - | grep -m1 -E 'releases.*download.*exe*' | cut -d '"' -f2 | head -n1)"
+
+	if [ ! -f "$RUNWDIB" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Downloading '$WDIB' to '$WDIBDLDIR'"
+		dlCheck "$WDIBDSRC" "$RUNWDIB" "X" "Downloading '$WDIB' to '$WDIBDLDIR'"
+	fi
+
+	if [ -f "$RUNWDIB" ]; then
+		writelog "SKIP" "${FUNCNAME[0]} - Found $RUNWDIB - skipping download"
+	fi
+}
+
 # start wine-discord-ipc-bridge
 function checkWDIB {
-# WIP #511
-WDIB="wine-discord-ipc-bridge"
-EWDIB="${WDIB//-}"
-RUNWDIB="$STLDLDIR/${WDIB}/${EWDIB}.exe"
-#USE_WDIB=1 # comment in for testing #511
-
 	if [ "$USE_WDIB" -eq 1 ] && [ "$ISGAME" -eq 2 ] && [ "$USEWINE" -eq 0 ]; then
-		writelog "INFO" "${FUNCNAME[0]} - Starting '$WDIB' process for '$AID'"
-		if [ ! -f "$RUNWDIB" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - File '$RUNWDIB' does not exist - downloading"
-			# dlwdib
-		fi
+		dlWDIB
 
 		if [ ! -f "$RUNWDIB" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - download failed - can't start '$WDIB' - skipping"
+			writelog "INFO" "${FUNCNAME[0]} - Download failed - can't start '$WDIB' - skipping"
 			USE_WDIB=0
 		else
-			writelog "INFO" "${FUNCNAME[0]} - Starting '$RUNWDIB' in the backgound"
+			writelog "INFO" "${FUNCNAME[0]} - Starting '$RUNWDIB' in the backgound for '$AID'"
 			extProtonRun "F" "$RUNWDIB"
 			killPrefixOnGameExit &
 		fi
