@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v10.0.20220730"
+PROGVERS="v10.0.20220731"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -98,6 +98,7 @@ GWXTEMP="$STLSHM/gamewinXID.txt"
 TRAYCUSC="$STLSHM/customscript"
 TEMPGPIDFILE="$STLSHM/gamepid.txt"
 STLSETENTRIES="$STLSHM/setentries.txt"
+CLOSEVARS="$STLSHM/closevars.txt"
 STLRAWENTRIES="$STLSHM/rawentries.txt"
 STLNOBLOCKENTRIES="$STLSHM/noblockentries.txt"
 STLCATSORTENTRIES="$STLSHM/catsortentries.txt"
@@ -14354,9 +14355,9 @@ function prepareLaunch {
 
 	writelog "INFO" "${FUNCNAME[0]} - First LoadCfg: $STLGAMECFG"
 	loadCfg "$STLGAMECFG"
-	
+
 	checkPev
-	
+
 	autoBumpGE
 	autoBumpProton
 
@@ -15386,9 +15387,7 @@ function startGame {
 		writelog "INFO" "${FUNCNAME[0]} - ## GAMESTART HERE ###"
 
 		restoreOrgVars # restore original LC_ and friends for the game
-		
-#env > /tmp/XXXXXXXXXXXXXXXXXXXXXXenv # any variable which is set when using proton directly, which triggers SLR?
- 
+
 		GRUNLOG="$STLGLLOGDIRID/${AID}.log"
 		if [ "$ISORIGIN" -eq 1 ]; then
 			writelog "INFO" "${FUNCNAME[0]} - ## ${L2EA}  LAUNCH COMMAND: '${RUNCMD[*]}'"
@@ -15396,7 +15395,9 @@ function startGame {
 			function runEA {
 				"${RUNCMD[@]}" 2>&1 | tee "$GRUNLOG"
 			}
-			runEA  &
+
+			unsetSTLvars		
+			runEA &
 		elif [ "$USEMANGOAPP" -eq 1 ]; then
 			# mangoapp gamestart - COMMENTDEBUG:
 			writelog "INFO" "${FUNCNAME[0]} - Using $MANGOAPP"
@@ -15435,18 +15436,9 @@ function startGame {
 
 	if [ "$ISGAME" -eq 2 ] && [ "$USEWINE" -eq 0 ] && { grep -qi "GE\-" <<< "$USEPROTON" || grep -qi "\-TKG" <<< "$USEPROTON" || [ "$ISORIGIN" -eq 1 ];}; then
 		if [ "$ISORIGIN" -eq 1 ]; then
-#XXXXXXXXXXXXXXXXXXXX
-			writelog "ERROR" "${FUNCNAME[0]} - At least Origin games currently are broken in '$PROGCMD', very likely because the SLR is no longer started automagically with '$PROGCMD'"	
-			writelog "ERROR" "${FUNCNAME[0]} - See https://github.com/frostworx/steamtinkerlaunch/issues/508 if interested. Any help/hints very welcome!"	
-			writelog "ERROR" "${FUNCNAME[0]} - The following code writes some logfiles and closes after 10 seconds. the game doesn't start either way! (try it if you don't believe me ;))"	
-
 			writelog "INFO" "${FUNCNAME[0]} - Waiting for $L2EA process to finish"		
 
-			for i in $(seq 0 10); do
-			sleep 1
-			
-			"$PGREP" -a "" | grep -i "origin\|exe\|wine" > "/tmp/ISORIGIN-getprocesses-$i"
-			done 
+			sleep 10
 			OE="Origin.exe"
 			WSPID="$("$PGREP" -a "" | grep "$OE" | grep -v grep | cut -d ' ' -f1 | tail -n1)"
 			writelog "INFO" "${FUNCNAME[0]} - $L2EA game launch pid is $WSPID"
@@ -17280,6 +17272,7 @@ function howto {
 	echo "         list-installed|li           list installed games supported by MO2"
 	echo "         create-instance|ci <id>     create MO2 instance for <id>"
 	echo "         url|u <url>                 open nxm url with MO2"
+	echo "    play <gameid>                    Start game with id <gameid> directly" 
  	echo "    proton|p <title> <X>             Start and/or create <title> with proton"
 	echo "                                       without using steam."
 	echo "                                       Optional <X> opens gui"
@@ -18686,6 +18679,33 @@ function addNonSteamGame {
 	fi
 }
 
+function setCloseVars {
+# yes, ugly... ¯\_(ツ)_/¯
+	if [ ! -f "$CLOSEVARS" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Storing all variables used in closeSTL into '$CLOSEVARS'"
+		{
+		echo BROWSER
+		echo LOGLEVEL
+		echo MO2MODE
+		echo ONLY_CUSTOMCMD
+		echo RUN_CHEATENGINE
+		echo RUN_GAMCON
+		echo RUN_NYRNA
+		echo RUN_REPLAY
+		echo RUNSBSVR
+		echo TOGSTEAMWEBHELPER
+		echo USECUSTOMCMD
+		echo USEMANGOAPP
+		echo USENETMON
+		echo USEPROTON
+		echo USEWINE
+		echo WAITFORTHISPID
+		} >> "$CLOSEVARS"
+		# should be sorted above already, but better safe
+		sort "$CLOSEVARS" -o "$CLOSEVARS"
+	fi
+}
+
 #STARTCLOSESTL ###
 function closeSTL {
 	writelog "INFO" "${FUNCNAME[0]} - closing STL"
@@ -18827,7 +18847,6 @@ function closeSTL {
 	else
 		echo "log can be found under: '$TEMPLOG'"
 	fi
-#	emptyVars "A" "$1"
 }
 #ENDCLOSESTL ###
 
@@ -18912,26 +18931,16 @@ function emptyVars {
 				fi
 			fi
 		done <<< "$(comm -32 <(cut -d '=' -f1 < "$STLSHM/${FUNCNAME[0]}-in") <(cut -d '=' -f1 < "$VARSIN"))"
-
-# empty "all" internal variables created by ${PROGNAME,,} - the ending logfile is "$2" and is written here
-	elif [ "$1" == "A" ]; then
-		env | grep "=" | grep -v "^ " | sort -o "$STLSHM/${FUNCNAME[0]}-in"
-		writelog "STOP" "$2"
-		restoreOrgVars
-
-		while read -r intvar; do
-			if [ -n "$intvar" ]; then
-				if [[ "$intvar" =~ "BASH_FUNC" ]]; then
-					BAFU1="${intvar#BASH_FUNC_*}"
-					BAFU="${BAFU1%%\%}"
-					unset -f "${BAFU%%\%}"
-				else
-					unset "$intvar"
-				fi
-			fi
-		done <<< "$(comm -32 <(cut -d '=' -f1 < "$STLSHM/${FUNCNAME[0]}-in") <(cut -d '=' -f1 < "$VARSIN"))"
-		env > "$STLSHM/${FUNCNAME[0]}-out"
 	fi
+}
+
+function unsetSTLvars {
+	setCloseVars
+	writelog "INFO" "${FUNCNAME[0]} - Unsetting $PROGNAME internal variables"
+	sort "$STLSETENTRIES" -o "${STLSETENTRIES}s"
+	while read -r line; do
+		unset "$line"
+	done <<< "$(comm -3 "${STLSETENTRIES}s" "$CLOSEVARS")" 
 }
 
 function restoreOrgVars {
