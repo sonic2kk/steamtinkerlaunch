@@ -5448,18 +5448,26 @@ function MainMenu {
 		SETHEAD="$SETHEAD \n ${GUI_SSU}: symlink to '$(readlink "$GPFX/$DRCU/$STUS")'"
 	fi
 
-	if [ -n "$GAMEWINDOW" ] && [ "$GAMEWINDOW" != "$NON" ]; then
-		SETHEAD="$SETHEAD \n ${GUI_SGW}: '$(fixShow "$GAMEWINDOW")'"
+	if [ "$ISORIGIN" ]; then
+		SETHEAD="$SETHEAD \n ${GUI_SGW}: 'Origin interfering'"
+	else
+		if [ -n "$GAMEWINDOW" ] && [ "$GAMEWINDOW" != "$NON" ]; then
+			SETHEAD="$SETHEAD \n ${GUI_SGW}: '$(fixShow "$GAMEWINDOW")'"
+		fi	
 	fi
-
+	
 	if [ -n "$GAMEEXE" ]; then
 		SETHEAD="$SETHEAD \n ${GUI_SGE}: '$GAMEEXE'"
 	fi
 
-	if [ "${#ORGCMDARGS[@]}" -ge 1 ]; then
-		SETHEAD="$SETHEAD \n ${GUI_SGA}: '${ORGCMDARGS[*]}'"
+	if [ "$ISORIGIN" ]; then
+		SETHEAD="$SETHEAD \n ${GUI_SGA}: 'Origin $L2EA url'"
+	else
+		if [ "${#ORGCMDARGS[@]}" -ge 1 ]; then
+			SETHEAD="$SETHEAD \n ${GUI_SGA}: '${ORGCMDARGS[*]}'"
+		fi
 	fi
-	
+
 	# filter html incompatible chars here
 	#SETHEAD="${SETHEAD//&/+}"
 	
@@ -7448,7 +7456,26 @@ function setFullGameExePath {
 				writelog "INFO" "${FUNCNAME[0]} - Using the base game directory '$EFD' as absolute game exe path - probably never reached?"
 				export "$1"="$EFD"
 			else
-				writelog "WARN" "${FUNCNAME[0]} - Using some weird old function to determine the absolute exe path - please report, this should never be reached"
+				if [ "$ISORIGIN" -eq 1 ] && grep -q "$L2EA" <<< "$EXECUTABLE" ; then
+					MYMETA="$EVMETAID/${EVALSC}_${AID}.vdf"
+					if [ -f "$MYMETA" ]; then
+						writelog "INFO" "${FUNCNAME[0]} - Origin game detected - looking for the real executable name instead of the used command '$EXECUTABLE'"
+						touch "$FUPDATE"
+						updateConfigEntry "ORIGINEXE" "$EXECUTABLE" "$GEMETA/${AID}.conf" # unused, but who knows what it is good for later
+						EXECUTABLE="$(grep "Uninstall" "$MYMETA" -A10 | grep "DisplayIcon" | awk -F '\\' '{print $NF}')"
+						EXECUTABLE="${EXECUTABLE//\"}"
+						touch "$FUPDATE"
+						updateConfigEntry "EXECUTABLE" "$EXECUTABLE" "$GEMETA/${AID}.conf"
+						GAMEEXE="${EXECUTABLE//.exe}"
+						touch "$FUPDATE"
+						updateConfigEntry "GAMEEXE" "$GAMEEXE" "$GEMETA/${AID}.conf"		
+					else
+						writelog "WARN" "${FUNCNAME[0]} - Origin game detected - but $EVALSC file $MYMETA not found - can't look for original game name"
+					fi
+				else
+					writelog "WARN" "${FUNCNAME[0]} - Using some weird old function to determine the absolute exe path - please report, this should never be reached"
+				fi
+
 				if grep -q "\\\\" <<< "$EXECUTABLE"; then
 					RELEX="${EXECUTABLE//\\//}"
 					FGEP="${EFD}/${RELEX%/*}"
@@ -15437,7 +15464,7 @@ function startGame {
 	if [ "$ISGAME" -eq 2 ] && [ "$USEWINE" -eq 0 ] && { grep -qi "GE\-" <<< "$USEPROTON" || grep -qi "\-TKG" <<< "$USEPROTON" || [ "$ISORIGIN" -eq 1 ];}; then
 		if [ "$ISORIGIN" -eq 1 ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Waiting for $L2EA process to finish"		
-
+			# TODO maybe add waitForOriginPid - the sleep is not too nice (but at least non blocking)
 			sleep 10
 			OE="Origin.exe"
 			WSPID="$("$PGREP" -a "" | grep "$OE" | grep -v grep | cut -d ' ' -f1 | tail -n1)"
@@ -19479,7 +19506,7 @@ function checkFirstTimeRun {
 			# get a proton version for the install process:
 			if grep -q "$EVALSC" <<< "$@"; then
 
-				# first check if the game has a game has a ${PROGNAME,,} config and use the corresponding proton version:
+				# first check if the game has a ${PROGNAME,,} config and use the corresponding proton version:
 				if [ -z "$EARLYPROT" ] && [ ! -f "$EVALPROTCONF" ] && [ -f "$STLGAMEDIRID/$STEAM_COMPAT_APP_ID.conf" ]; then
 					findEarlyProt "$STLGAMEDIRID/$STEAM_COMPAT_APP_ID.conf" "$ISCRILOG"
 				fi
