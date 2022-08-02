@@ -2598,7 +2598,6 @@ function setDefaultCfgValues {
 		if [ -z "$CUSTOMCMD_ARGS" ]						; then	CUSTOMCMD_ARGS="$NON"; fi
 		if [ -z "$ONLY_CUSTOMCMD" ]						; then	ONLY_CUSTOMCMD="0";	fi
 		if [ -z "$FORK_CUSTOMCMD" ]						; then	FORK_CUSTOMCMD="0";	fi
-		if [ -z "$FORKWAIT" ]							; then	FORKWAIT="2"; fi
 		if [ -z "$WAITFORCUSTOMCMD" ]					; then	WAITFORCUSTOMCMD="0"; fi
 		if [ -z "$INJECT_CUSTOMCMD" ]					; then	INJECT_CUSTOMCMD="0"; fi
 		if [ -z "$INJECTWAIT" ]							; then	INJECTWAIT="0";	fi
@@ -3088,8 +3087,6 @@ function saveCfg {
 			echo "ONLY_CUSTOMCMD=\"$ONLY_CUSTOMCMD\""
 			echo "## $DESC_FORK_CUSTOMCMD"
 			echo "FORK_CUSTOMCMD=\"$FORK_CUSTOMCMD\""
-			echo "## $DESC_FORKWAIT"
-			echo "FORKWAIT=\"$FORKWAIT\""
 			echo "## $DESC_WAITFORCUSTOMCMD"
 			echo "WAITFORCUSTOMCMD=\"$WAITFORCUSTOMCMD\""
 			echo "## $DESC_INJECT_CUSTOMCMD"
@@ -4757,7 +4754,6 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_CUSTOMCMD!$DESC_CUSTOMCMD $GUI_ECHOPLAC ('CUSTOMCMD')":FL "${OPCUSTPATH/#-/ -}" `#CAT_Misc` `#MENU_GAME` \
 --field="     $GUI_CUSTOMCMD_ARGS!$DESC_CUSTOMCMD_ARGS ('CUSTOMCMD_ARGS')" "${CUSTOMCMD_ARGS/#-/ -}" `#CAT_Misc` `#MENU_GAME` \
 --field="     $GUI_FORK_CUSTOMCMD!$DESC_FORK_CUSTOMCMD ('FORK_CUSTOMCMD')":CHK "${FORK_CUSTOMCMD/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
---field="     $GUI_FORKWAIT!$DESC_FORKWAIT ('FORKWAIT')":NUM "${FORKWAIT/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_ONLY_CUSTOMCMD!$DESC_ONLY_CUSTOMCMD ('ONLY_CUSTOMCMD')":CHK "${ONLY_CUSTOMCMD/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_WAITFORCUSTOMCMD!$DESC_WAITFORCUSTOMCMD ('WAITFORCUSTOMCMD')":NUM "${WAITFORCUSTOMCMD/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_INJECT_CUSTOMCMD!$DESC_INJECT_CUSTOMCMD ('INJECT_CUSTOMCMD')":CHK "${INJECT_CUSTOMCMD/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
@@ -6045,15 +6041,11 @@ function extProtonRun {
 			mapfile -d " " -t -O "${#RUNPROGARGS[@]}" RUNPROGARGS < <(printf '%s' "$PROGARGS")
 		fi
 
-		FWAIT="$FORKWAIT"
-
-		if [ "$FORKWAIT" -eq 0 ]; then
-			FWAIT=2
-		fi
+		FWAIT=2
 
 		if [ "$MODE" == "F" ]; then
 			if [ -n "${RUNPROGARGS[0]}" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Starting '$PROGRAM' with arguments '${RUNPROGARGS[*]}' forked into the background - waiting '$FWAIT' seconds before starting"
+				writelog "INFO" "${FUNCNAME[0]} - Starting '$PROGRAM' with arguments '${RUNPROGARGS[*]}' forked into the background"
 				restoreOrgVars
 				if [ "$EXTWINERUN" -eq 1 ]; then
 					(sleep "$FWAIT"; extWine64Run "$PROGRAM" "${RUNPROGARGS[@]}") &
@@ -6062,7 +6054,7 @@ function extProtonRun {
 				fi
 				emptyVars "O" "X"
 			else
-				writelog "INFO" "${FUNCNAME[0]} - Starting '$PROGRAM' forked into the background - waiting '$FWAIT' seconds before starting"
+				writelog "INFO" "${FUNCNAME[0]} - Starting '$PROGRAM' forked into the background"
 				restoreOrgVars
 				if [ "$EXTWINERUN" -eq 1 ]; then
 					(sleep "$FWAIT"; extWine64Run "$PROGRAM") &
@@ -6073,7 +6065,7 @@ function extProtonRun {
 			fi
 		elif [ "$MODE" == "FC" ]; then
 			if [ -n "${RUNPROGARGS[0]}" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Starting '$WICO $PROGRAM' with arguments '${RUNPROGARGS[*]}' forked into the background - waiting '$FWAIT' seconds before starting"
+				writelog "INFO" "${FUNCNAME[0]} - Starting '$WICO $PROGRAM' with arguments '${RUNPROGARGS[*]}' forked into the background"
 				restoreOrgVars
 				if [ "$EXTWINERUN" -eq 1 ]; then
 					(sleep "$FWAIT"; extWine64Run "$RUNWICO" "$PROGRAM" "${RUNPROGARGS[@]}") &
@@ -6082,7 +6074,7 @@ function extProtonRun {
 				fi
 				emptyVars "O" "X"
 			else
-				writelog "INFO" "${FUNCNAME[0]} - Starting '$WICO $PROGRAM' forked into the background - waiting '$FWAIT' seconds before starting"
+				writelog "INFO" "${FUNCNAME[0]} - Starting '$WICO $PROGRAM' forked into the background"
 				restoreOrgVars
 				if [ "$EXTWINERUN" -eq 1 ]; then
 					(sleep "$FWAIT"; extWine64Run "$RUNWICO" "$PROGRAM") &
@@ -9712,12 +9704,7 @@ function launchCustomProg {
 				writelog "INFO" "${FUNCNAME[0]} - '$CUSTCOM' doesn't seem to be a MS Windows exe - regular start (without further analysing)"
 				if [ "$FORK_CUSTOMCMD" -eq 1 ]; then	
 					writelog "INFO" "${FUNCNAME[0]} - FORK_CUSTOMCMD is set to 1 - forking the custom program in background and continue"
-					FWAIT="$FORKWAIT"
-
-					if [ "$FORKWAIT" -eq 0 ]; then
-						FWAIT=2
-					fi
-					(sleep "$FWAIT"; "$LACO" "${RUNCUSTOMCMD_ARGS[@]}") &
+					(sleep 2; "$LACO" "${RUNCUSTOMCMD_ARGS[@]}") &
 				else
 					"$LACO" "${RUNCUSTOMCMD_ARGS[@]}"
 				fi
