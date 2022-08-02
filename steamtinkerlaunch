@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v10.0.20220731"
+PROGVERS="v10.0.20220803"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -56,6 +56,7 @@ PERES="peres"
 GDB="gdb"
 XDGMIME="xdg-mime"
 XDGO="xdg-open"
+OBSVKC="obs-vkcapture"
 
 CHECKHMD=1
 X32D="x32dbg"
@@ -2522,7 +2523,7 @@ function setDefaultCfgValues {
 		if [ -z "$ROBERTAARGS" ]						; then	ROBERTAARGS="--wait-before-run"; fi
 		if [ -z "$LUXTORPEDACMD" ]						; then	LUXTORPEDACMD="$STEAMCOMPATOOLS/luxtorpeda/luxtorpeda"; fi
 		if [ -z "$LUXTORPEDAARGS" ]						; then	LUXTORPEDAARGS="wait-before-run"; fi
-		if [ -z "$RSVERS" ]								; then	RSVERS="5.2.1"; fi
+		if [ -z "$RSVERS" ]								; then	RSVERS="5.3.0"; fi
 		if [ -z "$DOWNLOAD_RESHADE" ]					; then	DOWNLOAD_RESHADE="1"; fi
 		if [ -z "$RESHADESRCDIR" ]						; then	RESHADESRCDIR="$STLDLDIR/reshade"; fi
 		if [ -z "$D3D47_64" ]							; then	D3D47_64="${D3D47//./_64.}"; fi
@@ -2598,6 +2599,7 @@ function setDefaultCfgValues {
 		if [ -z "$ONLY_CUSTOMCMD" ]						; then	ONLY_CUSTOMCMD="0";	fi
 		if [ -z "$FORK_CUSTOMCMD" ]						; then	FORK_CUSTOMCMD="0";	fi
 		if [ -z "$FORKWAIT" ]							; then	FORKWAIT="2"; fi
+		if [ -z "$WAITFORCUSTOMCMD" ]					; then	WAITFORCUSTOMCMD="0"; fi
 		if [ -z "$INJECT_CUSTOMCMD" ]					; then	INJECT_CUSTOMCMD="0"; fi
 		if [ -z "$INJECTWAIT" ]							; then	INJECTWAIT="0";	fi
 		if [ -z "$USEIGCS" ]							; then	USEIGCS="0"; fi
@@ -2611,6 +2613,7 @@ function setDefaultCfgValues {
 		if [ -z "$USEGAMEMODERUN" ]						; then	USEGAMEMODERUN="0";	fi
 		if [ -z "$USEGAMESCOPE" ]						; then	USEGAMESCOPE="0"; fi
 		if [ -z "$GAMESCOPE_ARGS" ]						; then	GAMESCOPE_ARGS="--"; fi
+		if [ -z "$USEOBSVKC" ]							; then	USEOBSVKC="0"; fi
 		if [ -z "$USEZINK" ]							; then	USEZINK="0"; fi
 		if [ -z "$USEPRIMERUN" ]						; then	USEPRIMERUN="0"; fi
 		if [ -z "$TOGSTEAMWEBHELPER" ]					; then	TOGSTEAMWEBHELPER="0"; fi
@@ -3087,6 +3090,8 @@ function saveCfg {
 			echo "FORK_CUSTOMCMD=\"$FORK_CUSTOMCMD\""
 			echo "## $DESC_FORKWAIT"
 			echo "FORKWAIT=\"$FORKWAIT\""
+			echo "## $DESC_WAITFORCUSTOMCMD"
+			echo "WAITFORCUSTOMCMD=\"$WAITFORCUSTOMCMD\""
 			echo "## $DESC_INJECT_CUSTOMCMD"
 			echo "INJECT_CUSTOMCMD=\"$INJECT_CUSTOMCMD\""
 			echo "## $DESC_INJECTWAIT"
@@ -3113,6 +3118,8 @@ function saveCfg {
 			echo "USEGAMESCOPE=\"$USEGAMESCOPE\""
 			echo "## $DESC_GAMESCOPE_ARGS"
 			echo "GAMESCOPE_ARGS=\"$GAMESCOPE_ARGS\""
+			echo "## $DESC_USEOBSVKC"
+			echo "USEOBSVKC=\"$USEOBSVKC\""
 			echo "## $DESC_USEZINK"
 			echo "USEZINK=\"$USEZINK\""
 			echo "## $DESC_USEPRIMERUN"
@@ -4495,16 +4502,16 @@ function openTrayIcon {
 			}
 
 			function PauseGame {
-				GAMEPID="$(sleep 5 && "$XDO" getactivewindow getwindowpid)"
+				PAUSEPID="$(sleep 5 && "$XDO" getactivewindow getwindowpid)"
 				# idea taken with friendly permission from $GHURL/Ilazki:
-				GAMESTATE="$(ps -q "$GAMEPID" -o state --no-headers)"
+				GAMESTATE="$(ps -q "$PAUSEPID" -o state --no-headers)"
 				GAMESIG="-STOP"
 
 				if [ "$GAMESTATE" = "T" ] ; then
 					GAMESIG="-CONT"
 				fi
 
-				kill "$GAMESIG" "$GAMEPID"
+				kill "$GAMESIG" "$PAUSEPID"
 			}
 
 			function TrayShaderMenu {
@@ -4752,6 +4759,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_FORK_CUSTOMCMD!$DESC_FORK_CUSTOMCMD ('FORK_CUSTOMCMD')":CHK "${FORK_CUSTOMCMD/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_FORKWAIT!$DESC_FORKWAIT ('FORKWAIT')":NUM "${FORKWAIT/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_ONLY_CUSTOMCMD!$DESC_ONLY_CUSTOMCMD ('ONLY_CUSTOMCMD')":CHK "${ONLY_CUSTOMCMD/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_WAITFORCUSTOMCMD!$DESC_WAITFORCUSTOMCMD ('WAITFORCUSTOMCMD')":NUM "${WAITFORCUSTOMCMD/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_INJECT_CUSTOMCMD!$DESC_INJECT_CUSTOMCMD ('INJECT_CUSTOMCMD')":CHK "${INJECT_CUSTOMCMD/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_INJECTWAIT!$DESC_INJECTWAIT ('INJECTWAIT')":NUM "${INJECTWAIT/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_USEIGCS!$DESC_USEIGCS ('USEIGCS')":CHK "${USEIGCS/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
@@ -4887,6 +4895,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_USEMANGOHUDSTLCFG!$DESC_USEMANGOHUDSTLCFG ('USEMANGOHUDSTLCFG')":CHK "${USEMANGOHUDSTLCFG/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_USEGAMESCOPE!$DESC_USEGAMESCOPE ('USEGAMESCOPE')":CHK "${USEGAMESCOPE/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_GAMESCOPE_ARGS!$DESC_GAMESCOPE_ARGS ('GAMESCOPE_ARGS')":CBE "${GAMESCOPE_ARGS/#-/ -}!--" `#CAT_Tools` `#MENU_GAME` \
+--field="     $GUI_USEOBSVKC!$DESC_USEOBSVKC ('USEOBSVKC')":CHK "${USEOBSVKC/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_USEZINK!$DESC_USEZINK ('USEZINK')":CHK "${USEZINK/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_USEPRIMERUN!$DESC_USEPRIMERUN ('USEPRIMERUN')":CHK "${USEPRIMERUN/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_RUN_NYRNA!$DESC_RUN_NYRNA ('RUN_NYRNA')":CHK "${RUN_NYRNA/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
@@ -7462,6 +7471,7 @@ function setFullGameExePath {
 						writelog "INFO" "${FUNCNAME[0]} - Origin game detected - looking for the real executable name instead of the used command '$EXECUTABLE'"
 						touch "$FUPDATE"
 						updateConfigEntry "ORIGINEXE" "$EXECUTABLE" "$GEMETA/${AID}.conf" # unused, but who knows what it is good for later
+						# shellcheck disable=SC1003
 						EXECUTABLE="$(grep "Uninstall" "$MYMETA" -A10 | grep "DisplayIcon" | awk -F '\\' '{print $NF}')"
 						EXECUTABLE="${EXECUTABLE//\"}"
 						touch "$FUPDATE"
@@ -10537,6 +10547,46 @@ function injectCustomProg {
 	writelog "INFO" "${FUNCNAME[0]} - Game is running, starting custom command in '$INJECTWAIT' seconds"
 	sleep "$INJECTWAIT"
 	launchCustomProg
+}
+
+function delayGameForCustomLaunch {
+	if [ "$USECUSTOMCMD" -eq 1 ] && [ "$FORK_CUSTOMCMD" -eq 1 ] && [ "$ONLY_CUSTOMCMD" -eq 0 ] && [ "$WAITFORCUSTOMCMD" -ge 1 ]; then
+		COUNTER=0
+		MAXTRY="$WAITFORCUSTOMCMD"
+
+		function CUCOPID {
+			"$PGREP" -a "" | grep "${CUSTOMCMD##*/}" | grep "Z:" | grep "\.exe" | grep -v "CrashHandler" | cut -d ' ' -f1 | tail -n1
+		}
+
+		function waitforCustomPid {
+				while [ -z "$(CUCOPID)" ]; do 
+					if [[ "$COUNTER" -ge "$MAXTRY" ]]; then
+						writelog "SKIP" "${FUNCNAME[0]} - Giving up waiting for custom program pid"
+						break
+					else
+						writelog "WAIT" "${FUNCNAME[0]} - Waiting for custom program process $(CUCOPID)"
+						COUNTER=$((COUNTER+1))
+						sleep 1
+					fi
+				done
+				
+				if [ -n "$(CUCOPID)" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Custom program process found at $(CUCOPID) after $COUNTER seconds"
+				fi
+		}
+
+		waitforCustomPid
+
+		if [ "$WAITFORCUSTOMCMD" -gt 1 ]; then
+			RESTWAIT=$((WAITFORCUSTOMCMD - COUNTER))
+			if [ "$RESTWAIT" -gt 0 ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Waiting $RESTWAIT more seconds before proceeding with loading the game"
+				sleep "$RESTWAIT"
+			fi
+		fi
+	else
+		writelog "Skip" "${FUNCNAME[0]} - Nothing to do"
+	fi
 }
 
 function checkCustomLaunch {
@@ -13768,6 +13818,7 @@ function checkExtDeps {
 	checkDep "USESPECIALK" "$SEVZA"
 	checkDep "RUN_CHEATENGINE" "$SEVZA"
 	checkDep "USEMANGOAPP" "$MANGOAPP"
+	checkDep "USEOBSVKC" "$OBSVKC"
 }
 
 function setYadBin {
@@ -14653,8 +14704,11 @@ function prepareLaunch {
 		setCompatDataTitle
 	fi
 
+	# delay game launch if requested via WAITFORCUSTOMCOMMAND
+	delayGameForCustomLaunch
+	
 	# GAME START
-	writelog "INFO" "${FUNCNAME[0]} -launchSteamGame:"
+	writelog "INFO" "${FUNCNAME[0]} - launchSteamGame:"
 	launchSteamGame
 
 	# GAME ENDED - Closing:
@@ -15475,19 +15529,22 @@ function startGame {
 			RLRUNWINESERVER="$(readlink -f "$RUNWINESERVER")"
 			WSPID="$("$PGREP" -a "" | grep "$RLRUNWINESERVER" | grep -v grep | cut -d ' ' -f1 | tail -n1)"
 			writelog "INFO" "${FUNCNAME[0]} - $MANGOAPP game launch pid is $WSPID"
+		elif [ "$USECUSTOMCMD" -eq 1 ] && [ "$FORK_CUSTOMCMD" -eq 1 ] && [ "$ONLY_CUSTOMCMD" -eq 0 ] && [ "$WAITFORCUSTOMCMD" -ge 1 ] && [ -n "$(CUCOPID)" ];then
+			WSPID="$(CUCOPID)"
+			writelog "INFO" "${FUNCNAME[0]} - Custom program pid is $WSPID"
 		else
 			RLRUNWINESERVER="$(readlink -f "$RUNWINESERVER")"
 			WSPID="$("$PGREP" -a "" | grep "$RLRUNWINESERVER" | grep -v grep | cut -d ' ' -f1 | tail -n1)"
 		fi
 		if [ -n "$WSPID" ] && [ "$WSPID" -eq "$WSPID" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Waiting for the wineserver process '$WSPID' to finish"
+			writelog "INFO" "${FUNCNAME[0]} - Waiting for the process '$WSPID' to finish"
 			tail --pid="$WSPID" -f /dev/null
 
 			if [ "$USEMANGOAPP" -eq 1 ]; then
 				writelog "INFO" "${FUNCNAME[0]} - $MANGOAPP game launch finished - closing"
 				"$PKILL" -f "$MANGOAPP"
 			else
-				writelog "INFO" "${FUNCNAME[0]} - wineserver process '$WSPID' finished - closing"
+				writelog "INFO" "${FUNCNAME[0]} - Process '$WSPID' finished - closing"
 			fi
 		else
 			writelog "ERROR" "${FUNCNAME[0]} - Could not determine pid of '$RLRUNWINESERVER'"
@@ -16524,7 +16581,7 @@ function setMaHuCmd {
 				mapfile -d " " -t -O "${#MAHUCMD[@]}" MAHUCMD < <(printf '%s' "$MAHUBIN")
 
 				if [ "$MAHUARGS" != "$NON" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - Using $MAHU arguments ''"
+					writelog "INFO" "${FUNCNAME[0]} - Using $MAHU arguments '$MAHUARGS'"
 					mapfile -d " " -t -O "${#MAHUCMD[@]}" MAHUCMD < <(printf '%s' "$MAHUARGS")
 				fi
 			else
@@ -16638,6 +16695,12 @@ function setWineCmd {
 	mapfile -d " " -t -O "${#FINGAMECMD[@]}" FINGAMECMD < <(printf '%s' "$RAWGAMECMD")
 	
 	writelog "INFO" "${FUNCNAME[0]} - Starting game $GN with '$("$RUNWINE" --version)' and waiting for its PID to exit"
+
+	# disable USEOBSVKC for wine
+	if [ "$USEOBSVKC" -eq 1 ]; then
+		writelog "SKIP" "${FUNCNAME[0]} - Ignoring USEOBSVKC being enabled, because wine is used instead of Proton"
+		OBSVKC=0
+	fi
 
 	# start with gamemoderun:
 	if [ "$USEGAMEMODERUN" -eq 1 ]; then
@@ -16783,6 +16846,10 @@ function launchSteamGame {
 	if [ "$USEGAMEMODERUN" -eq 1 ]; then
 		GMR="$(command -v "$GAMEMODERUN")"
 	fi
+
+	if [ "$USEOBSVKC" -eq 1 ]; then
+		OBSC="$(command -v "$OBSVKC")"
+	fi
 	
 	if [ "$USEGAMESCOPE" -eq 1 ]; then
 		if [ "$USEMANGOAPP" -eq 1 ]; then
@@ -16861,13 +16928,26 @@ function launchSteamGame {
 		writelog "SKIP" "${FUNCNAME[0]} - With ISGAME '$ISGAME' the game failed to start"
 	fi
 
-	if [ "$USEWINE" -ne 1 ]; then
+	if [ "$USEWINE" -eq 0 ]; then
 		# concatenate final game start command
 
-		if [ -n "$GMR" ]; then
-			FINALSTARTCMD=("$GMR")
+		if [ "$USEOBSVKC" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - USEOBSVKC is enabled - preparing $OBSVKC command"
+			if [ -n "${FINALSTARTCMD[0]}" ]; then
+				FINALSTARTCMD=("${FINALSTARTCMD[@]}" "$OBSC")
+			else
+				FINALSTARTCMD=("$OBSC")
+			fi
 		fi
-		
+
+		if [ -n "$GMR" ]; then
+			if [ -n "${FINALSTARTCMD[0]}" ]; then
+				FINALSTARTCMD=("${FINALSTARTCMD[@]}" "$GMR")
+			else
+				FINALSTARTCMD=("$GMR")
+			fi
+		fi
+
 		if [ -n "$GSC" ]; then
 			if [ -n "${FINALSTARTCMD[0]}" ]; then
 				FINALSTARTCMD=("${FINALSTARTCMD[@]}" "$GSC")
@@ -16967,6 +17047,16 @@ function launchSteamGame {
 				echo "$(date) - $GN ($AID) - ======================"
 			} >> "$STLSHM/${PROGNAME,,}-${FUNCNAME[0]}-STARTDEBUG.txt"
 
+		fi
+
+		# might be also useful for starting custom commands generally
+		if [ "$USECUSTOMCMD" -eq 1 ] && [ "$FORK_CUSTOMCMD" -eq 1 ] && [ "$ONLY_CUSTOMCMD" -eq 0 ] && [ "$WAITFORCUSTOMCMD" -ge 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - WAITFORCUSTOMCMD is enabled, so replacing $WFEAR with 'run' in'${FINALSTARTCMD[*]}'"
+			for i in "${!FINALSTARTCMD[@]}"; do
+				if [[ ${FINALSTARTCMD[$i]} == "$WFEAR" ]]; then
+					FINALSTARTCMD[$i]="run"
+				fi
+			done
 		fi
 
 		writelog "INFO" "${FUNCNAME[0]} - Original incoming start command: '${INGCMD[*]}'"
