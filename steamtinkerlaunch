@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v10.0.20220803"
+PROGVERS="v10.0.20220804"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -14273,7 +14273,6 @@ function setMangoHudCfg {
 				writelog "SKIP" "${FUNCNAME[0]} - Could not find or create '$MAHUTMPL'"
 			fi
 		fi
-		
 		if [ -f "$MHIC" ]; then
 			if grep -q "$MAHULID/$AID" "$MHIC"; then
 				mkProjDir "$MAHULID/$AID"
@@ -16551,41 +16550,6 @@ function setSLRReap {
 	fi
 }
 
-function setMaHuCmd {
-	MAHUCMD=()
-	if [ "$USEMANGOHUD" -eq 1 ]; then
-		if [ "$MAHUVAR" -eq 1 ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Exporting MANHOGUD variable and skipping all $MAHU binary settings, because MAHUVAR is '$MAHUVAR'"
-			export MANGOHUD=1
-		else
-			if [ -f "$MAHUBIN" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - $MAHU is enabled"
-				if [ "$LDPMAHU" -eq 1 ]; then
-					writelog "INFO" "${FUNCNAME[0]} - Preloading $MAHU"
-					export LD_PRELOAD="$LD_PRELOAD $MAHUBIN"
-				fi
-
-				mapfile -d " " -t -O "${#MAHUCMD[@]}" MAHUCMD < <(printf '%s' "$MAHUBIN")
-
-				if [ "$MAHUARGS" != "$NON" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - Using $MAHU arguments '$MAHUARGS'"
-					mapfile -d " " -t -O "${#MAHUCMD[@]}" MAHUCMD < <(printf '%s' "$MAHUARGS")
-				fi
-			else
-				writelog "WARN" "${FUNCNAME[0]} - $MAHU binary not found - disabling"
-				USEMANGOHUD=0
-			fi
-		fi
-	
-		if [ -z "${MAHUCMD[0]}" ]; then
-			writelog "WARN" "${FUNCNAME[0]} - unset MAHUCMD"
-			unset MAHUCMD
-		else
-			writelog "INFO" "${FUNCNAME[0]} - CMDPART - $MAHU command '${MAHUCMD[*]}' will be added to the game launch command"
-		fi
-	fi
-}
-
 function setBoxtronCmd {
 	DOSEXE="$GP"
 	if [ -x "$(command -v "$BOXTRONCMD" 2>/dev/null)" ]; then
@@ -16873,7 +16837,6 @@ function launchSteamGame {
 	writelog "INFO" "${FUNCNAME[0]} - Initial game command is '${INGCMD[*]}'"
 
 	setSLRReap
-	setMaHuCmd
 	
 	if [ "$USEBOXTRON" -eq 1 ] || [ "$USEROBERTA" -eq 1 ] || [ "$USELUXTORPEDA" -eq 1 ]; then
 		ISGAME=3
@@ -16947,12 +16910,33 @@ function launchSteamGame {
 			fi
 		fi
 
-		if [ -n "${MAHUCMD[0]}" ]; then
-			if [ -n "${FINALSTARTCMD[0]}" ]; then
-				FINALSTARTCMD=("${FINALSTARTCMD[@]}" "${MAHUCMD[@]}")
+		if [ "$USEMANGOHUD" -eq 1 ]; then
+			if [ "$MAHUARGS" != "$NON" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Using $MAHU arguments '$MAHUARGS'"
+				export MANGOHUD_CONFIG="$MAHUARGS"
+			fi
+
+			if [ "$MAHUVAR" -eq 1 ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Exporting MANHOGUD variable and skipping all $MAHU binary settings, because MAHUVAR is '$MAHUVAR'"
+				export MANGOHUD=1
 			else
-				FINALSTARTCMD=("${MAHUCMD[@]}")
-			fi	
+				if [ -f "$MAHUBIN" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - $MAHU is enabled"
+					if [ "$LDPMAHU" -eq 1 ]; then
+						writelog "INFO" "${FUNCNAME[0]} - Preloading $MAHU"
+						export LD_PRELOAD="$LD_PRELOAD $MAHUBIN"
+					else
+						if [ -n "${FINALSTARTCMD[0]}" ]; then
+							FINALSTARTCMD=("${FINALSTARTCMD[@]}" "$MAHUBIN")
+						else
+							FINALSTARTCMD=("$MAHUBIN")
+						fi	
+					fi
+				else
+					writelog "WARN" "${FUNCNAME[0]} - $MAHU binary not found - disabling"
+					USEMANGOHUD=0
+				fi
+			fi
 		fi
 
 		if [ -n "${SLRCMD[0]}" ]; then
@@ -17000,7 +16984,6 @@ function launchSteamGame {
 				echo "$(date) - $GN ($AID) - ======================"
 				echo "GMR $GMR"
 				echo "GSC $GSC"
-				echo "MAHUCMD '${MAHUCMD[*]}'"
 				echo "SLRCMD '${SLRCMD[*]}'"
 				echo "PROTSTARTCMD '${PROTSTARTCMD[*]}'"
 				echo "GAMESTARTCMD '${GAMESTARTCMD[*]}'"
