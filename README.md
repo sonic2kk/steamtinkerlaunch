@@ -9,7 +9,7 @@
 
 <img align="left" width="64" height="64" src="https://github.com/frostworx/repo-assets/blob/master/pics/steamtinkerlaunch-logo_64px.png" alt="**SteamTinkerLaunch** is a Linux wrapper tool for use with the Steam client">
 
-**Steam Tinker Launch** is a versatile Linux wrapper tool for use with the Steam client which allows for easy graphical configuration of game tools, such as [GameScope](https://github.com/frostworx/steamtinkerlaunch/wiki/GameScope), [MangoHud](https://github.com/frostworx/steamtinkerlaunch/wiki/MangoHud), [modding tools](https://github.com/frostworx/steamtinkerlaunch/wiki/Modding) and a bunch more. It supports both games using Proton and native Linux games.
+**Steam Tinker Launch** is a versatile Linux wrapper tool for use with the Steam client which allows for easy graphical configuration of game tools, such as [GameScope](https://github.com/frostworx/steamtinkerlaunch/wiki/GameScope), [MangoHud](https://github.com/frostworx/steamtinkerlaunch/wiki/MangoHud), [modding tools](https://github.com/frostworx/steamtinkerlaunch/wiki/Modding) and a bunch more. It supports both games using Proton and native Linux games, and works on both X11 and Wayland.
  
 As described by _/u/TaylorRoyal23_ on [r/linux_gaming](https://www.reddit.com/r/linux_gaming/comments/ud58i2/comment/i6i3yf9/?utm_source=share&utm_medium=web2x&context=3):
 
@@ -21,6 +21,8 @@ with a 2 second menu that allows you to easily change any of the settings.
 If you don't press any buttons it just goes with the defaults and launches the game.
 The menus can get a little confusing but it consolidates it all in one place and is way more simple
 than trying to remember dozens of commands for various settings that one might need."_
+
+![image](https://user-images.githubusercontent.com/7917345/186237765-8803c246-a025-413b-be8c-f2c13243291d.png)
 
 ## What Does It Do?
 SteamTinkerLaunch offers a huge variety of features, too many to list in this Readme. Please see the [Features List](https://github.com/frostworx/steamtinkerlaunch/wiki#features) and their associated wiki pages for a full breakdown. However, here are some of the key features offered by SteamTinkerLaunch. Note that some of these features may not work with Flatpak Steam!
