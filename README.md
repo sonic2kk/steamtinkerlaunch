@@ -78,7 +78,7 @@ SteamTinkerLaunch can be installed in a few different ways depending on your pla
 | Package Manager | Preferred installation method. See distribution package status below.<br />Many thanks to all package maintainers!<br /><br />[![Packaging status](https://repology.org/badge/vertical-allrepos/steamtinkerlaunch.svg)](https://repology.org/project/steamtinkerlaunch/versions)<br /><br />See also [Installation Wiki](https://github.com/frostworx/steamtinkerlaunch/wiki/Installation#package-manager). |
 | Manual Installation | [See Installation Wiki notes](https://github.com/frostworx/steamtinkerlaunch/wiki/Installation#manual-installation) for dependency information and post-installation setup. |
 | [Steam Deck](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam-Deck) | See [Installation Wiki](https://github.com/frostworx/steamtinkerlaunch/wiki/Installation#steam-deck) for Steam Deck specific installation instructions. |
-| [Steam Flatpak](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam-Flatpak) | See [Installation Wiki](https://github.com/frostworx/steamtinkerlaunch/wiki/Installation#steam-flatpak). |
+| [Steam Flatpak](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam-Flatpak) | See [Installation Wiki](https://github.com/frostworx/steamtinkerlaunch/wiki/Installation#steam-flatpak) for setup instructions on using Steam Flatpak and SteamTinkerLaunch. |
 | Other | See [Installation Wiki](https://github.com/frostworx/steamtinkerlaunch/wiki/Installation#distro-specific) for any distro-specific installation instructions. |
 
 ## Press
@@ -90,7 +90,7 @@ Several great people have mentioned SteamTinkerLaunch on their platforms/channel
 | **[ekianjo](https://boilingsteam.com/author/ekianjo/)** | [Wrote up a Q&A on BoilingSteam](https://boilingsteam.com/steam-tinker-launcher-making-tinkering-much-easier) with SteamTinkerLaunch creator Frostworx! |
 | **[Hex DSL](https://www.youtube.com/c/HexDSL)** | Made a [YouTube video](https://www.youtube.com/watch?v=rdXQRMwMfPE) showcasing SteamTinkerLaunch |
 | **[tuxfoo](https://www.youtube.com/channel/UCWpoyqSBIXtylRLFgP3PFfg)** | Made a [YouTube video](https://www.youtube.com/watch?v=l1KjIANTIKs) showcasing SteamTinkerLaunch
-| **[Linux Game Cast](https://linuxgamecast.com/)** | Mnetioned SteamTinkerLaunch on their [casts](https://www.youtube.com/watch?v=djuZdnE83fE&t=436s) [several](https://www.youtube.com/watch?v=yVsTMhx8E7c&t=983s) [times](https://www.youtube.com/watch?v=qhybhTGV3mA&t=1279s), and [counting]((https://linuxgamecast.com/2021/11/linux-game-cast-484-yami-pedro))! |
+| **[Linux Game Cast](https://linuxgamecast.com/)** | Mentioned SteamTinkerLaunch on their [casts](https://www.youtube.com/watch?v=djuZdnE83fE&t=436s) [several](https://www.youtube.com/watch?v=yVsTMhx8E7c&t=983s) [times](https://www.youtube.com/watch?v=qhybhTGV3mA&t=1279s), and [counting]((https://linuxgamecast.com/2021/11/linux-game-cast-484-yami-pedro))! |
 | [Mark Dougherty](https://linuxgamingcentral.com/) | Has written [several](https://linuxgamingcentral.com/posts/news-stl-v10-released/) [articles](https://linuxgamingcentral.com/posts/stl-v11-released/) about SteamTinkerLaunch |
 
  
