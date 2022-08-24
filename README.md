@@ -46,10 +46,10 @@ Steam Tinker Launch works with Linux native games and games using Proton, howeve
 
 There are two ways to use SteamTinkerLaunch through Steam:
 
-#### Steam Compatability Tool (Proton Games)
-Using SteamTinkerLaunch as a [compatability tool](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam-Compatibility-Tool) is the preferred way of using it with Proton games. Once SteamTinkerLaunch is installed, force it as a compatability tool for your chosen game from the list of compatability tools. You can also set SteamTinkerLaunch as the default compatability tool for all applications from the Steam Play settings of the Steam client.
+#### Steam compatibility Tool (Proton Games)
+Using SteamTinkerLaunch as a [compatibility tool](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam-Compatibility-Tool) is the preferred way of using it with Proton games. Once SteamTinkerLaunch is installed, force it as a compatibility tool for your chosen game from the list of compatibility tools. You can also set SteamTinkerLaunch as the default compatibility tool for all applications from the Steam Play settings of the Steam client.
 
-Please note that some platforms such as [Steam Flatpak](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam-Flatpak) only allow you to use SteamTinkerLaunch as a compatibility tool. When forcing a game to use a compatability tool, Steam will always download the Windows release of a game, so as a result your mileage may vary. Please report any issues using SteamTinkerLaunch as a compatability tool with Steam Flatpak on the [SteamTinkerLaunch Flatpak issue](https://github.com/frostworx/steamtinkerlaunch/issues/27).
+Please note that some platforms such as [Steam Flatpak](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam-Flatpak) only allow you to use SteamTinkerLaunch as a compatibility tool. When forcing a game to use a compatibility tool, Steam will always download the Windows release of a game, so as a result your mileage may vary. Please report any issues using SteamTinkerLaunch as a compatibility tool with Steam Flatpak on the [SteamTinkerLaunch Flatpak issue](https://github.com/frostworx/steamtinkerlaunch/issues/27).
 
 #### Steam Launch Option (Native Linux Games)
 To use SteamTinkerLaunch with native Linux games, you can simply add the following to your native game's launch option:
