@@ -58,7 +58,7 @@ To use SteamTinkerLaunch with native Linux games, you can simply add the followi
 steamtinkerlaunch %command%
 ```
 
-On some platforms such as [Steam Deck](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam-Deck), using SteamTinkerLaunch as a launch option may require you to add it to your path. Refer to your distributions documentation on how to add the script to your path, as this can vary between distributions and shells. 
+On some platforms such as [Steam Deck](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam-Deck), using SteamTinkerLaunch as a launch option may require you to add it to your path. Refer to your distributions documentation on how to add the script to your path, as this can vary between distributions and shells. A very general guide on how to add SteamTinkerLaunch to your path can be found on the [Local (Non-Root) section](https://github.com/frostworx/steamtinkerlaunch/wiki/Installation#local-non-root) of the Installation wiki. 
 
 ### Game-Specific Use
 When starting a game, a small [Wait Requester](#Wait-Requester) dialog will pop up. This will allow you to access the Main Menu either by pressing the button or pressing the spacebar, or skip to launching the game. By default, the dialog will only stay for two seconds before it times out and launches the game, but this can be configured in the SteamTinkerLaunch settings.
@@ -68,7 +68,7 @@ When starting a game, a small [Wait Requester](#Wait-Requester) dialog will pop 
 The Main Menu is the springboard to tinkering with your game options. See the [wiki page](https://github.com/frostworx/steamtinkerlaunch/wiki/Main-Menu) for more information on the options it provides. 
 
 ### Command Line
-SteamTinkerLaunch has several [command line options](https://github.com/frostworx/steamtinkerlaunch/wiki/Command-Line) which can be useful outside Steam, such as for installing modding tools. You can run `steamtinkerlaunch help` for a full list of available commands.
+SteamTinkerLaunch has several [command line options](https://github.com/frostworx/steamtinkerlaunch/wiki/Command-Line) which can be useful outside Steam, such as for installing modding tools. You can run `steamtinkerlaunch help` for a full list of available commands, or if SteamTinkerLaunch is not in your path you can run `sh steamtinkerlaunch help` from the folder where you downloaded SteamTinkerLaunch. 
 
 ## How Do I Install It?
 SteamTinkerLaunch can be installed in a few different ways depending on your platform and needs. Please refer to the [Installation wiki page](https://github.com/frostworx/steamtinkerlaunch/wiki/Installation) for detailed installation instructions.
@@ -76,7 +76,7 @@ SteamTinkerLaunch can be installed in a few different ways depending on your pla
 | Platform | Notes |
 | -------- | ----- |
 | Package Manager | Preferred installation method. See distribution package status below, though this list may not be exhaustive.<br />Many thanks to all package maintainers!<br /><br />[![Packaging status](https://repology.org/badge/vertical-allrepos/steamtinkerlaunch.svg)](https://repology.org/project/steamtinkerlaunch/versions)<br /><br />Refer to the [Installation Wiki](https://github.com/frostworx/steamtinkerlaunch/wiki/Installation#package-manager) for more information on available packages. |
-| Manual Installation | [See Installation Wiki notes](https://github.com/frostworx/steamtinkerlaunch/wiki/Installation#manual-installation) for dependency information and post-installation setup. |
+| Manual Installation | SteamTinkerLaunch supports **system-wide** (root) and may support a **local** (non-root) manuall installation. [See Installation Wiki notes](https://github.com/frostworx/steamtinkerlaunch/wiki/Installation#manual-installation) for setup and details. |
 | [Steam Deck](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam-Deck) | See [Installation Wiki](https://github.com/frostworx/steamtinkerlaunch/wiki/Installation#steam-deck) for Steam Deck specific installation instructions. |
 | [Steam Flatpak](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam-Flatpak) | See [Installation Wiki](https://github.com/frostworx/steamtinkerlaunch/wiki/Installation#steam-flatpak) for setup instructions on using Steam Flatpak and SteamTinkerLaunch. |
 | Other | See [Installation Wiki](https://github.com/frostworx/steamtinkerlaunch/wiki/Installation#distro-specific) for any distro-specific installation instructions. |
