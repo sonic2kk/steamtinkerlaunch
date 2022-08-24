@@ -75,7 +75,7 @@ SteamTinkerLaunch can be installed in a few different ways depending on your pla
 
 | Platform | Notes |
 | -------- | ----- |
-| Package Manager | Preferred installation method. See distribution package status below.<br />Many thanks to all package maintainers!<br /><br />[![Packaging status](https://repology.org/badge/vertical-allrepos/steamtinkerlaunch.svg)](https://repology.org/project/steamtinkerlaunch/versions)<br /><br />See also [Installation Wiki](https://github.com/frostworx/steamtinkerlaunch/wiki/Installation#package-manager). |
+| Package Manager | Preferred installation method. See distribution package status below, though this list may not be exhaustive.<br />Many thanks to all package maintainers!<br /><br />[![Packaging status](https://repology.org/badge/vertical-allrepos/steamtinkerlaunch.svg)](https://repology.org/project/steamtinkerlaunch/versions)<br /><br />Refer to the [Installation Wiki](https://github.com/frostworx/steamtinkerlaunch/wiki/Installation#package-manager) for more information on available packages. |
 | Manual Installation | [See Installation Wiki notes](https://github.com/frostworx/steamtinkerlaunch/wiki/Installation#manual-installation) for dependency information and post-installation setup. |
 | [Steam Deck](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam-Deck) | See [Installation Wiki](https://github.com/frostworx/steamtinkerlaunch/wiki/Installation#steam-deck) for Steam Deck specific installation instructions. |
 | [Steam Flatpak](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam-Flatpak) | See [Installation Wiki](https://github.com/frostworx/steamtinkerlaunch/wiki/Installation#steam-flatpak) for setup instructions on using Steam Flatpak and SteamTinkerLaunch. |
