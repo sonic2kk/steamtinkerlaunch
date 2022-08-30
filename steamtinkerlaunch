@@ -18478,7 +18478,7 @@ function SteamCatSelect {
 
 	setShowPic
 	unset VALTAGS
-	mapfile -d "\n" -t -O "${#VALTAGS[@]}" VALTAGS <<< "$(getActiveSteamCollections)"
+	mapfile -d "\n" -t -O "${#VALTAGS[@]}" VALTAGS <<< "$(getActiveSteamCollections | grep -v "^rt[A-Z]")"
 	SCATSELOUT="$(while read -r f; do if [[ ! "${SCATSEL[*]}" =~ $f ]]; then 	echo FALSE ; echo "$f"; else echo TRUE ; echo "$f" ;fi ; done <<< "$(printf "%s\n" "${VALTAGS[@]}")" | \
 	"$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center $WINDECO --list --checklist --column="" --column="Steam Collection" --separator="\n" --print-column="2" \
 	--text="$(spanFont "$GUI_STEAMCATSEL" "H")" --title="$TITLE" --button="$BUT_SEL":0 --button="$BUT_CAN":2 "$GEOM")"
@@ -18520,6 +18520,12 @@ function AutoMarkSCat {
 	}
 }
 
+function filterUnwantedSteamCategories {
+	FILTEREDTAGS=$(echo "$1" | grep -v "^rt[A-Z]")
+
+	echo "$(printf "%s" "${FILTEREDTAGS[@]}" | tr '\n' '!' | sed 's/\!*$//g')"
+}
+
 function addNonSteamGameGui {
 	writelog "INFO" "${FUNCNAME[0]} - Starting the Gui for adding a $NSGA to Steam"
 
@@ -18550,12 +18556,12 @@ function addNonSteamGameGui {
 	NOSTGVR=0
 	unset VALTAGS
 	mapfile -d "\n" -t -O "${#VALTAGS[@]}" VALTAGS <<< "$(getActiveSteamCollections | sed '/^$/d')"
-	VALIDTAGS="$(printf "%s" "${VALTAGS[@]}" | tr '\n' ',' | sed 's/,*$//g')"
+	VALIDTAGS="$(filterUnwantedSteamCategories "$VALTAGS")"
 
 	AutoMarkSCat
 
 	if [[ -v SCATSEL[@] ]]; then
-		NOSTTAGS="$(printf "%s" "${SCATSEL[@]}" | tr '\n' ',' | sed 's/,*$//g')"
+		NOSTTAGS="$(filterUnwantedSteamCategories "${SCATSEL[@]}")"
 	fi 
 	export CURWIKI="$PPW/Add-Non-Steam-Game"
 	TITLE="${PROGNAME}-$NSGA"
