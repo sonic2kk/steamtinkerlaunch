@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v11.1.20220831"
+PROGVERS="v11.1.20220905"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -14740,6 +14740,7 @@ function prepareLaunch {
 	delayGameForCustomLaunch
 	
 	# GAME START
+	# writelog "INFO" "${FUNCNAME[0]} - Hello there $STUIDPATH"
 	writelog "INFO" "${FUNCNAME[0]} - launchSteamGame:"
 	launchSteamGame
 
@@ -17320,6 +17321,10 @@ function howto {
 	echo "      -ep=|--exepath=                  Full gamepath required"
 	echo "      -sd=|--startdir=                 Start Dir - optional"
 	echo "      -ip=|--iconpath=                 Icon Path - optional"
+	echo "      -bg=|--background=               Background/Hero Path - optional"
+	echo "      -lg=|--logopath=                 Logo Path - optional"
+	echo "      -art=|--artwork=                 Artwork/Boxart Path - optional"
+	echo "      -sma=|--smallartwork=            Small Artwork Path - optional"
 	echo "      -lo=|--launchoptions             Game Launch Options - optional"
 	echo "      -hd=|--hide=                     Hide Game - optional*"
 	echo "      -adc=|--allowdesktopconf=        Allow Desktop Conf - optional"
@@ -18556,6 +18561,11 @@ function addNonSteamGameGui {
 	else
 		NOSTGICONPATH=""
 	fi
+	NOSTGBACKGROUND=""
+	NOSTGLOGO=""
+	NOSTGARTWORK=""
+	NOSTGSMLART=""
+
 	NOSTGHIDE=0
 	NOSTGADC=1
 	NOSTGAO=1
@@ -18573,20 +18583,27 @@ function addNonSteamGameGui {
 	TITLE="${PROGNAME}-$NSGA"
 	pollWinRes "$TITLE"
 
+	# TODO Update language file strings
 	NSGSET="$("$YAD" --f1-action="$F1ACTION" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
 	--title="$TITLE" --separator="|" \
 	--text="$(spanFont "$GUI_ADDNSG" "H")\n<span font=\"italic\">$(strFix "$GUI_WARNNSG1" "$STERECO")\n\n$(strFix "$GUI_WARNNSG2" "$STERECO"))</span>" \
-	--field=" ":LBL " " \
+	--field="$(spanFont "$GUI_NOSTGPATHS" "H")":LBL " " \
 	--field="     $GUI_NOSTGAPPNAME!$DESC_NOSTGAPPNAME ('NOSTGAPPNAME')" "${NOSTGAPPNAME/#-/ -}" \
 	--field="     $GUI_NOSTGEXEPATH!$DESC_NOSTGEXEPATH ('NOSTGEXEPATH')":FL "${NOSTGEXEPATH/#-/ -}" \
 	--field="     $GUI_NOSTGSTDIR!$DESC_NOSTGSTDIR ('NOSTGSTDIR')":DIR "${NOSTGSTDIR/#-/ -}" \
+	--field="$(spanFont "$GUI_NOSTGGAMEART" "H")":LBL " " \
 	--field="     $GUI_NOSTGICONPATH!$DESC_NOSTGICONPATH ('NOSTGICONPATH')":FL "${NOSTGICONPATH/#-/ -}" \
+	--field="     $GUI_NOSTGBACKGROUND!$DESC_NOSTGBACKGROUND ('NOSTGBACKGROUND')":FL "${NOSTGICONPATH/#-/ -}" \
+	--field="     $GUI_NOSTGLOGO!$DESC_NOSTGLOGO ('NOSTGLOGO')":FL "${NOSTGLOGO/#-/ -}" \
+	--field="     $GUI_NOSTGARTWORK!$DESC_NOSTGARTWORK ('NOSTGARTWORK')":FL "${NOSTGARTWORK/#-/ -}" \
+	--field="     $GUI_NOSTGSMLART!$DESC_NOSTGSMLART ('NOSTGSMLART')":FL "${NOSTGSMLART/#-/ -}" \
+	--field="$(spanFont "$GUI_NOSTGPROPS" "H")":LBL " " \
 	--field="     $GUI_NOSTGLAOP!$DESC_NOSTGLAOP ('NOSTGLAOP')" "${NOSTGLAOP/#-/ -}" \
+	--field="     $GUI_NOSTTAGS!$DESC_NOSTTAGS ('NOSTTAGS')":CBE "$(cleanDropDown "${NOSTTAGS/#-/ -}" "$VALIDTAGS")" \
 	--field="     $GUI_NOSTGHIDE!$DESC_NOSTGHIDE ('NOSTGHIDE')":CHK "${NOSTGHIDE/#-/ -}" \
 	--field="     $GUI_NOSTGADC!$DESC_NOSTGADC ('NOSTGADC')":CHK "${NOSTGADC/#-/ -}" \
 	--field="     $GUI_NOSTGAO!$DESC_NOSTGAO ('NOSTGAO')":CHK "${NOSTGAO/#-/ -}" \
 	--field="     $GUI_NOSTGVR!$DESC_NOSTGVR ('NOSTGVR')":CHK "${NOSTGVR/#-/ -}" \
-	--field="     $GUI_NOSTTAGS!$DESC_NOSTTAGS ('NOSTTAGS')":CBE "$(cleanDropDown "${NOSTTAGS/#-/ -}" "$VALIDTAGS")" \
 	--button="$BUT_CAN":0 --button="$BUT_TAGS":2 --button="$BUT_CREATE":4 "$GEOM")"
 
 	case $? in
@@ -18598,18 +18615,27 @@ function addNonSteamGameGui {
 		4)  writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_CREATE'"
 			if [ -n "$NSGSET" ]; then
 				mapfile -d "|" -t -O "${#NSGSETARR[@]}" NSGSETARR < <(printf '%s' "$NSGSET")
+				writelog "INFO" "${FUNCNAME[0]} - The Non-Steam Game args are ${NSGSETARR}"
 				NOSTGAPPNAME="${NSGSETARR[1]}"
 				NOSTGEXEPATH="${NSGSETARR[2]}"
 				NOSTGSTDIR="${NSGSETARR[3]}"
-				NOSTGICONPATH="${NSGSETARR[4]}"
-				NOSTGLAOP="${NSGSETARR[5]}"
-				NOSTGHIDE="$(retBool "${NSGSETARR[6]}")"
-				NOSTGADC="$(retBool "${NSGSETARR[7]}")"
-				NOSTGAO="$(retBool "${NSGSETARR[8]}")"
-				NOSTGVR="$(retBool "${NSGSETARR[9]}")"
-				NOSTTAGS="${NSGSETARR[10]}"
-				writelog "INFO" "${FUNCNAME[0]} - Launching command: addNonSteamGame -an=\"$NOSTGAPPNAME\" -ep=\"$NOSTGEXEPATH\" -sd=\"$NOSTGSTDIR\" -ip=\"$NOSTGICONPATH\" -lo=\"$NOSTGLAOP\" -hd=\"$NOSTGHIDE\" -adc=\"$NOSTGADC\" -ao=\"$NOSTGAO\" -vr=\"$NOSTGVR\" -t=\"$NOSTTAGS\""
-				addNonSteamGame	-an="$NOSTGAPPNAME" -ep="$NOSTGEXEPATH" -sd="$NOSTGSTDIR" -ip="$NOSTGICONPATH" -lo="$NOSTGLAOP" -hd="$NOSTGHIDE" -adc="$NOSTGADC" -ao="$NOSTGAO" -vr="$NOSTGVR" -t="$NOSTTAGS"
+
+				NOSTGICONPATH="${NSGSETARR[5]}"
+				NOSTGBACKGROUND="${NSGSETARR[6]}"
+				NOSTGLOGO="${NSGSETARR[7]}"
+				NOSTGARTWORK="${NSGSETARR[8]}"
+				NOSTGSMLART="${NSGSETARR[9]}"
+
+				NOSTGLAOP="${NSGSETARR[11]}"
+				NOSTTAGS="${NSGSETARR[12]}"
+				NOSTGHIDE="${NSGSETARR[13]}"
+				NOSTGADC="${NSGSETARR[14]}"
+				NOSTGAO="${NSGSETARR[15]}"
+				NOSTGVR="${NSGSETARR[16]}"
+
+				# Can we run the collection refresh command somewhere?
+				writelog "INFO" "${FUNCNAME[0]} - Launching command: addNonSteamGame -an=\"$NOSTGAPPNAME\" -ep=\"$NOSTGEXEPATH\" -sd=\"$NOSTGSTDIR\" -ip=\"$NOSTGICONPATH\" -lo=\"$NOSTGLAOP\" -hd=\"$NOSTGHIDE\" -adc=\"$NOSTGADC\" -ao=\"$NOSTGAO\" -vr=\"$NOSTGVR\" -t=\"$NOSTTAGS\" -bg=\"$NOSTGBACKGROUND\" -lg=\"$NOSTGLOGO\" -art=\"$NOSTGARTWORK\" -sma=\"$NOSTGSMLART\""
+				addNonSteamGame	-an="$NOSTGAPPNAME" -ep="$NOSTGEXEPATH" -sd="$NOSTGSTDIR" -ip="$NOSTGICONPATH" -lo="$NOSTGLAOP" -hd="$NOSTGHIDE" -adc="$NOSTGADC" -ao="$NOSTGAO" -vr="$NOSTGVR" -t="$NOSTTAGS" -bg="$NOSTGBACKGROUND" -lg="$NOSTGLOGO" -art="$NOSTGARTWORK" -sma="$NOSTGSMLART"
 			fi
 		;;
 	esac
@@ -18648,6 +18674,7 @@ function addNonSteamGame {
 	NOSTVR=0
 	NOSTSTLLO=0
 
+	# TODO add extra box art commands to command line args
 	for i in "$@"; do
 		case $i in
 			-an=*|--appname=*)
@@ -18694,6 +18721,22 @@ function addNonSteamGame {
 			NOSTSTLLO="${i#*=}"
 			shift
 			;;
+			-bg=*|--background=*)
+			NOSTBACKGROUND="${i#*=}"
+			shift
+			;;
+			-lg=*|--logo=*)
+			NOSTLOGO="${i#*=}"
+			shift
+			;;
+			-art=*|--artwork=*)
+			NOSTARTWORK="${i#*=}"
+			shift
+			;;
+			-sma=*|--smallartwork=*)
+			NOSTSMLART="${i#*=}"
+			shift
+			;;
 			*)
 			;;
 		esac
@@ -18729,12 +18772,16 @@ function addNonSteamGame {
 		writelog "INFO" "${FUNCNAME[0]} - Exe Path: '${NOSTEXEPATH}'"
 		writelog "INFO" "${FUNCNAME[0]} - Start Dir: '${NOSTSTDIR}'"
 		writelog "INFO" "${FUNCNAME[0]} - Icon Path: '${NOSTICONPATH}'"
+		writelog "INFO" "${FUNCNAME[0]} - Background Path: '${NOSTBACKGROUND}'"
+		writelog "INFO" "${FUNCNAME[0]} - Logo Path: '${NOSTLOGO}'"
+		writelog "INFO" "${FUNCNAME[0]} - Box art Path: '${NOSTARTWORK}'"
+		writelog "INFO" "${FUNCNAME[0]} - Small box art Path: '${NOSTSMLART}'"
 		writelog "INFO" "${FUNCNAME[0]} - Launch options: '${NOSTLAOP}'"
+		writelog "INFO" "${FUNCNAME[0]} - Tags: '${NOSTTAGS}'"
 		writelog "INFO" "${FUNCNAME[0]} - Is Hidden: '${NOSTHIDE}'"
 		writelog "INFO" "${FUNCNAME[0]} - Allow Desktop Config: '${NOSTADC}'"
 		writelog "INFO" "${FUNCNAME[0]} - Allow Overlay: '${NOSTAO}'"
 		writelog "INFO" "${FUNCNAME[0]} - OpenVR: '${NOSTVR}'"
-		writelog "INFO" "${FUNCNAME[0]} - Tags: '${NOSTTAGS}'"
 
 		if [ -f "$SCPATH" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - The file '$SCPATH' already exists, creating a backup, then removing the 2 closing backslashes at the end"
@@ -18749,7 +18796,33 @@ function addNonSteamGame {
 			NEWSET=0
 		fi
 
+		# Copy game artwork
+		SCGRIDPATH="$STUIDPATH/config/grid"
+		if [ ! -d "$SCGRIDPATH" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Creating new $SCGRIDPATH"
+			mkdir $SCGRIDPATH
+		fi
+
+		# NOSTAID might not be right? The files seem to copy over correctly but aren't set in Steam
+		if [ -n "$NOSTBACKGROUND" ]; then
+			copyGameArtFile "$NOSTBACKGROUND" "$SCGRIDPATH" "${NOSTAID}_hero"
+		fi
+
+		if [ -n "$NOSTLOGO" ]; then
+			copyGameArtFile "$NOSTLOGO" "$SCGRIDPATH" "${NOSTAID}_logo"
+		fi
+
+		if [ -n "$NOSTARTWORK" ]; then
+			copyGameArtFile "$NOSTARTWORK" "$SCGRIDPATH" "${NOSTAID}p"
+		fi
+
+		if [ -n "$NOSTSMLART" ]; then
+			copyGameArtFile "$NOSTARTWORK" "$SCGRIDPATH" "$NOSTAID"
+		fi		
+
 		writelog "INFO" "${FUNCNAME[0]} - Adding new set '$NEWSET'"
+
+
 
 		{
 		printf '\x00%s\x00' "$NEWSET"
@@ -18812,6 +18885,19 @@ function addNonSteamGame {
 		
 		writelog "INFO" "${FUNCNAME[0]} - Finished adding new $NSGA"
 	fi
+}
+
+function copyGameArtFile {
+	# Copy game art file to given path with given name, preserving existing extension
+
+	infile="$1"  # Absolute path to art file
+	artbasename="$(basename -- "$1")"
+	artext="${artbasename##*.}"
+	destname="$3"  # Name to give file when copied to destination
+	destdir="$2"  # Absolute path to destination directory
+	destfilepath="$destdir/$destname.$artext"  # Absolute path including modified art name
+
+	cp "$infile" "$destfilepath"
 }
 
 function setCloseVars {
