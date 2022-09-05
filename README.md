@@ -1,9 +1,12 @@
 # Steam Tinker Launch
+[![GitHub version](https://img.shields.io/github/v/tag/frostworx/steamtinkerlaunch?label=version&style=flat-square)](https://github.com/frostworx/steamtinkerlaunch/releases/latest)
 [![GitHub stars](https://img.shields.io/github/stars/frostworx/steamtinkerlaunch.svg?style=flat-square)](https://github.com/frostworx/steamtinkerlaunch/stargazers)
+![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/frostworx/steamtinkerlaunch?style=flat-square)
 [![GitHub contributors](https://img.shields.io/github/contributors/frostworx/steamtinkerlaunch.svg?style=flat-square)](https://github.com/frostworx/steamtinkerlaunch/graphs/contributors)
+![aur votes](https://img.shields.io/aur/votes/steamtinkerlaunch?label=aur%20votes&style=flat-square)
 [![GitHub issues](https://img.shields.io/github/issues/frostworx/steamtinkerlaunch.svg?style=flat-square)](https://github.com/frostworx/steamtinkerlaunch/issues)
 [![GitHub license](https://img.shields.io/github/license/frostworx/steamtinkerlaunch.svg?style=flat-square)](https://github.com/frostworx/steamtinkerlaunch/blob/dev/LICENSE)
-[![reddit](https://img.shields.io/reddit/subreddit-subscribers/SteamTinkerLaunch?style=flat-square&label=Reddit)](https://www.reddit.com/r/SteamTinkerLaunch)
+[![reddit](https://img.shields.io/reddit/subreddit-subscribers/SteamTinkerLaunch?style=flat-square&label=reddit)](https://www.reddit.com/r/SteamTinkerLaunch)
 
 ## What is SteamTinkerLaunch?
 
@@ -92,6 +95,8 @@ Several great people have mentioned SteamTinkerLaunch on their platforms/channel
 | **[tuxfoo](https://www.youtube.com/channel/UCWpoyqSBIXtylRLFgP3PFfg)** | Made a [YouTube video](https://www.youtube.com/watch?v=l1KjIANTIKs) showcasing SteamTinkerLaunch
 | **[Linux Game Cast](https://linuxgamecast.com/)** | Mentioned SteamTinkerLaunch on their [casts](https://www.youtube.com/watch?v=djuZdnE83fE&t=436s) [several](https://www.youtube.com/watch?v=yVsTMhx8E7c&t=983s) [times](https://www.youtube.com/watch?v=qhybhTGV3mA&t=1279s), and [counting]((https://linuxgamecast.com/2021/11/linux-game-cast-484-yami-pedro))! |
 | **[Mark Dougherty](https://linuxgamingcentral.com/)** | Has written [several](https://linuxgamingcentral.com/posts/news-stl-v10-released/) [articles](https://linuxgamingcentral.com/posts/stl-v11-released/) about SteamTinkerLaunch |
+| **[Kevin Wammer](https://overkill.wtf/author/kevin/)** | Wrote [this article](https://overkill.wtf/steam-deck-steam-tinker-launch-stl/) |
+| **[Starlogical from HiTechLoLife](https://www.youtube.com/c/HiTechLoLife)** | Created [this video](https://www.youtube.com/watch?v=4FRU2fuvLlw) describing SteamTinkerLaunch<br><br>_(yeah, MO2 might get a major overhaul, not sure yet if I can bring up the time though ;))_ |
 
  
 ## Configuration
