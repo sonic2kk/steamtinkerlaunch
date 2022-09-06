@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v11.1.20220831"
+PROGVERS="v11.1.20220904"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -2149,7 +2149,11 @@ function setCustomGameVars {
 
 	while read -r ORGARG; do
 		mapfile -t -O "${#ORGGCMD[@]}" ORGGCMD <<< "$ORGARG"
-	done <<< "$(printf "%s\n" "$@")"	
+	done <<< "$(printf "%s\n" "$@")"
+	if [ "${ORGGCMD[0]}" == "$WFEAR" ]; then
+		# removing first ORGGCMD element as it is '$WFEAR'
+		unset "ORGGCMD[0]"
+	fi
 }
 
 function prepareGUI {
@@ -14459,6 +14463,10 @@ function prepareLaunch {
 	if [ -n "$GPFX" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Proton wineprefix '$GPFX'"
 	fi
+
+	if [ -z "${INGCMD[*]}" ] && [ -n "${ORGGCMD[*]}" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - No INGCMD but valid ORGGCMD - May be Non-Steam game"
+	fi
 	writelog "INFO" "${FUNCNAME[0]} -------------------"
 	writelog "INFO" "${FUNCNAME[0]} - CreateGameCfg:"
 	createGameCfg
@@ -16768,7 +16776,7 @@ function setProtonCmd {
 			
 			if [ -f "${RUNPROTON//\"/}" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Prepending Proton '$USEPROTON' (='${RUNPROTON//\"/}') to the command line '${GAMESTARTCMD[*]}'"
-				PROTSTARTCMD=("${RUNPROTON//\"/}" "$WFEAR" "${GAMESTARTCMD[*]}")
+				PROTSTARTCMD=("${RUNPROTON//\"/}" "$WFEAR")
 			else
 				writelog "INFO" "${FUNCNAME[0]} - Still don't have a usable proton executable in RUNPROTON '{RUNPROTON//\"/}')"
 				if [ "$HAVEINPROTON" -eq 1 ]; then
