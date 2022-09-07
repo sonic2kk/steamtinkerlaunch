@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v11.1.20220904"
+PROGVERS="v11.1.20220907"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -11025,10 +11025,16 @@ function WinetricksPick {
 					WINETRICKSPAKS="$NON"
 				fi
 
-				WINETRICKSPAKS1="${WINETRICKSPAKS#*[[:blank:]]}"
-				WINETRICKSPAKS="${WINETRICKSPAKS1%*[[:blank:]]}"
+				WINETRICKSPAKS="${WINETRICKSPAKS#*[[:blank:]]}"
+				WINETRICKSPAKS="${WINETRICKSPAKS%*[[:blank:]]}"
+
+				declare -A WTNODUPPAKS
+				for i in $WINETRICKSPAKS; do
+					WTNODUPPAKS[$i]=1
+				done
+
 				touch "$FUPDATE"
-				updateConfigEntry "WINETRICKSPAKS" "$WINETRICKSPAKS" "$STLGAMECFG"
+				updateConfigEntry "WINETRICKSPAKS" "${!WTNODUPPAKS[@]}" "$STLGAMECFG"
 			}
 		;;
 	esac					
@@ -18535,9 +18541,8 @@ function AutoMarkSCat {
 }
 
 function filterUnwantedSteamCategories {
-	FILTEREDTAGS=$(echo "$1" | grep -v "^rt[A-Z]")
-
-	echo "$(printf "%s" "${FILTEREDTAGS[@]}" | tr '\n' '!' | sed 's/\!*$//g')"
+	FILTEREDTAGS="$(grep -v "^rt[A-Z]" <<< "$1")"
+	printf "%s" "${FILTEREDTAGS[@]}" | tr '\n' '!' | sed 's/\!*$//g'
 }
 
 function addNonSteamGameGui {
@@ -18570,7 +18575,7 @@ function addNonSteamGameGui {
 	NOSTGVR=0
 	unset VALTAGS
 	mapfile -d "\n" -t -O "${#VALTAGS[@]}" VALTAGS <<< "$(getActiveSteamCollections | sed '/^$/d')"
-	VALIDTAGS="$(filterUnwantedSteamCategories "$VALTAGS")"
+	VALIDTAGS="$(filterUnwantedSteamCategories "${VALTAGS[@]}")"
 
 	AutoMarkSCat
 
