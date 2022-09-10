@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v11.1.20220907"
+PROGVERS="v11.1.20220910"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -11033,7 +11033,7 @@ function WinetricksPick {
 					WTNODUPPAKS[$i]=1
 				done
 
-				WINETRICKSPAKS="${!WTNODUPPAKS[@]}"
+				WINETRICKSPAKS="${!WTNODUPPAKS[*]}"
 
 				touch "$FUPDATE"
 				updateConfigEntry "WINETRICKSPAKS" "$WINETRICKSPAKS" "$STLGAMECFG"
@@ -19475,9 +19475,10 @@ function createModifiedEvalsc {
 		ISCRILOG="$STLSHM/${PROGNAME,,}-${ISCRI}-temp_$RANDOM.log"
 	fi 
 
-	STESHA="$STEAM_COMPAT_CLIENT_INSTALL_PATH$SAC/$STEWOS"
+	STESHA="$STEAM_COMPAT_CLIENT_INSTALL_PATH/$SAC/$STEWOS"
 	if [ ! -d "$STESHA" ]; then
 		writelog "WARN" "${FUNCNAME[0]} - '$STESHA' not found - packages expected there won't be found" "X" "$ISCRILOG"
+		writelog "WARN" "${FUNCNAME[0]} - '$STESHA' is concatenated from '$STEAM_COMPAT_CLIENT_INSTALL_PATH', '$SAC', '$STEWOS'" "X" "$ISCRILOG"
 	fi
 
 	SOURCEEVALSC="$1"
@@ -19538,6 +19539,50 @@ function runEvacInstall {
 	mv "$DSTEVSC" "$STLSHM/${DSTEVSC##*/}_$RANDOM"
 }
 
+function findEarlyProt {
+	FEPLOG="$2"
+	writelog "INFO" "${FUNCNAME[0]} - Trying to get a proton version from '$1'" "X" "$FEPLOG"
+	if grep -q "^USEPROTON" "$1"; then
+		CONFPROTRAW="$(grep "^USEPROTON" "$1" | cut -d '=' -f2)"
+		CONFPROT="${CONFPROTRAW//\"}"
+
+		if [ -z "$SUSDA" ]; then
+			setSteamPaths
+		fi
+		
+		createProtonList
+		
+		if [ -f "$PROTONCSV" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Searching '$CONFPROT' in '$PROTONCSV'" "X" "$FEPLOG"
+
+			if grep -q "^${CONFPROT}" "$PROTONCSV"; then
+				writelog "INFO" "${FUNCNAME[0]} - Found '$CONFPROT' in '$PROTONCSV'" "X" "$FEPLOG"
+				EARLYPROT="$(grep "^${CONFPROT}" "$PROTONCSV" | cut -d ';' -f2)"
+				export EARLYPROT
+			else
+				writelog "INFO" "${FUNCNAME[0]} - '$CONFPROT' not found in '$PROTONCSV'" "X" "$FEPLOG"
+				# if configured USEPROTON proton binary was not found, try to find a minor version bump instead:
+				TESTEARLYPROT="$(fixProtonVersionMismatch "CONFPROT" "$STLGAMECFG" "X")"
+				if [ -f "$TESTEARLYPROT" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Found a minor version mismatch binary for '$CONFPROT':'$TESTEARLYPROT'" "X" "$FEPLOG"
+					EARLYPROT="$TESTEARLYPROT"
+					export EARLYPROT
+				else
+					if [ -n "$TESTEARLYPROT" ]; then
+						writelog "SKIP" "${FUNCNAME[0]} - Found '$TESTEARLYPROT' does not exist" "X" "$FEPLOG"
+					else
+						writelog "SKIP" "${FUNCNAME[0]} - No minor version mismatch binary for '$CONFPROT' found'" "X" "$FEPLOG"
+					fi
+				fi
+			fi
+		else
+			writelog "ERROR" "${FUNCNAME[0]} - Could not create '$PROTONCSV'" "X" "$FEPLOG"
+		fi
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - No USEPROTON entry found in '$1'" "X" "$FEPLOG"
+	fi
+}
+
 function checkFirstTimeRun {
 	ISCRILOG="$STLSHM/${PROGNAME,,}-${ISCRI}-${STEAM_COMPAT_APP_ID}.log"
 	GPFX="$STEAM_COMPAT_DATA_PATH/pfx"
@@ -19557,48 +19602,6 @@ function checkFirstTimeRun {
 		done
 		cp "$EVALVDF" "$EVMETAID"
 		writelog "INFO" "${FUNCNAME[0]} - Copied '$EVALVDF' to '$EVMETAID/$1'" "X" "$ISCRILOG"
-	}
-	
-	function findEarlyProt {
-		if [ -n "$2" ]; then
-			ISCRILOG="$2"
-			writelog "INFO" "${FUNCNAME[0]} - Trying to get a proton version from '$1'" "X" "$ISCRILOG"
-			if grep -q "^USEPROTON" "$1"; then
-				CONFPROTRAW="$(grep "^USEPROTON" "$1" | cut -d '=' -f2)"
-				CONFPROT="${CONFPROTRAW//\"}"
-
-				if [ -z "$SUSDA" ]; then
-					setSteamPaths
-				fi
-				
-				createProtonList
-				
-				if [ -f "$PROTONCSV" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - Searching '$CONFPROT' in '$PROTONCSV'" "X" "$ISCRILOG"
-
-					if grep -q "^${CONFPROT}" "$PROTONCSV"; then
-						writelog "INFO" "${FUNCNAME[0]} - Found '$CONFPROT' in '$PROTONCSV'" "X" "$ISCRILOG"
-						EARLYPROT="$(grep "^${CONFPROT}" "$PROTONCSV" | cut -d ';' -f2)"
-						export EARLYPROT
-					else
-						writelog "INFO" "${FUNCNAME[0]} - '$CONFPROT' not found in '$PROTONCSV'" "X" "$ISCRILOG"
-						# if configured USEPROTON proton binary was not found, try to find a minor version bump instead:
-						TESTEARLYPROT="$(fixProtonVersionMismatch "CONFPROT" "$STLGAMECFG" "X")"
-						if [ -f "$TESTEARLYPROT" ]; then
-							writelog "INFO" "${FUNCNAME[0]} - Found a minor version mismatch binary for '$CONFPROT':'$TESTEARLYPROT'" "X" "$ISCRILOG"
-							EARLYPROT="$TESTEARLYPROT"
-							export EARLYPROT
-						else
-							writelog "SKIP" "${FUNCNAME[0]} - Found '$TESTEARLYPROT' does not exist" "X" "$ISCRILOG"
-						fi
-					fi
-				else
-					writelog "ERROR" "${FUNCNAME[0]} - Could not create '$PROTONCSV'" "X" "$ISCRILOG"
-				fi
-			else
-				writelog "SKIP" "${FUNCNAME[0]} - No USEPROTON entry found in '$1'" "X" "$ISCRILOG"
-			fi
-		fi	
 	}
 
 	rmOldLog
@@ -19762,7 +19765,7 @@ function checkFirstTimeRun {
 						printf '\n%s\n' "$STINFO"	# heh, hello Steam Gui
 					# should not happen, but better log it anyway just in case:
 					else
-						writelog "SKIP" "${FUNCNAME[0]} - Skipping '$ISCRI' command '$*' - Exiting" "X" "$ISCRILOG"
+						writelog "SKIP" "${FUNCNAME[0]} - Skipping '$ISCRI' command '$*' - Neither '$EVALSC' nor '$GECUST' found in command exiting" "X" "$ISCRILOG"
 					fi
 			else
 				if ! grep -q "$GECUST" <<< "$@"; then
@@ -19770,19 +19773,87 @@ function checkFirstTimeRun {
 				fi
 			fi
 		else
-			writelog "SKIP" "${FUNCNAME[0]} - Skipping '$ISCRI' command '$*' - Exiting" "X" "$ISCRILOG"
+			if [ -d "$GPFX" ]; then
+				writelog "SKIP" "${FUNCNAME[0]} - Skipping '$ISCRI' command '$*', because '$GPFX' already exists - Exiting" "X" "$ISCRILOG"
+			elif [ -f "$EVMETAID/$EVSC" ]; then
+				writelog "SKIP" "${FUNCNAME[0]} - Skipping '$ISCRI' command '$*', because '$EVMETAID/$EVSC' already exists - Exiting" "X" "$ISCRILOG"
+			fi
 		fi
 	fi
 }
 
+function verbRun {
+	VERBLOG="$STLSHM/${PROGNAME,,}-VERB-${STEAM_COMPAT_APP_ID}.log"
+	GPFX="$STEAM_COMPAT_DATA_PATH/pfx"
+	SCCILECO="$STEAM_COMPAT_CLIENT_INSTALL_PATH/$LECO"
+	EVALPROTCONF="$STLSHM/evalprot-${STEAM_COMPAT_APP_ID}.conf"
+
+	writelog "INFO" "${FUNCNAME[0]} - 'verb' command detected '${*}'" "X" "$VERBLOG"
+
+	# first check if the game has a ${PROGNAME,,} config and use the corresponding proton version:
+	if [ -z "$EARLYPROT" ] && [ -f "$STLGAMEDIRID/$STEAM_COMPAT_APP_ID.conf" ]; then
+		findEarlyProt "$STLGAMEDIRID/$STEAM_COMPAT_APP_ID.conf" "$VERBLOG"
+	fi
+	# as fallback check if the game template ${PROGNAME,,} config has a usable proton version:
+	if [ -z "$EARLYPROT" ] && [ -f "$STLDEFGAMECFG" ]; then
+		findEarlyProt "$STLDEFGAMECFG" "$VERBLOG"
+	fi
+
+	# if everything else failed, check for a "static proton version" just for the base install - either from file or from system variable:
+	if [ -z "$EARLYPROT" ] && [ -f "$STLEARLYPROTCONF" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Trying to get a proton version from '$STLEARLYPROTCONF'" "X" "$VERBLOG"
+		source "$STLEARLYPROTCONF"
+	fi
+
+	# fallback if for whatever reason USEPROTON is empty everywhere - trying to get NOP
+	if [ -z "$EARLYPROT" ]; then
+		if [ -z "$SUSDA" ]; then
+			setSteamPaths
+		fi
+		writelog "INFO" "${FUNCNAME[0]} - Last try - trying to get Newest Official Proton" "X" "$VERBLOG"
+		CONFPROT="$(getDefaultProton)"
+		createProtonList
+		if [ -n "$CONFPROT" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Picking '^${CONFPROT}' from '$PROTONCSV'" "X" "$VERBLOG"
+			EARLYPROT="$(grep "^${CONFPROT}" "$PROTONCSV" | cut -d ';' -f2)"
+		else
+			writelog "WARN" "${FUNCNAME[0]} - Could not determine default Proton" "X" "$VERBLOG"
+		fi
+	fi
+	
+	# write found protonversion into temp config, so below GECUST runs can use it as well:
+	if [ -f "$EARLYPROT" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Running verb command '${*}' using proton '$EARLYPROT'" "X" "$VERBLOG"
+		"$EARLYPROT" "$WFEAR" "$@" >> "$VERBLOG" 2>&1
+	else
+		writelog "INFO" "${FUNCNAME[0]} - Skipping verb command '${*}', because no usable proton '$EARLYPROT' was found" "X" "$VERBLOG"
+	fi
+}
+
 function getCurrentCommandline {
+	echo "$@" >> "${STLSHM}/cmdline.txt"
 	# filter $ISCRI commands
 	if grep -q "$ISCRI" <<< "$@"; then
-		writelog "INFO" "${FUNCNAME[0]} - Running checkFirstTimeRun with arguments '${*}'" "P"
-		checkFirstTimeRun "$@"
+		while read -r IARG; do
+			mapfile -t -O "${#ISCRICMD[@]}" ISCRICMD <<< "$IARG"
+		done <<< "$(printf "%s\n" "$@")"
+		if [ "${ISCRICMD[0]}" == "%verb%" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Cutting '%verb%' from arguments '${*}'" "P"
+			ISCRICMD=( "${ISCRICMD[@]:1}" )
+		fi
+		writelog "INFO" "${FUNCNAME[0]} - Running checkFirstTimeRun with arguments '${ISCRICMD[*]}'" "P"
+		checkFirstTimeRun "${ISCRICMD[@]}"
+	elif grep -q "%verb%" <<< "$@"; then
+		echo "${FUNCNAME[0]} - Found '%verb%' in the command line '${*}'" >> "$STLSHM/DEBUG-verb.txt"
+		while read -r IARG; do
+			IARG="${IARG//steamservice.exe/SteamService.exe}"
+			mapfile -t -O "${#VERBCMD[@]}" VERBCMD <<< "$IARG"
+		done <<< "$(printf "%s\n" "$@")"
+		VERBCMD=( "${VERBCMD[@]:1}" )
+		echo "${FUNCNAME[0]} - Executing 'verb' command '${VERBCMD[*]}' through verbRun" >> "$STLSHM/DEBUG-verb.txt"
+		verbRun "${VERBCMD[@]}" # >> "$STLSHM/DEBUG-verb.txt" 2>&1
 		exit
 	else
-		echo "$@" > "${STLSHM}/cmdline.txt"
 		INPROSTR="proton $WFEAR"
 		if grep -q "$INPROSTR" <<< "$@"; then
 			HAVEINPROTON=1
