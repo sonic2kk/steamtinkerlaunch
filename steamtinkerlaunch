@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v11.1.20220915"
+PROGVERS="v11.1.20220916"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -2237,21 +2237,24 @@ function loadLanguage {
 
 		writelog "INFO" "${FUNCNAME[0]} - Loading STLLANG from '$STLDEFGLOBALCFG'"
 
-		if [ -f "$STLDEFGLOBALCFG" ]; then
+		ARGSLANG="$(awk -F 'lang=' '{print $2}' <<< "$@" | cut -d ' ' -f1)"
+		if [ -n "$ARGSLANG" ]; then
+			STLLANG="$ARGSLANG"
+			writelog "INFO" "${FUNCNAME[0]} - STLLANG from command line' is '$STLLANG'"
+
+		elif [ -f "$STLDEFGLOBALCFG" ]; then
 			STLLRAW="$(grep "^STLLANG" "$STLDEFGLOBALCFG" | cut -d '=' -f2)"
 			STLLANG="${STLLRAW//\"/}"
 			writelog "INFO" "${FUNCNAME[0]} - STLLANG from '$STLDEFGLOBALCFG' is '$STLLANG'"
 		else
-			ARGSLANG="$(awk -F 'lang=' '{print $2}' <<< "$@" | cut -d ' ' -f1)"
-			if [ -n "$ARGSLANG" ]; then
-				STLLANG="$ARGSLANG"
-				writelog "INFO" "${FUNCNAME[0]} - STLLANG from command line' is '$STLLANG'"
-			fi
+			writelog "WARN" "${FUNCNAME[0]} - Could not determine STLLANG"
 		fi
 
 		if [ -n "$STLLANG" ] && [ "$STLLANG" != "$STLDEFLANG" ]; then 
 			writelog "INFO" "${FUNCNAME[0]} - Now load the language file '$STLLANG'"
 			loadLangFile "$STLLANG"
+			touch "$FUPDATE"
+			updateConfigEntry "STLLANG" "$STLLANG" "$STLDEFGLOBALCFG"
 		fi
 		
 #		touch "$STLSHM/lola-$AID.txt"
