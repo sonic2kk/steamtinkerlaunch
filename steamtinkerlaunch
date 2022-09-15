@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v11.1.20220914"
+PROGVERS="v11.1.20220915"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -15514,6 +15514,11 @@ function startGame {
 		cd "${GMO2EXE%/*}" >/dev/null || return
 	fi
 
+	if ! command -v "$GAMESCOPE" >/dev/null && [ "$USEMANGOAPP" -eq 1 ]; then
+		writelog "WARN" "${FUNCNAME[0]} - Disabling USEMANGOAPP because '$GAMESCOPE' wasn't found"
+		USEMANGOAPP=0
+	fi
+	
 	if [ -x "$RUNCONTY" ] && [ "$RUNCONTY" != "$NON" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - ## Starting game using Conty executable '$RUNCONTY'"
 		"$RUNCONTY" "${RUNCMD[@]}"
@@ -15571,7 +15576,9 @@ function startGame {
 	emptyVars "O" "X" # clear original variables again (mostly for a continous log (date))
 	createSymLink "${FUNCNAME[0]}" "$GRUNLOG" "${STLGLLOGDIRTI}/${GN}.log"
 
-	if [ "$ISGAME" -eq 2 ] && [ "$USEWINE" -eq 0 ] && { grep -qi "GE\-" <<< "$USEPROTON" || grep -qi "\-TKG" <<< "$USEPROTON" || [ "$ISORIGIN" -eq 1 ];}; then
+# this is broken - maybe later:
+#	if [ "$ISGAME" -eq 2 ] && [ "$USEWINE" -eq 0 ] && { grep -qi "GE-" <<< "$USEPROTON" || grep -qi "\-TKG" <<< "$USEPROTON" || [ "$ISORIGIN" -eq 1 ];}; then
+	if [ "$ISGAME" -eq 2 ] && [ "$USEWINE" -eq 0 ]; then
 		if [ "$ISORIGIN" -eq 1 ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Waiting for $L2EA process to finish"		
 			# TODO maybe add waitForOriginPid - the sleep is not too nice (but at least non blocking)
@@ -15605,6 +15612,8 @@ function startGame {
 		else
 			writelog "ERROR" "${FUNCNAME[0]} - Could not determine pid of '$RLRUNWINESERVER'"
 		fi
+	else
+		writelog "WARN" "${FUNCNAME[0]} - Skipping Wait for any PID - ISGAME:'$ISGAME';USEWINE:'$USEWINE' - possible missing function!"
 	fi
 
 	duration=$SECONDS
