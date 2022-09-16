@@ -92,6 +92,7 @@ Several great people have mentioned SteamTinkerLaunch on their platforms/channel
 | **[tuxfoo](https://www.youtube.com/channel/UCWpoyqSBIXtylRLFgP3PFfg)** | Made a [YouTube video](https://www.youtube.com/watch?v=l1KjIANTIKs) showcasing SteamTinkerLaunch
 | **[Linux Game Cast](https://linuxgamecast.com/)** | Mentioned SteamTinkerLaunch on their [casts](https://www.youtube.com/watch?v=djuZdnE83fE&t=436s) [several](https://www.youtube.com/watch?v=yVsTMhx8E7c&t=983s) [times](https://www.youtube.com/watch?v=qhybhTGV3mA&t=1279s), and [counting]((https://linuxgamecast.com/2021/11/linux-game-cast-484-yami-pedro))! |
 | **[Mark Dougherty](https://linuxgamingcentral.com/)** | Has written [several](https://linuxgamingcentral.com/posts/news-stl-v10-released/) [articles](https://linuxgamingcentral.com/posts/stl-v11-released/) about SteamTinkerLaunch |
+| **[Kevin Wammer](https://overkill.wtf/author/kevin/)** | Wrote [this article](https://overkill.wtf/steam-deck-steam-tinker-launch-stl/) |
 
  
 ## Configuration
