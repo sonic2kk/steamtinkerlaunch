@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v11.1.20220921"
+PROGVERS="v11.1.20220922"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -151,6 +151,7 @@ FPBIN="/app/utils/bin"
 INFLATPAK=0
 WDIB="wine-discord-ipc-bridge"
 FIXGAMESCOPE=0
+SMALLDESK=0
 
 ### default vars ###
 
@@ -5447,62 +5448,63 @@ function MainMenu {
 	loadCfg "$CUMETA/$AID.conf" X
 	loadCfg "$GEMETA/$AID.conf" X
 
-	if [ -n "$DEVELOPER" ]; then
-		SETHEAD="$SETHEAD \n ${GUI_DEV}: '$DEVELOPER'"
-	fi
+	if [ "$SMALLDESK" -eq 0 ]; then
+		if [ -n "$DEVELOPER" ]; then
+			SETHEAD="$SETHEAD \n ${GUI_DEV}: '$DEVELOPER'"
+		fi
 
-	if [ -n "$PUBLISHER" ]; then
-		SETHEAD="$SETHEAD \n ${GUI_PUB}: '$PUBLISHER'"
-	fi
-
-	prepareProtonDBRating
-	getGameFiles "$AID"
-	setGameFilesArray
-	TT_GAFI="$(for i in "${!GamFiles[@]}"; do printf "%s: %s\n" "${GamDesc[$i]}" "${GamFiles[$i]}"; done)"
-
-	if [ -n "$METACRITIC_SCORE" ] && ! grep -q "^${GUI_MCS}" "$PDBRAINFO"; then
-		echo "${GUI_MCS}: $METACRITIC_SCORE" >> "$PDBRAINFO"
-	fi
+		if [ -n "$PUBLISHER" ]; then
+			SETHEAD="$SETHEAD \n ${GUI_PUB}: '$PUBLISHER'"
+		fi
 	
-	if [ -n "$OSLIST" ] && ! grep -q "^${GUI_OSL}" "$PDBRAINFO"; then
-		echo "${GUI_OSL}: $OSLIST" >> "$PDBRAINFO"
-	fi
-	
-	if [ -f "$PDBRAINFO" ] && grep -q "[0-9]" "$PDBRAINFO" ;then
-		SETHEAD="$SETHEAD \n $(cat "$PDBRASINF")"
-		TT_OPENURL="$(cat "$PDBRAINFO")"
-	fi
+		prepareProtonDBRating
+		getGameFiles "$AID"
+		setGameFilesArray
+		TT_GAFI="$(for i in "${!GamFiles[@]}"; do printf "%s: %s\n" "${GamDesc[$i]}" "${GamFiles[$i]}"; done)"
 
-	if [ -L "$GPFX/$DRCU/$STUS" ]; then
-		SETHEAD="$SETHEAD \n ${GUI_SSU}: symlink to '$(readlink "$GPFX/$DRCU/$STUS")'"
-	fi
+		if [ -n "$METACRITIC_SCORE" ] && ! grep -q "^${GUI_MCS}" "$PDBRAINFO"; then
+			echo "${GUI_MCS}: $METACRITIC_SCORE" >> "$PDBRAINFO"
+		fi
+		
+		if [ -n "$OSLIST" ] && ! grep -q "^${GUI_OSL}" "$PDBRAINFO"; then
+			echo "${GUI_OSL}: $OSLIST" >> "$PDBRAINFO"
+		fi
+		
+		if [ -f "$PDBRAINFO" ] && grep -q "[0-9]" "$PDBRAINFO" ;then
+			SETHEAD="$SETHEAD \n $(cat "$PDBRASINF")"
+			TT_OPENURL="$(cat "$PDBRAINFO")"
+		fi
 
-	if [ "$ISORIGIN" -eq 1 ]; then
-		SETHEAD="$SETHEAD \n ${GUI_SGW}: 'Origin interfering'"
-	else
-		if [ -n "$GAMEWINDOW" ] && [ "$GAMEWINDOW" != "$NON" ]; then
-			SETHEAD="$SETHEAD \n ${GUI_SGW}: '$(fixShow "$GAMEWINDOW")'"
-		fi	
-	fi
-	
-	if [ -n "$GAMEEXE" ]; then
-		SETHEAD="$SETHEAD \n ${GUI_SGE}: '$GAMEEXE'"
-	fi
+		if [ -L "$GPFX/$DRCU/$STUS" ]; then
+			SETHEAD="$SETHEAD \n ${GUI_SSU}: symlink to '$(readlink "$GPFX/$DRCU/$STUS")'"
+		fi
 
-	if [ "$ISORIGIN" -eq 1 ]; then
-		SETHEAD="$SETHEAD \n ${GUI_SGA}: 'Origin $L2EA url'"
-	else
-		if [ "${#ORGCMDARGS[@]}" -ge 1 ]; then
-			SETHEAD="$SETHEAD \n ${GUI_SGA}: '${ORGCMDARGS[*]}'"
+		if [ "$ISORIGIN" -eq 1 ]; then
+			SETHEAD="$SETHEAD \n ${GUI_SGW}: 'Origin interfering'"
+		else
+			if [ -n "$GAMEWINDOW" ] && [ "$GAMEWINDOW" != "$NON" ]; then
+				SETHEAD="$SETHEAD \n ${GUI_SGW}: '$(fixShow "$GAMEWINDOW")'"
+			fi	
+		fi
+		
+		if [ -n "$GAMEEXE" ]; then
+			SETHEAD="$SETHEAD \n ${GUI_SGE}: '$GAMEEXE'"
+		fi
+
+		if [ "$ISORIGIN" -eq 1 ]; then
+			SETHEAD="$SETHEAD \n ${GUI_SGA}: 'Origin $L2EA url'"
+		else
+			if [ "${#ORGCMDARGS[@]}" -ge 1 ]; then
+				SETHEAD="$SETHEAD \n ${GUI_SGA}: '${ORGCMDARGS[*]}'"
+			fi
 		fi
 	fi
-
 	# filter html incompatible chars here
 	#SETHEAD="${SETHEAD//&/+}"
 	
 	createProtonList X
 
-	"$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --center --window-icon="$STLICON" --form --center "$WINDECO" --title="$TITLE" \
+	"$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --scroll --center --window-icon="$STLICON" --form --center "$WINDECO" --title="$TITLE" \
 	--text="$SETHEAD" \
 	--columns="$COLCOUNT" --f1-action="$F1ACTIONCG" --separator="" \
 	--field="$FBUT_GUISET_DCP":FBTN "$(realpath "$0") dcp" \
@@ -20046,6 +20048,8 @@ function steamdedeckt {
 		if grep -q "generate-drm-mode" <<< "$(pgrep -a "$GAMESCOPE")"; then
 			writelog "INFO" "${FUNCNAME[0]} - Detected '$GAMESCOPE' running 'forced' - assuming we're running in Game Mode"
 			FIXGAMESCOPE=1
+		else
+			SMALLDESK=1
 		fi
 
 		writelog "INFO" "${FUNCNAME[0]} - Seems like we have a Steam Deck here - making some specific settings"
