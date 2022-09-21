@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v11.1.20220920"
+PROGVERS="v11.1.20220921"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -150,6 +150,7 @@ STLAIDSIZE="12"
 FPBIN="/app/utils/bin"
 INFLATPAK=0
 WDIB="wine-discord-ipc-bridge"
+FIXGAMESCOPE=0
 
 ### default vars ###
 
@@ -1641,8 +1642,8 @@ function pollWinRes {
 		SCREENRES="any"
 	fi
 
-	if [ "$ONSTEAMDECK" -eq 0 ]; then
-		# XXXXXXXXXXX? maybe disable even more for the SteamDeck. in theory it is not necessary to save the resolution configs, as they are always 1280x800
+# skip this if FIXGAMESCOPE is 1 - so for now only if running in GameMode on the Steam Deck
+	if [ "$FIXGAMESCOPE" -eq 0 ]; then
 		TEMPL="template"
 		GAMEGUICFG="$STLGUIDIR/$SCREENRES/${AID}/${TITLE}.conf"
 		TEMPLGUICFG="$STLGUIDIR/$SCREENRES/${TEMPL}/${TITLE}.conf"
@@ -1693,7 +1694,7 @@ function pollWinRes {
 	CURGUICFG="$GAMEGUICFG"
 	export CURGUICFG="$CURGUICFG"
 
-	if [ "$ONSTEAMDECK" -eq 0 ]; then
+	if [ "$FIXGAMESCOPE" -eq 0 ]; then
 		updateWinRes "$TITLE" "$GAMEGUICFG" "$TEMPLGUICFG" &
 	fi
 }
@@ -20018,6 +20019,11 @@ function steamdedeckt {
 		CABEXTRACTURL="$ARCHARCHIVEURL/c/$CABEXTRACT/$CABEXTRACTFILE"
 		
 		ONSTEAMDECK=1
+
+		if grep -q "generate-drm-mode" <<< "$(pgrep -a "$GAMESCOPE")"; then
+			writelog "INFO" "${FUNCNAME[0]} - Detected '$GAMESCOPE' running 'forced' - assuming we're running in Game Mode"
+			FIXGAMESCOPE=1
+		fi
 
 		writelog "INFO" "${FUNCNAME[0]} - Seems like we have a Steam Deck here - making some specific settings"
 
