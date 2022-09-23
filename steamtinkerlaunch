@@ -10,6 +10,7 @@ PROGVERS="v11.11"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
+AGHURL="https://api.github.com"
 PROJECTPAGE="$GHURL/frostworx/${PROGNAME,,}"
 PPW="$PROJECTPAGE/wiki"
 CURWIKI="$PPW"
@@ -152,6 +153,7 @@ INFLATPAK=0
 WDIB="wine-discord-ipc-bridge"
 FIXGAMESCOPE=0
 SMALLDESK=0
+VTX_DOTNET_ROOT="c:\\Program Files\\dotnet\\\\"
 
 ### default vars ###
 
@@ -2328,6 +2330,7 @@ function printProtonArr {
 function delEmptyFile {
 	if [ -f "$1" ]; then
 		if [ "$(wc -l < "$1")" -le 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Removing empty file '$1'"
 			rm "$1" 2>/dev/null
 		fi
 	fi
@@ -2485,9 +2488,9 @@ function setDefaultCfgValues {
 
 	function setDefaultCfgValuesurl {
 		if [ -z "$PROJECTPAGE" ]						; then	PROJECTPAGE="$GHURL/frostworx/steamtinkerlaunch"; fi
-		if [ -z "$CP_PROTONTKG" ]						; then	CP_PROTONTKG="$GHURL/Frogging-Family/wine-tkg-git/releases"; fi
-		if [ -z "$CP_PROTONGE" ]						; then	CP_PROTONGE="$GHURL/GloriousEggroll/proton-ge-custom/releases"; fi
-		if [ -z "$CP_PROTONSTL" ]						; then	CP_PROTONSTL="$GHURL/frostworx/steamtinkerlaunch-tweaks/releases"; fi
+		if [ -z "$CP_PROTONTKG" ]						; then	CP_PROTONTKG="$GHURL/Frogging-Family/wine-tkg-git"; fi
+		if [ -z "$CP_PROTONGE" ]						; then	CP_PROTONGE="$GHURL/GloriousEggroll/proton-ge-custom"; fi
+		if [ -z "$CP_PROTONSTL" ]						; then	CP_PROTONSTL="$GHURL/frostworx/steamtinkerlaunch-tweaks"; fi
 		if [ -z "$DL_D3D47_64" ]						; then	DL_D3D47_64="https://lutris.net/files/tools/dll/$D3D47"; fi
 		if [ -z "$DL_D3D47_32" ]						; then	DL_D3D47_32="http://dege.freeweb.hu/dgVoodoo2/bin/D3DCompiler_47.zip"; fi
 		if [ -z "$RESHADEDLURL" ]						; then	RESHADEDLURL="https://reshade.me/downloads"; fi
@@ -3633,7 +3636,7 @@ function dlCustomProton {
 		DLCHK="X"
 		INCHK="$NON"
 		# only "-STL" and "GE" proton have a sha512sum
-		if grep -q "\-GE" <<< "$CPURLFILE" || grep -q "GE\-" <<< "$CPURLFILE" || grep -q "\-STL" <<< "$CPURLFILE"; then
+		if grep -q "\-GE" <<< "$CPURLFILE" || grep -q "GE-" <<< "$CPURLFILE" || grep -q "\-STL" <<< "$CPURLFILE"; then
 			DLCHK="sha512sum"
 			INCHK="$("$WGET" -q "${CPURL%%.tar*}.${DLCHK}" -O - 2> >(grep -v "SSL_INIT") | cut -d ' ' -f1)"
 		fi
@@ -3652,7 +3655,7 @@ function dlCustomProton {
 		writelog "INFO" "${FUNCNAME[0]} - directory '$CUPROEXTDIR/$PROTNAME' already exists - nothing to extract"
 	else
 		# only "-STL" and "GE" proton have a sha512sum
-		if grep -q "\-GE" <<< "$CPURLFILE" || grep -q "GE\-" <<< "$CPURLFILE" || grep -q "\-STL" <<< "$CPURLFILE"; then
+		if grep -q "\-GE" <<< "$CPURLFILE" || grep -q "GE-" <<< "$CPURLFILE" || grep -q "\-STL" <<< "$CPURLFILE"; then
 			DLCHK="sha512sum"
 			writelog "INFO" "${FUNCNAME[0]} - checking if the checksum of the already downloaded file is correct '${CPURL%%.tar*}.${DLCHK}'"
 			INCHK="$("$WGET" -q "${CPURL%%.tar*}.${DLCHK}" -O - 2> >(grep -v "SSL_INIT") | cut -d ' ' -f1)"
@@ -3710,9 +3713,9 @@ function dlCustomProton {
 			writelog "SKIP" "${FUNCNAME[0]} - Don't know how to extract "
 		fi
 	fi
-	
+
 	rm "$PROTONCSV" 2>/dev/null
-	
+
 	if [ -f "$PROTFULLPATH" ]; then
 		addCustomProtonToList "$PROTFULLPATH"
 	fi
@@ -3728,18 +3731,29 @@ function createDLProtList {
 		rm "$PROTDLLIST" 2>/dev/null
 		while read -r CPURL; do
 			if grep -q "$GHURL" <<< "${!CPURL}"; then
-				"$WGET" -q "${!CPURL}" -O - | grep "tar.gz\|zip\|tar.xz" | grep "releases" | grep -oE '"/[^\\"]+' | sed "s|^\"|$GHURL|g" >> "$PROTDLLIST"
+			SRCURL="${!CPURL}"
+			SRCURL="${SRCURL//\/releases}"
+			SRCURL="${SRCURL//$GHURL/$AGHURL\/repos}"
+			SRCURL="${SRCURL}/releases"
+
+			"$WGET" -q "$SRCURL" -O - | jq -r '.[].assets[].browser_download_url' | grep "tar.gz\|tar.xz" | grep -v "Yad\|7.x" >> "$PROTDLLIST"
 			fi
 		done <<< "$(grep "^CP_" "$STLURLCFG" | cut -d '=' -f1)"
 	fi
 
-	unset ProtonDLList
-	unset ProtonDLDispList
+	delEmptyFile "$PROTDLLIST"
 
-	while read -r CPVERS; do
-		mapfile -t -O "${#ProtonDLList[@]}" ProtonDLList <<< "$CPVERS"
-		mapfile -t -O "${#ProtonDLDispList[@]}" ProtonDLDispList <<< "${CPVERS##*/}"
-	done < "$PROTDLLIST"
+	if [ ! -f "$PROTDLLIST" ]; then
+		writelog "ERROR" "${FUNCNAME[0]} - Could not generating list of online available custom Proton builds - Probably $GHURL changed something"
+	else
+		unset ProtonDLList
+		unset ProtonDLDispList
+
+		while read -r CPVERS; do
+			mapfile -t -O "${#ProtonDLList[@]}" ProtonDLList <<< "$CPVERS"
+			mapfile -t -O "${#ProtonDLDispList[@]}" ProtonDLDispList <<< "${CPVERS##*/}"
+		done < "$PROTDLLIST"
+	fi
 }
 
 function dlCustomProtonGUI {
@@ -3881,18 +3895,23 @@ function addCustomProtonToList {
 		writelog "INFO" "${FUNCNAME[0]} - Adding '$OUTNEWCUSTPROT' to '$CUSTOMPROTONLIST'"
 		echo "$OUTNEWCUSTPROT" >> "$CUSTOMPROTONLIST"
 		writelog "INFO" "${FUNCNAME[0]} - (Re-)creating the internal List of available Proton-Versions"
-		getAvailableProtonVersions "up"
+		getAvailableProtonVersions "up" X
 	fi
 }
 
 function dlLatestGE {
 	createDLProtList
-	if [ "$1" == "latestge" ] || [ "$1" == "lge" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - Downloading latest Proton GE"
+	
+	if [ -n "${ProtonDLList[0]}" ]; then
+		if [ "$1" == "latestge" ] || [ "$1" == "lge" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Downloading latest Proton GE"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Downloading latest custom Proton ${ProtonDLDispList[0]//\"/}"
+		fi
+		StatusWindow "$GUI_DLCUSTPROT" "dlCustomProton ${ProtonDLList[0]//\"/} $2" "DownloadCustomProtonStatus"
 	else
-		writelog "INFO" "${FUNCNAME[0]} - Downloading latest custom Proton ${ProtonDLDispList[0]//\"/}"
+		writelog "ERROR" "${FUNCNAME[0]} - Could not create list of downloadable Proton-Versions"
 	fi
-	StatusWindow "$GUI_DLCUSTPROT" "dlCustomProton ${ProtonDLList[0]//\"/} $2" "DownloadCustomProtonStatus"
 }
 
 function dlCustomProtonGate {
@@ -12673,6 +12692,34 @@ function startVortex {
 			WINE="$VORTEXWINE" WINEDEBUG="-all" WINEPREFIX="$VORTEXPFX" "$WINECFG"
 		fi
 
+		if [ ! -d "$VORTEXDOTNETDIR" ] || [ ! -f "$VORTEXDOTNETDIR/dotnet.exe" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - DotNet6 is not installed yet"
+			DNSRC="windowsdesktop-runtime-6.0.6-win-x64.exe"
+			DLSITE="${VORTEXDOWNLOADPATH}/site"
+			if [ ! -f "$DLSITE/$DNSRC" ]; then
+				if [ -f "${VORTEXINSTDIR}/${VTXRAA}" ]; then
+					RAWDNDL="$(grep -am1 "$DNSRC" "${VORTEXINSTDIR}/${VTXRAA}" | grep -oP '="\K[^"},]+')"
+					echo "RAWDNDL '$RAWDNDL'"
+					if grep -q "^https" <<< "$RAWDNDL"	&& grep -q "exe$" <<< "$RAWDNDL"; then
+						writelog "INFO" "${FUNCNAME[0]} - Using download URL found in $VTX '${VTXRAA}'"
+						DNDL="$RAWDNDL"
+					fi		
+				fi
+				
+				if [ -z "$DNDL" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Using hardcoded download URL for DotNet6"
+					DNDL="https://download.visualstudio.microsoft.com/download/pr/9d6b6b34-44b5-4cf4-b924-79a00deb9795/2f17c30bdf42b6a8950a8552438cf8c1/$DNSRC"
+				fi
+				dlCheck "$DNDL" "$DLSITE/$DNSRC" "X" " Downloading installer '$DNSRC' for DotNet6"
+			fi
+			if [ -f "$DLSITE/$DNSRC" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Starting installation of DotNet6 using '$DLSITE/$DNSRC'"
+				cd "$DLSITE" >/dev/null || return
+				wineVortexRun "$VORTEXWINE" "$DNSRC" "$@"
+				cd - >/dev/null || return
+			fi			
+		fi
+
 		if [ -f "$VORTEXEXE" ]; then
 			setVortexDLMime
 			setVortexDLPath
@@ -12926,19 +12973,36 @@ function setVortexVars {
 	fi
 
 	if [ "$USEVORTEXPROTON" == "$NON" ]; then
-		getAvailableProtonVersions "up" X
-		dlLatestGE "lge" "X"
-		getAvailableProtonVersions "up" X
-		SETVTXPROT="$(grep "^GE" "$PROTONCSV" | sort -V | tail -n1)"
-		SETVTXPROT="${SETVTXPROT%%;*}"
-		USEVORTEXPROTON="$SETVTXPROT"
-		touch "$FUPDATE"
-		updateConfigEntry "USEVORTEXPROTON" "$USEVORTEXPROTON" "$STLDEFGLOBALCFG"
-		writelog "INFO" "${FUNCNAME[0]} - USEVORTEXPROTON is '$NON', so using latest Proton-GE '$SETVTXPROT' automatically" "E"
+		if [ ! -f "$PROTONCSV" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Looking for available Proton versions"
+			getAvailableProtonVersions "up" X
+		fi
+
+		if ! grep -q "^GE" "$PROTONCSV"; then
+			writelog "INFO" "${FUNCNAME[0]} - Seems like there is no GE Proton available - getting one:"
+			autoBumpGE "X"
+		fi
+
+		delEmptyFile "$PROTONCSV"
+
+		if [ ! -f "$PROTONCSV" ]; then
+			writelog "ERROR" "${FUNCNAME[0]} - Could find '$PROTONCSV'"
+		else
+			SETVTXPROT="$(grep "^GE" "$PROTONCSV" | sort -V | tail -n1)"
+			SETVTXPROT="${SETVTXPROT%%;*}"
+			USEVORTEXPROTON="$SETVTXPROT"
+			touch "$FUPDATE"
+			updateConfigEntry "USEVORTEXPROTON" "$USEVORTEXPROTON" "$STLDEFGLOBALCFG"
+			writelog "INFO" "${FUNCNAME[0]} - USEVORTEXPROTON is '$NON', so using latest Proton-GE '$SETVTXPROT' automatically" "E"
+		fi
 	else
 		SETVTXPROT="$USEVORTEXPROTON"
 	fi
 
+	VORTEXDOTNETDIR="$VORTEXPFX/Program Files/dotnet"
+
+	export DOTNET_ROOT="$VTX_DOTNET_ROOT"
+	
 	writelog "INFO" "${FUNCNAME[0]} - Using $USEVORTEXPROTON for $VTX"
 
 	VORTEXGAMES="$GLOBALMISCDIR/$VOGAT"
@@ -13136,9 +13200,15 @@ function setMO2Vars {
 	MO2GAMES="$GLOBALMISCDIR/mo2games.txt"
 	if [ -z "$MO2WINE" ] || [ ! -f "$MO2WINE" ]; then
 		if [ "$USEMO2PROTON" == "$NON" ]; then
-			getAvailableProtonVersions "up" X
-			dlLatestGE "lge" "X"
-			getAvailableProtonVersions "up" X
+			if [ ! -f "$PROTONCSV" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Looking for available Proton versions"
+				getAvailableProtonVersions "up" X
+			fi
+
+			if ! grep -q "^GE" "$PROTONCSV"; then
+				autoBumpGE "X"
+			fi
+		
 			SETMO2PROT="$(grep "^GE" "$PROTONCSV" | sort -V | tail -n1)"
 			SETMO2PROT="${SETMO2PROT%%;*}"
 			USEMO2PROTON="$SETMO2PROT"
@@ -14389,20 +14459,25 @@ function setMangoHudCfg {
 }
 
 function autoBumpGE {
-	if [ "$AUTOBUMPGE" -eq 1 ] && grep -q "^GE" <<< "$USEPROTON" && [ "$ISGAME" -eq 2 ]; then
+	if { [ "$AUTOBUMPGE" -eq 1 ] && grep -q "^GE" <<< "$USEPROTON" && [ "$ISGAME" -eq 2 ];} || [ -n "$1" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Current Proton version is $USEPROTON"
 		dlLatestGE "lge" "X"
-		getAvailableProtonVersions "up"
-		NEWESTGE="$(grep "^GE" "$PROTONCSV" | sort -V | tail -n1)"
-		NEWESTGE="${NEWESTGE%%;*}"
-		if [ "$NEWESTGE" == "$USEPROTON" ]; then
-			writelog "SKIP" "${FUNCNAME[0]} - $USEPROTON is already the newest GE Proton version"
-		else
-			writelog "INFO" "${FUNCNAME[0]} - $(strFix "$NOTY_BUMP" "$USEPROTON" "$USEPROTON" "$NEWESTGE")"
-			notiShow "$(strFix "$NOTY_BUMP" "$USEPROTON" "$USEPROTON" "$NEWESTGE")"
-			USEPROTON="$NEWESTGE"
-			touch "$FUPDATE"
-			updateConfigEntry "USEPROTON" "$USEPROTON" "$STLGAMECFG"
+		getAvailableProtonVersions "up" X
+
+		if [ ! -f "$PROTONCSV" ]; then
+			writelog "ERROR" "${FUNCNAME[0]} - Could not find '$PROTONCSV'"
+		else	
+			NEWESTGE="$(grep "^GE" "$PROTONCSV" | sort -V | tail -n1)"
+			NEWESTGE="${NEWESTGE%%;*}"
+			if [ "$NEWESTGE" == "$USEPROTON" ]; then
+				writelog "SKIP" "${FUNCNAME[0]} - $USEPROTON is already the newest GE Proton version"
+			else
+				writelog "INFO" "${FUNCNAME[0]} - $(strFix "$NOTY_BUMP" "$USEPROTON" "$USEPROTON" "$NEWESTGE")"
+				notiShow "$(strFix "$NOTY_BUMP" "$USEPROTON" "$USEPROTON" "$NEWESTGE")"
+				USEPROTON="$NEWESTGE"
+				touch "$FUPDATE"
+				updateConfigEntry "USEPROTON" "$USEPROTON" "$STLGAMECFG"
+			fi
 		fi
 	fi
 }
