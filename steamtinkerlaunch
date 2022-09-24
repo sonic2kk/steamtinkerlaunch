@@ -6,10 +6,11 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v11.1.20220831"
+PROGVERS="v11.11"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
+AGHURL="https://api.github.com"
 PROJECTPAGE="$GHURL/frostworx/${PROGNAME,,}"
 PPW="$PROJECTPAGE/wiki"
 CURWIKI="$PPW"
@@ -150,6 +151,9 @@ STLAIDSIZE="12"
 FPBIN="/app/utils/bin"
 INFLATPAK=0
 WDIB="wine-discord-ipc-bridge"
+FIXGAMESCOPE=0
+SMALLDESK=0
+VTX_DOTNET_ROOT="c:\\Program Files\\dotnet\\\\"
 
 ### default vars ###
 
@@ -1641,8 +1645,8 @@ function pollWinRes {
 		SCREENRES="any"
 	fi
 
-	if [ "$ONSTEAMDECK" -eq 0 ]; then
-		# XXXXXXXXXXX? maybe disable even more for the SteamDeck. in theory it is not necessary to save the resolution configs, as they are always 1280x800
+# skip this if FIXGAMESCOPE is 1 - so for now only if running in GameMode on the Steam Deck
+	if [ "$FIXGAMESCOPE" -eq 0 ]; then
 		TEMPL="template"
 		GAMEGUICFG="$STLGUIDIR/$SCREENRES/${AID}/${TITLE}.conf"
 		TEMPLGUICFG="$STLGUIDIR/$SCREENRES/${TEMPL}/${TITLE}.conf"
@@ -1693,7 +1697,7 @@ function pollWinRes {
 	CURGUICFG="$GAMEGUICFG"
 	export CURGUICFG="$CURGUICFG"
 
-	if [ "$ONSTEAMDECK" -eq 0 ]; then
+	if [ "$FIXGAMESCOPE" -eq 0 ]; then
 		updateWinRes "$TITLE" "$GAMEGUICFG" "$TEMPLGUICFG" &
 	fi
 }
@@ -2149,7 +2153,11 @@ function setCustomGameVars {
 
 	while read -r ORGARG; do
 		mapfile -t -O "${#ORGGCMD[@]}" ORGGCMD <<< "$ORGARG"
-	done <<< "$(printf "%s\n" "$@")"	
+	done <<< "$(printf "%s\n" "$@")"
+	if [ "${ORGGCMD[0]}" == "$WFEAR" ]; then
+		# removing first ORGGCMD element as it is '$WFEAR'
+		unset "ORGGCMD[0]"
+	fi
 }
 
 function prepareGUI {
@@ -2233,21 +2241,24 @@ function loadLanguage {
 
 		writelog "INFO" "${FUNCNAME[0]} - Loading STLLANG from '$STLDEFGLOBALCFG'"
 
-		if [ -f "$STLDEFGLOBALCFG" ]; then
+		ARGSLANG="$(awk -F 'lang=' '{print $2}' <<< "$@" | cut -d ' ' -f1)"
+		if [ -n "$ARGSLANG" ]; then
+			STLLANG="$ARGSLANG"
+			writelog "INFO" "${FUNCNAME[0]} - STLLANG from command line' is '$STLLANG'"
+
+		elif [ -f "$STLDEFGLOBALCFG" ]; then
 			STLLRAW="$(grep "^STLLANG" "$STLDEFGLOBALCFG" | cut -d '=' -f2)"
 			STLLANG="${STLLRAW//\"/}"
 			writelog "INFO" "${FUNCNAME[0]} - STLLANG from '$STLDEFGLOBALCFG' is '$STLLANG'"
 		else
-			ARGSLANG="$(awk -F 'lang=' '{print $2}' <<< "$@" | cut -d ' ' -f1)"
-			if [ -n "$ARGSLANG" ]; then
-				STLLANG="$ARGSLANG"
-				writelog "INFO" "${FUNCNAME[0]} - STLLANG from command line' is '$STLLANG'"
-			fi
+			writelog "WARN" "${FUNCNAME[0]} - Could not determine STLLANG"
 		fi
 
 		if [ -n "$STLLANG" ] && [ "$STLLANG" != "$STLDEFLANG" ]; then 
 			writelog "INFO" "${FUNCNAME[0]} - Now load the language file '$STLLANG'"
 			loadLangFile "$STLLANG"
+			touch "$FUPDATE"
+			updateConfigEntry "STLLANG" "$STLLANG" "$STLDEFGLOBALCFG"
 		fi
 		
 #		touch "$STLSHM/lola-$AID.txt"
@@ -2319,6 +2330,7 @@ function printProtonArr {
 function delEmptyFile {
 	if [ -f "$1" ]; then
 		if [ "$(wc -l < "$1")" -le 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Removing empty file '$1'"
 			rm "$1" 2>/dev/null
 		fi
 	fi
@@ -2345,6 +2357,13 @@ function getAvailableProtonVersions {
 			# could still be enabled via steamcollection, but this would be an overkill here, as ${FUNCNAME[0]} is non-fatal
 		else
 			delEmptyFile "$PROTONCSV"
+
+			# find new proton versions in CUSTPROTEXTDIR
+			if [ ! -f "$CUSTOMPROTONLIST" ] || [ "$(find "$CUSTPROTEXTDIR" -mindepth 1 -maxdepth 1 -type d | wc -l)" -gt "$(wc -l < "$CUSTOMPROTONLIST")" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Updating protonlist '$CUSTOMPROTONLIST' with possible new proton versions from '$CUSTPROTEXTDIR'"
+				find "$CUSTPROTEXTDIR" -type f -name "proton" >> "$CUSTOMPROTONLIST"
+			fi
+
 			if [ ! -f "$PROTONCSV" ] || { [ -n "$1" ] && [ "$1" = "up" ]; } || [ "$1" == "F" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Initially creating an array with available Proton versions"
 
@@ -2469,13 +2488,13 @@ function setDefaultCfgValues {
 
 	function setDefaultCfgValuesurl {
 		if [ -z "$PROJECTPAGE" ]						; then	PROJECTPAGE="$GHURL/frostworx/steamtinkerlaunch"; fi
-		if [ -z "$CP_PROTONTKG" ]						; then	CP_PROTONTKG="$GHURL/Frogging-Family/wine-tkg-git/releases"; fi
-		if [ -z "$CP_PROTONGE" ]						; then	CP_PROTONGE="$GHURL/GloriousEggroll/proton-ge-custom/releases"; fi
-		if [ -z "$CP_PROTONSTL" ]						; then	CP_PROTONSTL="$GHURL/frostworx/steamtinkerlaunch-tweaks/releases"; fi
+		if [ -z "$CP_PROTONTKG" ]						; then	CP_PROTONTKG="$GHURL/Frogging-Family/wine-tkg-git"; fi
+		if [ -z "$CP_PROTONGE" ]						; then	CP_PROTONGE="$GHURL/GloriousEggroll/proton-ge-custom"; fi
+		if [ -z "$CP_PROTONSTL" ]						; then	CP_PROTONSTL="$GHURL/frostworx/steamtinkerlaunch-tweaks"; fi
 		if [ -z "$DL_D3D47_64" ]						; then	DL_D3D47_64="https://lutris.net/files/tools/dll/$D3D47"; fi
 		if [ -z "$DL_D3D47_32" ]						; then	DL_D3D47_32="http://dege.freeweb.hu/dgVoodoo2/bin/D3DCompiler_47.zip"; fi
 		if [ -z "$RESHADEDLURL" ]						; then	RESHADEDLURL="https://reshade.me/downloads"; fi
-		if [ -z "$VORTEXRELURL" ]						; then	VORTEXRELURL="$GHURL/Nexus-Mods/${VTX^}/releases"; fi
+		if [ -z "$VORTEXPROJURL" ]						; then  VORTEXPROJURL="$GHURL/Nexus-Mods/${VTX^}"; fi
 		if [ -z "$DXVKURL" ]							; then	DXVKURL="$GHURL/doitsujin/dxvk"; fi
 		if [ -z "$XLIVEURL" ]							; then	XLIVEURL="$GHURL/ThirteenAG/Ultimate-ASI-Loader/releases/download/v4.61/Ultimate-ASI-Loader.zip"; fi
 		if [ -z "$STASSURL" ]							; then	STASSURL="https://steamcdn-a.akamaihd.net/steam/apps"; fi
@@ -2484,7 +2503,7 @@ function setDefaultCfgValues {
 		if [ -z "$X64DBGURL" ]							; then	X64DBGURL="$GHURL/x64dbg/x64dbg/releases/tag/snapshot";fi
 		if [ -z "$STEAMGRIDDBAPI" ]						; then	STEAMGRIDDBAPI="https://www.steamgriddb.com/api/v2/grids/steam";fi
 		if [ -z "$CONTYRELURL" ]						; then	CONTYRELURL="$GHURL/Kron4ek/Conty/releases"; fi
-		if [ -z "$MO2DLURL" ]							; then	MO2DLURL="$GHURL/ModOrganizer2/modorganizer/releases"; fi
+		if [ -z "$MO2PROJURL" ]							; then  MO2PROJURL="$GHURL/ModOrganizer2/modorganizer"; fi
 		if [ -z "$CW_KRON4EK" ]							; then	CW_KRON4EK="$GHURL/Kron4ek/Wine-Builds/releases"; fi
 		if [ -z "$IGCSZIP" ]							; then	IGCSZIP="$GHURL/FransBouma/InjectableGenericCameraSystem/releases/download/IGCSInjector_102/IGCSInjector_v102.zip"; fi
 		if [ -z "$UUUURL" ]								; then	UUUURL="https://framedsc.github.io/GeneralGuides/universal_ue4_consoleunlocker.htm#downloading-the-uuu"; fi
@@ -2801,8 +2820,8 @@ function saveCfg {
 			echo "DXVKURL=\"$DXVKURL\""				
 			echo "## ${RESH} DL URL"
 			echo "RESHADEDLURL=\"$RESHADEDLURL\""
-			echo "## ${VTX^} DL URL"
-			echo "VORTEXRELURL=\"$VORTEXRELURL\""
+			echo "## ${VTX^} Project URL"
+			echo "VORTEXPROJURL=\"$VORTEXPROJURL\""
 			echo "## Xlive DL URL"
 			echo "XLIVEURL=\"$XLIVEURL\""
 			echo "## Steam Asset URL"
@@ -2817,8 +2836,8 @@ function saveCfg {
 			echo "STEAMGRIDDBAPI=\"$STEAMGRIDDBAPI\""
 			echo "## Conty DL URL"
 			echo "CONTYRELURL=\"$CONTYRELURL\""
-			echo "## Mod Organizer 2 DL URL"
-			echo "MO2DLURL=\"$MO2DLURL\""
+			echo "## Mod Organizer 2 Project URL"
+			echo "MO2PROJURL=\"$MO2PROJURL\""
 			echo "## $DPRS DL URL"
 			echo "DPRSRELURL=\"$DPRSRELURL\""
 			echo "## $DEPS URL"
@@ -3617,7 +3636,7 @@ function dlCustomProton {
 		DLCHK="X"
 		INCHK="$NON"
 		# only "-STL" and "GE" proton have a sha512sum
-		if grep -q "\-GE" <<< "$CPURLFILE" || grep -q "GE\-" <<< "$CPURLFILE" || grep -q "\-STL" <<< "$CPURLFILE"; then
+		if grep -q "\-GE" <<< "$CPURLFILE" || grep -q "GE-" <<< "$CPURLFILE" || grep -q "\-STL" <<< "$CPURLFILE"; then
 			DLCHK="sha512sum"
 			INCHK="$("$WGET" -q "${CPURL%%.tar*}.${DLCHK}" -O - 2> >(grep -v "SSL_INIT") | cut -d ' ' -f1)"
 		fi
@@ -3636,7 +3655,7 @@ function dlCustomProton {
 		writelog "INFO" "${FUNCNAME[0]} - directory '$CUPROEXTDIR/$PROTNAME' already exists - nothing to extract"
 	else
 		# only "-STL" and "GE" proton have a sha512sum
-		if grep -q "\-GE" <<< "$CPURLFILE" || grep -q "GE\-" <<< "$CPURLFILE" || grep -q "\-STL" <<< "$CPURLFILE"; then
+		if grep -q "\-GE" <<< "$CPURLFILE" || grep -q "GE-" <<< "$CPURLFILE" || grep -q "\-STL" <<< "$CPURLFILE"; then
 			DLCHK="sha512sum"
 			writelog "INFO" "${FUNCNAME[0]} - checking if the checksum of the already downloaded file is correct '${CPURL%%.tar*}.${DLCHK}'"
 			INCHK="$("$WGET" -q "${CPURL%%.tar*}.${DLCHK}" -O - 2> >(grep -v "SSL_INIT") | cut -d ' ' -f1)"
@@ -3694,9 +3713,9 @@ function dlCustomProton {
 			writelog "SKIP" "${FUNCNAME[0]} - Don't know how to extract "
 		fi
 	fi
-	
+
 	rm "$PROTONCSV" 2>/dev/null
-	
+
 	if [ -f "$PROTFULLPATH" ]; then
 		addCustomProtonToList "$PROTFULLPATH"
 	fi
@@ -3712,18 +3731,29 @@ function createDLProtList {
 		rm "$PROTDLLIST" 2>/dev/null
 		while read -r CPURL; do
 			if grep -q "$GHURL" <<< "${!CPURL}"; then
-				"$WGET" -q "${!CPURL}" -O - 2> >(grep -v "SSL_INIT") | grep "tar.gz\|zip\|tar.xz" | grep "releases" | grep -oE '\"/[^\\"]+' | sed "s|^\"|$GHURL|g" >> "$PROTDLLIST"
+			SRCURL="${!CPURL}"
+			SRCURL="${SRCURL//\/releases}"
+			SRCURL="${SRCURL//$GHURL/$AGHURL\/repos}"
+			SRCURL="${SRCURL}/releases"
+
+			"$WGET" -q "$SRCURL" -O - | jq -r '.[].assets[].browser_download_url' | grep "tar.gz\|tar.xz" | grep -v "Yad\|7.x" >> "$PROTDLLIST"
 			fi
 		done <<< "$(grep "^CP_" "$STLURLCFG" | cut -d '=' -f1)"
 	fi
 
-	unset ProtonDLList
-	unset ProtonDLDispList
+	delEmptyFile "$PROTDLLIST"
 
-	while read -r CPVERS; do
-		mapfile -t -O "${#ProtonDLList[@]}" ProtonDLList <<< "$CPVERS"
-		mapfile -t -O "${#ProtonDLDispList[@]}" ProtonDLDispList <<< "${CPVERS##*/}"
-	done < "$PROTDLLIST"
+	if [ ! -f "$PROTDLLIST" ]; then
+		writelog "ERROR" "${FUNCNAME[0]} - Could not generating list of online available custom Proton builds - Probably $GHURL changed something"
+	else
+		unset ProtonDLList
+		unset ProtonDLDispList
+
+		while read -r CPVERS; do
+			mapfile -t -O "${#ProtonDLList[@]}" ProtonDLList <<< "$CPVERS"
+			mapfile -t -O "${#ProtonDLDispList[@]}" ProtonDLDispList <<< "${CPVERS##*/}"
+		done < "$PROTDLLIST"
+	fi
 }
 
 function dlCustomProtonGUI {
@@ -3865,18 +3895,23 @@ function addCustomProtonToList {
 		writelog "INFO" "${FUNCNAME[0]} - Adding '$OUTNEWCUSTPROT' to '$CUSTOMPROTONLIST'"
 		echo "$OUTNEWCUSTPROT" >> "$CUSTOMPROTONLIST"
 		writelog "INFO" "${FUNCNAME[0]} - (Re-)creating the internal List of available Proton-Versions"
-		getAvailableProtonVersions "up"
+		getAvailableProtonVersions "up" X
 	fi
 }
 
 function dlLatestGE {
 	createDLProtList
-	if [ "$1" == "latestge" ] || [ "$1" == "lge" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - Downloading latest Proton GE"
+	
+	if [ -n "${ProtonDLList[0]}" ]; then
+		if [ "$1" == "latestge" ] || [ "$1" == "lge" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Downloading latest Proton GE"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Downloading latest custom Proton ${ProtonDLDispList[0]//\"/}"
+		fi
+		StatusWindow "$GUI_DLCUSTPROT" "dlCustomProton ${ProtonDLList[0]//\"/} $2" "DownloadCustomProtonStatus"
 	else
-		writelog "INFO" "${FUNCNAME[0]} - Downloading latest custom Proton ${ProtonDLDispList[0]//\"/}"
+		writelog "ERROR" "${FUNCNAME[0]} - Could not create list of downloadable Proton-Versions"
 	fi
-	StatusWindow "$GUI_DLCUSTPROT" "dlCustomProton ${ProtonDLList[0]//\"/} $2" "DownloadCustomProtonStatus"
 }
 
 function dlCustomProtonGate {
@@ -4712,7 +4747,7 @@ function listAllSettingsEntries {
 		while read -r ENTRY; do
 			echo "$ENTRY" | tee -a "$STLRAWENTRIES" >/dev/null
 			grep -oP "\('\K[^\')]+" <<< "$ENTRY" | tee -a "$STLSETENTRIES" >/dev/null
-		done <<< "$(sed -n "/^#STARTSETENTRIES/,/^#ENDSETENTRIES/p;/^#ENDSETENTRIES/q" "$0" | grep "\-\-field")"
+		done <<< "$(sed -n "/^#STARTSETENTRIES/,/^#ENDSETENTRIES/p;/^#ENDSETENTRIES/q" "$0" | grep "\--field")"
 	fi
 }
 
@@ -4961,7 +4996,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_DL_D3D47_64!$DESC_DL_D3D47_64 ('DL_D3D47_64')" "${DL_D3D47_64/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="     $GUI_DL_D3D47_32!$DESC_DL_D3D47_32 ('DL_D3D47_32')" "${DL_D3D47_32/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="     $GUI_RESHADEDLURL!$DESC_RESHADEDLURL ('RESHADEDLURL')" "${RESHADEDLURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
---field="     $GUI_VORTEXRELURL!$DESC_VORTEXRELURL ('VORTEXRELURL')" "${VORTEXRELURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
+--field="     $GUI_VORTEXRELURL!$DESC_VORTEXRELURL ('VORTEXPROJURL')" "${VORTEXPROJURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="     $GUI_DXVKURL!$DESC_DXVKURL ('DXVKURL')" "${DXVKURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="     $GUI_XLIVEURL!$DESC_XLIVEURL ('XLIVEURL')" "${XLIVEURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="     $GUI_STASSURL!$DESC_STASSURL ('STASSURL')" "${STASSURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
@@ -4970,7 +5005,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_X64DBGURL!$DESC_X64DBGURL ('X64DBGURL')" "${X64DBGURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="     $GUI_STEAMGRIDDBAPI!$DESC_STEAMGRIDDBAPI ('STEAMGRIDDBAPI')" "${STEAMGRIDDBAPI/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="     $GUI_CONTYRELURL!$DESC_CONTYRELURL ('CONTYRELURL')" "${CONTYRELURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
---field="     $GUI_MO2DLURL!$DESC_MO2DLURL ('MO2DLURL')" "${MO2DLURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
+--field="     $GUI_MO2DLURL!$DESC_MO2DLURL ('MO2PROJURL')" "${MO2PROJURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="     $GUI_DPRSRELURL!$DESC_DPRSRELURL ('DPRSRELURL')" "${DPRSRELURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="     $GUI_DEPURL!$DESC_DEPURL ('DEPURL')" "${DEPURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="$(spanFont "$GUI_OPTSVR" "H")":LBL "SKIP" `#CAT_VR` `#HEAD_VR` `#MENU_GAME` `#MENU_GLOBAL`  \
@@ -5432,62 +5467,63 @@ function MainMenu {
 	loadCfg "$CUMETA/$AID.conf" X
 	loadCfg "$GEMETA/$AID.conf" X
 
-	if [ -n "$DEVELOPER" ]; then
-		SETHEAD="$SETHEAD \n ${GUI_DEV}: '$DEVELOPER'"
-	fi
+	if [ "$SMALLDESK" -eq 0 ]; then
+		if [ -n "$DEVELOPER" ]; then
+			SETHEAD="$SETHEAD \n ${GUI_DEV}: '$DEVELOPER'"
+		fi
 
-	if [ -n "$PUBLISHER" ]; then
-		SETHEAD="$SETHEAD \n ${GUI_PUB}: '$PUBLISHER'"
-	fi
-
-	prepareProtonDBRating
-	getGameFiles "$AID"
-	setGameFilesArray
-	TT_GAFI="$(for i in "${!GamFiles[@]}"; do printf "%s: %s\n" "${GamDesc[$i]}" "${GamFiles[$i]}"; done)"
-
-	if [ -n "$METACRITIC_SCORE" ] && ! grep -q "^${GUI_MCS}" "$PDBRAINFO"; then
-		echo "${GUI_MCS}: $METACRITIC_SCORE" >> "$PDBRAINFO"
-	fi
+		if [ -n "$PUBLISHER" ]; then
+			SETHEAD="$SETHEAD \n ${GUI_PUB}: '$PUBLISHER'"
+		fi
 	
-	if [ -n "$OSLIST" ] && ! grep -q "^${GUI_OSL}" "$PDBRAINFO"; then
-		echo "${GUI_OSL}: $OSLIST" >> "$PDBRAINFO"
-	fi
-	
-	if [ -f "$PDBRAINFO" ] && grep -q "[0-9]" "$PDBRAINFO" ;then
-		SETHEAD="$SETHEAD \n $(cat "$PDBRASINF")"
-		TT_OPENURL="$(cat "$PDBRAINFO")"
-	fi
+		prepareProtonDBRating
+		getGameFiles "$AID"
+		setGameFilesArray
+		TT_GAFI="$(for i in "${!GamFiles[@]}"; do printf "%s: %s\n" "${GamDesc[$i]}" "${GamFiles[$i]}"; done)"
 
-	if [ -L "$GPFX/$DRCU/$STUS" ]; then
-		SETHEAD="$SETHEAD \n ${GUI_SSU}: symlink to '$(readlink "$GPFX/$DRCU/$STUS")'"
-	fi
+		if [ -n "$METACRITIC_SCORE" ] && ! grep -q "^${GUI_MCS}" "$PDBRAINFO"; then
+			echo "${GUI_MCS}: $METACRITIC_SCORE" >> "$PDBRAINFO"
+		fi
+		
+		if [ -n "$OSLIST" ] && ! grep -q "^${GUI_OSL}" "$PDBRAINFO"; then
+			echo "${GUI_OSL}: $OSLIST" >> "$PDBRAINFO"
+		fi
+		
+		if [ -f "$PDBRAINFO" ] && grep -q "[0-9]" "$PDBRAINFO" ;then
+			SETHEAD="$SETHEAD \n $(cat "$PDBRASINF")"
+			TT_OPENURL="$(cat "$PDBRAINFO")"
+		fi
 
-	if [ "$ISORIGIN" -eq 1 ]; then
-		SETHEAD="$SETHEAD \n ${GUI_SGW}: 'Origin interfering'"
-	else
-		if [ -n "$GAMEWINDOW" ] && [ "$GAMEWINDOW" != "$NON" ]; then
-			SETHEAD="$SETHEAD \n ${GUI_SGW}: '$(fixShow "$GAMEWINDOW")'"
-		fi	
-	fi
-	
-	if [ -n "$GAMEEXE" ]; then
-		SETHEAD="$SETHEAD \n ${GUI_SGE}: '$GAMEEXE'"
-	fi
+		if [ -L "$GPFX/$DRCU/$STUS" ]; then
+			SETHEAD="$SETHEAD \n ${GUI_SSU}: symlink to '$(readlink "$GPFX/$DRCU/$STUS")'"
+		fi
 
-	if [ "$ISORIGIN" -eq 1 ]; then
-		SETHEAD="$SETHEAD \n ${GUI_SGA}: 'Origin $L2EA url'"
-	else
-		if [ "${#ORGCMDARGS[@]}" -ge 1 ]; then
-			SETHEAD="$SETHEAD \n ${GUI_SGA}: '${ORGCMDARGS[*]}'"
+		if [ "$ISORIGIN" -eq 1 ]; then
+			SETHEAD="$SETHEAD \n ${GUI_SGW}: 'Origin interfering'"
+		else
+			if [ -n "$GAMEWINDOW" ] && [ "$GAMEWINDOW" != "$NON" ]; then
+				SETHEAD="$SETHEAD \n ${GUI_SGW}: '$(fixShow "$GAMEWINDOW")'"
+			fi	
+		fi
+		
+		if [ -n "$GAMEEXE" ]; then
+			SETHEAD="$SETHEAD \n ${GUI_SGE}: '$GAMEEXE'"
+		fi
+
+		if [ "$ISORIGIN" -eq 1 ]; then
+			SETHEAD="$SETHEAD \n ${GUI_SGA}: 'Origin $L2EA url'"
+		else
+			if [ "${#ORGCMDARGS[@]}" -ge 1 ]; then
+				SETHEAD="$SETHEAD \n ${GUI_SGA}: '${ORGCMDARGS[*]}'"
+			fi
 		fi
 	fi
-
 	# filter html incompatible chars here
 	#SETHEAD="${SETHEAD//&/+}"
 	
 	createProtonList X
 
-	"$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --center --window-icon="$STLICON" --form --center "$WINDECO" --title="$TITLE" \
+	"$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --scroll --center --window-icon="$STLICON" --form --center "$WINDECO" --title="$TITLE" \
 	--text="$SETHEAD" \
 	--columns="$COLCOUNT" --f1-action="$F1ACTIONCG" --separator="" \
 	--field="$FBUT_GUISET_DCP":FBTN "$(realpath "$0") dcp" \
@@ -11021,8 +11057,16 @@ function WinetricksPick {
 					WINETRICKSPAKS="$NON"
 				fi
 
-				WINETRICKSPAKS1="${WINETRICKSPAKS#*[[:blank:]]}"
-				WINETRICKSPAKS="${WINETRICKSPAKS1%*[[:blank:]]}"
+				WINETRICKSPAKS="${WINETRICKSPAKS#*[[:blank:]]}"
+				WINETRICKSPAKS="${WINETRICKSPAKS%*[[:blank:]]}"
+
+				declare -A WTNODUPPAKS
+				for i in $WINETRICKSPAKS; do
+					WTNODUPPAKS[$i]=1
+				done
+
+				WINETRICKSPAKS="${!WTNODUPPAKS[*]}"
+
 				touch "$FUPDATE"
 				updateConfigEntry "WINETRICKSPAKS" "$WINETRICKSPAKS" "$STLGAMECFG"
 			}
@@ -11924,6 +11968,29 @@ function installDotNet {
 	writelog "INFO" "${FUNCNAME[0]} - Stopped $DOTN$DNVER install - check $ILOG"
 }
 
+#### MO2 + Vortex ####
+# NOTE: This was written with MO2 and Vortex in mind
+# It relies on projects having proper releases and tagging
+# It may need tweaking if this is used for other projects in future or might require an entirely new function
+function getLatestGitHubExeVer {
+    SETUPNAME="$1"
+    PROJURL="$2"
+
+    RELEASESURL="${PROJURL}/releases"
+    EXPANDEDASSETSURL="${RELEASESURL}/expanded_assets"
+    TAGSURL="${PROJURL}/tags"
+
+    TAGSGREP="${RELEASESURL#"$GHURL"}/tag"
+
+    LATESTTAG="$("$WGET" -q "${TAGSURL}" -O - 2> >(grep -v "SSL_INIT") | grep -m1 "$TAGSGREP" | grep -oE "${TAGSGREP}[^\"]+")"
+    LATESTVER="${LATESTTAG##*/}"
+
+    LATESTRELEASEURL="${EXPANDEDASSETSURL}/${LATESTVER}"
+
+    SETUPFILE="$("$WGET" -q "${LATESTRELEASEURL}" -O - 2> >(grep -v "SSL_INIT") | grep "exe" | grep -m1 "$SETUPNAME" | grep -oE "${SETUPNAME}[^\"]+")"
+    echo "${SETUPFILE}"
+}
+
 #### VORTEX START: ####
 
 function addVortexStage {
@@ -12026,7 +12093,7 @@ function setVortexDLMime {
 function getLatestVortVer {
 	VSET="$VTX-setup"
 	writelog "INFO" "${FUNCNAME[0]} - Search for latest ${VTX^} stable Release"
-	VORTEXSETUP="$("$WGET" -q "${VORTEXRELURL}/latest" -O - 2> >(grep -v "SSL_INIT") | grep -m1 "$VSET" | grep -oE "${VSET}[^\"]+")"
+	VORTEXSETUP="$(getLatestGitHubExeVer "$VSET" "$VORTEXPROJURL")"
 	writelog "INFO" "${FUNCNAME[0]} - Found '$VORTEXSETUP'"
 	echo "VORTEXSETUP=$VORTEXSETUP" > "$VTST"
 }
@@ -12046,7 +12113,7 @@ function dlLatestVortex {
 			VVRAW="$(grep -oP "${VSET}-\K[^X]+" <<< "$VORTEXSETUP")"
 			VORTEXVERSION="${VVRAW%.exe}"
 			
-			DLURL="$VORTEXRELURL/download/v$VORTEXVERSION/$VORTEXSETUP"
+			DLURL="$VORTEXPROJURL/releases/download/v$VORTEXVERSION/$VORTEXSETUP"
 			# no idea how the sha512 is formatted in the yaml, so simply checking the size
 			DLCHK="stat"
 			INCHK="$("$WGET" -q "${DLURL//$VORTEXSETUP/latest.yml}" -O - 2> >(grep -v "SSL_INIT") | grep "size:" | gawk -F': ' '{print $2}')"
@@ -12625,6 +12692,34 @@ function startVortex {
 			WINE="$VORTEXWINE" WINEDEBUG="-all" WINEPREFIX="$VORTEXPFX" "$WINECFG"
 		fi
 
+		if [ ! -d "$VORTEXDOTNETDIR" ] || [ ! -f "$VORTEXDOTNETDIR/dotnet.exe" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - DotNet6 is not installed yet"
+			DNSRC="windowsdesktop-runtime-6.0.6-win-x64.exe"
+			DLSITE="${VORTEXDOWNLOADPATH}/site"
+			if [ ! -f "$DLSITE/$DNSRC" ]; then
+				if [ -f "${VORTEXINSTDIR}/${VTXRAA}" ]; then
+					RAWDNDL="$(grep -am1 "$DNSRC" "${VORTEXINSTDIR}/${VTXRAA}" | grep -oP '="\K[^"},]+')"
+					echo "RAWDNDL '$RAWDNDL'"
+					if grep -q "^https" <<< "$RAWDNDL"	&& grep -q "exe$" <<< "$RAWDNDL"; then
+						writelog "INFO" "${FUNCNAME[0]} - Using download URL found in $VTX '${VTXRAA}'"
+						DNDL="$RAWDNDL"
+					fi		
+				fi
+				
+				if [ -z "$DNDL" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Using hardcoded download URL for DotNet6"
+					DNDL="https://download.visualstudio.microsoft.com/download/pr/9d6b6b34-44b5-4cf4-b924-79a00deb9795/2f17c30bdf42b6a8950a8552438cf8c1/$DNSRC"
+				fi
+				dlCheck "$DNDL" "$DLSITE/$DNSRC" "X" " Downloading installer '$DNSRC' for DotNet6"
+			fi
+			if [ -f "$DLSITE/$DNSRC" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Starting installation of DotNet6 using '$DLSITE/$DNSRC'"
+				cd "$DLSITE" >/dev/null || return
+				wineVortexRun "$VORTEXWINE" "$DNSRC" "/quiet"
+				cd - >/dev/null || return
+			fi			
+		fi
+
 		if [ -f "$VORTEXEXE" ]; then
 			setVortexDLMime
 			setVortexDLPath
@@ -12878,19 +12973,36 @@ function setVortexVars {
 	fi
 
 	if [ "$USEVORTEXPROTON" == "$NON" ]; then
-		getAvailableProtonVersions "up" X
-		dlLatestGE "lge" "X"
-		getAvailableProtonVersions "up" X
-		SETVTXPROT="$(grep "^GE" "$PROTONCSV" | sort -V | tail -n1)"
-		SETVTXPROT="${SETVTXPROT%%;*}"
-		USEVORTEXPROTON="$SETVTXPROT"
-		touch "$FUPDATE"
-		updateConfigEntry "USEVORTEXPROTON" "$USEVORTEXPROTON" "$STLDEFGLOBALCFG"
-		writelog "INFO" "${FUNCNAME[0]} - USEVORTEXPROTON is '$NON', so using latest Proton-GE '$SETVTXPROT' automatically" "E"
+		if [ ! -f "$PROTONCSV" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Looking for available Proton versions"
+			getAvailableProtonVersions "up" X
+		fi
+
+		if ! grep -q "^GE" "$PROTONCSV"; then
+			writelog "INFO" "${FUNCNAME[0]} - Seems like there is no GE Proton available - getting one:"
+			autoBumpGE "X"
+		fi
+
+		delEmptyFile "$PROTONCSV"
+
+		if [ ! -f "$PROTONCSV" ]; then
+			writelog "ERROR" "${FUNCNAME[0]} - Could find '$PROTONCSV'"
+		else
+			SETVTXPROT="$(grep "^GE" "$PROTONCSV" | sort -V | tail -n1)"
+			SETVTXPROT="${SETVTXPROT%%;*}"
+			USEVORTEXPROTON="$SETVTXPROT"
+			touch "$FUPDATE"
+			updateConfigEntry "USEVORTEXPROTON" "$USEVORTEXPROTON" "$STLDEFGLOBALCFG"
+			writelog "INFO" "${FUNCNAME[0]} - USEVORTEXPROTON is '$NON', so using latest Proton-GE '$SETVTXPROT' automatically" "E"
+		fi
 	else
 		SETVTXPROT="$USEVORTEXPROTON"
 	fi
 
+	VORTEXDOTNETDIR="$VORTEXPFX/Program Files/dotnet"
+
+	export DOTNET_ROOT="$VTX_DOTNET_ROOT"
+	
 	writelog "INFO" "${FUNCNAME[0]} - Using $USEVORTEXPROTON for $VTX"
 
 	VORTEXGAMES="$GLOBALMISCDIR/$VOGAT"
@@ -13037,8 +13149,13 @@ function askVortex {
 function getLatestMO2Ver {
 	MO2SET="Mod.Organizer"
 
-	writelog "INFO" "${FUNCNAME[0]} - Search for latest '$MO2SET' Release"
-	MO2SETUP="$("$WGET" -q "${MO2DLURL}" -O - 2> >(grep -v "SSL_INIT") | grep "exe" | grep -m1 "$MO2SET" | grep -oE "${MO2SET}[^\"]+")"
+	writelog "INFO" "${FUNCNAME[0]} - Search for latest '$MO2SET' Release under '$MO2PROJURL'"
+	MO2SETUP="$(getLatestGitHubExeVer "$MO2SET" "$MO2PROJURL")"
+	if [ -n "$MO2SETUP" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Found '$MO2SETUP'"
+	else
+		writelog "ERROR" "${FUNCNAME[0]} - Could not find any '$MO2SET' Release"
+	fi
 }
 
 function dlLatestMO2 {
@@ -13050,7 +13167,7 @@ function dlLatestMO2 {
 		if [ ! -f "$MO2SPATH" ]; then
 			MO2VRAW="$(grep -oP "${MO2SET}-\K[^X]+" <<< "$MO2SETUP")"
 			MO2VERSION="${MO2VRAW%.exe}"
-			DLURL="$MO2DLURL/download/v$MO2VERSION/$MO2SETUP"
+			DLURL="$MO2PROJURL/releases/download/v$MO2VERSION/$MO2SETUP"
 			writelog "INFO" "${FUNCNAME[0]} - Downloading $MO2SETUP to $MO2DLDIR from '$DLURL'"
 			
 			if [ -n "$1" ]; then
@@ -13083,9 +13200,15 @@ function setMO2Vars {
 	MO2GAMES="$GLOBALMISCDIR/mo2games.txt"
 	if [ -z "$MO2WINE" ] || [ ! -f "$MO2WINE" ]; then
 		if [ "$USEMO2PROTON" == "$NON" ]; then
-			getAvailableProtonVersions "up" X
-			dlLatestGE "lge" "X"
-			getAvailableProtonVersions "up" X
+			if [ ! -f "$PROTONCSV" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Looking for available Proton versions"
+				getAvailableProtonVersions "up" X
+			fi
+
+			if ! grep -q "^GE" "$PROTONCSV"; then
+				autoBumpGE "X"
+			fi
+		
 			SETMO2PROT="$(grep "^GE" "$PROTONCSV" | sort -V | tail -n1)"
 			SETMO2PROT="${SETMO2PROT%%;*}"
 			USEMO2PROTON="$SETMO2PROT"
@@ -14336,20 +14459,25 @@ function setMangoHudCfg {
 }
 
 function autoBumpGE {
-	if [ "$AUTOBUMPGE" -eq 1 ] && grep -q "^GE" <<< "$USEPROTON" && [ "$ISGAME" -eq 2 ]; then
+	if { [ "$AUTOBUMPGE" -eq 1 ] && grep -q "^GE" <<< "$USEPROTON" && [ "$ISGAME" -eq 2 ];} || [ -n "$1" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Current Proton version is $USEPROTON"
 		dlLatestGE "lge" "X"
-		getAvailableProtonVersions "up"
-		NEWESTGE="$(grep "^GE" "$PROTONCSV" | sort -V | tail -n1)"
-		NEWESTGE="${NEWESTGE%%;*}"
-		if [ "$NEWESTGE" == "$USEPROTON" ]; then
-			writelog "SKIP" "${FUNCNAME[0]} - $USEPROTON is already the newest GE Proton version"
-		else
-			writelog "INFO" "${FUNCNAME[0]} - $(strFix "$NOTY_BUMP" "$USEPROTON" "$USEPROTON" "$NEWESTGE")"
-			notiShow "$(strFix "$NOTY_BUMP" "$USEPROTON" "$USEPROTON" "$NEWESTGE")"
-			USEPROTON="$NEWESTGE"
-			touch "$FUPDATE"
-			updateConfigEntry "USEPROTON" "$USEPROTON" "$STLGAMECFG"
+		getAvailableProtonVersions "up" X
+
+		if [ ! -f "$PROTONCSV" ]; then
+			writelog "ERROR" "${FUNCNAME[0]} - Could not find '$PROTONCSV'"
+		else	
+			NEWESTGE="$(grep "^GE" "$PROTONCSV" | sort -V | tail -n1)"
+			NEWESTGE="${NEWESTGE%%;*}"
+			if [ "$NEWESTGE" == "$USEPROTON" ]; then
+				writelog "SKIP" "${FUNCNAME[0]} - $USEPROTON is already the newest GE Proton version"
+			else
+				writelog "INFO" "${FUNCNAME[0]} - $(strFix "$NOTY_BUMP" "$USEPROTON" "$USEPROTON" "$NEWESTGE")"
+				notiShow "$(strFix "$NOTY_BUMP" "$USEPROTON" "$USEPROTON" "$NEWESTGE")"
+				USEPROTON="$NEWESTGE"
+				touch "$FUPDATE"
+				updateConfigEntry "USEPROTON" "$USEPROTON" "$STLGAMECFG"
+			fi
 		fi
 	fi
 }
@@ -14458,6 +14586,10 @@ function prepareLaunch {
 	writelog "INFO" "${FUNCNAME[0]} - Gamedir '$GFD'"
 	if [ -n "$GPFX" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Proton wineprefix '$GPFX'"
+	fi
+
+	if [ -z "${INGCMD[*]}" ] && [ -n "${ORGGCMD[*]}" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - No INGCMD but valid ORGGCMD - May be Non-Steam game"
 	fi
 	writelog "INFO" "${FUNCNAME[0]} -------------------"
 	writelog "INFO" "${FUNCNAME[0]} - CreateGameCfg:"
@@ -15178,7 +15310,7 @@ function checkPlayTime {
 	elif [ -z "$1" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - The game was not even started"
 	else
-		if [ -n "$CRASHGUESS" ] && [ "$1" -lt "$CRASHGUESS" ]; then
+		if [  -n "$CRASHGUESS" ] && [ "$1" -le "$CRASHGUESS" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - The game stopped after '$1' seconds - opening CrashGuess Requester"
 			steamdeckControl
 			fixShowGnAid
@@ -15491,6 +15623,11 @@ function startGame {
 		cd "${GMO2EXE%/*}" >/dev/null || return
 	fi
 
+	if ! command -v "$GAMESCOPE" >/dev/null && [ "$USEMANGOAPP" -eq 1 ]; then
+		writelog "WARN" "${FUNCNAME[0]} - Disabling USEMANGOAPP because '$GAMESCOPE' wasn't found"
+		USEMANGOAPP=0
+	fi
+	
 	if [ -x "$RUNCONTY" ] && [ "$RUNCONTY" != "$NON" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - ## Starting game using Conty executable '$RUNCONTY'"
 		"$RUNCONTY" "${RUNCMD[@]}"
@@ -15516,6 +15653,7 @@ function startGame {
 			writelog "INFO" "${FUNCNAME[0]} - Using $MANGOAPP"
 			MRSH="$STLSHM/maprun.sh"
 			printf "\"%s\" " "${RUNCMD[@]}" > "$MRSH"
+			sed -i "s/\\\/\\\\\\\/" "$STLSHM/maprun.sh"
 			chmod +x "$MRSH"
 			gameScopeArgs "$GAMESCOPE_ARGS"
 
@@ -15547,7 +15685,9 @@ function startGame {
 	emptyVars "O" "X" # clear original variables again (mostly for a continous log (date))
 	createSymLink "${FUNCNAME[0]}" "$GRUNLOG" "${STLGLLOGDIRTI}/${GN}.log"
 
-	if [ "$ISGAME" -eq 2 ] && [ "$USEWINE" -eq 0 ] && { grep -qi "GE\-" <<< "$USEPROTON" || grep -qi "\-TKG" <<< "$USEPROTON" || [ "$ISORIGIN" -eq 1 ];}; then
+# this is broken - maybe later:
+#	if [ "$ISGAME" -eq 2 ] && [ "$USEWINE" -eq 0 ] && { grep -qi "GE-" <<< "$USEPROTON" || grep -qi "\-TKG" <<< "$USEPROTON" || [ "$ISORIGIN" -eq 1 ];}; then
+	if [ "$ISGAME" -eq 2 ] && [ "$USEWINE" -eq 0 ]; then
 		if [ "$ISORIGIN" -eq 1 ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Waiting for $L2EA process to finish"		
 			# TODO maybe add waitForOriginPid - the sleep is not too nice (but at least non blocking)
@@ -15581,6 +15721,8 @@ function startGame {
 		else
 			writelog "ERROR" "${FUNCNAME[0]} - Could not determine pid of '$RLRUNWINESERVER'"
 		fi
+	else
+		writelog "WARN" "${FUNCNAME[0]} - Skipping Wait for any PID - ISGAME:'$ISGAME';USEWINE:'$USEWINE' - possible missing function!"
 	fi
 
 	duration=$SECONDS
@@ -16768,7 +16910,7 @@ function setProtonCmd {
 			
 			if [ -f "${RUNPROTON//\"/}" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Prepending Proton '$USEPROTON' (='${RUNPROTON//\"/}') to the command line '${GAMESTARTCMD[*]}'"
-				PROTSTARTCMD=("${RUNPROTON//\"/}" "$WFEAR" "${GAMESTARTCMD[*]}")
+				PROTSTARTCMD=("${RUNPROTON//\"/}" "$WFEAR")
 			else
 				writelog "INFO" "${FUNCNAME[0]} - Still don't have a usable proton executable in RUNPROTON '{RUNPROTON//\"/}')"
 				if [ "$HAVEINPROTON" -eq 1 ]; then
@@ -16921,15 +17063,6 @@ function launchSteamGame {
 	if [ "$USEWINE" -eq 0 ]; then
 		# concatenate final game start command
 
-		if [ "$USEOBSCAP" -eq 1 ]; then
-			writelog "INFO" "${FUNCNAME[0]} - USEOBSCAP is enabled - preparing $OBSCAP command"
-			if [ -n "${FINALSTARTCMD[0]}" ]; then
-				FINALSTARTCMD=("${FINALSTARTCMD[@]}" "$OBSC")
-			else
-				FINALSTARTCMD=("$OBSC")
-			fi
-		fi
-
 		if [ -n "$GMR" ]; then
 			if [ -n "${FINALSTARTCMD[0]}" ]; then
 				FINALSTARTCMD=("${FINALSTARTCMD[@]}" "$GMR")
@@ -16950,6 +17083,15 @@ function launchSteamGame {
 			fi
 		fi
 
+		if [ "$USEOBSCAP" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - USEOBSCAP is enabled - preparing $OBSCAP command"
+			if [ -n "${FINALSTARTCMD[0]}" ]; then
+				FINALSTARTCMD=("${FINALSTARTCMD[@]}" "$OBSC")
+			else
+				FINALSTARTCMD=("$OBSC")
+			fi
+		fi
+		
 		if [ "$USEMANGOHUD" -eq 1 ]; then
 			if [ "$MAHUARGS" != "$NON" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Exporting MANGOHUD_CONFIG with $MAHU arguments '$MAHUARGS'"
@@ -18527,9 +18669,8 @@ function AutoMarkSCat {
 }
 
 function filterUnwantedSteamCategories {
-	FILTEREDTAGS=$(echo "$1" | grep -v "^rt[A-Z]")
-
-	echo "$(printf "%s" "${FILTEREDTAGS[@]}" | tr '\n' '!' | sed 's/\!*$//g')"
+	FILTEREDTAGS="$(grep -v "^rt[A-Z]" <<< "$1")"
+	printf "%s" "${FILTEREDTAGS[@]}" | tr '\n' '!' | sed 's/\!*$//g'
 }
 
 function addNonSteamGameGui {
@@ -18562,7 +18703,7 @@ function addNonSteamGameGui {
 	NOSTGVR=0
 	unset VALTAGS
 	mapfile -d "\n" -t -O "${#VALTAGS[@]}" VALTAGS <<< "$(getActiveSteamCollections | sed '/^$/d')"
-	VALIDTAGS="$(filterUnwantedSteamCategories "$VALTAGS")"
+	VALIDTAGS="$(filterUnwantedSteamCategories "${VALTAGS[@]}")"
 
 	AutoMarkSCat
 
@@ -19460,9 +19601,10 @@ function createModifiedEvalsc {
 		ISCRILOG="$STLSHM/${PROGNAME,,}-${ISCRI}-temp_$RANDOM.log"
 	fi 
 
-	STESHA="$STEAM_COMPAT_CLIENT_INSTALL_PATH$SAC/$STEWOS"
+	STESHA="$STEAM_COMPAT_CLIENT_INSTALL_PATH/$SAC/$STEWOS"
 	if [ ! -d "$STESHA" ]; then
 		writelog "WARN" "${FUNCNAME[0]} - '$STESHA' not found - packages expected there won't be found" "X" "$ISCRILOG"
+		writelog "WARN" "${FUNCNAME[0]} - '$STESHA' is concatenated from '$STEAM_COMPAT_CLIENT_INSTALL_PATH', '$SAC', '$STEWOS'" "X" "$ISCRILOG"
 	fi
 
 	SOURCEEVALSC="$1"
@@ -19523,6 +19665,50 @@ function runEvacInstall {
 	mv "$DSTEVSC" "$STLSHM/${DSTEVSC##*/}_$RANDOM"
 }
 
+function findEarlyProt {
+	FEPLOG="$2"
+	writelog "INFO" "${FUNCNAME[0]} - Trying to get a proton version from '$1'" "X" "$FEPLOG"
+	if grep -q "^USEPROTON" "$1"; then
+		CONFPROTRAW="$(grep "^USEPROTON" "$1" | cut -d '=' -f2)"
+		CONFPROT="${CONFPROTRAW//\"}"
+
+		if [ -z "$SUSDA" ]; then
+			setSteamPaths
+		fi
+		
+		createProtonList
+		
+		if [ -f "$PROTONCSV" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Searching '$CONFPROT' in '$PROTONCSV'" "X" "$FEPLOG"
+
+			if grep -q "^${CONFPROT}" "$PROTONCSV"; then
+				writelog "INFO" "${FUNCNAME[0]} - Found '$CONFPROT' in '$PROTONCSV'" "X" "$FEPLOG"
+				EARLYPROT="$(grep "^${CONFPROT}" "$PROTONCSV" | cut -d ';' -f2)"
+				export EARLYPROT
+			else
+				writelog "INFO" "${FUNCNAME[0]} - '$CONFPROT' not found in '$PROTONCSV'" "X" "$FEPLOG"
+				# if configured USEPROTON proton binary was not found, try to find a minor version bump instead:
+				TESTEARLYPROT="$(fixProtonVersionMismatch "CONFPROT" "$STLGAMECFG" "X")"
+				if [ -f "$TESTEARLYPROT" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Found a minor version mismatch binary for '$CONFPROT':'$TESTEARLYPROT'" "X" "$FEPLOG"
+					EARLYPROT="$TESTEARLYPROT"
+					export EARLYPROT
+				else
+					if [ -n "$TESTEARLYPROT" ]; then
+						writelog "SKIP" "${FUNCNAME[0]} - Found '$TESTEARLYPROT' does not exist" "X" "$FEPLOG"
+					else
+						writelog "SKIP" "${FUNCNAME[0]} - No minor version mismatch binary for '$CONFPROT' found'" "X" "$FEPLOG"
+					fi
+				fi
+			fi
+		else
+			writelog "ERROR" "${FUNCNAME[0]} - Could not create '$PROTONCSV'" "X" "$FEPLOG"
+		fi
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - No USEPROTON entry found in '$1'" "X" "$FEPLOG"
+	fi
+}
+
 function checkFirstTimeRun {
 	ISCRILOG="$STLSHM/${PROGNAME,,}-${ISCRI}-${STEAM_COMPAT_APP_ID}.log"
 	GPFX="$STEAM_COMPAT_DATA_PATH/pfx"
@@ -19542,48 +19728,6 @@ function checkFirstTimeRun {
 		done
 		cp "$EVALVDF" "$EVMETAID"
 		writelog "INFO" "${FUNCNAME[0]} - Copied '$EVALVDF' to '$EVMETAID/$1'" "X" "$ISCRILOG"
-	}
-	
-	function findEarlyProt {
-		if [ -n "$2" ]; then
-			ISCRILOG="$2"
-			writelog "INFO" "${FUNCNAME[0]} - Trying to get a proton version from '$1'" "X" "$ISCRILOG"
-			if grep -q "^USEPROTON" "$1"; then
-				CONFPROTRAW="$(grep "^USEPROTON" "$1" | cut -d '=' -f2)"
-				CONFPROT="${CONFPROTRAW//\"}"
-
-				if [ -z "$SUSDA" ]; then
-					setSteamPaths
-				fi
-				
-				createProtonList
-				
-				if [ -f "$PROTONCSV" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - Searching '$CONFPROT' in '$PROTONCSV'" "X" "$ISCRILOG"
-
-					if grep -q "^${CONFPROT}" "$PROTONCSV"; then
-						writelog "INFO" "${FUNCNAME[0]} - Found '$CONFPROT' in '$PROTONCSV'" "X" "$ISCRILOG"
-						EARLYPROT="$(grep "^${CONFPROT}" "$PROTONCSV" | cut -d ';' -f2)"
-						export EARLYPROT
-					else
-						writelog "INFO" "${FUNCNAME[0]} - '$CONFPROT' not found in '$PROTONCSV'" "X" "$ISCRILOG"
-						# if configured USEPROTON proton binary was not found, try to find a minor version bump instead:
-						TESTEARLYPROT="$(fixProtonVersionMismatch "CONFPROT" "$STLGAMECFG" "X")"
-						if [ -f "$TESTEARLYPROT" ]; then
-							writelog "INFO" "${FUNCNAME[0]} - Found a minor version mismatch binary for '$CONFPROT':'$TESTEARLYPROT'" "X" "$ISCRILOG"
-							EARLYPROT="$TESTEARLYPROT"
-							export EARLYPROT
-						else
-							writelog "SKIP" "${FUNCNAME[0]} - Found '$TESTEARLYPROT' does not exist" "X" "$ISCRILOG"
-						fi
-					fi
-				else
-					writelog "ERROR" "${FUNCNAME[0]} - Could not create '$PROTONCSV'" "X" "$ISCRILOG"
-				fi
-			else
-				writelog "SKIP" "${FUNCNAME[0]} - No USEPROTON entry found in '$1'" "X" "$ISCRILOG"
-			fi
-		fi	
 	}
 
 	rmOldLog
@@ -19747,7 +19891,7 @@ function checkFirstTimeRun {
 						printf '\n%s\n' "$STINFO"	# heh, hello Steam Gui
 					# should not happen, but better log it anyway just in case:
 					else
-						writelog "SKIP" "${FUNCNAME[0]} - Skipping '$ISCRI' command '$*' - Exiting" "X" "$ISCRILOG"
+						writelog "SKIP" "${FUNCNAME[0]} - Skipping '$ISCRI' command '$*' - Neither '$EVALSC' nor '$GECUST' found in command exiting" "X" "$ISCRILOG"
 					fi
 			else
 				if ! grep -q "$GECUST" <<< "$@"; then
@@ -19755,19 +19899,89 @@ function checkFirstTimeRun {
 				fi
 			fi
 		else
-			writelog "SKIP" "${FUNCNAME[0]} - Skipping '$ISCRI' command '$*' - Exiting" "X" "$ISCRILOG"
+			if [ -d "$GPFX" ]; then
+				writelog "SKIP" "${FUNCNAME[0]} - Skipping '$ISCRI' command '$*', because '$GPFX' already exists - Exiting" "X" "$ISCRILOG"
+			elif [ -f "$EVMETAID/$EVSC" ]; then
+				writelog "SKIP" "${FUNCNAME[0]} - Skipping '$ISCRI' command '$*', because '$EVMETAID/$EVSC' already exists - Exiting" "X" "$ISCRILOG"
+			fi
 		fi
 	fi
 }
 
+function verbRun {
+	VERBLOG="$STLSHM/${PROGNAME,,}-VERB-${STEAM_COMPAT_APP_ID}.log"
+	GPFX="$STEAM_COMPAT_DATA_PATH/pfx"
+	SCCILECO="$STEAM_COMPAT_CLIENT_INSTALL_PATH/$LECO"
+	EVALPROTCONF="$STLSHM/evalprot-${STEAM_COMPAT_APP_ID}.conf"
+
+	writelog "INFO" "${FUNCNAME[0]} - 'verb' command detected '${*}'" "X" "$VERBLOG"
+	writelog "INFO" "${FUNCNAME[0]} - Settings variable SteamAppId to '$STEAM_COMPAT_APP_ID' to make verb command happy"
+	export SteamAppId="$STEAM_COMPAT_APP_ID"
+
+	# first check if the game has a ${PROGNAME,,} config and use the corresponding proton version:
+	if [ -z "$EARLYPROT" ] && [ -f "$STLGAMEDIRID/$STEAM_COMPAT_APP_ID.conf" ]; then
+		findEarlyProt "$STLGAMEDIRID/$STEAM_COMPAT_APP_ID.conf" "$VERBLOG"
+	fi
+	# as fallback check if the game template ${PROGNAME,,} config has a usable proton version:
+	if [ -z "$EARLYPROT" ] && [ -f "$STLDEFGAMECFG" ]; then
+		findEarlyProt "$STLDEFGAMECFG" "$VERBLOG"
+	fi
+
+	# if everything else failed, check for a "static proton version" just for the base install - either from file or from system variable:
+	if [ -z "$EARLYPROT" ] && [ -f "$STLEARLYPROTCONF" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Trying to get a proton version from '$STLEARLYPROTCONF'" "X" "$VERBLOG"
+		source "$STLEARLYPROTCONF"
+	fi
+
+	# fallback if for whatever reason USEPROTON is empty everywhere - trying to get NOP
+	if [ -z "$EARLYPROT" ]; then
+		if [ -z "$SUSDA" ]; then
+			setSteamPaths
+		fi
+		writelog "INFO" "${FUNCNAME[0]} - Last try - trying to get Newest Official Proton" "X" "$VERBLOG"
+		CONFPROT="$(getDefaultProton)"
+		createProtonList
+		if [ -n "$CONFPROT" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Picking '^${CONFPROT}' from '$PROTONCSV'" "X" "$VERBLOG"
+			EARLYPROT="$(grep "^${CONFPROT}" "$PROTONCSV" | cut -d ';' -f2)"
+		else
+			writelog "WARN" "${FUNCNAME[0]} - Could not determine default Proton" "X" "$VERBLOG"
+		fi
+	fi
+	
+	# write found protonversion into temp config, so below GECUST runs can use it as well:
+	if [ -f "$EARLYPROT" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Running verb command '${*}' using proton '$EARLYPROT'" "X" "$VERBLOG"
+		"$EARLYPROT" "$WFEAR" "$@" >> "$VERBLOG" 2>&1
+	else
+		writelog "INFO" "${FUNCNAME[0]} - Skipping verb command '${*}', because no usable proton '$EARLYPROT' was found" "X" "$VERBLOG"
+	fi
+}
+
 function getCurrentCommandline {
+	echo "$@" >> "${STLSHM}/cmdline.txt"
 	# filter $ISCRI commands
 	if grep -q "$ISCRI" <<< "$@"; then
-		writelog "INFO" "${FUNCNAME[0]} - Running checkFirstTimeRun with arguments '${*}'" "P"
-		checkFirstTimeRun "$@"
+		while read -r IARG; do
+			mapfile -t -O "${#ISCRICMD[@]}" ISCRICMD <<< "$IARG"
+		done <<< "$(printf "%s\n" "$@")"
+		if [ "${ISCRICMD[0]}" == "%verb%" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Cutting '%verb%' from arguments '${*}'" "P"
+			ISCRICMD=( "${ISCRICMD[@]:1}" )
+		fi
+		writelog "INFO" "${FUNCNAME[0]} - Running checkFirstTimeRun with arguments '${ISCRICMD[*]}'" "P"
+		checkFirstTimeRun "${ISCRICMD[@]}"
+	elif grep -q "%verb%" <<< "$@"; then
+		echo "${FUNCNAME[0]} - Found '%verb%' in the command line '${*}'" >> "$STLSHM/DEBUG-verb.txt"
+		while read -r IARG; do
+			IARG="${IARG//steamservice.exe/SteamService.exe}"
+			mapfile -t -O "${#VERBCMD[@]}" VERBCMD <<< "$IARG"
+		done <<< "$(printf "%s\n" "$@")"
+		VERBCMD=( "${VERBCMD[@]:1}" )
+		echo "${FUNCNAME[0]} - Executing 'verb' command '${VERBCMD[*]}' through verbRun" >> "$STLSHM/DEBUG-verb.txt"
+		verbRun "${VERBCMD[@]}" # >> "$STLSHM/DEBUG-verb.txt" 2>&1
 		exit
 	else
-		echo "$@" > "${STLSHM}/cmdline.txt"
 		INPROSTR="proton $WFEAR"
 		if grep -q "$INPROSTR" <<< "$@"; then
 			HAVEINPROTON=1
@@ -19905,6 +20119,13 @@ function steamdedeckt {
 		CABEXTRACTURL="$ARCHARCHIVEURL/c/$CABEXTRACT/$CABEXTRACTFILE"
 		
 		ONSTEAMDECK=1
+
+		if grep -q "generate-drm-mode" <<< "$(pgrep -a "$GAMESCOPE")"; then
+			writelog "INFO" "${FUNCNAME[0]} - Detected '$GAMESCOPE' running 'forced' - assuming we're running in Game Mode"
+			FIXGAMESCOPE=1
+		else
+			SMALLDESK=1
+		fi
 
 		writelog "INFO" "${FUNCNAME[0]} - Seems like we have a Steam Deck here - making some specific settings"
 
