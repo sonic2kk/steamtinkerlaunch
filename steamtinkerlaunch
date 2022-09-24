@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v11.11"
+PROGVERS="v11.12.20220924"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -6734,8 +6734,8 @@ function getExeFromID {
 				EXE="$(grep "^GAMEEXE" "$GEMETA/${1}.conf" | cut -d '"' -f2)"
 			fi
 			
-			if [ ! -z "${EXE}" ]; then
-				echo $EXE
+			if [ -n "${EXE}" ]; then
+				echo "$EXE"
 				return
 			fi
 		fi
@@ -12505,6 +12505,27 @@ function setGameVortexStaging {
 	fi
 }
 
+function activateVortexGame {
+	NEXUSGAMEID="$(grep "\"$1\"" "$VORTEXGAMES" | cut -d ';' -f1)"
+	NEXUSGAMEID="${NEXUSGAMEID//\"}"
+	if [ -n "$NEXUSGAMEID" ]; then
+ # TODO check if the game is already activated
+#		if ! grep -q "lastActiveProfile.$NEXUSGAMEID" "$VWRUN"; then
+			NEXRAND="$(tr -dc 'a-zA-Z0-9' < /dev/urandom | fold -w 9 | head -n1)" # valid?
+			writelog "INFO" "${FUNCNAME[0]} - Activating game '$NEXUSGAMEID' ($1) in ${VTX^}" "E"
+			setVortSet "settings.mods.activator.$NEXUSGAMEID=\"\\\"hardlink_activator\\\"\""
+			setVortSet "settings.profiles.activeProfileId=\"\\\"$NEXRAND\\\"\""
+			setVortSet "settings.profiles.lastActiveProfile.$NEXUSGAMEID=\"\\\"$NEXRAND\\\"\""
+			setVortSet "settings.profiles.nextProfileId=\"\\\"$NEXRAND\\\"\""
+			runVortSetCmd
+#		else
+#			writelog "SKIP" "${FUNCNAME[0]} - Seems like '$NEXUSGAMEID' ($1) is already activated in ${VTX^}" "E"
+#		fi
+	else
+		writelog "ERROR" "${FUNCNAME[0]} - No valid  NEXUSGAMEID found for '$1'" "E"
+	fi
+}
+
 function setupGameVortex {
 	VZGAMEDIR="Z:${1//\//\\\\}"
 	VORTGETSET="$STLSHM/vortgetset.txt"
@@ -12755,8 +12776,11 @@ function startVortex {
 				elif [ "$2" == "getset" ]; then
 					writelog "INFO" "${FUNCNAME[0]} - Showing ${VTX^} settings as requested"
 					runVortex "--get" "settings"
-					grep -v "^info\: Epic" "$VWRUN"
+					grep -v "^info: Epic" "$VWRUN"
 					rm "$VWRUN" 2>/dev/null
+				elif [ "$1" == "activate" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Activating game '$2'"
+					activateVortexGame "$2"
 				else
 					StatusWindow "${VTX^}" "prepareAllInstalledVortexGames" "PrepareVortexGameStatus"
 					writelog "INFO" "${FUNCNAME[0]} - Starting ${VTX^} without options" "E"
@@ -13007,8 +13031,7 @@ function setVortexVars {
 	else
 		SETVTXPROT="$USEVORTEXPROTON"
 	fi
-
-	VORTEXDOTNETDIR="$VORTEXPFX/Program Files/dotnet"
+	VORTEXDOTNETDIR="$VORTEXPFX/$DRC/Program Files/dotnet"
 
 	export DOTNET_ROOT="$VTX_DOTNET_ROOT"
 	
@@ -18053,6 +18076,8 @@ function commandline {
 				VortexSymDialog
 			elif [ "$2" == "download" ] || [ "$2" == "d" ]; then
 				StatusWindow "$(strFix "$NOTY_DLCUSTOMPROTON" "${VTX^}")" "dlLatestVortex S" "DownloadVortexStatus"
+			elif [ "$2" == "activate" ] && { [ -n "$3" ]  && [ "$3" -eq "$3" ] 2>/dev/null;}; then
+				startVortex "activate" "$3"
 			else	
 				writelog "INFO" "${FUNCNAME[0]} - arg2 '$2' is no valid command"
 				howto
