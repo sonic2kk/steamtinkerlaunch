@@ -6705,23 +6705,20 @@ function getIDFromTitle {
 	else
 		# Search for all meta files with a partial match for their `NAME` field
 		# Search on `NAME` primarily, fallback to `GAMENAME`
-		SAVEIFS=$IFS
-		IFS=$'\n'
-		MATCHES=( $(grep -i "^NAME=.*.$1" "$GEMETA" -R) )
-		if [ -z "${MATCHES}" ]; then
-			MATCHES=( $(grep "^GAMENAME=.*.$1" "$GEMETA" -R) )
+		mapfile -t MATCHES < <(grep -i "^NAME=.*.$1" "$GEMETA" -R)
+		if [ -z "${MATCHES[*]}" ]; then
+			mapfile -t MATCHES < <(grep -i "^GAMENAME=.*.$1" "$GEMETA" -R)
 		fi
-		IFS=$SAVEIFS
-		
+
 		# Echo all matches in format "AppID (Game Name)"
-		if [ ! -z "${MATCHES}"  ]; then
+		if [ -n "${MATCHES[*]}"  ]; then
 			for i in "${MATCHES[@]}"
 			do
 				MATCH_AID="$( echo "${i##*/}" | awk -F'.conf:' '{print $1}' )"
 				MATCH_NAME="$( echo "${i##*/}" | awk -F'NAME="' '{print $2}' )"
-				MATCH_NAME="$( echo ${MATCH_NAME::-1} | xargs )"
+				MATCH_NAME="$( echo "${MATCH_NAME::-1}" | xargs )"
 
-				printf "$MATCH_AID\t\t($MATCH_NAME)\n"
+				printf '%s\t\t(%s)\n' "$MATCH_AID" "$MATCH_NAME"
 			done
 		else
 			echo "Could not find AppID for name '$1'."
