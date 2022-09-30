@@ -18668,6 +18668,14 @@ function addNonSteamGame {
 		done
 	}
 
+	function getShortcutAID {
+		ID="$1$2"
+		CRC="$( getCRC "$1$2" | xargs )"
+		DECCRC="$( hex2dec "$CRC" )"
+
+		echo "$((DECCRC | 0x80000000 ))"
+	}
+
 	NOSTHIDE=0
 	NOSTADC=1
 	NOSTAO=1
@@ -18762,12 +18770,22 @@ function addNonSteamGame {
 		# NOSTSCNHEX="${NOSTCRC}02000000"
 		# echo "NOSTSCNHEX = ${NOSTSCNHEX}"
 
-		NOSTAIDRHX="$(printf "%03x%03x%02x\n" $((RANDOM%4096)) $((RANDOM%4096)) $((RANDOM%256)))"
-		NOSTAID="$(hex2dec "$NOSTAIDRHX")"
+		# NOSTAIDRHX="$(printf "%03x%03x%02x\n" $((RANDOM%4096)) $((RANDOM%4096)) $((RANDOM%256)))"
+		# NOSTAID="$(hex2dec "$NOSTAIDRHX")"
+		# NOSTAIDHX="\x$(awk '{$1=$1}1' FPAT='.{2}' OFS="\\\x" <<< "$NOSTAIDRHX")"
+
+		# TEST_AID="$(( $( getShortcutAID "\"${NOSTEXEPATH}\"" "${NOSTAPPNAME}" ) ))"
+
+		NOSTAID="$(( $( getShortcutAID '${NOSTEXEPATH}' '${NOSTAPPNAME}' ) ))"
+		NOSTAIDRHX="$( dec2hex "$NOSTAID" )"
+		# NOSTAIDHX="\x$NOSTAIDRHX\x"
 		NOSTAIDHX="\x$(awk '{$1=$1}1' FPAT='.{2}' OFS="\\\x" <<< "$NOSTAIDRHX")"
+		# TEST_NOSTAIDHX_REV="$( hex2dec "${NOSTAIDHX}" )"
+
 
 		writelog "INFO" "${FUNCNAME[0]} - === Adding new $NSGA ==="
 		writelog "INFO" "${FUNCNAME[0]} - AppID: '${NOSTAID}'"
+		writelog "INFO" "${FUNCNAME[0]} - NOSTAIDHX: '${NOSTAIDHX}'"
 		writelog "INFO" "${FUNCNAME[0]} - App Name: '${NOSTAPPNAME}'"
 		writelog "INFO" "${FUNCNAME[0]} - Exe Path: '${NOSTEXEPATH}'"
 		writelog "INFO" "${FUNCNAME[0]} - Start Dir: '${NOSTSTDIR}'"
@@ -18845,25 +18863,25 @@ function addNonSteamGame {
 			printf '\x01%s\x00\x00' "LaunchOptions"
 		fi
 		
-		if [ "$NOSTHIDE" -eq 1 ]; then
+		if [ "$NOSTHIDE" == "TRUE" ]; then
 			printf '\x02%s\x00\x01\x00\x00\x00' "IsHidden"
 		else
 			printf '\x02%s\x00\x00\x00\x00\x00' "IsHidden"
 		fi
 
-		if [ "$NOSTADC" -eq 1 ]; then
+		if [ "$NOSTADC" == "TRUE" ]; then
 			printf '\x02%s\x00\x01\x00\x00\x00' "AllowDesktopConfig"
 		else
 			printf '\x02%s\x00\x00\x00\x00\x00' "AllowDesktopConfig"
 		fi
 
-		if [ "$NOSTAO" -eq 1 ]; then
+		if [ "$NOSTAO" == "TRUE" ]; then
 			printf '\x02%s\x00\x01\x00\x00\x00' "AllowOverlay"
 		else
 			printf '\x02%s\x00\x00\x00\x00\x00' "AllowOverlay"
 		fi
 
-		if [ "$NOSTVR" -eq 1 ]; then
+		if [ "$NOSTVR" == "TRUE" ]; then
 			printf '\x02%s\x00\x01\x00\x00\x00' "openvr"
 		else
 			printf '\x02%s\x00\x00\x00\x00\x00' "openvr"
