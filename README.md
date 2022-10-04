@@ -47,21 +47,21 @@ To find out about the latest release, check out the [stable release changelog](h
 ### General usage
 Steam Tinker Launch works with Linux native games and games using Proton, however some Windows-only utilities (such as [ReShade](https://github.com/frostworx/steamtinkerlaunch/wiki/ReShade)) are only available for Proton games. SteamTinkerLaunch also supports Non-Steam Games so long as they are launched through the Steam client.
 
-There are two ways to use SteamTinkerLaunch through Steam:
+There are two ways to use SteamTinkerLaunch through Steam, either as a Compatibility Tool (intended for Proton games) or as a Launch Option (intended for native Linux games). Only **one** of these options should be used per game.
 
-#### Steam Compatibility Tool (Proton Games)
-Using SteamTinkerLaunch as a [compatibility tool](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam-Compatibility-Tool) is the preferred way of using it with Proton games. Once SteamTinkerLaunch is installed, force it as a compatibility tool for your chosen game from the list of compatibility tools. You can also set SteamTinkerLaunch as the default compatibility tool for all applications from the Steam Play settings of the Steam client.
+#### Steam Compatibility Tool (**Proton Games**)
+Using SteamTinkerLaunch as a [compatibility tool](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam-Compatibility-Tool) is the intedned way of using it with Proton games. Once SteamTinkerLaunch is installed, force it as a compatibility tool for your chosen game from the list of compatibility tools. You can also set SteamTinkerLaunch as the default compatibility tool for all applications from the Steam Play settings of the Steam client. Keep in mind that if you force SteamTinkerLaunch as a compatibility tool, Steam will always download the Windows release of the game.
 
-Please note that some platforms such as [Steam Flatpak](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam-Flatpak) only allow you to use SteamTinkerLaunch as a compatibility tool. When forcing a game to use a compatibility tool, Steam will always download the Windows release of a game, so as a result your mileage may vary. Please report any issues using SteamTinkerLaunch as a compatibility tool with Steam Flatpak on the [SteamTinkerLaunch Flatpak issue](https://github.com/frostworx/steamtinkerlaunch/issues/27).
-
-#### Steam Launch Option (Native Linux Games)
-To use SteamTinkerLaunch with native Linux games, you can simply add the following to your native game's launch option:
+#### Steam Launch Option (**Native Linux Games**)
+Using SteamTinkerLaunch as a [Launch Option](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam-Launch-Option) is the intended way of using it with native Linux games. You can enable SteamTinkerLaunch as a launch option
 
 ```sh
 steamtinkerlaunch %command%
 ```
 
-On some platforms such as [Steam Deck](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam-Deck), using SteamTinkerLaunch as a launch option may require you to add it to your path. Refer to your distributions documentation on how to add the script to your path, as this can vary between distributions and shells. A very general guide on how to add SteamTinkerLaunch to your path can be found on the [Local (Non-Root) section](https://github.com/frostworx/steamtinkerlaunch/wiki/Installation#local-non-root) of the Installation wiki. 
+On some platforms such as [Steam Deck](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam-Deck), using SteamTinkerLaunch as a launch option may require you to add it to your path. Refer to your distributions documentation on how to add the script to your path, as this can vary between distributions and shells. If you installed SteamTinkerLaunch via [ProtonUp-Qt](https://github.com/frostworx/steamtinkerlaunch/wiki/ProtonUp-Qt) it will added to your path for you, though you may still have to set the path to `$HOME/stl/prefix/steamtinkerlaunch` as described on the [Launch Option wiki page](https://github.com/frostworx/steamtinkerlaunch/wiki/Steam-Launch-Option).
+
+It is possible to use SteamTinkerLaunch as a launch option for Proton games, but this is **not** the intended use-case.
 
 ### Game-Specific Use
 When starting a game, a small [Wait Requester](#Wait-Requester) dialog will pop up. This will allow you to access the Main Menu either by pressing the button or pressing the spacebar, or skip to launching the game. By default, the dialog will only stay for two seconds before it times out and launches the game, but this can be configured in the SteamTinkerLaunch settings.
