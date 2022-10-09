@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v11.12.20220924"
+PROGVERS="v11.12.20221016"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -769,12 +769,12 @@ function dlCheck {
 			if [ "$DLTITLE" != "$NON" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - $DLTITLE"
 				notiShow "$(strFix "$NOTY_DLCUSTOMPROTON" "$DLDST")" "S"
-				if grep -q "show-progress" <<< "$("$WGET" --help)"; then
+				if grep -q "show-progress" <<< "$("$WGET" --help)" && [ "$ONSTEAMDECK" -eq 0 ]; then
 					writelog "INFO" "${FUNCNAME[0]} - '$WGET -q --show-progress $DLSRC -O $DLDST'"
-					"$WGET" -q --show-progress "$DLSRC" -O "$DLDST" 2>&1 | sed -u -e "s:\.::g;s:.*K::g;s:^[[:space:]]*::g"
+					"$WGET" -q --show-progress "$DLSRC" -O "$DLDST" 2>&1 | sed -u -e "s:\.::g;s:.*K::g;s:^[[:space:]]*::g" | grep -v "SSL_INIT"
 				else
 					writelog "INFO" "${FUNCNAME[0]} - '$WGET -q $DLSRC -O $DLDST'"
-					"$WGET" -q "$DLSRC" -O "$DLDST" 2>&1 | sed -u -e "s:\.::g;s:.*K::g;s:^[[:space:]]*::g"
+					"$WGET" -q "$DLSRC" -O "$DLDST" 2>&1 | sed -u -e "s:\.::g;s:.*K::g;s:^[[:space:]]*::g" | grep -v "SSL_INIT"
 				fi
 			else
 				"$WGET" -q "$DLSRC" -O "$DLDST" 1>/dev/null 2>&1 
@@ -2193,6 +2193,9 @@ function createLanguageList {
 }
 
 function loadLangFile {
+	local SCRIPTDIR
+	local LOCALLANGFILE
+
 	if [ -n "$1" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Language from command line is '$1'" "P"
 
@@ -2219,9 +2222,18 @@ function loadLangFile {
 
 			LAFI="$STLLANGDIR/${LANGFILENAME}.txt"
 			
+			SCRIPTDIR="$( realpath "$0" )"
+			SCRIPTDIR="${SCRIPTDIR%/*}"
+			LOCALLANGFILE="$SCRIPTDIR/lang/${LANGFILENAME}.txt"
+
 			if [ -f "$LAFI" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Loading found user-installed $LAFI" "P"
 				source "$LAFI"
+				STLLANG="$(cut -d '.' -f1 <<< "${LANGFILENAME##*/}")"
+			elif [ -f "$LOCALLANGFILE" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Loading language file from script directory '$LOCALLANGFILE'"
+				source "$LOCALLANGFILE"
+				STLLANG="$(cut -d '.' -f1 <<< "${LOCALLANGFILE##*/}")"
 			else
 				LAFI="$GLOBLANG/${LANGFILENAME}.txt"
 
@@ -3445,6 +3457,8 @@ function notiShow {
 	if [ "$ONSTEAMDECK" -eq 1 ] && [ "$FIXGAMESCOPE" -eq 1 ] ; then
 		writelog "INFO" "${FUNCNAME[0]} - Skipping notifier on SteamDeck Game Mode"
 		USENOTIFIER=0 # might avoid a 2nd try during this session
+	elif [ "$STLQUIET" -eq 1 ]; then
+		USENOTIFIER=0
 	else
 		if [ -n "$2" ] && [ "$2" == "X" ]; then
 			if [ -z "$NOTY" ]; then
@@ -5943,6 +5957,7 @@ function gitUpdate {
 	GITURL="$2"
 	if [ -d "$GITDIR/.git" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Pulling '$GITURL' update in '$GITDIR'"
+
 		if [ "$ONSTEAMDECK" -eq 1 ]; then
 			LD_PRELOAD="/usr/lib/libcurl.so.4" "$GIT" --work-tree="$GITDIR" --git-dir="$GITDIR/.git" pull --rebase=false &> "$STLSHM/${FUNCNAME[0]}-SteamDeck-${GITDIR##*/}"
 		else
@@ -5951,6 +5966,7 @@ function gitUpdate {
 	else
 		mkProjDir "$GITDIR"
 		writelog "INFO" "${FUNCNAME[0]} - Cloning '$GITURL' in '$GITDIR'"
+
 		if [ "$ONSTEAMDECK" -eq 1 ]; then
 			LD_PRELOAD="/usr/lib/libcurl.so.4" "$GIT" clone "$GITURL" "$GITDIR" &> "$STLSHM/${FUNCNAME[0]}-SteamDeck-${GITDIR##*/}"
 		else
@@ -14040,7 +14056,24 @@ function checkExtDeps {
 	checkDep "USEOBSCAP" "$OBSCAP"
 }
 
+# TODO offline yad install
 function setYadBin {
+	local YADINSTLDLDIR
+	local YADINSTLDEPS
+
+	function findYad {
+		SEARCHDIR="$1"
+
+		for f in "$SEARCHDIR"/*
+		do
+			MATCHFILE="$( basename "$f" | grep -ioE "(.*yad).*\.appimage$" )"
+			if [ -f "$SEARCHDIR/$MATCHFILE" ]; then
+				echo "$MATCHFILE"
+				return
+			fi
+		done
+	}
+
 	if [ -f "$1" ]; then
 		YADFILE="$1"
 	elif [ "$1" == "conty" ]; then
@@ -14093,7 +14126,43 @@ function setYadBin {
 				YAIURL="$GHURL/frostworx/steamtinkerlaunch-tweaks/releases/download"
 				YAIDL="$YAIURL/$YADSTLIMAGE/$YADSTLIMAGE"
 				YADAPPIMAGE="$YADSTLIMAGE"
-				writelog "INFO" "${FUNCNAME[0]} - Downloading default AppImage for SteamDeck to '$YADAIDLDIR'"
+
+				# If offline and Yad isn't installed, try to find Yad somewhere sensible
+				if [ "$INTERNETCONNECTION" -eq 0 ] && ! [ -f "$YAIDST" ]; then
+					writelog "WARN" "${FUNCNAME[0]} - No internet connection, searching for locally saved Yad AppImage"
+					echo "No internet connection, searching for locally saved Yad AppImage..."
+					YADINSTLDLDIR="$( findYad "$STLDLDIR/yadappimage" )"
+					YADINSTLDEPS="$( findYad "$STLDEPS" )"
+
+					if [ -f "$STLDLDIR/yadappimage/$YADAPPIMAGE" ]; then
+						# Yad in $HOME/.config/steamtinkerlaunch/downloads with full matching name
+						writelog "INFO" "${FUNCNAME[0]} - Found local Yad AppImage in '$STLDLDIR/yadappimage/$YADAPPIMAGE'"
+						echo "Found local Yad AppImage in '$STLDLDIR/yadappimage/$YADAPPIMAGE'!"
+						mv "$STLDLDIR/yadappimage/$YADAPPIMAGE" "$YAIDST" || steamDeckInstallFail
+					elif [ -f "$STLDEPS/$YADAPPIMAGE" ]; then
+						# Yad in $HOME/stl/deps with full matching name
+						writelog "INFO" "${FUNCNAME[0]} - Found local Yad AppImage in '$STLDEPS/$YADAPPIMAGE'"
+						echo "Found local Yad AppImage in '$STLDEPS/$YADAPPIMAGE'!"
+						mv "$STLDEPS/$YADAPPIMAGE" "$YAIDST" || steamDeckInstallFail
+					elif [ -n "$YADINSTLDLDIR" ]; then
+						# Partial match for Yad in STLDLDIR but only with filename starting with `yad` and ending with `.appimage` (case insensitive)
+						writelog "INFO" "${FUNCNAME[0]} - Found local Yad AppImage in '$STLDLDIR/yadappimage/$YADINSTLDLDIR'"
+						echo "Found local Yad AppImage in '$STLDLDIR/yadappimage/$YADINSTLDLDIR'!"
+						mv "$STLDLDIR/yadappimage/$YADINSTLDLDIR" "$YAIDST" || steamDeckInstallFail
+					elif [ -n "$YADINSTLDEPS" ]; then
+						# Partial match for Yad in STLDEPS but only with filename starting with `yad` and ending with `.appimage` (case insensitive)
+						writelog "INFO" "${FUNCNAME[0]} - Found local Yad AppImage in '$STLDEPS/$YADINSTLDEPS'"
+						echo "Found local Yad AppImage in '$STLDEPS/$YADINSTLDEPS'!"
+						mv "$STLDEPS/$YADINSTLDEPS" "$YAIDST" || steamDeckInstallFail
+					else
+						# No match for Yad anywhere, offline installation cannot continue
+						writelog "ERROR" "${FUNCNAME[0]} - Cannot find locally saved Yad AppImage, aborting install..."
+						echo "Cannot find locally saved Yad AppImage, aborting install..."
+						return 1;
+					fi
+				else
+					writelog "INFO" "${FUNCNAME[0]} - Downloading default AppImage for SteamDeck to '$YADAIDLDIR'"
+				fi
 			else
 				writelog "WARN" "${FUNCNAME[0]} - Provided string '$2' is neither a http download url nor a valid absolute path to a file - downloading and using the default instead"
 			fi
@@ -14107,8 +14176,15 @@ function setYadBin {
 				INCHK="$("$WGET" -q "${YAIDL}.${DLCHK}" -O - 2> >(grep -v "SSL_INIT") | cut -d ' ' -f1)"
 			else
 				INCHK="$NON"
-			fi
+			fi	
 
+			# Only show download notification if we didn't find local AppImage on Steam Deck
+			if [ "$ONSTEAMDECK" -eq 1 ]; then
+				notiShow "$( strFix "$NOTY_STEAMDECK_DEPSDOWNLOAD" "Yad" )" "X"
+				strFix "$NOTY_STEAMDECK_DEPSDOWNLOAD" "Yad"
+			fi
+			
+			# TODO: Hide progress, at least on Steam Deck, to prevent output pollution
 			dlCheck "$YAIDL" "$YAIDST" "$DLCHK" "Downloading '$YAIDL' to '$YAIDST'" "$INCHK"
 		fi
 		if [ -f "$YAIDST" ]; then
@@ -18170,8 +18246,12 @@ function commandline {
 	elif [ "$1" == "openissue" ] || [ "$1" == "oi" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Opening issue tracker in user's default browser"
 		xdg-open "$PROJECTPAGE/issues/new/choose"
+	elif echo "$@" | grep -owq '\-q'; then
+		writelog "INFO" "${FUNCNAME[0]} - Quiet mode enabled with '-q', suppressing notifier for this execution"
+		export STLQUIET=1
+		USENOTIFIER=0
 	else
-		if ! grep -q "lang=\|run" <<< "$@" ; then
+		if ! grep -q "lang=\|run" <<< "$@"; then
 			writelog "INFO" "${FUNCNAME[0]} ------------------------"
 			writelog "INFO" "${FUNCNAME[0]} - arg1 '$1' is no valid command"
 			howto
@@ -20077,6 +20157,8 @@ function initShmStl {
 	fi
 }
 
+### STEAM DECK BEGIN
+
 function steamdeckClose {
 	if [ "$ONSTEAMDECK" -eq 1 ]; then
 		GTKCSSFILE="$HOME/.config/gtk-3.0/gtk.css"
@@ -20169,32 +20251,278 @@ function steamdeckControl {
 	fi
 }
 
-function steamdedeckt {
-	# a bit rough (f.e. hardcoded wget version), but should be enough for the beginning
+# NOTE: More may be added here in future to handle install failure
+function steamDeckInstallFail {
+	printf "\n%s\n" "$NOTY_STEAMDECK_INSTALLFAIL"
+	notiShow "$NOTY_STEAMDECK_INSTALLFAIL" "X"
 
-	if [ -f "/etc/os-release" ] && grep -q "steamdeck" "/etc/os-release"; then
-		# if this really changes, it could be grepped directly from /etc/pacman.d/mirrorlist as well:
-		SDREPO="https://steamdeck-packages.steamos.cloud/archlinux-mirror/extra/os/x86_64/"
+	exit 1;
+}
 
-		# ARCHURL="https://archlinux.org/packages/community/x86_64"
-		ARCHARCHIVEURL="https://archive.archlinux.org/packages"
-		
-		INNOEXTRACTVERS="1.9-5"
-		INNOEXTRACTFILE="$INNOEXTRACT-$INNOEXTRACTVERS-x86_64.pkg.tar.zst"
-		INNOEXTRACTURL="$ARCHARCHIVEURL/i/$INNOEXTRACT/$INNOEXTRACTFILE"
+# Generic function to download dependency from URL (mainly intended for fetching from package repos)
+function fetchAndExtractDependency {
+	# Remove all files extensions from filename
+	function removeFileExtension {
+		local FNAME="$1"
+		local LASTFNAME=""
+		while ! [ "$FNAME" = "$LASTFNAME" ]; do
+			LASTFNAME="$FNAME"
+			FNAME="${FNAME%.*}"
+		done
+		echo "$FNAME"
+	}
 
-		CABEXTRACTVERS="1.9.1-2"
-		CABEXTRACTFILE="$CABEXTRACT-$CABEXTRACTVERS-x86_64.pkg.tar.zst"
-		CABEXTRACTURL="$ARCHARCHIVEURL/c/$CABEXTRACT/$CABEXTRACTFILE"
-		
-		ONSTEAMDECK=1
+	# Return dependency name stripped of version, architecture, file extension
+	function getPrettyDependencyName {
+		removeFileExtension "$( echo "$1" | sed -E 's:(\-[0-9]\.[0-9])+(.+)::g;s:^[^A-Za-z0-9]+::g' )"
+	}
 
-		if grep -q "generate-drm-mode" <<< "$(pgrep -a "$GAMESCOPE")"; then
-			writelog "INFO" "${FUNCNAME[0]} - Detected '$GAMESCOPE' running 'forced' - assuming we're running in Game Mode"
-			FIXGAMESCOPE=1
+	# Takes dependency filename and strips:
+	# - any non-letters-or-numbers from start of string
+	# - the architecture string and everything after it
+	# - any remaining letters or numbers
+	# - any remaining non-numbers from the end of the string
+	function getDependencyVersion {
+		echo "$1" | sed -E 's:^[^A-Za-z0-9]::g;s:x86+(.*)::g;s:[a-zA-Z]::g;s:[^0-9]+$::g' | grep -oE "[0-9]\.[0-9]+(.+)"
+	}
+
+	# Variables used to build URL
+	local ARCHIVEURL
+	local EXTRACTPATH
+	local ARCHIVENAME
+
+	ARCHIVEURL="$1"
+	EXTRACTPATH="$2"
+	ARCHIVENAME="${3:-${1##*/}}"  # If no extract name passed, take filename from end of archive URL
+
+	local CURLCMD
+	local EXTRACTCMD
+	local EXTRACTCMDFLAGS
+
+	CURLCMD="curl"
+	EXTRACTCMD="tar"
+	EXTRACTCMDFLAGS="xf"
+
+	local LOCALVERS
+	local STLVERS
+
+	# Download dependency
+	mkdir -p "$EXTRACTPATH"
+	if ! [ -f "$EXTRACTPATH/$ARCHIVENAME" ]; then
+		# Internet connection check
+		if ! [ "$INTERNETCONNECTION" -eq 0 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Installing '$ARCHIVENAME' from '$ARCHIVEURL' to installation directory '$EXTRACTPATH'"
+			echo "Downloading dependency '$ARCHIVENAME'..."
+			if "$CURLCMD" -Lq "$ARCHIVEURL" -o "$EXTRACTPATH/$ARCHIVENAME"; then
+				# Not showing notifier to prevent even more notifier spam - especially on Steam Deck's built-in 7" display 
+				writelog "INFO" "${FUNCNAME[0]} - Successfully downloaded dependency '$ARCHIVENAME'"
+				echo "Successfully downloaded $ARCHIVENAME!"
+			else
+				# Download failure
+				writelog "WARN" "${FUNCNAME[0]} - Failed to download dependency '$ARCHIVENAME', will attempt to continue with installation in case dependency archives already exist at '$EXTRACTPATH'"
+				notiShow "$(strFix "$NOTY_STEAMDECK_DEPINSTALLFAIL" "$ARCHIVENAME")" "X"
+				strFix "$NOTY_STEAMDECK_DEPINSTALLFAIL" "$ARCHIVENAME"
+			fi
 		else
-			SMALLDESK=1
+			# No internet connection
+			writelog "WARN" "${FUNCNAME[0]} - No internet connection, can't download dependency '$ARCHIVENAME' - Will check for locally installed dependencies later on (should be located at '$EXTRACTPATH/$ARCHIVENAME')"
+			echo "WARNING: No Internet Connection, cannot download dependency '$ARCHIVENAME'. For offline installation, manually place the file in '$EXTRACTPATH'."
+			notiShow "$(strFix "$NOTY_STEAMDECK_NOINTERNETDEPSWARN" "$ARCHIVENAME" "$EXTRACTPATH")"
 		fi
+	else
+		writelog "INFO" "${FUNCNAME[0]} - Dependency '$ARCHIVENAME' already exists at installation directory '$EXTRACTPATH', skipping redownload..."
+		echo "Dependency '$ARCHIVENAME' already exists at installation directory '$EXTRACTPATH', nothing to download"
+	fi
+
+	# Extracting dependencies
+	# If we can't find an exact match for the downloaded file, try to find a fuzzy match based on 'real' package name
+	if ! [ -f "$EXTRACTPATH/$ARCHIVENAME" ]; then
+		# -----
+		# Get list of files and remove version string from it, then check if this name is inside our target archive file
+		# This basically tries to find any archives that have the 'actual' package name e.g. 'innoextract' from 'innoextract-1.1-1.pkg.tar.zst', then tries to search if any files in the directory match
+		# the archive we passed in to try to download but couldn't and try to extract them. This lets us extract dependencies for a potential archive match if the name is not exact
+		# -----
+		local DEPMATCHFOUND=0
+		mapfile -t DEPFILES < <( find "$EXTRACTPATH" -maxdepth 1 -type f -iname \*"*.*"\* -exec basename {} \; )
+		if ! [[ "${#DEPFILES[@]}" -eq 0 ]]; then
+			writelog "INFO" "${FUNCNAME[0]} - Found archive in '$EXTRACTPATH' that is potential match for '$ARCHIVENAME'"
+			for file in "${DEPFILES[@]}"; do
+				# Removes version number, anything before the first space, and removes anything that isn't a sequence of letters or numbers from the beginning of the filename
+				# Attempts to be as generous as possible in matching *any* match for the dependency name
+				PRETTYFILENAME="$( getPrettyDependencyName "$file" )"
+				PRETTYARCHIVENAME="$( getPrettyDependencyName "$ARCHIVENAME" )"
+
+				if [[ ( "$ARCHIVENAME" =~ $PRETTYFILENAME || "$PRETTYFILENAME" =~ $PRETTYARCHIVENAME ) ]]; then
+					writelog "INFO" "${FUNCNAME[0]} - Found potential existing dependency '$file', assuming dependency '$ARCHIVENAME' is already satisfied."
+					echo "Found potential matching dependency archive for '$ARCHIVENAME' at '$file'"
+
+					LOCALVERS="$( getDependencyVersion "$file" )"
+					STLVERS="$( getDependencyVersion "$ARCHIVENAME" )"
+					# Check local archive version vs. what STL asked for
+					if [ -z "$LOCALVERS" ]; then
+						# Could not get version string from archive
+						writelog "WARN" "${FUNCNAME[0]} - Could not get version from archive - This dependency version may not work if is newer than '$STLVERS'"
+						echo "Could not get version from archive - This dependency version may not work if is newer than '$STLVERS'!"
+					else
+						if [ "$LOCALVERS" = "$STLVERS" ]; then
+							# Version match
+							writelog "INFO" "${FUNCNAME[0]} - Archive version appears to be the same version that SteamTinkerLaunch asked for - Should be ok to install this version"
+							echo "Dependency version looks ok"
+						else
+							# Version newer/older (might still work, but warn the user anyway)
+							writelog "WARN" "${FUNCNAME[0]} - Archive version '${LOCALVERS}' does not match the version that SteamTinkerLaunch asked for ('$STLVERS') - This may cause problems with the installation!"
+							echo "Dependency version does not match what SteamTinkerLaunch was looking for - This may cause problems with your installation!"
+						fi
+					fi
+
+					ARCHIVENAME="$file"
+					DEPMATCHFOUND=1					
+					break
+				fi
+			done
+		fi
+
+		# Abort if we couldn't match a dependency
+		if [[ "$DEPMATCHFOUND" -eq 0 ]]; then
+			writelog "INFO" "${FUNCNAME[0]} - Could not find any matching dependency archives in '$EXTRACTPATH' for '$ARCHIVENAME' - Assuming this dependency is missing and installation cannot continue"
+			echo "Could not find any archive in '$EXTRACTPATH' for '$ARCHIVENAME', aborting install..."
+			return 1;
+		fi
+	fi
+
+	# Extract archive now that we know we should have *something* to extract
+	writelog "INFO" "${FUNCNAME[0]} - Extracting dependency '$ARCHIVENAME' at '$EXTRACTPATH/$ARCHIVENAME'"
+	echo "Extracting dependency '$ARCHIVENAME'..."
+	if "$EXTRACTCMD" "$EXTRACTCMDFLAGS" "$EXTRACTPATH/$ARCHIVENAME" -C "$EXTRACTPATH"; then
+		# Succes extraction
+		writelog "INFO" "${FUNCNAME[0]} - Successfully extracted dependency to '$EXTRACTPATH/$ARCHIVENAME'"
+		echo "Successfully extracted '$ARCHIVENAME' to '$EXTRACTPATH'"
+	else
+		# Failed extraction
+		writelog "ERROR" "${FUNCNAME[0]} - Failed to extract dependency '$ARCHIVENAME' to '$EXTRACTPATH' - Consider checking file/folder permissions"
+		notiShow "$(strFix "$NOTY_STEAMDECK_EXTRACTFAIL" "$ARCHIVENAME" "$EXTRACTPATH")" "X"
+		strFix "$NOTY_STEAMDECK_EXTRACTFAIL" "$ARCHIVENAME" "$EXTRACTPATH"
+		return 1;
+	fi
+}
+
+function checkSteamDeckDependencies {
+	
+	function installDependencyVersionFromURL {
+		local DEPCMD="$1"
+		local DEPFILENAME="$2"
+		local DEPDIR="$3"
+		local REPOURL="$4"
+
+		if [ -f "$(command -v "$DEPCMD")" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Using '$DEPCMD' binary found in path: '$(command -v "$DEPCMD")'"
+			echo "Dependency '$DEPCMD' already installed, nothing to do."
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Downloading $DEPCMD version automatically from URL '$REPOURL'"
+			writelog "INFO" "${FUNCNAME[0]} - curl -Lq \"$REPOURL\" -o \"$DEPDIR/$DEPFILENAME\""
+
+			notiShow "$(strFix "$NOTY_STEAMDECK_DEPSDOWNLOAD" "$DEPCMD")" "X"
+			strFix "$NOTY_STEAMDECK_DEPSDOWNLOAD" "$DEPCMD"
+
+			fetchAndExtractDependency "$REPOURL" "$DEPDIR" "$DEPFILENAME" || steamDeckInstallFail
+
+			STEAMDECKWASUPDATE=1
+		fi
+	}
+
+	# if this really changes, it could be grepped directly from /etc/pacman.d/mirrorlist as well:
+	SDREPO="https://steamdeck-packages.steamos.cloud/archlinux-mirror/extra/os/x86_64/"
+
+	# ARCHURL="https://archlinux.org/packages/community/x86_64"
+	ARCHARCHIVEURL="https://archive.archlinux.org/packages"
+	
+	WGETVERS="1.21.2-1"
+	WGETFILE="$WGET-$WGETVERS-x86_64.pkg.tar.zst"
+	WGETURL="$SDREPO/$WGETFILE"
+
+	INNOEXTRACTVERS="1.9-5"
+	INNOEXTRACTFILE="$INNOEXTRACT-$INNOEXTRACTVERS-x86_64.pkg.tar.zst"
+	INNOEXTRACTURL="$ARCHARCHIVEURL/i/$INNOEXTRACT/$INNOEXTRACTFILE"
+
+	CABEXTRACTVERS="1.9.1-2"
+	CABEXTRACTFILE="$CABEXTRACT-$CABEXTRACTVERS-x86_64.pkg.tar.zst"
+	CABEXTRACTURL="$ARCHARCHIVEURL/c/$CABEXTRACT/$CABEXTRACTFILE"
+
+	printf '\n'
+
+	installDependencyVersionFromURL "$WGET" "$WGETFILE" "$STLDEPS" "$WGETURL" || steamDeckInstallFail 
+	installDependencyVersionFromURL "$INNOEXTRACT" "$INNOEXTRACTFILE" "$STLDEPS" "$INNOEXTRACTURL" || steamDeckInstallFail
+	installDependencyVersionFromURL "$CABEXTRACT" "$CABEXTRACTFILE" "$STLDEPS" "$CABEXTRACTURL" || steamDeckInstallFail
+
+	if [ -f "$(command -v "yad")" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Using yad binary found in path: '$(command -v "yad")'"
+		echo "Dependency 'yad' already installed, nothing to do."
+	else
+		printf '\n'
+		writelog "INFO" "${FUNCNAME[0]} - Using yad app image"
+		setYadBin "ai" "sd" || steamDeckInstallFail
+	fi
+}
+
+function installFilesSteamDeck {	
+	local INSTALLEDPROGVERS
+	local SCRIPTDIR
+
+	if [[ "$INTERNETCONNECTION" -eq 1 ]]; then
+		# Notification for either updating or downloading STL on Deck
+		if [ -d "$SYSTEMSTLCFGDIR/.git" ]; then
+			notiShow "$NOTY_STEAMDECK_UPDATE" "X"
+			echo "$NOTY_STEAMDECK_UPDATE"
+			STEAMDECKWASUPDATE=1
+		else
+			notiShow "$NOTY_STEAMDECK_DOWNLOAD" "X"
+			echo "$NOTY_STEAMDECK_DOWNLOAD"
+		fi
+
+		gitUpdate "$PREFIX" "$PROJECTPAGE"
+	else
+		# Get version of existing STL install, if present, and compare with our version
+		writelog "WARN" "${FUNCNAME[0]} - No Internet Connection detected, cannot clone Git repo - Attempting to manually install"
+
+		SCRIPTDIR="$( realpath "$0" )"
+		SCRIPTDIR="${SCRIPTDIR%/*}"
+
+		# Offline installation of STL was previously installed/attempted - With check to try and ensure scriptdir is a valid STL install and not a standalone script
+		if ! [ -d "$SCRIPTDIR/lang" ] && ! [ -d "$SCRIPTDIR/misc" ] && ! [ -d "$SCRIPTDIR/guicfgs" ]; then
+			writelog "WARN" "${FUNCNAME[0]} - Script dir '$SCRIPTDIR' does not look like a valid SteamTinkerLaunch installation directory! Not copying files in case this script is not in a proper STL folder"
+			echo "WARNING: Not updating offline filees - It looks like you're trying to install SteamTinkerLaunch as a standalone script outside of its downloaded files."
+		elif [ -f "$PREFIX/steamtinkerlaunch" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Found existing SteamTinkerLaunch files at '$PREFIX', checking if we need to update"
+			INSTALLEDPROGVERS="$( grep -i "^PROGVERS=.*." "$PREFIX/steamtinkerlaunch" | cut -d '"' -f 2 )"
+			writelog "INFO" "${FUNCNAME[0]} - Currently installed STL version: $INSTALLEDPROGVERS"
+			writelog "INFO" "${FUNCNAME[0]} - This script's STL version: $PROGVERS"
+			# Check if we actually need to update (running script ver > currently installed script ver)
+			# Not a fool-proof test, sometimes PROGVERS isn't bumped, but a user can always manually copy the files if they want to
+			# We'll assume they downloaded the latest version ahead of time and want to manually install that
+			if [[ "$PROGVERS" > "$INSTALLEDPROGVERS" ]]; then 
+				writelog "INFO" "${FUNCNAME[0]} - Existing SteamTinkerLaunch installation is older than current version - Installation will continue by copying downloaded files at '$SCRIPTDIR' to '$PREFIX'"
+				echo "Updating SteamTinkerLaunch to '$PROGVERS' by copying installation files to '$PREFIX' for offline installation..." 
+				cp -R "$SCRIPTDIR"/* "$PREFIX"
+				STEAMDECKWASUPDATE=1
+			else
+				writelog "INFO" "${FUNCNAME[0]} - Existing SteamTinkerLaunch installation is newer than or same as current version - No code to update"
+				echo "Existing SteamTinkerLaunch install is up-to-date, verifying dependencies..."
+				STEAMDECKDIDINSTALL=0
+			fi
+		else
+			# No existing STL installation - Let's create one using the files downloaded with the script currently running!
+			writelog "INFO" "${FUNCNAME[0]} - No existing STL installation found - Installation will continue by copying downloaded files at '$SCRIPTDIR' to '$PREFIX'"
+			echo "No existing STL installation found, so copying installation files to '$PREFIX' for offline installation..." 
+			cp -R "$SCRIPTDIR"/* "$PREFIX"
+		fi
+	fi
+}
+
+function steamdedeckt {
+	if [ -f "/etc/os-release" ] && grep -q "steamdeck" "/etc/os-release"; then		
+		ONSTEAMDECK=1
+		export STEAMDECKWASUPDATE=0
+		export STEAMDECKDIDINSTALL=1
 
 		writelog "INFO" "${FUNCNAME[0]} - Seems like we have a Steam Deck here - making some specific settings"
 
@@ -20210,50 +20538,48 @@ function steamdedeckt {
 			setSteamPaths
 		fi
 
-		gitUpdate "$PREFIX" "$PROJECTPAGE"
+		# Show icon and title for notifier
+		if ! [ -f "$STLICON" ]; then
+			SCRIPTDIR="$( realpath "$0" )"
+			SCRIPTDIR="${SCRIPTDIR%/*}"
+			STLICON="$SCRIPTDIR/misc/steamtinkerlaunch.svg"
+		fi
+		export NOTYARGS="-i $STLICON -a $PROGNAME"
+
+		if grep -q "generate-drm-mode" <<< "$(pgrep -a "$GAMESCOPE")"; then
+			writelog "INFO" "${FUNCNAME[0]} - Detected '$GAMESCOPE' running 'forced' - assuming we're running in Game Mode"
+			FIXGAMESCOPE=1
+		else
+			SMALLDESK=1
+		fi
+
+		notiShow "$NOTY_STEAMDECK_INSTALL" "X"
+		echo "$NOTY_STEAMDECK_INSTALL on Steam Deck"
+
+		INTERNETCONNECTION=1
+		if ! ping -q -c1 archlinux.org &>/dev/null; then
+			INTERNETCONNECTION=0
+			writelog "WARN" "${FUNCNAME[0]} - No Internet Connection detected, attempting to install SteamTinkerLaunch offline - This may not succeed!"
+			writelog "WARN" "${FUNCNAME[0]} - Make sure you have either manually installed all dependencies, or added all manual dependency archives to '$STLDEPS'"
+			notiShow "$NOTY_STEAMDECK_NOINTERNET" "X"
+			echo "$NOTY_STEAMDECK_NOINTERNET"
+		fi
 
 		export STLSDPATH="${STLDEPS}/usr/bin"
 		export PATH="$PATH:$STLSDPATH"
 
-		if [ -f "$(command -v "wget")" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Using wget binary found in path: '$(command -v "wget")'"
-		else
-			LD_PRELOAD="/usr/lib/libcurl.so.4" curl -Lq "$SDREPO/wget-1.21.2-1-x86_64.pkg.tar.zst" -o "$STLDEPS/wget-latest-x86_64.pkg.tar.zst" 2>/dev/null
-			tar xf "$STLDEPS/wget-latest-x86_64.pkg.tar.zst" -C "$STLDEPS"
+		installFilesSteamDeck
+		checkSteamDeckDependencies
+
+		# Don't remove dependencies offline
+		if [ "$INTERNETCONNECTION" -eq 1 ]; then
+			find "$STLDEPS" -type f \( -name "*.zst" -o -name "*.gz" -o -name ".*" \) -exec rm {} \;
 		fi
 
-		if [ ! -f "$(command -v "$INNOEXTRACT")" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Downloading $INNOEXTRACT version $INNOEXTRACTVERS automatically from official Arch Linux archive URL '$ARCHARCHIVEURL'"
-			writelog "INFO" "${FUNCNAME[0]} - curl -Lq \"$INNOEXTRACTURL\" -o \"$STLDEPS/$INNOEXTRACTFILE\""
-			LD_PRELOAD="/usr/lib/libcurl.so.4" curl -Lq "$INNOEXTRACTURL" -o "$STLDEPS/$INNOEXTRACTFILE" 2>/tmp/curl.txt
-			tar xf "$STLDEPS/$INNOEXTRACTFILE" -C "$STLDEPS"
-		fi
-
-		if [ -f "$(command -v "$INNOEXTRACT")" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Using $INNOEXTRACT binary found in path: '$(command -v "$INNOEXTRACT")'"
-		fi
-
-		if [ ! -f "$(command -v "$CABEXTRACT")" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Downloading $CABEXTRACT version $CABEXTRACTVERS automatically from official Arch Linux archive URL '$ARCHARCHIVEURL'"
-			writelog "INFO" "${FUNCNAME[0]} - curl -Lq \"$CABEXTRACTURL\" -o \"$STLDEPS/$CABEXTRACTFILE\""
-			LD_PRELOAD="/usr/lib/libcurl.so.4" curl -Lq "$CABEXTRACTURL" -o "$STLDEPS/$CABEXTRACTFILE" 2>/tmp/curl.txt
-			tar xf "$STLDEPS/$CABEXTRACTFILE" -C "$STLDEPS"
-		fi
-
-		if [ -f "$(command -v "$CABEXTRACT")" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Using $CABEXTRACT binary found in path: '$(command -v "$CABEXTRACT")'"
-		fi
-
-		if [ -f "$(command -v "yad")" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Using yad binary found in path: '$(command -v "yad")'"
-		else
-			writelog "INFO" "${FUNCNAME[0]} - Using yad app image"
-			setYadBin "ai" "sd"
-		fi
-		
 		# update/set compatibility tool to git stl:
 		if [ "$INFLATPAK" -eq 0 ]; then
-			CompatTool "add" "$PREFIX/$PROGCMD"
+			notiShow "$NOTY_STEAMDECK_ADDCOMPAT" "X"
+			CompatTool "add" "$PREFIX/$PROGCMD" >/dev/null
 		fi
 		
 		GTKCSSFILE="$HOME/.config/gtk-3.0/gtk.css"
@@ -20277,6 +20603,8 @@ function steamdedeckt {
 		fi
 	fi
 }
+
+### STEAM DECK END
 
 function setflatpak {
 	if [ -n "$FLATPAK_ID" ] && [ "$FLATPAK_ID" == "com.valvesoftware.Steam" ]; then
@@ -20305,10 +20633,27 @@ function main {
 	fi
 	SYSSTEAMCOMPATOOLS="$USS/$CTD"
 
-	steamdedeckt
+	SCRIPTDIR="$( realpath "$0" )"
+	SCRIPTDIR="${SCRIPTDIR%/*}"
+
 	initAID "$@"
 	setAIDCfgs
-	loadLangFile "$STLDEFLANG"
+
+	# Respect language choice asap in running (uses correct language during Steam Deck install)
+	# Try and load either from langfile directory or `lang=` argument (prioritising lang arguments)
+	# Default if we don't get a valid `$STLLANG`
+	loadLanguage "$@"
+	if [ -z "$STLLANG" ]; then
+		loadLangFile "$STLDEFLANG"
+	fi
+
+	# Check quiet mode to hide notifier
+	STLQUIET=0
+	if echo "$@" | grep -qow '\-q'; then
+		commandline "$@"
+	fi
+
+	steamdedeckt
 	getCurrentCommandline "$@"
 	saveOrgVars
 	emptyVars "O"
@@ -20374,6 +20719,28 @@ function main {
 			fi
 		else
 			commandline "$@"
+		fi
+	fi
+
+	# Notify success on Steam Deck
+	# TODO check that this doesn't show success on regular run and close
+	if [ "$ONSTEAMDECK" -eq 1 ]; then
+		printf '\n'
+		if [ "$STEAMDECKDIDINSTALL" -eq 1 ]; then
+			INSTALLEDPROGVERS="$( grep -i "^PROGVERS=.*." "$PREFIX/steamtinkerlaunch" | cut -d '"' -f 2 )"
+			if [ "$STEAMDECKWASUPDATE" -eq 1 ]; then
+				# Update success w/ version
+				strFix "$NOTY_STEAMDECK_UPDATE_SUCCESS!" "$INSTALLEDPROGVERS"
+				notiShow "$(strFix "$NOTY_STEAMDECK_UPDATE_SUCCESS" "$INSTALLEDPROGVERS")" "X"
+			else
+				# Install success w/ version
+				strFix "$NOTY_STEAMDECK_INSTALL_SUCCESS!" "$INSTALLEDPROGVERS"
+				notiShow "$(strFix "$NOTY_STEAMDECK_INSTALL_SUCCESS" "$INSTALLEDPROGVERS")" "X"
+			fi
+		else
+			# Show install finished if no STL install files were modified (currently only for offline installs where existing install == install files)
+			echo "$NOTY_STEAMDECK_INSTALL_FINISH!"
+			notiShow "$NOTY_STEAMDECK_INSTALL_FINISH" "X"
 		fi
 	fi
 }
