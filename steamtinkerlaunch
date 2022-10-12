@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v11.12.20221009"
+PROGVERS="v11.12.20221012"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -16606,7 +16606,11 @@ function createDLWineList {
 		rm "$WINEDLLIST" 2>/dev/null
 		while read -r CWURL; do
 		if grep -q "$GHURL" <<< "${!CWURL}"; then
-			"$WGET" -q "${!CWURL}" -O - 2> >(grep -v "SSL_INIT") | grep "tar.gz\|zip\|tar.xz" | grep "releases" | grep -oE '\"/[^\\"]+' | sed "s|^\"|$GHURL|g" >> "$WINEDLLIST"
+			SRCURL="${!CWURL}"
+			SRCURL="${SRCURL//\/releases}"
+			SRCURL="${SRCURL//$GHURL/$AGHURL\/repos}"
+			SRCURL="${SRCURL}/releases"
+			"$WGET" -q "$SRCURL" -O - | jq -r '.[].assets[].browser_download_url' | grep "tar.gz\|tar.xz" >>  "$WINEDLLIST"
 		fi
 		done <<< "$(grep "^CW_" "$STLURLCFG" | cut -d '=' -f1)"
 	fi
