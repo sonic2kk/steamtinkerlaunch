@@ -16918,42 +16918,44 @@ function setWineVars {
 }
 
 function setSLRReap {
-	if [ "$HAVESLRCT" -eq 1 ] && [ "$USESLR" -eq 1 ]; then
-		writelog "INFO" "${FUNCNAME[0]} - ## SLR is enabled via USESLR=$USESLR - prepending SLR from Compatibility Tool to the current launch command"
-		SLRCMD=("${RUNSLRCT[@]}")
-	fi
-	
-	if [ "$HAVESLR" -eq 1 ] && [ "$USESLR" -eq 1 ]; then
-		writelog "INFO" "${FUNCNAME[0]} - ## SLR is enabled via USESLR=$USESLR - prepending SLR from command line to the current launch command"
-		SLRCMD=("${RUNSLR[@]}")
-	fi
-
-	if [ "$HAVESLR" -eq 1 ] && [ "$USESLR" -eq 0 ] ; then
-		writelog "SKIP" "${FUNCNAME[0]} - USESLR is disabled, so skipping '$SLR' found in the commandline: '${RUNSLR[*]}'"
-	fi
-
-	RUNFORCESLR=0
-	if [ "$HAVESLR" -eq 0 ] && [ "$USESLR" -eq 1 ] ; then
-		if [ -n "$LASTSLR" ] && [ -f "${LASTSLR% --verb*}" ] && [ "$FORCESLR" -eq 1 ]; then
-			writelog "INFO" "${FUNCNAME[0]} - ## No SLR provided from command line, but FORCESLR is $FORCESLR, so prepending LASTSLR '$LASTSLR' to the current launch command"
-			mapfile -d " " -t -O "${#LASTSLRARR[@]}" LASTSLRARR < <(printf '%s' "$LASTSLR")
-			SLRCMD=("${LASTSLRARR[@]}")
-			RUNFORCESLR=1
-		else
-			writelog "SKIP" "${FUNCNAME[0]} - No SLR was provided via command line, so configuration USESLR '$USESLR' is ignored '${LASTSLR% --verb*}' $FORCESLR"
+	if [ -n "$USESLR" ] && [ -n "$HAVESLR" ]; then
+		if [ "$HAVESLRCT" -eq 1 ] && [ "$USESLR" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - ## SLR is enabled via USESLR=$USESLR - prepending SLR from Compatibility Tool to the current launch command"
+			SLRCMD=("${RUNSLRCT[@]}")
 		fi
-	fi
+		
+		if [ "$HAVESLR" -eq 1 ] && [ "$USESLR" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - ## SLR is enabled via USESLR=$USESLR - prepending SLR from command line to the current launch command"
+			SLRCMD=("${RUNSLR[@]}")
+		fi
 
-	if [ "$HAVEREAP" -eq 1 ] && [ "$USEREAP" -eq 1 ]; then
-		writelog "INFO" "${FUNCNAME[0]} - ## reaper command is enabled via USEREAP=$USEREAP - prepending to the current launch command"
-		SLRCMD=("${REAPCMD[@]}" "${SLRCMD[@]}")
-	elif [ "$HAVEREAP" -eq 0 ] && [ "$USEREAP" -eq 1 ] && [ -n "$LASTREAP" ] && [ -f "$LASTREAP" ] && [ "$FORCEREAP" -eq 1 ]; then
-		writelog "INFO" "${FUNCNAME[0]} - ## No reaper command provided from command line, but FORCEREAP is $FORCEREAP, so prepending LASTREAP '$LASTREAP' to the current launch command"
-		SLRCMD=("$LASTREAP" "SteamLaunch" "AppId=$AID" "--" "${SLRCMD[@]}")
-	fi
+		if [ "$HAVESLR" -eq 1 ] && [ "$USESLR" -eq 0 ] ; then
+			writelog "SKIP" "${FUNCNAME[0]} - USESLR is disabled, so skipping '$SLR' found in the commandline: '${RUNSLR[*]}'"
+		fi
+		RUNFORCESLR=0
 
-	if [ -n "${SLRCMD[0]}" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - Adding SLR '${SLRCMD[*]}' to the launch command"
+		if [ "$HAVESLR" -eq 0 ] && [ "$USESLR" -eq 1 ] ; then
+			if [ -n "$LASTSLR" ] && [ -f "${LASTSLR% --verb*}" ] && [ "$FORCESLR" -eq 1 ]; then
+				writelog "INFO" "${FUNCNAME[0]} - ## No SLR provided from command line, but FORCESLR is $FORCESLR, so prepending LASTSLR '$LASTSLR' to the current launch command"
+				mapfile -d " " -t -O "${#LASTSLRARR[@]}" LASTSLRARR < <(printf '%s' "$LASTSLR")
+				SLRCMD=("${LASTSLRARR[@]}")
+				RUNFORCESLR=1
+			else
+				writelog "SKIP" "${FUNCNAME[0]} - No SLR was provided via command line, so configuration USESLR '$USESLR' is ignored '${LASTSLR% --verb*}' $FORCESLR"
+			fi
+		fi
+	
+		if [ "$HAVEREAP" -eq 1 ] && [ "$USEREAP" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - ## reaper command is enabled via USEREAP=$USEREAP - prepending to the current launch command"
+			SLRCMD=("${REAPCMD[@]}" "${SLRCMD[@]}")
+		elif [ "$HAVEREAP" -eq 0 ] && [ "$USEREAP" -eq 1 ] && [ -n "$LASTREAP" ] && [ -f "$LASTREAP" ] && [ "$FORCEREAP" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - ## No reaper command provided from command line, but FORCEREAP is $FORCEREAP, so prepending LASTREAP '$LASTREAP' to the current launch command"
+			SLRCMD=("$LASTREAP" "SteamLaunch" "AppId=$AID" "--" "${SLRCMD[@]}")
+		fi
+
+		if [ -n "${SLRCMD[0]}" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Adding SLR '${SLRCMD[*]}' to the launch command"
+		fi
 	fi
 }
 
