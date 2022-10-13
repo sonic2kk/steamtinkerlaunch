@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v11.12.20221012"
+PROGVERS="v11.12.20221013"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -2620,6 +2620,7 @@ function setDefaultCfgValues {
 	}
 
 	function setDefaultCfgValuesdefault_template {
+		if [ -z "$KEEPSTLOPEN" ]						; then	KEEPSTLOPEN="0"; fi
 		if [ -z "$USESLR" ]								; then	USESLR="1"; fi
 		if [ -z "$FORCESLR" ]							; then	FORCESLR="0"; fi
 		if [ -z "$USEREAP" ]							; then	USEREAP="1"; fi
@@ -3095,6 +3096,8 @@ function saveCfg {
 			{
 			echo "## config Version: $PROGVERS"
 			echo "##########################"
+			echo "## $DESC_KEEPSTLOPEN"
+			echo "KEEPSTLOPEN=\"$KEEPSTLOPEN\""
 			echo "## $DESC_USESLR"
 			echo "USESLR=\"$USESLR\""
 			echo "## $DESC_FORCESLR"
@@ -4809,6 +4812,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_SGDBNSFW!$DESC_SGDBNSFW ('SGDBNSFW')":CBE "$(cleanDropDown "${SGDBNSFW/#-/ -}" "any!false!true")" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
 --field="     $GUI_SGDBHUMOR!$DESC_SGDBHUMOR ('SGDBHUMOR')":CBE "$(cleanDropDown "${SGDBHUMOR/#-/ -}" "any!false!true")" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
 --field="$(spanFont "$GUI_OPTSMISC" "H")":LBL "SKIP" `#CAT_Misc` `#HEAD_Misc` `#MENU_GAME` `#MENU_GLOBAL`  \
+--field="     $GUI_KEEPSTLOPEN!$DESC_KEEPSTLOPEN ('KEEPSTLOPEN')":CHK "${KEEPSTLOPEN/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_USECUSTOMCMD!$DESC_USECUSTOMCMD ('USECUSTOMCMD')":CHK "${USECUSTOMCMD/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_CUSTOMCMD!$DESC_CUSTOMCMD $GUI_ECHOPLAC ('CUSTOMCMD')":FL "${OPCUSTPATH/#-/ -}" `#CAT_Misc` `#MENU_GAME` \
 --field="     $GUI_CUSTOMCMD_ARGS!$DESC_CUSTOMCMD_ARGS ('CUSTOMCMD_ARGS')" "${CUSTOMCMD_ARGS/#-/ -}" `#CAT_Misc` `#MENU_GAME` \
@@ -15042,9 +15046,14 @@ function prepareLaunch {
 	writelog "INFO" "${FUNCNAME[0]} - launchSteamGame:"
 	launchSteamGame
 
-	# GAME ENDED - Closing:
-	writelog "STOP" "######### CLEANUP #########"
-	closeSTL "######### DONE - $PROGNAME $PROGVERS #########"
+	if [ "$KEEPSTLOPEN" -eq 1 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - KEEPSTLOPEN is enabled - re-opening the $PROGNAME menu"
+		prepareLaunch X
+	else
+		# GAME ENDED - Closing:
+		writelog "STOP" "######### CLEANUP #########"
+		closeSTL "######### DONE - $PROGNAME $PROGVERS #########"
+	fi
 }
 
 function switchProton {
