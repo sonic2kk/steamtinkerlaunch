@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v11.12.20221021-1"
+PROGVERS="v11.12.20221021-2"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -796,7 +796,7 @@ function dlCheck {
 function getGamePic {
 	if [ "$DLGAMEDATA" -eq 1 ] && [ "$STLPLAY" -eq 0 ]; then
 		DLPIC="$1"
-		if [ ! -f "$DLPIC" ] && [ "$STLPLAY" -eq 0 ]; then
+		if [[ ( ! -f "$DLPIC" || ! -s "$DLPIC" ) && "$STLPLAY" -eq 0 ]]; then
 			DLTITLE="Downloading picture for game '$(basename "${1//.jpg/}")'"
 			dlCheck "$2" "$DLPIC" "X" "$DLTITLE"
 		fi
@@ -1258,7 +1258,7 @@ function getGameIcon {
 function getGameData {
 	if ! grep -q ",${1}," <<< "$NOGAMES" && [ "$STLPLAY" -eq 0 ]; then
 		DLPIC="$STLGHEADD/$1.jpg"
-		if [ ! -f "$DLPIC" ]; then
+		if [ ! -f "$DLPIC" ] || [ ! -s "$DLPIC" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Downloading picture '$DLPIC' from '$STASSURL/$1/header.jpg'" "X" "$GGDLOG"
 			getGamePic "$DLPIC" "$STASSURL/$1/header.jpg"
 		fi
@@ -3819,6 +3819,17 @@ function setShowPic {
 
 			if [ ! -f "$STLGHEADD/$AID.jpg" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Using '$SHOWPIC' as fallback picture, because '$STLGHEADD/$AID.jpg' doesn't exist"
+			elif [ -f "$STLGHEADD/$AID.jpg" ] && [ ! -s "$STLGHEADD/$AID.jpg" ]; then
+				# Attempt to redownload header picture if we failed last time (e.g., if we were offline)
+				writelog "INFO" "${FUNCNAME[0]} - Game header picture exists at '$STLGHEADD/$AID.jpg' but has zero bytes. Attempting one redownload"
+				getGameData "$AID"
+
+				if [ -s "$STLGHEADD/$AID.jpg" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Successfully redownloaded header picture for '$AID' to '$STLGHEADD/$AID.jpg', using that."
+					SHOWPIC="$STLGHEADD/$AID.jpg"  # Actually use the new picture
+				else
+					writelog "INFO" "${FUNCNAME[0]} - Could not redownload header picture, defaulting '$SHOWPIC' to STL icon '$STLICON' (Maybe we're offline?)"
+				fi
 			elif [ ! -s "$STLGHEADD/$AID.jpg" ]; then
 				if [ -z "$SUSDA" ] || [ -z "$STUIDPATH" ]; then
 					setSteamPaths
