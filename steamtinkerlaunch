@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v11.12.20221020-3"
+PROGVERS="v11.12.20221021"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -5397,7 +5397,14 @@ function getLaPl {
 }
 
 function fixShowGnAid {
-	if [ -n "$GN" ]; then
+	local PRETTYGAMENAME
+
+	# Will use "real" game name if it exists, e.g. "NieR:Automata" instead of NieRAutomata
+	PRETTYGAMENAME="$( getTitleFromID "$AID" )"
+	if [ -n "$PRETTYGAMENAME" ]; then
+		SGNAID="$PRETTYGAMENAME ($AID)"
+		SGNAID="${SGNAID//&/+}"
+	elif [ -n "$GN" ]; then
 		SGNAID="$GN ($AID)"
 		SGNAID="${SGNAID//&/+}"
 	else
@@ -5442,6 +5449,10 @@ function MainMenu {
 	setHuyList
 	setOPCustPath
 
+	fixCustomMeta "$CUMETA/$AID.conf" # will be removed again later
+	loadCfg "$CUMETA/$AID.conf" X
+	loadCfg "$GEMETA/$AID.conf" X
+
 	export CURWIKI="$PPW/Main-Menu"
 	TITLE="${PROGNAME}-MainMenu"
 	if [ "$ONSTEAMDECK" -eq 1 ]; then
@@ -5456,17 +5467,13 @@ function MainMenu {
 
 	TT_OPENURL="Help Url Gui"
 
-	fixCustomMeta "$CUMETA/$AID.conf" # will be removed again later
-	loadCfg "$CUMETA/$AID.conf" X
-	loadCfg "$GEMETA/$AID.conf" X
-
 	if [ "$SMALLDESK" -eq 0 ]; then
 		if [ -n "$DEVELOPER" ]; then
-			SETHEAD="$SETHEAD \n ${GUI_DEV}: '$DEVELOPER'"
+			SETHEAD="$SETHEAD \n <b>${GUI_DEV}:</b> '$DEVELOPER'"
 		fi
 
 		if [ -n "$PUBLISHER" ]; then
-			SETHEAD="$SETHEAD \n ${GUI_PUB}: '$PUBLISHER'"
+			SETHEAD="$SETHEAD \n <b>${GUI_PUB}:</b> '$PUBLISHER'"
 		fi
 	
 		prepareProtonDBRating
@@ -5475,11 +5482,11 @@ function MainMenu {
 		TT_GAFI="$(for i in "${!GamFiles[@]}"; do printf "%s: %s\n" "${GamDesc[$i]}" "${GamFiles[$i]}"; done)"
 
 		if [ -n "$METACRITIC_SCORE" ] && ! grep -q "^${GUI_MCS}" "$PDBRAINFO"; then
-			echo "${GUI_MCS}: $METACRITIC_SCORE" >> "$PDBRAINFO"
+			echo "<b>${GUI_MCS}:</b> $METACRITIC_SCORE" >> "$PDBRAINFO"
 		fi
 		
 		if [ -n "$OSLIST" ] && ! grep -q "^${GUI_OSL}" "$PDBRAINFO"; then
-			echo "${GUI_OSL}: $OSLIST" >> "$PDBRAINFO"
+			echo "<b>${GUI_OSL}</b>: $OSLIST" >> "$PDBRAINFO"
 		fi
 		
 		if [ -f "$PDBRAINFO" ] && grep -q "[0-9]" "$PDBRAINFO" ;then
@@ -5488,26 +5495,26 @@ function MainMenu {
 		fi
 
 		if [ -L "$GPFX/$DRCU/$STUS" ]; then
-			SETHEAD="$SETHEAD \n ${GUI_SSU}: symlink to '$(readlink "$GPFX/$DRCU/$STUS")'"
+			SETHEAD="$SETHEAD \n <b>${GUI_SSU}:</b> symlink to '$(readlink "$GPFX/$DRCU/$STUS")'"
 		fi
 
 		if [ "$ISORIGIN" -eq 1 ]; then
-			SETHEAD="$SETHEAD \n ${GUI_SGW}: 'Origin interfering'"
+			SETHEAD="$SETHEAD \n <b>${GUI_SGW}:</b> 'Origin interfering'"
 		else
 			if [ -n "$GAMEWINDOW" ] && [ "$GAMEWINDOW" != "$NON" ]; then
-				SETHEAD="$SETHEAD \n ${GUI_SGW}: '$(fixShow "$GAMEWINDOW")'"
+				SETHEAD="$SETHEAD \n <b>${GUI_SGW}:</b> '$(fixShow "$GAMEWINDOW")'"
 			fi	
 		fi
 		
 		if [ -n "$GAMEEXE" ]; then
-			SETHEAD="$SETHEAD \n ${GUI_SGE}: '$GAMEEXE'"
+			SETHEAD="$SETHEAD \n <b>${GUI_SGE}:</b> '$GAMEEXE'"
 		fi
 
 		if [ "$ISORIGIN" -eq 1 ]; then
-			SETHEAD="$SETHEAD \n ${GUI_SGA}: 'Origin $L2EA url'"
+			SETHEAD="$SETHEAD \n <b>${GUI_SGA}:</b> 'Origin $L2EA url'"
 		else
 			if [ "${#ORGCMDARGS[@]}" -ge 1 ]; then
-				SETHEAD="$SETHEAD \n ${GUI_SGA}: '${ORGCMDARGS[*]}'"
+				SETHEAD="$SETHEAD \n <b>${GUI_SGA}:</b> '${ORGCMDARGS[*]}'"
 			fi
 		fi
 	fi
@@ -14878,7 +14885,7 @@ function prepareProtonDBRating {
 			PDBTOTAL="${PDBARR[2]}"
 			PDBTREND="${PDBARR[3]}"
 			PDBBESTT="${PDBARR[4]}"
-			printf 'ProtonDB Rating Trend: %s' "${PDBTREND}" > "$PDBRASINF"
+			printf '<b>ProtonDB Rating Trend:</b> %s' "${PDBTREND}" > "$PDBRASINF"
 			printf '%s\nConfidence: %s\nScore: %s\nTotal Votes: %s\nRating Trend: %s\nBest Rating: %s\n' "$GUI_USEPDBRATING" "${PDBCONFI}" "${PDBSCORE}" "${PDBTOTAL}" "${PDBTREND}" "${PDBBESTT}" > "$PDBRAINFO"
 		fi
 	fi
