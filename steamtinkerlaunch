@@ -20352,6 +20352,7 @@ function steamdedeckt {
 		ONSTEAMDECK=1
 		export STEAMDECKWASUPDATE=0
 		export STEAMDECKDIDINSTALL=1
+		export STEAMDECKSTEAMRUN=0  # Stores if we're running STL when Steam opens on Steam Deck
 
 		writelog "INFO" "${FUNCNAME[0]} - Seems like we have a Steam Deck here - making some specific settings"
 
@@ -20382,9 +20383,6 @@ function steamdedeckt {
 			SMALLDESK=1
 		fi
 
-		notiShow "$NOTY_STEAMDECK_INSTALL" "X"
-		echo "$NOTY_STEAMDECK_INSTALL on Steam Deck"
-
 		INTERNETCONNECTION=1
 		if ! ping -q -c1 archlinux.org &>/dev/null; then
 			INTERNETCONNECTION=0
@@ -20394,41 +20392,60 @@ function steamdedeckt {
 			echo "$NOTY_STEAMDECK_NOINTERNET"
 		fi
 
+		# TODO don't attempt to install if we already have an install and if we're running from Steam
+
+		# Check if we're running STL on a Steam first launch
+		# Assume Steam if all of these are true:
+		# - We already have an STL installation (assume install if script in prefix)
+		# - The AppID is a placeholder ID (not running a game)
+		# - The script is running from CompatibilityTools.d 
+		if [ -f "$PREFIX/steamtinkerlaunch" ] && [ "$AID" = "$PLACEHOLDERAID" ] && [[ ${0^^} == *"${CTD^^}"* ]]; then
+			writelog "INFO" "${FUNCNAME[0]} - Looks like we're running through Steam on a Steam Deck, we don't want to do any updating here!"
+			STEAMDECKSTEAMRUN=1
+		else
+			notiShow "$NOTY_STEAMDECK_INSTALL" "X"
+			echo "$NOTY_STEAMDECK_INSTALL on Steam Deck"
+		fi
+		
 		export STLSDPATH="${STLDEPS}/usr/bin"
 		export PATH="$PATH:$STLSDPATH"
 
-		installFilesSteamDeck
-		checkSteamDeckDependencies
+		if [ "$STEAMDECKSTEAMRUN" -eq 0 ]; then
+			installFilesSteamDeck
+			checkSteamDeckDependencies
 
-		# Don't remove dependencies offline
-		if [ "$INTERNETCONNECTION" -eq 1 ]; then
-			find "$STLDEPS" -type f \( -name "*.zst" -o -name "*.gz" -o -name ".*" \) -exec rm {} \;
-		fi
-
-		# update/set compatibility tool to git stl:
-		if [ "$INFLATPAK" -eq 0 ]; then
-			notiShow "$NOTY_STEAMDECK_ADDCOMPAT" "X"
-			CompatTool "add" "$PREFIX/$PROGCMD" >/dev/null
-		fi
-		
-		GTKCSSFILE="$HOME/.config/gtk-3.0/gtk.css"
-
-		if [ ! -f "$GTKCSSFILE" ] ; then
-			writelog "SKIP" "${FUNCNAME[0]} - '$GTKCSSFILE' does not exist - skipping"
-		else
-			if grep -q "scrollbar" "$GTKCSSFILE"; then
-				writelog "SKIP" "${FUNCNAME[0]} - found a scrollbar entry in '$GTKCSSFILE'"
-			else
-				writelog "INFO" "${FUNCNAME[0]} - backup '$GTKCSSFILE' to '${GTKCSSFILE}_ORIGNAL'"
-				cp "$GTKCSSFILE" "${GTKCSSFILE}_ORIGNAL"
-				writelog "INFO" "${FUNCNAME[0]} - adding bigger scrollbar to '$GTKCSSFILE'"
-				{
-					echo ".scrollbar.vertical slider,"
-					echo "scrollbar.vertical slider {"
-					echo "min-width: 30px;"
-					echo "}"
-				} >> "$GTKCSSFILE"
+			# Don't remove dependencies offline
+			if [ "$INTERNETCONNECTION" -eq 1 ]; then
+				find "$STLDEPS" -type f \( -name "*.zst" -o -name "*.gz" -o -name ".*" \) -exec rm {} \;
 			fi
+
+			# update/set compatibility tool to git stl:
+			if [ "$INFLATPAK" -eq 0 ]; then
+				notiShow "$NOTY_STEAMDECK_ADDCOMPAT" "X"
+				CompatTool "add" "$PREFIX/$PROGCMD" >/dev/null
+			fi
+			
+			GTKCSSFILE="$HOME/.config/gtk-3.0/gtk.css"
+
+			if [ ! -f "$GTKCSSFILE" ] ; then
+				writelog "SKIP" "${FUNCNAME[0]} - '$GTKCSSFILE' does not exist - skipping"
+			else
+				if grep -q "scrollbar" "$GTKCSSFILE"; then
+					writelog "SKIP" "${FUNCNAME[0]} - found a scrollbar entry in '$GTKCSSFILE'"
+				else
+					writelog "INFO" "${FUNCNAME[0]} - backup '$GTKCSSFILE' to '${GTKCSSFILE}_ORIGNAL'"
+					cp "$GTKCSSFILE" "${GTKCSSFILE}_ORIGNAL"
+					writelog "INFO" "${FUNCNAME[0]} - adding bigger scrollbar to '$GTKCSSFILE'"
+					{
+						echo ".scrollbar.vertical slider,"
+						echo "scrollbar.vertical slider {"
+						echo "min-width: 30px;"
+						echo "}"
+					} >> "$GTKCSSFILE"
+				fi
+			fi
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Seems like we're being run by Steam here, not doing any installation steps"
 		fi
 	fi
 }
@@ -20486,6 +20503,28 @@ function main {
 	getCurrentCommandline "$@"
 	saveOrgVars
 	emptyVars "O"
+
+    # Notify success on Steam Deck
+	# TODO check that this doesn't show success on regular run and close
+	if [ "$ONSTEAMDECK" -eq 1 ] && [ "$STEAMDECKSTEAMRUN" -eq 0 ]; then
+		printf '\n'
+		if [ "$STEAMDECKDIDINSTALL" -eq 1 ]; then
+			INSTALLEDPROGVERS="$( grep -i "^PROGVERS=.*." "$PREFIX/steamtinkerlaunch" | cut -d '"' -f 2 )"
+			if [ "$STEAMDECKWASUPDATE" -eq 1 ]; then
+				# Update success w/ version
+				strFix "$NOTY_STEAMDECK_UPDATE_SUCCESS!" "$INSTALLEDPROGVERS"
+				notiShow "$(strFix "$NOTY_STEAMDECK_UPDATE_SUCCESS" "$INSTALLEDPROGVERS")" "X"
+			else
+				# Install success w/ version
+				strFix "$NOTY_STEAMDECK_INSTALL_SUCCESS!" "$INSTALLEDPROGVERS"
+				notiShow "$(strFix "$NOTY_STEAMDECK_INSTALL_SUCCESS" "$INSTALLEDPROGVERS")" "X"
+			fi
+		else
+			# Show install finished if no STL install files were modified (currently only for offline installs where existing install == install files)
+			echo "$NOTY_STEAMDECK_INSTALL_FINISH!"
+			notiShow "$NOTY_STEAMDECK_INSTALL_FINISH" "X"
+		fi
+	fi
 
 	writelog "START" "######### Initializing Game Launch $AID using $PROGNAME $PROGVERS #########" "P"
 
@@ -20548,28 +20587,6 @@ function main {
 			fi
 		else
 			commandline "$@"
-		fi
-	fi
-
-	# Notify success on Steam Deck
-	# TODO check that this doesn't show success on regular run and close
-	if [ "$ONSTEAMDECK" -eq 1 ]; then
-		printf '\n'
-		if [ "$STEAMDECKDIDINSTALL" -eq 1 ]; then
-			INSTALLEDPROGVERS="$( grep -i "^PROGVERS=.*." "$PREFIX/steamtinkerlaunch" | cut -d '"' -f 2 )"
-			if [ "$STEAMDECKWASUPDATE" -eq 1 ]; then
-				# Update success w/ version
-				strFix "$NOTY_STEAMDECK_UPDATE_SUCCESS!" "$INSTALLEDPROGVERS"
-				notiShow "$(strFix "$NOTY_STEAMDECK_UPDATE_SUCCESS" "$INSTALLEDPROGVERS")" "X"
-			else
-				# Install success w/ version
-				strFix "$NOTY_STEAMDECK_INSTALL_SUCCESS!" "$INSTALLEDPROGVERS"
-				notiShow "$(strFix "$NOTY_STEAMDECK_INSTALL_SUCCESS" "$INSTALLEDPROGVERS")" "X"
-			fi
-		else
-			# Show install finished if no STL install files were modified (currently only for offline installs where existing install == install files)
-			echo "$NOTY_STEAMDECK_INSTALL_FINISH!"
-			notiShow "$NOTY_STEAMDECK_INSTALL_FINISH" "X"
 		fi
 	fi
 }
