@@ -20326,7 +20326,30 @@ function installFilesSteamDeck {
 			echo "$NOTY_STEAMDECK_DOWNLOAD"
 		fi
 
-		gitUpdate "$PREFIX" "$PROJECTPAGE"
+		# Attempt to get update files from Git
+		if ! gitUpdate "$PREFIX" "$PROJECTPAGE"; then
+			writelog "WARN" "${FUNCNAME[0]} - Could not clone/pull changes from git repo, doing some checks"
+			if ! ping -q -c1 archlinux.org &>/dev/null; then
+				writelog "WARN" "${FUNCNAME[0]} - Looks like GitHub might be down, will not attempt another update right now"
+				echo "Seems like Git is down, not attempting an update."
+			else
+				writelog "WARN" "${FUNCNAME[0]} - Looks like GitHub is ok, attempting to update via a fresh clone to '${PREFIX}-temp'"
+				if ! gitUpdate "${PREFIX}-temp"; then
+					writelog "WARN" "${FUNCNAME[0]} - Still failed to download from GitHub, though it should be up -Not trying to update again, maybe something is wrong with install files"
+					echo "Could not pull down changes from Git, even though GitHub should be up. Not attempting another update right now, maybe try again later or try a fresh install if the issue persists."
+				else
+					# Currently we assume the removal of the existing files and moving of the new files will succeed ok
+					# There could be a very rare instance where due to permission faults or somethimg, this fails
+					# We aren't worried about this for now, but a PR might be welcome on this in future :-)
+					writelog "INFO" "${FUNCNAME[0]} - Fresh clone succeeded ok, overwriting existing installation with fresh clone"
+					rm -rf "$PREFIX"
+					mv "${PREFIX}-temp" "$PREFIX"
+					writelog "INFO" "${FUNCNAME[0]} - Successfully pulled updated changes!"
+				fi
+			fi
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Fetching from git seems to have succeeded ok."
+		fi
 	else
 		# Get version of existing STL install, if present, and compare with our version
 		writelog "WARN" "${FUNCNAME[0]} - No Internet Connection detected, cannot clone Git repo - Attempting to manually install"
