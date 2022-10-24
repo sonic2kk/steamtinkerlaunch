@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v11.12.20221024-4"
+PROGVERS="v11.12.20221024-5"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -20499,11 +20499,19 @@ function steamdedeckt {
 				else
 					writelog "INFO" "${FUNCNAME[0]} - backup '$GTKCSSFILE' to '${GTKCSSFILE}_ORIGNAL'"
 					cp "$GTKCSSFILE" "${GTKCSSFILE}_ORIGNAL"
-					writelog "INFO" "${FUNCNAME[0]} - adding bigger scrollbar to '$GTKCSSFILE'"
+
+					# NOTE: This styles most, but not all, UI elements on Steam Deck
+					# It makes the scrollbar wider and easier to grab, and it adds a right margin so UI elements aren't covered by the scollbar
+					# However currently the UI is not as uniform on Steam Deck, because file choosers and text fields don't have this margin
+					# PRs are welcome to apply styling to these elements :-)
+					writelog "INFO" "${FUNCNAME[0]} - adding bigger scrollbar and customising some other UI elements using '$GTKCSSFILE'"
 					{
 						echo ".scrollbar.vertical slider,"
 						echo "scrollbar.vertical slider {"
 						echo "min-width: 15px;"
+						echo "}"
+						echo "spinbutton, combobox button {"
+						echo "margin-right: 20px;"
 						echo "}"
 					} >> "$GTKCSSFILE"
 				fi
@@ -20513,6 +20521,16 @@ function steamdedeckt {
 		fi
 	fi
 }
+
+function restoreGtkCss {
+	if [ "$ONSTEAMDECK" -eq 1 ]; then
+		GTKCSSFILE="$HOME/.config/gtk-3.0/gtk.css"
+		if [ -f "${GTKCSSFILE}_ORIGNAL" ] ; then
+			writelog "INFO" "${FUNCNAME[0]} - recovering original gtk.css from '${GTKCSSFILE}_ORIGNAL'"
+			mv "${GTKCSSFILE}_ORIGNAL" "$GTKCSSFILE"
+		fi
+	fi
+} 
 
 ### STEAM DECK END
 
@@ -20531,6 +20549,7 @@ function setflatpak {
 function main {
 
 	initShmStl
+	restoreGtkCss
 	rm "$TEMPLOG" "$WINRESLOG" "$PRELOG" "$APPMALOG" "$GGDLOG" 2>/dev/null
 	touch "$PRELOG"
 	mkProjDir "$LOGDIRID"
@@ -20653,6 +20672,8 @@ function main {
 			commandline "$@"
 		fi
 	fi
+
+	restoreGtkCss
 }
 
 if [ "$EUID" = 0 ]; then
