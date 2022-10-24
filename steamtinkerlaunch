@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v11.12.20221024-3"
+PROGVERS="v11.12.20221024-4"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -20354,6 +20354,7 @@ function installFilesSteamDeck {
 					writelog "INFO" "${FUNCNAME[0]} - Fresh clone succeeded ok, overwriting existing installation with fresh clone"
 					rm -rf "$PREFIX"
 					mv "${PREFIX}-temp" "$PREFIX"
+					rm -rf "${PREFIX}-temp"
 					writelog "INFO" "${FUNCNAME[0]} - Successfully pulled updated changes!"
 				fi
 			fi
@@ -20441,13 +20442,6 @@ function steamdedeckt {
 		writelog "INFO" "${FUNCNAME[0]} - Set 'SMALLDESK' to '$SMALLDESK'"
 
 		INTERNETCONNECTION=1
-		if ! ping -q -c1 archlinux.org &>/dev/null; then
-			INTERNETCONNECTION=0
-			writelog "WARN" "${FUNCNAME[0]} - No Internet Connection detected, attempting to install SteamTinkerLaunch offline - This may not succeed!"
-			writelog "WARN" "${FUNCNAME[0]} - Make sure you have either manually installed all dependencies, or added all manual dependency archives to '$STLDEPS'"
-			notiShow "$NOTY_STEAMDECK_NOINTERNET" "X"
-			echo "$NOTY_STEAMDECK_NOINTERNET"
-		fi
 
 		# Check if we're running STL on a Steam first launch
 		# Assume Steam if all of these are true:
@@ -20457,9 +20451,24 @@ function steamdedeckt {
 		if [ -f "$PREFIX/steamtinkerlaunch" ] && [ "$AID" = "$PLACEHOLDERAID" ] && [[ ${0^^} == *"${CTD^^}"* ]]; then
 			writelog "INFO" "${FUNCNAME[0]} - Looks like we're running through Steam on a Steam Deck, we don't want to do any updating here!"
 			STEAMDECKSTEAMRUN=1
+		elif [[ ${0^^} == *"${PREFIX^^}"* ]] && ! [ "$AID" = "$PLACEHOLDERAID" ]; then
+			# Launching a game proper through Steam would mean the dir we're launching from (${0}) would be the compattool dir
+			#
+			# The check for the AID != PlaceholderAID means we can update if we're just running the script from the prefix (i.e., we double clicked it) 
+			# But if we have an actual game AppID and we're running from the prefix, we're probably being called from an extra dialog on the main menu, which means we don't want to update (and this stops notifier spam too)
+			writelog "INFO" "${FUNCNAME[0]} - Looks like we have a game but we're running from the Steam Deck install Prefix, not doing any updating here!"
+			STEAMDECKSTEAMRUN=1
 		else
 			notiShow "$NOTY_STEAMDECK_INSTALL" "X"
 			echo "$NOTY_STEAMDECK_INSTALL on Steam Deck"
+
+			if ! ping -q -c1 archlinux.org &>/dev/null; then
+				INTERNETCONNECTION=0
+				writelog "WARN" "${FUNCNAME[0]} - No Internet Connection detected, attempting to install SteamTinkerLaunch offline - This may not succeed!"
+				writelog "WARN" "${FUNCNAME[0]} - Make sure you have either manually installed all dependencies, or added all manual dependency archives to '$STLDEPS'"
+				notiShow "$NOTY_STEAMDECK_NOINTERNET" "X"
+				echo "$NOTY_STEAMDECK_NOINTERNET"
+			fi
 		fi
 		
 		export STLSDPATH="${STLDEPS}/usr/bin"
