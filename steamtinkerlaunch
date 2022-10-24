@@ -20024,14 +20024,20 @@ function steamdeckClose {
 
 function steamdeckBeforeGame {
 	if [ "$ONSTEAMDECK" -eq 1 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Looks like FIXGAMESCOPE is '$FIXGAMESCOPE' "
+
 		if [ "$USEGAMESCOPE" -eq 1 ] && [ "$FIXGAMESCOPE" -eq 1 ]; then
-			writelog "SKIP" "${FUNCNAME[0]} - Disabling own gamescope on SteamDeck Game Mode" "X"
+			writelog "SKIP" "${FUNCNAME[0]} - Disabling own GameScope on SteamDeck Game Mode" "X"
 			USEGAMESCOPE=0
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Allowing GameScope enabled on SteamDeck in Desktop Mode" "X"
 		fi
 
 		if [ "$USEGAMEMODERUN" -eq 1 ] && [ "$FIXGAMESCOPE" -eq 1 ]; then
-			writelog "SKIP" "${FUNCNAME[0]} - Disabling own gamemode on SteamDeck Game Mode" "X"
+			writelog "SKIP" "${FUNCNAME[0]} - Disabling own Feral GameMode tool (gamemoderun) on SteamDeck Game Mode" "X"
 			USEGAMEMODERUN=0
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Allowing Feral GameMode tool (gamemoderun) enabled on SteamDeck in Desktop Mode" "X"
 		fi
 		
 		if [ -n "$STLCTLID" ] && [ "$STLCTLID" != "$PLACEHOLDERAID" ]; then
@@ -20417,12 +20423,18 @@ function steamdedeckt {
 		fi
 		export NOTYARGS="-i $STLICON -a $PROGNAME"
 
+		# Differentiate between Game Mode and Desktop Mode on Steam Deck
 		if grep -q "generate-drm-mode" <<< "$(pgrep -a "$GAMESCOPE")"; then
 			writelog "INFO" "${FUNCNAME[0]} - Detected '$GAMESCOPE' running 'forced' - assuming we're running in Game Mode"
 			FIXGAMESCOPE=1
 		else
+			writelog "INFO" "${FUNCNAME[0]} - Did not detect a running '$GAMESCOPE' process - assuming we're running in Desktop Mode"
+
 			SMALLDESK=1
 		fi
+
+		writelog "INFO" "${FUNCNAME[0]} - Set 'FIXGAMESCOPE' to '$FIXGAMESCOPE'"
+		writelog "INFO" "${FUNCNAME[0]} - Set 'SMALLDESK' to '$SMALLDESK'"
 
 		INTERNETCONNECTION=1
 		if ! ping -q -c1 archlinux.org &>/dev/null; then
@@ -20432,8 +20444,6 @@ function steamdedeckt {
 			notiShow "$NOTY_STEAMDECK_NOINTERNET" "X"
 			echo "$NOTY_STEAMDECK_NOINTERNET"
 		fi
-
-		# TODO don't attempt to install if we already have an install and if we're running from Steam
 
 		# Check if we're running STL on a Steam first launch
 		# Assume Steam if all of these are true:
