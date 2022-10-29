@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v11.12.20221028-1"
+PROGVERS="v11.12.20221029-1"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -315,6 +315,7 @@ STLAPPINFOIDDIR="$STLGAMES/$APIN"
 STLGHEADD="$STLGAMES/header"
 STLGSAD="$STLGAMES/standalone"
 STLGICONS="$STLGAMES/icons"
+STLGDECKCOMPAT="$STLGAMES/deckinfo"
 STLGICO="$STLGICONS/ico"
 STLGZIP="$STLGICONS/zip"
 STLGPNG="$STLGICONS/png"
@@ -5495,6 +5496,7 @@ function MainMenu {
 		fi
 	
 		prepareProtonDBRating
+		prepareSteamDeckCompatInfo
 		getGameFiles "$AID"
 		setGameFilesArray
 		TT_GAFI="$( printf "<u>%s</u>" "${GUI_GAFI}" )"
@@ -5511,6 +5513,10 @@ function MainMenu {
 		if [ -f "$PDBRAINFO" ] && grep -q "[0-9]" "$PDBRAINFO" ;then
 			SETHEAD="$SETHEAD \n $(cat "$PDBRASINF")"
 			TT_OPENURL="$(cat "$PDBRAINFO")"
+		fi
+
+		if [ -n "$STEAMDECKCOMPATRATING" ]; then
+			SETHEAD="$SETHEAD \n <b>${GUI_SDCR}:</b> $STEAMDECKCOMPATRATING"
 		fi
 
 		if [ -L "$GPFX/$DRCU/$STUS" ]; then
@@ -8662,11 +8668,18 @@ function askSettings {
 				if [ -f "$PDBRASINF" ];then
 					PDBROUT="$(cat "$PDBRASINF")"
 				fi
+
+				# Tested and this should not break Non-Steam Games - Open an issue if it does!
+				prepareSteamDeckCompatInfo
+				mapfile -d ";" -t -O "${#DECKCOMPATARR[@]}" DECKCOMPATARR <<< "$( getSteamDeckCompatInfo "$( echo "$AID" | xargs )" )"
+				unset "DECKCOMPATARR[-1]"
+				STEAMDECKCOMPATOUT="<b>$GUI_SDCR:</b> ${DECKCOMPATARR[0]:$STEAMDECKCOMPAT_UNKNOWN}"
 		
 				"$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
 				--title="$TITLE" \
 				--text="$(spanFont "$SGNAID - $REQQEST" "H")" \
 				--field="<span font=\"italic\">$PDBROUT</span>":LBL \
+				--field="<span font=\"italic\">$STEAMDECKCOMPATOUT</span>":LBL \
 				--field="<span font=\"italic\">$LAPL</span>":LBL \
 				--field="<span font=\"italic\">(${#CfgFiles[@]} $GUI_EDITABLECFGS)</span>":LBL \
 				--field="<span font=\"italic\">($GUI_EDITABLEGAMECFGS)</span>":LBL \
@@ -8745,6 +8758,7 @@ function createProjectDirs {
 	mkProjDir "$TIGEMETA"
 	mkProjDir "$TICUMETA"
 	mkProjDir "$STLCUSTVARSDIR"
+	mkProjDir "$STLGDECKCOMPAT"
 }
 
 # add missing config entries to configfile $1 using seperator $2:
@@ -17837,6 +17851,22 @@ function commandline {
 		OneTimeRunGui "$USEID"
 	elif [ "$1" == "pdb" ]; then
 		getProtonDBRating "$2"
+	elif [ "$1" == "steamdeckcompat" ] || [ "$1" == "sdc" ]; then
+		mapfile -d ";" -t -O "${#DECKCOMPATARR[@]}" DECKCOMPATARR <<< "$( getSteamDeckCompatInfo "$( echo "$2" | xargs )" )"
+		unset "DECKCOMPATARR[-1]"
+
+		if [ "${#DECKCOMPATARR[@]}" -eq "0" ]; then
+			echo "Could not get Steam Deck compatibility information got AppID '$2' - Is this definitely correct?"
+			echo "You can check get the AppID for a game by running 'steamtinkerlaunch getid <name>'"
+		else
+			echo "Valve's testing indicates that this game is ${DECKCOMPATARR[0]} on Steam Deck"
+			if ! [ "${#DECKCOMPATARR[@]}" -eq "1" ]; then  # Only take a newline if there is compatibility information to show
+				echo ""
+				for COMPATSTR in "${DECKCOMPATARR[@]:1}"; do
+					echo "$COMPATSTR"
+				done
+			fi
+		fi
 	elif [ "$1" == "pickwin" ] || [ "$1" == "pw" ]; then
 		pickGameWindowNameMeta "$2" "$3"
 	elif [ "$1" == "play" ]; then
@@ -20532,6 +20562,131 @@ function restoreGtkCss {
 		fi
 	fi
 } 
+
+function prepareSteamDeckCompatInfo {
+	mapfile -d ";" -t -O "${#DECKCOMPATARR[@]}" DECKCOMPATARR <<< "$( getSteamDeckCompatInfo "$AID" )"
+	unset "DECKCOMPATARR[-1]"
+
+	if [ "${#DECKCOMPATARR[@]}" -eq "0" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - No compatibility information available for '$AID' - Is this AppID definitely correct?"
+	else
+		STEAMDECKCOMPATRATING="${DECKCOMPATARR[0]}"
+	fi
+}
+
+# Fetches compatibility information about a game directly from the Steam store endpoint
+# TODO fetch blog URL
+# TODO maybe store `display_type` to differentiate what each string refers to, e.g.:
+#    - 4 means Verified
+#    - 3 means Playable
+#    - ???
+#    - 1 is the grey subtext for small notes about controllers and internet access
+function getSteamDeckCompatInfo {
+	if [ -z "$1" ]; then
+		echo "No AppID given, you need to pass the AppID of the game you want to check the compatibility of"
+		writelog "ERROR" "${FUNCNAME[0]} - Need a valid AppID to check the Steam Deck compatibility information"
+		return 1
+	fi
+
+    AID="$1"
+
+	mkProjDir "$STLGDECKCOMPAT"
+
+	# Unofficial ocumentation for this endpoint is available here: https://github.com/Revadike/InternalSteamWebAPI/wiki/Get-Deck-Compatibility-Report
+    DECKCOMPATENDPOINT="https://store.steampowered.com/saleaction/ajaxgetdeckappcompatibilityreport?nAppID="
+    COMPATFILE="$STLGDECKCOMPAT/${AID}-deckcompatrating.json"
+
+    COMPATINFO=""
+
+	# Check if we can access Steam before fetching the Deck compatibility info
+	if ! ping -q -c1 store.steampowered.com &>/dev/null; then
+		writelog "INFO" "${FUNCNAME[0]} - Looks like we can't access Steam, not removing any Steam Deck compatibility files"
+
+		# No existing file and offline, so skip
+		if ! [ -f "$COMPATFILE" ]; then
+			writelog "WARN" "${FUNCNAME[0]} - Looks like we can't contact Steam and there is no known Steam Deck compatibility information file at '$COMPATFILE' - Skipping this step since we won't be able to retrieve any useful data"
+			return 1
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Existing file found at '$COMPATFILE', Steam Deck compatibility information will be taken from this since we can't contact Steam - The information here could be outdated depending on when it was fetched!"
+		fi
+	else 
+		# Remove existing file - TODO only remove if it is a day old or more
+		if [ -f "$COMPATFILE" ]; then			
+			if ! jq -e '.success' "$COMPATFILE" 1>/dev/null; then
+				writelog "INFO" "${FUNCNAME[0]} - File '$COMPATFILE' containing Steam Deck compatibility information already exists, however it looks like it failed last time - Removing it so we can attempt to redownload it"
+				rm "$COMPATFILE"
+			elif [ "$(( $(date +"%s") - $(stat -c "%Y" "$COMPATFILE") ))" -gt "86400" ]; then  # Todo maybe let the user define this in the Global Menu
+				writelog "INFO" "${FUNCNAME[0]} - File '$COMPATFILE' is older than 1 day - Removing it so we can update in case the compatibility rating has changed"
+			fi
+		fi
+
+		# If the file doesn't exist at all and we can connect to Steam, create it from the response
+		if ! [ -f "$COMPATFILE" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Fetching Steam Deck compatibility information for '$AID' from Steam store endpoint with '${DECKCOMPATENDPOINT}${AID}'"
+			if ! "$WGET" -q "${DECKCOMPATENDPOINT}${AID}" -O "$COMPATFILE" 2> >(grep -v "SSL_INIT"); then
+				# Failed to fetch for some reason, skip getting Deck compat info
+				writelog "INFO" "${FUNCNAME[0]} - Failed to fetch Steam Deck compatibility information from Steam store endpoint with '${DECKCOMPATENDPOINT}${AID}'"
+				return 1
+			fi
+		else
+			# File exists, don't redownload
+			writelog "INFO" "${FUNCNAME[0]} - Steam Deck compatibility rating file '$COMPATFILE' already exists - not redownloading"
+		fi
+	fi
+
+	# We were able to hit the endpoint successfully, but check if the response success is valid!
+	RESULTSLENGTH="$( jq -e '.results | length' "$COMPATFILE" )"
+    if (( RESULTSLENGTH > 0 )); then 
+        writelog "INFO" "${FUNCNAME[0]} - Successfully retrieved Steam Deck compatility information - Stored to '$COMPATFILE'"
+
+        # Get Verified/Playable/Unsupported/Unknown
+        DECKCOMPATRATING="$( jq -e '.results.resolved_category' "$COMPATFILE" )"
+        case $DECKCOMPATRATING in
+            1) COMPATTEXT="$STEAMDECKCOMPAT_UNSUPPORTED" ;;
+            2) COMPATTEXT="$STEAMDECKCOMPAT_PLAYABLE" ;;
+            3) COMPATTEXT="$STEAMDECKCOMPAT_VERIFIED" ;;
+            *) COMPATTEXT="$STEAMDECKCOMPAT_UNKNOWN" ;;
+        esac
+        COMPATINFO+="${COMPATTEXT};"
+
+		writelog "INFO" "${FUNCNAME[0]} - Successfully retrieved Steam Deck compatibility rating of '$COMPATTEXT' for '$AID'"
+		writelog "INFO" "${FUNCNAME[0]} - Converting language tokens for Steam Deck compatibility criteria into SteamTinkerLaunch translated strings"
+
+		# Turn language tokens like '#SteamDeckVerified_TestResult_blah' into an actual translated string from the translation files
+		# Language strings credited to: https://github.com/SteamDatabase/SteamTracking
+        for LANGTOKEN in $( jq -r '.results.resolved_items[].loc_token' "$COMPATFILE" ); do
+            LANGTOKEN="$( echo "$LANGTOKEN" | xargs )"
+            if [ -n "$LANGTOKEN" ]; then
+				OGLANGTOKEN="$LANGTOKEN"
+				# Convert token to uppercase and remove hash at beginning
+                LANGTOKEN="${LANGTOKEN^^}"
+                LANGTOKEN="${LANGTOKEN//#/}"
+
+				# Get associated translation variable from translation files to match this translated string
+				STLLANGTOKEN="${!LANGTOKEN}"
+				if [ -n "$STLLANGTOKEN" ]; then
+					COMPATINFO+="\"$STLLANGTOKEN\";"
+				else
+					writelog "WARN" "${FUNCNAME[0]} - Could not find translation string for returned language token '$OGLANGTOKEN' - Seems like we need to update the translation files to include a new string!"
+				fi
+
+				writelog "INFO" "${FUNCNAME[0]} - '$OGLANGTOKEN' - '$LANGTOKEN'"
+            else
+                writelog "INFO" "${FUNCNAME[0]} - Skipping blank LANGTOKEN '$LANGTOKEN' - though this should probably not happen!"
+            fi
+        done
+
+		writelog "INFO" "${FUNCNAME[0]} - Finished setting Steam Deck compatibility criteria strings"
+    else
+		# We were able to get a response from the endpoint, but the results body wwas blank so we can't get any response information
+		# Not sure when this would happen outside of Non-Steam Games
+		writelog "WARN" "${FUNCNAME[0]} - No compatibility information available for '$AID' - Maybe the AppID is invalid?"
+		rm "$COMPATFILE"
+		return 1
+    fi
+
+	echo "$COMPATINFO"
+}
 
 ### STEAM DECK END
 
