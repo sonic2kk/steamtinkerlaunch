@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v11.12.20221029-1"
+PROGVERS="v11.12.20221030-1"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -2223,6 +2223,23 @@ function loadLangFile {
 			LOCALLANGFILE="$SCRIPTDIR/lang/${LANGFILENAME}.txt"
 
 			if [ -f "$LAFI" ]; then
+				# If langfile in ~/.config/steamtinkerlaunch/lang exists, and we have a langfile installed globally or in the scriptdir, update the user-installed langfile
+				writelog "INFO" "${FUNCNAME[0]} - Found user-installed $LAFI, attempting to update it"
+				UPDATELANGFILEPATH=""
+				if [ -f "$SYSTEMSTLCFGDIR/lang/${LANGFILENAME}.txt" ]; then
+					UPDATELANGFILEPATH="$SYSTEMSTLCFGDIR/lang/${LANGFILENAME}.txt"  # Globally installed langfile (or stlprefix langfile on steam deck) - This one takes priority as it is assumed to be the most up to date
+				elif [ -f "$LOCALLANGFILE" ]; then
+					UPDATELANGFILEPATH="$LOCALLANGFILE" # langfile from scriptdir (on steam deck first-time install this would be the install directory)
+				fi
+
+				if [ -n "$UPDATELANGFILEPATH" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Found lang file to replace the existing user-installed file with under '$UPDATELANGFILEPATH'"
+					rm "$LAFI"
+					cp "$UPDATELANGFILEPATH" "$LAFI"
+				else
+					writelog "INFO" "${FUNCNAME[0]} - No lang file to replace existing user-installed file with, not updating langfile"
+				fi
+
 				writelog "INFO" "${FUNCNAME[0]} - Loading found user-installed $LAFI" "P"
 				source "$LAFI"
 				STLLANG="$(cut -d '.' -f1 <<< "${LANGFILENAME##*/}")"
@@ -5974,6 +5991,23 @@ function gitUpdate {
 	fi
 }
 
+# Just for fun ;)
+function getSeasonalGreeting {
+	CURRDATE="$( date +"%d-%m" )"
+	if [ "$CURRDATE" = "25-12" ];then
+		echo "Happy Holidays!"
+	elif [ "$CURRDATE" = "31-12" ] || [ "$CURRDATE" = "01-01" ]; then
+		echo "Happy New Year!"
+	elif [ "$CURRDATE" = "31-10" ]; then
+		TM="$( date +"%H:%M" )"
+		if [ "$TM" = "00:00" ]; then
+			echo "Happy Halloween, it's the witching hour!"
+		else
+			echo "Happy Halloween!"
+		fi
+	fi
+}
+
 function migrateCfgOption {
 	# temporary function to update specific configuration options - will vary depending on the current steamtinkerlaunch version and mostly won't be used at all
 	if [ "$1" == "$STLGAMECFG" ]; then
@@ -9057,24 +9091,25 @@ function autoCollectionSettings {
 			if [ ! -f "$SC" ]; then
 				writelog "SKIP" "${FUNCNAME[0]} - File '${SC##*/}' not found in steam userid dir - skipping"
 			else
-				writelog "INFO" "${FUNCNAME[0]} - Searching collections for game '$AID' in '${SC##*/}'"
+				writelog "INFO" "${FUNCNAME[0]} - Searching collections for game '$AID' in '$SC'"
 
 				while read -r SCAT; do
 					GLOBALSCATCONF="$GLOBALCOLLECTIONDIR/$SCAT.conf"
 
+					# Should we break after a file to load is found? Is there benefit to loading another file?
 					if [ -f "$GLOBALSCATCONF" ]; then
-						writelog "INFO" "${FUNCNAME[0]} - Config '$GLOBALSCATCONF' found - loading its settings"
+						writelog "INFO" "${FUNCNAME[0]} - Global Config '$GLOBALSCATCONF' found - loading its settings"
 						loadCfg "$GLOBALSCATCONF"
 					else
-						writelog "SKIP" "${FUNCNAME[0]} - Config '$GLOBALSCATCONF' not found - skipping"
+						writelog "SKIP" "${FUNCNAME[0]} - Global Config '$GLOBALSCATCONF' not found - skipping"
 					fi
 
 					SCATCONF="$STLCOLLECTIONDIR/$SCAT.conf"
 					if [ -f "$SCATCONF" ]; then
-						writelog "INFO" "${FUNCNAME[0]} - Config '$SCATCONF' found - loading its settings"
+						writelog "INFO" "${FUNCNAME[0]} - Collections Directory Config '$SCATCONF' found - loading its settings"
 						loadCfg "$SCATCONF"
 					else
-						writelog "SKIP" "${FUNCNAME[0]} - Config '$SCATCONF' not found - skipping"
+						writelog "SKIP" "${FUNCNAME[0]} - Collections Directory Config '$SCATCONF' not found - skipping"
 					fi
 					
 					SCATCMD="$TWEAKCMDDIR/$SCAT.sh"
@@ -20794,6 +20829,9 @@ function main {
 
 	writelog "INFO" "${FUNCNAME[0]} - Initializing default window resolution"
 	setInitWinXY
+
+	GREETING="$( getSeasonalGreeting )"
+	writelog "INFO" "${FUNCNAME[0]} - ${GREETING:-Welcome to SteamTinkerLaunch}"
 
 	if [ -z "$1" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - No arguments provided. See '$PROGCMD --help' for possible command line parameters" "E"
