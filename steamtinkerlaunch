@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v11.12.20221030-2"
+PROGVERS="v11.12.20221030-3"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -15002,8 +15002,26 @@ function fixProtonVersionMismatch {
 		MIMAPROT="${!1}"
 
 		if [[ "$MIMAPROT" =~ "experimental" ]]; then
-			writelog "INFO" "${FUNCNAME[0]} - Skipping function for 'experimental' Proton version"
+			# Look for replacement Proton Experimental - There should only ever be one Proton Experimental version installed at a time
+			writelog "INFO" "${FUNCNAME[0]} - Mismatch for 'experimental' Proton version - Looking for updated Proton Experimental"
+
+			# Even though there should only be one Experimental version, only take the first one just in case (should not cause issues, hopefully)
+			REPLACEMENTEXPERIMENTAL="$( grep 'experimental' "$PROTONCSV" | head -1 | cut -d ';' -f1 )" 
+			if [ -n "$REPLACEMENTEXPERIMENTAL" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Found potential replacement for Proton Experimental with '$REPLACEMENTEXPERIMENTAL'"
+				switchProton "$REPLACEMENTEXPERIMENTAL"
+			else
+				# If no Proton replacement, fall back to first Proton version in ProtonCSV
+				# Not ideal but a user might've uninstalled Proton Experimental, and we can't assume what versions of Proton they will have except that they'll have *some* version
+				FALLBACKPROTON="$( head -1 "$PROTONCSV" )"
+				writelog "INFO" "${FUNCNAME[0]} - No potential replacement for Proton Experimental found, falling back to first Proton version in ProtonCSV ('$FALLBACKPROTON')"
+				switchProton "$FALLBACKPROTON"
+			fi
+
+			touch "$FUPDATE"
+			updateConfigEntry "USEPROTON" "$USEPROTON" "$2"
 		elif [[ "$MIMAPROT" =~ "proton-unknown" ]]; then
+			# Should we fall back to first item in ProtonCSV here?
 			writelog "INFO" "${FUNCNAME[0]} - Skipping function for 'proton-unknown' Proton version"
 		else
 			writelog "INFO" "${FUNCNAME[0]} - Incoming category is '$ORGPROTCAT' with value '$MIMAPROT'"
