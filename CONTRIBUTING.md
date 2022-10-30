@@ -1,5 +1,5 @@
 # Contributing
-We are always looking for new contributors! It has a lot of parts and a lot of features, so there's always something to contribute. 
+We are always looking for new contributors! SteamTinkerLaunch has a lot of parts and a lot of features, so there's always something to contribute. 
 
 ## How to Contribute
 SteamTinkerLaunch is basically a huge Bash script. If you know any Bash, feel free to jump in and look around the code. It might seem a little daunting at first but just play around and you'll get the hang of it. I also recommend reading through the `steamtinkerlaunch.log` file. The log for the most recent launch can be found in `/dev/shm/steamtinkerlaunch`. This can give you a sense for the flow of the script and how all the functions connect together.
