@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v11.12.20221030-6"
+PROGVERS="v11.12.20221030-7"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -8729,10 +8729,13 @@ function askSettings {
 				fi
 
 				# Tested and this should not break Non-Steam Games - Open an issue if it does!
-				prepareSteamDeckCompatInfo
 				mapfile -d ";" -t -O "${#DECKCOMPATARR[@]}" DECKCOMPATARR <<< "$( getSteamDeckCompatInfo "$( echo "$AID" | xargs )" )"
 				unset "DECKCOMPATARR[-1]"
 				STEAMDECKCOMPATOUT="<b>$GUI_SDCR:</b> ${DECKCOMPATARR[0]:$STEAMDECKCOMPAT_UNKNOWN}"
+				if ! [ -f "$STLGDECKCOMPAT/${AID}-deckcompatrating.json" ]; then
+					# If the Steam Deck compat rating json doesn't exist, assume something messed up e.g. offline or JQ is not installed
+					writelog "INFO" "${FUNCNAME[0]} - Could not retrieve Steam Deck compatibility rating, defaulting to $STEAMDECKCOMPAT_UNKNOWN - Maybe '$JQ' is missing or we are offline?"
+				fi
 
 				writelog "INFO" "${FUNCNAME[0]} - Steam Deck compatibility rating string is '$STEAMDECKCOMPATOUT'"
 
@@ -20648,6 +20651,11 @@ function restoreGtkCss {
 } 
 
 function prepareSteamDeckCompatInfo {
+	if [ ! -x "$(command -v "$JQ")" ]; then
+		writelog "WARN" "${FUNCNAME[0]} - Can't get Steam Deck compatibility information because '$JQ' is not installed"
+		return 1
+	fi
+
 	mapfile -d ";" -t -O "${#DECKCOMPATARR[@]}" DECKCOMPATARR <<< "$( getSteamDeckCompatInfo "$AID" )"
 	unset "DECKCOMPATARR[-1]"
 
@@ -20666,6 +20674,11 @@ function prepareSteamDeckCompatInfo {
 #    - ???
 #    - 1 is the grey subtext for small notes about controllers and internet access
 function getSteamDeckCompatInfo {
+	if [ ! -x "$(command -v "$JQ")" ]; then
+		writelog "WARN" "${FUNCNAME[0]} - Can't get Steam Deck compatibility information because '$JQ' is not installed"
+		return 1
+	fi
+
 	if [ -z "$1" ]; then
 		echo "No AppID given, you need to pass the AppID of the game you want to check the compatibility of"
 		writelog "ERROR" "${FUNCNAME[0]} - Need a valid AppID to check the Steam Deck compatibility information"
