@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v11.12.20221030-8"
+PROGVERS="v11.12.20221030-9"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -9650,7 +9650,25 @@ function StandaloneProtonGame {
 	fi
 }
 
+function oneTimeWinecfg {
+	writelog "INFO" "${FUNCNAME[0]} - Running OneTime Winecfg"
+	
+	PROTWINECMD="${RUNPROTON//\"/}/bin/wine"
+	WINE="$PROTWINECMD" WINEPREFIX="$GPFX" "$PROTWINECMD" "${WINECFG}.exe"
+}
+
+function oneTimeWinetricks {
+	writelog "INFO" "${FUNCNAME[0]} - Running OneTime Winetricks"
+	if [ ! -x "$(command -v "winetricks")" ]; then
+		writelog "WARN" "${FUNCNAME[0]} - Could not run one-time Winetricks because Winetricks is not installed - Skipping"
+	else
+		PROTWINECMD="${RUNPROTON//\"/}/bin/wine"
+		WINEPREFIX="$GPFX" "winetricks"
+	fi
+}
+
 function OneTimeRunGui {
+
 	if [ -n "$1" ]; then
 		AID="$1"
 		setAIDCfgs
@@ -9684,24 +9702,32 @@ function OneTimeRunGui {
 
 		OTCMDS="$("$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top $WINDECO \
 			--title="$TITLE" --separator="|" \
+			--columns="2" \
 			--text="$(spanFont "$GUI_ONETIMERUN" "H")" \
 			--field="$GUI_OTPROTON!$DESC_OTPROTON":CB "$(cleanDropDown "${OTPROTON//\"}" "$PROTYADLIST")" \
 			--field="$GUI_OTEXE!$DESC_OTEXE":FL "${OTEXE//\"}" \
 			--field="$GUI_OTARGS!$DESC_OTARGS" "${OTARGS//\"}"\
+			--field="$BUT_RUNWINECFG!$DESC_RUNWINECFG":FBTN "$( realpath "$0" ) runwinecfg" \
+			--field="$BUT_RUNWINETRICKS!$DESC_RUNWINETRICKS":FBTN "$( realpath "$0" ) runwinetricks" \
 			--field="$GUI_OTSAVE!$DESC_OTSAVE":CHK "FALSE" \
-			--button="$BUT_CAN:0" --button="$BUT_RUN:2" "$GEOM"
+			--button="$BUT_CAN:0" \
+			--button="$BUT_RUNONETIMECMD:2" \
+			"$GEOM"
 			)"
 			case $? in
+				# Selected Cancel
 				0)	{
 						writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_CAN' - Exiting"
 					}
 				;;
+				# Selected Run
 				2)	{
 						mapfile -d "|" -t -O "${#OTARR[@]}" OTARR < <(printf '%s' "$OTCMDS")
 						OTPROTON="${OTARR[0]}"
 						OTEXE="${OTARR[1]}"
 						OTARGS="${OTARR[2]}"
-						OTSAVE="${OTARR[3]}"					
+						# OTARR[3] and OTARR[4] are the WINECFG and WINETRICKS buttons
+						OTSAVE="${OTARR[5]}"	
 
 						RUNOTPROTON="$(getProtPathFromCSV "$OTPROTON")"
 						if [ ! -f "$RUNOTPROTON" ]; then
@@ -11334,14 +11360,18 @@ function chooseWinetricksPrefix {
 function checkWineCfgLaunch {
 	if [ -n "$RUN_WINECFG" ]; then
 		if [ "$RUN_WINECFG" -eq 1 ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Starting '$WINECFG' before game start:"
+			writelog "INFO" "${FUNCNAME[0]} - Starting '$WINECFG' at prefix '$GPFX' with Wine '$RUNWINE':"
 			if [ "$USEWINE" -eq 0 ]; then
 				#513
 				WINE="$RUNWINE" WINEARCH=win64 WINEDEBUG="$STLWINEDEBUG" WINEPREFIX="$GPFX" "$RUNWINE" "${WINECFG}.exe" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log"
 			else
 				extWine64Run "$RUNWINECFG"
 			fi
+		else
+			writelog "WARN" "${FUNCNAME[0]} - Function was called but RUN_WINECFG ('$RUN_WINECFG') was not enabled - skipping"
 		fi
+	else
+		writelog "WARN" "${FUNCNAME[0]} - Function was called but RUN_WINECFG ('$RUN_WINECFG') was not defined - skipping"
 	fi
 }
 
@@ -18212,6 +18242,10 @@ function commandline {
 	elif [ "$1" == "winetricks" ] || [ "$1" == "wt" ]; then
 		FUSEID "$2"
 		chooseWinetricksPrefix "$USEID"
+	elif [ "$1" == "runwinecfg" ]; then
+		oneTimeWinecfg
+	elif [ "$1" == "runwinetricks" ]; then
+		oneTimeWinetricks
 	elif [ "$1" == "winedebugchannel" ] || [ "$1" == "wdc" ]; then
 		FUSEID "$2"
 		SetWineDebugChannels "$USEID"
