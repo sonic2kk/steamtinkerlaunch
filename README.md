@@ -121,8 +121,13 @@ SteamTinkerLaunch produces a number of logs, including game-specific log files. 
 
 SteamTinkerLaunch may also store additional logging information in `/dev/shm/steamtinkerlaunch`.
 
+As well as logs, there is a wiki page for [troubleshooting](https://github.com/sonic2kk/steamtinkerlaunch/wiki/Troubleshooting) which lists some problems a few users have faced and some known issues.
+
 ## Disclaimer
 Keep in mind that you are using SteamTinkerLaunch at your own risk and that you are responsible for the 3rd party programs that you launch with it.
+
+## Contributing
+SteamTinkerLaunch is always looking for new contributors. See [CONTRIBUTING.md](https://github.com/sonic2kk/steamtinkerlaunch/blob/master/CONTRIBUTING.md) for some more information on how to contribute to the project. 
 
 ## License
 SteamTinkerLaunch is licensed under the GNU General Public License v3.0. See [LICENSE](https://github.com/sonic2kk/steamtinkerlaunch/blob/master/LICENSE) for more information.
