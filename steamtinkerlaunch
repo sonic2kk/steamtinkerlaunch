@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v11.12.20221030-7"
+PROGVERS="v11.12.20221030-8"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -20667,7 +20667,6 @@ function prepareSteamDeckCompatInfo {
 }
 
 # Fetches compatibility information about a game directly from the Steam store endpoint
-# TODO fetch blog URL
 # TODO maybe store `display_type` to differentiate what each string refers to, e.g.:
 #    - 4 means Verified
 #    - 3 means Playable
@@ -20686,7 +20685,6 @@ function getSteamDeckCompatInfo {
 	fi
 
     AID="$1"
-
 	mkProjDir "$STLGDECKCOMPAT"
 
 	# Unofficial ocumentation for this endpoint is available here: https://github.com/Revadike/InternalSteamWebAPI/wiki/Get-Deck-Compatibility-Report
@@ -20773,6 +20771,14 @@ function getSteamDeckCompatInfo {
                 writelog "INFO" "${FUNCNAME[0]} - Skipping blank LANGTOKEN '$LANGTOKEN' - though this should probably not happen!"
             fi
         done
+
+		DEVELOPERCOMMENTSURL="$( jq -e '.results.steam_deck_blog_url' "$COMPATFILE" )"
+		if [ "${#DEVELOPERCOMMENTSURL}" -gt 2 ]; then  # DEVELOPERCOMMENTSURL will always have quotes around it (e.g. `""` for blank), so the minimum length will always be 2 since it will be 2 for a blank entry because of the set of quotes 
+			writelog "INFO" "${FUNCNAME[0]} - Seems like the developer has a blog post with some comments on this game's compatibility, appending it... (length is ${#DEVELOPERCOMMENTSURL}"
+			COMPATINFO+="$( strFix "$STEAMDECKVERIFIED_CUSTOMRESULT_DEVPOST" "$DEVELOPERCOMMENTSURL" );"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Seems like no developer comments were left for this game - This is fine as most games don't have this, so skipping"
+		fi
 
 		writelog "INFO" "${FUNCNAME[0]} - Finished setting Steam Deck compatibility criteria strings"
     else
