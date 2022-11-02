@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v11.12.20221031-1"
+PROGVERS="v11.12.20221102-1"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -5512,38 +5512,51 @@ function MainMenu {
 	fi
 	fixShowGnAid
 
+	if [ -z "$STEAMDECKCOMPATRATING" ]; then
+		prepareSteamDeckCompatInfo  # Only fetches data once, we might already have it from askSettings so don't fetch again - Minor optimisation
+	fi
+
 	LAPL="$(getLaPl)"
-	SETHEAD="$(spanFont "${PROGNAME} (${PROGNAME,,}) - ${PROGVERS} \n \n$SGNAID" "H")\n<span font=\"italic\">$LAPL\n(${#CfgFiles[@]} $GUI_EDITABLECFGS)\n($GUI_EDITABLEGAMECFGS)\n</span>"
+	SETHEAD="$(spanFont "${PROGNAME} (${PROGNAME,,}) - ${PROGVERS} \n \n$SGNAID" "H")"
+	# SETHEAD="$(spanFont "${PROGNAME} (${PROGNAME,,}) - ${PROGVERS} \n \n$SGNAID" "H")\n<i>$LAPL\n(${#CfgFiles[@]} $GUI_EDITABLECFGS)\n($GUI_EDITABLEGAMECFGS)\n</i>"
 
 	TT_OPENURL="Help Url Gui"
 
-	# Show Steam Deck compatibility on Steam Deck
+	# Last played date/time with STL
+	if [ -n "$LAPL" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Game Info Gotten!"
+		SETHEAD="${SETHEAD}\n<i>$LAPL</i>"
+	fi
+
+	# Game config file info
+	# TODO hide if no gamecfgs - Maybe this check needs an overhaul?
+	SETHEAD="${SETHEAD}\n <i>(${#CfgFiles[@]} $GUI_EDITABLECFGS)\n($GUI_EDITABLEGAMECFGS)</i>"
+
+	# Show Steam Deck compatibility on Main Menu when in Steam Deck Desktop Mode
 	if [ "$SMALLDESK" -eq 1 ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Looks like we're in Steam Deck desktop mode here on the Main Menu"
 
-		if [ -n "$STEAMDECKCOMPATRATING" ]; then
-			SETHEAD="$SETHEAD \n <b>${GUI_SDCR}:</b> $STEAMDECKCOMPATRATING"
-		fi
+		SETHEAD="$SETHEAD \n <b>${GUI_SDCR}:</b> $STEAMDECKCOMPATRATING"
 	fi
 
 	if [ "$SMALLDESK" -eq 0 ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Looks like we're loading the Main Menu regularly"
 
 		if [ -n "$DEVELOPER" ]; then
-			SETHEAD="$SETHEAD \n <b>${GUI_DEV}:</b> '$DEVELOPER'"
+			SETHEAD="$SETHEAD \n\n <b>${GUI_DEV}:</b> $DEVELOPER"
 		fi
 
 		if [ -n "$PUBLISHER" ]; then
-			SETHEAD="$SETHEAD \n <b>${GUI_PUB}:</b> '$PUBLISHER'"
+			SETHEAD="$SETHEAD \n <b>${GUI_PUB}:</b> $PUBLISHER"
 		fi
 	
 		prepareProtonDBRating
-		prepareSteamDeckCompatInfo
 		getGameFiles "$AID"
 		setGameFilesArray
 		TT_GAFI="$( printf "<u>%s</u>" "${GUI_GAFI}" )"
 		TT_GAFI="${TT_GAFI}$(for i in "${!GamFiles[@]}"; do printf "\n<b>%s</b>: %s" "${GamDesc[$i]}" "${GamFiles[$i]}"; done)"
 
+		# Only shown on the Game Files tooltip
 		if [ -n "$METACRITIC_SCORE" ] && ! grep -q "^${GUI_MCS}" "$PDBRAINFO"; then
 			echo "<b>${GUI_MCS}:</b> $METACRITIC_SCORE" >> "$PDBRAINFO"
 		fi
@@ -5562,26 +5575,26 @@ function MainMenu {
 		fi
 
 		if [ -L "$GPFX/$DRCU/$STUS" ]; then
-			SETHEAD="$SETHEAD \n <b>${GUI_SSU}:</b> symlink to '$(readlink "$GPFX/$DRCU/$STUS")'"
+			SETHEAD="$SETHEAD \n <b>${GUI_SSU}:</b> symlink to $(readlink "$GPFX/$DRCU/$STUS")"
 		fi
 
 		if [ "$ISORIGIN" -eq 1 ]; then
-			SETHEAD="$SETHEAD \n <b>${GUI_SGW}:</b> 'Origin interfering'"
+			SETHEAD="$SETHEAD \n <b>${GUI_SGW}:</b> Origin interfering"
 		else
 			if [ -n "$GAMEWINDOW" ] && [ "$GAMEWINDOW" != "$NON" ]; then
-				SETHEAD="$SETHEAD \n <b>${GUI_SGW}:</b> '$(fixShow "$GAMEWINDOW")'"
+				SETHEAD="$SETHEAD \n <b>${GUI_SGW}:</b> $(fixShow "$GAMEWINDOW")"
 			fi	
 		fi
 		
 		if [ -n "$GAMEEXE" ]; then
-			SETHEAD="$SETHEAD \n <b>${GUI_SGE}:</b> '$GAMEEXE'"
+			SETHEAD="$SETHEAD \n <b>${GUI_SGE}:</b> $GAMEEXE"
 		fi
 
 		if [ "$ISORIGIN" -eq 1 ]; then
-			SETHEAD="$SETHEAD \n <b>${GUI_SGA}:</b> 'Origin $L2EA url'"
+			SETHEAD="$SETHEAD \n <b>${GUI_SGA}:</b> Origin $L2EA url"
 		else
 			if [ "${#ORGCMDARGS[@]}" -ge 1 ]; then
-				SETHEAD="$SETHEAD \n <b>${GUI_SGA}:</b> '${ORGCMDARGS[*]}'"
+				SETHEAD="$SETHEAD \n <b>${GUI_SGA}:</b> ${ORGCMDARGS[*]}"
 			fi
 		fi
 	fi
@@ -8729,26 +8742,24 @@ function askSettings {
 				fi
 
 				# Tested and this should not break Non-Steam Games - Open an issue if it does!
-				mapfile -d ";" -t -O "${#DECKCOMPATARR[@]}" DECKCOMPATARR <<< "$( getSteamDeckCompatInfo "$( echo "$AID" | xargs )" )"
-				unset "DECKCOMPATARR[-1]"
-				STEAMDECKCOMPATOUT="<b>$GUI_SDCR:</b> ${DECKCOMPATARR[0]:$STEAMDECKCOMPAT_UNKNOWN}"
+				prepareSteamDeckCompatInfo
+				STEAMDECKCOMPATOUT="<b>$GUI_SDCR:</b> ${STEAMDECKCOMPATRATING:$STEAMDECKCOMPAT_UNKNOWN}"
 				if ! [ -f "$STLGDECKCOMPAT/${AID}-deckcompatrating.json" ]; then
 					# If the Steam Deck compat rating json doesn't exist, assume something messed up e.g. offline or JQ is not installed
 					writelog "INFO" "${FUNCNAME[0]} - Could not retrieve Steam Deck compatibility rating, defaulting to $STEAMDECKCOMPAT_UNKNOWN - Maybe '$JQ' is missing or we are offline?"
 				fi
 
 				writelog "INFO" "${FUNCNAME[0]} - Steam Deck compatibility rating string is '$STEAMDECKCOMPATOUT'"
-
 				writelog "INFO" "${FUNCNAME[0]} - Preparing to show Wait Requester"
 
 				"$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
 				--title="$TITLE" \
 				--text="$(spanFont "$SGNAID - $REQQEST" "H")" \
-				--field="<span font=\"italic\">$PDBROUT</span>":LBL \
-				--field="<span font=\"italic\">$STEAMDECKCOMPATOUT</span>":LBL \
-				--field="<span font=\"italic\">$LAPL</span>":LBL \
-				--field="<span font=\"italic\">(${#CfgFiles[@]} $GUI_EDITABLECFGS)</span>":LBL \
-				--field="<span font=\"italic\">($GUI_EDITABLEGAMECFGS)</span>":LBL \
+				--field="<i>$PDBROUT</i>":LBL \
+				--field="<i>$STEAMDECKCOMPATOUT</i>":LBL \
+				--field="<i>$LAPL</i>":LBL \
+				--field="<i>(${#CfgFiles[@]} $GUI_EDITABLECFGS)</i>":LBL \
+				--field="<i>($GUI_EDITABLEGAMECFGS)</i>":LBL \
 				--button="$REQBUT":0 \
 				--button="$BUT_CAN":1 \
 				--timeout="$WAITEDITOR" \
@@ -15016,7 +15027,7 @@ function prepareProtonDBRating {
 			PDBTOTAL="${PDBARR[2]}"
 			PDBTREND="${PDBARR[3]}"
 			PDBBESTT="${PDBARR[4]}"
-			printf '<b>ProtonDB Rating Trend:</b> %s' "${PDBTREND}" > "$PDBRASINF"
+			printf '<b>ProtonDB Rating Trend:</b> %s' "${PDBTREND^}" > "$PDBRASINF"
 			printf '<u>%s</u>\n<b>Confidence:</b> %s\n<b>Score:</b> %s\n<b>Total Votes:</b> %s\n<b>Rating Trend:</b> %s\n<b>Best Rating:</b> %s\n' "$GUI_USEPDBRATING" "${PDBCONFI}" "${PDBSCORE}" "${PDBTOTAL}" "${PDBTREND}" "${PDBBESTT}" > "$PDBRAINFO"
 		fi
 	fi
@@ -18394,7 +18405,7 @@ function restoreSteamUser {
 
 		"$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center --on-top "$WINDECO" \
 		--title="$TITLE" \
-		--text="$(spanFont "$(strFix "$GUI_AR" "$BACKUPSRC" "$SteamUserDir")" "H")\n<span font=\"italic\">$1</span>" $GEOM
+		--text="$(spanFont "$(strFix "$GUI_AR" "$BACKUPSRC" "$SteamUserDir")" "H")\n<i>$1</i>" $GEOM
 		case $? in
 			0) 	{
 					writelog "INFO" "${FUNCNAME[0]} - Restoring '$SteamUserDir' from '$BACKUPSRC' confirmed"
@@ -18880,7 +18891,7 @@ function addNonSteamGameGui {
 
 	NSGSET="$("$YAD" --f1-action="$F1ACTION" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
 	--title="$TITLE" --separator="|" \
-	--text="$(spanFont "$GUI_ADDNSG" "H")\n<span font=\"italic\">$(strFix "$GUI_WARNNSG1" "$STERECO")\n\n$(strFix "$GUI_WARNNSG2" "$STERECO"))</span>" \
+	--text="$(spanFont "$GUI_ADDNSG" "H")\n<i>$(strFix "$GUI_WARNNSG1" "$STERECO")\n\n$(strFix "$GUI_WARNNSG2" "$STERECO"))</i>" \
 	--field=" ":LBL " " \
 	--field="     $GUI_NOSTGAPPNAME!$DESC_NOSTGAPPNAME ('NOSTGAPPNAME')" "${NOSTGAPPNAME/#-/ -}" \
 	--field="     $GUI_NOSTGEXEPATH!$DESC_NOSTGEXEPATH ('NOSTGEXEPATH')":FL "${NOSTGEXEPATH/#-/ -}" \
@@ -20697,7 +20708,17 @@ function prepareSteamDeckCompatInfo {
 	if [ "${#DECKCOMPATARR[@]}" -eq "0" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - No compatibility information available for '$AID' - Is this AppID definitely correct?"
 	else
-		STEAMDECKCOMPATRATING="${DECKCOMPATARR[0]}"
+		COMPATMARK=""
+		# HTML symbols for Verified (checkmark), Playable (circled question mark) and Unsupported (no-entry sign) 
+		case ${DECKCOMPATARR[0]} in
+			*"Verified"*) COMPATMARK="&#10003;"
+			;;
+			*"Playable"*) COMPATMARK="&#128712;"
+			;;
+			*"Unsupported"*) COMPATMARK="&#128683;"
+			;;
+		esac
+		STEAMDECKCOMPATRATING="${DECKCOMPATARR[0]} ${COMPATMARK}"
 	fi
 }
 
