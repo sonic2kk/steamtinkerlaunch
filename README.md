@@ -3,7 +3,7 @@
 [![GitHub stars](https://img.shields.io/github/stars/sonic2kk/steamtinkerlaunch.svg?style=flat-square)](https://github.com/sonic2kk/steamtinkerlaunch/stargazers)
 ![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/sonic2kk/steamtinkerlaunch?style=flat-square)
 [![GitHub contributors](https://img.shields.io/github/contributors/sonic2kk/steamtinkerlaunch.svg?style=flat-square)](https://github.com/sonic2kk/steamtinkerlaunch/graphs/contributors)
-![aur votes](https://img.shields.io/aur/votes/steamtinkerlaunch?label=aur%20votes&style=flat-square)
+[![aur votes](https://img.shields.io/aur/votes/steamtinkerlaunch?label=aur%20votes&style=flat-square)](https://aur.archlinux.org/packages/steamtinkerlaunch)
 [![GitHub issues](https://img.shields.io/github/issues/sonic2kk/steamtinkerlaunch.svg?style=flat-square)](https://github.com/sonic2kk/steamtinkerlaunch/issues)
 [![GitHub license](https://img.shields.io/github/license/sonic2kk/steamtinkerlaunch.svg?style=flat-square)](https://github.com/sonic2kk/steamtinkerlaunch/blob/dev/LICENSE)
 
