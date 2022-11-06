@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v11.12.20221103-2"
+PROGVERS="v11.12.20221107-1"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -9662,6 +9662,7 @@ function StandaloneProtonGame {
 	fi
 }
 
+# TODO these both need work on Steam Deck to function
 function oneTimeWinecfg {
 	writelog "INFO" "${FUNCNAME[0]} - Running OneTime Winecfg"
 	
@@ -20862,6 +20863,36 @@ function setflatpak {
 	fi
 }
 
+# Somewhat experimental for now
+# This has the side effect of being called everytime on a local install run, but since the scriptdir of a local install can change, It Has To Be This Way
+function setLocalInstall {
+	SCRIPTDIR="$( realpath "$0" )"
+	SCRIPTDIR="${SCRIPTDIR%/*}"
+	# If not on Steam Deck or Flatpak, and we don't have a system config directory, assume we have a non-root local install and set/update config folder structure to match
+	if [ "$ONSTEAMDECK" -eq 0 ] && [ ! -d "$SYSTEMSTLCFGDIR" ] && [ "$INFLATPAK" -eq 0 ]; then  # Check if "$SYSTEMSTLCFGDIR" doesn't exist because the user could be running the script for testing but have a global install
+		writelog "INFO" "${FUNCNAME[0]} - Looks like we have a non-root local install here - Updating paths..."
+		
+		# If no "$SYSTEMSTLCFGDIR" directory, assume it was looking in `/usr/something` for configs (where they would be on a root install)
+		# but since that folder doesn't exist, set it to the scriptdir 
+		SYSTEMSTLCFGDIR="$SCRIPTDIR"
+	else
+		writelog "INFO" "${FUNCNAME[0]} - Looks like we don't have a local non-root install"
+	fi
+
+	# Only update if we have an existing config file, don't call `updateConfigEntry` on non-existent file
+	# Running this block here means we can update existing configs if the user installs system-wide again later or switches between
+	if [ -f "$STLDEFGLOBALCFG" ]; then
+		touch "$FUPDATE"
+		updateConfigEntry "GLOBALCOLLECTIONDIR" "$SYSTEMSTLCFGDIR/collections" "$STLDEFGLOBALCFG"
+		updateConfigEntry "GLOBALMISCDIR" "$SYSTEMSTLCFGDIR/misc" "$STLDEFGLOBALCFG"
+		updateConfigEntry "GLOBALSBSTWEAKS" "$SYSTEMSTLCFGDIR/sbstweaks" "$STLDEFGLOBALCFG"
+		updateConfigEntry "GLOBALTWEAKS" "$SYSTEMSTLCFGDIR/tweaks" "$STLDEFGLOBALCFG"
+		updateConfigEntry "GLOBALEVALDIR" "$SYSTEMSTLCFGDIR/eval" "$STLDEFGLOBALCFG"
+		updateConfigEntry "GLOBALSTLLANGDIR" "$SYSTEMSTLCFGDIR/lang" "$STLDEFGLOBALCFG"
+		updateConfigEntry "GLOBALSTLGUIDIR" "$SYSTEMSTLCFGDIR/guicfgs" "$STLDEFGLOBALCFG"
+	fi
+}
+
 ##################
 
 function main {
@@ -20872,6 +20903,7 @@ function main {
 	touch "$PRELOG"
 	mkProjDir "$LOGDIRID"
 	setflatpak
+	setLocalInstall
 
 	if [ "$INFLATPAK" -eq 1 ]; then
 		USS="/app/share/steam"
