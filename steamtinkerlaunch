@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v11.12.20221107-6"
+PROGVERS="v11.12.20221107-7"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -12208,11 +12208,18 @@ function dlVortexSupportedList {
 	fi
 	
 	awk '/supported-games/,/Vortex FAQ/' "$VORTHTMLLIST" | grep -oP "(?<=<li><a href=).*" | grep -v "Nexus Mods" | sed "s:^\"/:\":; s:\">:\";\":; s:</a></li>:\":" | sort -o "$VORTTMPLIST"
-	grep -wF -f "$VORTTMPLIST" "$VORTEXGAMES" > "${VORTTMPLIST//-temp/-temp2}"
+	readarray -t VTXOLGAMES <<<"$( grep -wF -f "$VORTTMPLIST" "$VORTEXGAMES" > "${VORTTMPLIST//-temp/-temp2}"
 	{
 		cat "${VORTTMPLIST//-temp/-temp2}"
 		comm -23 "$VORTEXGAMES" "${VORTTMPLIST//-temp/-temp2}"
-	} | sort
+	} | sort )"
+
+	for VTXOLG in "${VTXOLGAMES[@]}"; do
+		VTXGN="$( echo "$VTXOLG" | cut -d ";" -f 2 | cut -d '"' -f 2 )"
+		VTXGAID="$( echo "$VTXOLG" | cut -d ";" -f 3 | cut -d '"' -f 2 )"
+		printf "%s (%s)\n" "$VTXGN" "$VTXGAID"
+	done
+
 	rm "${VORTTMPLIST//-temp/-temp2}" "$VORTTMPLIST" 2>/dev/null
 }
 
