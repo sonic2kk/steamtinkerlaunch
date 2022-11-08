@@ -2591,7 +2591,7 @@ function setDefaultCfgValues {
 		if [ -z "$ROBERTAARGS" ]						; then	ROBERTAARGS="--wait-before-run"; fi
 		if [ -z "$LUXTORPEDACMD" ]						; then	LUXTORPEDACMD="$STEAMCOMPATOOLS/luxtorpeda/luxtorpeda"; fi
 		if [ -z "$LUXTORPEDAARGS" ]						; then	LUXTORPEDAARGS="wait-before-run"; fi
-		if [ -z "$RSVERS" ]								; then	RSVERS="5.3.0"; fi
+		if [ -z "$RSVERS" ]								; then	RSVERS="5.4.2"; fi
 		if [ -z "$DOWNLOAD_RESHADE" ]					; then	DOWNLOAD_RESHADE="1"; fi
 		if [ -z "$RESHADESRCDIR" ]						; then	RESHADESRCDIR="$STLDLDIR/reshade"; fi
 		if [ -z "$D3D47_64" ]							; then	D3D47_64="${D3D47//./_64.}"; fi
@@ -2721,6 +2721,7 @@ function setDefaultCfgValues {
 		if [ -z "$RESHADE_DEPTH3D" ]					; then	RESHADE_DEPTH3D="0"; fi
 		if [ -z "$USERESHADE" ]							; then	USERESHADE="0"; fi
 		if [ -z "$RESHADEUPDATE" ]						; then	RESHADEUPDATE="0"; fi
+		if [ -z "$RSVERSOVRD" ] 						; then RSVERSOVRD="0"; fi
 		if [ -z "$CHOOSESHADERS" ]						; then	CHOOSESHADERS="0"; fi
 		if [ -z "$ALTEXEPATH" ]							; then	ALTEXEPATH="/tmp"; fi
 		if [ -z "$ARCHALTEXE" ]							; then	ARCHALTEXE="$DUMMYBIN"; fi
@@ -3256,6 +3257,8 @@ function saveCfg {
 			echo "USERESHADE=\"$USERESHADE\""
 			echo "## $DESC_RESHADEUPDATE"
 			echo "RESHADEUPDATE=\"$RESHADEUPDATE\""
+			echo "## $DESC_RESHADEOVERRIDE"
+			echo "RSVERSOVRD=\"$RSVERSOVRD\""
 			echo "## $DESC_CHOOSESHADERS"
 			echo "CHOOSESHADERS=\"$CHOOSESHADERS\""
 			echo "## $DESC_ALTEXEPATH"
@@ -4948,6 +4951,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_RS_64!$DESC_RS_64 ('RS_64')" "${RS_64/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#MENU_GLOBAL` \
 --field="     $GUI_D3D47_32!$DESC_D3D47_32 ('D3D47_32')" "${D3D47_32/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#MENU_GLOBAL` \
 --field="     $GUI_D3D47_64!$DESC_D3D47_64 ('D3D47_64')" "${D3D47_64/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#MENU_GLOBAL` \
+--field="     $GUI_RESHADEOVERRIDE!$DESC_RESHADEOVERRIDE ('RSVERSOVRD')":CBE "$(cleanDropDown "${RSVERS/#-/ -}" "$RESHADEVERSIONS")" `#CAT_Shader` `#SUB_ReShade` `#MENU_GAME` \
 --field="     $GUI_ARCHALTEXE!$DESC_ARCHALTEXE ('ARCHALTEXE')":FL "${ARCHALTEXE/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#MENU_GAME` \
 --field="     $GUI_ALTEXEPATH!$DESC_ALTEXEPATH ('ALTEXEPATH')":DIR "${ALTEXEPATH/#-/ -}" `#CAT_Shader` `#SUB_Directories` `#MENU_GAME` \
 --field="     $GUI_RESHADESRCDIR!$DESC_RESHADESRCDIR ('RESHADESRCDIR')":DIR "${RESHADESRCDIR/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#SUB_Directories` `#MENU_GLOBAL` \
@@ -7433,21 +7437,22 @@ function dlReShade {
 	else
 		DLVERS="$1"
 	fi
-	rm "$RESHADESRCDIR/$RS_64" 2>/dev/null
-	rm "$RESHADESRCDIR/$RS_32" 2>/dev/null
-	rm "$RESHADESRCDIR/${RS_64//.dll/.json}" 2>/dev/null
-	rm "$RESHADESRCDIR/${RS_32//.dll/.json}" 2>/dev/null
+	#rm "$RESHADESRCDIR/$RS_64" 2>/dev/null
+	#rm "$RESHADESRCDIR/$RS_32" 2>/dev/null
+	#rm "$RESHADESRCDIR/${RS_64//.dll/.json}" 2>/dev/null
+	#rm "$RESHADESRCDIR/${RS_32//.dll/.json}" 2>/dev/null
 
-	DLDST="${RESHADESRCDIR}/${RSSU}.exe"
-	DLDSTV="${RESHADESRCDIR}/${RSSU}_${DLVERS}.exe"
+	#DLDST="${RESHADESRCDIR}/${RSSU}.exe"
+	#DLDSTV="${RESHADESRCDIR}/${RSSU}_${DLVERS}.exe"
+	DLDST="${RESHADESRCDIR}/${RSSU}_${DLVERS}.exe"
 
 	RSSETUP="${RESHADEDLURL}/${RSSU}_${DLVERS}.exe"
 
 	dlCheck "$RSSETUP" "$DLDST" "X" "Downloading $RSSU"
-	if [ ! -f "$DLDSTV" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - Creating backup '${RSSU}_${DLVERS}.exe'"
-		cp "$DLDST" "$DLDSTV"
-	fi
+	#if [ ! -f "$DLDSTV" ]; then
+	#	writelog "INFO" "${FUNCNAME[0]} - Creating backup '${RSSU}_${DLVERS}.exe'"
+	#	cp "$DLDST" "$DLDSTV"
+	#fi
 
 	echo "$DLVERS" > "${DLDST//.exe/.log}"
 
@@ -7455,15 +7460,28 @@ function dlReShade {
 		writelog "SKIP" "${FUNCNAME[0]} - Downloaded file '$DLDST' is empty - removing"
 		rm "$DLDST" 2>/dev/null
 	else
-		"$UNZIP" -q "$DLDST" -d "$RESHADESRCDIR" 2>/dev/null
+		"$UNZIP" -q "$DLDST" -d "$RESHADESRCDIR/$RSVERS" 2>/dev/null
 		writelog "INFO" "${FUNCNAME[0]} - Downloaded and extracted ${RESH}-v${DLVERS} file '$DLDST'"
+	fi
+}
+
+function overrideReShadeVersion
+{
+	RESHADEVERSIONS="5.4.2!5.0.0!4.2.0!3.5.3" # List some hardcoded reshade versions to selct for the override #TODO replace with a auto poplating list based on the last few releses
+
+	if ! [ "$RSVERSOVRD" -eq "0" ]; then
+		writelog "INFO" "ReShade version - Set to '$RSVERSOVRD'"
+		RSVERS="$RSVERSOVRD"
+	else
+		writelog "SKIP" "RSVERSOVRD is set to '$RSVERSOVRD' continue with reshade version - '$RSVERS'"
 	fi
 }
 
 # prepare reshade files if not found:
 function prepareReshadeFiles {
-	if [ "$DOWNLOAD_RESHADE" -eq 1 ]; then
-		writelog "INFO" "${FUNCNAME[0]} - DOWNLOAD_RESHADE enabled"
+overrideReShadeVersion
+if [ "$DOWNLOAD_RESHADE" -eq 1 ]; then
+	writelog "INFO" "${FUNCNAME[0]} - DOWNLOAD_RESHADE enabled"
 		if [ ! -f "$D3D47DLDIR/$D3D47_32" ]; then dd
 			writelog "404" "${FUNCNAME[0]} - '$D3D47DLDIR/$D3D47_32' missing - downloading"
 
@@ -7475,8 +7493,8 @@ function prepareReshadeFiles {
 		dld3d47 "32"
 		dld3d47 "64"
 
-		if [ ! -f "$RESHADESRCDIR/$RS_64" ] || [ ! -f "$RESHADESRCDIR/$RS_32" ]; then
-			writelog "404" "${FUNCNAME[0]} - '$RESHADESRCDIR/$RS_64' and/or '$RS_32' missing - downloading"
+		if [ ! -f "$RESHADESRCDIR/$RSVERS/$RS_64" ] || [ ! -f "$RESHADESRCDIR/$RSVERS/$RS_32" ]; then
+			writelog "404" "${FUNCNAME[0]} - '$RESHADESRCDIR/$RSVERS/$RS_64' and/or '$RS_32' missing - downloading"
 			dlReShade
 		fi
 
