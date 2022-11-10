@@ -2598,6 +2598,8 @@ function setDefaultCfgValues {
 		if [ -z "$D3D47_32" ]							; then	D3D47_32="${D3D47//./_32.}"; fi
 		if [ -z "$RS_64" ]								; then	RS_64="ReShade64.dll"; fi
 		if [ -z "$RS_32" ]								; then	RS_32="ReShade32.dll"; fi
+		if [ -z "$RS_64_VK" ]							; then	RS_64_VK="ReShade64.json"; fi
+		if [ -z "$RS_32_VK" ]							; then	RS_32_VK="ReShade32.json"; fi
 		if [ -z "$DLSHADER" ]							; then	DLSHADER="1"; fi
 		if [ -z "$SAVESETSIZE" ]						; then	SAVESETSIZE="1"; fi
 		if [ -z "$STARTMENU" ]							; then	STARTMENU="Menu"; fi
@@ -2722,7 +2724,7 @@ function setDefaultCfgValues {
 		if [ -z "$USERESHADE" ]							; then	USERESHADE="0"; fi
 		if [ -z "$RESHADEUPDATE" ]						; then	RESHADEUPDATE="0"; fi
 		if [ -z "$RSOVRD" ] 							; then RSOVRD="0"; fi
-		if [ -z "$RSVERSOVRD" ] 						; then RSVERSOVRD="$RSVERS"; fi
+		if [ -z "$RSOVRVERS" ] 						; then RSOVRVERS="$RSVERS"; fi
 		if [ -z "$CHOOSESHADERS" ]						; then	CHOOSESHADERS="0"; fi
 		if [ -z "$ALTEXEPATH" ]							; then	ALTEXEPATH="/tmp"; fi
 		if [ -z "$ARCHALTEXE" ]							; then	ARCHALTEXE="$DUMMYBIN"; fi
@@ -3016,6 +3018,10 @@ function saveCfg {
 			echo "RS_64=\"$RS_64\""
 			echo "## $DESC_RS_32"
 			echo "RS_32=\"$RS_32\""
+			echo "## $DESC_RS_64_VK"
+			echo "RS_64_VK=\"$RS_64_VK\""
+			echo "## $DESC_RS_32_VK"
+			echo "RS_32_VK=\"$RS_32_VK\""
 			echo "## $DESC_DLSHADER"
 			echo "DLSHADER=\"$DLSHADER\""
 			echo "## $DESC_SAVESETSIZE"
@@ -3261,7 +3267,7 @@ function saveCfg {
 			echo "## $DESC_RESHADEOVERRIDETOGGLE"
 			echo "RSOVRD=\"$RSOVRD\""
 			echo "## $DESC_RESHADEOVERRIDEVERSION"
-			echo "RSVERSOVRD=\"$RSVERSOVRD\""
+			echo "RSOVRVERS=\"$RSOVRVERS\""
 			echo "## $DESC_CHOOSESHADERS"
 			echo "CHOOSESHADERS=\"$CHOOSESHADERS\""
 			echo "## $DESC_ALTEXEPATH"
@@ -4953,9 +4959,11 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_RSVERS!$DESC_RSVERS ('RSVERS')" "${RSVERS/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#MENU_GLOBAL` \
 --field="     $GUI_RS_32!$DESC_RS_32 ('RS_32')" "${RS_32/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#MENU_GLOBAL` \
 --field="     $GUI_RS_64!$DESC_RS_64 ('RS_64')" "${RS_64/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#MENU_GLOBAL` \
+--field="     $GUI_RS_32_VK!$DESC_RS_32_VK ('RS_32_VK')" "${RS_32_VK/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#MENU_GLOBAL` \
+--field="     $GUI_RS_64_VK!$DESC_RS_64_VK ('RS_64_VK')" "${RS_64_VK/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#MENU_GLOBAL` \
 --field="     $GUI_D3D47_32!$DESC_D3D47_32 ('D3D47_32')" "${D3D47_32/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#MENU_GLOBAL` \
 --field="     $GUI_D3D47_64!$DESC_D3D47_64 ('D3D47_64')" "${D3D47_64/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#MENU_GLOBAL` \
---field="     $GUI_RESHADEOVERRIDEVERSION!$DESC_RESHADEOVERRIDEVERSION ('RSVERSOVRD')":CBE "$(cleanDropDown "$RESHADEVERSIONS")" `#CAT_Shader` `#SUB_ReShade` `#MENU_GAME` \
+--field="     $GUI_RESHADEOVERRIDEVERSION!$DESC_RESHADEOVERRIDEVERSION ('RSOVRVERS')":CBE "$(cleanDropDown "$RESHADEVERSIONS")" `#CAT_Shader` `#SUB_ReShade` `#MENU_GAME` \
 --field="     $GUI_ARCHALTEXE!$DESC_ARCHALTEXE ('ARCHALTEXE')":FL "${ARCHALTEXE/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#MENU_GAME` \
 --field="     $GUI_ALTEXEPATH!$DESC_ALTEXEPATH ('ALTEXEPATH')":DIR "${ALTEXEPATH/#-/ -}" `#CAT_Shader` `#SUB_Directories` `#MENU_GAME` \
 --field="     $GUI_RESHADESRCDIR!$DESC_RESHADESRCDIR ('RESHADESRCDIR')":DIR "${RESHADESRCDIR/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#SUB_Directories` `#MENU_GLOBAL` \
@@ -7437,7 +7445,7 @@ function installd3d47dll {
 }
 
 function createDLReShadeList {
-	RESHADEVERSIONS="$RSVERSOVRD!$RSVERS!5.0.0!4.9.1!3.4.1" # List some hardcoded reshade versions to selct for the override 
+	RESHADEVERSIONS="$RSOVRVERS!$RSVERS!5.0.0!4.9.1!3.4.1" # List some hardcoded reshade versions to selct for the override 
 	#TODO replace with a auto poplating list based on the last few releses
 }
 
@@ -7474,14 +7482,17 @@ function dlReShade {
 	fi
 }
 
-function overrideReShadeVersion
-{
-	if [[ "$RSVERSOVRD" = "$RSVERS" ]] && [ "$RSOVRD" -eq 1 ]; then
-		writelog "INFO" ${FUNCNAME[0]} - "Overriding ReShade version - Set to '$RSVERSOVRD'"
-		RSVERS="$RSVERSOVRD"
-	else
-		writelog "SKIP" ${FUNCNAME[0]} - "RSVERSOVRD is set to '$RSVERSOVRD' continue with reshade version - '$RSVERS'"
-	fi
+function overrideReShadeVersion {
+if [ "$RSOVRD" -eq 1 ]; then  # This is meant to be the checkbox var
+	if [[ ! "$RSOVRVERS" = "$RSVERS" ]]; then
+		writelog "INFO" "${FUNCNAME[0]} - Overriding global ReShade version '$RSVERS' with '$RSOVRVERS'"
+       	RSVERS="$RSOVRVERS"
+   	else
+       	writelog "SKIP" "${FUNCNAME[0]} - ReShade Override version and ReShade global version match - Not overriding"
+   	fi
+else
+    writelog "SKIP" "${FUNCNAME[0]} - ReShade override is disabled - Skipping"
+fi
 }
 
 # prepare reshade files if not found:
@@ -7502,6 +7513,11 @@ if [ "$DOWNLOAD_RESHADE" -eq 1 ]; then
 
 		if [ ! -f "$RESHADESRCDIR/$RSVERS/$RS_64" ] || [ ! -f "$RESHADESRCDIR/$RSVERS/$RS_32" ]; then
 			writelog "404" "${FUNCNAME[0]} - '$RESHADESRCDIR/$RSVERS/$RS_64' and/or '$RS_32' missing - downloading"
+			dlReShade
+		fi
+
+		if [ ! -f "$RESHADESRCDIR/$RSVERS/$RS_64_VK" ] || [ ! -f "$RESHADESRCDIR/$RSVERS/$RS_32_VK" ]; then
+			writelog "404" "${FUNCNAME[0]} - '$RESHADESRCDIR/$RSVERS/$RS_64_VK' and/or '$RS_32_VK' missing - downloading"
 			dlReShade
 		fi
 
