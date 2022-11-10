@@ -2536,6 +2536,7 @@ function setDefaultCfgValues {
 		if [ -z "$DL_D3D47_64" ]						; then	DL_D3D47_64="https://lutris.net/files/tools/dll/$D3D47"; fi
 		if [ -z "$DL_D3D47_32" ]						; then	DL_D3D47_32="http://dege.freeweb.hu/dgVoodoo2/bin/D3DCompiler_47.zip"; fi
 		if [ -z "$RESHADEDLURL" ]						; then	RESHADEDLURL="https://reshade.me/downloads"; fi
+		if [ -z "$RESHADEPROJURL" ]						; then	RESHADEPROJURL="https://github.com/crosire/reshade"; fi
 		if [ -z "$VORTEXPROJURL" ]						; then  VORTEXPROJURL="$GHURL/Nexus-Mods/${VTX^}"; fi
 		if [ -z "$DXVKURL" ]							; then	DXVKURL="$GHURL/doitsujin/dxvk"; fi
 		if [ -z "$XLIVEURL" ]							; then	XLIVEURL="$GHURL/ThirteenAG/Ultimate-ASI-Loader/releases/download/v4.61/Ultimate-ASI-Loader.zip"; fi
@@ -2859,6 +2860,8 @@ function saveCfg {
 			echo "DXVKURL=\"$DXVKURL\""				
 			echo "## ${RESH} DL URL"
 			echo "RESHADEDLURL=\"$RESHADEDLURL\""
+			echo "## ${RESH} Project URL"
+			echo "RESHADEPROJURl=\"$RESHADEPROJURL\""
 			echo "## ${VTX^} Project URL"
 			echo "VORTEXPROJURL=\"$VORTEXPROJURL\""
 			echo "## Xlive DL URL"
@@ -6045,6 +6048,21 @@ function gitUpdate {
 		fi
 	fi
 }
+# Get the last N tagged releases from PROJURL taken from sonic2kk
+function fetchGitHubTags {
+    PROJURL="$1"
+    N="$2"
+
+    RELEASESURL="${PROJURL}/releases"
+    TAGSURL="${PROJURL}/tags"
+
+    TAGSGREP="${RELEASESURL#"$GHURL"}/tag"
+
+    mapfile -t BASETAGS < <("$WGET" -q "${TAGSURL}" -O - 2> >(grep -v "SSL_INIT") | grep -oE "${TAGSGREP}[^\"]+" | sort -urV | grep -m "$N" "$TAGSGREP")
+    for TAG in "${BASETAGS[@]}"; do
+        basename "$TAG"
+    done
+}
 
 # Just for fun ;)
 function getSeasonalGreeting {
@@ -7445,8 +7463,10 @@ function installd3d47dll {
 }
 
 function createDLReShadeList {
-	RESHADEVERSIONS="$RSOVRVERS!$RSVERS!5.0.0!4.9.1!3.4.1" # List some hardcoded reshade versions to selct for the override 
-	#TODO replace with a auto poplating list based on the last few releses
+	if [ "$RSOVRD" -eq 1 ]; then
+		RSVERSONLINE="$( fetchGitHubTags "$RESHADEPROJURL" "3" )"
+		RESHADEVERSIONS="$RSOVRVERS!$RSVERS!$RSVERSONLINE!4.91!3.4.1" 
+	fi
 }
 
 function dlReShade {
@@ -7477,7 +7497,7 @@ function dlReShade {
 		writelog "SKIP" "${FUNCNAME[0]} - Downloaded file '$DLDST' is empty - removing"
 		rm "$DLDST" 2>/dev/null
 	else
-		"$UNZIP" -q "$DLDST" -d "$RESHADESRCDIR/$RSVERS" 2>/dev/null
+		"$UNZIP" -qo "$DLDST" -d "$RESHADESRCDIR/${DLVERS}" 2>/dev/null
 		writelog "INFO" "${FUNCNAME[0]} - Downloaded and extracted ${RESH}-v${DLVERS} file '$DLDST'"
 	fi
 }
@@ -7485,13 +7505,13 @@ function dlReShade {
 function overrideReShadeVersion {
 	if [ "$RSOVRD" -eq 1 ]; then  # This is meant to be the checkbox var
 		if [[ ! "$RSOVRVERS" = "$RSVERS" ]]; then
-			writelog "INFO" "${FUNCNAME[0]} - Overriding global ReShade version '$RSVERS' with '$RSOVRVERS'"
+			writelog "INFO" "${FUNCNAME[0]} - Overriding global '$RESH' version '$RSVERS' with '$RSOVRVERS'"
        		RSVERS="$RSOVRVERS"
    		else
-       		writelog "SKIP" "${FUNCNAME[0]} - ReShade Override version and ReShade global version match - Not overriding"
+       		writelog "SKIP" "${FUNCNAME[0]} - '$RESH' Override version and '$RESH' global version match - Not overriding"
    	fi
 	else
-    	writelog "SKIP" "${FUNCNAME[0]} - ReShade override is disabled - Skipping"
+    	writelog "SKIP" "${FUNCNAME[0]} - '$RESH' override is disabled - Skipping"
 	fi
 }
 
