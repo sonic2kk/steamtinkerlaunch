@@ -2593,7 +2593,7 @@ function setDefaultCfgValues {
 		if [ -z "$LUXTORPEDACMD" ]						; then	LUXTORPEDACMD="$STEAMCOMPATOOLS/luxtorpeda/luxtorpeda"; fi
 		if [ -z "$LUXTORPEDAARGS" ]						; then	LUXTORPEDAARGS="wait-before-run"; fi
 		if [ -z "$RSVERS" ]								; then	RSVERS="5.4.2"; fi
-#		if [ -z "$AUTOBUMPRESHADE" ]					; then	AUTOBUMPRESHADE="0"; fi
+		if [ -z "$AUTOBUMPRESHADE" ]					; then	AUTOBUMPRESHADE="0"; fi
 		if [ -z "$DOWNLOAD_RESHADE" ]					; then	DOWNLOAD_RESHADE="1"; fi
 		if [ -z "$RESHADESRCDIR" ]						; then	RESHADESRCDIR="$STLDLDIR/reshade"; fi
 		if [ -z "$D3D47_64" ]							; then	D3D47_64="${D3D47//./_64.}"; fi
@@ -3012,8 +3012,8 @@ function saveCfg {
 			echo "DOWNLOAD_RESHADE=\"$DOWNLOAD_RESHADE\""
 			echo "## $DESC_RSVERS"
 			echo "RSVERS=\"$RSVERS\""
-#			echo "## $AUTOBUMPRESHADE"
-#			echo "AUTOBUMPRESHADE=\"$AUTOBUMPRESHADE\""
+			echo "## $AUTOBUMPRESHADE"
+			echo "AUTOBUMPRESHADE=\"$AUTOBUMPRESHADE\""
 			echo "## $DESC_RESHADESRCDIR"
 			echo "RESHADESRCDIR=\"$RESHADESRCDIR\""
 			echo "## $DESC_D3D47_64"
@@ -5516,6 +5516,7 @@ function MainMenu {
 
 	createDLSpekList
 	createDLReShadeList
+	autoBumpReShade
 	prepareMenu "$@"
 
 	setShowPic
@@ -7466,12 +7467,16 @@ function installd3d47dll {
 	fi
 }
 
-#function autoBumpReShade {
-#	RSVERSLATEST="$( fetchGitHubTags "$RESHADEPROJURL" "1" )"
-#	if [ "$AUTOBUMPRESHADE" -eq 1 ] && [ "$RSVERS" -ge RSVERSLATEST ]; then
-#		
-#	fi
-#}
+function autoBumpReShade {
+	RSVERSLATEST="$( fetchGitHubTags "$RESHADEPROJURL" "1" )"
+	if [ "$AUTOBUMPRESHADE" -eq 1 ] && [ "$RSVERS" = RSVERSLATEST ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Found newer version of '$RESH' - Updating '$RSVERS' to '$RSVERSLATEST"
+		touch "$FUPDATE" 
+		updateConfigEntry "RSVERS" "$RSVERSLATEST" "$STLDEFGLOBALCFG"
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - '$RSVERS' is the latest version of '$RESH' - not updating"
+	fi
+}
 
 function createDLReShadeList {
 	if [ "$RSOVRD" -eq 1 ]; then
@@ -7545,6 +7550,7 @@ function prepareReshadeFiles {
 		dld3d47 "32"
 		dld3d47 "64"
 
+		#Check if ReShade file are missing
 		if [ ! -f "$RESHADESRCDIR/$RSVERS/$RS_64" ] || [ ! -f "$RESHADESRCDIR/$RSVERS/$RS_32" ]; then
 			writelog "404" "${FUNCNAME[0]} - '$RESHADESRCDIR/$RSVERS/$RS_64' and/or '$RS_32' missing - downloading"
 			dlReShade
@@ -7552,6 +7558,16 @@ function prepareReshadeFiles {
 
 		if [ ! -f "$RESHADESRCDIR/$RSVERS/$RS_64_VK" ] || [ ! -f "$RESHADESRCDIR/$RSVERS/$RS_32_VK" ]; then
 			writelog "404" "${FUNCNAME[0]} - '$RESHADESRCDIR/$RSVERS/$RS_64_VK' and/or '$RS_32_VK' missing - downloading"
+			dlReShade
+		fi
+
+		#Check if ReShade file is zero bytes
+		if [ ! -s "$RESHADESRCDIR/$RSVERS/$RS_64" ] || [ ! -s "$RESHADESRCDIR/$RSVERS/$RS_32" ]; then
+			writelog "404" "${FUNCNAME[0]} - '$RESHADESRCDIR/$RSVERS/$RS_64' and/or '$RS_32' corrupted - downloading"
+			dlReShade
+		fi
+		if [ ! -s "$RESHADESRCDIR/$RSVERS/$RS_64_VK" ] || [ ! -s "$RESHADESRCDIR/$RSVERS/$RS_32_VK" ]; then
+			writelog "404" "${FUNCNAME[0]} - '$RESHADESRCDIR/$RSVERS/$RS_64_VK' and/or '$RS_32_VK' corrupted - downloading"
 			dlReShade
 		fi
 
