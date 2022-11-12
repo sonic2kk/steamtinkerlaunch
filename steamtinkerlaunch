@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v11.12.20221112-5"
+PROGVERS="v11.12.20221112-6"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -3763,23 +3763,28 @@ function dlCustomProton {
 }
 
 function createDLProtList {
-	writelog "INFO" "${FUNCNAME[0]} - Generating list of online available custom Proton builds"
+	if [ ! -x "$(command -v "$JQ")" ]; then
+		writelog "WARN" "${FUNCNAME[0]} - 'jq' is not installed - Can't generate list of online Proton versions"
+	else
+		writelog "INFO" "${FUNCNAME[0]} - Generating list of online available custom Proton builds"
 
-	PROTDLLIST="$STLSHM/ProtonDL.txt"
-	MAXAGE=360
+		PROTDLLIST="$STLSHM/ProtonDL.txt"
+		MAXAGE=360
 
-	if [ ! -f "$PROTDLLIST" ] || test "$(find "$PROTDLLIST" -mmin +"$MAXAGE")"; then
-		rm "$PROTDLLIST" 2>/dev/null
-		while read -r CPURL; do
-			if grep -q "$GHURL" <<< "${!CPURL}"; then
-			SRCURL="${!CPURL}"
-			SRCURL="${SRCURL//\/releases}"
-			SRCURL="${SRCURL//$GHURL/$AGHURL\/repos}"
-			SRCURL="${SRCURL}/releases"
+		if [ ! -f "$PROTDLLIST" ] || test "$(find "$PROTDLLIST" -mmin +"$MAXAGE")"; then
+			rm "$PROTDLLIST" 2>/dev/null
+			while read -r CPURL; do
+				if grep -q "$GHURL" <<< "${!CPURL}"; then
+				SRCURL="${!CPURL}"
+				SRCURL="${SRCURL//\/releases}"
+				SRCURL="${SRCURL//$GHURL/$AGHURL\/repos}"
+				SRCURL="${SRCURL}/releases"
 
-			"$WGET" -q "$SRCURL" -O - | jq -r '.[].assets[].browser_download_url' | grep "tar.gz\|tar.xz" | grep -v "Yad\|7.x" >> "$PROTDLLIST"
-			fi
-		done <<< "$(grep "^CP_" "$STLURLCFG" | cut -d '=' -f1)"
+				# Potentially rewrite to avoid reliance on jq?
+				"$WGET" -q "$SRCURL" -O - | jq -r '.[].assets[].browser_download_url' | grep "tar.gz\|tar.xz" | grep -v "Yad\|7.x" >> "$PROTDLLIST"
+				fi
+			done <<< "$(grep "^CP_" "$STLURLCFG" | cut -d '=' -f1)"
+		fi
 	fi
 
 	delEmptyFile "$PROTDLLIST"
@@ -9687,12 +9692,12 @@ function StandaloneProtonGame {
 	fi
 }
 
-# TODO these both need work on Steam Deck to function
+# TODO these both need work on Steam Deck to function'
 function oneTimeWinecfg {
 	writelog "INFO" "${FUNCNAME[0]} - Running OneTime Winecfg"
 	
 	PROTWINECMD="${RUNPROTON//\"/}/bin/wine"
-	WINE="$PROTWINECMD" WINEPREFIX="$GPFX" "$PROTWINECMD" "${WINECFG}.exe"
+	WINE="$PROTWINECMD" WINEPREFIX="$GPFX" "$PROTWINECMD" "${WINECFG}.exe"  # Maybe check if we're on Steam Deck and use Winetricks for this? Would also require Winetricks but we could fetch and install that  
 }
 
 function oneTimeWinetricks {
