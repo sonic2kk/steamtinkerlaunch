@@ -12231,6 +12231,18 @@ function dlLatestHMM {
 		writelog "WARN" "${FUNCNAME[0]} - Will still attempt to install Winetricks as they may be cached"
 		echo "WARNING: Can't reach GitHub - Not attempting to download HedgeModManager"
 
+		# Set HMMVER offline if we have it in the HMMVERFILE + some warning logging if there is no version file
+		if [ -d "$HMMVERFILE" ]; then
+			HMMVER="$( head -n 1 "$HMMVERFILE" )"
+			if [ -z "$HMMVER" ]; then
+				writelog "WARN" "${FUNCNAME[0]} - HedgeModManager version stored in HMMVERFILE at '$HMMVERFILE' appears to be empty, installation may have failed last time!"
+			else
+				writelog "INFO" "${FUNCNAME[0]} - HedgeModManager version stored in HMMVERFILE is '$HMMVER' - It seems like HedgeModManager successfully installed before, so running offline should work fine"
+			fi
+		else
+			writelog "WARN" "${FUNCNAME[0]} - No HMMVERFILE found at '$HMMVERFILE' - HedgeModManager may not have been installed and so may fail to starrt offline!"
+		fi
+
 		return
 	fi
 
@@ -12337,8 +12349,8 @@ function installHMM {
 				echo "Finished installing HedgeModManager"
 			fi
 		else
-			writelog "ERROR" "${FUNCNAME[0]} - HedgeModManager '$HMMEXE' went missing - This should not happen!"
-			echo "HedgeModManager executable '$HMMEXE' went missing - This should not happen! You should open an issue about this."
+			writelog "ERROR" "${FUNCNAME[0]} - HedgeModManager '$HMMEXE' went missing - Maybe user is connected to the Internet"
+			echo "HedgeModManager executable '$HMMEXE' went missing or was never downloaded to begin with - Are you connected to the Internet?"
 		fi
 	else
 		writelog "SKIP" "${FUNCNAME[0]} - '$HMMSPATH' not found - Nothing to install - skipping"
@@ -12374,8 +12386,6 @@ function configureHMMPfxReg {
 	updateWineRegistryKey "delete" "$KHCUSTEAMACTPRO" "$STCLIDLL64" "$HMMPFX" "$HMMWINE"
 
 	writelog "INFO" "${FUNCNAME[0]} - Finished removing registry keys from HedgeModManager prefix"
-
-	# TODO disable Proton light theme?
 }
 
 # Game-specific Winetricks
@@ -12415,12 +12425,18 @@ function prepareHMMGames {
 	echo "Setting up installed HedgeModManager compatible games"
 	notiShow "$NOTY_HMMCONFIG" "X"
 	while read -r HMMG; do
+		# Get HMM game information from hmmgames.txt lines - games are stored as: "game name";appid;"architecture"
 		HMMGN="$( echo "$HMMG" | cut -d ";" -f 1 | cut -d '"' -f2 )"
 		HMMGAID="$( echo "$HMMG" | cut -d ";" -f 2 | cut -d '"' -f2 )"
 		HMMGARCH="$( echo "$HMMG" | cut -d ";" -f 3 | cut -d '"' -f2 )"
 
+		# Sometimes on Steam Deck it seems like the Wineprefix is created in a different library folder than the one the game is installed in
+		# Might be a Steam Client bug, but if it persists / if this is the new behaviour, this check may need updated!
 		HMMGAPPMA="$( listAppManifests | grep -m1 "${HMMGAID}.acf" )"
 		HMMGPFX="$( setGPfxFromAppMa "$HMMGAID" "$HMMGAPPMA" )"
+		if [ ! -d "$HMMGPFX" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Wineprefix for game '$HMMGN ($HMMGAID)' did not already exist at '$HMMGPFX' - The game may not have been started before!"
+		fi
 
 		# If HMM game is 64bit, installed and has a compatdata dir, install dotnet48 for that game
 		if [[ "$HMMGARCH" = "64" ]]; then
