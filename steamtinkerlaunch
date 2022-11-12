@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v11.12.20221108-1"
+PROGVERS="v11.12.20221112-7"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -154,6 +154,7 @@ WDIB="wine-discord-ipc-bridge"
 FIXGAMESCOPE=0
 SMALLDESK=0
 VTX_DOTNET_ROOT="c:\\Program Files\\dotnet\\\\"
+STLQUIET=0
 
 ### default vars ###
 
@@ -250,6 +251,8 @@ USERTWEAKDIR="$TWEAKDIR/user"																# the place for the users own main 
 TWEAKCMDDIR="$TWEAKDIR/cmd"																	# dir for scriptfiles used by tweakfiles
 SBSTWEAKDIR="$TWEAKDIR/sbs"																	# directory for optional config overrides for easier side-by-side VR gaming
 MO2DLDIR="$STLDLDIR/mo2"
+HMMDLDIR="$STLDLDIR/hedgemodmanager"
+HMMVERFILE="$HMMDLDIR/hmmver.txt"
 CONTYDLDIR="$STLDLDIR/conty"
 X64DBGDLDIR="$STLDLDIR/$X64D"
 GEOELFDLDIR="$STLDLDIR/geo11"
@@ -273,8 +276,12 @@ DOTN="dotnet"
 MO2="mo2"
 STLMO2DIR="$STLCFGDIR/$MO2"
 MO="ModOrganizer"
+HMM="HedgeModManager"
+HMMSTABLE="stable"
+HMMDEV="nightly"
 MORDIR="$DRC/Modding"
 MOERPATH="$MORDIR/MO2/${MO}.exe"
+STLHMMDIR="$STLCFGDIR/${HMM,,}"
 DOCS="Documents"
 MYDOCS="My $DOCS"
 MYGAMES="My Games"
@@ -2546,6 +2553,7 @@ function setDefaultCfgValues {
 		if [ -z "$STEAMGRIDDBAPI" ]						; then	STEAMGRIDDBAPI="https://www.steamgriddb.com/api/v2/grids/steam";fi
 		if [ -z "$CONTYRELURL" ]						; then	CONTYRELURL="$GHURL/Kron4ek/Conty/releases"; fi
 		if [ -z "$MO2PROJURL" ]							; then  MO2PROJURL="$GHURL/ModOrganizer2/modorganizer"; fi
+		if [ -z "$HMMPROJURL" ]                         ; then  HMMPROJURL="$GHURL/thesupersonic16/HedgeModManager"; fi
 		if [ -z "$CW_KRON4EK" ]							; then	CW_KRON4EK="$GHURL/Kron4ek/Wine-Builds/releases"; fi
 		if [ -z "$IGCSZIP" ]							; then	IGCSZIP="$GHURL/FransBouma/InjectableGenericCameraSystem/releases/download/IGCSInjector_102/IGCSInjector_v102.zip"; fi
 		if [ -z "$UUUURL" ]								; then	UUUURL="https://framedsc.github.io/GeneralGuides/universal_ue4_consoleunlocker.htm#downloading-the-uuu"; fi
@@ -2619,7 +2627,6 @@ function setDefaultCfgValues {
 		if [ -z "$AUTOPULLPROTON" ]						; then	AUTOPULLPROTON="1"; fi
 		if [ -z "$CUSTPROTDLDIR" ]						; then	CUSTPROTDLDIR="$STLDLDIR/$PROCU"; fi
 		if [ -z "$CUSTPROTEXTDIR" ]						; then	CUSTPROTEXTDIR="$STLCFGDIR/$PROCU"; fi
-		if [ -z "$CUPROTOCOMPAT" ]						; then	CUPROTOCOMPAT="0"; fi
 		if [ -z "$WINEDLDIR" ]							; then	WINEDLDIR="$STLDLDIR/wine"; fi
 		if [ -z "$WINEEXTDIR" ]							; then	WINEEXTDIR="$STLCFGDIR/wine"; fi
 		if [ -z "$USEVORTEXPROTON" ]					; then	USEVORTEXPROTON="$NON"; fi
@@ -2648,7 +2655,10 @@ function setDefaultCfgValues {
 		if [ -z "$DPRSPAUTOUP" ]						; then	DPRSPAUTOUP="0"; fi
 		if [ -z "$DEPSAUTOUP" ]							; then	DEPSAUTOUP="0"; fi
 		if [ -z "$MO2COMPDATA" ]						; then	MO2COMPDATA="$STLMO2DIR/$CODA"; fi
+		if [ -z "$HMMCOMPDATA" ]                        ; then  HMMCOMPDATA="$STLHMMDIR/$CODA"; fi
+		if [ -z "$HMMDLVER" ]                           ; then  HMMDLVER="$HMMSTABLE"; fi
 		if [ -z "$USEMO2PROTON" ]						; then	USEMO2PROTON="$NON"; fi
+		if [ -z "$USEHMMPROTON" ]                       ; then  USEHMMPROTON="$NON"; fi
 		if [ -z "$USETERM" ]							; then	USETERM="$(command -v "xterm")"; fi
 		if [ -z "$TERMARGS" ]							; then	TERMARGS="-e"; fi
 	}
@@ -2879,6 +2889,8 @@ function saveCfg {
 			echo "CONTYRELURL=\"$CONTYRELURL\""
 			echo "## Mod Organizer 2 Project URL"
 			echo "MO2PROJURL=\"$MO2PROJURL\""
+			echo "## HedgeModManager Project URL"
+			echo "HMMPROJURL=\"$HMMPROJURL\""
 			echo "## $DPRS DL URL"
 			echo "DPRSRELURL=\"$DPRSRELURL\""
 			echo "## $DEPS URL"
@@ -3106,6 +3118,12 @@ function saveCfg {
 			echo "MO2COMPDATA=\"$MO2COMPDATA\""
 			echo "## $DESC_USEMO2PROTON"
 			echo "USEMO2PROTON=\"$USEMO2PROTON\""
+			echo "## $DESC_HMMCOMPDATA"
+			echo "HMMCOMPDATA=\"$HMMCOMPDATA\""
+			echo "## $DESC_USEHMMPROTON"
+			echo "USEHMMPROTON=\"$USEHMMPROTON\""
+			echo "## $DESC_HMMDLVER"
+			echo "HMMDLVER=\"$HMMDLVER\""
 			echo "## $DESC_USETERM"
 			echo "USETERM=\"$USETERM\""
 			echo "## $DESC_TERMARGS"
@@ -3763,23 +3781,28 @@ function dlCustomProton {
 }
 
 function createDLProtList {
-	writelog "INFO" "${FUNCNAME[0]} - Generating list of online available custom Proton builds"
+	if [ ! -x "$(command -v "$JQ")" ]; then
+		writelog "WARN" "${FUNCNAME[0]} - 'jq' is not installed - Can't generate list of online Proton versions"
+	else
+		writelog "INFO" "${FUNCNAME[0]} - Generating list of online available custom Proton builds"
 
-	PROTDLLIST="$STLSHM/ProtonDL.txt"
-	MAXAGE=360
+		PROTDLLIST="$STLSHM/ProtonDL.txt"
+		MAXAGE=360
 
-	if [ ! -f "$PROTDLLIST" ] || test "$(find "$PROTDLLIST" -mmin +"$MAXAGE")"; then
-		rm "$PROTDLLIST" 2>/dev/null
-		while read -r CPURL; do
-			if grep -q "$GHURL" <<< "${!CPURL}"; then
-			SRCURL="${!CPURL}"
-			SRCURL="${SRCURL//\/releases}"
-			SRCURL="${SRCURL//$GHURL/$AGHURL\/repos}"
-			SRCURL="${SRCURL}/releases"
+		if [ ! -f "$PROTDLLIST" ] || test "$(find "$PROTDLLIST" -mmin +"$MAXAGE")"; then
+			rm "$PROTDLLIST" 2>/dev/null
+			while read -r CPURL; do
+				if grep -q "$GHURL" <<< "${!CPURL}"; then
+				SRCURL="${!CPURL}"
+				SRCURL="${SRCURL//\/releases}"
+				SRCURL="${SRCURL//$GHURL/$AGHURL\/repos}"
+				SRCURL="${SRCURL}/releases"
 
-			"$WGET" -q "$SRCURL" -O - | jq -r '.[].assets[].browser_download_url' | grep "tar.gz\|tar.xz" | grep -v "Yad\|7.x" >> "$PROTDLLIST"
-			fi
-		done <<< "$(grep "^CP_" "$STLURLCFG" | cut -d '=' -f1)"
+				# Potentially rewrite to avoid reliance on jq?
+				"$WGET" -q "$SRCURL" -O - | jq -r '.[].assets[].browser_download_url' | grep "tar.gz\|tar.xz" | grep -v "Yad\|7.x" >> "$PROTDLLIST"
+				fi
+			done <<< "$(grep "^CP_" "$STLURLCFG" | cut -d '=' -f1)"
+		fi
 	fi
 
 	delEmptyFile "$PROTDLLIST"
@@ -4852,6 +4875,10 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_SGDBTYPES!$DESC_SGDBTYPES ('SGDBTYPES')":CBE "$(cleanDropDown "${SGDBTYPES/#-/ -}" "animated!static!animated,static!static,animated")" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
 --field="     $GUI_SGDBNSFW!$DESC_SGDBNSFW ('SGDBNSFW')":CBE "$(cleanDropDown "${SGDBNSFW/#-/ -}" "any!false!true")" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
 --field="     $GUI_SGDBHUMOR!$DESC_SGDBHUMOR ('SGDBHUMOR')":CBE "$(cleanDropDown "${SGDBHUMOR/#-/ -}" "any!false!true")" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
+--field="$(spanFont "$GUI_OPTSHMM" "H")":LBL "SKIP" `#CAT_HMM` `#HEAD_HMM` `#MENU_GLOBAL` \
+--field="     $GUI_HMMDLVER!$DESC_HMMDLVER ('HMMDLVER')":CB "$(cleanDropDown "${HMMDLVER/#-/ -}" "$HMMSTABLE!$HMMDEV")" `#CAT_HMM` `#MENU_GLOBAL` \
+--field="     $GUI_HMMCOMPDATA!$DESC_HMMCOMPDATA ('HMMCOMPDATA')":DIR "${HMMCOMPDATA/#-/ -}" `#CAT_HMM` `#SUB_Directories` `#MENU_GLOBAL` \
+--field="     $GUI_USEHMMPROTON!$DESC_USEHMMPROTON ('USEHMMPROTON')":CB "$(cleanDropDown "${USEHMMPROTON/#-/ -}" "$PROTYADLIST")" `#CAT_HMM` `#MENU_GLOBAL` \
 --field="$(spanFont "$GUI_OPTSMISC" "H")":LBL "SKIP" `#CAT_Misc` `#HEAD_Misc` `#MENU_GAME` `#MENU_GLOBAL`  \
 --field="     $GUI_USECUSTOMCMD!$DESC_USECUSTOMCMD ('USECUSTOMCMD')":CHK "${USECUSTOMCMD/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_CUSTOMCMD!$DESC_CUSTOMCMD $GUI_ECHOPLAC ('CUSTOMCMD')":FL "${OPCUSTPATH/#-/ -}" `#CAT_Misc` `#MENU_GAME` \
@@ -5063,6 +5090,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_STEAMGRIDDBAPI!$DESC_STEAMGRIDDBAPI ('STEAMGRIDDBAPI')" "${STEAMGRIDDBAPI/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="     $GUI_CONTYRELURL!$DESC_CONTYRELURL ('CONTYRELURL')" "${CONTYRELURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="     $GUI_MO2DLURL!$DESC_MO2DLURL ('MO2PROJURL')" "${MO2PROJURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
+--field="     $GUI_HMMDLURL!$DESC_HMMDLURL ('HMMPROJURL')" "${HMMPROJURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="     $GUI_DPRSRELURL!$DESC_DPRSRELURL ('DPRSRELURL')" "${DPRSRELURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="     $GUI_DEPURL!$DESC_DEPURL ('DEPURL')" "${DEPURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="$(spanFont "$GUI_OPTSVR" "H")":LBL "SKIP" `#CAT_VR` `#HEAD_VR` `#MENU_GAME` `#MENU_GLOBAL`  \
@@ -9755,12 +9783,12 @@ function StandaloneProtonGame {
 	fi
 }
 
-# TODO these both need work on Steam Deck to function
+# TODO these both need work on Steam Deck to function'
 function oneTimeWinecfg {
 	writelog "INFO" "${FUNCNAME[0]} - Running OneTime Winecfg"
 	
 	PROTWINECMD="${RUNPROTON//\"/}/bin/wine"
-	WINE="$PROTWINECMD" WINEPREFIX="$GPFX" "$PROTWINECMD" "${WINECFG}.exe"
+	WINE="$PROTWINECMD" WINEPREFIX="$GPFX" "$PROTWINECMD" "${WINECFG}.exe"  # Maybe check if we're on Steam Deck and use Winetricks for this? Would also require Winetricks but we could fetch and install that  
 }
 
 function oneTimeWinetricks {
@@ -12098,8 +12126,456 @@ function installDotNet {
 	writelog "INFO" "${FUNCNAME[0]} - Stopped $DOTN$DNVER install - check $ILOG"
 }
 
+function updateWineRegistryKey {
+	REGOP="$1"  # i.e. "add", "delete"
+	REGPATH="$2"
+	REGVAL="$3"
+	WINEPFX="$4"
+	WINERUNCMD="$5"
+
+	writelog "INFO" "${FUNCNAME[0]} - Removing key '$REGVAL' from '$REGPATH' using '$WINERUNCMD'"
+	WINEPREFIX="$WINEPFX" "$WINERUNCMD" reg "${REGOP}" "${REGPATH}" "/v" "${REGVAL}" "/f"
+}
+
+### HMM BEGIN
+
+# NOTE: This was written with HMM in mind, but it may work generally too
+# Returns the download URL to the latest GitHub actions build of a repository and the commit SHA it was built from separated by a comma
+#
+# EX: DefinitelyNotValve/HalfLife2EpisodeThree/suites/12345678/artifacts/87654321;0df23c5 
+function fetchLatestGitHubActionsBuild {
+    PROJAPIURL="$1"
+    ARTIFACTNUM=$2
+
+    # /actions/runs
+    ARTIFACTRUNSRESP="$( curl -s "${PROJAPIURL}/actions/runs" | jq '.workflow_runs[0]' )"
+    ARTIFACTRUNSUITEID="$( echo "$ARTIFACTRUNSRESP" | jq '.check_suite_id' )"
+    LATESTARTIFACTURL="$( echo "$ARTIFACTRUNSRESP" | jq '.artifacts_url' | cut -d '"' -f 2 )"
+
+    # /actions/runs/<artifact_id>/artifacts
+    LATESTARTIFACTRESP="$( curl -s "${LATESTARTIFACTURL}" | jq ".artifacts[${ARTIFACTNUM}]" )"
+    LATESTARTIFACTID="$( echo "$LATESTARTIFACTRESP" | jq ".id" )"
+    LATESTARTIFACTSHA="$( echo "$LATESTARTIFACTRESP" | jq ".workflow_run.head_sha" | cut -d '"' -f 2 )"
+    
+    ARTIFACTDLURL="suites/${ARTIFACTRUNSUITEID}/artifacts/${LATESTARTIFACTID}"
+    echo "${ARTIFACTDLURL};${LATESTARTIFACTSHA::7}"
+}
+
+# HMM doesn't really have a "setup" exe, but MO2 and Vortex use this naming convention so... keeping it :-)
+function getLatestHMMVer {
+	HMMSET="HedgeModManager"
+	
+	writelog "INFO" "${FUNCNAME[0]} - Searching for latest '$HMMSET' Release under '$HMMPROJURL'"
+	HMMSETUP="$( getLatestGitHubExeVer "HedgeModManager" "https://github.com/thesupersonic16/HedgeModManager" )"
+	if [ -n "$HMMSETUP" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Found '$HMMSETUP'"
+	else
+		writelog "ERROR" "${FUNCNAME[0]} - Could not find any '$HMMSET' Release"
+	fi
+}
+
+function checkLatestHMM {
+	AVAILABLEHMMVER="$1"
+	HMMSPATH="$2"
+
+	HMMUPDATEAVAILABLE=0
+
+	# Auto-update executable - May not be needed if HMM auto updater works
+	if [ -f "$HMMVERFILE" ]; then
+		CURRHMMVER="$( head -n 1 "$HMMVERFILE" )"
+		if [[ "$CURRHMMVER" = "$AVAILABLEHMMVER" ]]; then
+			writelog "INFO" "${FUNCNAME[0]} - Latest HedgeModManager already downloaded - Nothing to do"  # Probably have to do a version check here later
+			echo "Latest HedgeModManager is already downloaded or was downloaded previously"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - HedgeModManager update is available ($CURRHMMVER -> $AVAILABLEHMMVER) - Updating"
+			echo "HedgeModManager update is available ($CURRHMMVER -> $AVAILABLEHMMVER) - Updating"
+			if [ -f "$HMMSPATH" ]; then
+				rm "$HMMSPATH"
+			else
+				writelog "INFO" "${FUNCNAME[0]} - HedgeModManager executable doesn't exist - nothing to remove before updating"  # Could happen if EXE is removed but version tracking file is not
+				echo "No existing HedgeModManager executable"
+			fi
+			HMMUPDATEAVAILABLE=1
+		fi
+	else
+		writelog "INFO" "${FUNCNAME[0]} - No HedgeModManager version file found at '$HMMVERFILE' - Nothing to check, assuming we need to update"
+		echo "Could not get existing HedgeModManager version - Downloading latest '$AVAILABLEHMMVER'"
+		HMMUPDATEAVAILABLE=1
+	fi
+}
+
+function dlLatestHMM {
+
+	function dlLatestHMMDev {
+		HMMARCHIVENAME="${HMM}-Release.zip"
+		HMMARCHIVEPATH="$HMMDLDIR/${HMMARCHIVENAME}"
+
+		HMMSETUP="${HMM}.exe"
+		HMMSETUPBASE="$( basename "${HMMSETUP}" )"  # Doing this in case "HMMSETUP" ever changes
+		HMMSPATH="$HMMDLDIR/$HMMSETUP"
+
+		HMMUPDATEAVAILABLE=0
+
+		HMMAPIURLPATH="${HMMPROJURL//$GHURL}"
+		HMMLATESTDEV="${HMMPROJURL}/$( fetchLatestGitHubActionsBuild "${AGHURL}/repos${HMMAPIURLPATH}" 1 )"  # Used to get the latest dev version SHA
+		HMMLATESTDEVURL="https://nightly.link${HMMAPIURLPATH}/workflows/build/rewrite/${HMMARCHIVENAME}"  # Use nightly.link to get latest artifact download link for HMM
+		HMMVER="$( echo "$HMMLATESTDEV" | cut -d ";" -f 2 )"
+
+		writelog "INFO" "${FUNCNAME[0]} - HedgeModManager artifact URL: '$HMMLATESTDEVURL' ($HMMVER)"
+
+		checkLatestHMM "$HMMVER" "$HMMSPATH"
+
+		mkProjDir "$HMMDLDIR"
+		if [ ! -f "$HMMSPATH" ] || [ "$HMMUPDATEAVAILABLE" -eq 1 ]; then
+			# No exe OR we need to update, check if we have the archive to extract it from
+			writelog "INFO" "${FUNCNAME[0]} - Either no HedgeModManager executable downloaded and extracted, or there is an update available - HMMUPDATEAVAILABLE is '${HMMUPDATEAVAILABLE}'"
+			if [ ! -f "$HMMARCHIVEPATH" ] || [ "$HMMUPDATEAVAILABLE" -eq 1 ]; then
+				# (No archive and no exe) or update available, download from GitHub
+				writelog "INFO" "${FUNCNAME[0]} - Either no HedgeModManager artifact present, or an update is available - HMMUPDATEAVAILABLE is '${HMMUPDATEAVAILABLE}'"
+				
+				# Download
+				writelog "INFO" "${FUNCNAME[0]} - Downloading latest HedgeModManager Development Artifact from URL '$HMMLATESTDEVURL'"
+				echo "Downloading latest HedgeModManager Development Artifact"
+				notiShow "$(strFix "$NOTY_HMMDL" "$HMMDLVER")" "X"
+				dlCheck "$HMMLATESTDEVURL" "$HMMARCHIVEPATH" "X" "Downloading latest HedgeModManager Development '$HMMVER'" &>/dev/null
+			else
+				# We have existing archive but no executable 
+				writelog "INFO" "${FUNCNAME[0]} - Found existing and up-to-date HedgeModManager archive at '$HMMSPATH' - Extracting"
+				echo "Found up-to-date HedgeModManager Development release archive - Extracting "
+			fi
+
+			# Extract
+			# Check if download success
+			if [ -f "$HMMARCHIVEPATH" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Downloaded latest HedgeModManager Artifact - Extracting archive at '$HMMARCHIVEPATH'"
+				echo "Extracting latest HedgeModManager Development Artifact"
+				"$UNZIP" -qo "$HMMARCHIVEPATH" -d "$HMMDLDIR"  # Extract quiet and overwrite existing file if present without confirmation
+				
+				# If download sucess, try to extract
+				if [ -f "$HMMSPATH" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Successfully extracted HedgeModManager archive at '$HMMSPATH'"
+					echo "Successfully extracted HedgeModManager archive"
+					writelog "Info" "${FUNCNAME[0]} - Removing archive '$HMMARCHIVENAME' after successful extraction"
+					rm "$HMMARCHIVEPATH"
+
+					echo "$HMMVER" > "$HMMVERFILE"  # Update version on successfull download and extract
+				else
+					# Download failed
+					writelog "WARN" "${FUNCNAME[0]} - Failed to extract HedgeModManager archive at '$HMMSPATH'" 
+					echo "Failed to extract HedgeModManager archive"
+				fi
+			else
+				# Download failed
+				writelog "WARN" "${FUNCNAME[0]} - Failed to download latest HedgeModManager Development archive ('$HMMVER') to '$( basename "$HMMSETUP" )'"
+				echo "Failed to download latest HedgeModManager development release archive"
+			fi			
+		else
+			# We have executable - Nothing to do
+			writelog "INFO" "${FUNCNAME[0]} - Found existing and up-to-date HedgeModManager executable at '$HMMSPATH'"
+			echo "Found up-to-date HedgeModManager executable - Nothing to download"
+		fi
+	}
+
+	# Download latest HedgeModManager stable release 
+	function dlLatestHMMStable {
+		getLatestHMMVer
+
+		# These values return the version URL from GitHub, so when we called "basename" we're getting the URL basename
+		# The format that comes back is something like /releases/7.8-2/HedgeModManager.exe
+		if [ -n "$HMMSETUP" ]; then
+			mkProjDir "$HMMDLDIR"
+			HMMSETUPBASE="$( basename "$HMMSETUP" )"
+			HMMVER="$( dirname "$HMMSETUP" )"
+			HMMVER="${HMMVER##*/}"
+			HMMSPATH="$HMMDLDIR/$HMMSETUPBASE"
+
+			echo "Latest available version is '$HMMVER' - Checking to see if we are up-to-date"
+			checkLatestHMM "$HMMVER" "$HMMSPATH"
+
+			if [ ! -f "$HMMSPATH" ] || [ "$HMMUPDATEAVAILABLE" -eq 1 ]; then
+				DLURL="${HMMPROJURL//"HedgeModManager"}$HMMSETUP"
+				writelog "INFO" "${FUNCNAME[0]} - Downloading '$HMMSETUPBASE' to '$( basename "$HMMDLDIR" )' from '$DLURL'"
+				echo "Downloading HedgeModManager ${HMMVER}"
+				notiShow "$(strFix "$NOTY_HMMDL" "$HMMVER")" "X"
+				dlCheck "$DLURL" "$HMMSPATH" "X" "Downloading HedgeModManager $HMMSETUP $HMMVER" &>/dev/null
+				if [ -f "$HMMSPATH" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Successfully downloaded HedgeModManager $HMMVER - continuing installation"
+					echo "Successfully downloaded HedgeModManager $HMMVER to '$( basename "$HMMSETUP" )'"
+					echo "$HMMVER" > "$HMMVERFILE"
+				else
+					writelog "ERROR" "${FUNCNAME[0]} - Failed to download HedgeModManager from '$DLURL'"
+					echo "Failed to download HedgeModManager"
+				fi
+			else
+				writelog "INFO" "${FUNCNAME[0]} - HedgeModManager executable already downloaded - Nothing to do"
+				echo "HedgeModManager is up-to-date"
+			fi
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - No HMMSETUP defined - nothing to download - skipping"
+			echo "Could not find HedgeModManager release"
+		fi
+	}
+
+	# Internet connection check
+	if ! ping -q -c1 github.com &>/dev/null; then
+		writelog "WARN" "${FUNCNAME[0]} - Looks like we're offline or GitHub is down, not attempting to download HedgeModManager when offline - May cause issues if no HMM exe is downloaded!"
+		writelog "WARN" "${FUNCNAME[0]} - Will still attempt to install Winetricks as they may be cached"
+		echo "WARNING: Can't reach GitHub - Not attempting to download HedgeModManager"
+
+		return
+	fi
+
+	DLVER="$1"
+	if [ -z "$DLVER" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - No value passed for whether user wants stable or development HedgeModManager - Assuming they want stable!"
+	fi
+	writelog "INFO" "${FUNCNAME[0]} - User wants HedgeModManager '${DLVER:-stable}'"
+
+	if [[ "$DLVER" = "$HMMDEV" ]]; then
+		# Get latest GitHub artifacts ver
+		writelog "INFO" "${FUNCNAME[0]} - Checking latest available HedgeModManager Development version"
+		echo "Checking latest available HedgeModManager Development version"
+
+		dlLatestHMMDev
+	else
+		# If we don't pass dev, assume we want stable
+		writelog "INFO" "${FUNCNAME[0]} - Checking latest available HedgeModManager Release/Stable version"
+		echo "Checking latest available HedgeModManager Release version"
+		
+		dlLatestHMMStable
+	fi
+}
+
+function setHMMVars {
+	# Set prefix path here
+	# Set exe path here
+	# Set Proton version here - If we use a custom HMMPROT we'll need to write that out into the config file
+	HMMPFX="${HMMCOMPDATA}/pfx"
+	if [ -z "$HMMEXE" ]; then
+		HMMEXE="$HMMDLDIR/${HMM}.exe"
+	fi
+	HMMGAMES="$GLOBALMISCDIR/hmmgames.txt"
+	if [ -z "$HMMWINE" ] || [ ! -f "$HMMWINE" ]; then
+		if [ "$USEHMMPROTON" == "$NON" ]; then
+			if [ ! -f "$PROTONCSV" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Looking for available Proton versions"
+				getAvailableProtonVersions "up" X
+			fi
+
+			if ! grep -q "^GE" "$PROTONCSV"; then
+				autoBumpGE "X"
+			else
+				writelog "INFO" "${FUNCNAME[0]} - Seems like we have a GE-Proton version available already"
+			fi
+
+			SETHMMPROT="$(grep "^GE" "$PROTONCSV" | sort -V | tail -n1)"
+			SETHMMPROT="${SETHMMPROT%%;*}"
+			USEHMMPROTON="$SETHMMPROT"
+			touch "$FUPDATE"
+			updateConfigEntry "USEHMMPROTON" "$USEHMMPROTON" "$STLDEFGLOBALCFG"
+			writelog "INFO" "${FUNCNAME[0]} - USEHMMPROT is '$NON', so using latest GE-Proton"
+		else
+			SETHMMPROT="$USEHMMPROTON"
+		fi
+
+		writelog "INFO" "${FUNCNAME[0]} - Using $USEHMMPROTON for $HMM"
+		setModWine "SETHMMPROT" "HMMRUNPROT" "HMMWINE"
+	fi
+}
+
+# Doesn't really "install" HMM, just creates the prefix for it if it doesn't already exist
+# HMM's UI needs `dotnet48` to run and `d3dx9 vcrun2019 d3dcompiler_47` to render - we don't want to install this for every game, give HMM its own prefix to run in
+# We can remove these if HMM ever works with Wine out of the box
+function installHMM {
+	if [ -f "$HMMSPATH" ]; then
+		setHMMVars
+		if [ -f "$HMMEXE" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - HedgeModManager executable found at '$HMMEXE' - Checking if we need to set up its Wine prefix"
+			if [ ! -d "$HMMCOMPDATA" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - No existing HedgeModManager prefix found - Creating one"
+				echo "Installing HedgeModManager $HMMVER"
+				notiShow "$( strFix "$NOTY_HMMINST" "$HMMVER" )" "X"
+				mkProjDir "$HMMCOMPDATA/pfx"
+
+				# Install dotnet48
+				writelog "INFO" "${FUNCNAME[0]} - Installing dotnet48 for $HMM"
+				installDotNet "$HMMPFX" "$HMMWINE" "48" &>/dev/null
+				writelog "INFO" "${FUNCNAME[0]} - Done"
+
+				# Setup prefix with Proton
+				touch "${HMMCOMPDATA}/tracked_files"
+				STEAM_COMPAT_CLIENT_INSTALL_PATH="$SROOT" STEAM_COMPAT_DATA_PATH="$HMMCOMPDATA" "$HMMRUNPROT" "run" 2> "$STLSHM/${FUNCNAME[0]}_protonrun.log"
+				
+				# Install other needed Winetricks 
+				writelog "INFO" "${FUNCNAME[0]} - Installing 'd3dx9' 'vcrun2019' 'd3dcompiler_47' with '$HMMWINE' - These extra Winetricks are needed for HedgeModManager to run as well"
+				OGGPFX="$GPFX"
+				GPFX="$HMMPFX"
+				RUNWINE="$HMMWINE"
+				installWinetricksPaks "d3dx9 vcrun2019 d3dcompiler_47" "$HMMWINE" "extWine64Run"
+				GPFX="$OGGPFX"
+				writelog "INFO" "${FUNCNAME[0]} - Finished installing extra HedgeModManager winetricks"
+
+				configureHMMPfxReg &>/dev/null
+
+				writelog "INFO" "${FUNCNAME[0]} - Finished setting up HedgeModManager prefix"
+				echo "Successfully installed HedgeModManager $HMMVER"
+				notiShow "$NOTY_HMMINSTFIN" "X"
+			else
+				writelog "SKIP" "${FUNCNAME[0]} - HedgeModManager prefix already exists - Not recreating - Skipping installation"
+				
+				configureHMMPfxReg &>/dev/null  # The registry configuration needed may change overtime and may not have been fully configured at installation
+			
+				echo "Finished installing HedgeModManager"
+			fi
+		else
+			writelog "ERROR" "${FUNCNAME[0]} - HedgeModManager '$HMMEXE' went missing - This should not happen!"
+			echo "HedgeModManager executable '$HMMEXE' went missing - This should not happen! You should open an issue about this."
+		fi
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - '$HMMSPATH' not found - Nothing to install - skipping"
+	fi
+}
+
+# Remove Steam reg keys - needed to get HMM to find games with our prefix
+function configureHMMPfxReg {
+	writelog "INFO" "${FUNCNAME[0]} - Removing extra Steam registry keys from HedgeModManager prefix '$HMMPFX'"
+
+	# Reg paths
+	HKLMSTEAM="HKEY_LOCAL_MACHINE\\Software\\Wow6432Node\\Valve\\Steam"
+	HKCUSTEAM="HKEY_CURRENT_USER\\Software\\Valve\\Steam"
+	KHCUSTEAMACTPRO="${HKCUSTEAM}\\ActiveProcess"
+
+	# Reg values
+	STEXE="SteamExe"
+	STPA="SteamPath"
+	INSTPA="InstallPath"
+	STCLIDLL="SteamClientDll"
+	STCLIDLL64="SteamClientDll64"
+
+	# HKEY_LOCAL_MACHINE
+	updateWineRegistryKey "delete" "$HKLMSTEAM" "$INSTPA" "$HMMPFX" "$HMMWINE"
+
+	# KEY_CURRENT_USER
+	updateWineRegistryKey "delete" "$HKCUSTEAM" "$STEXE" "$HMMPFX" "$HMMWINE"
+	updateWineRegistryKey "delete" "$HKCUSTEAM" "$STPA" "$HMMPFX" "$HMMWINE"
+
+	# ActiveProcess
+	updateWineRegistryKey "delete" "$KHCUSTEAMACTPRO" "$STPA" "$HMMPFX" "$HMMWINE"
+	updateWineRegistryKey "delete" "$KHCUSTEAMACTPRO" "$STCLIDLL" "$HMMPFX" "$HMMWINE"
+	updateWineRegistryKey "delete" "$KHCUSTEAMACTPRO" "$STCLIDLL64" "$HMMPFX" "$HMMWINE"
+
+	writelog "INFO" "${FUNCNAME[0]} - Finished removing registry keys from HedgeModManager prefix"
+
+	# TODO disable Proton light theme?
+}
+
+# Game-specific Winetricks
+function prepareHMMGameWinetricks {
+	HMMGTWEAKAID="$1"  # Game AppID
+	HMMGINSTPFX="$2"  # Prefix to install winetricks to (i.e. game prefix) 
+
+	# Set GPFX to game's prefix - Can't guarantee current GPFX will be the game's prefix so force it to ensure winetrick(s) are installed to the game's prefix and not HMM's prefix
+	OGGPFX="$GPFX"
+	GPFX="$HMMGINSTPFX"
+	case $HMMGTWEAKAID in
+	"71340")
+		writelog "INFO" "${FUNCNAME[0]} - AppID '$HMMGTWEAKAID' determined to be Sonic Generations"
+		GPFXSTUS="$HMMGPFX/$DRCU/$STUS"
+		if [ -d "$GPFXSTUS" ]; then
+			# Install d3d to Sonic Generations' prefix
+			writelog "INFO" "${FUNCNAME[0]} - Applying 'd3dcompiler_47' winetrick for Direct3D 11 mod support"
+			echo "Sonic Generations: Installing 'd3dcompiler_47' for Direct3D 11 mod support"
+		
+			RUNWINE="$HMMWINE"
+			installWinetricksPaks "d3dcompiler_47" "$HMMWINE" "extWine64Run" &>/dev/null
+			writelog "INFO" "${FUNCNAME[0]} - Finished installing 'd3dcompiler47' for Sonic Generations"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Seems like Sonic Generations is not installed - skipping"
+		fi
+		;;
+	esac
+	GPFX="$OGGPFX"
+}
+
+# Install dotnet48 for every 64bit game
+function prepareHMMGames {
+	setHMMVars
+	
+	# Get all hardcoded HMM supported games
+	writelog "INFO" "${FUNCNAME[0]} - Reading all hardcoded HedgeModManager supported games from '$HMMGAMES'"
+	echo "Setting up installed HedgeModManager compatible games"
+	notiShow "$NOTY_HMMCONFIG" "X"
+	while read -r HMMG; do
+		HMMGN="$( echo "$HMMG" | cut -d ";" -f 1 | cut -d '"' -f2 )"
+		HMMGAID="$( echo "$HMMG" | cut -d ";" -f 2 | cut -d '"' -f2 )"
+		HMMGARCH="$( echo "$HMMG" | cut -d ";" -f 3 | cut -d '"' -f2 )"
+
+		HMMGAPPMA="$( listAppManifests | grep -m1 "${HMMGAID}.acf" )"
+		HMMGPFX="$( setGPfxFromAppMa "$HMMGAID" "$HMMGAPPMA" )"
+
+		# If HMM game is 64bit, installed and has a compatdata dir, install dotnet48 for that game
+		if [[ "$HMMGARCH" = "64" ]]; then
+			GPFX="$HMMPFX"
+
+			# Check if we have a valid compatdata for a game (pfx/drive_c/users/steamuser)
+			GPFXSTUS="$HMMGPFX/$DRCU/$STUS"
+			if [ -d "$GPFXSTUS" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Found compatdata dir for '$HMMGN' at '$GPFXSTUS' - Assuming it is installed"
+
+				writelog "INFO" "${FUNCNAME[0]} - Install dotnet48 for install 64bit HedgeModManager game '$HMMGN'"
+				notiShow "$( strFix "$NOTY_HMMGAMCONFIG" "$HMMGN" )" "X"
+				echo "Running configuration for '$HMMGN'"
+				installDotNet "$HMMGPFX" "$HMMWINE" "48" &>/dev/null
+				writelog "INFO" "${FUNCNAME[0]} - Finished installing dotnet48 for '$HMMGN'"
+			else
+				writelog "SKIP" "${FUNCNAME[0]} - Could not find compatdata dir for '$HMMGN' - Assuming that it is not installed"
+			fi
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - '$HMMGN' is 32bit, skipping"
+		fi
+
+		writelog "INFO" "${FUNCNAME[0]} - Checking if we need to apply any game-specific tweaks to improve mod compatibility"
+		prepareHMMGameWinetricks "$HMMGAID" "$HMMGPFX"
+	done <$HMMGAMES
+	echo "Finished configuring installed HedgeModManager games" 
+}
+
+function startHMM {
+	# TODO:
+	# - Refine UI (add HMM button, etc)
+	# - Update lang strings
+	# - Add HMM Collection support
+	# - Test on Steam Deck
+	HMMDLVERARG="$1"
+
+	# Add notifier
+	dlLatestHMM "$HMMDLVERARG"
+	installHMM
+	prepareHMMGames
+	
+	writelog "INFO" "${FUNCNAME[0]} - Starting HedgeModManager in prefix '$HMMPFX' with Wine '$HMMWINE' and using executable at '$HMMEXE'"
+	echo "Starting HedgeModManager"
+	notiShow "$( strFix "$NOTY_HMMSTART" "$HMMVER" )" "X"
+
+	WINEDEBUG="-all" WINEPREFIX="$HMMPFX" "$HMMWINE" "$HMMEXE" &>/dev/null
+}
+
+function listSupportedHMMGames {
+	# List HMM compatible games (taken from misc/hmmgames.txt), like:
+	# Game Name (appid) (architecture)
+	while read -r HMMGAME; do 
+		HMMGAMENAME="$( echo "$HMMGAME" | cut -d ";" -f 1 | cut -d '"' -f2 )"
+		HMMGAMEAID="$( echo "$HMMGAME" | cut -d ";" -f 2 | cut -d '"' -f2 )"
+		HMMGAMEARCH="$( echo "$HMMGAME" | cut -d ";" -f 3 | cut -d '"' -f2 )"
+
+		echo "$HMMGAMENAME ($HMMGAMEAID) ($HMMGAMEARCH-bit)"
+	done < "$GLOBALMISCDIR/hmmgames.txt"
+}
+
+### HMM END
+
 #### MO2 + Vortex ####
-# NOTE: This was written with MO2 and Vortex in mind
+# NOTE: This was written with MO2 and Vortex in mind (seems to also currently work for HMM)
 # It relies on projects having proper releases and tagging
 # It may need tweaking if this is used for other projects in future or might require an entirely new function
 function getLatestGitHubExeVer {
@@ -17775,6 +18251,13 @@ function howto {
 	echo "    gettitle|gt <gameid>             Print the Game Title for <gameid>"
 	echo "    getcompatdata|gc <gameid/title>  Print the Game compatdata path"
 	echo "    getgamedir|gg <gameid/title>     Print the Game dir"
+	echo "    hedgemodmanager|hmm              HedgeModManager"
+	echo "            install|i                  install latest stable HedgeModManager"
+	echo "            download|d <channel>       download latest HedgeModManager release (stable or nightly)"
+	echo "                                        defaults to stable"
+	echo "            start|s <channel>          start HedgeModManager"
+	echo "                                        automatically downloads and installs latest stable if <channel>"
+	echo "                                        is not provided"
 	echo "    steamdeckcompat <gameid>         Get information about Steam Deck compatibility for <gameid>"
 	echo "                                       Will work offline if the information has been fetched before"
 	echo " "
@@ -18080,6 +18563,29 @@ function commandline {
 			fi
 		else
 			echo "need arg2"
+			howto
+		fi
+	elif [ "$1" == "hedgemodmanager" ] || [ "$1" == "hmm" ]; then
+		if [ -n "$2" ]; then
+			if [ -n "$3" ]; then
+				HMMDLVER="$3"
+			fi
+
+			if [ "$2" == "download" ] || [ "$2" == "d" ]; then
+				dlLatestHMM "$HMMDLVER"
+			elif [ "$2" == "install" ] || [ "$2" == "i" ]; then
+				dlLatestHMM "$HMMDLVER"
+				installHMM
+			elif [ "$2" == "start" ] || [ "$2" == "s" ]; then
+				startHMM "$HMMDLVER"
+			elif [ "$2" == "list-supported" ] || [ "$2" == "ls" ]; then
+				listSupportedHMMGames
+			else
+				echo "Need to input a valid arg2 '$2' to run a HedgeModManager command"
+				howto
+			fi
+		else
+			writelog "INFO" "arg2 '$2' is no valid command"
 			howto
 		fi
 	elif [ "$1" == "noty" ]; then
@@ -20603,6 +21109,9 @@ function checkSteamDeckDependencies {
 	if [ -f "$(command -v "yad")" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Using yad binary found in path: '$(command -v "yad")'"
 		echo "Dependency 'yad' already installed, nothing to do."
+		# Force update of global config file to add Yad path if it exists in $HOME/stl/deps/yad/bin
+		touch "$FUPDATE"
+		updateConfigEntry "YAD" "$( command -v "yad" )" "$STLDEFGLOBALCFG"
 	else
 		printf '\n'
 		writelog "INFO" "${FUNCNAME[0]} - Using yad app image"
@@ -20691,24 +21200,6 @@ function installFilesSteamDeck {
 function steamdedeckt {
 	if [ -f "/etc/os-release" ] && grep -q "steamdeck" "/etc/os-release"; then		
 		ONSTEAMDECK=1
-
-		if [ "$INFLATPAK" -eq 1 ]; then
-			# Not sure if this will even work, not sure if the Flatpak can even do the Steam Deck probe check
-			writelog "ERROR" "${FUNCNAME[0]} - Looks like you're trying to install Flatpak SteamTinkerLaunch on Steam Deck - This is not the correct way to install SteamTinkerLaunch on Steam Deck."
-			writelog "ERROR" "${FUNCNAME[0]} - See the wiki for how to correctly install SteamTinkerLaunch on Steam Deck: https://github.com/sonic2kk/steamtinkerlaunch/wiki/Steam-Deck"
-
-			echo "Looks like you're trying to install Flatpak SteamTinkerLaunch on Steam Deck - This is not the correct way to install SteamTinkerLaunch on Steam Deck."
-			echo "See the wiki for how to correctly install SteamTinkerLaunch on Steam Deck: https://github.com/sonic2kk/steamtinkerlaunch/wiki/Steam-Deck"
-
-			# Also not sure if this will work, yad may not work
-			yad --title="Incorrect SteamTinkerLaunch Usage" --width=400 --form \
-			--field="<span font_weight='BOLD' font_size='larger'>WARNING</span>":LBL \
-			--field="It looks like you're trying to use Flatpak SteamTinkerLaunch (downloaded from Discover) on Steam Deck.\n":LBL \
-			--field="This is <b>not</b> the correct way to use SteamTinkerLaunch.\n":LBL \
-			--field "Please visit the SteamTinkerLaunch <a href=\"https://github.com/sonic2kk/steamtinkerlaunch/wiki/Steam-Deck\">Steam Deck wiki page</a> for information on how to correctly install SteamTinkerLaunch.":LBL
-
-			exit 1
-		fi
 
 		export STEAMDECKWASUPDATE=0
 		export STEAMDECKDIDINSTALL=1
@@ -21044,7 +21535,6 @@ function main {
 	touch "$PRELOG"
 	mkProjDir "$LOGDIRID"
 	setflatpak
-	setLocalInstall
 
 	if [ "$INFLATPAK" -eq 1 ]; then
 		USS="/app/share/steam"
@@ -21074,6 +21564,7 @@ function main {
 	fi
 
 	steamdedeckt
+	setLocalInstall
 	getCurrentCommandline "$@"
 	saveOrgVars
 	emptyVars "O"
