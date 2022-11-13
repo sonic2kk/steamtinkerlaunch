@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v11.12.20221114-4"
+PROGVERS="v11.12.20221114-5"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -12507,6 +12507,27 @@ function listSupportedHMMGames {
 	done < "$GLOBALMISCDIR/hmmgames.txt"
 }
 
+# Output installed HMM supported games in the format "Game (AppID) -> /path/to/prefix" 
+function listInstalledHMMGames {
+	writelog "INFO" "${FUNCNAME[0]} - Looking for installed HedgeModManager games"
+	OGGPFX="$GPFX"
+	while read -r HMMGAME; do
+		HMMGN="$( echo "$HMMGAME" | cut -d ";" -f 1 | cut -d '"' -f2 )"
+		HMMGAID="$( echo "$HMMGAME" | cut -d ";" -f 2 | cut -d '"' -f2 )"
+
+		# Check if game has compatdata dir, if it does then assume it is installed
+		# also attempt to preserve existing GPFX, though this will probably only be called from the command line 
+		HMMGAPPMA="$( listAppManifests | grep -m1 "${HMMGAID}.acf" )"
+		HMMGPFX="$( setGPfxFromAppMa "$HMMGAID" "$HMMGAPPMA" )"
+		
+		# Check if it has a "proper" directory structure and is not just a blank compatdata
+		if [ -d "$HMMGPFX/$DRCU/$STUS" ]; then
+			printf "%s (%s) -> %s\n" "$HMMGN" "$HMMGAID" "$HMMGPFX"
+		fi
+	done < "$GLOBALMISCDIR/hmmgames.txt"
+	GPFX="$GPFX"
+}
+
 ### HMM END
 
 #### MO2 + Vortex ####
@@ -18537,7 +18558,7 @@ function commandline {
 			elif [ "$2" == "list-supported" ] || [ "$2" == "ls" ]; then
 				listMO2Games
 			elif [ "$2" == "list-installed" ] || [ "$2" == "li" ]; then
-				# Output installed MO2 games in format "Name (AppID) -> /path/to/game"
+				# Output installed MO2 games in format "Name (AppID) -> /path/to/prefix"
 				setMO2Vars
 				mapfile -t -O "${#CMDINSTMO2GAMS}" CMDINSTMO2GAMS <<< "$( prepAllMO2Games "li" )"
 				for IMO2G in "${CMDINSTMO2GAMS[@]}"; do
@@ -18578,6 +18599,8 @@ function commandline {
 				startHMM "$HMMDLVER"
 			elif [ "$2" == "list-supported" ] || [ "$2" == "ls" ]; then
 				listSupportedHMMGames
+			elif [ "$2" == "list-installed" ] || [ "$2" == "li" ]; then
+				listInstalledHMMGames
 			else
 				echo "Need to input a valid arg2 '$2' to run a HedgeModManager command"
 				howto
