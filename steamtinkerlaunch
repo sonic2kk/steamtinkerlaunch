@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v11.12.20221112-8"
+PROGVERS="v11.12.20221112-9"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -12870,6 +12870,56 @@ function getVortexSupported {
 	fi
 }
 
+# If extra formatting is added this file may need updated 
+function getVortexSupportedNames {
+	VOSTINDEXJS="index.js"
+	VOSTINFOJSON="info.json"
+
+	VORTEXPFX="${VORTEXCOMPDATA//\"/}/pfx"
+	VORTEXINSTDIR="$VORTEXPFX/$BTVP"
+	VORTEXEXE="$VORTEXINSTDIR/${VTX^}.exe"
+
+	if [ ! -f "$VORTEXEXE" ]; then
+		writelog "ERROR" "${FUNCNAME[0]} - Cannot get Vortex game list - No Vortex executable at '$VORTEXEXE' - Vortex may not be installed"
+		echo "Cannot get Vortex game list - Are you sure Vortex is installed?"
+		return
+	fi
+
+	VGPDIR="$VORTEXINSTDIR/$RABP"
+	for VOSTGAMDIR in "$VGPDIR/game-"*/; do
+		if [ -f "$VOSTGAMDIR/$VOSTINDEXJS" ] && [ -f "$VOSTGAMDIR/$VOSTINFOJSON" ]; then
+			# Get Vortex game name from the Vortex supported gamedir's `info.json` file  
+			VOSTGAMDIRNAM="$( jq '.name' "$VOSTGAMDIR/$VOSTINFOJSON" | sed 's-^"--g;s-^Game:--g;s-"$--g;s-^Stub:--g;s-^Game--g;s-^\ --g' )"
+
+			# Match Steam AppIDs from `index.js` file - grep order is order if preference to search on 
+			VOSTGAMDIRAID="$( sed "s-'--g;s-\"--g" "$VOSTGAMDIR/$VOSTINDEXJS" | grep -ioE "steamAppId: [0-9]+|STEAMAPP_ID = [0-9]+|STEAM_ID = [0-9]+|APPID = [0-9]+|steamId: [0-9]+" | grep -oE "[0-9]+" | head -n1 )"
+
+			# If we still can't find it, try to find it based on the domain name (*usually* but not always, this is directory name without game- pfx)
+			# from the Vortex games list (this list may be incomplete, so we don't search on it by default)
+			if [ -z "$VOSTGAMDIRAID" ]; then
+				VORTEXGAMES="$GLOBALMISCDIR/$VOGAT"
+				VSGDN="$( echo "$( basename "$VOSTGAMDIR" )" | sed 's:game-::g' )"
+				VOSTGAMDIRAID="$( grep -im1 "$VSGDN" "$VORTEXGAMES" | cut -d ";" -f 3 | cut -d '"' -f 2 )"
+				
+				# If we *STILL* can't find it, search Vortex games list based on the game's "full" name in `info.json`
+				if [ -z "$VOSTGAMDIRAID" ]; then
+					VOSTGAMDIRAID="$( grep -im1 "$VOSTGAMDIRNAM" "$VORTEXGAMES" | cut -d ";" -f 3 | cut -d '"' -f 2 )"
+
+					# Special hack for kotor as Vortex groups these two games together annoyingly and doesn't list them separately - an improved way to handle this would be welcome
+					if [[ $VOSTGAMDIRNAM = *"Knights of the Old Republic"* ]]; then 
+						printf "Star Wars: Knights of the Old Republic (32370)\nStar Wars: Knights of the Old Republic II (208580)\n"
+						continue 
+					fi
+				fi 
+			fi
+			
+			printf '%s (%s)\n' "$VOSTGAMDIRNAM" "$VOSTGAMDIRAID"
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - Could not find '$VOSTINDEXJS' or '$VOSTINFOJSON' for Vortex game in '$VOSTGAMDIR' - Skipping"
+		fi
+	done
+}
+
 function checkVortexRegs {
 	function addReg {
 		MODGREG="$STLSHM/modgames.reg"
@@ -18729,7 +18779,8 @@ function commandline {
 				addVortexStage "$3"
 			elif [ "$2" == "list-supported" ] || [ "$2" == "ls" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Games With ${VTX^} Support found in the ${VTX^} installation:" "E"
-				getVortexSupported X
+				# getVortexSupported X
+				getVortexSupportedNames
 			elif [ "$2" == "list-online" ] || [ "$2" == "lo" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Games With ${VTX^} Support listed online:" "E"
 				dlVortexSupportedList
