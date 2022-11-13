@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v11.12.20221114-1"
+PROGVERS="v11.12.20221114-2"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -13965,10 +13965,15 @@ function prepAllMO2Games {
 	checkInstalledMO2Games "$1"
 }
 
+# Output supported MO2 games in format "Name (AppID)"
 function listMO2Games {
-	echo "Games supported by $MO:"
-	echo "---------------------------------"
-	cat "$GLOBALMISCDIR/mo2games.txt"
+	MO2GAMES="$GLOBALMISCDIR/mo2games.txt"
+	while read -r MO2GAM; do
+		MO2GAMNAM="$( echo "$MO2GAM" | cut -d ";" -f 1 | cut -d '"' -f 2 )"
+		MO2GAMAID="$( echo "$MO2GAM" | cut -d ";" -f 2 | cut -d '"' -f 2 )"
+
+		printf "%s (%s)\n" "$MO2GAMNAM" "$MO2GAMAID"
+	done <$MO2GAMES
 }
 
 function manageMO2GInstance {
@@ -18522,8 +18527,16 @@ function commandline {
 			elif [ "$2" == "list-supported" ] || [ "$2" == "ls" ]; then
 				listMO2Games
 			elif [ "$2" == "list-installed" ] || [ "$2" == "li" ]; then
+				# Output installed MO2 games in format "Name (AppID) -> /path/to/game"
 				setMO2Vars
-				prepAllMO2Games "li"
+				mapfile -t -O "${#CMDINSTMO2GAMS}" CMDINSTMO2GAMS <<< "$( prepAllMO2Games "li" )"
+				for IMO2G in "${CMDINSTMO2GAMS[@]}"; do
+					IMO2GAID="$( echo "$IMO2G" | cut -d ";" -f 1 )"
+					IMO2GN="$( echo "$IMO2G" | cut -d ";" -f 2 )"
+					IMO2GPA="$( echo "$IMO2G" | cut -d ";" -f 3 )"
+
+					printf "%s (%s) -> %s\n" "$IMO2GN" "$IMO2GAID" "$IMO2GPA"
+				done 
 			elif [ "$2" == "create-instance" ] || [ "$2" == "ci" ]; then
 				if [ -z "$3" ] || [ "$3" == "all" ]; then
 					createAllMO2Instances
