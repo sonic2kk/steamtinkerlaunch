@@ -2553,6 +2553,7 @@ function setDefaultCfgValues {
 		if [ -z "$DL_D3D47_64" ]						; then	DL_D3D47_64="https://lutris.net/files/tools/dll/$D3D47"; fi
 		if [ -z "$DL_D3D47_32" ]						; then	DL_D3D47_32="http://dege.freeweb.hu/dgVoodoo2/bin/D3DCompiler_47.zip"; fi
 		if [ -z "$RESHADEDLURL" ]						; then	RESHADEDLURL="https://reshade.me/downloads"; fi
+		if [ -z "$RESHADEPROJURL" ]						; then	RESHADEPROJURL="https://github.com/crosire/reshade"; fi
 		if [ -z "$VORTEXPROJURL" ]						; then  VORTEXPROJURL="$GHURL/Nexus-Mods/${VTX^}"; fi
 		if [ -z "$DXVKURL" ]							; then	DXVKURL="$GHURL/doitsujin/dxvk"; fi
 		if [ -z "$XLIVEURL" ]							; then	XLIVEURL="$GHURL/ThirteenAG/Ultimate-ASI-Loader/releases/download/v4.61/Ultimate-ASI-Loader.zip"; fi
@@ -2609,13 +2610,16 @@ function setDefaultCfgValues {
 		if [ -z "$ROBERTAARGS" ]						; then	ROBERTAARGS="--wait-before-run"; fi
 		if [ -z "$LUXTORPEDACMD" ]						; then	LUXTORPEDACMD="$STEAMCOMPATOOLS/luxtorpeda/luxtorpeda"; fi
 		if [ -z "$LUXTORPEDAARGS" ]						; then	LUXTORPEDAARGS="wait-before-run"; fi
-		if [ -z "$RSVERS" ]								; then	RSVERS="5.3.0"; fi
+		if [ -z "$RSVERS" ]								; then	RSVERS="5.4.2"; fi
+		if [ -z "$AUTOBUMPRESHADE" ]					; then	AUTOBUMPRESHADE="0"; fi
 		if [ -z "$DOWNLOAD_RESHADE" ]					; then	DOWNLOAD_RESHADE="1"; fi
 		if [ -z "$RESHADESRCDIR" ]						; then	RESHADESRCDIR="$STLDLDIR/reshade"; fi
 		if [ -z "$D3D47_64" ]							; then	D3D47_64="${D3D47//./_64.}"; fi
 		if [ -z "$D3D47_32" ]							; then	D3D47_32="${D3D47//./_32.}"; fi
 		if [ -z "$RS_64" ]								; then	RS_64="ReShade64.dll"; fi
 		if [ -z "$RS_32" ]								; then	RS_32="ReShade32.dll"; fi
+		if [ -z "$RS_64_VK" ]							; then	RS_64_VK="ReShade64.json"; fi
+		if [ -z "$RS_32_VK" ]							; then	RS_32_VK="ReShade32.json"; fi
 		if [ -z "$DLSHADER" ]							; then	DLSHADER="1"; fi
 		if [ -z "$SAVESETSIZE" ]						; then	SAVESETSIZE="1"; fi
 		if [ -z "$STARTMENU" ]							; then	STARTMENU="Menu"; fi
@@ -2741,6 +2745,8 @@ function setDefaultCfgValues {
 		if [ -z "$RESHADE_DEPTH3D" ]					; then	RESHADE_DEPTH3D="0"; fi
 		if [ -z "$USERESHADE" ]							; then	USERESHADE="0"; fi
 		if [ -z "$RESHADEUPDATE" ]						; then	RESHADEUPDATE="0"; fi
+		if [ -z "$RSOVRD" ] 							; then RSOVRD="0"; fi
+		if [ -z "$RSOVRVERS" ] 						; then RSOVRVERS="$RSVERS"; fi
 		if [ -z "$CHOOSESHADERS" ]						; then	CHOOSESHADERS="0"; fi
 		if [ -z "$ALTEXEPATH" ]							; then	ALTEXEPATH="/tmp"; fi
 		if [ -z "$ARCHALTEXE" ]							; then	ARCHALTEXE="$DUMMYBIN"; fi
@@ -2875,6 +2881,8 @@ function saveCfg {
 			echo "DXVKURL=\"$DXVKURL\""				
 			echo "## ${RESH} DL URL"
 			echo "RESHADEDLURL=\"$RESHADEDLURL\""
+			echo "## ${RESH} Project URL"
+			echo "RESHADEPROJURl=\"$RESHADEPROJURL\""
 			echo "## ${VTX^} Project URL"
 			echo "VORTEXPROJURL=\"$VORTEXPROJURL\""
 			echo "## Xlive DL URL"
@@ -3026,6 +3034,8 @@ function saveCfg {
 			echo "DOWNLOAD_RESHADE=\"$DOWNLOAD_RESHADE\""
 			echo "## $DESC_RSVERS"
 			echo "RSVERS=\"$RSVERS\""
+			echo "## $AUTOBUMPRESHADE"
+			echo "AUTOBUMPRESHADE=\"$AUTOBUMPRESHADE\""
 			echo "## $DESC_RESHADESRCDIR"
 			echo "RESHADESRCDIR=\"$RESHADESRCDIR\""
 			echo "## $DESC_D3D47_64"
@@ -3036,6 +3046,10 @@ function saveCfg {
 			echo "RS_64=\"$RS_64\""
 			echo "## $DESC_RS_32"
 			echo "RS_32=\"$RS_32\""
+			echo "## $DESC_RS_64_VK"
+			echo "RS_64_VK=\"$RS_64_VK\""
+			echo "## $DESC_RS_32_VK"
+			echo "RS_32_VK=\"$RS_32_VK\""
 			echo "## $DESC_DLSHADER"
 			echo "DLSHADER=\"$DLSHADER\""
 			echo "## $DESC_SAVESETSIZE"
@@ -3284,6 +3298,10 @@ function saveCfg {
 			echo "USERESHADE=\"$USERESHADE\""
 			echo "## $DESC_RESHADEUPDATE"
 			echo "RESHADEUPDATE=\"$RESHADEUPDATE\""
+			echo "## $DESC_RESHADEOVERRIDETOGGLE"
+			echo "RSOVRD=\"$RSOVRD\""
+			echo "## $DESC_RESHADEOVERRIDEVERSION"
+			echo "RSOVRVERS=\"$RSOVRVERS\""
 			echo "## $DESC_CHOOSESHADERS"
 			echo "CHOOSESHADERS=\"$CHOOSESHADERS\""
 			echo "## $DESC_ALTEXEPATH"
@@ -4980,11 +4998,16 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_DOWNLOAD_RESHADE!$DESC_DOWNLOAD_RESHADE ('DOWNLOAD_RESHADE')":CHK "${DOWNLOAD_RESHADE/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_INSTALL_RESHADE!$DESC_INSTALL_RESHADE ('INSTALL_RESHADE')":CHK "${INSTALL_RESHADE/#-/ -}" `#CAT_Shader` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_RESHADEUPDATE!$DESC_RESHADEUPDATE ('RESHADEUPDATE')":CHK "${RESHADEUPDATE/#-/ -}" `#CAT_Shader` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_RESHADEOVERRIDETOGGLE!$DESC_RESHADEOVERRIDETOGGLE ('RSOVRD')":CHK "${RSOVRD/#-/ -}" `#CAT_Shader` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_RSVERS!$DESC_RSVERS ('RSVERS')" "${RSVERS/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#MENU_GLOBAL` \
+--field="     $GUI_AUTOBUMPRESHADE!$DESC_AUTOBUMPRESHADE ('AUTOBUMPRESHADE')":CHK "${AUTOBUMPRESHADE/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#MENU_GLOBAL` \
 --field="     $GUI_RS_32!$DESC_RS_32 ('RS_32')" "${RS_32/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#MENU_GLOBAL` \
 --field="     $GUI_RS_64!$DESC_RS_64 ('RS_64')" "${RS_64/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#MENU_GLOBAL` \
+--field="     $GUI_RS_32_VK!$DESC_RS_32_VK ('RS_32_VK')" "${RS_32_VK/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#MENU_GLOBAL` \
+--field="     $GUI_RS_64_VK!$DESC_RS_64_VK ('RS_64_VK')" "${RS_64_VK/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#MENU_GLOBAL` \
 --field="     $GUI_D3D47_32!$DESC_D3D47_32 ('D3D47_32')" "${D3D47_32/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#MENU_GLOBAL` \
 --field="     $GUI_D3D47_64!$DESC_D3D47_64 ('D3D47_64')" "${D3D47_64/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#MENU_GLOBAL` \
+--field="     $GUI_RESHADEOVERRIDEVERSION!$DESC_RESHADEOVERRIDEVERSION ('RSOVRVERS')":CBE "$(cleanDropDown "$RESHADEVERSIONS")" `#CAT_Shader` `#SUB_ReShade` `#MENU_GAME` \
 --field="     $GUI_ARCHALTEXE!$DESC_ARCHALTEXE ('ARCHALTEXE')":FL "${ARCHALTEXE/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#MENU_GAME` \
 --field="     $GUI_ALTEXEPATH!$DESC_ALTEXEPATH ('ALTEXEPATH')":DIR "${ALTEXEPATH/#-/ -}" `#CAT_Shader` `#SUB_Directories` `#MENU_GAME` \
 --field="     $GUI_RESHADESRCDIR!$DESC_RESHADESRCDIR ('RESHADESRCDIR')":DIR "${RESHADESRCDIR/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#SUB_Directories` `#MENU_GLOBAL` \
@@ -5189,6 +5212,7 @@ function openGameDefaultMenu {
 
 function openGlobalMenu {
 	prepareMenu "$@"
+	autoBumpReShade
 	if [ -z "$2" ]; then
 		FUNC="$NON"
 	else
@@ -5530,6 +5554,7 @@ function MainMenu {
 	writelog "INFO" "${FUNCNAME[0]} - Preparing to load Main Menu"
 
 	createDLSpekList
+	createDLReShadeList
 	prepareMenu "$@"
 
 	setShowPic
@@ -6065,6 +6090,21 @@ function gitUpdate {
 			"$GIT" clone "$GITURL" "$GITDIR" &> "$STLSHM/${FUNCNAME[0]}-${GITDIR##*/}"
 		fi
 	fi
+}
+# Get the last N tagged releases from PROJURL taken from sonic2kk
+function fetchGitHubTags {
+    PROJURL="$1"
+    N="$2"
+
+    RELEASESURL="${PROJURL}/releases"
+    TAGSURL="${PROJURL}/tags"
+
+    TAGSGREP="${RELEASESURL#"$GHURL"}/tag"
+
+    mapfile -t BASETAGS < <("$WGET" -q "${TAGSURL}" -O - 2> >(grep -v "SSL_INIT") | grep -oE "${TAGSGREP}[^\"]+" | sort -urV | grep -m "$N" "$TAGSGREP")
+    for TAG in "${BASETAGS[@]}"; do
+        basename "$TAG"
+    done
 }
 
 # Just for fun ;)
@@ -7465,43 +7505,70 @@ function installd3d47dll {
 	fi
 }
 
+function autoBumpReShade {
+	RSVERSLATEST="$( fetchGitHubTags "$RESHADEPROJURL" "1" )"
+	RSVERSLATEST="${RSVERSLATEST//v/}"
+	if [ "$AUTOBUMPRESHADE" -eq 1 ] && [[ "$RSVERS" < "$RSVERSLATEST" ]]; then
+		writelog "INFO" "${FUNCNAME[0]} - Found newer version of '$RESH' - Updating '$RSVERS' to '$RSVERSLATEST"
+		touch "$FUPDATE" 
+		updateConfigEntry "RSVERS" "$RSVERSLATEST" "$STLDEFGLOBALCFG"
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - '$RSVERS' is the latest version of '$RESH' - not updating"
+	fi
+}
+
+function createDLReShadeList {
+	if [ "$RSOVRD" -eq 1 ]; then
+		RSVERSONLINE="$( fetchGitHubTags "$RESHADEPROJURL" "3" )"
+		RSVERSONLINE="${RSVERSONLINE//$'\n'/!}"
+		RSVERSONLINE="${RSVERSONLINE//v/}"
+		writelog "INFO" "${FUNCNAME[0]}" - "Found the following '$RESH' versions online '$RSVERSONLINE'"
+		RESHADEVERSIONS="$RSOVRVERS!$RSVERSONLINE!4.91!3.4.1" 
+	fi
+}
+
 function dlReShade {
 	if [ -z "$1" ]; then
 		DLVERS="$RSVERS"
 	else
 		DLVERS="$1"
 	fi
-	rm "$RESHADESRCDIR/$RS_64" 2>/dev/null
-	rm "$RESHADESRCDIR/$RS_32" 2>/dev/null
-	rm "$RESHADESRCDIR/${RS_64//.dll/.json}" 2>/dev/null
-	rm "$RESHADESRCDIR/${RS_32//.dll/.json}" 2>/dev/null
 
-	DLDST="${RESHADESRCDIR}/${RSSU}.exe"
-	DLDSTV="${RESHADESRCDIR}/${RSSU}_${DLVERS}.exe"
+	DLDST="${RESHADESRCDIR}/${RSSU}_${DLVERS}.exe"
 
 	RSSETUP="${RESHADEDLURL}/${RSSU}_${DLVERS}.exe"
 
 	dlCheck "$RSSETUP" "$DLDST" "X" "Downloading $RSSU"
-	if [ ! -f "$DLDSTV" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - Creating backup '${RSSU}_${DLVERS}.exe'"
-		cp "$DLDST" "$DLDSTV"
-	fi
-
+	
 	echo "$DLVERS" > "${DLDST//.exe/.log}"
 
 	if [ ! -s "$DLDST" ]; then
 		writelog "SKIP" "${FUNCNAME[0]} - Downloaded file '$DLDST' is empty - removing"
 		rm "$DLDST" 2>/dev/null
 	else
-		"$UNZIP" -q "$DLDST" -d "$RESHADESRCDIR" 2>/dev/null
+		"$UNZIP" -qo "$DLDST" -d "$RESHADESRCDIR/${DLVERS}" 2>/dev/null
 		writelog "INFO" "${FUNCNAME[0]} - Downloaded and extracted ${RESH}-v${DLVERS} file '$DLDST'"
+	fi
+}
+
+function overrideReShadeVersion {
+	if [ "$RSOVRD" -eq 1 ]; then  # This is meant to be the checkbox var
+		if [[ ! "$RSOVRVERS" = "$RSVERS" ]]; then
+			writelog "INFO" "${FUNCNAME[0]} - Overriding global '$RESH' version '$RSVERS' with '$RSOVRVERS'"
+       		RSVERS="$RSOVRVERS"
+   		else
+       		writelog "SKIP" "${FUNCNAME[0]} - '$RESH' Override version and '$RESH' global version match - Not overriding"
+   	fi
+	else
+    	writelog "SKIP" "${FUNCNAME[0]} - '$RESH' override is disabled - Skipping"
 	fi
 }
 
 # prepare reshade files if not found:
 function prepareReshadeFiles {
+	overrideReShadeVersion
 	if [ "$DOWNLOAD_RESHADE" -eq 1 ]; then
-		writelog "INFO" "${FUNCNAME[0]} - DOWNLOAD_RESHADE enabled"
+	writelog "INFO" "${FUNCNAME[0]} - DOWNLOAD_RESHADE enabled"
 		if [ ! -f "$D3D47DLDIR/$D3D47_32" ]; then dd
 			writelog "404" "${FUNCNAME[0]} - '$D3D47DLDIR/$D3D47_32' missing - downloading"
 
@@ -7513,8 +7580,24 @@ function prepareReshadeFiles {
 		dld3d47 "32"
 		dld3d47 "64"
 
-		if [ ! -f "$RESHADESRCDIR/$RS_64" ] || [ ! -f "$RESHADESRCDIR/$RS_32" ]; then
-			writelog "404" "${FUNCNAME[0]} - '$RESHADESRCDIR/$RS_64' and/or '$RS_32' missing - downloading"
+		#Check if ReShade file are missing
+		if [ ! -f "$RESHADESRCDIR/$RSVERS/$RS_64" ] || [ ! -f "$RESHADESRCDIR/$RSVERS/$RS_32" ]; then
+			writelog "404" "${FUNCNAME[0]} - '$RESHADESRCDIR/$RSVERS/$RS_64' and/or '$RS_32' missing - downloading"
+			dlReShade
+		fi
+
+		if [ ! -f "$RESHADESRCDIR/$RSVERS/$RS_64_VK" ] || [ ! -f "$RESHADESRCDIR/$RSVERS/$RS_32_VK" ]; then
+			writelog "404" "${FUNCNAME[0]} - '$RESHADESRCDIR/$RSVERS/$RS_64_VK' and/or '$RS_32_VK' missing - downloading"
+			dlReShade
+		fi
+
+		#Check if ReShade file is zero bytes
+		if [ ! -s "$RESHADESRCDIR/$RSVERS/$RS_64" ] || [ ! -s "$RESHADESRCDIR/$RSVERS/$RS_32" ]; then
+			writelog "404" "${FUNCNAME[0]} - '$RESHADESRCDIR/$RSVERS/$RS_64' and/or '$RS_32' corrupted - downloading"
+			dlReShade
+		fi
+		if [ ! -s "$RESHADESRCDIR/$RSVERS/$RS_64_VK" ] || [ ! -s "$RESHADESRCDIR/$RSVERS/$RS_32_VK" ]; then
+			writelog "404" "${FUNCNAME[0]} - '$RESHADESRCDIR/$RSVERS/$RS_64_VK' and/or '$RS_32_VK' corrupted - downloading"
 			dlReShade
 		fi
 
@@ -8030,13 +8113,13 @@ function installRSdll {
 		if [ -n "$2" ] && [ "$2" -eq 1 ]; then
 			writelog "SKIP" "${FUNCNAME[0]} - Skipping installation of $1 because 'NOD3D9' is enabled"
 		else
-			if [ ! -f "$RESHADESRCDIR/$3" ]; then
-				writelog "SKIP" "${FUNCNAME[0]} - Sourcefile '$RESHADESRCDIR/$3' missing - skipping this file" 
+			if [ ! -f "$RESHADESRCDIR/$RSVERS/$3" ]; then
+				writelog "SKIP" "${FUNCNAME[0]} - Sourcefile '$RESHADESRCDIR/$RSVERS/$3' missing - skipping this file" 
 			else
-				cp "$RESHADESRCDIR/$3" "$INSTDESTDIR/$1" >/dev/null 2>/dev/null
+				cp "$RESHADESRCDIR/$RSVERS/$3" "$INSTDESTDIR/$1" >/dev/null 2>/dev/null
 				echo "$1" >> "$INSTDESTDIR/$RSTXT"
 				sort "$INSTDESTDIR/$RSTXT" -u -o "$INSTDESTDIR/$RSTXT"
-				writelog "INFO" "${FUNCNAME[0]} - Copied '$RESHADESRCDIR/$3' to '$INSTDESTDIR/$1'" 
+				writelog "INFO" "${FUNCNAME[0]} - Copied '$RESHADESRCDIR/$RSVERS/$3' to '$INSTDESTDIR/$1'" 
 			fi
 		fi
 	else
@@ -8047,7 +8130,7 @@ function installRSdll {
 				writelog "SKIP" "${FUNCNAME[0]} - Destfile '$INSTDESTDIR/$1' already exists in the same version '$RSVERS' - skipping this file" 
 			else
 				writelog "INFO" "${FUNCNAME[0]} - Destfile '$INSTDESTDIR/$1' already exists, but has a different version - updating"
-				cp "$RESHADESRCDIR/$3" "$INSTDESTDIR/$1" >/dev/null 2>/dev/null
+				cp "$RESHADESRCDIR/$RSVERS/$3" "$INSTDESTDIR/$1" >/dev/null 2>/dev/null
 			fi
 		fi
 	fi
@@ -15320,6 +15403,7 @@ function prepareLaunch {
 
 	autoBumpGE
 	autoBumpProton
+	autoBumpReShade
 
 	if [ "$ISGAME" -eq 2 ] && [ "$HAVEINPROTON" -eq 0 ]; then
 		FIRSTGAMEUSEPROTON="$USEPROTON"
