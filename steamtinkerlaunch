@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v11.12.20221114-3"
+PROGVERS="v11.12.20221114-4"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -680,9 +680,19 @@ function OpenWikiPage {
 	fi
 	
 	if [ -n "$WIKURL" ]; then
-		TITLE="${PROGNAME}-Wiki"
-		pollWinRes "$TITLE"
-		"$YAD" --window-icon="$STLICON" --title="$TITLE" --on-top --center "$WINDECO" --html --uri="$WIKURL" "$GEOM" >/dev/null 2>/dev/null	
+		if [ "$ONSTEAMDECK" -eq 1 ]; then
+			# Only open wiki on Steam Deck Game Mode
+			if [ "$FIXGAMESCOPE" -eq 0 ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Opening wiki URL '$WIKIURL' using xdg-open on Steam Deck since Yad AppImage does not have WebKit support" 
+				"$XDGO" "$WIKIURL"
+			else
+				writelog "SKIP" "${FUNCNAME[0]} - Running in Steam Deck Game Mode - Opening wiki page using xdg-open here may not work or may have undesired results - Skipping"
+			fi
+		else
+			TITLE="${PROGNAME}-Wiki"
+			pollWinRes "$TITLE"
+			"$YAD" --window-icon="$STLICON" --title="$TITLE" --on-top --center "$WINDECO" --html --uri="$WIKURL" "$GEOM" >/dev/null 2>/dev/null	
+		fi
 	fi
 }
 
@@ -1665,7 +1675,7 @@ function pollWinRes {
 		SCREENRES="any"
 	fi
 
-# skip this if FIXGAMESCOPE is 1 - so for now only if running in GameMode on the Steam Deck
+	# skip this if FIXGAMESCOPE is 1 - so for now only if running in GameMode on the Steam Deck
 	if [ "$FIXGAMESCOPE" -eq 0 ]; then
 		TEMPL="template"
 		GAMEGUICFG="$STLGUIDIR/$SCREENRES/${AID}/${TITLE}.conf"
@@ -17135,7 +17145,7 @@ function dlWineGUI {
 	"$GEOM")"
 
 	if [ -n "${DLDISPWINE//|/\"}" ]; then
-		if grep -q "^http" <<< "${DLDISPWINE//|/\"}"; then
+		if grep -q "^http" <<< "${DLDISPWINE//|/\"}"; then  #"
 			DLURL="${DLDISPWINE//|/\"}"
 			writelog "INFO" "${FUNCNAME[0]} - The URL '$DLURL' was entered manually - downloading directly"
 		else
@@ -17643,7 +17653,7 @@ function setProtonCmd {
 		fi
 	fi
 
-############
+############ 
 	# set the definitive used versions, which are also stored into writeLastRun
 	PROTONVERSION="$(setProtonPathVersion "$RUNPROTON")"
 
@@ -19658,6 +19668,10 @@ function addNonSteamGame {
 		# NOSTCRC="$(getCRC "${NOSTEXEPATH}${NOSTAPPNAME}")"
 		# NOSTSCNHEX="${NOSTCRC}02000000"
 		# echo "NOSTSCNHEX = ${NOSTSCNHEX}"
+		# 
+		# Somehow other tools like Steam-Rom-Manager are able to generate correct AppIDs for Non-Steam Games
+		# Not sure how they do it even after trying to reproduce what they do in TypeScript locally
+		# Contributions would be very welcome on properly generating AppIDs for Non-Steam Games!
 
 		NOSTAIDRHX="$(printf "%03x%03x%02x\n" $((RANDOM%4096)) $((RANDOM%4096)) $((RANDOM%256)))"
 		NOSTAID="$(hex2dec "$NOSTAIDRHX")"
