@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v11.12.20221114-9"
+PROGVERS="v11.12.20221114-10"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -6973,38 +6973,52 @@ function getCompatData {
 	fi
 }
 
+# Extracts a value from a given App Manifest file path
+function getValueFromAppManifest {
+	KEY="$1"
+	APPMA="$2"
+	grep "$KEY" "$APPMA" | sed "s-\t- -g;s-\"${KEY}\"--g;s-\"--g" | xargs 
+}
+
+# Returns game install directory in the format "Game (AppID) -> /path/to/gamefolder"
 function getGameDir {
 	if [ -z "$1" ]; then
 		echo "A Game ID or Game Title is required as argument"
 	else
-			unset FGDIR
-			if [ "$1" -eq "$1" ] 2>/dev/null; then
-				if [ -d "$CUMETA" ]; then
-					TEST="$(find "$CUMETA" | grep "$1")"
-					if [ -f "$TEST" ]; then
-						source "$TEST"
-						FGDIR="$(basename "${TEST//.conf/}");$MEGAMEDIR"
-					fi
-				else
-					echo "No Game Dir found for '$1'"
-				fi
+		# First assume user entered AppID, then if no AppManifest found, try get AppID from name and search on that
+		SEARCHMANIFEST="$( listAppManifests | grep -m1 "${1}.acf" )"
+		if [ -z "$SEARCHMANIFEST" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Could not find App Manifest with entered argument '$1' - Assuming it is a game title and trying to find its AppID from title"
+			SEARCHGETIDFROMTITLE="$( getIDFromTitle "$1" | head -n1 )"
+			
+			writelog "INFO" "${FUNCNAME[0]} - called 'getIDFromTitle' for argument '$1', it returned '$SEARCHGETIDFROMTITLE'"
+			SEARCHAID="$( echo "$SEARCHGETIDFROMTITLE" | cut -d "(" -f 1 | xargs)"
+
+			writelog "INFO" "${FUNCNAME[0]} - Extracted AppID from 'getIDFromTitle' result is '$SEARCHAID' - Searching for App Manifest with this AppID"
+
+			SEARCHMANIFEST="$( listAppManifests | grep -m1 "${SEARCHAID}.acf" )"
+			if [ -z "$SEARCHMANIFEST" ]; then
+				writelog "ERROR" "${FUNCNAME[0]} - Could not find game directory for '$1' - Maybe it is not installed"
+				echo "Could not find game directory for '$1'"
+				return
 			else
-				if [ -d "$TICUMETA" ]; then
-					TEST="$(find "$TICUMETA" | grep "$1")"
-					if [ -f "$TEST" ]; then
-						source "$TEST"
-						FGDIR="$(basename "${TEST//.conf/}");$MEGAMEDIR"
-					fi
-				else
-					echo "No Game Dir found for '$1'"
-				fi
+				writelog "INFO" "${FUNCNAME[0]} - Found matching App Manifest '$SEARCHMANIFEST'"
 			fi
 
-			if [ -n "$FGDIR" ]; then
-				echo "$FGDIR"
+			APPMAINSTDIR="$( getValueFromAppManifest "installdir" "$SEARCHMANIFEST" )"
+			APPMALIBFLDR="$( dirname "$SEARCHMANIFEST" )"
+			GAMINSTDIR="$APPMALIBFLDR/common/$APPMAINSTDIR"
+			if [ -d "$GAMINSTDIR" ]; then
+				APPMAGN="$( getValueFromAppManifest "name" "$SEARCHMANIFEST" )"
+				APPMAAID="$( getValueFromAppManifest "appid" "$SEARCHMANIFEST" )"
+
+				printf "%s (%s) -> %s\n" "$APPMAGN" "$APPMAAID" "$GAMINSTDIR"
 			else
-				echo "No Game Dir found for '$1'"
+				echo "Could not find install directory for '$1'"
 			fi
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Found matching App Manifest file for presumed entered AppID '$1' - Manifest file is '$SEARCHMANIFEST'"
+		fi
 	fi
 }
 
@@ -18360,7 +18374,7 @@ function howto {
 	echo "    getid|gi <gametitle>             Print the SteamAppId for <gametitle>"
 	echo "    gettitle|gt <gameid>             Print the Game Title for <gameid>"
 	echo "    getcompatdata|gc <gameid/title>  Print the Game compatdata path"
-	echo "    getgamedir|gg <gameid/title>     Print the Game dir"
+	echo "    getgamedir|gg <gameid/title>     Print the Game install directory"
 	echo "    hedgemodmanager|hmm              HedgeModManager"
 	echo "            install|i                  install latest stable HedgeModManager"
 	echo "            download|d <channel>       download latest HedgeModManager release (stable or nightly)"
