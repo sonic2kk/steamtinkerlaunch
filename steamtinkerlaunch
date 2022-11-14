@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v11.12.20221115-3"
+PROGVERS="v11.12.20221115-5"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -277,8 +277,14 @@ MO2="mo2"
 STLMO2DIR="$STLCFGDIR/$MO2"
 MO="ModOrganizer"
 HMM="HedgeModManager"
+HMMNICE="Hedge Mod Manager"
 HMMSTABLE="stable"
 HMMDEV="nightly"
+HMMAUTO="auto"
+HMMDF="$HMM-${PROGNAME,,}.desktop"
+HMMDFDL="$HMM-${PROGNAME,,}-dl.desktop"
+HMMDFPA="$HOME/.local/share/applications/$HMMDF"  # .desktop file to open HMM
+HMMDFDLPA="$HOME/.local/share/applications/$HMMDFDL"  # .desktop file to 
 MORDIR="$DRC/Modding"
 MOERPATH="$MORDIR/MO2/${MO}.exe"
 STLHMMDIR="$STLCFGDIR/${HMM,,}"
@@ -12364,6 +12370,11 @@ function dlLatestHMM {
 	fi
 	writelog "INFO" "${FUNCNAME[0]} - User wants HedgeModManager '${DLVER:-stable}'"
 
+	# This will come from desktop file usually
+	if [[ "$DLVER" = "$HMMAUTO" ]]; then
+		DLVER="$HMMDLVER"
+	fi
+
 	if [[ "$DLVER" = "$HMMDEV" ]]; then
 		# Get latest GitHub artifacts ver
 		writelog "INFO" "${FUNCNAME[0]} - Checking latest available HedgeModManager Development version"
@@ -12468,6 +12479,11 @@ function installHMM {
 	else
 		writelog "SKIP" "${FUNCNAME[0]} - '$HMMSPATH' not found - Nothing to install - skipping"
 	fi
+
+	# Create .desktop file for 1-click install support and adding HMM to application menu
+	writelog "INFO" "${FUNCNAME[0]} - Adding HedgeModManager to application menu and setting up link handlers"
+	echo "Adding HedgeModManager to application menu and setting up link handlers"
+	createHMMDesktopFile
 }
 
 # Remove Steam reg keys - needed to get HMM to find games with our prefix
@@ -12581,12 +12597,8 @@ function prepareHMMGames {
 function startHMM {
 	# TODO:
 	# - Refine UI (add HMM button, etc)
-	# - Update lang strings
-	# - Add HMM Collection support
-	# - Test on Steam Deck
 	HMMDLVERARG="$1"
 
-	# Add notifier
 	dlLatestHMM "$HMMDLVERARG"
 	installHMM
 	prepareHMMGames
@@ -12595,7 +12607,7 @@ function startHMM {
 	echo "Starting HedgeModManager"
 	notiShow "$( strFix "$NOTY_HMMSTART" "$HMMVER" )" "X"
 
-	WINEDEBUG="-all" WINEPREFIX="$HMMPFX" "$HMMWINE" "$HMMEXE" &>/dev/null
+	WINEDEBUG="-all" WINEPREFIX="$HMMPFX" "$HMMWINE" "$HMMEXE" "$HMMARGS" &>/dev/null
 }
 
 # This will only remove the HMM Wineprefix and download executable files
@@ -12608,16 +12620,30 @@ function uninstallHMM {
 	# This may not be the same one in the cfg folder if the user moved it
 	if [ -d "$HMMCOMPDATA" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Removing HedgeModManager compatdata folder"
+		echo "Removing HedgeModManager compatdata"
 		rm -rf "$HMMCOMPDATA"
 	fi
 
 	# Downloads dir - Should always be in STL cfg dir
 	if [ -d "$HMMDLDIR" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Removing HedgeModManager downloads directory"
+		echo "Removing HedgeModManager SteamTinkerLaunch directory"
 		rm -rf "$HMMDLDIR"
 	fi
+
+	# Remove desktop files
+	if [ -d "$HMMDFPA" ]; then
+		echo "Removing HedgeModManager Desktop file at '$HMMDFPA'" 
+		rm "$HMMDFPA"
+	fi
 	
-	writelog "INFO" "${FUNCNAME[0]} - Removed HedgeModManager"
+	if [ -d "$HMMDFDLPA" ]; then
+		echo "Removing HedgeModManager Desktop file at '$HMMDFDLPA'"
+		rm "$HMMDFPA"
+	fi
+	
+	writelog "INFO" "${FUNCNAME[0]} - Successfully uninstalled HedgeModManager"
+	echo "Uninstalled HedgeModManager"
 }
 
 function listSupportedHMMGames {
@@ -12652,6 +12678,101 @@ function listInstalledHMMGames {
 	done < "$GLOBALMISCDIR/hmmgames.txt"
 	GPFX="$OGGPFX"
 }
+
+# Handle incoming mod download requests for HMM via "gamebananaidentifier:modurl" (ex: hedgemmgens:https://gamebanana.com/mmdl/455806,Mod,50766)
+# HMM starts as a separate process for this, so it's fine to just call the exe (+selected proton +correct prefix) with the `-gb` parameter
+# WILL NOT WORK WITH GAMEBANANA BROWSER URLs!!!
+function dlHedgeMod {
+	setHMMVars
+
+	if [ ! -d "$HMMPFX" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - HedgeModManager is not installed!"
+		echo "It looks like HedgeModManager is not installed. Can't download URL, please try again!"
+		notiShow "$NOTY_HMMDLMODFAIL" "X"  # Temp, use strings and better message later
+	else
+		writelog "INFO" "${FUNCNAME[0]} - Downloading HedgeModManager mod '$1' using '$HMMEXE' in prefix '$HMMPFX' with Wine '$HMMWINE'"
+
+		# GameBanana Mime handler and Mod ID
+		BANANAHANDLER="$( echo "$1" | cut -d ":" -f 1 )"
+
+		MODGAMENAME="$( grep "$BANANAHANDLER" "$HMMGAMES" | cut -d ";" -f 1 | cut -d '"' -f 2 )"
+		MODID="$( basename "$( echo "$1" | cut -d ":" -f 3 )" | cut -d "," -f 3 )"
+		
+		echo "Downloading HedgeModManager $MODGAMENAME mod '$1'..."
+		notiShow "$( strFix "$NOTY_HMMDLMOD" "$MODGAMENAME" "$MODID" )" "X"
+
+		WINEDEBUG="-all" WINEPREFIX="$HMMPFX" "${HMMWINE}" "${HMMEXE}" -gb "$1" &>/dev/null
+	fi
+}
+
+# Create a .desktop file entry/entries for HedgeModManager
+function createHMMDesktopFile {
+	HMMICONNM="icon256.png"
+	HMMICOPATH="$HMMDLDIR/$HMMICONNM"
+	HMMICOURL="${HMMPROJURL}/raw/rewrite/HedgeModManager/Resources/Graphics/${HMMICONNM}"
+	
+	# Download HMM icon file from HMM repo to the HMM DL folder if it wasn't already downloaded 
+	if [ ! -f "$HMMICOPATH" ]; then 
+		"$WGET" "$HMMICOURL" -O "$HMMICOPATH"
+	fi
+
+	# Generate application launch .desktop file - Re-create each time to set correct path
+	if [ -f "$HMMDFPA" ]; then
+		rm "$HMMDFPA"
+	fi
+	writelog "INFO" "${FUNCNAME[0]} - Creating new HedgeModManager desktop file at '$HMMDFPA'"
+	{
+		echo "[Desktop Entry]"
+		echo "Type=Application"
+		echo "Categories=Game;"
+		echo "Name=${HMMNICE}"
+		echo "Comment=A mod manager for Hedgehog Engine games on PC (Installed by SteamTinkerLaunch)"
+		echo "MimeType=x-scheme-handler/hedgemm"
+		echo "Exec=$(realpath "$0") ${HMM,,} start ${HMMAUTO} \"%u\""  # "hmm start" takes dl channel as argument, next arg is the URL
+		echo "Icon=${HMMICOPATH}"
+		echo "Terminal=false"
+		echo "X-KeepTerminal=false"
+	} > "$HMMDFPA"
+
+	# Get all HMM mime handlers in use on GameBanana from hardcoded list in hmmgames.txt
+	HMMGAMEMIMES="x-scheme-handler/hedgemm"
+	while read -r HMMGAME; do
+		# 4th col in hmmgames.txt is the MimeType name
+		HMMGAMEMIMES+=";x-scheme-handler/$( echo "$HMMGAME" | cut -d ";" -f 4 | cut -d '"' -f2 )"
+	done < "$GLOBALMISCDIR/hmmgames.txt"
+
+	if [ ! -f "$HMMDFDLPA" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Creating HedgeModManager Desktop file for handing supported game MimeTypes"
+	else
+		writelog "INFO" "${FUNCNAME[0]} - Updating HedgeModManager Desktop file for handing supported game MimeTypes"
+		rm "$HMMDFDLPA"
+	fi
+
+	# Create Desktop file for handling mod dowwnloads using HMM handlers
+	{
+		echo "[Desktop Entry]"
+		echo "Type=Application"
+		echo "Categories=Game;"
+		echo "Name=${HMM} ($PROGNAME) - GameBanana Handler"
+		echo "MimeType=$HMMGAMEMIMES"
+		echo "Terminal=false"
+		echo "X-KeepTerminal=false"
+		echo "Path=$HMMDLDIR"
+		echo "Exec=$(realpath "$0") ${HMM,,} u %u"  # "hmm start" takes dl channel as argument, next arg is the URL
+		echo "NoDisplay=true"
+	} >> "$HMMDFDLPA"
+
+	# Associate GameBanana Mimes with DL desktop file
+	if [ -x "$(command -v "$XDGMIME" 2>/dev/null)" ]; then
+		writelog "INFO" "Setting download defaults for HedgeModManager GameBanana protocols via '$XDGMIME' pointing at '$HMMDFDLPA'"
+		for HMMMIME in ${HMMGAMEMIMES//;/ }; do
+			"$XDGMIME" default "$HMMDFDL" "$HMMMIME"
+		done
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - Required Mime handler '$XDGMIME' not found - couldn't set download defaults for HedgeModManager GameBanana protocols - skipping"
+	fi
+}
+
 
 ### HMM END
 
@@ -18384,9 +18505,12 @@ function howto {
 	echo "            start|s <channel>          start HedgeModManager"
 	echo "                                        automatically downloads and installs latest stable if <channel>"
 	echo "                                        is not provided"
+	echo "            url|u <url>              Download a GameBanana mod using MineType URL"
+	echo "                                      Note that this will *not* work with regular browser URLs"
+	echo "            desktopfile|df           (Re-)create .desktop files for HedgeModManager"
 	echo "            list-supported           List games supported by HedgeModManager"
 	echo "            list-installed           List installed games with HedgeModManager support"
-	echo "            uninstall                Remove HedgeModManager downloads folder and Wineprefix"
+	echo "            uninstall                Remove HedgeModManager downloads folder, desktop files and Wineprefix"
 	echo "                                      Note that this will not remove your mods or installed Winetricks"
 	echo "    steamdeckcompat <gameid>         Get information about Steam Deck compatibility for <gameid>"
 	echo "                                       Will work offline if the information has been fetched before"
@@ -18720,6 +18844,10 @@ function commandline {
 				listSupportedHMMGames
 			elif [ "$2" == "list-installed" ] || [ "$2" == "li" ]; then
 				listInstalledHMMGames
+			elif [ "$2" == "desktopfile" ] || [ "$2" == "df" ]; then
+				createHMMDesktopFile
+			elif [ "$2" == "url" ] || [ "$2" == "u" ]; then
+				dlHedgeMod "$3"
 			else
 				echo "Need to input a valid arg2 '$2' to run a HedgeModManager command"
 				howto
