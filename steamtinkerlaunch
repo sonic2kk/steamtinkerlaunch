@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v11.12.20221114-8"
+PROGVERS="v11.12.20221114-9"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -683,8 +683,8 @@ function OpenWikiPage {
 		if [ "$ONSTEAMDECK" -eq 1 ]; then
 			# Only open wiki on Steam Deck Game Mode
 			if [ "$FIXGAMESCOPE" -eq 0 ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Opening wiki URL '$WIKIURL' using xdg-open on Steam Deck since Yad AppImage does not have WebKit support" 
-				"$XDGO" "$WIKIURL"
+				writelog "INFO" "${FUNCNAME[0]} - Opening wiki URL '$WIKURL' using xdg-open on Steam Deck since Yad AppImage does not have WebKit support" 
+				"$XDGO" "$WIKURL"
 			else
 				writelog "SKIP" "${FUNCNAME[0]} - Running in Steam Deck Game Mode - Opening wiki page using xdg-open here may not work or may have undesired results - Skipping"
 			fi
@@ -12582,6 +12582,28 @@ function startHMM {
 	WINEDEBUG="-all" WINEPREFIX="$HMMPFX" "$HMMWINE" "$HMMEXE" &>/dev/null
 }
 
+# This will only remove the HMM Wineprefix and download executable files
+# It will not remove any installed Winetricks or mods 
+function uninstallHMM {
+	writelog "INFO" "${FUNCNAME[0]} - Preparing to uninstall HedgeModManager"
+	echo "Preparing to uninstall HedgeModManager"
+
+	# Compatdata aka "Install" directory
+	# This may not be the same one in the cfg folder if the user moved it
+	if [ -d "$HMMCOMPDATA" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Removing HedgeModManager compatdata folder"
+		rm -rf "$HMMCOMPDATA"
+	fi
+
+	# Downloads dir - Should always be in STL cfg dir
+	if [ -d "$HMMDLDIR" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Removing HedgeModManager downloads directory"
+		rm -rf "$HMMDLDIR"
+	fi
+	
+	writelog "INFO" "${FUNCNAME[0]} - Removed HedgeModManager"
+}
+
 function listSupportedHMMGames {
 	# List HMM compatible games (taken from misc/hmmgames.txt), like:
 	# Game Name (appid) (architecture)
@@ -12612,7 +12634,7 @@ function listInstalledHMMGames {
 			printf "%s (%s) -> %s\n" "$HMMGN" "$HMMGAID" "$HMMGPFX"
 		fi
 	done < "$GLOBALMISCDIR/hmmgames.txt"
-	GPFX="$GPFX"
+	GPFX="$OGGPFX"
 }
 
 ### HMM END
@@ -18348,6 +18370,8 @@ function howto {
 	echo "                                        is not provided"
 	echo "            list-supported           List games supported by HedgeModManager"
 	echo "            list-installed           List installed games with HedgeModManager support"
+	echo "            uninstall                Remove HedgeModManager downloads folder and Wineprefix"
+	echo "                                      Note that this will not remove your mods or installed Winetricks"
 	echo "    steamdeckcompat <gameid>         Get information about Steam Deck compatibility for <gameid>"
 	echo "                                       Will work offline if the information has been fetched before"
 	echo " "
