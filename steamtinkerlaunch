@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v11.12.20221115-5"
+PROGVERS="v11.12.20221117-2"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -13807,25 +13807,44 @@ function setModWine {
 	DNWINEVAR="$3"
 	INUVP="$USEDNPROTON"
 
+	writelog "INFO" "${FUNCNAME[0]} - Setting mod game wine"
+	writelog "INFO" "${FUNCNAME[0]} - USEDNPROTONVAR is '${USEDNPROTONVAR}'"
+	writelog "INFO" "${FUNCNAME[0]} - USEDNPROTON is '${USEDNPROTON}'"
+	writelog "INFO" "${FUNCNAME[0]} - DNPROTON is '${DNPROTON}'"
+	writelog "INFO" "${FUNCNAME[0]} - DNWINEVAR is '${DNWINEVAR}'"
+
 	if [ -z "$DNPROTON" ] || [ ! -f "$DNPROTON" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - DNPROTON not defined or not a file"
 		if [ -z "${ProtonCSV[0]}" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Getting avaialble Proton versions"
 			getAvailableProtonVersions "up" X
+		else
+			writelog "${FUNCNAME[0]} - DNPROTON is either a file or it is defined"
 		fi
 		DNPROTON="$(getProtPathFromCSV "$USEDNPROTON")"
+		writelog "INFO" "${FUNCNAME[0]} - DNPROTON was gotten from CSV path - It is '${DNPROTON}'"
 		if [ ! -f "$DNPROTON" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Proton version mismatch"
 			DNPROTON="$(fixProtonVersionMismatch "$USEDNPROTONVAR" "$STLDEFGLOBALCFG" X)"
+			writleog "INFO" "${FUNCNAME[0]} - Resolve, USEDNPROTONVAR is now '$USEDNPROTONVAR'"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - DNPROTON is a file -- '$DNPROTON'"
 		fi
 
 		if [ ! -f "$DNPROTON" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - DNPROTON '$DNPROTON' is not a file"
 			createDLProtList
 			DLURL="$(printf "%s\n" "${ProtonDLList[@]}" | grep -m1 "$USEDNPROTON")"
 			if [ -n "$DLURL" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Downloading: '$DLURL'" "E"
 				StatusWindow "$GUI_DLCUSTPROT" "dlCustomProton ${DLURL//|/\"}" "DownloadCustomProtonStatus"
 				DNPROTON="$(getProtPathFromCSV "$USEDNPROTON")"
+				writelog "INFO" "${FUNCNAME[0]} - DNPROTON in DLURL check was gotten as '$DNPROTON'"
 			else
 				writelog "SKIP" "${FUNCNAME[0]} - No download URL found for requested '$USEDNPROTON' - skipping" "E"
 			fi
+		else
+			writelog "INFO" "${FUNCNAME[0]} - DNPROTON is a file -- it is '$DNPROTON'"
 		fi
 	fi
 
@@ -13833,22 +13852,32 @@ function setModWine {
 		export "$2"="$DNPROTON"
 		CHECKDNWINED="$(dirname "$DNPROTON")/$DBW"
 		CHECKDNWINEF="$(dirname "$DNPROTON")/$FBW"
+		
+		writelog "INFO" "${FUNCNAME[0]} - DNPROTON is defined and is a file -- '$DNPROTON'"
+		writelog "INFO" "${FUNCNAME[0]} - CHECKDNWINED is '$CHECKDNWINED'"
+		writelog "INFO" "${FUNCNAME[0]} - CHECKDWINEF is '$CHECKDNWINEF'"
 		if [ -f "$CHECKDNWINED" ]; then
 			FWINEVAR="$CHECKDNWINED"
+			writelog "INFO" "CHECKDNWINED is a file -- '${CHECKDNWINED}'"
 		elif [ -f "$CHECKDNWINEF" ]; then
 			FWINEVAR="$CHECKDNWINEF"
+			writelog "INFO" "CHECKDNWINEF is a file -- '${CHECKDNWINEF}'"
 		else
 			writelog "ERROR" "${FUNCNAME[0]} - $DNWINEVAR was not found - can't continue"
 		fi
 		
 		if [ -f "$FWINEVAR" ]; then
 			export "$DNWINEVAR"="$FWINEVAR"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - FWINEVAR is not a file -- '$FWINEVAR'"
 		fi
 		
 		if [ "$INUVP" != "$USEDNPROTON" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Updating 'USEDNPROTON' in '${STLDEFGLOBALCFG##*/}' to '$USEDNPROTON'" "E"
 			touch "$FUPDATE"
 			updateConfigEntry "$USEDNPROTONVAR" "$USEDNPROTON" "$STLDEFGLOBALCFG"
+		else
+			writelog "INFO" "${FUNCNAME[0]} INUVP is not equal to USEDNPROTON -- '$INUVP' != '$USEDNPROTON'"
 		fi
 	else
 		writelog "ERROR" "${FUNCNAME[0]} - DNPROTON was not found - can't continue" "E"
