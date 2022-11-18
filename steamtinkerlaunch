@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v11.12.20221118-2"
+PROGVERS="v11.12.20221118-3"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -12390,10 +12390,8 @@ function dlLatestHMM {
 	fi
 }
 
+# NOTE: Winetricks *needs* GE-Proton to install dotnet48 correctly!
 function setHMMVars {
-	# Set prefix path here
-	# Set exe path here
-	# Set Proton version here - If we use a custom HMMPROT we'll need to write that out into the config file
 	HMMPFX="${HMMCOMPDATA}/pfx"
 	if [ -z "$HMMEXE" ]; then
 		HMMEXE="$HMMDLDIR/${HMM}.exe"
@@ -12441,11 +12439,29 @@ function setHMMVars {
 		writelog "INFO" "${FUNCNAME[0]} - - HMMRUNPROT is '$HMMRUNPROT'"
 		writelog "INFO" "${FUNCNAME[0]} - - HMMWINE is '$HMMWINE'"
 
+		# Sometimes ProtonCSV can have a version of GE-Proton that doesn't actually exist (or that used to exist, but doesn't anymore)
+		#
+		# This check forces it to look in the file in a different order (reverse version sort order `sort -Vr`) which should get it to find GE-Proton
+		# and updates the relevant HMM Proton/Wine variables + writes out to config file 
+		#
+		# The real fix here is to correctly re-populate the Proton versions in ProtonCSV.txt so that STL never tries to use an invalid Proton version to begin with! 
+		#
+		# This check could be much cleaner, but the check is here outside of the above check to force the Proton value to get updated for any existing users
+		if [ ! -f "$SETHMMPROT" ]; then
+			writelog "WARN" "${FUNCNAME[0]} - SETHMMPROT was not a directory -- Attempting to find it again"
+			SETHMMPROT="$(grep "^GE" "$PROTONCSV" | sort -Vr | tail -n1)"
+			SETHMMPROT="${SETHMMPROT%%;*}"
+
 			if [ ! -f "$SETHMMPROT" ]; then
-				# Work around bug where our HMM implementation can't find GE-Proton
-				writelog "INFO" "${FUNCNAME[0]} - SETHMMPROT was not a directory -- Falling back to Experimental (or it will all back to stable)"
-				fixProtonVersionMismatch "experimental" "$STLDEFGLOBALCFG"
+				writelog "ERROR" "${FUNCNAME[0]} - Still could not find GE-Proton in PROTONCSV - This should be reported!"
+			else
+				writelog "INFO" "${FUNCNAME[0]} - SETHMMPROT was updated to value '$SETHMMPROT'"
+				USEHMMPROTON="$SETHMMPROT"
+
+				touch "$FUPDATE"
+				updateConfigEntry "USEHMMPROTON" "$USEHMMPROTON" "$STLDEFGLOBALCFG"
 			fi
+		fi
 
 		setModWine "SETHMMPROT" "HMMRUNPROT" "HMMWINE"
 	fi
