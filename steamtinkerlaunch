@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v11.12.20221118-4"
+PROGVERS="v11.12.20221121-1"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -2750,9 +2750,10 @@ function setDefaultCfgValues {
 		if [ -z "$INSTALL_RESHADE" ]					; then	INSTALL_RESHADE="0"; fi
 		if [ -z "$RESHADE_DEPTH3D" ]					; then	RESHADE_DEPTH3D="0"; fi
 		if [ -z "$USERESHADE" ]							; then	USERESHADE="0"; fi
+		if [ -z "$CUSTOMCMDRESHADE" ]					; then	CUSTOMCMDRESHADE="0"; fi
 		if [ -z "$RESHADEUPDATE" ]						; then	RESHADEUPDATE="0"; fi
-		if [ -z "$RSOVRD" ] 							; then RSOVRD="0"; fi
-		if [ -z "$RSOVRVERS" ] 						; then RSOVRVERS="$RSVERS"; fi
+		if [ -z "$RSOVRD" ] 							; then  RSOVRD="0"; fi
+		if [ -z "$RSOVRVERS" ] 							; then  RSOVRVERS="$RSVERS"; fi
 		if [ -z "$CHOOSESHADERS" ]						; then	CHOOSESHADERS="0"; fi
 		if [ -z "$ALTEXEPATH" ]							; then	ALTEXEPATH="/tmp"; fi
 		if [ -z "$ARCHALTEXE" ]							; then	ARCHALTEXE="$DUMMYBIN"; fi
@@ -3302,6 +3303,8 @@ function saveCfg {
 			echo "RESHADE_DEPTH3D=\"$RESHADE_DEPTH3D\""
 			echo "## $DESC_USERESHADE"
 			echo "USERESHADE=\"$USERESHADE\""
+			echo "## $DESC_CUSTOMCMDRESHADE"
+			echo "CUSTOMCMDRESHADE=\"$CUSTOMCMDRESHADE\""
 			echo "## $DESC_RESHADEUPDATE"
 			echo "RESHADEUPDATE=\"$RESHADEUPDATE\""
 			echo "## $DESC_RESHADEOVERRIDETOGGLE"
@@ -5001,6 +5004,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_STL_VKD3D_PROFILE_PATH!$DESC_STL_VKD3D_PROFILE_PATH ('STL_VKD3D_PROFILE_PATH')":DIR "${STL_VKD3D_PROFILE_PATH/#-/ -}" `#CAT_VKD3D` `#MENU_GAME` \
 --field="$(spanFont "$GUI_OPTSSHADER" "H")":LBL "SKIP" `#CAT_Shader` `#HEAD_Shader` `#MENU_GAME` `#MENU_GLOBAL` \
 --field="     $GUI_USERESHADE!$DESC_USERESHADE ('USERESHADE')":CHK "${USERESHADE/#-/ -}" `#CAT_Shader` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_CUSTOMCMDRESHADE!$DESC_CUSTOMCMDRESHADE ('CUSTOMCMDRESHADE')":CHK "${CUSTOMCMDRESHADE/#-/ -}" `#CAT_Shader` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_DOWNLOAD_RESHADE!$DESC_DOWNLOAD_RESHADE ('DOWNLOAD_RESHADE')":CHK "${DOWNLOAD_RESHADE/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_INSTALL_RESHADE!$DESC_INSTALL_RESHADE ('INSTALL_RESHADE')":CHK "${INSTALL_RESHADE/#-/ -}" `#CAT_Shader` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_RESHADEUPDATE!$DESC_RESHADEUPDATE ('RESHADEUPDATE')":CHK "${RESHADEUPDATE/#-/ -}" `#CAT_Shader` `#SUB_Checkbox` `#MENU_GAME` \
@@ -5543,8 +5547,16 @@ function setShadDestDir {
 #		SHADDESTDIR="$GPFX/$DRCU/$STUS/$DOCS/$SPEKRESHDIR"
 #	else
 	fi
-		setFullGameExePath "SHADDESTDIR"
+		# setFullGameExePath "SHADDESTDIR"
 #	fi
+
+	# Don't use ReShade for custom command by default - Only use it if the user has enabled it for a valid custom command OR if they've enabled "Only custom command"
+	if [[ ( "$USECUSTOMCMD" -eq 1 && -f "$CUSTOMCMD" && "$CUSTOMCMDRESHADE" -eq 1 ) || "$ONLY_CUSTOMCMD" -eq 1 ]]; then 
+		if [ "$USERESHADE" -eq 1 ]; then # Make extra sure we want to use ReShade
+			writelog "INFO" "${FUNCNAME[0]} - Using ReShade for custom command"
+			setFullGameExePath "SHADDESTDIR"
+		fi
+	fi
 }
 
 function refreshProtList {
