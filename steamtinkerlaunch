@@ -6,12 +6,12 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v11.12.20221014"
+PROGVERS="v11.12.20221121-5"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
 AGHURL="https://api.github.com"
-PROJECTPAGE="$GHURL/frostworx/${PROGNAME,,}"
+PROJECTPAGE="$GHURL/sonic2kk/${PROGNAME,,}"
 PPW="$PROJECTPAGE/wiki"
 CURWIKI="$PPW"
 STARTDEBUG=1
@@ -155,6 +155,7 @@ WDIB="wine-discord-ipc-bridge"
 FIXGAMESCOPE=0
 SMALLDESK=0
 VTX_DOTNET_ROOT="c:\\Program Files\\dotnet\\\\"
+STLQUIET=0
 
 ### default vars ###
 
@@ -250,8 +251,9 @@ TWEAKDIR="$STLCFGDIR/tweaks"																# the parent directory for all user 
 USERTWEAKDIR="$TWEAKDIR/user"																# the place for the users own main tweakfiles
 TWEAKCMDDIR="$TWEAKDIR/cmd"																	# dir for scriptfiles used by tweakfiles
 SBSTWEAKDIR="$TWEAKDIR/sbs"																	# directory for optional config overrides for easier side-by-side VR gaming
-CEDLDIR="$STLDLDIR/cheatengine"
 MO2DLDIR="$STLDLDIR/mo2"
+HMMDLDIR="$STLDLDIR/hedgemodmanager"
+HMMVERFILE="$HMMDLDIR/hmmver.txt"
 CONTYDLDIR="$STLDLDIR/conty"
 X64DBGDLDIR="$STLDLDIR/$X64D"
 GEOELFDLDIR="$STLDLDIR/geo11"
@@ -260,7 +262,6 @@ EWDIB="${WDIB//-}"
 RUNWDIB="$WDIBDLDIR/${EWDIB}.exe"
 LGEOELFSYM="$GEOELFDLDIR/latest"
 CUSTOMFALLBACKPIC="$STLDLDIR/custom-fallback.png"
-STLCEDIR="$STLCFGDIR/cheatengine"
 VTX="vortex"
 VOGAT="${VTX}games.txt"
 STLVORTEXDIR="$STLCFGDIR/$VTX"
@@ -277,9 +278,19 @@ MO2="mo2"
 STLMO2DIR="$STLCFGDIR/$MO2"
 STLMO2DLDATDIR="$STLMO2DIR/dldata"
 MO="ModOrganizer"
+HMM="HedgeModManager"
+HMMNICE="Hedge Mod Manager"
+HMMSTABLE="stable"
+HMMDEV="nightly"
+HMMAUTO="auto"
+HMMDF="$HMM-${PROGNAME,,}.desktop"
+HMMDFDL="$HMM-${PROGNAME,,}-dl.desktop"
+HMMDFPA="$HOME/.local/share/applications/$HMMDF"  # .desktop file to open HMM
+HMMDFDLPA="$HOME/.local/share/applications/$HMMDFDL"  # .desktop file to 
 MORDIR="$DRC/Modding"
 MOERDIR="$MORDIR/MO2"
 MOERPATH="$MOERDIR/${MO}.exe"
+STLHMMDIR="$STLCFGDIR/${HMM,,}"
 DOCS="Documents"
 MYDOCS="My $DOCS"
 MYGAMES="My Games"
@@ -320,6 +331,7 @@ STLAPPINFOIDDIR="$STLGAMES/$APIN"
 STLGHEADD="$STLGAMES/header"
 STLGSAD="$STLGAMES/standalone"
 STLGICONS="$STLGAMES/icons"
+STLGDECKCOMPAT="$STLGAMES/deckinfo"
 STLGICO="$STLGICONS/ico"
 STLGZIP="$STLGICONS/zip"
 STLGPNG="$STLGICONS/png"
@@ -528,7 +540,7 @@ D3D9="d3d9.dll"
 D3D47="d3dcompiler_47.dll"
 OGL32="opengl32.dll"
 D3D47DLDIR="$STLDLDIR/${D3D47%.*}"
-SOMEWINEDLLOVERRIDES="dxgi=n,b;d3d9=n,b;${D3D47//.dll}=n,b"
+SOMEWINEDLLOVERRIDES="dinput8=n,b!dxgi=n,b!d3d9=n,b!${D3D47//.dll}=n,b"
 RS_DX_DEST="$DXGI"
 RS_D9_DEST="$D3D9"
 RESH="ReShade"
@@ -542,8 +554,6 @@ LGAM="launchGameMenu"
 LGATM="launchGameTemplateMenu"
 LGLM="launchGlobalMenu"
 LCM="launchCategoryMenu"
-CE="Cheat Engine"
-SCOOPCEURL="https://raw.githubusercontent.com/ScoopInstaller/Binary/master"
 HEADLINEFONT="larger"
 FONTSIZES="!xx-small!x-small!small!smaller!medium!large!larger!!x-large!xx-large!"
 SREG="system.reg"
@@ -553,7 +563,6 @@ VTXRAA="resources/app.asar"
 RABP="${VTXRAA}.unpacked/bundledPlugins"
 
 # make SC happy:
-GUI_GAMCON=""
 GUI_CUSTOMCMD=""
 ################
 
@@ -680,9 +689,19 @@ function OpenWikiPage {
 	fi
 	
 	if [ -n "$WIKURL" ]; then
-		TITLE="${PROGNAME}-Wiki"
-		pollWinRes "$TITLE"
-		"$YAD" --window-icon="$STLICON" --title="$TITLE" --on-top --center "$WINDECO" --html --uri="$WIKURL" "$GEOM" >/dev/null 2>/dev/null	
+		if [ "$ONSTEAMDECK" -eq 1 ]; then
+			# Only open wiki on Steam Deck Game Mode
+			if [ "$FIXGAMESCOPE" -eq 0 ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Opening wiki URL '$WIKURL' using xdg-open on Steam Deck since Yad AppImage does not have WebKit support" 
+				"$XDGO" "$WIKURL"
+			else
+				writelog "SKIP" "${FUNCNAME[0]} - Running in Steam Deck Game Mode - Opening wiki page using xdg-open here may not work or may have undesired results - Skipping"
+			fi
+		else
+			TITLE="${PROGNAME}-Wiki"
+			pollWinRes "$TITLE"
+			"$YAD" --window-icon="$STLICON" --title="$TITLE" --on-top --center "$WINDECO" --html --uri="$WIKURL" "$GEOM" >/dev/null 2>/dev/null	
+		fi
 	fi
 }
 
@@ -772,12 +791,12 @@ function dlCheck {
 			if [ "$DLTITLE" != "$NON" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - $DLTITLE"
 				notiShow "$(strFix "$NOTY_DLCUSTOMPROTON" "$DLDST")" "S"
-				if grep -q "show-progress" <<< "$("$WGET" --help)"; then
+				if grep -q "show-progress" <<< "$("$WGET" --help)" && [ "$ONSTEAMDECK" -eq 0 ]; then
 					writelog "INFO" "${FUNCNAME[0]} - '$WGET -q --show-progress $DLSRC -O $DLDST'"
-					"$WGET" -q --show-progress "$DLSRC" -O "$DLDST" 2>&1 | sed -u -e "s:\.::g;s:.*K::g;s:^[[:space:]]*::g"
+					"$WGET" -q --show-progress "$DLSRC" -O "$DLDST" 2>&1 | sed -u -e "s:\.::g;s:.*K::g;s:^[[:space:]]*::g" | grep -v "SSL_INIT"
 				else
 					writelog "INFO" "${FUNCNAME[0]} - '$WGET -q $DLSRC -O $DLDST'"
-					"$WGET" -q "$DLSRC" -O "$DLDST" 2>&1 | sed -u -e "s:\.::g;s:.*K::g;s:^[[:space:]]*::g"
+					"$WGET" -q "$DLSRC" -O "$DLDST" 2>&1 | sed -u -e "s:\.::g;s:.*K::g;s:^[[:space:]]*::g" | grep -v "SSL_INIT"
 				fi
 			else
 				"$WGET" -q "$DLSRC" -O "$DLDST" 1>/dev/null 2>&1 
@@ -804,7 +823,7 @@ function dlCheck {
 function getGamePic {
 	if [ "$DLGAMEDATA" -eq 1 ] && [ "$STLPLAY" -eq 0 ]; then
 		DLPIC="$1"
-		if [ ! -f "$DLPIC" ] && [ "$STLPLAY" -eq 0 ]; then
+		if [[ ( ! -f "$DLPIC" || ! -s "$DLPIC" ) && "$STLPLAY" -eq 0 ]]; then
 			DLTITLE="Downloading picture for game '$(basename "${1//.jpg/}")'"
 			dlCheck "$2" "$DLPIC" "X" "$DLTITLE"
 		fi
@@ -1073,6 +1092,18 @@ function getAppInfoData {
 	# $1=AID; $2=category; optional $3=skip stdout; optional $4=force writing metadata again
 	if [ -n "$2" ] && [ "$STLPLAY" -eq 0 ]; then
 		AILIST="$GLOBALMISCDIR/$AITXT"
+		if ! [ -f "$AILIST" ]; then
+			SCRIPTDIR="$( realpath "$0" )"
+			SCRIPTDIR="${SCRIPTDIR%/*}"
+
+			writelog "INFO" "${FUNCNAME[0]} - No '$AITXT' found in Global Misc Dir '$GLOBALMISCDIR', checking for one in the script dir '$SCRIPTDIR'"
+			if [ -f "$SCRIPTDIR/misc/$AITXT" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Found '$AITXT' in '$SCRIPTDIR/misc' - Using this"
+				AILIST="$SCRIPTDIR/misc/$AITXT"
+			else
+				writelog "INFO" "${FUNCNAME[0]} - Could not find '$AITXT' in script directory - giving up"
+			fi
+		fi
 
 		if grep -q "$2" "$AILIST"; then
 
@@ -1266,7 +1297,7 @@ function getGameIcon {
 function getGameData {
 	if ! grep -q ",${1}," <<< "$NOGAMES" && [ "$STLPLAY" -eq 0 ]; then
 		DLPIC="$STLGHEADD/$1.jpg"
-		if [ ! -f "$DLPIC" ]; then
+		if [ ! -f "$DLPIC" ] || [ ! -s "$DLPIC" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Downloading picture '$DLPIC' from '$STASSURL/$1/header.jpg'" "X" "$GGDLOG"
 			getGamePic "$DLPIC" "$STASSURL/$1/header.jpg"
 		fi
@@ -1653,7 +1684,7 @@ function pollWinRes {
 		SCREENRES="any"
 	fi
 
-# skip this if FIXGAMESCOPE is 1 - so for now only if running in GameMode on the Steam Deck
+	# skip this if FIXGAMESCOPE is 1 - so for now only if running in GameMode on the Steam Deck
 	if [ "$FIXGAMESCOPE" -eq 0 ]; then
 		TEMPL="template"
 		GAMEGUICFG="$STLGUIDIR/$SCREENRES/${AID}/${TITLE}.conf"
@@ -2196,6 +2227,9 @@ function createLanguageList {
 }
 
 function loadLangFile {
+	local SCRIPTDIR
+	local LOCALLANGFILE
+
 	if [ -n "$1" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Language from command line is '$1'" "P"
 
@@ -2222,9 +2256,35 @@ function loadLangFile {
 
 			LAFI="$STLLANGDIR/${LANGFILENAME}.txt"
 			
+			SCRIPTDIR="$( realpath "$0" )"
+			SCRIPTDIR="${SCRIPTDIR%/*}"
+			LOCALLANGFILE="$SCRIPTDIR/lang/${LANGFILENAME}.txt"
+
 			if [ -f "$LAFI" ]; then
+				# If langfile in ~/.config/steamtinkerlaunch/lang exists, and we have a langfile installed globally or in the scriptdir, update the user-installed langfile
+				writelog "INFO" "${FUNCNAME[0]} - Found user-installed $LAFI, attempting to update it"
+				UPDATELANGFILEPATH=""
+				if [ -f "$SYSTEMSTLCFGDIR/lang/${LANGFILENAME}.txt" ]; then
+					UPDATELANGFILEPATH="$SYSTEMSTLCFGDIR/lang/${LANGFILENAME}.txt"  # Globally installed langfile (or stlprefix langfile on steam deck) - This one takes priority as it is assumed to be the most up to date
+				elif [ -f "$LOCALLANGFILE" ]; then
+					UPDATELANGFILEPATH="$LOCALLANGFILE" # langfile from scriptdir (on steam deck first-time install this would be the install directory)
+				fi
+
+				if [ -n "$UPDATELANGFILEPATH" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Found lang file to replace the existing user-installed file with under '$UPDATELANGFILEPATH'"
+					rm "$LAFI"
+					cp "$UPDATELANGFILEPATH" "$LAFI"
+				else
+					writelog "INFO" "${FUNCNAME[0]} - No lang file to replace existing user-installed file with, not updating langfile"
+				fi
+
 				writelog "INFO" "${FUNCNAME[0]} - Loading found user-installed $LAFI" "P"
 				source "$LAFI"
+				STLLANG="$(cut -d '.' -f1 <<< "${LANGFILENAME##*/}")"
+			elif [ -f "$LOCALLANGFILE" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Loading language file from script directory '$LOCALLANGFILE'"
+				source "$LOCALLANGFILE"
+				STLLANG="$(cut -d '.' -f1 <<< "${LOCALLANGFILE##*/}")"
 			else
 				LAFI="$GLOBLANG/${LANGFILENAME}.txt"
 
@@ -2495,23 +2555,24 @@ function getAvailableProtonVersions {
 function setDefaultCfgValues {
 
 	function setDefaultCfgValuesurl {
-		if [ -z "$PROJECTPAGE" ]						; then	PROJECTPAGE="$GHURL/frostworx/steamtinkerlaunch"; fi
+		if [ -z "$PROJECTPAGE" ]						; then	PROJECTPAGE="$GHURL/sonic2kk/steamtinkerlaunch"; fi
 		if [ -z "$CP_PROTONTKG" ]						; then	CP_PROTONTKG="$GHURL/Frogging-Family/wine-tkg-git"; fi
 		if [ -z "$CP_PROTONGE" ]						; then	CP_PROTONGE="$GHURL/GloriousEggroll/proton-ge-custom"; fi
 		if [ -z "$CP_PROTONSTL" ]						; then	CP_PROTONSTL="$GHURL/frostworx/steamtinkerlaunch-tweaks"; fi
 		if [ -z "$DL_D3D47_64" ]						; then	DL_D3D47_64="https://lutris.net/files/tools/dll/$D3D47"; fi
 		if [ -z "$DL_D3D47_32" ]						; then	DL_D3D47_32="http://dege.freeweb.hu/dgVoodoo2/bin/D3DCompiler_47.zip"; fi
 		if [ -z "$RESHADEDLURL" ]						; then	RESHADEDLURL="https://reshade.me/downloads"; fi
+		if [ -z "$RESHADEPROJURL" ]						; then	RESHADEPROJURL="https://github.com/crosire/reshade"; fi
 		if [ -z "$VORTEXPROJURL" ]						; then  VORTEXPROJURL="$GHURL/Nexus-Mods/${VTX^}"; fi
 		if [ -z "$DXVKURL" ]							; then	DXVKURL="$GHURL/doitsujin/dxvk"; fi
 		if [ -z "$XLIVEURL" ]							; then	XLIVEURL="$GHURL/ThirteenAG/Ultimate-ASI-Loader/releases/download/v4.61/Ultimate-ASI-Loader.zip"; fi
 		if [ -z "$STASSURL" ]							; then	STASSURL="https://steamcdn-a.akamaihd.net/steam/apps"; fi
 		if [ -z "$WINETRICKSURL" ]						; then	WINETRICKSURL="$GHURL/Winetricks/winetricks"; fi
-		if [ -z "$CHEATENGINEURL" ]						; then	CHEATENGINEURL="$SCOOPCEURL";fi
 		if [ -z "$X64DBGURL" ]							; then	X64DBGURL="$GHURL/x64dbg/x64dbg/releases/tag/snapshot";fi
 		if [ -z "$STEAMGRIDDBAPI" ]						; then	STEAMGRIDDBAPI="https://www.steamgriddb.com/api/v2/grids/steam";fi
 		if [ -z "$CONTYRELURL" ]						; then	CONTYRELURL="$GHURL/Kron4ek/Conty/releases"; fi
 		if [ -z "$MO2PROJURL" ]							; then  MO2PROJURL="$GHURL/ModOrganizer2/modorganizer"; fi
+		if [ -z "$HMMPROJURL" ]                         ; then  HMMPROJURL="$GHURL/thesupersonic16/HedgeModManager"; fi
 		if [ -z "$CW_KRON4EK" ]							; then	CW_KRON4EK="$GHURL/Kron4ek/Wine-Builds/releases"; fi
 		if [ -z "$IGCSZIP" ]							; then	IGCSZIP="$GHURL/FransBouma/InjectableGenericCameraSystem/releases/download/IGCSInjector_102/IGCSInjector_v102.zip"; fi
 		if [ -z "$UUUURL" ]								; then	UUUURL="https://framedsc.github.io/GeneralGuides/universal_ue4_consoleunlocker.htm#downloading-the-uuu"; fi
@@ -2545,7 +2606,6 @@ function setDefaultCfgValues {
 		if [ -z "$NETOPTS" ]							; then	NETOPTS="-taucp -W"; fi
 		if [ -z "$NETMONDIR" ]							; then	NETMONDIR="$LOGDIR"; fi
 		if [ -z "$VRVIDEOPLAYER" ]						; then	VRVIDEOPLAYER="$(command -v "vr-video-player")"; fi
-		if [ -z "$GAMCON" ]								; then	GAMCON="/usr/share/gameconqueror/GameConqueror.py"; fi
 		if [ -z "$GLOBALCOLLECTIONDIR" ]				; then	GLOBALCOLLECTIONDIR="$SYSTEMSTLCFGDIR/collections"; fi
 		if [ -z "$GLOBALMISCDIR" ]						; then	GLOBALMISCDIR="$SYSTEMSTLCFGDIR/misc"; fi
 		if [ -z "$GLOBALSBSTWEAKS" ]					; then	GLOBALSBSTWEAKS="$SYSTEMSTLCFGDIR/misc/sbstweaks"; fi
@@ -2559,13 +2619,16 @@ function setDefaultCfgValues {
 		if [ -z "$ROBERTAARGS" ]						; then	ROBERTAARGS="--wait-before-run"; fi
 		if [ -z "$LUXTORPEDACMD" ]						; then	LUXTORPEDACMD="$STEAMCOMPATOOLS/luxtorpeda/luxtorpeda"; fi
 		if [ -z "$LUXTORPEDAARGS" ]						; then	LUXTORPEDAARGS="wait-before-run"; fi
-		if [ -z "$RSVERS" ]								; then	RSVERS="5.3.0"; fi
+		if [ -z "$RSVERS" ]								; then	RSVERS="5.4.2"; fi
+		if [ -z "$AUTOBUMPRESHADE" ]					; then	AUTOBUMPRESHADE="0"; fi
 		if [ -z "$DOWNLOAD_RESHADE" ]					; then	DOWNLOAD_RESHADE="1"; fi
 		if [ -z "$RESHADESRCDIR" ]						; then	RESHADESRCDIR="$STLDLDIR/reshade"; fi
 		if [ -z "$D3D47_64" ]							; then	D3D47_64="${D3D47//./_64.}"; fi
 		if [ -z "$D3D47_32" ]							; then	D3D47_32="${D3D47//./_32.}"; fi
 		if [ -z "$RS_64" ]								; then	RS_64="ReShade64.dll"; fi
 		if [ -z "$RS_32" ]								; then	RS_32="ReShade32.dll"; fi
+		if [ -z "$RS_64_VK" ]							; then	RS_64_VK="ReShade64.json"; fi
+		if [ -z "$RS_32_VK" ]							; then	RS_32_VK="ReShade32.json"; fi
 		if [ -z "$DLSHADER" ]							; then	DLSHADER="1"; fi
 		if [ -z "$SAVESETSIZE" ]						; then	SAVESETSIZE="1"; fi
 		if [ -z "$STARTMENU" ]							; then	STARTMENU="Menu"; fi
@@ -2583,7 +2646,6 @@ function setDefaultCfgValues {
 		if [ -z "$AUTOPULLPROTON" ]						; then	AUTOPULLPROTON="1"; fi
 		if [ -z "$CUSTPROTDLDIR" ]						; then	CUSTPROTDLDIR="$STLDLDIR/$PROCU"; fi
 		if [ -z "$CUSTPROTEXTDIR" ]						; then	CUSTPROTEXTDIR="$STLCFGDIR/$PROCU"; fi
-		if [ -z "$CUPROTOCOMPAT" ]						; then	CUPROTOCOMPAT="0"; fi
 		if [ -z "$WINEDLDIR" ]							; then	WINEDLDIR="$STLDLDIR/wine"; fi
 		if [ -z "$WINEEXTDIR" ]							; then	WINEEXTDIR="$STLCFGDIR/wine"; fi
 		if [ -z "$USEVORTEXPROTON" ]					; then	USEVORTEXPROTON="$NON"; fi
@@ -2591,8 +2653,6 @@ function setDefaultCfgValues {
 		if [ -z "$VORTEXDOWNLOADPATH" ]					; then	VORTEXDOWNLOADPATH="$STLVORTEXDIR/downloads"; fi
 		if [ -z "$USEVORTEXPRERELEASE" ]				; then	USEVORTEXPRERELEASE="0"; fi
 		if [ -z "$DISABLE_AUTOSTAGES" ]					; then	DISABLE_AUTOSTAGES="0"; fi
-		if [ -z "$CHEATENGINEVERSION" ]					; then	CHEATENGINEVERSION="7.4"; fi
-		if [ -z "$CHEATENGINEMD5SUM" ]					; then	CHEATENGINEMD5SUM="f4dd84b93a3e2cbfa6bded3a6ed06d54"; fi
 		if [ -z "$NOSTEAMSTLDEF" ]						; then	NOSTEAMSTLDEF="0"; fi
 		if [ -z "$SGDBAPIKEY" ]							; then	SGDBAPIKEY="$NON"; fi
 		if [ -z "$SGDBSTYLES" ]							; then	SGDBSTYLES="$SGDBSTYOPTS"; fi
@@ -2614,7 +2674,10 @@ function setDefaultCfgValues {
 		if [ -z "$DPRSPAUTOUP" ]						; then	DPRSPAUTOUP="0"; fi
 		if [ -z "$DEPSAUTOUP" ]							; then	DEPSAUTOUP="0"; fi
 		if [ -z "$MO2COMPDATA" ]						; then	MO2COMPDATA="$STLMO2DIR/$CODA"; fi
+		if [ -z "$HMMCOMPDATA" ]                        ; then  HMMCOMPDATA="$STLHMMDIR/$CODA"; fi
+		if [ -z "$HMMDLVER" ]                           ; then  HMMDLVER="$HMMSTABLE"; fi
 		if [ -z "$USEMO2PROTON" ]						; then	USEMO2PROTON="$NON"; fi
+		if [ -z "$USEHMMPROTON" ]                       ; then  USEHMMPROTON="$NON"; fi
 		if [ -z "$USETERM" ]							; then	USETERM="$(command -v "xterm")"; fi
 		if [ -z "$TERMARGS" ]							; then	TERMARGS="-e"; fi
 	}
@@ -2663,9 +2726,6 @@ function setDefaultCfgValues {
 		if [ -z "$ENABLE_VKBASALT" ]					; then	ENABLE_VKBASALT="0"; fi
 		if [ -z "$RUN_NYRNA" ]							; then	RUN_NYRNA="0"; fi
 		if [ -z "$RUN_REPLAY" ]							; then	RUN_REPLAY="0";	fi
-		if [ -z "$RUN_GAMCON" ]							; then	RUN_GAMCON="0";	fi
-		if [ -z "$RUN_CHEATENGINE" ]					; then	RUN_CHEATENGINE="0"; fi
-		if [ -z "$GAMCONWAITEXE" ]						; then	GAMCONWAITEXE="$DUMMYBIN"; fi
 		if [ -z "$RUN_X64DBG" ]							; then	RUN_X64DBG="0";	fi
 		if [ -z "$RUN_GDB" ]							; then	RUN_GDB="0";	fi
 		if [ -z "$USE_WDIB" ]							; then	USE_WDIB="0";	fi
@@ -2694,7 +2754,10 @@ function setDefaultCfgValues {
 		if [ -z "$INSTALL_RESHADE" ]					; then	INSTALL_RESHADE="0"; fi
 		if [ -z "$RESHADE_DEPTH3D" ]					; then	RESHADE_DEPTH3D="0"; fi
 		if [ -z "$USERESHADE" ]							; then	USERESHADE="0"; fi
+		if [ -z "$CUSTOMCMDRESHADE" ]					; then	CUSTOMCMDRESHADE="0"; fi
 		if [ -z "$RESHADEUPDATE" ]						; then	RESHADEUPDATE="0"; fi
+		if [ -z "$RSOVRD" ] 							; then  RSOVRD="0"; fi
+		if [ -z "$RSOVRVERS" ] 							; then  RSOVRVERS="$RSVERS"; fi
 		if [ -z "$CHOOSESHADERS" ]						; then	CHOOSESHADERS="0"; fi
 		if [ -z "$ALTEXEPATH" ]							; then	ALTEXEPATH="/tmp"; fi
 		if [ -z "$ARCHALTEXE" ]							; then	ARCHALTEXE="$DUMMYBIN"; fi
@@ -2829,6 +2892,8 @@ function saveCfg {
 			echo "DXVKURL=\"$DXVKURL\""				
 			echo "## ${RESH} DL URL"
 			echo "RESHADEDLURL=\"$RESHADEDLURL\""
+			echo "## ${RESH} Project URL"
+			echo "RESHADEPROJURl=\"$RESHADEPROJURL\""
 			echo "## ${VTX^} Project URL"
 			echo "VORTEXPROJURL=\"$VORTEXPROJURL\""
 			echo "## Xlive DL URL"
@@ -2837,8 +2902,6 @@ function saveCfg {
 			echo "STASSURL=\"$STASSURL\""
 			echo "## winetricks URL"
 			echo "WINETRICKSURL=\"$WINETRICKSURL\""
-			echo "## Cheat Engine URL"
-			echo "CHEATENGINEURL=\"$CHEATENGINEURL\""
 			echo "## x64dbg URL"
 			echo "X64DBGURL=\"$X64DBGURL\""
 			echo "## SteamGridDB Api URL"
@@ -2847,6 +2910,8 @@ function saveCfg {
 			echo "CONTYRELURL=\"$CONTYRELURL\""
 			echo "## Mod Organizer 2 Project URL"
 			echo "MO2PROJURL=\"$MO2PROJURL\""
+			echo "## HedgeModManager Project URL"
+			echo "HMMPROJURL=\"$HMMPROJURL\""
 			echo "## $DPRS DL URL"
 			echo "DPRSRELURL=\"$DPRSRELURL\""
 			echo "## $DEPS URL"
@@ -2950,8 +3015,6 @@ function saveCfg {
 			echo "NETMONDIR=\"$NETMONDIR\""
 			echo "## $DESC_VRVIDEOPLAYER"
 			echo "VRVIDEOPLAYER=\"$VRVIDEOPLAYER\""
-			echo "## $DESC_GAMCON"
-			echo "GAMCON=\"$GAMCON\""
 			echo "## $DESC_GLOBALSBSTWEAKS"
 			echo "GLOBALSBSTWEAKS=\"$GLOBALSBSTWEAKS\""
 			echo "## $DESC_GLOBALTWEAKS"
@@ -2982,6 +3045,8 @@ function saveCfg {
 			echo "DOWNLOAD_RESHADE=\"$DOWNLOAD_RESHADE\""
 			echo "## $DESC_RSVERS"
 			echo "RSVERS=\"$RSVERS\""
+			echo "## $DESC_AUTOBUMPRESHADE"
+			echo "AUTOBUMPRESHADE=\"$AUTOBUMPRESHADE\""
 			echo "## $DESC_RESHADESRCDIR"
 			echo "RESHADESRCDIR=\"$RESHADESRCDIR\""
 			echo "## $DESC_D3D47_64"
@@ -2992,6 +3057,10 @@ function saveCfg {
 			echo "RS_64=\"$RS_64\""
 			echo "## $DESC_RS_32"
 			echo "RS_32=\"$RS_32\""
+			echo "## $DESC_RS_64_VK"
+			echo "RS_64_VK=\"$RS_64_VK\""
+			echo "## $DESC_RS_32_VK"
+			echo "RS_32_VK=\"$RS_32_VK\""
 			echo "## $DESC_DLSHADER"
 			echo "DLSHADER=\"$DLSHADER\""
 			echo "## $DESC_SAVESETSIZE"
@@ -3028,10 +3097,6 @@ function saveCfg {
 			echo "USEVORTEXPRERELEASE=\"$USEVORTEXPRERELEASE\""
 			echo "## $(strFix "$DESC_DISABLE_AUTOSTAGES" "$PROGNAME")"
 			echo "DISABLE_AUTOSTAGES=\"$DISABLE_AUTOSTAGES\""
-			echo "## $DESC_CHEATENGINEVERSION"
-			echo "CHEATENGINEVERSION=\"$CHEATENGINEVERSION\""
-			echo "## $DESC_CHEATENGINEMD5SUM"
-			echo "CHEATENGINEMD5SUM=\"$CHEATENGINEMD5SUM\""
 			echo "## $DESC_NOSTEAMSTLDEF"
 			echo "NOSTEAMSTLDEF=\"$NOSTEAMSTLDEF\""
 			echo "## $DESC_SGDBAPIKEY"
@@ -3074,6 +3139,12 @@ function saveCfg {
 			echo "MO2COMPDATA=\"$MO2COMPDATA\""
 			echo "## $DESC_USEMO2PROTON"
 			echo "USEMO2PROTON=\"$USEMO2PROTON\""
+			echo "## $DESC_HMMCOMPDATA"
+			echo "HMMCOMPDATA=\"$HMMCOMPDATA\""
+			echo "## $DESC_USEHMMPROTON"
+			echo "USEHMMPROTON=\"$USEHMMPROTON\""
+			echo "## $DESC_HMMDLVER"
+			echo "HMMDLVER=\"$HMMDLVER\""
 			echo "## $DESC_USETERM"
 			echo "USETERM=\"$USETERM\""
 			echo "## $DESC_TERMARGS"
@@ -3182,12 +3253,6 @@ function saveCfg {
 			echo "RUN_NYRNA=\"$RUN_NYRNA\""
 			echo "## $DESC_RUN_REPLAY"
 			echo "RUN_REPLAY=\"$RUN_REPLAY\""
-			echo "## $DESC_RUN_GAMCON"
-			echo "RUN_GAMCON=\"$RUN_GAMCON\""
-			echo "## $DESC_RUN_CHEATENGINE"
-			echo "RUN_CHEATENGINE=\"$RUN_CHEATENGINE\""
-			echo "## $DESC_GAMCONWAITEXE"
-			echo "GAMCONWAITEXE=\"$GAMCONWAITEXE\""
 			echo "## $DESC_RUN_X64DBG"
 			echo "RUN_X64DBG=\"$RUN_X64DBG\""
 			echo "## $DESC_RUN_GDB"
@@ -3244,8 +3309,14 @@ function saveCfg {
 			echo "RESHADE_DEPTH3D=\"$RESHADE_DEPTH3D\""
 			echo "## $DESC_USERESHADE"
 			echo "USERESHADE=\"$USERESHADE\""
+			echo "## $DESC_CUSTOMCMDRESHADE"
+			echo "CUSTOMCMDRESHADE=\"$CUSTOMCMDRESHADE\""
 			echo "## $DESC_RESHADEUPDATE"
 			echo "RESHADEUPDATE=\"$RESHADEUPDATE\""
+			echo "## $DESC_RESHADEOVERRIDETOGGLE"
+			echo "RSOVRD=\"$RSOVRD\""
+			echo "## $DESC_RESHADEOVERRIDEVERSION"
+			echo "RSOVRVERS=\"$RSOVRVERS\""
 			echo "## $DESC_CHOOSESHADERS"
 			echo "CHOOSESHADERS=\"$CHOOSESHADERS\""
 			echo "## $DESC_ALTEXEPATH"
@@ -3451,6 +3522,8 @@ function notiShow {
 	if [ "$ONSTEAMDECK" -eq 1 ] && [ "$FIXGAMESCOPE" -eq 1 ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Skipping notifier on SteamDeck Game Mode"
 		USENOTIFIER=0 # might avoid a 2nd try during this session
+	elif [ "$STLQUIET" -eq 1 ]; then
+		USENOTIFIER=0
 	else
 		if [ -n "$2" ] && [ "$2" == "X" ]; then
 			if [ -z "$NOTY" ]; then
@@ -3733,23 +3806,28 @@ function dlCustomProton {
 }
 
 function createDLProtList {
-	writelog "INFO" "${FUNCNAME[0]} - Generating list of online available custom Proton builds"
+	if [ ! -x "$(command -v "$JQ")" ]; then
+		writelog "WARN" "${FUNCNAME[0]} - 'jq' is not installed - Can't generate list of online Proton versions"
+	else
+		writelog "INFO" "${FUNCNAME[0]} - Generating list of online available custom Proton builds"
 
-	PROTDLLIST="$STLSHM/ProtonDL.txt"
-	MAXAGE=360
+		PROTDLLIST="$STLSHM/ProtonDL.txt"
+		MAXAGE=360
 
-	if [ ! -f "$PROTDLLIST" ] || test "$(find "$PROTDLLIST" -mmin +"$MAXAGE")"; then
-		rm "$PROTDLLIST" 2>/dev/null
-		while read -r CPURL; do
-			if grep -q "$GHURL" <<< "${!CPURL}"; then
-			SRCURL="${!CPURL}"
-			SRCURL="${SRCURL//\/releases}"
-			SRCURL="${SRCURL//$GHURL/$AGHURL\/repos}"
-			SRCURL="${SRCURL}/releases"
+		if [ ! -f "$PROTDLLIST" ] || test "$(find "$PROTDLLIST" -mmin +"$MAXAGE")"; then
+			rm "$PROTDLLIST" 2>/dev/null
+			while read -r CPURL; do
+				if grep -q "$GHURL" <<< "${!CPURL}"; then
+				SRCURL="${!CPURL}"
+				SRCURL="${SRCURL//\/releases}"
+				SRCURL="${SRCURL//$GHURL/$AGHURL\/repos}"
+				SRCURL="${SRCURL}/releases"
 
-			"$WGET" -q "$SRCURL" -O - | jq -r '.[].assets[].browser_download_url' | grep "tar.gz\|tar.xz" | grep -v "Yad\|7.x" >> "$PROTDLLIST"
-			fi
-		done <<< "$(grep "^CP_" "$STLURLCFG" | cut -d '=' -f1)"
+				# Potentially rewrite to avoid reliance on jq?
+				"$WGET" -q "$SRCURL" -O - | jq -r '.[].assets[].browser_download_url' | grep "tar.gz\|tar.xz" | grep -v "Yad\|7.x" >> "$PROTDLLIST"
+				fi
+			done <<< "$(grep "^CP_" "$STLURLCFG" | cut -d '=' -f1)"
+		fi
 	fi
 
 	delEmptyFile "$PROTDLLIST"
@@ -3837,6 +3915,17 @@ function setShowPic {
 
 			if [ ! -f "$STLGHEADD/$AID.jpg" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Using '$SHOWPIC' as fallback picture, because '$STLGHEADD/$AID.jpg' doesn't exist"
+			elif [ -f "$STLGHEADD/$AID.jpg" ] && [ ! -s "$STLGHEADD/$AID.jpg" ]; then
+				# Attempt to redownload header picture if we failed last time (e.g., if we were offline)
+				writelog "INFO" "${FUNCNAME[0]} - Game header picture exists at '$STLGHEADD/$AID.jpg' but has zero bytes. Attempting one redownload"
+				getGameData "$AID"
+
+				if [ -s "$STLGHEADD/$AID.jpg" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Successfully redownloaded header picture for '$AID' to '$STLGHEADD/$AID.jpg', using that."
+					SHOWPIC="$STLGHEADD/$AID.jpg"  # Actually use the new picture
+				else
+					writelog "INFO" "${FUNCNAME[0]} - Could not redownload header picture, defaulting '$SHOWPIC' to STL icon '$STLICON' (Maybe we're offline?)"
+				fi
 			elif [ ! -s "$STLGHEADD/$AID.jpg" ]; then
 				if [ -z "$SUSDA" ] || [ -z "$STUIDPATH" ]; then
 					setSteamPaths
@@ -4811,6 +4900,10 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_SGDBTYPES!$DESC_SGDBTYPES ('SGDBTYPES')":CBE "$(cleanDropDown "${SGDBTYPES/#-/ -}" "animated!static!animated,static!static,animated")" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
 --field="     $GUI_SGDBNSFW!$DESC_SGDBNSFW ('SGDBNSFW')":CBE "$(cleanDropDown "${SGDBNSFW/#-/ -}" "any!false!true")" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
 --field="     $GUI_SGDBHUMOR!$DESC_SGDBHUMOR ('SGDBHUMOR')":CBE "$(cleanDropDown "${SGDBHUMOR/#-/ -}" "any!false!true")" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
+--field="$(spanFont "$GUI_OPTSHMM" "H")":LBL "SKIP" `#CAT_HMM` `#HEAD_HMM` `#MENU_GLOBAL` \
+--field="     $GUI_HMMDLVER!$DESC_HMMDLVER ('HMMDLVER')":CB "$(cleanDropDown "${HMMDLVER/#-/ -}" "$HMMSTABLE!$HMMDEV")" `#CAT_HMM` `#MENU_GLOBAL` \
+--field="     $GUI_HMMCOMPDATA!$DESC_HMMCOMPDATA ('HMMCOMPDATA')":DIR "${HMMCOMPDATA/#-/ -}" `#CAT_HMM` `#SUB_Directories` `#MENU_GLOBAL` \
+--field="     $GUI_USEHMMPROTON!$DESC_USEHMMPROTON ('USEHMMPROTON')":CB "$(cleanDropDown "${USEHMMPROTON/#-/ -}" "$PROTYADLIST")" `#CAT_HMM` `#MENU_GLOBAL` \
 --field="$(spanFont "$GUI_OPTSMISC" "H")":LBL "SKIP" `#CAT_Misc` `#HEAD_Misc` `#MENU_GAME` `#MENU_GLOBAL`  \
 --field="     $GUI_KEEPSTLOPEN!$DESC_KEEPSTLOPEN ('KEEPSTLOPEN')":CHK "${KEEPSTLOPEN/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_USECUSTOMCMD!$DESC_USECUSTOMCMD ('USECUSTOMCMD')":CHK "${USECUSTOMCMD/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
@@ -4918,14 +5011,20 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_STL_VKD3D_PROFILE_PATH!$DESC_STL_VKD3D_PROFILE_PATH ('STL_VKD3D_PROFILE_PATH')":DIR "${STL_VKD3D_PROFILE_PATH/#-/ -}" `#CAT_VKD3D` `#MENU_GAME` \
 --field="$(spanFont "$GUI_OPTSSHADER" "H")":LBL "SKIP" `#CAT_Shader` `#HEAD_Shader` `#MENU_GAME` `#MENU_GLOBAL` \
 --field="     $GUI_USERESHADE!$DESC_USERESHADE ('USERESHADE')":CHK "${USERESHADE/#-/ -}" `#CAT_Shader` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_CUSTOMCMDRESHADE!$DESC_CUSTOMCMDRESHADE ('CUSTOMCMDRESHADE')":CHK "${CUSTOMCMDRESHADE/#-/ -}" `#CAT_Shader` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_DOWNLOAD_RESHADE!$DESC_DOWNLOAD_RESHADE ('DOWNLOAD_RESHADE')":CHK "${DOWNLOAD_RESHADE/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_INSTALL_RESHADE!$DESC_INSTALL_RESHADE ('INSTALL_RESHADE')":CHK "${INSTALL_RESHADE/#-/ -}" `#CAT_Shader` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_RESHADEUPDATE!$DESC_RESHADEUPDATE ('RESHADEUPDATE')":CHK "${RESHADEUPDATE/#-/ -}" `#CAT_Shader` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_RESHADEOVERRIDETOGGLE!$DESC_RESHADEOVERRIDETOGGLE ('RSOVRD')":CHK "${RSOVRD/#-/ -}" `#CAT_Shader` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_RSVERS!$DESC_RSVERS ('RSVERS')" "${RSVERS/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#MENU_GLOBAL` \
+--field="     $GUI_AUTOBUMPRESHADE!$DESC_AUTOBUMPRESHADE ('AUTOBUMPRESHADE')":CHK "${AUTOBUMPRESHADE/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#MENU_GLOBAL` \
 --field="     $GUI_RS_32!$DESC_RS_32 ('RS_32')" "${RS_32/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#MENU_GLOBAL` \
 --field="     $GUI_RS_64!$DESC_RS_64 ('RS_64')" "${RS_64/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#MENU_GLOBAL` \
+--field="     $GUI_RS_32_VK!$DESC_RS_32_VK ('RS_32_VK')" "${RS_32_VK/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#MENU_GLOBAL` \
+--field="     $GUI_RS_64_VK!$DESC_RS_64_VK ('RS_64_VK')" "${RS_64_VK/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#MENU_GLOBAL` \
 --field="     $GUI_D3D47_32!$DESC_D3D47_32 ('D3D47_32')" "${D3D47_32/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#MENU_GLOBAL` \
 --field="     $GUI_D3D47_64!$DESC_D3D47_64 ('D3D47_64')" "${D3D47_64/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#MENU_GLOBAL` \
+--field="     $GUI_RESHADEOVERRIDEVERSION!$DESC_RESHADEOVERRIDEVERSION ('RSOVRVERS')":CBE "$(cleanDropDown "${RSOVRVERS/#-/ -}" "$RESHADEVERSIONS")" `#CAT_Shader` `#SUB_ReShade` `#MENU_GAME` \
 --field="     $GUI_ARCHALTEXE!$DESC_ARCHALTEXE ('ARCHALTEXE')":FL "${ARCHALTEXE/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#MENU_GAME` \
 --field="     $GUI_ALTEXEPATH!$DESC_ALTEXEPATH ('ALTEXEPATH')":DIR "${ALTEXEPATH/#-/ -}" `#CAT_Shader` `#SUB_Directories` `#MENU_GAME` \
 --field="     $GUI_RESHADESRCDIR!$DESC_RESHADESRCDIR ('RESHADESRCDIR')":DIR "${RESHADESRCDIR/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#SUB_Directories` `#MENU_GLOBAL` \
@@ -4959,10 +5058,6 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_USEPRIMERUN!$DESC_USEPRIMERUN ('USEPRIMERUN')":CHK "${USEPRIMERUN/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_RUN_NYRNA!$DESC_RUN_NYRNA ('RUN_NYRNA')":CHK "${RUN_NYRNA/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_RUN_REPLAY!$DESC_RUN_REPLAY ('RUN_REPLAY')":CHK "${RUN_REPLAY/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
---field="     $GUI_RUN_GAMCON!$DESC_RUN_GAMCON ('RUN_GAMCON')":CHK "${RUN_GAMCON/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
---field="     $GUI_RUN_CHEATENGINE!$DESC_RUN_CHEATENGINE ('RUN_CHEATENGINE')":CHK "${RUN_CHEATENGINE/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
---field="     $GUI_GAMCON!$DESC_GAMCON ('GAMCON')":FL "${GAMCON/#-/ -}" `#CAT_Tools` `#MENU_GLOBAL` \
---field="     $GUI_GAMCONWAITEXE!$DESC_GAMCONWAITEXE $GUI_ECHOPLAC ('GAMCONWAITEXE')":FL "${GAMCONWAITEXE/#-/ -}" `#CAT_Tools` `#MENU_GAME` \
 --field="     $GUI_USEBOXTRON!$DESC_USEBOXTRON ('USEBOXTRON')":CHK "${USEBOXTRON/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_BOXTRONCMD!$DESC_BOXTRONCMD ('BOXTRONCMD')":FL "${BOXTRONCMD/#-/ -}" `#CAT_Tools` `#MENU_GLOBAL` \
 --field="     $GUI_BOXTRONARGS!$DESC_BOXTRONARGS ('BOXTRONARGS')" "${BOXTRONARGS/#-/ -}" `#CAT_Tools` `#MENU_GLOBAL` \
@@ -4984,8 +5079,6 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_STRACERUN!$DESC_STRACERUN ('STRACERUN')":CHK "${STRACERUN/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_STRACEDIR!$DESC_STRACEDIR ('STRACEDIR')":DIR "${STRACEDIR/#-/ -}" `#CAT_Tools` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_STRACEOPTS!$DESC_STRACEOPTS ('STRACEOPTS')" "${STRACEOPTS/#-/ -}" `#CAT_Tools` `#MENU_GAME` \
---field="     $GUI_CHEATENGINEVERSION!$DESC_CHEATENGINEVERSION ('CHEATENGINEVERSION')" "${CHEATENGINEVERSION/#-/ -}" `#CAT_Tools``#MENU_GLOBAL`  \
---field="     $GUI_CHEATENGINEMD5SUM!$DESC_CHEATENGINEMD5SUM ('CHEATENGINEMD5SUM')" "${CHEATENGINEMD5SUM/#-/ -}" `#CAT_Tools``#MENU_GLOBAL`  \
 --field="     $GUI_AUTOCONTY!$DESC_AUTOCONTY ('AUTOCONTY')":CHK "${AUTOCONTY/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_USECONTY!$DESC_USECONTY ('USECONTY')":CHK "${USECONTY/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_CUSTCONTY!$DESC_CUSTCONTY ('CUSTCONTY')":FL "${CUSTCONTY/#-/ -}" `#CAT_Tools` `#MENU_GLOBAL` \
@@ -5020,11 +5113,11 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_XLIVEURL!$DESC_XLIVEURL ('XLIVEURL')" "${XLIVEURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="     $GUI_STASSURL!$DESC_STASSURL ('STASSURL')" "${STASSURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="     $GUI_WINETRICKSURL!$DESC_WINETRICKSURL ('WINETRICKSURL')" "${WINETRICKSURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
---field="     $GUI_CHEATENGINEURL!$DESC_CHEATENGINEURL ('CHEATENGINEURL')" "${CHEATENGINEURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="     $GUI_X64DBGURL!$DESC_X64DBGURL ('X64DBGURL')" "${X64DBGURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="     $GUI_STEAMGRIDDBAPI!$DESC_STEAMGRIDDBAPI ('STEAMGRIDDBAPI')" "${STEAMGRIDDBAPI/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="     $GUI_CONTYRELURL!$DESC_CONTYRELURL ('CONTYRELURL')" "${CONTYRELURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="     $GUI_MO2DLURL!$DESC_MO2DLURL ('MO2PROJURL')" "${MO2PROJURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
+--field="     $GUI_HMMDLURL!$DESC_HMMDLURL ('HMMPROJURL')" "${HMMPROJURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="     $GUI_DPRSRELURL!$DESC_DPRSRELURL ('DPRSRELURL')" "${DPRSRELURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="     $GUI_DEPURL!$DESC_DEPURL ('DEPURL')" "${DEPURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="$(spanFont "$GUI_OPTSVR" "H")":LBL "SKIP" `#CAT_VR` `#HEAD_VR` `#MENU_GAME` `#MENU_GLOBAL`  \
@@ -5136,6 +5229,7 @@ function openGameDefaultMenu {
 
 function openGlobalMenu {
 	prepareMenu "$@"
+	autoBumpReShade
 	if [ -z "$2" ]; then
 		FUNC="$NON"
 	else
@@ -5418,12 +5512,26 @@ function clickInfo {
 
 function getLaPl {
 	if [ -f "$PLAYTIMELOGDIR/$GN.log" ]; then
-		echo "$GUI_LASTPLAYED $(tail -n1 "$PLAYTIMELOGDIR/${GN}.log")"
+		echo "<b>$GUI_LASTPLAYED</b> $(tail -n1 "$PLAYTIMELOGDIR/${GN}.log")"
 	fi	
 }
 
 function fixShowGnAid {
-	if [ -n "$GN" ]; then
+	local PRETTYGAMENAME
+
+    # Temp workaround to fix some games not launching because of locale bugs, particularly on Steam Deck
+    # Not limited to Steam Deck since this could prevent future bug reports
+    # May cause other bugs so keep an eye on this, but probably this is broken because of KDE not correctly setting all locales? Seems to affect KDE on Arch primarily
+    if [ -n "$LANG" ]; then
+        export LC_ALL="$LANG"  # $LANG should always be defined, unless locales are VERY broken
+    fi
+
+	# Will use "real" game name if it exists, e.g. "NieR:Automata" instead of NieRAutomata
+	PRETTYGAMENAME="$( getTitleFromID "$AID" )"
+	if [ -n "$PRETTYGAMENAME" ]; then
+		SGNAID="$PRETTYGAMENAME ($AID)"
+		SGNAID="${SGNAID//&/+}"
+	elif [ -n "$GN" ]; then
 		SGNAID="$GN ($AID)"
 		SGNAID="${SGNAID//&/+}"
 	else
@@ -5446,8 +5554,16 @@ function setShadDestDir {
 #		SHADDESTDIR="$GPFX/$DRCU/$STUS/$DOCS/$SPEKRESHDIR"
 #	else
 	fi
-		setFullGameExePath "SHADDESTDIR"
+		# setFullGameExePath "SHADDESTDIR"
 #	fi
+
+	# Don't use ReShade for custom command by default - Only use it if the user has enabled it for a valid custom command OR if they've enabled "Only custom command"
+	# if [[ ( "$USECUSTOMCMD" -eq 1 && -f "$CUSTOMCMD" && "$CUSTOMCMDRESHADE" -eq 1 ) || "$ONLY_CUSTOMCMD" -eq 1 ]]; then 
+		# if [ "$USERESHADE" -eq 1 ]; then # Make extra sure we want to use ReShade
+			# writelog "INFO" "${FUNCNAME[0]} - Using ReShade for custom command"
+			setFullGameExePath "SHADDESTDIR"
+		# fi
+	# fi
 }
 
 function refreshProtList {
@@ -5460,13 +5576,20 @@ function refreshProtList {
 }
 
 function MainMenu {
+	writelog "INFO" "${FUNCNAME[0]} - Preparing to load Main Menu"
+
 	createDLSpekList
+	createDLReShadeList
 	prepareMenu "$@"
 
 	setShowPic
 	
 	setHuyList
 	setOPCustPath
+
+	fixCustomMeta "$CUMETA/$AID.conf" # will be removed again later
+	loadCfg "$CUMETA/$AID.conf" X
+	loadCfg "$GEMETA/$AID.conf" X
 
 	export CURWIKI="$PPW/Main-Menu"
 	TITLE="${PROGNAME}-MainMenu"
@@ -5477,35 +5600,57 @@ function MainMenu {
 	fi
 	fixShowGnAid
 
+	if [ -z "$STEAMDECKCOMPATRATING" ]; then
+		prepareSteamDeckCompatInfo  # Only fetches data once, we might already have it from askSettings so don't fetch again - Minor optimisation
+	fi
+
 	LAPL="$(getLaPl)"
-	SETHEAD="$(spanFont "${PROGNAME} (${PROGNAME,,}) - ${PROGVERS} \n \n$SGNAID" "H")\n<span font=\"italic\">$LAPL\n(${#CfgFiles[@]} $GUI_EDITABLECFGS)\n($GUI_EDITABLEGAMECFGS)\n</span>"
+	SETHEAD="$(spanFont "${PROGNAME} (${PROGNAME,,}) - ${PROGVERS} \n \n$SGNAID" "H")"
+	# SETHEAD="$(spanFont "${PROGNAME} (${PROGNAME,,}) - ${PROGVERS} \n \n$SGNAID" "H")\n<i>$LAPL\n(${#CfgFiles[@]} $GUI_EDITABLECFGS)\n($GUI_EDITABLEGAMECFGS)\n</i>"
 
 	TT_OPENURL="Help Url Gui"
 
-	fixCustomMeta "$CUMETA/$AID.conf" # will be removed again later
-	loadCfg "$CUMETA/$AID.conf" X
-	loadCfg "$GEMETA/$AID.conf" X
+	# Last played date/time with STL
+	if [ -n "$LAPL" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Game Info Gotten!"
+		SETHEAD="${SETHEAD}\n<i>$LAPL</i>"
+	fi
+
+	# Game config file info
+	# TODO hide if no gamecfgs - Maybe this check needs an overhaul?
+	SETHEAD="${SETHEAD}\n <i>(${#CfgFiles[@]} $GUI_EDITABLECFGS)\n ($GUI_EDITABLEGAMECFGS)</i>"
+
+	# Show Steam Deck compatibility on Main Menu when in Steam Deck Desktop Mode
+	if [ "$SMALLDESK" -eq 1 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Looks like we're in Steam Deck desktop mode here on the Main Menu"
+
+		SETHEAD="$SETHEAD \n <b>${GUI_SDCR}:</b> $STEAMDECKCOMPATRATING"
+	fi
 
 	if [ "$SMALLDESK" -eq 0 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Looks like we're loading the Main Menu regularly"
+
 		if [ -n "$DEVELOPER" ]; then
-			SETHEAD="$SETHEAD \n ${GUI_DEV}: '$DEVELOPER'"
+			SETHEAD="$SETHEAD \n\n <b>${GUI_DEV}:</b> $DEVELOPER"
 		fi
 
 		if [ -n "$PUBLISHER" ]; then
-			SETHEAD="$SETHEAD \n ${GUI_PUB}: '$PUBLISHER'"
+			SETHEAD="$SETHEAD \n <b>${GUI_PUB}:</b> $PUBLISHER"
 		fi
 	
 		prepareProtonDBRating
 		getGameFiles "$AID"
 		setGameFilesArray
-		TT_GAFI="$(for i in "${!GamFiles[@]}"; do printf "%s: %s\n" "${GamDesc[$i]}" "${GamFiles[$i]}"; done)"
+		TT_GAFI="$( printf "<u>%s</u>" "${GUI_GAFI}" )"
+		TT_GAFI="${TT_GAFI}$(for i in "${!GamFiles[@]}"; do printf "\n<b>%s</b>: %s" "${GamDesc[$i]}" "${GamFiles[$i]}"; done)"
 
+		# Only shown on the Game Files tooltip
 		if [ -n "$METACRITIC_SCORE" ] && ! grep -q "^${GUI_MCS}" "$PDBRAINFO"; then
-			echo "${GUI_MCS}: $METACRITIC_SCORE" >> "$PDBRAINFO"
+			echo "<b>${GUI_MCS}:</b> $METACRITIC_SCORE" >> "$PDBRAINFO"
 		fi
 		
-		if [ -n "$OSLIST" ] && ! grep -q "^${GUI_OSL}" "$PDBRAINFO"; then
-			echo "${GUI_OSL}: $OSLIST" >> "$PDBRAINFO"
+		if [ -n "$OSLIST" ] && ! grep -q "${GUI_OSL}" "$PDBRAINFO"; then
+			echo "<b>${GUI_OSL}</b>: $OSLIST" >> "$PDBRAINFO"
 		fi
 		
 		if [ -f "$PDBRAINFO" ] && grep -q "[0-9]" "$PDBRAINFO" ;then
@@ -5513,27 +5658,31 @@ function MainMenu {
 			TT_OPENURL="$(cat "$PDBRAINFO")"
 		fi
 
+		if [ -n "$STEAMDECKCOMPATRATING" ]; then
+			SETHEAD="$SETHEAD \n <b>${GUI_SDCR}:</b> $STEAMDECKCOMPATRATING"
+		fi
+
 		if [ -L "$GPFX/$DRCU/$STUS" ]; then
-			SETHEAD="$SETHEAD \n ${GUI_SSU}: symlink to '$(readlink "$GPFX/$DRCU/$STUS")'"
+			SETHEAD="$SETHEAD \n <b>${GUI_SSU}:</b> symlink to $(readlink "$GPFX/$DRCU/$STUS")"
 		fi
 
 		if [ "$ISORIGIN" -eq 1 ]; then
-			SETHEAD="$SETHEAD \n ${GUI_SGW}: 'Origin interfering'"
+			SETHEAD="$SETHEAD \n <b>${GUI_SGW}:</b> Origin interfering"
 		else
 			if [ -n "$GAMEWINDOW" ] && [ "$GAMEWINDOW" != "$NON" ]; then
-				SETHEAD="$SETHEAD \n ${GUI_SGW}: '$(fixShow "$GAMEWINDOW")'"
+				SETHEAD="$SETHEAD \n <b>${GUI_SGW}:</b> $(fixShow "$GAMEWINDOW")"
 			fi	
 		fi
 		
 		if [ -n "$GAMEEXE" ]; then
-			SETHEAD="$SETHEAD \n ${GUI_SGE}: '$GAMEEXE'"
+			SETHEAD="$SETHEAD \n <b>${GUI_SGE}:</b> $GAMEEXE"
 		fi
 
 		if [ "$ISORIGIN" -eq 1 ]; then
-			SETHEAD="$SETHEAD \n ${GUI_SGA}: 'Origin $L2EA url'"
+			SETHEAD="$SETHEAD \n <b>${GUI_SGA}:</b> Origin $L2EA url"
 		else
 			if [ "${#ORGCMDARGS[@]}" -ge 1 ]; then
-				SETHEAD="$SETHEAD \n ${GUI_SGA}: '${ORGCMDARGS[*]}'"
+				SETHEAD="$SETHEAD \n <b>${GUI_SGA}:</b> ${ORGCMDARGS[*]}"
 			fi
 		fi
 	fi
@@ -5950,6 +6099,7 @@ function gitUpdate {
 	GITURL="$2"
 	if [ -d "$GITDIR/.git" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Pulling '$GITURL' update in '$GITDIR'"
+
 		if [ "$ONSTEAMDECK" -eq 1 ]; then
 			LD_PRELOAD="/usr/lib/libcurl.so.4" "$GIT" --work-tree="$GITDIR" --git-dir="$GITDIR/.git" pull --rebase=false &> "$STLSHM/${FUNCNAME[0]}-SteamDeck-${GITDIR##*/}"
 		else
@@ -5958,10 +6108,43 @@ function gitUpdate {
 	else
 		mkProjDir "$GITDIR"
 		writelog "INFO" "${FUNCNAME[0]} - Cloning '$GITURL' in '$GITDIR'"
+
 		if [ "$ONSTEAMDECK" -eq 1 ]; then
 			LD_PRELOAD="/usr/lib/libcurl.so.4" "$GIT" clone "$GITURL" "$GITDIR" &> "$STLSHM/${FUNCNAME[0]}-SteamDeck-${GITDIR##*/}"
 		else
 			"$GIT" clone "$GITURL" "$GITDIR" &> "$STLSHM/${FUNCNAME[0]}-${GITDIR##*/}"
+		fi
+	fi
+}
+# Get the last N tagged releases from PROJURL taken from sonic2kk
+function fetchGitHubTags {
+    PROJURL="$1"
+    N="$2"
+
+    RELEASESURL="${PROJURL}/releases"
+    TAGSURL="${PROJURL}/tags"
+
+    TAGSGREP="${RELEASESURL#"$GHURL"}/tag"
+
+    mapfile -t BASETAGS < <("$WGET" -q "${TAGSURL}" -O - 2> >(grep -v "SSL_INIT") | grep -oE "${TAGSGREP}[^\"]+" | sort -urV | grep -m "$N" "$TAGSGREP")
+    for TAG in "${BASETAGS[@]}"; do
+        basename "$TAG"
+    done
+}
+
+# Just for fun ;)
+function getSeasonalGreeting {
+	CURRDATE="$( date +"%d-%m" )"
+	if [ "$CURRDATE" = "25-12" ];then
+		echo "Happy Holidays!"
+	elif [ "$CURRDATE" = "31-12" ] || [ "$CURRDATE" = "01-01" ]; then
+		echo "Happy New Year!"
+	elif [ "$CURRDATE" = "31-10" ]; then
+		TM="$( date +"%H:%M" )"
+		if [ "$TM" = "00:00" ]; then
+			echo "Happy Halloween, it's the witching hour!"
+		else
+			echo "Happy Halloween!"
 		fi
 	fi
 }
@@ -5979,7 +6162,9 @@ function migrateCfgOption {
 			STLDXVKLINE="$(grep "^STLDXVKCFG" "$STLGAMECFG")"
 			STLDXVKLINE="${STLDXVKLINE//\"/}"
 			STLDXVKLINE="${STLDXVKLINE//STLCFGDIR/$STLCFGDIR}"
-			export "${STLDXVKLINE?}"
+			if [ -n "$STLDXVKLINE" ]; then
+				export "${STLDXVKLINE?}"
+			fi
 		fi
 
 		if [ -z "$STLDXVKCFG" ]; then
@@ -6813,38 +6998,52 @@ function getCompatData {
 	fi
 }
 
+# Extracts a value from a given App Manifest file path
+function getValueFromAppManifest {
+	KEY="$1"
+	APPMA="$2"
+	grep -m1 "$KEY" "$APPMA" | sed "s-\t- -g;s-\"${KEY}\"--g;s-\"--g" | xargs 
+}
+
+# Returns game install directory in the format "Game (AppID) -> /path/to/gamefolder"
 function getGameDir {
 	if [ -z "$1" ]; then
 		echo "A Game ID or Game Title is required as argument"
 	else
-			unset FGDIR
-			if [ "$1" -eq "$1" ] 2>/dev/null; then
-				if [ -d "$CUMETA" ]; then
-					TEST="$(find "$CUMETA" | grep "$1")"
-					if [ -f "$TEST" ]; then
-						source "$TEST"
-						FGDIR="$(basename "${TEST//.conf/}");$MEGAMEDIR"
-					fi
-				else
-					echo "No Game Dir found for '$1'"
-				fi
-			else
-				if [ -d "$TICUMETA" ]; then
-					TEST="$(find "$TICUMETA" | grep "$1")"
-					if [ -f "$TEST" ]; then
-						source "$TEST"
-						FGDIR="$(basename "${TEST//.conf/}");$MEGAMEDIR"
-					fi
-				else
-					echo "No Game Dir found for '$1'"
-				fi
-			fi
+		# First assume user entered AppID, then if no AppManifest found, try get AppID from name and search on that
+		SEARCHMANIFEST="$( listAppManifests | grep -m1 "${1}.acf" )"
+		if [ -z "$SEARCHMANIFEST" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Could not find App Manifest with entered argument '$1' - Assuming it is a game title and trying to find its AppID from title"
+			SEARCHGETIDFROMTITLE="$( getIDFromTitle "$1" | head -n1 )"
+			
+			writelog "INFO" "${FUNCNAME[0]} - called 'getIDFromTitle' for argument '$1', it returned '$SEARCHGETIDFROMTITLE'"
+			SEARCHAID="$( echo "$SEARCHGETIDFROMTITLE" | cut -d "(" -f 1 | xargs)"
 
-			if [ -n "$FGDIR" ]; then
-				echo "$FGDIR"
+			writelog "INFO" "${FUNCNAME[0]} - Extracted AppID from 'getIDFromTitle' result is '$SEARCHAID' - Searching for App Manifest with this AppID"
+
+			SEARCHMANIFEST="$( listAppManifests | grep -m1 "${SEARCHAID}.acf" )"
+			if [ -z "$SEARCHMANIFEST" ]; then
+				writelog "ERROR" "${FUNCNAME[0]} - Could not find game directory for '$1' - Maybe it is not installed"
+				echo "Could not find game directory for '$1'"
+				return
 			else
-				echo "No Game Dir found for '$1'"
+				writelog "INFO" "${FUNCNAME[0]} - Found matching App Manifest '$SEARCHMANIFEST'"
 			fi
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Found matching App Manifest file for presumed entered AppID '$1' - Manifest file is '$SEARCHMANIFEST'"
+		fi
+
+		APPMAINSTDIR="$( getValueFromAppManifest "installdir" "$SEARCHMANIFEST" )"
+		APPMALIBFLDR="$( dirname "$SEARCHMANIFEST" )"
+		GAMINSTDIR="$APPMALIBFLDR/common/$APPMAINSTDIR"
+		if [ -d "$GAMINSTDIR" ]; then
+			APPMAGN="$( getValueFromAppManifest "name" "$SEARCHMANIFEST" )"
+			APPMAAID="$( getValueFromAppManifest "appid" "$SEARCHMANIFEST" )"
+
+			printf "%s (%s) -> %s\n" "$APPMAGN" "$APPMAAID" "$GAMINSTDIR"
+		else
+			echo "Could not find install directory for '$1'"
+		fi
 	fi
 }
 
@@ -7345,43 +7544,74 @@ function installd3d47dll {
 	fi
 }
 
+function autoBumpReShade {
+	RSVERSLATEST="$( fetchGitHubTags "$RESHADEPROJURL" "1" )"
+	RSVERSLATEST="${RSVERSLATEST//v/}"
+	if [ "$AUTOBUMPRESHADE" -eq 1 ] && [[ "$RSVERS" < "$RSVERSLATEST" ]]; then
+		writelog "INFO" "${FUNCNAME[0]} - Found newer version of '$RESH' - Updating '$RSVERS' to '$RSVERSLATEST"
+		touch "$FUPDATE" 
+		updateConfigEntry "RSVERS" "$RSVERSLATEST" "$STLDEFGLOBALCFG"
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - '$RSVERS' is the latest version of '$RESH' - not updating"
+	fi
+}
+
+function createDLReShadeList {
+	if ! ping -q -c1 github.com &>/dev/null; then
+		writelog "INFO" "${FUNCNAME[0]} - Can't reach GitHub, so not attempting to fetch ReShade versions list"
+ 		RESHADEVERSIONS="none"
+	else
+		RSVERSONLINE="$( fetchGitHubTags "$RESHADEPROJURL" "3" )"
+		RSVERSONLINE="${RSVERSONLINE//$'\n'/!}"
+		RSVERSONLINE="${RSVERSONLINE//$!/}"
+		RSVERSONLINE="${RSVERSONLINE//v/}"
+		writelog "INFO" "${FUNCNAME[0]} - Found the following '$RESH' versions online '$RSVERSONLINE'"
+		RESHADEVERSIONS="$RSOVRVERS!$RSVERSONLINE!4.91!3.4.1" 
+	fi
+}
+
 function dlReShade {
 	if [ -z "$1" ]; then
 		DLVERS="$RSVERS"
 	else
 		DLVERS="$1"
 	fi
-	rm "$RESHADESRCDIR/$RS_64" 2>/dev/null
-	rm "$RESHADESRCDIR/$RS_32" 2>/dev/null
-	rm "$RESHADESRCDIR/${RS_64//.dll/.json}" 2>/dev/null
-	rm "$RESHADESRCDIR/${RS_32//.dll/.json}" 2>/dev/null
 
-	DLDST="${RESHADESRCDIR}/${RSSU}.exe"
-	DLDSTV="${RESHADESRCDIR}/${RSSU}_${DLVERS}.exe"
+	DLDST="${RESHADESRCDIR}/${RSSU}_${DLVERS}.exe"
 
 	RSSETUP="${RESHADEDLURL}/${RSSU}_${DLVERS}.exe"
 
 	dlCheck "$RSSETUP" "$DLDST" "X" "Downloading $RSSU"
-	if [ ! -f "$DLDSTV" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - Creating backup '${RSSU}_${DLVERS}.exe'"
-		cp "$DLDST" "$DLDSTV"
-	fi
-
+	
 	echo "$DLVERS" > "${DLDST//.exe/.log}"
 
 	if [ ! -s "$DLDST" ]; then
 		writelog "SKIP" "${FUNCNAME[0]} - Downloaded file '$DLDST' is empty - removing"
 		rm "$DLDST" 2>/dev/null
 	else
-		"$UNZIP" -q "$DLDST" -d "$RESHADESRCDIR" 2>/dev/null
+		"$UNZIP" -qo "$DLDST" -d "$RESHADESRCDIR/${DLVERS}" 2>/dev/null
 		writelog "INFO" "${FUNCNAME[0]} - Downloaded and extracted ${RESH}-v${DLVERS} file '$DLDST'"
+	fi
+}
+
+function overrideReShadeVersion {
+	if [ "$RSOVRD" -eq 1 ]; then  # This is meant to be the checkbox var
+		if [[ ! "$RSOVRVERS" = "$RSVERS" ]]; then
+			writelog "INFO" "${FUNCNAME[0]} - Overriding global '$RESH' version '$RSVERS' with '$RSOVRVERS'"
+       		RSVERS="$RSOVRVERS"
+   		else
+       		writelog "SKIP" "${FUNCNAME[0]} - '$RESH' Override version and '$RESH' global version match - Not overriding"
+   	fi
+	else
+    	writelog "SKIP" "${FUNCNAME[0]} - '$RESH' override is disabled - Skipping"
 	fi
 }
 
 # prepare reshade files if not found:
 function prepareReshadeFiles {
+	overrideReShadeVersion
 	if [ "$DOWNLOAD_RESHADE" -eq 1 ]; then
-		writelog "INFO" "${FUNCNAME[0]} - DOWNLOAD_RESHADE enabled"
+	writelog "INFO" "${FUNCNAME[0]} - DOWNLOAD_RESHADE enabled"
 		if [ ! -f "$D3D47DLDIR/$D3D47_32" ]; then dd
 			writelog "404" "${FUNCNAME[0]} - '$D3D47DLDIR/$D3D47_32' missing - downloading"
 
@@ -7393,8 +7623,24 @@ function prepareReshadeFiles {
 		dld3d47 "32"
 		dld3d47 "64"
 
-		if [ ! -f "$RESHADESRCDIR/$RS_64" ] || [ ! -f "$RESHADESRCDIR/$RS_32" ]; then
-			writelog "404" "${FUNCNAME[0]} - '$RESHADESRCDIR/$RS_64' and/or '$RS_32' missing - downloading"
+		#Check if ReShade file are missing
+		if [ ! -f "$RESHADESRCDIR/$RSVERS/$RS_64" ] || [ ! -f "$RESHADESRCDIR/$RSVERS/$RS_32" ]; then
+			writelog "404" "${FUNCNAME[0]} - '$RESHADESRCDIR/$RSVERS/$RS_64' and/or '$RS_32' missing - downloading"
+			dlReShade
+		fi
+
+		if [ ! -f "$RESHADESRCDIR/$RSVERS/$RS_64_VK" ] || [ ! -f "$RESHADESRCDIR/$RSVERS/$RS_32_VK" ]; then
+			writelog "404" "${FUNCNAME[0]} - '$RESHADESRCDIR/$RSVERS/$RS_64_VK' and/or '$RS_32_VK' missing - downloading"
+			dlReShade
+		fi
+
+		#Check if ReShade file is zero bytes
+		if [ ! -s "$RESHADESRCDIR/$RSVERS/$RS_64" ] || [ ! -s "$RESHADESRCDIR/$RSVERS/$RS_32" ]; then
+			writelog "404" "${FUNCNAME[0]} - '$RESHADESRCDIR/$RSVERS/$RS_64' and/or '$RS_32' corrupted - downloading"
+			dlReShade
+		fi
+		if [ ! -s "$RESHADESRCDIR/$RSVERS/$RS_64_VK" ] || [ ! -s "$RESHADESRCDIR/$RSVERS/$RS_32_VK" ]; then
+			writelog "404" "${FUNCNAME[0]} - '$RESHADESRCDIR/$RSVERS/$RS_64_VK' and/or '$RS_32_VK' corrupted - downloading"
 			dlReShade
 		fi
 
@@ -7550,7 +7796,7 @@ function ShaderRepoDialog {
 }
 
 function setFullGameExePath {
-	if [ "$USECUSTOMCMD" -eq 1 ] && [ -f "$CUSTOMCMD" ]; then
+	if [[ ( "$USECUSTOMCMD" -eq 1 && -f "$CUSTOMCMD" ) ]] || [[ ( "$USECUSTOMCMD" -eq 1 && -f "$CUSTOMCMD" && "$CUSTOMCMDRESHADE" -eq 1 ) || "$ONLY_CUSTOMCMD" -eq 1 ]]; then
 		FGEP="${CUSTOMCMD%/*}"
 		writelog "INFO" "${FUNCNAME[0]} - Using the directory '$FGEP' of the used custom command as absolute game exe path"
 		export "$1"="$FGEP"
@@ -7910,13 +8156,13 @@ function installRSdll {
 		if [ -n "$2" ] && [ "$2" -eq 1 ]; then
 			writelog "SKIP" "${FUNCNAME[0]} - Skipping installation of $1 because 'NOD3D9' is enabled"
 		else
-			if [ ! -f "$RESHADESRCDIR/$3" ]; then
-				writelog "SKIP" "${FUNCNAME[0]} - Sourcefile '$RESHADESRCDIR/$3' missing - skipping this file" 
+			if [ ! -f "$RESHADESRCDIR/$RSVERS/$3" ]; then
+				writelog "SKIP" "${FUNCNAME[0]} - Sourcefile '$RESHADESRCDIR/$RSVERS/$3' missing - skipping this file" 
 			else
-				cp "$RESHADESRCDIR/$3" "$INSTDESTDIR/$1" >/dev/null 2>/dev/null
+				cp "$RESHADESRCDIR/$RSVERS/$3" "$INSTDESTDIR/$1" >/dev/null 2>/dev/null
 				echo "$1" >> "$INSTDESTDIR/$RSTXT"
 				sort "$INSTDESTDIR/$RSTXT" -u -o "$INSTDESTDIR/$RSTXT"
-				writelog "INFO" "${FUNCNAME[0]} - Copied '$RESHADESRCDIR/$3' to '$INSTDESTDIR/$1'" 
+				writelog "INFO" "${FUNCNAME[0]} - Copied '$RESHADESRCDIR/$RSVERS/$3' to '$INSTDESTDIR/$1'" 
 			fi
 		fi
 	else
@@ -7927,7 +8173,7 @@ function installRSdll {
 				writelog "SKIP" "${FUNCNAME[0]} - Destfile '$INSTDESTDIR/$1' already exists in the same version '$RSVERS' - skipping this file" 
 			else
 				writelog "INFO" "${FUNCNAME[0]} - Destfile '$INSTDESTDIR/$1' already exists, but has a different version - updating"
-				cp "$RESHADESRCDIR/$3" "$INSTDESTDIR/$1" >/dev/null 2>/dev/null
+				cp "$RESHADESRCDIR/$RSVERS/$3" "$INSTDESTDIR/$1" >/dev/null 2>/dev/null
 			fi
 		fi
 	fi
@@ -8316,7 +8562,7 @@ function createDLSpekList {
 		writelog "INFO" "${FUNCNAME[0]} - $SPEK is enabled, looking for available versions online"
 		while read -r line; do
 			mapfile -t -O "${#SKDLList[@]}" SKDLList <<< "$line"
-		done <<< "$("$WGET" -q "$SPEKGHURL" -O - 2> >(grep -v "SSL_INIT") | grep "download*.*\.7z" | grep -oE '\"/[^\\"]+' | sed "s|^\"/${SPEK}O/${SPEK}/releases/download/SK_||g" | sed "s|/${SPEK}.7z||g" | sed "s|_|.|g")"
+		done <<< "$("$WGET" -q "$SPEKGHURL" -O - 2> >(grep -v "SSL_INIT") | grep "download*.*\.7z" | grep -oE '\"/[^\\"]+' | sed "s|^\"/${SPEK}O/${SPEK}/releases/download/SK_||g" | sed "s|/${SPEK}.7z||g" | sed "s|_|.|g")" # '
 		SPEKYADLIST="latest!$(printf "!%s\n" "${SKDLList[@]//\"/}" | tr -d '\n' | sed "s:^!::" | sed "s:!$::")"
 	else
 		writelog "SKIP" "${FUNCNAME[0]} - Skipping looking for available SpecialK versions, because USESPECIALK is disabled"
@@ -8660,14 +8906,26 @@ function askSettings {
 				if [ -f "$PDBRASINF" ];then
 					PDBROUT="$(cat "$PDBRASINF")"
 				fi
-		
+
+				# Tested and this should not break Non-Steam Games - Open an issue if it does!
+				prepareSteamDeckCompatInfo
+				STEAMDECKCOMPATOUT="<b>$GUI_SDCR:</b> ${STEAMDECKCOMPATRATING:$STEAMDECKCOMPAT_UNKNOWN}"
+				if ! [ -f "$STLGDECKCOMPAT/${AID}-deckcompatrating.json" ]; then
+					# If the Steam Deck compat rating json doesn't exist, assume something messed up e.g. offline or JQ is not installed
+					writelog "INFO" "${FUNCNAME[0]} - Could not retrieve Steam Deck compatibility rating, defaulting to $STEAMDECKCOMPAT_UNKNOWN - Maybe '$JQ' is missing or we are offline?"
+				fi
+
+				writelog "INFO" "${FUNCNAME[0]} - Steam Deck compatibility rating string is '$STEAMDECKCOMPATOUT'"
+				writelog "INFO" "${FUNCNAME[0]} - Preparing to show Wait Requester"
+
 				"$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
 				--title="$TITLE" \
 				--text="$(spanFont "$SGNAID - $REQQEST" "H")" \
-				--field="<span font=\"italic\">$PDBROUT</span>":LBL \
-				--field="<span font=\"italic\">$LAPL</span>":LBL \
-				--field="<span font=\"italic\">(${#CfgFiles[@]} $GUI_EDITABLECFGS)</span>":LBL \
-				--field="<span font=\"italic\">($GUI_EDITABLEGAMECFGS)</span>":LBL \
+				--field="<i>$PDBROUT</i>":LBL \
+				--field="<i>$STEAMDECKCOMPATOUT</i>":LBL \
+				--field="<i>$LAPL</i>":LBL \
+				--field="<i>(${#CfgFiles[@]} $GUI_EDITABLECFGS)</i>":LBL \
+				--field="<i>($GUI_EDITABLEGAMECFGS)</i>":LBL \
 				--button="$REQBUT":0 \
 				--button="$BUT_CAN":1 \
 				--timeout="$WAITEDITOR" \
@@ -8733,7 +8991,6 @@ function createProjectDirs {
 	mkProjDir "$STLGZIP"
 	mkProjDir "$STLGPNG"
 	mkProjDir "$STLAPPINFOIDDIR"
-	mkProjDir "$CEDLDIR"
 	mkProjDir "$HIDEDIR"
 	mkProjDir "$VORTEXCOMPDATA"
 	mkProjDir "$GEMETA"
@@ -8744,6 +9001,7 @@ function createProjectDirs {
 	mkProjDir "$TIGEMETA"
 	mkProjDir "$TICUMETA"
 	mkProjDir "$STLCUSTVARSDIR"
+	mkProjDir "$STLGDECKCOMPAT"
 }
 
 # add missing config entries to configfile $1 using seperator $2:
@@ -9042,27 +9300,28 @@ function autoCollectionSettings {
 			if [ ! -f "$SC" ]; then
 				writelog "SKIP" "${FUNCNAME[0]} - File '${SC##*/}' not found in steam userid dir - skipping"
 			else
-				writelog "INFO" "${FUNCNAME[0]} - Searching collections for game '$AID' in '${SC##*/}'"
+				writelog "INFO" "${FUNCNAME[0]} - Searching collections for game '$AID' in '$SC'"
 
 				while read -r SCAT; do
 					GLOBALSCATCONF="$(find "$GLOBALCOLLECTIONDIR" -type f -iname "$SCAT.conf")"
 					GLOBALSCATCONFF="$GLOBALCOLLECTIONDIR/$SCAT.conf"
 
+					# Should we break after a file to load is found? Is there benefit to loading another file?
 					if [ -f "$GLOBALSCATCONF" ]; then
-						writelog "INFO" "${FUNCNAME[0]} - Config '$GLOBALSCATCONF' found - loading its settings"
+						writelog "INFO" "${FUNCNAME[0]} - Global Config '$GLOBALSCATCONF' found - loading its settings"
 						loadCfg "$GLOBALSCATCONF"
 					else
-						writelog "SKIP" "${FUNCNAME[0]} - Config '$GLOBALSCATCONFF' not found - skipping"
+						writelog "SKIP" "${FUNCNAME[0]} - Global Config '$GLOBALSCATCONF' not found - skipping"
 					fi
 
 					SCATCONF="$(find "$STLCOLLECTIONDIR" -type f -iname "$SCAT.conf")"
 					SCATCONFF="$STLCOLLECTIONDIR/$SCAT.conf"
 
 					if [ -f "$SCATCONF" ]; then
-						writelog "INFO" "${FUNCNAME[0]} - Config '$SCATCONF' found - loading its settings"
+						writelog "INFO" "${FUNCNAME[0]} - Collections Directory Config '$SCATCONF' found - loading its settings"
 						loadCfg "$SCATCONF"
 					else
-						writelog "SKIP" "${FUNCNAME[0]} - Config '$SCATCONFF' not found - skipping"
+						writelog "SKIP" "${FUNCNAME[0]} - Collections Directory Config '$SCATCONF' not found - skipping"
 					fi
 					
 					SCATCMD="$TWEAKCMDDIR/$SCAT.sh"
@@ -9074,7 +9333,8 @@ function autoCollectionSettings {
 							"$SCATCMD" "$AID" "$EFD" "$GWFX"
 						fi
 					fi
-				done <<< "$(sed -n "/\"$AID\"/,/}/p;" "$SC" | sed -n "/\"tags\"/,/}/p" | sed -n "/{/,/}/p" | grep -v '{\|}' | awk '{print $2}' | sed "s:\"::g")"
+				done <<< "$(sed -n "/\"$AID\"/,/}/p;" "$SC" | sed -n "/\"tags\"/,/}/p" | sed -n "/{/,/}/p" | grep -v '{\|}' | cut -d '"' -f4)"
+				# "$(sed -n "/\"$AID\"/,/}/p;" "$SC" | sed -n "/\"tags\"/,/}/p" | sed -n "/{/,/}/p" | grep -v '{\|}' | awk '{print $2}' | sed "s:\"::g")" # '
 			fi
 		else
 			writelog "SKIP" "${FUNCNAME[0]} - '$SUSDA' not found - this should not happen! - skipping"
@@ -9571,7 +9831,26 @@ function StandaloneProtonGame {
 	fi
 }
 
+# TODO these both need work on Steam Deck to function'
+function oneTimeWinecfg {
+	writelog "INFO" "${FUNCNAME[0]} - Running OneTime Winecfg"
+	
+	PROTWINECMD="${RUNPROTON//\"/}/bin/wine"
+	WINE="$PROTWINECMD" WINEPREFIX="$GPFX" "$PROTWINECMD" "${WINECFG}.exe"  # Maybe check if we're on Steam Deck and use Winetricks for this? Would also require Winetricks but we could fetch and install that  
+}
+
+function oneTimeWinetricks {
+	writelog "INFO" "${FUNCNAME[0]} - Running OneTime Winetricks"
+	if [ ! -x "$(command -v "winetricks")" ]; then
+		writelog "WARN" "${FUNCNAME[0]} - Could not run one-time Winetricks because Winetricks is not installed - Skipping"
+	else
+		PROTWINECMD="${RUNPROTON//\"/}/bin/wine"
+		WINEPREFIX="$GPFX" "winetricks"
+	fi
+}
+
 function OneTimeRunGui {
+
 	if [ -n "$1" ]; then
 		AID="$1"
 		setAIDCfgs
@@ -9605,24 +9884,32 @@ function OneTimeRunGui {
 
 		OTCMDS="$("$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top $WINDECO \
 			--title="$TITLE" --separator="|" \
+			--columns="2" \
 			--text="$(spanFont "$GUI_ONETIMERUN" "H")" \
 			--field="$GUI_OTPROTON!$DESC_OTPROTON":CB "$(cleanDropDown "${OTPROTON//\"}" "$PROTYADLIST")" \
 			--field="$GUI_OTEXE!$DESC_OTEXE":FL "${OTEXE//\"}" \
 			--field="$GUI_OTARGS!$DESC_OTARGS" "${OTARGS//\"}"\
+			--field="$BUT_RUNWINECFG!$DESC_RUNWINECFG":FBTN "$( realpath "$0" ) runwinecfg" \
+			--field="$BUT_RUNWINETRICKS!$DESC_RUNWINETRICKS":FBTN "$( realpath "$0" ) runwinetricks" \
 			--field="$GUI_OTSAVE!$DESC_OTSAVE":CHK "FALSE" \
-			--button="$BUT_CAN:0" --button="$BUT_RUN:2" "$GEOM"
+			--button="$BUT_CAN:0" \
+			--button="$BUT_RUNONETIMECMD:2" \
+			"$GEOM"
 			)"
 			case $? in
+				# Selected Cancel
 				0)	{
 						writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_CAN' - Exiting"
 					}
 				;;
+				# Selected Run
 				2)	{
 						mapfile -d "|" -t -O "${#OTARR[@]}" OTARR < <(printf '%s' "$OTCMDS")
 						OTPROTON="${OTARR[0]}"
 						OTEXE="${OTARR[1]}"
 						OTARGS="${OTARR[2]}"
-						OTSAVE="${OTARR[3]}"					
+						# OTARR[3] and OTARR[4] are the WINECFG and WINETRICKS buttons
+						OTSAVE="${OTARR[5]}"	
 
 						RUNOTPROTON="$(getProtPathFromCSV "$OTPROTON")"
 						if [ ! -f "$RUNOTPROTON" ]; then
@@ -11255,14 +11542,18 @@ function chooseWinetricksPrefix {
 function checkWineCfgLaunch {
 	if [ -n "$RUN_WINECFG" ]; then
 		if [ "$RUN_WINECFG" -eq 1 ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Starting '$WINECFG' before game start:"
+			writelog "INFO" "${FUNCNAME[0]} - Starting '$WINECFG' at prefix '$GPFX' with Wine '$RUNWINE':"
 			if [ "$USEWINE" -eq 0 ]; then
 				#513
 				WINE="$RUNWINE" WINEARCH=win64 WINEDEBUG="$STLWINEDEBUG" WINEPREFIX="$GPFX" "$RUNWINE" "${WINECFG}.exe" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log"
 			else
 				extWine64Run "$RUNWINECFG"
 			fi
+		else
+			writelog "WARN" "${FUNCNAME[0]} - Function was called but RUN_WINECFG ('$RUN_WINECFG') was not enabled - skipping"
 		fi
+	else
+		writelog "WARN" "${FUNCNAME[0]} - Function was called but RUN_WINECFG ('$RUN_WINECFG') was not defined - skipping"
 	fi
 }
 
@@ -11370,113 +11661,6 @@ function useReplay {
 	fi
 }
 
-# gameconqueror
-function runGamCon {
-	writelog "INFO" "${FUNCNAME[0]} - Starting '$GAMCON' process"
-
-	if [ -n "$GAMCONWAITEXE" ] && [[ ! "$GAMCONWAITEXE" =~ ${DUMMYBIN}$ ]]; then
-		if [ -f "$GAMCONWAITEXE" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Waiting for alternative '$GAMCONWAITEXE' process"
-			while [ -z "$("$PIDOF" "$GAMCONWAITEXE" | cut -d ' ' -f1)" ]; do 
-				writelog "WAIT" "${FUNCNAME[0]} - Waiting for '$GAMCONWAITEXE' PID"
-				sleep 1
-			done
-			GCGPID="$("$PIDOF" "$GAMCONWAITEXE" | cut -d ' ' -f1)"
-		else
-			writelog "SKIP" "${FUNCNAME[0]} - Alternative '$GAMCONWAITEXE' defined but file doesn't exist - continuing with regular game exe"
-			waitForGamePid
-			GCGPID="$(GAMEPID)"
-		fi
-	else
-		waitForGamePid
-		GCGPID="$(GAMEPID)"
-	fi
-	
-	writelog "INFO" "${FUNCNAME[0]} - Game process found at '$GCGPID'"
-	writelog "INFO" "${FUNCNAME[0]} - Starting '$GAMCON $GCGPID'"
-	"$GAMCON" "$GCGPID"
-}
-
-# start gameconqueror
-function checkGamConLaunch {
-	if [ "$RUN_GAMCON" -eq 1 ]; then
-		# start the whole GamCon start/wait/stop/process
-		writelog "INFO" "${FUNCNAME[0]} - Starting '$GAMCON' process for '$AID'"
-		if [ "$RUN_GAMCON" -eq 1 ]; then
-			runGamCon &
-		else
-			writelog "SKIP" "${FUNCNAME[0]} - ERROR - RUN_GAMCON is '$RUN_GAMCON' which is invalid - setting to 0"
-			RUN_GAMCON=0
-		fi
-	fi
-}
-
-# CheatEngine
-
-function downloadCheatEngine {
-	# I won't spend more time on CE
-	CEZIP="$1"
-	LCE="${CE// /-}"
-	
-	# maybe remove later again START
-	if [ "$CHEATENGINEURL" != "$SCOOPCEURL" ]; then
-		touch "$FUPDATE"
-		CHEATENGINEURL="$SCOOPCEURL"
-		updateConfigEntry "CHEATENGINEURL" "$CHEATENGINEURL" "$STLURLCFG"
-	fi
-	# maybe remove later again END
-	
-	CHEATENGINEURLEVAL="$CHEATENGINEURL/${LCE,,}/$CEZIP"
-	writelog "INFO" "${FUNCNAME[0]} - Downloading '$CEZIP' into '$CEDLDIR'"
-	notiShow "$(strFix "$NOTY_DLCE" "$CEZIP")" "S"
-	dlCheck "$CHEATENGINEURLEVAL" "$CEDLDIR/$CEZIP" "X" "Downloading '$CEZIP'"
-	notiShow "$GUI_DONE" "S"
-}
-
-function installCheatEngine {
-	CEZIP="${CE// /}${CHEATENGINEVERSION//./}.7z"
-
-	STARTCE=1
-
-	if [ ! -f "$CEDLDIR/$CEZIP" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - '$CE' Installer '$CEDLDIR/$CEZIP' does not exist - trying to download"
-		downloadCheatEngine "$CEZIP"
-	fi
-
-	if [ -f "$CEDLDIR/$CEZIP" ]; then
-		CURMD5="$(md5sum "$CEDLDIR/$CEZIP")"
-		if [ "${CURMD5%% *}" == "$CHEATENGINEMD5SUM" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - md5sum of installed '$CEDLDIR/$CEZIP' is correct: '${CURMD5%% *}'"
-		else
-			writelog "WARN" "${FUNCNAME[0]} - md5sum of installed '$CEDLDIR/$CEZIP' is wrong: '${CURMD5%% *}' - trying download again!"
-			rm "$CEDLDIR/$CEZIP"
-			downloadCheatEngine "$CEZIP"
-			CURMD5="$(md5sum "$CEDLDIR/$CEZIP")"
-			if [ "${CURMD5%% *}" == "$CHEATENGINEMD5SUM" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - New Download was successful - continuing"
-			else
-				writelog "SKIP" "${FUNCNAME[0]} - New Download failed - skipping CheatEngine"
-				notiShow "$(strFix "$NOTY_CHEATENGINEMD5SUM" "${CURMD5%% *}" "$CHEATENGINEMD5SUM")"
-				STARTCE=0
-			fi
-		fi
-	fi
-
-	if [ -f "$CEDLDIR/$CEZIP" ] && [ "$STARTCE" -eq 1 ]; then
-			CEDIR="$STLCEDIR/${CE} $CHEATENGINEVERSION"
-			CEEXE="$CEDIR/${CE}.exe"
-		if [ -x "$(command -v "$SEVZA")" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Using $SEVZA binary found in path: '$(command -v "$SEVZA")'"
-			writelog "INFO" "${FUNCNAME[0]} - Extracting '$CEDLDIR/$CEZIP' to '$CEDIR'" "E"
-			"$SEVZA" x "$CEDLDIR/$CEZIP" -o"$CEDIR" 2>/dev/null
-		else
-			writelog "SKIP" "${FUNCNAME[0]} -  '$SEVZA' could be found - can't extract '$CEZIP' - skipping"
-		fi
-	else
-		writelog "SKIP" "${FUNCNAME[0]} - Downloading '$CEDLDIR/$CEZIP' failed - can't install - skipping"	
-	fi
-}
-
 function killPrefixOnGameExit {
 	waitForGamePid
 	GPID="$(GAMEPID)"
@@ -11550,34 +11734,6 @@ function checkWDIB {
 		else
 			writelog "INFO" "${FUNCNAME[0]} - Starting '$RUNWDIB' in the backgound for '$AID'"
 			extProtonRun "F" "$RUNWDIB"
-			killPrefixOnGameExit &
-		fi
-	fi
-}
-
-# start CheatEngine
-function checkCheatEngineLaunch {
-	if [ "$RUN_CHEATENGINE" -eq 1 ] && [ "$ISGAME" -eq 2 ] && [ "$USEWINE" -eq 0 ]; then
-		# start the whole GamCon start/wait/stop/process
-		writelog "INFO" "${FUNCNAME[0]} - Starting '$CE' process for '$AID'"
-		CEDIR="$STLCEDIR/${CE} $CHEATENGINEVERSION"
-		CEEXE="$CEDIR/${CE}.exe"
-		
-		if [ ! -f "$CEEXE" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - File '$CEEXE' does not exist - starting installer"
-			StatusWindow "$GUI_RUN_CHEATENGINE" "installCheatEngine" "InstallCheatEngineStatus"
-		fi
-
-		if [ ! -f "$CEEXE" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Installing failed - can't start '$CE' - skipping"
-		else
-			if [ "$USEGAMEMODERUN" -eq 1 ]; then
-				writelog "WARN" "${FUNCNAME[0]} - Disabling '$GMR' for '$CE', because function 'GAMEPID' doesn't find the game pid with it in the current state"
-				USEGAMEMODERUN=0
-			fi
-		
-			writelog "INFO" "${FUNCNAME[0]} - Starting '$CEEXE' in the backgound"
-			extProtonRun "F" "$CEEXE" "$CUSTOMCMD_ARGS"
 			killPrefixOnGameExit &
 		fi
 	fi
@@ -12008,18 +12164,682 @@ function installDotNet {
 	else
 		DNVER="48"
 	fi
+	LOGSUFFIX="$4"
 	chooseWinetricks
 	ILOG="$STLSHM/installDotNet.log"
 	rm "$ILOG" 2>/dev/null
 	writelog "INFO" "${FUNCNAME[0]} - Starting $DOTN$DNVER install - check $ILOG"
 	writelog "INFO" "${FUNCNAME[0]} - WINEDEBUG=\"-all\" WINEPREFIX=\"$INSTPFX\" WINE=\"$INSTWINE\" \"$WINETRICKS\" --unattended \"$DOTN$DNVER\""
 
-	WINEDEBUG="-all" WINEPREFIX="$INSTPFX" WINE="$INSTWINE" "$WINETRICKS" --unattended "$DOTN$DNVER" >> "$ILOG"
+	WINEDEBUG="-all" WINEPREFIX="$INSTPFX" WINE="$INSTWINE" "$WINETRICKS" --unattended "$DOTN$DNVER" >> "${ILOG}${LOGSUFFIX}"
 	writelog "INFO" "${FUNCNAME[0]} - Stopped $DOTN$DNVER install - check $ILOG"
 }
 
+function updateWineRegistryKey {
+	REGOP="$1"  # i.e. "add", "delete"
+	REGPATH="$2"
+	REGVAL="$3"
+	WINEPFX="$4"
+	WINERUNCMD="$5"
+
+	writelog "INFO" "${FUNCNAME[0]} - Removing key '$REGVAL' from '$REGPATH' using '$WINERUNCMD'"
+	WINEPREFIX="$WINEPFX" "$WINERUNCMD" reg "${REGOP}" "${REGPATH}" "/v" "${REGVAL}" "/f"
+}
+
+### HMM BEGIN
+
+# NOTE: This was written with HMM in mind, but it may work generally too
+# Returns the download URL to the latest GitHub actions build of a repository and the commit SHA it was built from separated by a comma
+#
+# EX: DefinitelyNotValve/HalfLife2EpisodeThree/suites/12345678/artifacts/87654321;0df23c5 
+function fetchLatestGitHubActionsBuild {
+    PROJAPIURL="$1"
+    ARTIFACTNUM=$2
+
+    # /actions/runs
+    ARTIFACTRUNSRESP="$( curl -s "${PROJAPIURL}/actions/runs" | jq '.workflow_runs[0]' )"
+    ARTIFACTRUNSUITEID="$( echo "$ARTIFACTRUNSRESP" | jq '.check_suite_id' )"
+    LATESTARTIFACTURL="$( echo "$ARTIFACTRUNSRESP" | jq '.artifacts_url' | cut -d '"' -f 2 )"
+
+    # /actions/runs/<artifact_id>/artifacts
+    LATESTARTIFACTRESP="$( curl -s "${LATESTARTIFACTURL}" | jq ".artifacts[${ARTIFACTNUM}]" )"
+    LATESTARTIFACTID="$( echo "$LATESTARTIFACTRESP" | jq ".id" )"
+    LATESTARTIFACTSHA="$( echo "$LATESTARTIFACTRESP" | jq ".workflow_run.head_sha" | cut -d '"' -f 2 )"
+    
+    ARTIFACTDLURL="suites/${ARTIFACTRUNSUITEID}/artifacts/${LATESTARTIFACTID}"
+    echo "${ARTIFACTDLURL};${LATESTARTIFACTSHA::7}"
+}
+
+# HMM doesn't really have a "setup" exe, but MO2 and Vortex use this naming convention so... keeping it :-)
+function getLatestHMMVer {
+	HMMSET="HedgeModManager"
+	
+	writelog "INFO" "${FUNCNAME[0]} - Searching for latest '$HMMSET' Release under '$HMMPROJURL'"
+	HMMSETUP="$( getLatestGitHubExeVer "HedgeModManager" "https://github.com/thesupersonic16/HedgeModManager" )"
+	if [ -n "$HMMSETUP" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Found '$HMMSETUP'"
+	else
+		writelog "ERROR" "${FUNCNAME[0]} - Could not find any '$HMMSET' Release"
+	fi
+}
+
+function checkLatestHMM {
+	AVAILABLEHMMVER="$1"
+	HMMSPATH="$2"
+
+	HMMUPDATEAVAILABLE=0
+
+	# Auto-update executable - May not be needed if HMM auto updater works
+	if [ -f "$HMMVERFILE" ]; then
+		CURRHMMVER="$( head -n 1 "$HMMVERFILE" )"
+		if [[ "$CURRHMMVER" = "$AVAILABLEHMMVER" ]]; then
+			writelog "INFO" "${FUNCNAME[0]} - Latest HedgeModManager already downloaded - Nothing to do"  # Probably have to do a version check here later
+			echo "Latest HedgeModManager is already downloaded or was downloaded previously"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - HedgeModManager update is available ($CURRHMMVER -> $AVAILABLEHMMVER) - Updating"
+			echo "HedgeModManager update is available ($CURRHMMVER -> $AVAILABLEHMMVER) - Updating"
+			if [ -f "$HMMSPATH" ]; then
+				rm "$HMMSPATH"
+			else
+				writelog "INFO" "${FUNCNAME[0]} - HedgeModManager executable doesn't exist - nothing to remove before updating"  # Could happen if EXE is removed but version tracking file is not
+				echo "No existing HedgeModManager executable"
+			fi
+			HMMUPDATEAVAILABLE=1
+		fi
+	else
+		writelog "INFO" "${FUNCNAME[0]} - No HedgeModManager version file found at '$HMMVERFILE' - Nothing to check, assuming we need to update"
+		echo "Could not get existing HedgeModManager version - Downloading latest '$AVAILABLEHMMVER'"
+		HMMUPDATEAVAILABLE=1
+	fi
+}
+
+function dlLatestHMM {
+
+	function dlLatestHMMDev {
+		HMMARCHIVENAME="${HMM}-Release.zip"
+		HMMARCHIVEPATH="$HMMDLDIR/${HMMARCHIVENAME}"
+
+		HMMSETUP="${HMM}.exe"
+		HMMSETUPBASE="$( basename "${HMMSETUP}" )"  # Doing this in case "HMMSETUP" ever changes
+		HMMSPATH="$HMMDLDIR/$HMMSETUP"
+
+		HMMUPDATEAVAILABLE=0
+
+		HMMAPIURLPATH="${HMMPROJURL//$GHURL}"
+		HMMLATESTDEV="${HMMPROJURL}/$( fetchLatestGitHubActionsBuild "${AGHURL}/repos${HMMAPIURLPATH}" 1 )"  # Used to get the latest dev version SHA
+		HMMLATESTDEVURL="https://nightly.link${HMMAPIURLPATH}/workflows/build/rewrite/${HMMARCHIVENAME}"  # Use nightly.link to get latest artifact download link for HMM
+		HMMVER="$( echo "$HMMLATESTDEV" | cut -d ";" -f 2 )"
+
+		writelog "INFO" "${FUNCNAME[0]} - HedgeModManager artifact URL: '$HMMLATESTDEVURL' ($HMMVER)"
+
+		checkLatestHMM "$HMMVER" "$HMMSPATH"
+
+		mkProjDir "$HMMDLDIR"
+		if [ ! -f "$HMMSPATH" ] || [ "$HMMUPDATEAVAILABLE" -eq 1 ]; then
+			# No exe OR we need to update, check if we have the archive to extract it from
+			writelog "INFO" "${FUNCNAME[0]} - Either no HedgeModManager executable downloaded and extracted, or there is an update available - HMMUPDATEAVAILABLE is '${HMMUPDATEAVAILABLE}'"
+			if [ ! -f "$HMMARCHIVEPATH" ] || [ "$HMMUPDATEAVAILABLE" -eq 1 ]; then
+				# (No archive and no exe) or update available, download from GitHub
+				writelog "INFO" "${FUNCNAME[0]} - Either no HedgeModManager artifact present, or an update is available - HMMUPDATEAVAILABLE is '${HMMUPDATEAVAILABLE}'"
+				
+				# Download
+				writelog "INFO" "${FUNCNAME[0]} - Downloading latest HedgeModManager Development Artifact from URL '$HMMLATESTDEVURL'"
+				echo "Downloading latest HedgeModManager Development Artifact"
+				notiShow "$(strFix "$NOTY_HMMDL" "$HMMDLVER")" "X"
+				dlCheck "$HMMLATESTDEVURL" "$HMMARCHIVEPATH" "X" "Downloading latest HedgeModManager Development '$HMMVER'" &>/dev/null
+			else
+				# We have existing archive but no executable 
+				writelog "INFO" "${FUNCNAME[0]} - Found existing and up-to-date HedgeModManager archive at '$HMMSPATH' - Extracting"
+				echo "Found up-to-date HedgeModManager Development release archive - Extracting "
+			fi
+
+			# Extract
+			# Check if download success
+			if [ -f "$HMMARCHIVEPATH" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Downloaded latest HedgeModManager Artifact - Extracting archive at '$HMMARCHIVEPATH'"
+				echo "Extracting latest HedgeModManager Development Artifact"
+				"$UNZIP" -qo "$HMMARCHIVEPATH" -d "$HMMDLDIR"  # Extract quiet and overwrite existing file if present without confirmation
+				
+				# If download sucess, try to extract
+				if [ -f "$HMMSPATH" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Successfully extracted HedgeModManager archive at '$HMMSPATH'"
+					echo "Successfully extracted HedgeModManager archive"
+					writelog "Info" "${FUNCNAME[0]} - Removing archive '$HMMARCHIVENAME' after successful extraction"
+					rm "$HMMARCHIVEPATH"
+
+					echo "$HMMVER" > "$HMMVERFILE"  # Update version on successfull download and extract
+				else
+					# Download failed
+					writelog "WARN" "${FUNCNAME[0]} - Failed to extract HedgeModManager archive at '$HMMSPATH'" 
+					echo "Failed to extract HedgeModManager archive"
+				fi
+			else
+				# Download failed
+				writelog "WARN" "${FUNCNAME[0]} - Failed to download latest HedgeModManager Development archive ('$HMMVER') to '$( basename "$HMMSETUP" )'"
+				echo "Failed to download latest HedgeModManager development release archive"
+			fi			
+		else
+			# We have executable - Nothing to do
+			writelog "INFO" "${FUNCNAME[0]} - Found existing and up-to-date HedgeModManager executable at '$HMMSPATH'"
+			echo "Found up-to-date HedgeModManager executable - Nothing to download"
+		fi
+	}
+
+	# Download latest HedgeModManager stable release 
+	function dlLatestHMMStable {
+		getLatestHMMVer
+
+		# These values return the version URL from GitHub, so when we called "basename" we're getting the URL basename
+		# The format that comes back is something like /releases/7.8-2/HedgeModManager.exe
+		if [ -n "$HMMSETUP" ]; then
+			mkProjDir "$HMMDLDIR"
+			HMMSETUPBASE="$( basename "$HMMSETUP" )"
+			HMMVER="$( dirname "$HMMSETUP" )"
+			HMMVER="${HMMVER##*/}"
+			HMMSPATH="$HMMDLDIR/$HMMSETUPBASE"
+
+			echo "Latest available version is '$HMMVER' - Checking to see if we are up-to-date"
+			checkLatestHMM "$HMMVER" "$HMMSPATH"
+
+			if [ ! -f "$HMMSPATH" ] || [ "$HMMUPDATEAVAILABLE" -eq 1 ]; then
+				DLURL="${HMMPROJURL//"HedgeModManager"}$HMMSETUP"
+				writelog "INFO" "${FUNCNAME[0]} - Downloading '$HMMSETUPBASE' to '$( basename "$HMMDLDIR" )' from '$DLURL'"
+				echo "Downloading HedgeModManager ${HMMVER}"
+				notiShow "$(strFix "$NOTY_HMMDL" "$HMMVER")" "X"
+				dlCheck "$DLURL" "$HMMSPATH" "X" "Downloading HedgeModManager $HMMSETUP $HMMVER" &>/dev/null
+				if [ -f "$HMMSPATH" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Successfully downloaded HedgeModManager $HMMVER - continuing installation"
+					echo "Successfully downloaded HedgeModManager $HMMVER to '$( basename "$HMMSETUP" )'"
+					echo "$HMMVER" > "$HMMVERFILE"
+				else
+					writelog "ERROR" "${FUNCNAME[0]} - Failed to download HedgeModManager from '$DLURL'"
+					echo "Failed to download HedgeModManager"
+				fi
+			else
+				writelog "INFO" "${FUNCNAME[0]} - HedgeModManager executable already downloaded - Nothing to do"
+				echo "HedgeModManager is up-to-date"
+			fi
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - No HMMSETUP defined - nothing to download - skipping"
+			echo "Could not find HedgeModManager release"
+		fi
+	}
+
+	# Internet connection check
+	if ! ping -q -c1 github.com &>/dev/null; then
+		writelog "WARN" "${FUNCNAME[0]} - Looks like we're offline or GitHub is down, not attempting to download HedgeModManager when offline - May cause issues if no HMM exe is downloaded!"
+		writelog "WARN" "${FUNCNAME[0]} - Will still attempt to install Winetricks as they may be cached"
+		echo "WARNING: Can't reach GitHub - Not attempting to download HedgeModManager"
+
+		# Set HMMVER offline if we have it in the HMMVERFILE + some warning logging if there is no version file
+		if [ -d "$HMMVERFILE" ]; then
+			HMMVER="$( head -n 1 "$HMMVERFILE" )"
+			if [ -z "$HMMVER" ]; then
+				writelog "WARN" "${FUNCNAME[0]} - HedgeModManager version stored in HMMVERFILE at '$HMMVERFILE' appears to be empty, installation may have failed last time!"
+			else
+				writelog "INFO" "${FUNCNAME[0]} - HedgeModManager version stored in HMMVERFILE is '$HMMVER' - It seems like HedgeModManager successfully installed before, so running offline should work fine"
+			fi
+		else
+			writelog "WARN" "${FUNCNAME[0]} - No HMMVERFILE found at '$HMMVERFILE' - HedgeModManager may not have been installed and so may fail to starrt offline!"
+		fi
+
+		return
+	fi
+
+	DLVER="$1"
+	if [ -z "$DLVER" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - No value passed for whether user wants stable or development HedgeModManager - Assuming they want stable!"
+	fi
+	writelog "INFO" "${FUNCNAME[0]} - User wants HedgeModManager '${DLVER:-stable}'"
+
+	# This will come from desktop file usually
+	if [[ "$DLVER" = "$HMMAUTO" ]]; then
+		DLVER="$HMMDLVER"
+	fi
+
+	if [[ "$DLVER" = "$HMMDEV" ]]; then
+		# Get latest GitHub artifacts ver
+		writelog "INFO" "${FUNCNAME[0]} - Checking latest available HedgeModManager Development version"
+		echo "Checking latest available HedgeModManager Development version"
+
+		dlLatestHMMDev
+	else
+		# If we don't pass dev, assume we want stable
+		writelog "INFO" "${FUNCNAME[0]} - Checking latest available HedgeModManager Release/Stable version"
+		echo "Checking latest available HedgeModManager Release version"
+		
+		dlLatestHMMStable
+	fi
+}
+
+# NOTE: Winetricks *needs* GE-Proton to install dotnet48 correctly!
+function setHMMVars {
+	HMMPFX="${HMMCOMPDATA}/pfx"
+	if [ -z "$HMMEXE" ]; then
+		HMMEXE="$HMMDLDIR/${HMM}.exe"
+		writelog "INFO" "${FUNCNAME[0]} - HMM EXE was not set - It is now '$HMMEXE'"
+	fi
+	HMMGAMES="$GLOBALMISCDIR/hmmgames.txt"
+	if [ -z "$HMMWINE" ] || [ ! -f "$HMMWINE" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - HMMWINE is either not set or not a file -- It is currently '$HMMWINE'"
+		if [ "$USEHMMPROTON" == "$NON" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - USEHMMPROTON is '$USEHMMPROTON'"
+			if [ ! -f "$PROTONCSV" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Looking for available Proton versions"
+				getAvailableProtonVersions "up" X
+			fi
+
+			if ! grep -q "^GE" "$PROTONCSV"; then
+				writelog "INFO" "${FUNCNAME[0]} - calling autoBumpGE"
+				autoBumpGE "X"
+			else
+				writelog "INFO" "${FUNCNAME[0]} - Seems like we have a GE-Proton version available already"
+			fi
+
+			SETHMMPROT="$(grep "^GE" "$PROTONCSV" | sort -V | tail -n1)"
+			writelog "INFO" "${FUNCNAME[0]} - SETHMMPROT is currently '$SETHMMPROT'"
+			
+			SETHMMPROT="${SETHMMPROT%%;*}"
+			writelog "INFO" "${FUNCNAME[0]} - SETHMMPROT is now '$SETHMMPROT'"
+			
+			USEHMMPROTON="$SETHMMPROT"
+			writelog "INFO" "${FUNCNAME[0]} - USEHMMPROTON is '$USEHMMPROTON'"
+
+			touch "$FUPDATE"
+			updateConfigEntry "USEHMMPROTON" "$USEHMMPROTON" "$STLDEFGLOBALCFG"
+			writelog "INFO" "${FUNCNAME[0]} - USEHMMPROT is '$NON', so using latest GE-Proton"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - USEHMMPROTON was set -- it is '$USEHMMPROTON'"
+			SETHMMPROT="$USEHMMPROTON"
+			writelog "INFO" "${FUNCNAME[0]} - SETHMMPROT should equal USEHMMPROTON -- '$SETHMMPROT' == '$USEHMMPROTON'"
+		fi
+
+		writelog "INFO" "${FUNCNAME[0]} - Using '$USEHMMPROTON' for '$HMM'"
+
+		writelog "INFO" "${FUNCNAME[0]} - About to call 'setModWine' with the following vars:"
+		writelog "INFO" "${FUNCNAME[0]} - - SETHMMPROT is '$SETHMMPROT'"
+		writelog "INFO" "${FUNCNAME[0]} - - HMMRUNPROT is '$HMMRUNPROT'"
+		writelog "INFO" "${FUNCNAME[0]} - - HMMWINE is '$HMMWINE'"
+
+		# Sometimes ProtonCSV can have a version of GE-Proton that doesn't actually exist (or that used to exist, but doesn't anymore)
+		#
+		# This check forces it to look in the file in a different order (reverse version sort order `sort -Vr`) which should get it to find GE-Proton
+		# and updates the relevant HMM Proton/Wine variables + writes out to config file 
+		#
+		# The real fix here is to correctly re-populate the Proton versions in ProtonCSV.txt so that STL never tries to use an invalid Proton version to begin with! 
+		#
+		# This check could be much cleaner, but the check is here outside of the above check to force the Proton value to get updated for any existing users
+		if [ ! -f "$( getProtPathFromCSV "$SETHMMPROT" )" ]; then
+			writelog "WARN" "${FUNCNAME[0]} - SETHMMPROT was not a directory -- Attempting to find it again"
+			SETHMMPROT="$(grep "^GE" "$PROTONCSV" | sort -Vr | tail -n1)"
+			SETHMMPROT="${SETHMMPROT%%;*}"
+
+			if [ ! -f "$( getProtPathFromCSV "$SETHMMPROT" )" ]; then
+				writelog "ERROR" "${FUNCNAME[0]} - Still could not find GE-Proton in PROTONCSV - This should be reported!"
+			else
+				writelog "INFO" "${FUNCNAME[0]} - SETHMMPROT was updated to value '$SETHMMPROT'"
+				USEHMMPROTON="$SETHMMPROT"
+
+				touch "$FUPDATE"
+				updateConfigEntry "USEHMMPROTON" "$USEHMMPROTON" "$STLDEFGLOBALCFG"
+			fi
+		fi
+
+		setModWine "SETHMMPROT" "HMMRUNPROT" "HMMWINE"
+	fi
+}
+
+# Doesn't really "install" HMM, just creates the prefix for it if it doesn't already exist
+# HMM's UI needs `dotnet48` to run and `d3dx9 vcrun2019 d3dcompiler_47` to render - we don't want to install this for every game, give HMM its own prefix to run in
+# We can remove these if HMM ever works with Wine out of the box
+function installHMM {
+	if [ -f "$HMMSPATH" ]; then
+		setHMMVars
+		chooseWinetricks  # Force install of Winetricks earlier to prevent potential missing Winetricks var 
+		if [ -f "$HMMEXE" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - HedgeModManager executable found at '$HMMEXE' - Checking if we need to set up its Wine prefix"
+			if [ ! -d "$HMMCOMPDATA" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - No existing HedgeModManager prefix found - Creating one"
+				echo "Installing HedgeModManager $HMMVER"
+				notiShow "$( strFix "$NOTY_HMMINST" "$HMMVER" )" "X"
+				mkProjDir "$HMMCOMPDATA/pfx"
+
+				# Install dotnet48
+				writelog "INFO" "${FUNCNAME[0]} - Installing dotnet48 for $HMM"
+				installDotNet "$HMMPFX" "$HMMWINE" "48" "HMMPREFIX"
+				writelog "INFO" "${FUNCNAME[0]} - Done"
+
+				# Setup prefix with Proton
+				touch "${HMMCOMPDATA}/tracked_files"
+				STEAM_COMPAT_CLIENT_INSTALL_PATH="$SROOT" STEAM_COMPAT_DATA_PATH="$HMMCOMPDATA" "$HMMRUNPROT" "run" 2> "$STLSHM/${FUNCNAME[0]}_protonrun.log"
+				
+				# Install other needed Winetricks 
+				writelog "INFO" "${FUNCNAME[0]} - Installing 'd3dx9' 'vcrun2019' 'd3dcompiler_47' with '$HMMWINE' - These extra Winetricks are needed for HedgeModManager to run as well"
+				OGGPFX="$GPFX"
+				GPFX="$HMMPFX"
+				RUNWINE="$HMMWINE"
+				installWinetricksPaks "d3dx9 vcrun2019 d3dcompiler_47" "$HMMWINE" "extWine64Run"
+				GPFX="$OGGPFX"
+				writelog "INFO" "${FUNCNAME[0]} - Finished installing extra HedgeModManager winetricks"
+
+				configureHMMPfxReg &>/dev/null
+
+				writelog "INFO" "${FUNCNAME[0]} - Finished setting up HedgeModManager prefix"
+				echo "Successfully installed HedgeModManager $HMMVER"
+				notiShow "$NOTY_HMMINSTFIN" "X"
+			else
+				writelog "SKIP" "${FUNCNAME[0]} - HedgeModManager prefix already exists - Not recreating - Skipping installation"
+				
+				configureHMMPfxReg &>/dev/null  # The registry configuration needed may change overtime and may not have been fully configured at installation
+			
+				echo "Finished installing HedgeModManager"
+			fi
+		else
+			writelog "ERROR" "${FUNCNAME[0]} - HedgeModManager '$HMMEXE' went missing - Maybe user is connected to the Internet"
+			echo "HedgeModManager executable '$HMMEXE' went missing or was never downloaded to begin with - Are you connected to the Internet?"
+		fi
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - '$HMMSPATH' not found - Nothing to install - skipping"
+	fi
+
+	# Create .desktop file for 1-click install support and adding HMM to application menu
+	writelog "INFO" "${FUNCNAME[0]} - Adding HedgeModManager to application menu and setting up link handlers"
+	echo "Adding HedgeModManager to application menu and setting up link handlers"
+	createHMMDesktopFile
+}
+
+# Remove Steam reg keys - needed to get HMM to find games with our prefix
+function configureHMMPfxReg {
+	writelog "INFO" "${FUNCNAME[0]} - Removing extra Steam registry keys from HedgeModManager prefix '$HMMPFX'"
+
+	# Reg paths
+	HKLMSTEAM="HKEY_LOCAL_MACHINE\\Software\\Wow6432Node\\Valve\\Steam"
+	HKCUSTEAM="HKEY_CURRENT_USER\\Software\\Valve\\Steam"
+	KHCUSTEAMACTPRO="${HKCUSTEAM}\\ActiveProcess"
+
+	# Reg values
+	STEXE="SteamExe"
+	STPA="SteamPath"
+	INSTPA="InstallPath"
+	STCLIDLL="SteamClientDll"
+	STCLIDLL64="SteamClientDll64"
+
+	# HKEY_LOCAL_MACHINE
+	updateWineRegistryKey "delete" "$HKLMSTEAM" "$INSTPA" "$HMMPFX" "$HMMWINE"
+
+	# KEY_CURRENT_USER
+	updateWineRegistryKey "delete" "$HKCUSTEAM" "$STEXE" "$HMMPFX" "$HMMWINE"
+	updateWineRegistryKey "delete" "$HKCUSTEAM" "$STPA" "$HMMPFX" "$HMMWINE"
+
+	# ActiveProcess
+	updateWineRegistryKey "delete" "$KHCUSTEAMACTPRO" "$STPA" "$HMMPFX" "$HMMWINE"
+	updateWineRegistryKey "delete" "$KHCUSTEAMACTPRO" "$STCLIDLL" "$HMMPFX" "$HMMWINE"
+	updateWineRegistryKey "delete" "$KHCUSTEAMACTPRO" "$STCLIDLL64" "$HMMPFX" "$HMMWINE"
+
+	writelog "INFO" "${FUNCNAME[0]} - Finished removing registry keys from HedgeModManager prefix"
+}
+
+# Game-specific Winetricks
+function prepareHMMGameWinetricks {
+	HMMGTWEAKAID="$1"  # Game AppID
+	HMMGINSTPFX="$2"  # Prefix to install winetricks to (i.e. game prefix) 
+
+	# Set GPFX to game's prefix - Can't guarantee current GPFX will be the game's prefix so force it to ensure winetrick(s) are installed to the game's prefix and not HMM's prefix
+	OGGPFX="$GPFX"
+	GPFX="$HMMGINSTPFX"
+	case $HMMGTWEAKAID in
+	"71340")
+		writelog "INFO" "${FUNCNAME[0]} - AppID '$HMMGTWEAKAID' determined to be Sonic Generations"
+		GPFXSTUS="$HMMGPFX/$DRCU/$STUS"
+		if [ -d "$GPFXSTUS" ]; then
+			# Install d3d to Sonic Generations' prefix
+			writelog "INFO" "${FUNCNAME[0]} - Applying 'd3dcompiler_47' winetrick for Direct3D 11 mod support"
+			echo "Sonic Generations: Installing 'd3dcompiler_47' for Direct3D 11 mod support"
+		
+			RUNWINE="$HMMWINE"
+			installWinetricksPaks "d3dcompiler_47" "$HMMWINE" "extWine64Run" &>/dev/null
+			writelog "INFO" "${FUNCNAME[0]} - Finished installing 'd3dcompiler47' for Sonic Generations"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Seems like Sonic Generations is not installed - skipping"
+		fi
+		;;
+	esac
+	GPFX="$OGGPFX"
+}
+
+# Install dotnet48 for every 64bit game
+function prepareHMMGames {
+	setHMMVars
+	
+	# Get all hardcoded HMM supported games
+	writelog "INFO" "${FUNCNAME[0]} - Reading all hardcoded HedgeModManager supported games from '$HMMGAMES'"
+	echo "Setting up installed HedgeModManager compatible games"
+	notiShow "$NOTY_HMMCONFIG" "X"
+	while read -r HMMG; do
+		# Get HMM game information from hmmgames.txt lines - games are stored as: "game name";appid;"architecture"
+		HMMGN="$( echo "$HMMG" | cut -d ";" -f 1 | cut -d '"' -f2 )"
+		HMMGAID="$( echo "$HMMG" | cut -d ";" -f 2 | cut -d '"' -f2 )"
+		HMMGARCH="$( echo "$HMMG" | cut -d ";" -f 3 | cut -d '"' -f2 )"
+
+		# Sometimes on Steam Deck it seems like the Wineprefix is created in a different library folder than the one the game is installed in
+		# Might be a Steam Client bug, but if it persists / if this is the new behaviour, this check may need updated!
+		HMMGAPPMA="$( listAppManifests | grep -m1 "${HMMGAID}.acf" )"
+		HMMGPFX="$( setGPfxFromAppMa "$HMMGAID" "$HMMGAPPMA" )"
+		if [ ! -d "$HMMGPFX" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Wineprefix for game '$HMMGN ($HMMGAID)' did not already exist at '$HMMGPFX' - The game may not have been started before!"
+		fi
+
+		# If HMM game is 64bit, installed and has a compatdata dir, install dotnet48 for that game
+		if [[ "$HMMGARCH" = "64" ]]; then
+			GPFX="$HMMPFX"
+
+			# Check if we have a valid compatdata for a game (pfx/drive_c/users/steamuser)
+			GPFXSTUS="$HMMGPFX/$DRCU/$STUS"
+			if [ -d "$GPFXSTUS" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Found compatdata dir for '$HMMGN' at '$GPFXSTUS' - Assuming it is installed"
+
+				writelog "INFO" "${FUNCNAME[0]} - Install dotnet48 for install 64bit HedgeModManager game '$HMMGN'"
+				notiShow "$( strFix "$NOTY_HMMGAMCONFIG" "$HMMGN" )" "X"
+				echo "Running configuration for '$HMMGN'"
+				installDotNet "$HMMGPFX" "$HMMWINE" "48" &>/dev/null
+				writelog "INFO" "${FUNCNAME[0]} - Finished installing dotnet48 for '$HMMGN'"
+			else
+				writelog "SKIP" "${FUNCNAME[0]} - Could not find compatdata dir for '$HMMGN' - Assuming that it is not installed"
+			fi
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - '$HMMGN' is 32bit, skipping"
+		fi
+
+		writelog "INFO" "${FUNCNAME[0]} - Checking if we need to apply any game-specific tweaks to improve mod compatibility"
+		prepareHMMGameWinetricks "$HMMGAID" "$HMMGPFX"
+	done <$HMMGAMES
+	echo "Finished configuring installed HedgeModManager games" 
+}
+
+function startHMM {
+	# TODO:
+	# - Refine UI (add HMM button, etc)
+	HMMDLVERARG="$1"
+
+	dlLatestHMM "$HMMDLVERARG"
+	installHMM
+	prepareHMMGames
+	
+	writelog "INFO" "${FUNCNAME[0]} - Starting HedgeModManager in prefix '$HMMPFX' with Wine '$HMMWINE' and using executable at '$HMMEXE'"
+	echo "Starting HedgeModManager"
+	notiShow "$( strFix "$NOTY_HMMSTART" "$HMMVER" )" "X"
+
+	WINEDEBUG="-all" WINEPREFIX="$HMMPFX" "$HMMWINE" "$HMMEXE" "$HMMARGS" &>/dev/null
+}
+
+# This will only remove the HMM Wineprefix and download executable files
+# It will not remove any installed Winetricks or mods 
+function uninstallHMM {
+	writelog "INFO" "${FUNCNAME[0]} - Preparing to uninstall HedgeModManager"
+	echo "Preparing to uninstall HedgeModManager"
+
+	# Compatdata aka "Install" directory
+	# This may not be the same one in the cfg folder if the user moved it
+	if [ -d "$HMMCOMPDATA" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Removing HedgeModManager compatdata folder"
+		echo "Removing HedgeModManager compatdata"
+		rm -rf "$HMMCOMPDATA"
+	fi
+
+	# Downloads dir - Should always be in STL cfg dir
+	if [ -d "$HMMDLDIR" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Removing HedgeModManager downloads directory"
+		echo "Removing HedgeModManager SteamTinkerLaunch directory"
+		rm -rf "$HMMDLDIR"
+	fi
+
+	# Remove desktop files
+	if [ -d "$HMMDFPA" ]; then
+		echo "Removing HedgeModManager Desktop file at '$HMMDFPA'" 
+		rm "$HMMDFPA"
+	fi
+	
+	if [ -d "$HMMDFDLPA" ]; then
+		echo "Removing HedgeModManager Desktop file at '$HMMDFDLPA'"
+		rm "$HMMDFPA"
+	fi
+	
+	writelog "INFO" "${FUNCNAME[0]} - Successfully uninstalled HedgeModManager"
+	echo "Uninstalled HedgeModManager"
+}
+
+function listSupportedHMMGames {
+	# List HMM compatible games (taken from misc/hmmgames.txt), like:
+	# Game Name (appid) (architecture)
+	while read -r HMMGAME; do 
+		HMMGAMENAME="$( echo "$HMMGAME" | cut -d ";" -f 1 | cut -d '"' -f2 )"
+		HMMGAMEAID="$( echo "$HMMGAME" | cut -d ";" -f 2 | cut -d '"' -f2 )"
+		HMMGAMEARCH="$( echo "$HMMGAME" | cut -d ";" -f 3 | cut -d '"' -f2 )"
+
+		echo "$HMMGAMENAME ($HMMGAMEAID) ($HMMGAMEARCH-bit)"
+	done < "$GLOBALMISCDIR/hmmgames.txt"
+}
+
+# Output installed HMM supported games in the format "Game (AppID) -> /path/to/prefix" 
+function listInstalledHMMGames {
+	writelog "INFO" "${FUNCNAME[0]} - Looking for installed HedgeModManager games"
+	OGGPFX="$GPFX"
+	while read -r HMMGAME; do
+		HMMGN="$( echo "$HMMGAME" | cut -d ";" -f 1 | cut -d '"' -f2 )"
+		HMMGAID="$( echo "$HMMGAME" | cut -d ";" -f 2 | cut -d '"' -f2 )"
+
+		# Check if game has compatdata dir, if it does then assume it is installed
+		# also attempt to preserve existing GPFX, though this will probably only be called from the command line 
+		HMMGAPPMA="$( listAppManifests | grep -m1 "${HMMGAID}.acf" )"
+		HMMGPFX="$( setGPfxFromAppMa "$HMMGAID" "$HMMGAPPMA" )"
+		
+		# Check if it has a "proper" directory structure and is not just a blank compatdata
+		if [ -d "$HMMGPFX/$DRCU/$STUS" ]; then
+			printf "%s (%s) -> %s\n" "$HMMGN" "$HMMGAID" "$HMMGPFX"
+		fi
+	done < "$GLOBALMISCDIR/hmmgames.txt"
+	GPFX="$OGGPFX"
+}
+
+# Handle incoming mod download requests for HMM via "gamebananaidentifier:modurl" (ex: hedgemmgens:https://gamebanana.com/mmdl/455806,Mod,50766)
+# HMM starts as a separate process for this, so it's fine to just call the exe (+selected proton +correct prefix) with the `-gb` parameter
+# WILL NOT WORK WITH GAMEBANANA BROWSER URLs!!!
+function dlHedgeMod {
+	setHMMVars
+
+	if [ ! -d "$HMMPFX" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - HedgeModManager is not installed!"
+		echo "It looks like HedgeModManager is not installed. Can't download URL, please try again!"
+		notiShow "$NOTY_HMMDLMODFAIL" "X"  # Temp, use strings and better message later
+	else
+		writelog "INFO" "${FUNCNAME[0]} - Downloading HedgeModManager mod '$1' using '$HMMEXE' in prefix '$HMMPFX' with Wine '$HMMWINE'"
+
+		# GameBanana Mime handler and Mod ID
+		BANANAHANDLER="$( echo "$1" | cut -d ":" -f 1 )"
+
+		MODGAMENAME="$( grep "$BANANAHANDLER" "$HMMGAMES" | cut -d ";" -f 1 | cut -d '"' -f 2 )"
+		MODID="$( basename "$( echo "$1" | cut -d ":" -f 3 )" | cut -d "," -f 3 )"
+		
+		echo "Downloading HedgeModManager $MODGAMENAME mod '$1'..."
+		notiShow "$( strFix "$NOTY_HMMDLMOD" "$MODGAMENAME" "$MODID" )" "X"
+
+		WINEDEBUG="-all" WINEPREFIX="$HMMPFX" "${HMMWINE}" "${HMMEXE}" -gb "$1" &>/dev/null
+	fi
+}
+
+# Create a .desktop file entry/entries for HedgeModManager
+function createHMMDesktopFile {
+	HMMICONNM="icon256.png"
+	HMMICOPATH="$HMMDLDIR/$HMMICONNM"
+	HMMICOURL="${HMMPROJURL}/raw/rewrite/HedgeModManager/Resources/Graphics/${HMMICONNM}"
+	
+	# Download HMM icon file from HMM repo to the HMM DL folder if it wasn't already downloaded 
+	if [ ! -f "$HMMICOPATH" ]; then 
+		"$WGET" "$HMMICOURL" -O "$HMMICOPATH"
+	fi
+
+	# Generate application launch .desktop file - Re-create each time to set correct path
+	if [ -f "$HMMDFPA" ]; then
+		rm "$HMMDFPA"
+	fi
+	writelog "INFO" "${FUNCNAME[0]} - Creating new HedgeModManager desktop file at '$HMMDFPA'"
+	{
+		echo "[Desktop Entry]"
+		echo "Type=Application"
+		echo "Categories=Game;"
+		echo "Name=${HMMNICE}"
+		echo "Comment=A mod manager for Hedgehog Engine games on PC (Installed by SteamTinkerLaunch)"
+		echo "MimeType=x-scheme-handler/hedgemm"
+		echo "Exec=$(realpath "$0") ${HMM,,} start ${HMMAUTO} \"%u\""  # "hmm start" takes dl channel as argument, next arg is the URL
+		echo "Icon=${HMMICOPATH}"
+		echo "Terminal=false"
+		echo "X-KeepTerminal=false"
+	} > "$HMMDFPA"
+
+	# Get all HMM mime handlers in use on GameBanana from hardcoded list in hmmgames.txt
+	HMMGAMEMIMES="x-scheme-handler/hedgemm"
+	while read -r HMMGAME; do
+		# 4th col in hmmgames.txt is the MimeType name
+		HMMGAMEMIMES+=";x-scheme-handler/$( echo "$HMMGAME" | cut -d ";" -f 4 | cut -d '"' -f2 )"
+	done < "$GLOBALMISCDIR/hmmgames.txt"
+
+	if [ ! -f "$HMMDFDLPA" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Creating HedgeModManager Desktop file for handing supported game MimeTypes"
+	else
+		writelog "INFO" "${FUNCNAME[0]} - Updating HedgeModManager Desktop file for handing supported game MimeTypes"
+		rm "$HMMDFDLPA"
+	fi
+
+	# Create Desktop file for handling mod dowwnloads using HMM handlers
+	{
+		echo "[Desktop Entry]"
+		echo "Type=Application"
+		echo "Categories=Game;"
+		echo "Name=${HMM} ($PROGNAME) - GameBanana Handler"
+		echo "MimeType=$HMMGAMEMIMES"
+		echo "Terminal=false"
+		echo "X-KeepTerminal=false"
+		echo "Path=$HMMDLDIR"
+		echo "Exec=$(realpath "$0") ${HMM,,} u %u"  # "hmm start" takes dl channel as argument, next arg is the URL
+		echo "NoDisplay=true"
+	} >> "$HMMDFDLPA"
+
+	# Associate GameBanana Mimes with DL desktop file
+	if [ -x "$(command -v "$XDGMIME" 2>/dev/null)" ]; then
+		writelog "INFO" "Setting download defaults for HedgeModManager GameBanana protocols via '$XDGMIME' pointing at '$HMMDFDLPA'"
+		for HMMMIME in ${HMMGAMEMIMES//;/ }; do
+			"$XDGMIME" default "$HMMDFDL" "$HMMMIME"
+		done
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - Required Mime handler '$XDGMIME' not found - couldn't set download defaults for HedgeModManager GameBanana protocols - skipping"
+	fi
+}
+
+
+### HMM END
+
 #### MO2 + Vortex ####
-# NOTE: This was written with MO2 and Vortex in mind
+# NOTE: This was written with MO2 and Vortex in mind (seems to also currently work for HMM)
 # It relies on projects having proper releases and tagging
 # It may need tweaking if this is used for other projects in future or might require an entirely new function
 function getLatestGitHubExeVer {
@@ -12217,13 +13037,20 @@ function dlVortexSupportedList {
 	if [ ! -f "$VORTHTMLLIST" ]; then
 		dlCheck "$VORTSUPURL" "$VORTHTMLLIST" "X" "Downloading list of ${VTX^} supported games"
 	fi
-	
+
 	awk '/supported-games/,/Vortex FAQ/' "$VORTHTMLLIST" | grep -oP "(?<=<li><a href=).*" | grep -v "Nexus Mods" | sed "s:^\"/:\":; s:\">:\";\":; s:</a></li>:\":" | sort -o "$VORTTMPLIST"
-	grep -wF -f "$VORTTMPLIST" "$VORTEXGAMES" > "${VORTTMPLIST//-temp/-temp2}"
+	readarray -t VTXOLGAMES <<<"$( grep -wF -f "$VORTTMPLIST" "$VORTEXGAMES" > "${VORTTMPLIST//-temp/-temp2}"
 	{
 		cat "${VORTTMPLIST//-temp/-temp2}"
 		comm -23 "$VORTEXGAMES" "${VORTTMPLIST//-temp/-temp2}"
-	} | sort
+	} | sort -u )"
+
+	for VTXOLG in "${VTXOLGAMES[@]}"; do
+		VTXGN="$( echo "$VTXOLG" | cut -d ";" -f 2 | cut -d '"' -f 2 )"
+		VTXGAID="$( echo "$VTXOLG" | cut -d ";" -f 3 | cut -d '"' -f 2 )"
+		printf "%s (%s)\n" "$VTXGN" "$VTXGAID"
+	done
+
 	rm "${VORTTMPLIST//-temp/-temp2}" "$VORTTMPLIST" 2>/dev/null
 }
 
@@ -12268,12 +13095,12 @@ function VortexGamesDialog {
 
 	VINGAMES="$(while read -r f; do
 		loadCfg "$GEMETA/$f.conf" X
-		if [ "$GAMENAME" != "$NON" ]; then
-			GNAM="$GAMENAME"
-			echo "$f;$GAMENAME" >> "$VGNLIST"
-		else
-			GNAM="$NON"
+		VTXGAMFILENAME="$( grep "$f" "$VORTEXGAMES" | cut -d ";" -f 2 | cut -d '"' -f 2 )"
+		if [ -n "$VTXGAMFILENAME" ]; then
+			GNAM="$VTXGAMFILENAME"
+			GNAM="$( echo "${VTXGAMFILENAME//$'\n'/;}" | cut -d ";" -f 2 )"
 		fi
+		writelog "INFO" "${FUNCNAME[0]} - Game is '$VTXGAMFILENAME'"
 
 		if [ ! -f "$STLGAMEDIRID/${f}.conf" ]; then
 			writelog "SKIP" "${FUNCNAME[0]} - Game config '$STLGAMEDIRID/${f}.conf' not found, so creating a minimal one from '$STLDEFGAMECFG'"
@@ -12366,9 +13193,59 @@ function getVortexSupported {
 	gVSIDs "$VGPDIR"
 	gVSIDs "$VUPDIR"
 	
-	if [ -n "$1" ]; then
-		printf "%s\n" "${VOSTIDS[@]}" | sort -n
+	# if [ -n "$1" ]; then
+	# 	printf "%s\n" "${VOSTIDS[@]}" | sort -n
+	# fi
+}
+
+# If extra formatting is added this file may need updated 
+function getVortexSupportedNames {
+	VOSTINDEXJS="index.js"
+	VOSTINFOJSON="info.json"
+
+	VORTEXPFX="${VORTEXCOMPDATA//\"/}/pfx"
+	VORTEXINSTDIR="$VORTEXPFX/$BTVP"
+	VORTEXEXE="$VORTEXINSTDIR/${VTX^}.exe"
+
+	if [ ! -f "$VORTEXEXE" ]; then
+		writelog "ERROR" "${FUNCNAME[0]} - Cannot get Vortex game list - No Vortex executable at '$VORTEXEXE' - Vortex may not be installed"
+		echo "Cannot get Vortex game list - Are you sure Vortex is installed?"
+		return
 	fi
+
+	VGPDIR="$VORTEXINSTDIR/$RABP"
+	for VOSTGAMDIR in "$VGPDIR/game-"*/; do
+		if [ -f "$VOSTGAMDIR/$VOSTINDEXJS" ] && [ -f "$VOSTGAMDIR/$VOSTINFOJSON" ]; then
+			# Get Vortex game name from the Vortex supported gamedir's `info.json` file  
+			VOSTGAMDIRNAM="$( jq '.name' "$VOSTGAMDIR/$VOSTINFOJSON" | sed 's-^"--g;s-^Game:--g;s-"$--g;s-^Stub:--g;s-^Game--g;s-^\ --g' )"
+
+			# Match Steam AppIDs from `index.js` file - grep order is order if preference to search on 
+			VOSTGAMDIRAID="$( sed "s-'--g;s-\"--g" "$VOSTGAMDIR/$VOSTINDEXJS" | grep -ioE "steamAppId: [0-9]+|STEAMAPP_ID = [0-9]+|STEAM_ID = [0-9]+|APPID = [0-9]+|steamId: [0-9]+" | grep -oE "[0-9]+" | head -n1 )"
+
+			# If we still can't find it, try to find it based on the domain name (*usually* but not always, this is directory name without game- pfx)
+			# from the Vortex games list (this list may be incomplete, so we don't search on it by default)
+			if [ -z "$VOSTGAMDIRAID" ]; then
+				VORTEXGAMES="$GLOBALMISCDIR/$VOGAT"
+				VSGDN="$( basename "$VOSTGAMDIR" | sed 's:game-::g' )"
+				VOSTGAMDIRAID="$( grep -im1 "$VSGDN" "$VORTEXGAMES" | cut -d ";" -f 3 | cut -d '"' -f 2 )"
+				
+				# If we *STILL* can't find it, search Vortex games list based on the game's "full" name in `info.json`
+				if [ -z "$VOSTGAMDIRAID" ]; then
+					VOSTGAMDIRAID="$( grep -im1 "$VOSTGAMDIRNAM" "$VORTEXGAMES" | cut -d ";" -f 3 | cut -d '"' -f 2 )"
+
+					# Special hack for kotor as Vortex groups these two games together annoyingly and doesn't list them separately - an improved way to handle this would be welcome
+					if [[ $VOSTGAMDIRNAM = *"Knights of the Old Republic"* ]]; then 
+						printf "Star Wars: Knights of the Old Republic (32370)\nStar Wars: Knights of the Old Republic II (208580)\n"
+						continue 
+					fi
+				fi 
+			fi
+			
+			printf '%s (%s)\n' "$VOSTGAMDIRNAM" "$VOSTGAMDIRAID"
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - Could not find '$VOSTINDEXJS' or '$VOSTINFOJSON' for Vortex game in '$VOSTGAMDIR' - Skipping"
+		fi
+	done
 }
 
 function checkVortexRegs {
@@ -12780,9 +13657,10 @@ function startVortex {
 				
 				if [ ! -f "$DLSITE/$DNSRC" ]; then
 					writelog "INFO" "${FUNCNAME[0]} - Using hardcoded download URL for DotNet6"
-					DNDL="https://download.visualstudio.microsoft.com/download/pr/7989338b-8ae9-4a5d-8425-020148016812/c26361fde7f706279265a505b4d1d93a/$DNSRC"
-					dlCheck "$DNDL" "$DLSITE/$DNSRC" "X" " Downloading installer '$DNSRC' for DotNet6"
+					DNDL="https://download.visualstudio.microsoft.com/download/pr/9d6b6b34-44b5-4cf4-b924-79a00deb9795/2f17c30bdf42b6a8950a8552438cf8c1/$DNSRC"
 				fi
+				mkdir -p "$DLSITE"
+				dlCheck "$DNDL" "$DLSITE/$DNSRC" "X" " Downloading installer '$DNSRC' for DotNet6"
 			fi
 			if [ -f "$DLSITE/$DNSRC" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Starting installation of DotNet6 using '$DLSITE/$DNSRC'"
@@ -12992,25 +13870,44 @@ function setModWine {
 	DNWINEVAR="$3"
 	INUVP="$USEDNPROTON"
 
+	writelog "INFO" "${FUNCNAME[0]} - Setting mod game wine"
+	writelog "INFO" "${FUNCNAME[0]} - USEDNPROTONVAR is '${USEDNPROTONVAR}'"
+	writelog "INFO" "${FUNCNAME[0]} - USEDNPROTON is '${USEDNPROTON}'"
+	writelog "INFO" "${FUNCNAME[0]} - DNPROTON is '${DNPROTON}'"
+	writelog "INFO" "${FUNCNAME[0]} - DNWINEVAR is '${DNWINEVAR}'"
+
 	if [ -z "$DNPROTON" ] || [ ! -f "$DNPROTON" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - DNPROTON not defined or not a file"
 		if [ -z "${ProtonCSV[0]}" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Getting avaialble Proton versions"
 			getAvailableProtonVersions "up" X
+		else
+			writelog "${FUNCNAME[0]} - DNPROTON is either a file or it is defined"
 		fi
 		DNPROTON="$(getProtPathFromCSV "$USEDNPROTON")"
+		writelog "INFO" "${FUNCNAME[0]} - DNPROTON was gotten from CSV path - It is '${DNPROTON}'"
 		if [ ! -f "$DNPROTON" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Proton version mismatch"
 			DNPROTON="$(fixProtonVersionMismatch "$USEDNPROTONVAR" "$STLDEFGLOBALCFG" X)"
+			writelog "INFO" "${FUNCNAME[0]} - Resolve, USEDNPROTONVAR is now '$USEDNPROTONVAR'"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - DNPROTON is a file -- '$DNPROTON'"
 		fi
 
 		if [ ! -f "$DNPROTON" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - DNPROTON '$DNPROTON' is not a file"
 			createDLProtList
 			DLURL="$(printf "%s\n" "${ProtonDLList[@]}" | grep -m1 "$USEDNPROTON")"
 			if [ -n "$DLURL" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Downloading: '$DLURL'" "E"
 				StatusWindow "$GUI_DLCUSTPROT" "dlCustomProton ${DLURL//|/\"}" "DownloadCustomProtonStatus"
 				DNPROTON="$(getProtPathFromCSV "$USEDNPROTON")"
+				writelog "INFO" "${FUNCNAME[0]} - DNPROTON in DLURL check was gotten as '$DNPROTON'"s
 			else
 				writelog "SKIP" "${FUNCNAME[0]} - No download URL found for requested '$USEDNPROTON' - skipping" "E"
 			fi
+		else
+			writelog "INFO" "${FUNCNAME[0]} - DNPROTON is a file -- it is '$DNPROTON'"
 		fi
 	fi
 
@@ -13018,22 +13915,32 @@ function setModWine {
 		export "$2"="$DNPROTON"
 		CHECKDNWINED="$(dirname "$DNPROTON")/$DBW"
 		CHECKDNWINEF="$(dirname "$DNPROTON")/$FBW"
+		
+		writelog "INFO" "${FUNCNAME[0]} - DNPROTON is defined and is a file -- '$DNPROTON'"
+		writelog "INFO" "${FUNCNAME[0]} - CHECKDNWINED is '$CHECKDNWINED'"
+		writelog "INFO" "${FUNCNAME[0]} - CHECKDWINEF is '$CHECKDNWINEF'"
 		if [ -f "$CHECKDNWINED" ]; then
 			FWINEVAR="$CHECKDNWINED"
+			writelog "INFO" "CHECKDNWINED is a file -- '${CHECKDNWINED}'"
 		elif [ -f "$CHECKDNWINEF" ]; then
 			FWINEVAR="$CHECKDNWINEF"
+			writelog "INFO" "CHECKDNWINEF is a file -- '${CHECKDNWINEF}'"
 		else
 			writelog "ERROR" "${FUNCNAME[0]} - $DNWINEVAR was not found - can't continue"
 		fi
 		
 		if [ -f "$FWINEVAR" ]; then
 			export "$DNWINEVAR"="$FWINEVAR"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - FWINEVAR is not a file -- '$FWINEVAR'"
 		fi
 		
 		if [ "$INUVP" != "$USEDNPROTON" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Updating 'USEDNPROTON' in '${STLDEFGLOBALCFG##*/}' to '$USEDNPROTON'" "E"
 			touch "$FUPDATE"
 			updateConfigEntry "$USEDNPROTONVAR" "$USEDNPROTON" "$STLDEFGLOBALCFG"
+		else
+			writelog "INFO" "${FUNCNAME[0]} INUVP is not equal to USEDNPROTON -- '$INUVP' != '$USEDNPROTON'"
 		fi
 	else
 		writelog "ERROR" "${FUNCNAME[0]} - DNPROTON was not found - can't continue" "E"
@@ -13441,10 +14348,15 @@ function prepAllMO2Games {
 	checkInstalledMO2Games "$1"
 }
 
+# Output supported MO2 games in format "Name (AppID)"
 function listMO2Games {
-	echo "Games supported by $MO:"
-	echo "---------------------------------"
-	cat "$GLOBALMISCDIR/mo2games.txt"
+	MO2GAMES="$GLOBALMISCDIR/mo2games.txt"
+	while read -r MO2GAM; do
+		MO2GAMNAM="$( echo "$MO2GAM" | cut -d ";" -f 1 | cut -d '"' -f 2 )"
+		MO2GAMAID="$( echo "$MO2GAM" | cut -d ";" -f 2 | cut -d '"' -f 2 )"
+
+		printf "%s (%s)\n" "$MO2GAMNAM" "$MO2GAMAID"
+	done <$MO2GAMES
 }
 
 function manageMO2GInstance {
@@ -14139,18 +15051,32 @@ function checkExtDeps {
 	checkDep "USEROBERTA" "$ROBERTACMD"
 	checkDep "USEBOXTRON" "$BOXTRONCMD"
 	checkDep "RUNSBSVR" "$VRVIDEOPLAYER"
-	checkDep "RUN_GAMCON" "$GAMCON"
 	checkDep "USENETMON" "$NETMON"
 	checkDep "USENOTIFIER" "$NOTY"
 	checkDep "CHECKHMD" "$LSUSB"
 	checkDep "BACKUPSTEAMUSER" "$RSYNC"
 	checkDep "USESPECIALK" "$SEVZA"
-	checkDep "RUN_CHEATENGINE" "$SEVZA"
 	checkDep "USEMANGOAPP" "$MANGOAPP"
 	checkDep "USEOBSCAP" "$OBSCAP"
 }
 
 function setYadBin {
+	local YADINSTLDLDIR
+	local YADINSTLDEPS
+
+	function findYad {
+		SEARCHDIR="$1"
+
+		for f in "$SEARCHDIR"/*
+		do
+			MATCHFILE="$( basename "$f" | grep -ioE "(.*yad).*\.appimage$" )"
+			if [ -f "$SEARCHDIR/$MATCHFILE" ]; then
+				echo "$MATCHFILE"
+				return
+			fi
+		done
+	}
+
 	if [ -f "$1" ]; then
 		YADFILE="$1"
 	elif [ "$1" == "conty" ]; then
@@ -14203,7 +15129,43 @@ function setYadBin {
 				YAIURL="$GHURL/frostworx/steamtinkerlaunch-tweaks/releases/download"
 				YAIDL="$YAIURL/$YADSTLIMAGE/$YADSTLIMAGE"
 				YADAPPIMAGE="$YADSTLIMAGE"
-				writelog "INFO" "${FUNCNAME[0]} - Downloading default AppImage for SteamDeck to '$YADAIDLDIR'"
+
+				# If offline and Yad isn't installed, try to find Yad somewhere sensible
+				if [ "$INTERNETCONNECTION" -eq 0 ] && ! [ -f "$YAIDST" ]; then
+					writelog "WARN" "${FUNCNAME[0]} - No internet connection, searching for locally saved Yad AppImage"
+					echo "No internet connection, searching for locally saved Yad AppImage..."
+					YADINSTLDLDIR="$( findYad "$STLDLDIR/yadappimage" )"
+					YADINSTLDEPS="$( findYad "$STLDEPS" )"
+
+					if [ -f "$STLDLDIR/yadappimage/$YADAPPIMAGE" ]; then
+						# Yad in $HOME/.config/steamtinkerlaunch/downloads with full matching name
+						writelog "INFO" "${FUNCNAME[0]} - Found local Yad AppImage in '$STLDLDIR/yadappimage/$YADAPPIMAGE'"
+						echo "Found local Yad AppImage in '$STLDLDIR/yadappimage/$YADAPPIMAGE'!"
+						mv "$STLDLDIR/yadappimage/$YADAPPIMAGE" "$YAIDST" || steamDeckInstallFail
+					elif [ -f "$STLDEPS/$YADAPPIMAGE" ]; then
+						# Yad in $HOME/stl/deps with full matching name
+						writelog "INFO" "${FUNCNAME[0]} - Found local Yad AppImage in '$STLDEPS/$YADAPPIMAGE'"
+						echo "Found local Yad AppImage in '$STLDEPS/$YADAPPIMAGE'!"
+						mv "$STLDEPS/$YADAPPIMAGE" "$YAIDST" || steamDeckInstallFail
+					elif [ -n "$YADINSTLDLDIR" ]; then
+						# Partial match for Yad in STLDLDIR but only with filename starting with `yad` and ending with `.appimage` (case insensitive)
+						writelog "INFO" "${FUNCNAME[0]} - Found local Yad AppImage in '$STLDLDIR/yadappimage/$YADINSTLDLDIR'"
+						echo "Found local Yad AppImage in '$STLDLDIR/yadappimage/$YADINSTLDLDIR'!"
+						mv "$STLDLDIR/yadappimage/$YADINSTLDLDIR" "$YAIDST" || steamDeckInstallFail
+					elif [ -n "$YADINSTLDEPS" ]; then
+						# Partial match for Yad in STLDEPS but only with filename starting with `yad` and ending with `.appimage` (case insensitive)
+						writelog "INFO" "${FUNCNAME[0]} - Found local Yad AppImage in '$STLDEPS/$YADINSTLDEPS'"
+						echo "Found local Yad AppImage in '$STLDEPS/$YADINSTLDEPS'!"
+						mv "$STLDEPS/$YADINSTLDEPS" "$YAIDST" || steamDeckInstallFail
+					else
+						# No match for Yad anywhere, offline installation cannot continue
+						writelog "ERROR" "${FUNCNAME[0]} - Cannot find locally saved Yad AppImage, aborting install..."
+						echo "Cannot find locally saved Yad AppImage, aborting install..."
+						return 1;
+					fi
+				else
+					writelog "INFO" "${FUNCNAME[0]} - Downloading default AppImage for SteamDeck to '$YADAIDLDIR'"
+				fi
 			else
 				writelog "WARN" "${FUNCNAME[0]} - Provided string '$2' is neither a http download url nor a valid absolute path to a file - downloading and using the default instead"
 			fi
@@ -14217,8 +15179,14 @@ function setYadBin {
 				INCHK="$("$WGET" -q "${YAIDL}.${DLCHK}" -O - 2> >(grep -v "SSL_INIT") | cut -d ' ' -f1)"
 			else
 				INCHK="$NON"
-			fi
+			fi	
 
+			# Only show download notification if we didn't find local AppImage on Steam Deck
+			if [ "$ONSTEAMDECK" -eq 1 ]; then
+				notiShow "$( strFix "$NOTY_STEAMDECK_DEPSDOWNLOAD" "Yad" )" "X"
+				strFix "$NOTY_STEAMDECK_DEPSDOWNLOAD" "Yad"
+			fi
+			
 			dlCheck "$YAIDL" "$YAIDST" "$DLCHK" "Downloading '$YAIDL' to '$YAIDST'" "$INCHK"
 		fi
 		if [ -f "$YAIDST" ]; then
@@ -14234,16 +15202,19 @@ function setYadBin {
 		if [ "$ONSTEAMDECK" -eq 1 ]; then
 			# skipping version check on SteamDeck, because the program might have been started via ssh, and yad requires a display
 			writelog "INFO" "${FUNCNAME[0]} - Using '$YADFILE' on SteamDeck"
-			if [ ! -f "$YADAIDLDIR/$YAD" ]; then
+			if [ ! -f "$YADAIDLDIR/yad" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Creating symlink from '$YADFILE' to '$YADAIDLDIR/$YAD'"
 				ln -s "$YADFILE" "$YADAIDLDIR/yad"
 			fi
+			touch "$FUPDATE"
+			updateConfigEntry "YAD" "$YADAIDLDIR/yad" "$STLDEFGLOBALCFG"  # Update Yad entry on config file on Steam Deck to point to symlink in deps dir
 		else
 			YADVER="$("$YADFILE" --version | tail -n1 | cut -d ' ' -f1)"
 			if [ "$(printf '%s\n' "$MINYAD" "$YADVER" | sort -V | head -n1)" != "$MINYAD" ] || grep -qi "[A-Z]" <<< "$YADVER" ; then
 				writelog "ERROR" "${FUNCNAME[0]} - Version for '$YADFILE' is invalid. You need to at least version '$MINYAD'"
 			else
 				writelog "INFO" "${FUNCNAME[0]} - configuring yad binary to '$YADFILE'"
+				touch "$FUPDATE"
 				updateConfigEntry "YAD" "$YADFILE" "$STLDEFGLOBALCFG"
 			fi
 		fi
@@ -14775,6 +15746,7 @@ function prepareLaunch {
 
 	autoBumpGE
 	autoBumpProton
+	autoBumpReShade
 
 	if [ "$ISGAME" -eq 2 ] && [ "$HAVEINPROTON" -eq 0 ]; then
 		FIRSTGAMEUSEPROTON="$USEPROTON"
@@ -15007,16 +15979,6 @@ function prepareLaunch {
 	writelog "INFO" "${FUNCNAME[0]} - CheckNetMonLaunch:"
 	checkNetMonLaunch
 
-	# start gameconqueror when game starts if RUN_GAMCON is -ge 1
-	writelog "INFO" "${FUNCNAME[0]} - checkGamConLaunch:"
-	checkGamConLaunch
-
-	if [ "$ISGAME" -eq 2 ]; then
-		# start CheatEngine when game starts if RUN_CHEATENGINE is -eq 1
-		writelog "INFO" "${FUNCNAME[0]} - checkCheatEngineLaunch:"
-		checkCheatEngineLaunch
-	fi
-
 	# start wine-discord-ipc-bridge when game starts if USE_WDIB is -eq 1
 	writelog "INFO" "${FUNCNAME[0]} - checkWDIB:"
 	checkWDIB
@@ -15098,8 +16060,8 @@ function prepareProtonDBRating {
 			PDBTOTAL="${PDBARR[2]}"
 			PDBTREND="${PDBARR[3]}"
 			PDBBESTT="${PDBARR[4]}"
-			printf 'ProtonDB Rating Trend: %s' "${PDBTREND}" > "$PDBRASINF"
-			printf '%s\nConfidence: %s\nScore: %s\nTotal Votes: %s\nRating Trend: %s\nBest Rating: %s\n' "$GUI_USEPDBRATING" "${PDBCONFI}" "${PDBSCORE}" "${PDBTOTAL}" "${PDBTREND}" "${PDBBESTT}" > "$PDBRAINFO"
+			printf '<b>ProtonDB Rating Trend:</b> %s' "${PDBTREND^}" > "$PDBRASINF"
+			printf '<u>%s</u>\n<b>Confidence:</b> %s\n<b>Score:</b> %s\n<b>Total Votes:</b> %s\n<b>Rating Trend:</b> %s\n<b>Best Rating:</b> %s\n' "$GUI_USEPDBRATING" "${PDBCONFI}" "${PDBSCORE}" "${PDBTOTAL}" "${PDBTREND}" "${PDBBESTT}" > "$PDBRAINFO"
 		fi
 	fi
 }
@@ -15140,8 +16102,26 @@ function fixProtonVersionMismatch {
 		MIMAPROT="${!1}"
 
 		if [[ "$MIMAPROT" =~ "experimental" ]]; then
-			writelog "INFO" "${FUNCNAME[0]} - Skipping function for 'experimental' Proton version"
+			# Look for replacement Proton Experimental - There should only ever be one Proton Experimental version installed at a time
+			writelog "INFO" "${FUNCNAME[0]} - Mismatch for 'experimental' Proton version - Looking for updated Proton Experimental"
+
+			# Even though there should only be one Experimental version, only take the first one just in case (should not cause issues, hopefully)
+			REPLACEMENTEXPERIMENTAL="$( grep 'experimental' "$PROTONCSV" | head -1 | cut -d ';' -f1 )" 
+			if [ -n "$REPLACEMENTEXPERIMENTAL" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Found potential replacement for Proton Experimental with '$REPLACEMENTEXPERIMENTAL'"
+				switchProton "$REPLACEMENTEXPERIMENTAL"
+			else
+				# If no Proton replacement, fall back to first Proton version in ProtonCSV
+				# Not ideal but a user might've uninstalled Proton Experimental, and we can't assume what versions of Proton they will have except that they'll have *some* version
+				FALLBACKPROTON="$( head -1 "$PROTONCSV" )"
+				writelog "INFO" "${FUNCNAME[0]} - No potential replacement for Proton Experimental found, falling back to first Proton version in ProtonCSV ('$FALLBACKPROTON')"
+				switchProton "$FALLBACKPROTON"
+			fi
+
+			touch "$FUPDATE"
+			updateConfigEntry "USEPROTON" "$USEPROTON" "$2"
 		elif [[ "$MIMAPROT" =~ "proton-unknown" ]]; then
+			# Should we fall back to first item in ProtonCSV here?
 			writelog "INFO" "${FUNCNAME[0]} - Skipping function for 'proton-unknown' Proton version"
 		else
 			writelog "INFO" "${FUNCNAME[0]} - Incoming category is '$ORGPROTCAT' with value '$MIMAPROT'"
@@ -15376,10 +16356,28 @@ function checkConty {
 }
 
 function logPlayTime {
+	# Takes seconds and converts it into HH:MM:SS
+	function getLengthPlayed {
+		((h=${1}/3600))
+		((m=(${1}%3600)/60))
+		((s=${1}%60))
+
+		if [ $h -gt 0 ]; then
+			printf "%02d hrs, %02d mins, %02d secs" $h $m $s
+		elif [ $m -gt 0 ]; then
+			printf "%02d mins, %02d secs" $m $s
+		else
+			printf "%02d secs" $s
+		fi
+	}
+
 	if [ "$LOGPLAYTIME" -eq 1 ] && [ -n "$GN" ] ; then
 		mkProjDir "$PLAYTIMELOGDIR"
 		# different date formats?
-		echo "$(date +%d.%m.%Y): $1 sec" >> "$PLAYTIMELOGDIR/${GN}.log"
+		TIMEPLAYEDSTR="$(date +%d.%m.%Y) for $(getLengthPlayed "$1")"
+		
+		echo "$TIMEPLAYEDSTR" >> "$PLAYTIMELOGDIR/${GN}.log"
+		# echo "$(date +%d.%m.%Y): $1 sec" >> "$PLAYTIMELOGDIR/${GN}.log"
 	fi
 }
 
@@ -16659,7 +17657,7 @@ function dlWineGUI {
 	"$GEOM")"
 
 	if [ -n "${DLDISPWINE//|/\"}" ]; then
-		if grep -q "^http" <<< "${DLDISPWINE//|/\"}"; then
+		if grep -q "^http" <<< "${DLDISPWINE//|/\"}"; then  #"
 			DLURL="${DLDISPWINE//|/\"}"
 			writelog "INFO" "${FUNCNAME[0]} - The URL '$DLURL' was entered manually - downloading directly"
 		else
@@ -17169,7 +18167,7 @@ function setProtonCmd {
 		fi
 	fi
 
-############
+############ 
 	# set the definitive used versions, which are also stored into writeLastRun
 	PROTONVERSION="$(setProtonPathVersion "$RUNPROTON")"
 
@@ -17226,8 +18224,13 @@ function launchSteamGame {
 	if [ "$USEGAMESCOPE" -eq 1 ]; then
 		if [ "$USEMANGOAPP" -eq 1 ]; then
 			if [ "$ONSTEAMDECK" -eq 1 ]; then
-				writelog "SKIP" "${FUNCNAME[0]} - Disabling USEMANGOAPP variable, because Steam Deck uses $MANGOAPP already by default"
-				USEMANGOAPP=0
+				if [ "$FIXGAMESCOPE" -eq 1 ]; then
+					writelog "SKIP" "${FUNCNAME[0]} - Disabling USEMANGOAPP variable in Steam Deck Game Mode, because Steam Deck uses $MANGOAPP already by default"
+					USEMANGOAPP=0
+				else
+					writelog "INFO" "${FUNCNAME[0]} - Allowing USEMANGOAPP variable in Steam Deck Desktop Mode"
+					USEMANGOAPP=1
+				fi
 			else
 				writelog "SKIP" "${FUNCNAME[0]} - Not adding $GAMESCOPE to the game launch command, because $MANGOAPP is enabled, which triggers it automatically"
 				USEGAMESCOPE=0
@@ -17756,7 +18759,23 @@ function howto {
 	echo "    getid|gi <gametitle>             Print the SteamAppId for <gametitle>"
 	echo "    gettitle|gt <gameid>             Print the Game Title for <gameid>"
 	echo "    getcompatdata|gc <gameid/title>  Print the Game compatdata path"
-	echo "    getgamedir|gg <gameid/title>     Print the Game dir"
+	echo "    getgamedir|gg <gameid/title>     Print the Game install directory"
+	echo "    hedgemodmanager|hmm              HedgeModManager"
+	echo "            install|i                  install latest stable HedgeModManager"
+	echo "            download|d <channel>       download latest HedgeModManager release (stable or nightly)"
+	echo "                                        defaults to stable"
+	echo "            start|s <channel>          start HedgeModManager"
+	echo "                                        automatically downloads and installs latest stable if <channel>"
+	echo "                                        is not provided"
+	echo "            url|u <url>              Download a GameBanana mod using MineType URL"
+	echo "                                      Note that this will *not* work with regular browser URLs"
+	echo "            desktopfile|df           (Re-)create .desktop files for HedgeModManager"
+	echo "            list-supported           List games supported by HedgeModManager"
+	echo "            list-installed           List installed games with HedgeModManager support"
+	echo "            uninstall                Remove HedgeModManager downloads folder, desktop files and Wineprefix"
+	echo "                                      Note that this will not remove your mods or installed Winetricks"
+	echo "    steamdeckcompat <gameid>         Get information about Steam Deck compatibility for <gameid>"
+	echo "                                       Will work offline if the information has been fetched before"
 	echo " "
 	echo "    lang=<option>                    Mostly to get translated configs"
 	echo "                                       on inital setup. <option> can be"
@@ -18044,8 +19063,16 @@ function commandline {
 			elif [ "$2" == "list-supported" ] || [ "$2" == "ls" ]; then
 				listMO2Games
 			elif [ "$2" == "list-installed" ] || [ "$2" == "li" ]; then
+				# Output installed MO2 games in format "Name (AppID) -> /path/to/prefix"
 				setMO2Vars
-				prepAllMO2Games "li"
+				mapfile -t -O "${#CMDINSTMO2GAMS}" CMDINSTMO2GAMS <<< "$( prepAllMO2Games "li" )"
+				for IMO2G in "${CMDINSTMO2GAMS[@]}"; do
+					IMO2GAID="$( echo "$IMO2G" | cut -d ";" -f 1 )"
+					IMO2GN="$( echo "$IMO2G" | cut -d ";" -f 2 )"
+					IMO2GPA="$( echo "$IMO2G" | cut -d ";" -f 3 )"
+
+					printf "%s (%s) -> %s\n" "$IMO2GN" "$IMO2GAID" "$IMO2GPA"
+				done 
 			elif [ "$2" == "create-instance" ] || [ "$2" == "ci" ]; then
 				if [ -z "$3" ] || [ "$3" == "all" ]; then
 					createAllMO2Instances
@@ -18062,6 +19089,37 @@ function commandline {
 			echo "need arg2"
 			howto
 		fi
+	elif [ "$1" == "hedgemodmanager" ] || [ "$1" == "hmm" ]; then
+		if [ -n "$2" ]; then
+			if [ -n "$3" ]; then
+				CMDHMMDLVER="$3"
+			fi
+
+			if [ "$2" == "download" ] || [ "$2" == "d" ]; then
+				dlLatestHMM "$CMDHMMDLVER"
+			elif [ "$2" == "install" ] || [ "$2" == "i" ]; then
+				dlLatestHMM "$CMDHMMDLVER"
+				installHMM
+			elif [ "$2" == "start" ] || [ "$2" == "s" ]; then
+				startHMM "$CMDHMMDLVER"
+			elif [ "$2" == "list-supported" ] || [ "$2" == "ls" ]; then
+				listSupportedHMMGames
+			elif [ "$2" == "list-installed" ] || [ "$2" == "li" ]; then
+				listInstalledHMMGames
+			elif [ "$2" == "desktopfile" ] || [ "$2" == "df" ]; then
+				createHMMDesktopFile
+			elif [ "$2" == "uninstall" ]; then
+				uninstallHMM
+			elif [ "$2" == "url" ] || [ "$2" == "u" ]; then
+				dlHedgeMod "$3"
+			else
+				echo "Need to input a valid arg2 '$2' to run a HedgeModManager command"
+				howto
+			fi
+		else
+			writelog "INFO" "arg2 '$2' is no valid command"
+			howto
+		fi
 	elif [ "$1" == "noty" ]; then
 		if [ -n "$2" ]; then
 			NTEXT="$2"
@@ -18074,6 +19132,22 @@ function commandline {
 		OneTimeRunGui "$USEID"
 	elif [ "$1" == "pdb" ]; then
 		getProtonDBRating "$2"
+	elif [ "$1" == "steamdeckcompat" ] || [ "$1" == "sdc" ]; then
+		mapfile -d ";" -t -O "${#DECKCOMPATARR[@]}" DECKCOMPATARR <<< "$( getSteamDeckCompatInfo "$( echo "$2" | xargs )" )"
+		unset "DECKCOMPATARR[-1]"
+
+		if [ "${#DECKCOMPATARR[@]}" -eq "0" ]; then
+			echo "Could not get Steam Deck compatibility information got AppID '$2' - Is this definitely correct?"
+			echo "You can check get the AppID for a game by running 'steamtinkerlaunch getid <name>'"
+		else
+			echo "Valve's testing indicates that this game is ${DECKCOMPATARR[0]} on Steam Deck"
+			if ! [ "${#DECKCOMPATARR[@]}" -eq "1" ]; then  # Only take a newline if there is compatibility information to show
+				echo ""
+				for COMPATSTR in "${DECKCOMPATARR[@]:1}"; do
+					echo "$COMPATSTR"
+				done
+			fi
+		fi
 	elif [ "$1" == "pickwin" ] || [ "$1" == "pw" ]; then
 		pickGameWindowNameMeta "$2" "$3"
 	elif [ "$1" == "play" ]; then
@@ -18262,7 +19336,8 @@ function commandline {
 				addVortexStage "$3"
 			elif [ "$2" == "list-supported" ] || [ "$2" == "ls" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Games With ${VTX^} Support found in the ${VTX^} installation:" "E"
-				getVortexSupported X
+				# getVortexSupported X
+				getVortexSupportedNames
 			elif [ "$2" == "list-online" ] || [ "$2" == "lo" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Games With ${VTX^} Support listed online:" "E"
 				dlVortexSupportedList
@@ -18270,12 +19345,27 @@ function commandline {
 				writelog "INFO" "${FUNCNAME[0]} - Games owned with ${VTX^} Support:" "E"
 				VORTEXGAMES="$GLOBALMISCDIR/$VOGAT"
 				while read -r line; do
-					grep "\"$line\"" "$VORTEXGAMES"
+					# TODO speed this up somehow?
+					OWNEDVTXGAMELINE="$( grep "\"$line\"" "$VORTEXGAMES" )"
+					OWNEDVTXGAMENAME="$( echo "$OWNEDVTXGAMELINE" | cut -d ";" -f2 | cut -d '"' -f 2 )"
+					OWNEDVTXGAMEAID="$( echo "$OWNEDVTXGAMELINE" | cut -d ";" -f3 | cut -d '"' -f 2 )"
+
+					if [ -n "$OWNEDVTXGAMENAME" ] && [ -n "$OWNEDVTXGAMEAID" ]; then
+						printf "%s (%s)\n" "$OWNEDVTXGAMENAME" "$OWNEDVTXGAMEAID"
+					fi
 				done <<< "$(getOwnedAids)"
 			elif [ "$2" == "list-installed" ] || [ "$2" == "li" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Installed Games With ${VTX^} Support"
 				setVortexVars
-				while read -r line ;do echo -ne "$line;"; getTitleFromID "$line"; done <<< "$(getInstalledGamesWithVortexSupport X)"
+				VORTEXGAMES="$GLOBALMISCDIR/$VOGAT"
+				while read -r INSTALLEDVTXAID; do
+					INSTALLEDVTXNAME="$( grep "$INSTALLEDVTXAID" "$VORTEXGAMES" | cut -d ";" -f 2 | cut -d '"' -f 2 )"
+
+					# Bit hacky but fixes an instance where two games (on newlines) are returned but only one AppID is returned
+					# Get rid of the newlines and replace with a semicolon, then cut and get the second game name which should be the matching AppID
+					INSTALLEDVTXNAME="$( echo "${INSTALLEDVTXNAME//$'\n'/;}" | cut -d ";" -f 2 )"
+					printf "%s (%s)\n" "$INSTALLEDVTXNAME" "$INSTALLEDVTXAID"
+				done <<< "$(getInstalledGamesWithVortexSupport X)"
 			elif [ "$2" == "games" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Opening Gui for en/disabling ${VTX^} for installed and supported games"
 				VortexGamesDialog
@@ -18332,6 +19422,10 @@ function commandline {
 	elif [ "$1" == "winetricks" ] || [ "$1" == "wt" ]; then
 		FUSEID "$2"
 		chooseWinetricksPrefix "$USEID"
+	elif [ "$1" == "runwinecfg" ]; then
+		oneTimeWinecfg
+	elif [ "$1" == "runwinetricks" ]; then
+		oneTimeWinetricks
 	elif [ "$1" == "winedebugchannel" ] || [ "$1" == "wdc" ]; then
 		FUSEID "$2"
 		SetWineDebugChannels "$USEID"
@@ -18346,8 +19440,12 @@ function commandline {
 	elif [ "$1" == "openissue" ] || [ "$1" == "oi" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Opening issue tracker in user's default browser"
 		xdg-open "$PROJECTPAGE/issues/new/choose"
+	elif echo "$@" | grep -owq '\-q'; then
+		writelog "INFO" "${FUNCNAME[0]} - Quiet mode enabled with '-q', suppressing notifier for this execution"
+		export STLQUIET=1
+		USENOTIFIER=0
 	else
-		if ! grep -q "lang=\|run" <<< "$@" ; then
+		if ! grep -q "lang=\|run" <<< "$@"; then
 			writelog "INFO" "${FUNCNAME[0]} ------------------------"
 			writelog "INFO" "${FUNCNAME[0]} - arg1 '$1' is no valid command"
 			howto
@@ -18475,7 +19573,7 @@ function restoreSteamUser {
 
 		"$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --center --on-top "$WINDECO" \
 		--title="$TITLE" \
-		--text="$(spanFont "$(strFix "$GUI_AR" "$BACKUPSRC" "$SteamUserDir")" "H")\n<span font=\"italic\">$1</span>" $GEOM
+		--text="$(spanFont "$(strFix "$GUI_AR" "$BACKUPSRC" "$SteamUserDir")" "H")\n<i>$1</i>" $GEOM
 		case $? in
 			0) 	{
 					writelog "INFO" "${FUNCNAME[0]} - Restoring '$SteamUserDir' from '$BACKUPSRC' confirmed"
@@ -18961,7 +20059,7 @@ function addNonSteamGameGui {
 
 	NSGSET="$("$YAD" --f1-action="$F1ACTION" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
 	--title="$TITLE" --separator="|" \
-	--text="$(spanFont "$GUI_ADDNSG" "H")\n<span font=\"italic\">$(strFix "$GUI_WARNNSG1" "$STERECO")\n\n$(strFix "$GUI_WARNNSG2" "$STERECO"))</span>" \
+	--text="$(spanFont "$GUI_ADDNSG" "H")\n<i>$(strFix "$GUI_WARNNSG1" "$STERECO")\n\n$(strFix "$GUI_WARNNSG2" "$STERECO"))</i>" \
 	--field=" ":LBL " " \
 	--field="     $GUI_NOSTGAPPNAME!$DESC_NOSTGAPPNAME ('NOSTGAPPNAME')" "${NOSTGAPPNAME/#-/ -}" \
 	--field="     $GUI_NOSTGEXEPATH!$DESC_NOSTGEXEPATH ('NOSTGEXEPATH')":FL "${NOSTGEXEPATH/#-/ -}" \
@@ -19104,6 +20202,10 @@ function addNonSteamGame {
 		# NOSTCRC="$(getCRC "${NOSTEXEPATH}${NOSTAPPNAME}")"
 		# NOSTSCNHEX="${NOSTCRC}02000000"
 		# echo "NOSTSCNHEX = ${NOSTSCNHEX}"
+		# 
+		# Somehow other tools like Steam-Rom-Manager are able to generate correct AppIDs for Non-Steam Games
+		# Not sure how they do it even after trying to reproduce what they do in TypeScript locally
+		# Contributions would be very welcome on properly generating AppIDs for Non-Steam Games!
 
 		NOSTAIDRHX="$(printf "%03x%03x%02x\n" $((RANDOM%4096)) $((RANDOM%4096)) $((RANDOM%256)))"
 		NOSTAID="$(hex2dec "$NOSTAIDRHX")"
@@ -19209,8 +20311,6 @@ function setCloseVars {
 		echo LOGLEVEL
 		echo MO2MODE
 		echo ONLY_CUSTOMCMD
-		echo RUN_CHEATENGINE
-		echo RUN_GAMCON
 		echo RUN_NYRNA
 		echo RUN_REPLAY
 		echo RUNSBSVR
@@ -19308,19 +20408,6 @@ function closeSTL {
 				writelog "INFO" "${FUNCNAME[0]} - $REPLAY killed"
 			fi
 		fi
-	fi
-
-	# kill $GAMCON if running
-	if [ "$RUN_GAMCON" -eq 1 ]; then
-		writelog "INFO" "${FUNCNAME[0]} - Game process finished - closing '$GAMCON'"
-		"$PKILL" -f "$GAMCON"
-		writelog "INFO" "${FUNCNAME[0]} - Killed '$GAMCON' script"
-	fi
-
-	# kill $CE if running
-	if [ "$RUN_CHEATENGINE" -eq 1 ] && [ -n "$CEPID" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - Game process finished - closing '$CE' by killing CEPID '$CEPID'"
-		kill "$CEPID" 2>/dev/null
 	fi
 	
 	# stop network monitor if running
@@ -20249,6 +21336,8 @@ function initShmStl {
 	fi
 }
 
+### STEAM DECK BEGIN
+
 function steamdeckClose {
 	if [ "$ONSTEAMDECK" -eq 1 ]; then
 		GTKCSSFILE="$HOME/.config/gtk-3.0/gtk.css"
@@ -20267,14 +21356,24 @@ function steamdeckClose {
 
 function steamdeckBeforeGame {
 	if [ "$ONSTEAMDECK" -eq 1 ]; then
+		if [ "$FIXGAMESCOPE" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Final Deck Check: Looks like we're in Game Mode (FIXGAMESCOPE is '$FIXGAMESCOPE')"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Final Deck Check: Looks like we're in Desktop Mode (FIXGAMESCOPE is '$FIXGAMESCOPE')"
+		fi
+
 		if [ "$USEGAMESCOPE" -eq 1 ] && [ "$FIXGAMESCOPE" -eq 1 ]; then
-			writelog "SKIP" "${FUNCNAME[0]} - Disabling own gamescope on SteamDeck Game Mode" "X"
+			writelog "SKIP" "${FUNCNAME[0]} - Disabling own GameScope on SteamDeck Game Mode" "X"
 			USEGAMESCOPE=0
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Allowing GameScope enabled on SteamDeck in Desktop Mode" "X"
 		fi
 
 		if [ "$USEGAMEMODERUN" -eq 1 ] && [ "$FIXGAMESCOPE" -eq 1 ]; then
-			writelog "SKIP" "${FUNCNAME[0]} - Disabling own gamemode on SteamDeck Game Mode" "X"
+			writelog "SKIP" "${FUNCNAME[0]} - Disabling own Feral GameMode tool (gamemoderun) on SteamDeck Game Mode" "X"
 			USEGAMEMODERUN=0
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Allowing Feral GameMode tool (gamemoderun) enabled on SteamDeck in Desktop Mode" "X"
 		fi
 		
 		if [ -n "$STLCTLID" ] && [ "$STLCTLID" != "$PLACEHOLDERAID" ]; then
@@ -20341,32 +21440,307 @@ function steamdeckControl {
 	fi
 }
 
+# NOTE: More may be added here in future to handle install failure
+function steamDeckInstallFail {
+	printf "\n%s\n" "$NOTY_STEAMDECK_INSTALLFAIL"
+	notiShow "$NOTY_STEAMDECK_INSTALLFAIL" "X"
+
+	exit 1;
+}
+
+# Generic function to download dependency from URL (mainly intended for fetching from package repos)
+function fetchAndExtractDependency {
+	# Remove all files extensions from filename
+	function removeFileExtension {
+		local FNAME="$1"
+		local LASTFNAME=""
+		while ! [ "$FNAME" = "$LASTFNAME" ]; do
+			LASTFNAME="$FNAME"
+			FNAME="${FNAME%.*}"
+		done
+		echo "$FNAME"
+	}
+
+	# Return dependency name stripped of version, architecture, file extension
+	function getPrettyDependencyName {
+		removeFileExtension "$( echo "$1" | sed -E 's:(\-[0-9]\.[0-9])+(.+)::g;s:^[^A-Za-z0-9]+::g' )"
+	}
+
+	# Takes dependency filename and strips:
+	# - any non-letters-or-numbers from start of string
+	# - the architecture string and everything after it
+	# - any remaining letters or numbers
+	# - any remaining non-numbers from the end of the string
+	function getDependencyVersion {
+		echo "$1" | sed -E 's:^[^A-Za-z0-9]::g;s:x86+(.*)::g;s:[a-zA-Z]::g;s:[^0-9]+$::g' | grep -oE "[0-9]\.[0-9]+(.+)"
+	}
+
+	# Variables used to build URL
+	local ARCHIVEURL
+	local EXTRACTPATH
+	local ARCHIVENAME
+
+	ARCHIVEURL="$1"
+	EXTRACTPATH="$2"
+	ARCHIVENAME="${3:-${1##*/}}"  # If no extract name passed, take filename from end of archive URL
+
+	local CURLCMD
+	local EXTRACTCMD
+	local EXTRACTCMDFLAGS
+
+	CURLCMD="curl"
+	EXTRACTCMD="tar"
+	EXTRACTCMDFLAGS="xf"
+
+	local LOCALVERS
+	local STLVERS
+
+	# Download dependency
+	mkdir -p "$EXTRACTPATH"
+	if ! [ -f "$EXTRACTPATH/$ARCHIVENAME" ]; then
+		# Internet connection check
+		if ! [ "$INTERNETCONNECTION" -eq 0 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Installing '$ARCHIVENAME' from '$ARCHIVEURL' to installation directory '$EXTRACTPATH'"
+			echo "Downloading dependency '$ARCHIVENAME'..."
+			if "$CURLCMD" -Lq "$ARCHIVEURL" -o "$EXTRACTPATH/$ARCHIVENAME"; then
+				# Not showing notifier to prevent even more notifier spam - especially on Steam Deck's built-in 7" display 
+				writelog "INFO" "${FUNCNAME[0]} - Successfully downloaded dependency '$ARCHIVENAME'"
+				echo "Successfully downloaded $ARCHIVENAME!"
+			else
+				# Download failure
+				writelog "WARN" "${FUNCNAME[0]} - Failed to download dependency '$ARCHIVENAME', will attempt to continue with installation in case dependency archives already exist at '$EXTRACTPATH'"
+				notiShow "$(strFix "$NOTY_STEAMDECK_DEPINSTALLFAIL" "$ARCHIVENAME")" "X"
+				strFix "$NOTY_STEAMDECK_DEPINSTALLFAIL" "$ARCHIVENAME"
+			fi
+		else
+			# No internet connection
+			writelog "WARN" "${FUNCNAME[0]} - No internet connection, can't download dependency '$ARCHIVENAME' - Will check for locally installed dependencies later on (should be located at '$EXTRACTPATH/$ARCHIVENAME')"
+			echo "WARNING: No Internet Connection, cannot download dependency '$ARCHIVENAME'. For offline installation, manually place the file in '$EXTRACTPATH'."
+			notiShow "$(strFix "$NOTY_STEAMDECK_NOINTERNETDEPSWARN" "$ARCHIVENAME" "$EXTRACTPATH")"
+		fi
+	else
+		writelog "INFO" "${FUNCNAME[0]} - Dependency '$ARCHIVENAME' already exists at installation directory '$EXTRACTPATH', skipping redownload..."
+		echo "Dependency '$ARCHIVENAME' already exists at installation directory '$EXTRACTPATH', nothing to download"
+	fi
+
+	# Extracting dependencies
+	# If we can't find an exact match for the downloaded file, try to find a fuzzy match based on 'real' package name
+	if ! [ -f "$EXTRACTPATH/$ARCHIVENAME" ]; then
+		# -----
+		# Get list of files and remove version string from it, then check if this name is inside our target archive file
+		# This basically tries to find any archives that have the 'actual' package name e.g. 'innoextract' from 'innoextract-1.1-1.pkg.tar.zst', then tries to search if any files in the directory match
+		# the archive we passed in to try to download but couldn't and try to extract them. This lets us extract dependencies for a potential archive match if the name is not exact
+		# -----
+		local DEPMATCHFOUND=0
+		mapfile -t DEPFILES < <( find "$EXTRACTPATH" -maxdepth 1 -type f -iname \*"*.*"\* -exec basename {} \; )
+		if ! [[ "${#DEPFILES[@]}" -eq 0 ]]; then
+			writelog "INFO" "${FUNCNAME[0]} - Found archive in '$EXTRACTPATH' that is potential match for '$ARCHIVENAME'"
+			for file in "${DEPFILES[@]}"; do
+				# Removes version number, anything before the first space, and removes anything that isn't a sequence of letters or numbers from the beginning of the filename
+				# Attempts to be as generous as possible in matching *any* match for the dependency name
+				PRETTYFILENAME="$( getPrettyDependencyName "$file" )"
+				PRETTYARCHIVENAME="$( getPrettyDependencyName "$ARCHIVENAME" )"
+
+				if [[ ( "$ARCHIVENAME" =~ $PRETTYFILENAME || "$PRETTYFILENAME" =~ $PRETTYARCHIVENAME ) ]]; then
+					writelog "INFO" "${FUNCNAME[0]} - Found potential existing dependency '$file', assuming dependency '$ARCHIVENAME' is already satisfied."
+					echo "Found potential matching dependency archive for '$ARCHIVENAME' at '$file'"
+
+					LOCALVERS="$( getDependencyVersion "$file" )"
+					STLVERS="$( getDependencyVersion "$ARCHIVENAME" )"
+					# Check local archive version vs. what STL asked for
+					if [ -z "$LOCALVERS" ]; then
+						# Could not get version string from archive
+						writelog "WARN" "${FUNCNAME[0]} - Could not get version from archive - This dependency version may not work if is newer than '$STLVERS'"
+						echo "Could not get version from archive - This dependency version may not work if is newer than '$STLVERS'!"
+					else
+						if [ "$LOCALVERS" = "$STLVERS" ]; then
+							# Version match
+							writelog "INFO" "${FUNCNAME[0]} - Archive version appears to be the same version that SteamTinkerLaunch asked for - Should be ok to install this version"
+							echo "Dependency version looks ok"
+						else
+							# Version newer/older (might still work, but warn the user anyway)
+							writelog "WARN" "${FUNCNAME[0]} - Archive version '${LOCALVERS}' does not match the version that SteamTinkerLaunch asked for ('$STLVERS') - This may cause problems with the installation!"
+							echo "Dependency version does not match what SteamTinkerLaunch was looking for - This may cause problems with your installation!"
+						fi
+					fi
+
+					ARCHIVENAME="$file"
+					DEPMATCHFOUND=1					
+					break
+				fi
+			done
+		fi
+
+		# Abort if we couldn't match a dependency
+		if [[ "$DEPMATCHFOUND" -eq 0 ]]; then
+			writelog "INFO" "${FUNCNAME[0]} - Could not find any matching dependency archives in '$EXTRACTPATH' for '$ARCHIVENAME' - Assuming this dependency is missing and installation cannot continue"
+			echo "Could not find any archive in '$EXTRACTPATH' for '$ARCHIVENAME', aborting install..."
+			return 1;
+		fi
+	fi
+
+	# Extract archive now that we know we should have *something* to extract
+	writelog "INFO" "${FUNCNAME[0]} - Extracting dependency '$ARCHIVENAME' at '$EXTRACTPATH/$ARCHIVENAME'"
+	echo "Extracting dependency '$ARCHIVENAME'..."
+	if "$EXTRACTCMD" "$EXTRACTCMDFLAGS" "$EXTRACTPATH/$ARCHIVENAME" -C "$EXTRACTPATH"; then
+		# Succes extraction
+		writelog "INFO" "${FUNCNAME[0]} - Successfully extracted dependency to '$EXTRACTPATH/$ARCHIVENAME'"
+		echo "Successfully extracted '$ARCHIVENAME' to '$EXTRACTPATH'"
+	else
+		# Failed extraction
+		writelog "ERROR" "${FUNCNAME[0]} - Failed to extract dependency '$ARCHIVENAME' to '$EXTRACTPATH' - Consider checking file/folder permissions"
+		notiShow "$(strFix "$NOTY_STEAMDECK_EXTRACTFAIL" "$ARCHIVENAME" "$EXTRACTPATH")" "X"
+		strFix "$NOTY_STEAMDECK_EXTRACTFAIL" "$ARCHIVENAME" "$EXTRACTPATH"
+		return 1;
+	fi
+}
+
+function checkSteamDeckDependencies {
+	
+	function installDependencyVersionFromURL {
+		local DEPCMD="$1"
+		local DEPFILENAME="$2"
+		local DEPDIR="$3"
+		local REPOURL="$4"
+
+		if [ -f "$(command -v "$DEPCMD")" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Using '$DEPCMD' binary found in path: '$(command -v "$DEPCMD")'"
+			echo "Dependency '$DEPCMD' already installed, nothing to do."
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Downloading $DEPCMD version automatically from URL '$REPOURL'"
+			writelog "INFO" "${FUNCNAME[0]} - curl -Lq \"$REPOURL\" -o \"$DEPDIR/$DEPFILENAME\""
+
+			notiShow "$(strFix "$NOTY_STEAMDECK_DEPSDOWNLOAD" "$DEPCMD")" "X"
+			strFix "$NOTY_STEAMDECK_DEPSDOWNLOAD" "$DEPCMD"
+
+			fetchAndExtractDependency "$REPOURL" "$DEPDIR" "$DEPFILENAME" || steamDeckInstallFail
+
+			STEAMDECKWASUPDATE=1
+		fi
+	}
+
+	# if this really changes, it could be grepped directly from /etc/pacman.d/mirrorlist as well:
+	SDREPO="https://steamdeck-packages.steamos.cloud/archlinux-mirror/extra/os/x86_64/"
+
+	# ARCHURL="https://archlinux.org/packages/community/x86_64"
+	ARCHARCHIVEURL="https://archive.archlinux.org/packages"
+	
+	WGETVERS="1.21.2-1"
+	WGETFILE="$WGET-$WGETVERS-x86_64.pkg.tar.zst"
+	WGETURL="$SDREPO/$WGETFILE"
+
+	INNOEXTRACTVERS="1.9-5"
+	INNOEXTRACTFILE="$INNOEXTRACT-$INNOEXTRACTVERS-x86_64.pkg.tar.zst"
+	INNOEXTRACTURL="$ARCHARCHIVEURL/i/$INNOEXTRACT/$INNOEXTRACTFILE"
+
+	CABEXTRACTVERS="1.9.1-2"
+	CABEXTRACTFILE="$CABEXTRACT-$CABEXTRACTVERS-x86_64.pkg.tar.zst"
+	CABEXTRACTURL="$ARCHARCHIVEURL/c/$CABEXTRACT/$CABEXTRACTFILE"
+
+	printf '\n'
+
+	installDependencyVersionFromURL "$WGET" "$WGETFILE" "$STLDEPS" "$WGETURL" || steamDeckInstallFail 
+	installDependencyVersionFromURL "$INNOEXTRACT" "$INNOEXTRACTFILE" "$STLDEPS" "$INNOEXTRACTURL" || steamDeckInstallFail
+	installDependencyVersionFromURL "$CABEXTRACT" "$CABEXTRACTFILE" "$STLDEPS" "$CABEXTRACTURL" || steamDeckInstallFail
+
+	if [ -f "$(command -v "yad")" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Using yad binary found in path: '$(command -v "yad")'"
+		echo "Dependency 'yad' already installed, nothing to do."
+		# Force update of global config file to add Yad path if it exists in $HOME/stl/deps/yad/bin
+		touch "$FUPDATE"
+		updateConfigEntry "YAD" "$( command -v "yad" )" "$STLDEFGLOBALCFG"
+	else
+		printf '\n'
+		writelog "INFO" "${FUNCNAME[0]} - Using yad app image"
+		setYadBin "ai" "sd" || steamDeckInstallFail
+	fi
+}
+
+function installFilesSteamDeck {	
+	local INSTALLEDPROGVERS
+	local SCRIPTDIR
+
+	if [[ "$INTERNETCONNECTION" -eq 1 ]]; then
+		# Notification for either updating or downloading STL on Deck
+		if [ -d "$SYSTEMSTLCFGDIR/.git" ]; then
+			notiShow "$NOTY_STEAMDECK_UPDATE" "X"
+			echo "$NOTY_STEAMDECK_UPDATE"
+			STEAMDECKWASUPDATE=1
+		else
+			notiShow "$NOTY_STEAMDECK_DOWNLOAD" "X"
+			echo "$NOTY_STEAMDECK_DOWNLOAD"
+		fi
+
+		# Attempt to get update files from Git
+		if ! gitUpdate "$PREFIX" "$PROJECTPAGE"; then
+			writelog "WARN" "${FUNCNAME[0]} - Could not clone/pull changes from git repo, doing some checks"
+			if ! ping -q -c1 archlinux.org &>/dev/null; then
+				writelog "WARN" "${FUNCNAME[0]} - Looks like GitHub might be down, will not attempt another update right now"
+				echo "Seems like Git is down, not attempting an update."
+			else
+				writelog "WARN" "${FUNCNAME[0]} - Looks like GitHub is ok, attempting to update via a fresh clone to '${PREFIX}-temp'"
+				if ! gitUpdate "${PREFIX}-temp"; then
+					writelog "WARN" "${FUNCNAME[0]} - Still failed to download from GitHub, though it should be up -Not trying to update again, maybe something is wrong with install files"
+					echo "Could not pull down changes from Git, even though GitHub should be up. Not attempting another update right now, maybe try again later or try a fresh install if the issue persists."
+				else
+					# Currently we assume the removal of the existing files and moving of the new files will succeed ok
+					# There could be a very rare instance where due to permission faults or somethimg, this fails
+					# We aren't worried about this for now, but a PR might be welcome on this in future :-)
+					writelog "INFO" "${FUNCNAME[0]} - Fresh clone succeeded ok, overwriting existing installation with fresh clone"
+					rm -rf "$PREFIX"
+					mv "${PREFIX}-temp" "$PREFIX"
+					rm -rf "${PREFIX}-temp"
+					writelog "INFO" "${FUNCNAME[0]} - Successfully pulled updated changes!"
+				fi
+			fi
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Fetching from git seems to have succeeded ok."
+		fi
+	else
+		# Get version of existing STL install, if present, and compare with our version
+		writelog "WARN" "${FUNCNAME[0]} - No Internet Connection detected, cannot clone Git repo - Attempting to manually install"
+
+		SCRIPTDIR="$( realpath "$0" )"
+		SCRIPTDIR="${SCRIPTDIR%/*}"
+
+		# Offline installation of STL was previously installed/attempted - With check to try and ensure scriptdir is a valid STL install and not a standalone script
+		if ! [ -d "$SCRIPTDIR/lang" ] && ! [ -d "$SCRIPTDIR/misc" ] && ! [ -d "$SCRIPTDIR/guicfgs" ]; then
+			writelog "WARN" "${FUNCNAME[0]} - Script dir '$SCRIPTDIR' does not look like a valid SteamTinkerLaunch installation directory! Not copying files in case this script is not in a proper STL folder"
+			echo "WARNING: Not updating offline filees - It looks like you're trying to install SteamTinkerLaunch as a standalone script outside of its downloaded files."
+		elif [ -f "$PREFIX/steamtinkerlaunch" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Found existing SteamTinkerLaunch files at '$PREFIX', checking if we need to update"
+			INSTALLEDPROGVERS="$( grep -i "^PROGVERS=.*." "$PREFIX/steamtinkerlaunch" | cut -d '"' -f 2 )"
+			writelog "INFO" "${FUNCNAME[0]} - Currently installed STL version: $INSTALLEDPROGVERS"
+			writelog "INFO" "${FUNCNAME[0]} - This script's STL version: $PROGVERS"
+			# Check if we actually need to update (running script ver > currently installed script ver)
+			# Not a fool-proof test, sometimes PROGVERS isn't bumped, but a user can always manually copy the files if they want to
+			# We'll assume they downloaded the latest version ahead of time and want to manually install that
+			if [[ "$PROGVERS" > "$INSTALLEDPROGVERS" ]]; then 
+				writelog "INFO" "${FUNCNAME[0]} - Existing SteamTinkerLaunch installation is older than current version - Installation will continue by copying downloaded files at '$SCRIPTDIR' to '$PREFIX'"
+				echo "Updating SteamTinkerLaunch to '$PROGVERS' by copying installation files to '$PREFIX' for offline installation..." 
+				cp -R "$SCRIPTDIR"/* "$PREFIX"
+				STEAMDECKWASUPDATE=1
+			else
+				writelog "INFO" "${FUNCNAME[0]} - Existing SteamTinkerLaunch installation is newer than or same as current version - No code to update"
+				echo "Existing SteamTinkerLaunch install is up-to-date, verifying dependencies..."
+				STEAMDECKDIDINSTALL=0
+			fi
+		else
+			# No existing STL installation - Let's create one using the files downloaded with the script currently running!
+			writelog "INFO" "${FUNCNAME[0]} - No existing STL installation found - Installation will continue by copying downloaded files at '$SCRIPTDIR' to '$PREFIX'"
+			echo "No existing STL installation found, so copying installation files to '$PREFIX' for offline installation..." 
+			cp -R "$SCRIPTDIR"/* "$PREFIX"
+		fi
+	fi
+}
+
 function steamdedeckt {
-	# a bit rough (f.e. hardcoded wget version), but should be enough for the beginning
-
-	if [ -f "/etc/os-release" ] && grep -q "steamdeck" "/etc/os-release"; then
-		# if this really changes, it could be grepped directly from /etc/pacman.d/mirrorlist as well:
-		SDREPO="https://steamdeck-packages.steamos.cloud/archlinux-mirror/extra/os/x86_64/"
-
-		# ARCHURL="https://archlinux.org/packages/community/x86_64"
-		ARCHARCHIVEURL="https://archive.archlinux.org/packages"
-		
-		INNOEXTRACTVERS="1.9-5"
-		INNOEXTRACTFILE="$INNOEXTRACT-$INNOEXTRACTVERS-x86_64.pkg.tar.zst"
-		INNOEXTRACTURL="$ARCHARCHIVEURL/i/$INNOEXTRACT/$INNOEXTRACTFILE"
-
-		CABEXTRACTVERS="1.9.1-2"
-		CABEXTRACTFILE="$CABEXTRACT-$CABEXTRACTVERS-x86_64.pkg.tar.zst"
-		CABEXTRACTURL="$ARCHARCHIVEURL/c/$CABEXTRACT/$CABEXTRACTFILE"
-		
+	if [ -f "/etc/os-release" ] && grep -q "steamdeck" "/etc/os-release"; then		
 		ONSTEAMDECK=1
 
-		if grep -q "generate-drm-mode" <<< "$(pgrep -a "$GAMESCOPE")"; then
-			writelog "INFO" "${FUNCNAME[0]} - Detected '$GAMESCOPE' running 'forced' - assuming we're running in Game Mode"
-			FIXGAMESCOPE=1
-		else
-			SMALLDESK=1
-		fi
+		export STEAMDECKWASUPDATE=0
+		export STEAMDECKDIDINSTALL=1
+		export STEAMDECKSTEAMRUN=0  # Stores if we're running STL when Steam opens on Steam Deck
 
 		writelog "INFO" "${FUNCNAME[0]} - Seems like we have a Steam Deck here - making some specific settings"
 
@@ -20382,77 +21756,271 @@ function steamdedeckt {
 			setSteamPaths
 		fi
 
-		gitUpdate "$PREFIX" "$PROJECTPAGE"
+		# Show icon and title for notifier
+		if ! [ -f "$STLICON" ]; then
+			SCRIPTDIR="$( realpath "$0" )"
+			SCRIPTDIR="${SCRIPTDIR%/*}"
+			STLICON="$SCRIPTDIR/misc/steamtinkerlaunch.svg"
+		fi
+		export NOTYARGS="-i $STLICON -a $PROGNAME"
 
+		# Differentiate between Game Mode and Desktop Mode on Steam Deck
+		if grep -q "generate-drm-mode" <<< "$(pgrep -a "$GAMESCOPE")"; then
+			writelog "INFO" "${FUNCNAME[0]} - Detected '$GAMESCOPE' running 'forced' - assuming we're running in Game Mode"
+			FIXGAMESCOPE=1
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Did not detect a running '$GAMESCOPE' process - assuming we're running in Desktop Mode"
+
+			SMALLDESK=1
+		fi
+
+		writelog "INFO" "${FUNCNAME[0]} - Set 'FIXGAMESCOPE' to '$FIXGAMESCOPE'"
+		writelog "INFO" "${FUNCNAME[0]} - Set 'SMALLDESK' to '$SMALLDESK'"
+
+		INTERNETCONNECTION=1
+
+		# Check if we're running STL on a Steam first launch
+		# Assume Steam if all of these are true:
+		# - We already have an STL installation (assume install if script in prefix)
+		# - The AppID is a placeholder ID (not running a game)
+		# - The script is running from CompatibilityTools.d 
+		if [ -f "$PREFIX/steamtinkerlaunch" ] && [ "$AID" = "$PLACEHOLDERAID" ] && [[ ${0^^} == *"${CTD^^}"* ]]; then
+			writelog "INFO" "${FUNCNAME[0]} - Looks like we're running through Steam on a Steam Deck, we don't want to do any updating here!"
+			STEAMDECKSTEAMRUN=1
+		elif [[ ${0^^} == *"${PREFIX^^}"* ]] && ! [ "$AID" = "$PLACEHOLDERAID" ]; then
+			# Launching a game proper through Steam would mean the dir we're launching from (${0}) would be the compattool dir
+			#
+			# The check for the AID != PlaceholderAID means we can update if we're just running the script from the prefix (i.e., we double clicked it) 
+			# But if we have an actual game AppID and we're running from the prefix, we're probably being called from an extra dialog on the main menu, which means we don't want to update (and this stops notifier spam too)
+			writelog "INFO" "${FUNCNAME[0]} - Looks like we have a game but we're running from the Steam Deck install Prefix, not doing any updating here!"
+			STEAMDECKSTEAMRUN=1
+		else
+			notiShow "$NOTY_STEAMDECK_INSTALL" "X"
+			echo "$NOTY_STEAMDECK_INSTALL on Steam Deck"
+
+			if ! ping -q -c1 archlinux.org &>/dev/null; then
+				INTERNETCONNECTION=0
+				writelog "WARN" "${FUNCNAME[0]} - No Internet Connection detected, attempting to install SteamTinkerLaunch offline - This may not succeed!"
+				writelog "WARN" "${FUNCNAME[0]} - Make sure you have either manually installed all dependencies, or added all manual dependency archives to '$STLDEPS'"
+				notiShow "$NOTY_STEAMDECK_NOINTERNET" "X"
+				echo "$NOTY_STEAMDECK_NOINTERNET"
+			fi
+		fi
+		
 		export STLSDPATH="${STLDEPS}/usr/bin"
 		export PATH="$PATH:$STLSDPATH"
 
-		if [ -f "$(command -v "wget")" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Using wget binary found in path: '$(command -v "wget")'"
-		else
-			LD_PRELOAD="/usr/lib/libcurl.so.4" curl -Lq "$SDREPO/wget-1.21.2-1-x86_64.pkg.tar.zst" -o "$STLDEPS/wget-latest-x86_64.pkg.tar.zst" 2>/dev/null
-			tar xf "$STLDEPS/wget-latest-x86_64.pkg.tar.zst" -C "$STLDEPS"
-		fi
+		if [ "$STEAMDECKSTEAMRUN" -eq 0 ]; then
+			installFilesSteamDeck
+			checkSteamDeckDependencies
 
-		if [ ! -f "$(command -v "$INNOEXTRACT")" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Downloading $INNOEXTRACT version $INNOEXTRACTVERS automatically from official Arch Linux archive URL '$ARCHARCHIVEURL'"
-			writelog "INFO" "${FUNCNAME[0]} - curl -Lq \"$INNOEXTRACTURL\" -o \"$STLDEPS/$INNOEXTRACTFILE\""
-			LD_PRELOAD="/usr/lib/libcurl.so.4" curl -Lq "$INNOEXTRACTURL" -o "$STLDEPS/$INNOEXTRACTFILE" 2>/tmp/curl.txt
-			tar xf "$STLDEPS/$INNOEXTRACTFILE" -C "$STLDEPS"
-		fi
-
-		if [ -f "$(command -v "$INNOEXTRACT")" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Using $INNOEXTRACT binary found in path: '$(command -v "$INNOEXTRACT")'"
-		fi
-
-		if [ ! -f "$(command -v "$CABEXTRACT")" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Downloading $CABEXTRACT version $CABEXTRACTVERS automatically from official Arch Linux archive URL '$ARCHARCHIVEURL'"
-			writelog "INFO" "${FUNCNAME[0]} - curl -Lq \"$CABEXTRACTURL\" -o \"$STLDEPS/$CABEXTRACTFILE\""
-			LD_PRELOAD="/usr/lib/libcurl.so.4" curl -Lq "$CABEXTRACTURL" -o "$STLDEPS/$CABEXTRACTFILE" 2>/tmp/curl.txt
-			tar xf "$STLDEPS/$CABEXTRACTFILE" -C "$STLDEPS"
-		fi
-
-		if [ -f "$(command -v "$CABEXTRACT")" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Using $CABEXTRACT binary found in path: '$(command -v "$CABEXTRACT")'"
-		fi
-
-		if [ -f "$(command -v "yad")" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Using yad binary found in path: '$(command -v "yad")'"
-		else
-			writelog "INFO" "${FUNCNAME[0]} - Using yad app image"
-			setYadBin "ai" "sd"
-		fi
-		
-		if [ "$ONSTEAMDECK" -eq 1 ] && [ -d "$STLDEPS" ]; then
-			find "$STLDEPS" -type f \( -name "*.zst" -o -name "*.gz" -o -name ".*" \) -exec rm {} \;
-		fi
-		
-		# update/set compatibility tool to git stl:
-		if [ "$INFLATPAK" -eq 0 ]; then
-			CompatTool "add" "$PREFIX/$PROGCMD"
-		fi
-		
-		GTKCSSFILE="$HOME/.config/gtk-3.0/gtk.css"
-
-		if [ ! -f "$GTKCSSFILE" ] ; then
-			writelog "SKIP" "${FUNCNAME[0]} - '$GTKCSSFILE' does not exist - skipping"
-		else
-			if grep -q "scrollbar" "$GTKCSSFILE"; then
-				writelog "SKIP" "${FUNCNAME[0]} - found a scrollbar entry in '$GTKCSSFILE'"
-			else
-				writelog "INFO" "${FUNCNAME[0]} - backup '$GTKCSSFILE' to '${GTKCSSFILE}_ORIGNAL'"
-				cp "$GTKCSSFILE" "${GTKCSSFILE}_ORIGNAL"
-				writelog "INFO" "${FUNCNAME[0]} - adding bigger scrollbar to '$GTKCSSFILE'"
-				{
-					echo ".scrollbar.vertical slider,"
-					echo "scrollbar.vertical slider {"
-					echo "min-width: 30px;"
-					echo "}"
-				} >> "$GTKCSSFILE"
+			# Don't remove dependencies offline
+			if [ "$INTERNETCONNECTION" -eq 1 ]; then
+				find "$STLDEPS" -type f \( -name "*.zst" -o -name "*.gz" -o -name ".*" \) -exec rm {} \;
 			fi
+
+			# update/set compatibility tool to git stl:
+			if [ "$INFLATPAK" -eq 0 ]; then
+				notiShow "$NOTY_STEAMDECK_ADDCOMPAT" "X"
+				CompatTool "add" "$PREFIX/$PROGCMD" >/dev/null
+			fi
+			
+			GTKCSSFILE="$HOME/.config/gtk-3.0/gtk.css"
+
+			if [ ! -f "$GTKCSSFILE" ] ; then
+				writelog "SKIP" "${FUNCNAME[0]} - '$GTKCSSFILE' does not exist - skipping"
+			else
+				if grep -q "scrollbar" "$GTKCSSFILE"; then
+					writelog "SKIP" "${FUNCNAME[0]} - found a scrollbar entry in '$GTKCSSFILE'"
+				else
+					writelog "INFO" "${FUNCNAME[0]} - backup '$GTKCSSFILE' to '${GTKCSSFILE}_ORIGNAL'"
+					cp "$GTKCSSFILE" "${GTKCSSFILE}_ORIGNAL"
+
+					# NOTE: This styles most, but not all, UI elements on Steam Deck
+					# It makes the scrollbar wider and easier to grab, and it adds a right margin so UI elements aren't covered by the scollbar
+					# However currently the UI is not as uniform on Steam Deck, because file choosers and text fields don't have this margin
+					# PRs are welcome to apply styling to these elements :-)
+					writelog "INFO" "${FUNCNAME[0]} - adding bigger scrollbar and customising some other UI elements using '$GTKCSSFILE'"
+					{
+						echo ".scrollbar.vertical slider,"
+						echo "scrollbar.vertical slider {"
+						echo "min-width: 15px;"
+						echo "}"
+						echo "spinbutton, combobox button {"
+						echo "margin-right: 20px;"
+						echo "}"
+					} >> "$GTKCSSFILE"
+				fi
+			fi
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Seems like we're being run by Steam here, not doing any installation steps"
 		fi
 	fi
 }
+
+function restoreGtkCss {
+	if [ "$ONSTEAMDECK" -eq 1 ]; then
+		GTKCSSFILE="$HOME/.config/gtk-3.0/gtk.css"
+		if [ -f "${GTKCSSFILE}_ORIGNAL" ] ; then
+			writelog "INFO" "${FUNCNAME[0]} - recovering original gtk.css from '${GTKCSSFILE}_ORIGNAL'"
+			mv "${GTKCSSFILE}_ORIGNAL" "$GTKCSSFILE"
+		fi
+	fi
+} 
+
+function prepareSteamDeckCompatInfo {
+	if [ ! -x "$(command -v "$JQ")" ]; then
+		writelog "WARN" "${FUNCNAME[0]} - Can't get Steam Deck compatibility information because '$JQ' is not installed"
+		return 1
+	fi
+
+	mapfile -d ";" -t -O "${#DECKCOMPATARR[@]}" DECKCOMPATARR <<< "$( getSteamDeckCompatInfo "$AID" )"
+	unset "DECKCOMPATARR[-1]"
+
+	if [ "${#DECKCOMPATARR[@]}" -eq "0" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - No compatibility information available for '$AID' - Is this AppID definitely correct?"
+	else
+		COMPATMARK=""
+		# HTML symbols for Verified (checkmark), Playable (circled question mark) and Unsupported (no-entry sign) 
+		case ${DECKCOMPATARR[0]} in
+			*"Verified"*) COMPATMARK="&#10003;"
+			;;
+			*"Playable"*) COMPATMARK="&#128712;"
+			;;
+			*"Unsupported"*) COMPATMARK="&#128683;"
+			;;
+		esac
+		STEAMDECKCOMPATRATING="${DECKCOMPATARR[0]} ${COMPATMARK}"
+	fi
+}
+
+# Fetches compatibility information about a game directly from the Steam store endpoint
+# TODO maybe store `display_type` to differentiate what each string refers to, e.g.:
+#    - 4 means Verified
+#    - 3 means Playable
+#    - ???
+#    - 1 is the grey subtext for small notes about controllers and internet access
+function getSteamDeckCompatInfo {
+	if [ ! -x "$(command -v "$JQ")" ]; then
+		writelog "WARN" "${FUNCNAME[0]} - Can't get Steam Deck compatibility information because '$JQ' is not installed"
+		return 1
+	fi
+
+	if [ -z "$1" ]; then
+		echo "No AppID given, you need to pass the AppID of the game you want to check the compatibility of"
+		writelog "ERROR" "${FUNCNAME[0]} - Need a valid AppID to check the Steam Deck compatibility information"
+		return 1
+	fi
+
+    AID="$1"
+	mkProjDir "$STLGDECKCOMPAT"
+
+	# Unofficial ocumentation for this endpoint is available here: https://github.com/Revadike/InternalSteamWebAPI/wiki/Get-Deck-Compatibility-Report
+    DECKCOMPATENDPOINT="https://store.steampowered.com/saleaction/ajaxgetdeckappcompatibilityreport?nAppID="
+    COMPATFILE="$STLGDECKCOMPAT/${AID}-deckcompatrating.json"
+
+    COMPATINFO=""
+
+	# Check if we can access Steam before fetching the Deck compatibility info
+	if ! ping -q -c1 store.steampowered.com &>/dev/null; then
+		writelog "INFO" "${FUNCNAME[0]} - Looks like we can't access Steam, not removing any Steam Deck compatibility files"
+
+		# No existing file and offline, so skip
+		if ! [ -f "$COMPATFILE" ]; then
+			writelog "WARN" "${FUNCNAME[0]} - Looks like we can't contact Steam and there is no known Steam Deck compatibility information file at '$COMPATFILE' - Skipping this step since we won't be able to retrieve any useful data"
+			return 1
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Existing file found at '$COMPATFILE', Steam Deck compatibility information will be taken from this since we can't contact Steam - The information here could be outdated depending on when it was fetched!"
+		fi
+	else 
+		# Remove existing file - TODO only remove if it is a day old or more
+		if [ -f "$COMPATFILE" ]; then			
+			if ! jq -e '.success' "$COMPATFILE" 1>/dev/null; then
+				writelog "INFO" "${FUNCNAME[0]} - File '$COMPATFILE' containing Steam Deck compatibility information already exists, however it looks like it failed last time - Removing it so we can attempt to redownload it"
+				rm "$COMPATFILE"
+			elif [ "$(( $(date +"%s") - $(stat -c "%Y" "$COMPATFILE") ))" -gt "86400" ]; then  # Todo maybe let the user define this in the Global Menu
+				writelog "INFO" "${FUNCNAME[0]} - File '$COMPATFILE' is older than 1 day - Removing it so we can update in case the compatibility rating has changed"
+				rm "$COMPATFILE"
+			fi
+		fi
+
+		# If the file doesn't exist at all and we can connect to Steam, create it from the response
+		if ! [ -f "$COMPATFILE" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Fetching Steam Deck compatibility information for '$AID' from Steam store endpoint with '${DECKCOMPATENDPOINT}${AID}'"
+			if ! "$WGET" -q "${DECKCOMPATENDPOINT}${AID}" -O "$COMPATFILE" 2> >(grep -v "SSL_INIT"); then
+				# Failed to fetch for some reason, skip getting Deck compat info
+				writelog "INFO" "${FUNCNAME[0]} - Failed to fetch Steam Deck compatibility information from Steam store endpoint with '${DECKCOMPATENDPOINT}${AID}'"
+				return 1
+			fi
+		else
+			# File exists, don't redownload
+			writelog "INFO" "${FUNCNAME[0]} - Steam Deck compatibility rating file '$COMPATFILE' already exists - not redownloading"
+		fi
+	fi
+
+	# We were able to hit the endpoint successfully, but check if the response success is valid!
+	RESULTSLENGTH="$( jq -e '.results | length' "$COMPATFILE" )"
+    if (( RESULTSLENGTH > 0 )); then 
+        writelog "INFO" "${FUNCNAME[0]} - Successfully retrieved Steam Deck compatility information - Stored to '$COMPATFILE'"
+
+        # Get Verified/Playable/Unsupported/Unknown
+        DECKCOMPATRATING="$( jq -e '.results.resolved_category' "$COMPATFILE" )"
+        case $DECKCOMPATRATING in
+            1) COMPATTEXT="$STEAMDECKCOMPAT_UNSUPPORTED" ;;
+            2) COMPATTEXT="$STEAMDECKCOMPAT_PLAYABLE" ;;
+            3) COMPATTEXT="$STEAMDECKCOMPAT_VERIFIED" ;;
+            *) COMPATTEXT="$STEAMDECKCOMPAT_UNKNOWN" ;;
+        esac
+        COMPATINFO+="${COMPATTEXT};"
+
+		writelog "INFO" "${FUNCNAME[0]} - Successfully retrieved Steam Deck compatibility rating of '$COMPATTEXT' for '$AID'"
+		writelog "INFO" "${FUNCNAME[0]} - Converting language tokens for Steam Deck compatibility criteria into SteamTinkerLaunch translated strings"
+
+		# Turn language tokens like '#SteamDeckVerified_TestResult_blah' into an actual translated string from the translation files
+		# Language strings credited to: https://github.com/SteamDatabase/SteamTracking
+        for LANGTOKEN in $( jq -r '.results.resolved_items[].loc_token' "$COMPATFILE" ); do
+            LANGTOKEN="$( echo "$LANGTOKEN" | xargs )"
+            if [ -n "$LANGTOKEN" ]; then
+				OGLANGTOKEN="$LANGTOKEN"
+				# Convert token to uppercase and remove hash at beginning
+                LANGTOKEN="${LANGTOKEN^^}"
+                LANGTOKEN="${LANGTOKEN//#/}"
+
+				# Get associated translation variable from translation files to match this translated string
+				STLLANGTOKEN="${!LANGTOKEN}"
+				if [ -n "$STLLANGTOKEN" ]; then
+					COMPATINFO+="\"$STLLANGTOKEN\";"
+				else
+					writelog "WARN" "${FUNCNAME[0]} - Could not find translation string for returned language token '$OGLANGTOKEN' - Seems like we need to update the translation files to include a new string!"
+				fi
+
+				writelog "INFO" "${FUNCNAME[0]} - '$OGLANGTOKEN' - '$LANGTOKEN'"
+            else
+                writelog "INFO" "${FUNCNAME[0]} - Skipping blank LANGTOKEN '$LANGTOKEN' - though this should probably not happen!"
+            fi
+        done
+
+		DEVELOPERCOMMENTSURL="$( jq -e '.results.steam_deck_blog_url' "$COMPATFILE" )"
+		if [ "${#DEVELOPERCOMMENTSURL}" -gt 2 ]; then  # DEVELOPERCOMMENTSURL will always have quotes around it (e.g. `""` for blank), so the minimum length will always be 2 since it will be 2 for a blank entry because of the set of quotes 
+			writelog "INFO" "${FUNCNAME[0]} - Seems like the developer has a blog post with some comments on this game's compatibility, appending it... (length is ${#DEVELOPERCOMMENTSURL}"
+			COMPATINFO+="$( strFix "$STEAMDECKVERIFIED_CUSTOMRESULT_DEVPOST" "$DEVELOPERCOMMENTSURL" );"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Seems like no developer comments were left for this game - This is fine as most games don't have this, so skipping"
+		fi
+
+		writelog "INFO" "${FUNCNAME[0]} - Finished setting Steam Deck compatibility criteria strings"
+    else
+		# We were able to get a response from the endpoint, but the results body wwas blank so we can't get any response information
+		# Not sure when this would happen outside of Non-Steam Games
+		writelog "WARN" "${FUNCNAME[0]} - No compatibility information available for '$AID' - Maybe the AppID is invalid?"
+		rm "$COMPATFILE"
+		return 1
+    fi
+
+	echo "$COMPATINFO"
+}
+
+### STEAM DECK END
 
 function setflatpak {
 	if [ -n "$FLATPAK_ID" ] && [ "$FLATPAK_ID" == "com.valvesoftware.Steam" ]; then
@@ -20464,11 +22032,51 @@ function setflatpak {
 	fi
 }
 
+# Somewhat experimental for now
+# This has the side effect of being called everytime on a local install run, but since the scriptdir of a local install can change, It Has To Be This Way
+function setLocalInstall {
+	SCRIPTDIR="$( realpath "$0" )"
+	SCRIPTDIR="${SCRIPTDIR%/*}"
+	# If not on Steam Deck or Flatpak, and we don't have a system config directory, assume we have a non-root local install and set/update config folder structure to match
+	if [ "$ONSTEAMDECK" -eq 0 ] && [ ! -d "$SYSTEMSTLCFGDIR" ] && [ "$INFLATPAK" -eq 0 ]; then  # Check if "$SYSTEMSTLCFGDIR" doesn't exist because the user could be running the script for testing but have a global install
+		writelog "INFO" "${FUNCNAME[0]} - Looks like we have a non-root local install here - Updating paths..."
+		
+		# If no "$SYSTEMSTLCFGDIR" directory, assume it was looking in `/usr/something` for configs (where they would be on a root install)
+		# but since that folder doesn't exist, set it to the scriptdir 
+		SYSTEMSTLCFGDIR="$SCRIPTDIR"
+	else
+		writelog "INFO" "${FUNCNAME[0]} - Looks like we don't have a local non-root install"
+	fi
+
+	# Only update if we have an existing config file, don't call `updateConfigEntry` on non-existent file
+	# Running this block here means we can update existing configs if the user installs system-wide again later or switches between
+	if [ -f "$STLDEFGLOBALCFG" ]; then
+		touch "$FUPDATE"
+		updateConfigEntry "GLOBALCOLLECTIONDIR" "$SYSTEMSTLCFGDIR/collections" "$STLDEFGLOBALCFG"
+		updateConfigEntry "GLOBALMISCDIR" "$SYSTEMSTLCFGDIR/misc" "$STLDEFGLOBALCFG"
+		updateConfigEntry "GLOBALSBSTWEAKS" "$SYSTEMSTLCFGDIR/sbstweaks" "$STLDEFGLOBALCFG"
+		updateConfigEntry "GLOBALTWEAKS" "$SYSTEMSTLCFGDIR/tweaks" "$STLDEFGLOBALCFG"
+		updateConfigEntry "GLOBALEVALDIR" "$SYSTEMSTLCFGDIR/eval" "$STLDEFGLOBALCFG"
+		updateConfigEntry "GLOBALSTLLANGDIR" "$SYSTEMSTLCFGDIR/lang" "$STLDEFGLOBALCFG"
+		updateConfigEntry "GLOBALSTLGUIDIR" "$SYSTEMSTLCFGDIR/guicfgs" "$STLDEFGLOBALCFG"
+	fi
+}
+
+function removeEmptyFiles {
+	# Remove appinfo files that are 0 bytes (i.e. Non-Steam Games)
+	for AIF in "$STLAPPINFOIDDIR/"*; do
+		if ! [ -s "$AIF" ]; then
+			rm "$AIF" &>/dev/null
+		fi
+	done
+}
+
 ##################
 
 function main {
 
 	initShmStl
+	restoreGtkCss
 	rm "$TEMPLOG" "$WINRESLOG" "$PRELOG" "$APPMALOG" "$GGDLOG" 2>/dev/null
 	touch "$PRELOG"
 	mkProjDir "$LOGDIRID"
@@ -20481,13 +22089,53 @@ function main {
 	fi
 	SYSSTEAMCOMPATOOLS="$USS/$CTD"
 
-	steamdedeckt
+	SCRIPTDIR="$( realpath "$0" )"
+	SCRIPTDIR="${SCRIPTDIR%/*}"
+
 	initAID "$@"
 	setAIDCfgs
-	loadLangFile "$STLDEFLANG"
+
+	# Respect language choice asap in running (uses correct language during Steam Deck install)
+	# Try and load either from langfile directory or `lang=` argument (prioritising lang arguments)
+	# Default if we don't get a valid `$STLLANG`
+	loadLanguage "$@"
+	if [ -z "$STLLANG" ]; then
+		loadLangFile "$STLDEFLANG"
+	fi
+
+	# Check quiet mode to hide notifier
+	STLQUIET=0
+	if echo "$@" | grep -qow '\-q'; then
+		commandline "$@"
+	fi
+
+	steamdedeckt
+	setLocalInstall
 	getCurrentCommandline "$@"
 	saveOrgVars
 	emptyVars "O"
+
+    # Notify success on Steam Deck
+	# TODO check that this doesn't show success on regular run and close
+	if [ "$ONSTEAMDECK" -eq 1 ] && [ "$STEAMDECKSTEAMRUN" -eq 0 ]; then
+		printf '\n'
+		if [ "$STEAMDECKDIDINSTALL" -eq 1 ]; then
+			INSTALLEDPROGVERS="$( grep -i "^PROGVERS=.*." "$PREFIX/steamtinkerlaunch" | cut -d '"' -f 2 )"
+			if [ "$STEAMDECKWASUPDATE" -eq 1 ]; then
+				# Update success w/ version
+				strFix "$NOTY_STEAMDECK_UPDATE_SUCCESS!" "$INSTALLEDPROGVERS"
+				notiShow "$(strFix "$NOTY_STEAMDECK_UPDATE_SUCCESS" "$INSTALLEDPROGVERS")" "X"
+			else
+				# Install success w/ version
+				strFix "$NOTY_STEAMDECK_INSTALL_SUCCESS!" "$INSTALLEDPROGVERS"
+				notiShow "$(strFix "$NOTY_STEAMDECK_INSTALL_SUCCESS" "$INSTALLEDPROGVERS")" "X"
+			fi
+		else
+			# Show install finished if no STL install files were modified (currently only for offline installs where existing install == install files)
+			echo "$NOTY_STEAMDECK_INSTALL_FINISH!"
+			notiShow "$NOTY_STEAMDECK_INSTALL_FINISH" "X"
+		fi
+	fi
 
 	writelog "START" "######### Initializing Game Launch $AID using $PROGNAME $PROGVERS #########" "P"
 
@@ -20516,6 +22164,11 @@ function main {
 
 	writelog "INFO" "${FUNCNAME[0]} - Initializing default window resolution"
 	setInitWinXY
+
+	GREETING="$( getSeasonalGreeting )"
+	writelog "INFO" "${FUNCNAME[0]} - ${GREETING:-Welcome to SteamTinkerLaunch}"
+
+	removeEmptyFiles
 
 	if [ -z "$1" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - No arguments provided. See '$PROGCMD --help' for possible command line parameters" "E"
@@ -20552,6 +22205,8 @@ function main {
 			commandline "$@"
 		fi
 	fi
+
+	restoreGtkCss
 }
 
 if [ "$EUID" = 0 ]; then
