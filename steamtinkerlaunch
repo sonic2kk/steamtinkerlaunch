@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v11.12.20221202-1"
+PROGVERS="v11.12.20221202-2"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -12188,7 +12188,7 @@ function updateWineRegistryKey {
 	WINEPREFIX="$WINEPFX" "$WINERUNCMD" reg "${REGOP}" "${REGPATH}" "/v" "${REGVAL}" "/f"
 }
 
-### HMM BEGIN
+### HEDGEMODMANAGER (HMM) BEGIN
 
 # NOTE: This was written with HMM in mind, but it may work generally too
 # Returns the download URL to the latest GitHub actions build of a repository and the commit SHA it was built from separated by a comma
@@ -12754,6 +12754,23 @@ function listInstalledHMMGames {
 	GPFX="$OGGPFX"
 }
 
+function listOwnedHMMGames {
+	writelog "INFO" "${FUNCNAME[0]} - Looking for owned HedgeModManager games"
+
+	HMMGAMES="$GLOBALMISCDIR/hmmgames.txt"
+	while read -r line; do
+		OWNEDHMMGAMELINE="$( grep "\"$line\"" "$HMMGAMES" )"
+		OWNEDHMMGAMENAME="$( echo "$OWNEDHMMGAMELINE" | cut -d ";" -f 1 | cut -d '"' -f 2 )"
+		OWNEDHMMGAMEAID="$( echo "$OWNEDHMMGAMELINE" | cut -d ";" -f 2 | cut -d '"' -f 2 )"
+		OWNEDHMMGAMEARCH="$( echo "$OWNEDHMMGAMELINE" | cut -d ";" -f 3 | cut -d '"' -f 2 )"
+
+		# If we have all of these, we can safely assume the game is installed -- Virtually identical logic to Vortex's list-owned
+		if [ -n "$OWNEDHMMGAMENAME" ] && [ -n "$OWNEDHMMGAMEAID" ] && [ -n "$OWNEDHMMGAMEARCH" ]; then
+			printf "%s (%s) (%s-bit)\n" "$OWNEDHMMGAMENAME" "$OWNEDHMMGAMEAID" "$OWNEDHMMGAMEARCH"
+		fi
+	done <<< "$(getOwnedAids)"
+}
+
 # Handle incoming mod download requests for HMM via "gamebananaidentifier:modurl" (ex: hedgemmgens:https://gamebanana.com/mmdl/455806,Mod,50766)
 # HMM starts as a separate process for this, so it's fine to just call the exe (+selected proton +correct prefix) with the `-gb` parameter
 # WILL NOT WORK WITH GAMEBANANA BROWSER URLs!!!
@@ -12781,6 +12798,9 @@ function dlHedgeMod {
 }
 
 # Create a .desktop file entry/entries for HedgeModManager
+#
+# This seems to not work on Steam Deck - Maybe the .desktop file should just called xdg-open?
+# Though the issue seemed more to be that HMM's desktop file wasn't being called at all from Firefox... 
 function createHMMDesktopFile {
 	HMMICONNM="icon256.png"
 	HMMICOPATH="$HMMDLDIR/$HMMICONNM"
@@ -12848,8 +12868,7 @@ function createHMMDesktopFile {
 	fi
 }
 
-
-### HMM END
+### HEDGEMODMANAGER (HMM) END
 
 #### MO2 + Vortex ####
 # NOTE: This was written with MO2 and Vortex in mind (seems to also currently work for HMM)
@@ -18619,6 +18638,7 @@ function howto {
 	echo "            desktopfile|df           (Re-)create .desktop files for HedgeModManager"
 	echo "            list-supported           List games supported by HedgeModManager"
 	echo "            list-installed           List installed games with HedgeModManager support"
+	echo "            list-owned               List owned games on Steam with HedgeModManager support"   
 	echo "            uninstall                Remove HedgeModManager downloads folder, desktop files and Wineprefix"
 	echo "                                      Note that this will not remove your mods or installed Winetricks"
 	echo "    steamdeckcompat <gameid>         Get information about Steam Deck compatibility for <gameid>"
@@ -18953,6 +18973,8 @@ function commandline {
 				listSupportedHMMGames
 			elif [ "$2" == "list-installed" ] || [ "$2" == "li" ]; then
 				listInstalledHMMGames
+			elif [ "$2" == "list-owned" ] || [ "$2" == "lo" ]; then
+				listOwnedHMMGames
 			elif [ "$2" == "desktopfile" ] || [ "$2" == "df" ]; then
 				createHMMDesktopFile
 			elif [ "$2" == "uninstall" ]; then
