@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v11.12.20221202-2"
+PROGVERS="v11.12.20221205-1"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -8924,7 +8924,7 @@ function askSettings {
 				--field="<i>(${#CfgFiles[@]} $GUI_EDITABLECFGS)</i>":LBL \
 				--field="<i>($GUI_EDITABLEGAMECFGS)</i>":LBL \
 				--button="$REQBUT":0 \
-				--button="$BUT_CAN":1 \
+				--button="$BUT_SKIP":1 \
 				--timeout="$WAITEDITOR" \
 				--timeout-indicator=top \
 				"$GEOM"
@@ -9825,21 +9825,53 @@ function StandaloneProtonGame {
 	fi
 }
 
-# TODO these both need work on Steam Deck to function'
+function getWinecfgExecutable {
+	# Check if we have a systemwide Winecfg
+	if [ -x "$(command -v "$WINECFG")" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Using Winecfg found at '$WINECFG'"
+		OTWINECFGEXE="$WINECFG"
+	else
+		# Try to use winecfg with Proton executable
+		writelog "INFO" "${FUNCNAME[0]} - Trying to use Winetricks with game Proton version"
+		if [ -z "$RUNPROTON" ]; then
+			writelog "WARN" "${FUNCNAME[0]} - RUNPROTON is empty - '$RUNPROTON' - Maybe this is not a Proton game?"
+		else
+			WINECFGBASEPATH="$(dirname "$RUNPROTON")"
+			if [ -d "$WINECFGBASEPATH" ]; then
+				OTWINECFGEXE="$( find "$WINECFGBASEPATH" -name "winecfg.exe" | head 1 )"
+				writelog "INFO" "${FUNCNAME[0]} - Using Winecfg found at '$OTWINECFGEXE'"
+			else
+				writelog "WARN" "${FUNCNAME[0]} - Could not find directory name for Proton version '$RUNPROTON' - This probably shouldn't happen! - Could not get Winecfg executable to run"
+			fi
+		fi
+	fi
+}
+
+# These functions will always use the game Proton version instead of the Proton version in the dropdown
+# I don't think there's a way for us to get the Proton version in this dropdown to use with the game
+#
+# Having these as primary menu buttons would mean the dialog would close and the user would have to re-open the one-time run menu to run their game
+# The tradeoff for now is having them set the Proton version by changing the game version before going to the one-time menu, and then they can run Winetricks
+#
+# I think this is a better tradeoff than having the menu close, as the amount of users who would change the Proton version are probably minimal
+# compared to the users who would be annoyed by the dialog closing
 function oneTimeWinecfg {
 	writelog "INFO" "${FUNCNAME[0]} - Running OneTime Winecfg"
 	
-	PROTWINECMD="${RUNPROTON//\"/}/bin/wine"
-	WINE="$PROTWINECMD" WINEPREFIX="$GPFX" "$PROTWINECMD" "${WINECFG}.exe"  # Maybe check if we're on Steam Deck and use Winetricks for this? Would also require Winetricks but we could fetch and install that  
+	getWinecfgExecutable
+	extWine64Run "$OTWINECFGEXE"
+	# PROTWINECMD="${RUNPROTON//\"/}/bin/wine"
+	# WINE="$PROTWINECMD" WINEPREFIX="$GPFX" "$PROTWINECMD" "${WINECFG}.exe"  # Maybe check if we're on Steam Deck and use Winetricks for this? Would also require Winetricks but we could fetch and install that  
 }
 
 function oneTimeWinetricks {
-	writelog "INFO" "${FUNCNAME[0]} - Running OneTime Winetricks"
-	if [ ! -x "$(command -v "winetricks")" ]; then
+	writelog "INFO" "${FUNCNAME[0]} - Getting Winetricks binary"
+	chooseWinetricks
+	if [ ! -x "$(command -v "$WINETRICKS")" ]; then
 		writelog "WARN" "${FUNCNAME[0]} - Could not run one-time Winetricks because Winetricks is not installed - Skipping"
 	else
-		PROTWINECMD="${RUNPROTON//\"/}/bin/wine"
-		WINEPREFIX="$GPFX" "winetricks"
+		writelog "INFO" "${FUNCNAME[0]} - Running OneTime Winetricks for prefix '$GPFX'"  # TODO set wine/proton version here with WINE=
+		WINEPREFIX="$GPFX" "$WINETRICKS"
 	fi
 }
 
