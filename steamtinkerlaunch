@@ -84,6 +84,7 @@ WINRESLOG="$STLSHM/winres.log"
 SHADLOG="$STLSHM/shaderupdate.log"
 GWIDFILE="$STLSHM/${PROGNAME,,}-sbsgwid"
 PIDLOCK="$STLSHM/pid.lock"
+LAMOINST="$STLSHM/LastMOInst.txt"
 GDBGAMERUN="$STLSHM/gdbgamerun.sh"
 GDBRUN="$STLSHM/gdbrun.sh"
 VRINITLOCK="$STLSHM/vrinit.lock"
@@ -275,6 +276,7 @@ YADAIDLDIR="$STLDLDIR/yadappimage"
 DOTN="dotnet"
 MO2="mo2"
 STLMO2DIR="$STLCFGDIR/$MO2"
+STLMO2DLDATDIR="$STLMO2DIR/dldata"
 MO="ModOrganizer"
 HMM="HedgeModManager"
 HMMNICE="Hedge Mod Manager"
@@ -286,7 +288,8 @@ HMMDFDL="$HMM-${PROGNAME,,}-dl.desktop"
 HMMDFPA="$HOME/.local/share/applications/$HMMDF"  # .desktop file to open HMM
 HMMDFDLPA="$HOME/.local/share/applications/$HMMDFDL"  # .desktop file to 
 MORDIR="$DRC/Modding"
-MOERPATH="$MORDIR/MO2/${MO}.exe"
+MOERDIR="$MORDIR/MO2"
+MOERPATH="$MOERDIR/${MO}.exe"
 STLHMMDIR="$STLCFGDIR/${HMM,,}"
 DOCS="Documents"
 MYDOCS="My $DOCS"
@@ -2680,6 +2683,7 @@ function setDefaultCfgValues {
 	}
 
 	function setDefaultCfgValuesdefault_template {
+		if [ -z "$KEEPSTLOPEN" ]						; then	KEEPSTLOPEN="0"; fi
 		if [ -z "$USESLR" ]								; then	USESLR="1"; fi
 		if [ -z "$FORCESLR" ]							; then	FORCESLR="0"; fi
 		if [ -z "$USEREAP" ]							; then	USEREAP="1"; fi
@@ -3163,6 +3167,8 @@ function saveCfg {
 			{
 			echo "## config Version: $PROGVERS"
 			echo "##########################"
+			echo "## $DESC_KEEPSTLOPEN"
+			echo "KEEPSTLOPEN=\"$KEEPSTLOPEN\""
 			echo "## $DESC_USESLR"
 			echo "USESLR=\"$USESLR\""
 			echo "## $DESC_FORCESLR"
@@ -3513,7 +3519,7 @@ function saveCfg {
 }
 
 function notiShow {
-	if [ "$ONSTEAMDECK" -eq 1 ] && [ "$FIXGAMESCOPE" -eq 1 ] ; then
+	if [ "$ONSTEAMDECK" -eq 1 ] && [ "$FIXGAMESCOPE" -eq 1 ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Skipping notifier on SteamDeck Game Mode"
 		USENOTIFIER=0 # might avoid a 2nd try during this session
 	elif [ "$STLQUIET" -eq 1 ]; then
@@ -4899,6 +4905,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_HMMCOMPDATA!$DESC_HMMCOMPDATA ('HMMCOMPDATA')":DIR "${HMMCOMPDATA/#-/ -}" `#CAT_HMM` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_USEHMMPROTON!$DESC_USEHMMPROTON ('USEHMMPROTON')":CB "$(cleanDropDown "${USEHMMPROTON/#-/ -}" "$PROTYADLIST")" `#CAT_HMM` `#MENU_GLOBAL` \
 --field="$(spanFont "$GUI_OPTSMISC" "H")":LBL "SKIP" `#CAT_Misc` `#HEAD_Misc` `#MENU_GAME` `#MENU_GLOBAL`  \
+--field="     $GUI_KEEPSTLOPEN!$DESC_KEEPSTLOPEN ('KEEPSTLOPEN')":CHK "${KEEPSTLOPEN/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_USECUSTOMCMD!$DESC_USECUSTOMCMD ('USECUSTOMCMD')":CHK "${USECUSTOMCMD/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_CUSTOMCMD!$DESC_CUSTOMCMD $GUI_ECHOPLAC ('CUSTOMCMD')":FL "${OPCUSTPATH/#-/ -}" `#CAT_Misc` `#MENU_GAME` \
 --field="     $GUI_CUSTOMCMD_ARGS!$DESC_CUSTOMCMD_ARGS ('CUSTOMCMD_ARGS')" "${CUSTOMCMD_ARGS/#-/ -}" `#CAT_Misc` `#MENU_GAME` \
@@ -9300,7 +9307,8 @@ function autoCollectionSettings {
 				writelog "INFO" "${FUNCNAME[0]} - Searching collections for game '$AID' in '$SC'"
 
 				while read -r SCAT; do
-					GLOBALSCATCONF="$GLOBALCOLLECTIONDIR/$SCAT.conf"
+					GLOBALSCATCONF="$(find "$GLOBALCOLLECTIONDIR" -type f -iname "$SCAT.conf")"
+					GLOBALSCATCONFF="$GLOBALCOLLECTIONDIR/$SCAT.conf"
 
 					# Should we break after a file to load is found? Is there benefit to loading another file?
 					if [ -f "$GLOBALSCATCONF" ]; then
@@ -9310,7 +9318,9 @@ function autoCollectionSettings {
 						writelog "SKIP" "${FUNCNAME[0]} - Global Config '$GLOBALSCATCONF' not found - skipping"
 					fi
 
-					SCATCONF="$STLCOLLECTIONDIR/$SCAT.conf"
+					SCATCONF="$(find "$STLCOLLECTIONDIR" -type f -iname "$SCAT.conf")"
+					SCATCONFF="$STLCOLLECTIONDIR/$SCAT.conf"
+
 					if [ -f "$SCATCONF" ]; then
 						writelog "INFO" "${FUNCNAME[0]} - Collections Directory Config '$SCATCONF' found - loading its settings"
 						loadCfg "$SCATCONF"
@@ -13715,10 +13725,11 @@ function startVortex {
 					if grep -q "^https" <<< "$RAWDNDL"	&& grep -q "exe$" <<< "$RAWDNDL"; then
 						writelog "INFO" "${FUNCNAME[0]} - Using download URL found in $VTX '${VTXRAA}'"
 						DNDL="$RAWDNDL"
+						dlCheck "$DNDL" "$DLSITE/$DNSRC" "X" " Downloading installer '$DNSRC' for DotNet6"
 					fi		
 				fi
 				
-				if [ -z "$DNDL" ]; then
+				if [ ! -f "$DLSITE/$DNSRC" ]; then
 					writelog "INFO" "${FUNCNAME[0]} - Using hardcoded download URL for DotNet6"
 					DNDL="https://download.visualstudio.microsoft.com/download/pr/9d6b6b34-44b5-4cf4-b924-79a00deb9795/2f17c30bdf42b6a8950a8552438cf8c1/$DNSRC"
 				fi
@@ -14235,35 +14246,63 @@ function dlLatestMO2 {
 }
 
 function setMO2Vars {
-	MO2PFX="${MO2COMPDATA//\"/}/pfx"
+	if [ -z "$MOINST" ]; then
+		MOINST="$NON"
+	fi
+
+	if [ "$MOINST" == "$NON" ]; then
+		if [ -n "$GPFX" ]; then
+			MOINST="portable"
+			writelog "INFO" "${FUNCNAME[0]} - Found the variable for the game wineprefix '$GPFX', so using a $MOINST instance of '$MO2'"
+			MO2PFX="$GPFX"
+			MO2CODA="${GPFX//\/pfx}"
+		else
+			MOINST="global"
+			writelog "INFO" "${FUNCNAME[0]} - No game wineprefix found in env, so using a $MOINST instance of '$MO2'"
+			MO2CODA="$MO2COMPDATA"
+			MO2PFX="${MO2COMPDATA//\"/}/pfx"
+		fi
+	else
+		writelog "INFO" "${FUNCNAME[0]} - The '$MO2' instance was already set to '$MOINST' during this run"
+	fi
+	
 	if [ -z "$MO2EXE" ]; then
 		MO2EXE="$MO2PFX/$MOERPATH"
 		NXMG="nxmhandler"
 		NMXHLOG="$MO2PFX/$DRCU/$STUS/$ADLO/$MO/${NXMG}.log"
 	fi
 	MO2GAMES="$GLOBALMISCDIR/mo2games.txt"
+	writelog "INFO" "${FUNCNAME[0]} - The $MO2 helper-file is set to '$MO2GAMES'"
+
 	if [ -z "$MO2WINE" ] || [ ! -f "$MO2WINE" ]; then
-		if [ "$USEMO2PROTON" == "$NON" ]; then
-			if [ ! -f "$PROTONCSV" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Looking for available Proton versions"
-				getAvailableProtonVersions "up" X
-			fi
+		writelog "INFO" "${FUNCNAME[0]} - Preparing Proton variables for a $MOINST $MO2 instance"
 
-			if ! grep -q "^GE" "$PROTONCSV"; then
-				autoBumpGE "X"
-			fi
-		
-			SETMO2PROT="$(grep "^GE" "$PROTONCSV" | sort -V | tail -n1)"
-			SETMO2PROT="${SETMO2PROT%%;*}"
-			USEMO2PROTON="$SETMO2PROT"
-			touch "$FUPDATE"
-			updateConfigEntry "USEMO2PROTON" "$USEMO2PROTON" "$STLDEFGLOBALCFG"
-			writelog "INFO" "${FUNCNAME[0]} - USEMO2PROTON is '$NON', so using latest Proton-GE '$SETMO2PROT' automatically" "E"
+		if [ "$MOINST" == "portable" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Using proton version '$USEPROTON', which is currently configured for the game $GAMENAME"
+			SETMO2PROT="$USEPROTON"	
 		else
-			SETMO2PROT="$USEMO2PROTON"
-		fi
+			if [ "$USEMO2PROTON" == "$NON" ]; then
+				if [ ! -f "$PROTONCSV" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Looking for available Proton versions"
+					getAvailableProtonVersions "up" X
+				fi
 
-		writelog "INFO" "${FUNCNAME[0]} - Using $USEMO2PROTON for $MO"
+				if ! grep -q "^GE" "$PROTONCSV"; then
+					autoBumpGE "X"
+				fi
+			
+				SETMO2PROT="$(grep "^GE" "$PROTONCSV" | sort -V | tail -n1)"
+				SETMO2PROT="${SETMO2PROT%%;*}"
+				USEMO2PROTON="$SETMO2PROT"
+				touch "$FUPDATE"
+				updateConfigEntry "USEMO2PROTON" "$USEMO2PROTON" "$STLDEFGLOBALCFG"
+				writelog "INFO" "${FUNCNAME[0]} - USEMO2PROTON is '$NON', so using latest Proton-GE '$SETMO2PROT' automatically" "E"
+			else
+				SETMO2PROT="$USEMO2PROTON"
+			fi
+		fi
+		
+		writelog "INFO" "${FUNCNAME[0]} - Using $SETMO2PROT for $MO"
 		setModWine "SETMO2PROT" "MO2RUNPROT" "MO2WINE"
 	fi
 }
@@ -14280,12 +14319,9 @@ function installMO2 {
 		else
 			if [ -f "$MO2RUNPROT" ]; then 
 				writelog "INFO" "${FUNCNAME[0]} - Using '$MO2RUNPROT' for installation" "E"
-				mkProjDir "$MO2COMPDATA"
-#				notiShow "$(strFix "$NOTY_INSTSTART" "${DOTN^}")" "S"
-#				installDotNet "$MO2PFX" "$MO2WINE" "48"
-#				notiShow "$GUI_DONE" "S"
+				mkProjDir "$MO2CODA"
 				touch "${MO2COMPDATA}/tracked_files"
-				STEAM_COMPAT_CLIENT_INSTALL_PATH="$SROOT" STEAM_COMPAT_DATA_PATH="$MO2COMPDATA" "$MO2RUNPROT" "run" 2> "$STLSHM/${FUNCNAME[0]}_protonrun.log"
+				STEAM_COMPAT_CLIENT_INSTALL_PATH="$SROOT" STEAM_COMPAT_DATA_PATH="$MO2CODA" "$MO2RUNPROT" "run" 2> "$STLSHM/${FUNCNAME[0]}_protonrun.log"
 				writelog "INFO" "${FUNCNAME[0]} - Installing '$MO2SPATH' into '$MO2PFX'"
 				notiShow "$(strFix "$NOTY_INSTSTART" "${MO2SPATH##*/}")"
 				# the '$MO2SPATH' installer at least fails on the Steam Deck, so using $INNOEXTRACT for the installation if available
@@ -14403,12 +14439,15 @@ function manageMO2GInstance {
 		StatusWindow "$(strFix "$NOTY_INSTSTART" "$MO")" "installMO2" "InstallMO2Status"
 	fi
 
+	echo "$MOINST" > "$LAMOINST"
+
 	if [ -f "$MO2INSTFAIL" ]; then
 		writelog "SKIP" "${FUNCNAME[0]} - '$MO2INSTFAIL' found - seems like installation failed previously - skipping ${FUNCNAME[0]}"
 	else
 		if [ -z "$1" ]; then
 			writelog "SKIP" "${FUNCNAME[0]} - argument 1 '$1' is invalid"
 		else
+			writelog "INFO" "${FUNCNAME[0]} - Looking for '$1' in '$MO2GAMES'"
 			if grep -q "$1" "$MO2GAMES"; then
 				MO2AID="$1"
 				MO2GA1="$(grep -m1 "\"$MO2AID\"" "$MO2GAMES" | cut -d ';' -f1)"
@@ -14416,16 +14455,29 @@ function manageMO2GInstance {
 
 				MO2GAMIN1="$(grep -m1 "\"$MO2AID\"" "$MO2GAMES" | cut -d ';' -f3)"
 				MO2GAMINI="${MO2GAMIN1//\"}"
-				
+	
 				if [ -n "$MO2GAM" ]; then
-					MOIN="$MO2PFX/$DRCU/$STUS/$ADLO/$MO/$MO2GAM"
+					if [ -n "$2" ] && [ "$2" == "portable" ]; then
+						MOIN="$MO2PFX/$MOERDIR"
+						writelog "INFO" "${FUNCNAME[0]} - preparing '$2' instance in '$MOIN' for '$1'"
+						GLOBMOIN="${MO2COMPDATA//\"/}/pfx/$DRCU/$STUS/$ADLO/$MO/$MO2GAM"
+					else
+						MOIN="$MO2PFX/$DRCU/$STUS/$ADLO/$MO/$MO2GAM"
+						GLOBMOIN="$MOIN"
+					fi
+
 					MODPRDE="$MOIN/profiles/Default"
 					MODLIST="$MODPRDE/modlist.txt"
 					MOININI="$MOIN/${MO}.ini"
 					MOINEW=0
+
+					GLOBZMOIN="Z:${GLOBMOIN//\//\\\\}"
+
 					if [ ! -f "$MOININI" ]; then
 						MO2GADI="$(getGameDirFromAID "$MO2AID")"
-						
+
+						writelog "INFO" "${FUNCNAME[0]} - Creating an initial '$MOININI'"
+
 						if [ -d "$MO2GADI" ]; then
 							MO2GAZDI="Z:${MO2GADI//\//\\\\}"
 							mkProjDir "$MOIN"
@@ -14434,17 +14486,36 @@ function manageMO2GInstance {
 							echo "[General]"
 							echo "gameName=$MO2GAMINI"
 							echo "selected_profile=@ByteArray(Default)"
-							echo "gamePath=@ByteArray($MO2GAZDI)"
+							echo "gamePath=@ByteArray($MO2GAZDI)"	
+							echo "[Settings]"
+							echo "download_directory=${GLOBZMOIN}\\\\downloads"
+							echo "cache_directory=${GLOBZMOIN}\\\\webcache"
+							echo "mod_directory=${GLOBZMOIN}\\\mods"
+							echo "overwrite_directory=${GLOBZMOIN}\\\\overwrite"
+							echo "profiles_directory=${GLOBZMOIN}\\\\profiles"
 							} >> "$MOININI"
 							MOINEW=1
 						else
 							writelog "SKIP" "${FUNCNAME[0]} - '$MO2AID' is a supported Id, but the game installation could not be found"
 						fi
+					else
+						writelog "INFO" "${FUNCNAME[0]} - '$MOININI' does already exist"
+						if grep -q "${GLOBZMOIN}" "$MOININI"; then
+							writelog "INFO" "${FUNCNAME[0]} - and it uses $PROGNAME paths"
+						else
+							# XXXXXXXXXXXX maybe TODO optionally add above paths if missing
+							writelog "INFO" "${FUNCNAME[0]} - the file was created by the user, leaving it unmodified"
+						fi
 					fi
 					if [ -d "$MOIN" ]; then
 						if [ -n "$2" ]; then
-							writelog "INFO" "${FUNCNAME[0]} - Using $MO instance '$MO2GAM'"
-							MO2INST="$MO2GAM"
+							if [ "$2" == "portable" ]; then
+								writelog "INFO" "${FUNCNAME[0]} - Using $2 instance"
+								MO2INST="$2"	
+							else
+								writelog "INFO" "${FUNCNAME[0]} - Using $MO instance '$MO2GAM'"
+								MO2INST="$MO2GAM"
+							fi
 						else
 							if [ "$MOINEW" -eq 1 ]; then
 								writelog "INFO" "${FUNCNAME[0]} - Created initial $MO instance '$MO2GAM'"
@@ -14458,7 +14529,7 @@ function manageMO2GInstance {
 				fi
 			else
 				STAMO2=0
-				writelog "SKIP" "${FUNCNAME[0]} - '$MO2AID' is no supported $MO game"
+				writelog "SKIP" "${FUNCNAME[0]} - '$1' is no supported $MO game"
 				listMO2Games
 			fi
 		fi
@@ -14477,7 +14548,12 @@ function prepareMO2 {
 	STAMO2=1
 	if [ -n "$1" ] && [ "$1" != "$NON" ]; then
 		if [ "$1" -eq "$1" ] 2>/dev/null; then
-			manageMO2GInstance "$1" "X"
+			if [ -n "$MOINST" ] && [ "$MOINST" == "portable" ]; then
+				manageMO2GInstance "$1" "$MOINST"
+			else
+				manageMO2GInstance "$1"
+			fi
+
 			if [ "$2" == "disabled" ]; then
 				STAMO2=0
 			fi
@@ -14495,9 +14571,14 @@ function prepareMO2 {
 		if [ -f "$MO2INSTFAIL" ]; then
 			writelog "SKIP" "${FUNCNAME[0]} - '$MO2INSTFAIL' found - seems like installation failed previously - skipping ${FUNCNAME[0]}"
 		else
-			writelog "INFO" "${FUNCNAME[0]} - Updating/creating $MO instances"
-			createAllMO2Instances
-			STAMO2=1
+			if [ "$MOINST" == "global" ]; then
+				updateMO2GlobConf
+				writelog "INFO" "${FUNCNAME[0]} - Updating/creating $MO instances for $MOINST instance"
+				createAllMO2Instances
+				STAMO2=1
+			else
+				writelog "SKIP" "${FUNCNAME[0]} - $MOINST instance running - nothing to prepare"
+			fi
 		fi
 	fi
 
@@ -14506,33 +14587,39 @@ function prepareMO2 {
 			StatusWindow "$(strFix "$NOTY_INSTSTART" "$MO")" "installMO2" "InstallMO2Status"
 		fi
 
-		prepAllMO2Games "set"
+		if [ "$MOINST" == "global" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - preparing all games for $MOINST instance"
+			prepAllMO2Games "set"
+		fi
 
 		if [ -f "$MO2EXE" ]; then
-			if [ -z "$MO2INST" ]; then
-				if [ -f "$NMXHLOG" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - No $MO instance provided - searching last one found in '$NMXHLOG'"
-					RINST1="$(tac "$NMXHLOG" | grep -m1 \"reg\")"
-					RINST2="${RINST1##*\"reg\" }"
-					RINST="$(cut -d '"' -f2 <<< "$RINST2")"
-					if [ -n "$RINST" ]; then
-						MO2INST1="$(grep -m1 "\"$RINST\"" "$MO2GAMES" | cut -d ';' -f1)"
-						MO2INST="${MO2INST1//\"}"
-						writelog "INFO" "${FUNCNAME[0]} - Found '$RINST' as last used game in '$NMXHLOG', so using instance '$MO2INST'"
-						MO2AID="$(grep -m1 "\"$RINST\"" "$MO2GAMES" | cut -d ';' -f2)"
-						manageMO2GInstance "${MO2AID//\"}" "X"
-						if [ -z "$EFD" ]; then
-							if [ -z "$APPMAFE" ]; then
-								APPMAFE="$(listAppManifests | grep -m1 "${MO2AID//\"}.acf")"
+			if [ "$MOINST" == "global" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Checking for instance to be launched as $MOINST instance"
+				if [ -z "$MO2INST" ]; then
+					if [ -f "$NMXHLOG" ]; then
+						writelog "INFO" "${FUNCNAME[0]} - No $MO instance provided - searching last one found in '$NMXHLOG'"
+						RINST1="$(tac "$NMXHLOG" | grep -m1 \"reg\")"
+						RINST2="${RINST1##*\"reg\" }"
+						RINST="$(cut -d '"' -f2 <<< "$RINST2")"
+						if [ -n "$RINST" ]; then
+							MO2INST1="$(grep -m1 "\"$RINST\"" "$MO2GAMES" | cut -d ';' -f1)"
+							MO2INST="${MO2INST1//\"}"
+							writelog "INFO" "${FUNCNAME[0]} - Found '$RINST' as last used game in '$NMXHLOG', so using instance '$MO2INST'"
+							MO2AID="$(grep -m1 "\"$RINST\"" "$MO2GAMES" | cut -d ';' -f2)"
+							manageMO2GInstance "${MO2AID//\"}" "X"
+							if [ -z "$EFD" ]; then
+								if [ -z "$APPMAFE" ]; then
+									APPMAFE="$(listAppManifests | grep -m1 "${MO2AID//\"}.acf")"
+								fi
+								EFD="$(getGameDirFromAM "$APPMAFE")"
 							fi
-							EFD="$(getGameDirFromAM "$APPMAFE")"
 						fi
+					else
+						writelog "INFO" "${FUNCNAME[0]} - No log '$NMXHLOG' found, so the last used instance can't be determined - using last supported instance installed instead"
+						LAINST="$(checkInstalledMO2Games "li" | tail -n1)"
+						MO2INST="$(cut -d ';' -f2 <<< "$LAINST")"
+						MO2AID="$(cut -d ';' -f1 <<< "$LAINST")"
 					fi
-				else
-					writelog "INFO" "${FUNCNAME[0]} - No log '$NMXHLOG' found, so the last used instance can't be determined - using last supported instance installed instead"
-					LAINST="$(checkInstalledMO2Games "li" | tail -n1)"
-					MO2INST="$(cut -d ';' -f2 <<< "$LAINST")"
-					MO2AID="$(cut -d ';' -f1 <<< "$LAINST")"
 				fi
 			fi
 
@@ -14552,17 +14639,18 @@ function prepareMO2 {
 function startMO2 {
 	prepareMO2 "$NON" "gui"
 	if [ -d "${MO2EXE%/*}" ] ; then
-		writelog "INFO" "${FUNCNAME[0]} - Starting '$MO2EXE' in standalone mode with command:" E
+		writelog "INFO" "${FUNCNAME[0]} - Starting '$MO2EXE'" E
 		PFXSUTEMP="$GPFX/$DRCU/$STUS/Temp"
 		mkProjDir "$PFXSUTEMP"
 		cd "${MO2EXE%/*}" >/dev/null || return
-			if [ -n "$MO2INST" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - WINEDEBUG=\"-all\" WINEPREFIX=\"$MO2PFX\" \"$MO2WINE\" \"$MO2EXE\" -i \"$MO2INST\"" E
-				WINEDEBUG="-all" WINEPREFIX="$MO2PFX" "$MO2WINE" "$MO2EXE" -i "$MO2INST" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}_${IFILE##*/}.log"
-			else
-				writelog "INFO" "${FUNCNAME[0]} - WINEDEBUG=\"-all\" WINEPREFIX=\"$MO2PFX\" \"$MO2WINE\" \"$MO2EXE\"" E
-				WINEDEBUG="-all" WINEPREFIX="$MO2PFX" "$MO2WINE" "$MO2EXE" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}_${IFILE##*/}.log"
-			fi
+
+		if [ -n "$MO2INST" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - WINEDEBUG=\"-all\" WINEPREFIX=\"$MO2PFX\" \"$MO2WINE\" \"$MO2EXE\" -i \"$MO2INST\"" E
+			WINEDEBUG="-all" WINEPREFIX="$MO2PFX" "$MO2WINE" "$MO2EXE" -i "$MO2INST" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}_${IFILE##*/}.log"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - WINEDEBUG=\"-all\" WINEPREFIX=\"$MO2PFX\" \"$MO2WINE\" \"$MO2EXE\"" E
+			WINEDEBUG="-all" WINEPREFIX="$MO2PFX" "$MO2WINE" "$MO2EXE" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}_${IFILE##*/}.log"
+		fi
 		cd - >/dev/null || return
 		mkProjDir "$PFXSUTEMP"
 	elif [ -f "$MO2INSTFAIL" ]; then
@@ -14574,29 +14662,51 @@ function startMO2 {
 
 function dlMod2nexurl {
 	setMO2Vars
-	# improvable - feel free to open a PR
+
 	MONGUR1="${1//nxm:\/\/}"
 	MONGURL="${MONGUR1%%/*}"
-	MODLER="$STLSHM/dlNexMod-$MONGURL"
+	MYPORTDLDAT="${STLMO2DLDATDIR}/${MONGURL}.conf"
 
-	if [ -f "$MODLER" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - Download Url '$1' for game '$MONGURL' using currently running MO session via '$MODLER'"
-		"$MODLER" "$1" >"$MODLER.log" 2>"$MODLER.log"
-	else
-		setSteamPath "SROOT"
-		MONINST="$(grep -i "\"$MONGURL\"" "$MO2GAMES" | head -n1 | cut -d ';' -f1)"
-		MOIN="$MO2PFX/$DRCU/$STUS/$ADLO/$MO/${MONINST//\"}"
-		MOININI="$MOIN/${MO}.ini"
+	function dlMod2globnexurl {
+		MYGLOBDLDAT="${STLMO2DLDATDIR}/global.conf"
 
-		if [ -f "$MOININI" ]; then
-			cd "${MO2EXE%/*}" >/dev/null || return
-				writelog "INFO" "${FUNCNAME[0]} - Download Url '$1' for game '$MONGURL'" "E"
-				writelog "INFO" "${FUNCNAME[0]} - STEAM_COMPAT_CLIENT_INSTALL_PATH=\"$SROOT\" STEAM_COMPAT_DATA_PATH=\"$MO2COMPDATA\" \"$MO2RUNPROT\" \"run\" \"${MO}.exe\" \"\$1\""
-				STEAM_COMPAT_CLIENT_INSTALL_PATH="$SROOT" STEAM_COMPAT_DATA_PATH="$MO2COMPDATA" "$MO2RUNPROT" "run" "${MO}.exe" "$1"
+		if [ -f "$MYGLOBDLDAT" ]; then
+			source "$MYGLOBDLDAT"
+			if [ -d "${GMO2EXE%/*}" ] && [ -f "$RUNPROTON" ] && [ -n "$STEAM_COMPAT_CLIENT_INSTALL_PATH" ] && [ -n "$STEAM_COMPAT_DATA_PATH" ]; then
+				MYINST="$(grep -m1 "\"${MONGURL}\"" "$MO2GAMES" | cut -d ';' -f1)"
+				MYINST="${MYINST//\"/}"
+				if [ -n "$MYINST" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Starting global '$RUNPROTON run ${MO}.exe -i $MYINST $1'"
+					STEAM_COMPAT_CLIENT_INSTALL_PATH="$STEAM_COMPAT_CLIENT_INSTALL_PATH" STEAM_COMPAT_DATA_PATH="$STEAM_COMPAT_DATA_PATH" "$RUNPROTON" "run" "${MO}.exe" -i "$MYINST" "$1" 2>&1 | tee /tmp/RUNMO2DL.log
+				else
+					writelog "ERROR" "${FUNCNAME[0]} - Could not find a valid $MO instance for '${MONGURL}' - giving up"
+				fi
+			else
+				writelog "ERROR" "${FUNCNAME[0]} - Attempted to download Url '$1' for game '$MONGURL', but seems like global '$MYGLOBDLDAT' has incomplete data - giving up" "E"
+			fi
+		else
+			writelog "ERROR" "${FUNCNAME[0]} - Attempted to download Url '$1' for game '$MONGURL', but the source script '$MYGLOBDLDAT' for global $MO is missing - giving up" "E"
+		fi
+	}
+
+	if [ -f "$LAMOINST" ] && grep -q "global" "$LAMOINST"; then
+		writelog "INFO" "${FUNCNAME[0]} - The last used $MO2 instance was global', so using the global $MO installation for the download" "E"
+		dlMod2globnexurl "$1"
+	elif [ -f "$MYPORTDLDAT" ]; then
+		source "$MYPORTDLDAT"
+		if [ -d "${GMO2EXE%/*}" ] && [ -f "$RUNPROTON" ] && [ -n "$STEAM_COMPAT_CLIENT_INSTALL_PATH" ] && [ -n "$STEAM_COMPAT_DATA_PATH" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Download Url '$1' for game '$MONGURL' using data from portable '$MYPORTDLDAT'"
+			cd "${GMO2EXE%/*}" >/dev/null || return
+			writelog "INFO" "${FUNCNAME[0]} - Starting portable '$RUNPROTON run ${MO}.exe $1'"
+			STEAM_COMPAT_CLIENT_INSTALL_PATH="$STEAM_COMPAT_CLIENT_INSTALL_PATH" STEAM_COMPAT_DATA_PATH="$STEAM_COMPAT_DATA_PATH" "$RUNPROTON" run "${MO}.exe" "$1" 2>&1 | tee /tmp/RUNMO2DL.log
 			cd - >/dev/null || return
 		else
-			writelog "SKIP" "${FUNCNAME[0]} - Download Url is for game '$MONGURL', which does not have an instance in '$MO2PFX/$DRCU/$STUS/$ADLO/$MO'"
+			writelog "ERROR" "${FUNCNAME[0]} - Attempted to download Url '$1' for game '$MONGURL', but seems like portable '$MYPORTDLDAT' has incomplete data - trying global $MO" "E"
+			dlMod2globnexurl "$1"
 		fi
+	else
+		writelog "INFO" "${FUNCNAME[0]} - Attempted to download Url '$1' for game '$MONGURL', but the source script '$MYPORTDLDAT' for portable $MO2 is missing - trying to start a global $MO" "E"
+		dlMod2globnexurl "$1"
 	fi
 }
 
@@ -15974,9 +16084,14 @@ function prepareLaunch {
 	writelog "INFO" "${FUNCNAME[0]} - launchSteamGame:"
 	launchSteamGame
 
-	# GAME ENDED - Closing:
-	writelog "STOP" "######### CLEANUP #########"
-	closeSTL "######### DONE - $PROGNAME $PROGVERS #########"
+	if [ "$KEEPSTLOPEN" -eq 1 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - KEEPSTLOPEN is enabled - re-opening the $PROGNAME menu"
+		prepareLaunch X
+	else
+		# GAME ENDED - Closing:
+		writelog "STOP" "######### CLEANUP #########"
+		closeSTL "######### DONE - $PROGNAME $PROGVERS #########"
+	fi
 }
 
 function switchProton {
@@ -16619,6 +16734,39 @@ function gameFix {
 	fi
 }
 
+function updateMO2GlobConf {
+	mkProjDir "$STLMO2DLDATDIR"
+	MYGLOBDLDAT="${STLMO2DLDATDIR}/global.conf"
+	writelog "INFO" "${FUNCNAME[0]} - Updating '$MYGLOBDLDAT' with up to date data"
+	{
+		echo "GMO2EXE=\"$MO2EXE\""
+		echo "RUNPROTON=\"$MO2RUNPROT\""
+		echo "STEAM_COMPAT_CLIENT_INSTALL_PATH=\"$STEAM_COMPAT_CLIENT_INSTALL_PATH\""
+		echo "STEAM_COMPAT_DATA_PATH=\"$MO2CODA\""
+	} > "$MYGLOBDLDAT"
+}
+
+function updateMO2PortConf {
+	MONGURL="$(grep -i "\"$MO2GAM\"" "$MO2GAMES" | head -n1 | cut -d ';' -f4)"
+	MONGURL="${MONGURL//\"}"
+
+	mkProjDir "$STLMO2DLDATDIR"
+	MYPORTDLDAT="${STLMO2DLDATDIR}/${MONGURL}.conf"
+
+	if [ -z "${MONGURL}" ]; then
+		writelog "WARN" "${FUNCNAME[0]} - extracting the gamename MONGURL from '$MO2GAMES' by looking for '$MO2GAM' failed - the file '$MYPORTDLDAT' won't be found"
+	fi
+
+	writelog "INFO" "${FUNCNAME[0]} - Updating '$MYPORTDLDAT' with up to date data"
+
+	{
+		echo "GMO2EXE=\"$GMO2EXE\""
+		echo "RUNPROTON=\"$RUNPROTON\""
+		echo "STEAM_COMPAT_CLIENT_INSTALL_PATH=\"$STEAM_COMPAT_CLIENT_INSTALL_PATH\""
+		echo "STEAM_COMPAT_DATA_PATH=\"$STEAM_COMPAT_DATA_PATH\""
+	} > "$MYPORTDLDAT"
+}
+
 function prepMO2 {
 	function setBaseMO2RunCmd {
 		unset RUNCMD
@@ -16628,20 +16776,24 @@ function prepMO2 {
 				break
 			fi
 		done <<< "$(printf "%s\n" "$@")"
-		# done <<< "$(printf "%s\n" "${#RUNCMD[@]}")"
 	}
 
 	if [ "$ISGAME" -eq 2 ] && [ "$USEWINE" -ne 1 ]; then
 		if [ "$MO2MODE" != "disabled" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - MO2MODE is '$MO2MODE' - preparing MO2 symlinks in '$GPFX'"
+			if [ "$MOINST" == "global" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - MO2MODE is '$MO2MODE' - preparing MO2 symlinks in '$GPFX' for '$MOINST' instance"
 
-			GAMMO2DAT="$GPFX/$DRCU/$STUS/$ADLO/$MO"
-			ORGMO2DAT="$MO2PFX/$DRCU/$STUS/$ADLO/$MO"
-			createOrUpdateSymDir "$GAMMO2DAT" "$ORGMO2DAT"
+				GAMMO2DAT="$GPFX/$DRCU/$STUS/$ADLO/$MO"
+				ORGMO2DAT="$MO2PFX/$DRCU/$STUS/$ADLO/$MO"
+				createOrUpdateSymDir "$GAMMO2DAT" "$ORGMO2DAT"
 
-			OMODDIR="$MO2PFX/$MORDIR"
-			GMODDIR="$GPFX/$MORDIR"
-			createOrUpdateSymDir "$GMODDIR" "$OMODDIR"
+				OMODDIR="$MO2PFX/$MORDIR"
+				GMODDIR="$GPFX/$MORDIR"
+				createOrUpdateSymDir "$GMODDIR" "$OMODDIR"
+			else
+				writelog "INFO" "${FUNCNAME[0]} - MO2MODE is '$MO2MODE' - preparing MO2 symlinks in '$GPFX' for '$MOINST' instance"
+			fi
+			
 			setBaseMO2RunCmd "$@"
 			GMO2EXE="$GPFX/$MOERPATH"
 		fi
@@ -16681,7 +16833,30 @@ function disabledWIPSilentMode {
 
 		if [ "$MO2MODE" == "gui" ]; then
 			if [ -n "$MO2GAM" ]; then
-				RUNCMD=("${RUNCMD[@]}" "$MO2EXE" "-i" "$MO2GAM")
+				if [ -n "$MOINST" ] && [ "$MOINST" == "portable" ]; then
+				#XXXXXXXXXXXXXXXX
+				# testing and not working because wabbajack wants to open a nexus url for authentication, which doesn't seem to work
+					USEWABBAJACK=0
+
+					WAB="wabbajack"
+					if [ "$USEWABBAJACK" -eq 1 ]; then
+						writelog "INFO" "${FUNCNAME[0]} - ${WAB^} is enabled - starting"
+						WABINST="$MO2DLDIR/${WAB^}.exe"
+						export DOTNET_ROOT="$VTX_DOTNET_ROOT"
+						export DOTNET_BUNDLE_EXTRACT_BASE_DIR="$VTX_DOTNET_ROOT"
+						installDotNet "$MO2PFX" "$MO2WINE" "48"
+					#	WINEDEBUG="-all" WINEPREFIX="$MO2PFX" "$MO2WINE" "$WABINST" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}_${WAB}.log"
+						RUNCMD=("$MO2WINE" "$WABINST")
+					else
+						writelog "INFO" "${FUNCNAME[0]} - ${WAB^} MOINST $MOINST"
+
+						writelog "INFO" "${FUNCNAME[0]} - Running $MOINST instance"
+						RUNCMD=("${RUNCMD[@]}" "$MO2EXE")
+					fi
+				else
+					RUNCMD=("${RUNCMD[@]}" "$MO2EXE" "-i" "${MO2GAM//\"}")
+				fi
+
 				writelog "INFO" "${FUNCNAME[0]} - Starting '$SGNAID' with $MO gui via '${RUNCMD[*]}'"
 				notiShow "$(strFix "$NOTY_STARTVEMO" "$GN" "$AID")"
 			else
@@ -16689,17 +16864,12 @@ function disabledWIPSilentMode {
 				writelog "INFO" "${FUNCNAME[0]} - Starting '$SGNAID' with $MO gui via '${RUNCMD[*]}'"
 				notiShow "$(strFix "$NOTY_STARTVEMO" "$GN" "$AID")"
 			fi
-		
-			MONGURL="$(grep -i "\"$MO2GAM\"" "$MO2GAMES" | head -n1 | cut -d ';' -f4)"
-			MONGURL="${MONGURL//\"}"
-			MODLER="$STLSHM/dlNexMod-$MONGURL"
-			head -n1 "$0" > "$MODLER"
-			{
-			echo "cd \"${GMO2EXE%/*}\" >/dev/null || return"
-			echo "STEAM_COMPAT_CLIENT_INSTALL_PATH=\"$STEAM_COMPAT_CLIENT_INSTALL_PATH\" STEAM_COMPAT_DATA_PATH=\"$STEAM_COMPAT_DATA_PATH\" \"$RUNPROTON\" \"run\" \"${MO}.exe\" -i \"${MO2GAM//\"}\" \"\$1\""
-			echo "cd - >/dev/null || return"
-			} >> "$MODLER"
-			chmod +x "$MODLER"
+
+			if [ -n "$MOINST" ] && [ "$MOINST" == "portable" ]; then
+				updateMO2PortConf
+			else
+				updateMO2GlobConf
+			fi
 		fi
 	fi
 }
@@ -17522,7 +17692,11 @@ function createDLWineList {
 		rm "$WINEDLLIST" 2>/dev/null
 		while read -r CWURL; do
 		if grep -q "$GHURL" <<< "${!CWURL}"; then
-			"$WGET" -q "${!CWURL}" -O - 2> >(grep -v "SSL_INIT") | grep "tar.gz\|zip\|tar.xz" | grep "releases" | grep -oE '\"/[^\\"]+' | sed "s|^\"|$GHURL|g" >> "$WINEDLLIST"
+			SRCURL="${!CWURL}"
+			SRCURL="${SRCURL//\/releases}"
+			SRCURL="${SRCURL//$GHURL/$AGHURL\/repos}"
+			SRCURL="${SRCURL}/releases"
+			"$WGET" -q "$SRCURL" -O - | jq -r '.[].assets[].browser_download_url' | grep "tar.gz\|tar.xz" >>  "$WINEDLLIST"
 		fi
 		done <<< "$(grep "^CW_" "$STLURLCFG" | cut -d '=' -f1)"
 	fi
@@ -17834,42 +18008,44 @@ function setWineVars {
 }
 
 function setSLRReap {
-	if [ "$HAVESLRCT" -eq 1 ] && [ "$USESLR" -eq 1 ]; then
-		writelog "INFO" "${FUNCNAME[0]} - ## SLR is enabled via USESLR=$USESLR - prepending SLR from Compatibility Tool to the current launch command"
-		SLRCMD=("${RUNSLRCT[@]}")
-	fi
-	
-	if [ "$HAVESLR" -eq 1 ] && [ "$USESLR" -eq 1 ]; then
-		writelog "INFO" "${FUNCNAME[0]} - ## SLR is enabled via USESLR=$USESLR - prepending SLR from command line to the current launch command"
-		SLRCMD=("${RUNSLR[@]}")
-	fi
-
-	if [ "$HAVESLR" -eq 1 ] && [ "$USESLR" -eq 0 ] ; then
-		writelog "SKIP" "${FUNCNAME[0]} - USESLR is disabled, so skipping '$SLR' found in the commandline: '${RUNSLR[*]}'"
-	fi
-
-	RUNFORCESLR=0
-	if [ "$HAVESLR" -eq 0 ] && [ "$USESLR" -eq 1 ] ; then
-		if [ -n "$LASTSLR" ] && [ -f "${LASTSLR% --verb*}" ] && [ "$FORCESLR" -eq 1 ]; then
-			writelog "INFO" "${FUNCNAME[0]} - ## No SLR provided from command line, but FORCESLR is $FORCESLR, so prepending LASTSLR '$LASTSLR' to the current launch command"
-			mapfile -d " " -t -O "${#LASTSLRARR[@]}" LASTSLRARR < <(printf '%s' "$LASTSLR")
-			SLRCMD=("${LASTSLRARR[@]}")
-			RUNFORCESLR=1
-		else
-			writelog "SKIP" "${FUNCNAME[0]} - No SLR was provided via command line, so configuration USESLR '$USESLR' is ignored '${LASTSLR% --verb*}' $FORCESLR"
+	if [ -n "$USESLR" ] && [ -n "$HAVESLR" ]; then
+		if [ "$HAVESLRCT" -eq 1 ] && [ "$USESLR" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - ## SLR is enabled via USESLR=$USESLR - prepending SLR from Compatibility Tool to the current launch command"
+			SLRCMD=("${RUNSLRCT[@]}")
 		fi
-	fi
+		
+		if [ "$HAVESLR" -eq 1 ] && [ "$USESLR" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - ## SLR is enabled via USESLR=$USESLR - prepending SLR from command line to the current launch command"
+			SLRCMD=("${RUNSLR[@]}")
+		fi
 
-	if [ "$HAVEREAP" -eq 1 ] && [ "$USEREAP" -eq 1 ]; then
-		writelog "INFO" "${FUNCNAME[0]} - ## reaper command is enabled via USEREAP=$USEREAP - prepending to the current launch command"
-		SLRCMD=("${REAPCMD[@]}" "${SLRCMD[@]}")
-	elif [ "$HAVEREAP" -eq 0 ] && [ "$USEREAP" -eq 1 ] && [ -n "$LASTREAP" ] && [ -f "$LASTREAP" ] && [ "$FORCEREAP" -eq 1 ]; then
-		writelog "INFO" "${FUNCNAME[0]} - ## No reaper command provided from command line, but FORCEREAP is $FORCEREAP, so prepending LASTREAP '$LASTREAP' to the current launch command"
-		SLRCMD=("$LASTREAP" "SteamLaunch" "AppId=$AID" "--" "${SLRCMD[@]}")
-	fi
+		if [ "$HAVESLR" -eq 1 ] && [ "$USESLR" -eq 0 ] ; then
+			writelog "SKIP" "${FUNCNAME[0]} - USESLR is disabled, so skipping '$SLR' found in the commandline: '${RUNSLR[*]}'"
+		fi
+		RUNFORCESLR=0
 
-	if [ -n "${SLRCMD[0]}" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - Adding SLR '${SLRCMD[*]}' to the launch command"
+		if [ "$HAVESLR" -eq 0 ] && [ "$USESLR" -eq 1 ] ; then
+			if [ -n "$LASTSLR" ] && [ -f "${LASTSLR% --verb*}" ] && [ "$FORCESLR" -eq 1 ]; then
+				writelog "INFO" "${FUNCNAME[0]} - ## No SLR provided from command line, but FORCESLR is $FORCESLR, so prepending LASTSLR '$LASTSLR' to the current launch command"
+				mapfile -d " " -t -O "${#LASTSLRARR[@]}" LASTSLRARR < <(printf '%s' "$LASTSLR")
+				SLRCMD=("${LASTSLRARR[@]}")
+				RUNFORCESLR=1
+			else
+				writelog "SKIP" "${FUNCNAME[0]} - No SLR was provided via command line, so configuration USESLR '$USESLR' is ignored '${LASTSLR% --verb*}' $FORCESLR"
+			fi
+		fi
+	
+		if [ "$HAVEREAP" -eq 1 ] && [ "$USEREAP" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - ## reaper command is enabled via USEREAP=$USEREAP - prepending to the current launch command"
+			SLRCMD=("${REAPCMD[@]}" "${SLRCMD[@]}")
+		elif [ "$HAVEREAP" -eq 0 ] && [ "$USEREAP" -eq 1 ] && [ -n "$LASTREAP" ] && [ -f "$LASTREAP" ] && [ "$FORCEREAP" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - ## No reaper command provided from command line, but FORCEREAP is $FORCEREAP, so prepending LASTREAP '$LASTREAP' to the current launch command"
+			SLRCMD=("$LASTREAP" "SteamLaunch" "AppId=$AID" "--" "${SLRCMD[@]}")
+		fi
+
+		if [ -n "${SLRCMD[0]}" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Adding SLR '${SLRCMD[*]}' to the launch command"
+		fi
 	fi
 }
 
@@ -18773,7 +18949,7 @@ function howto {
 	echo "                                         <absolute/path/to/a/yad/appimage>"
 	echo "                                         <http/s/yad/appimage/download/url>"
 	echo "                                       (see Wiki for details)"
-	echo "   openissue|oi                      Opens issue tracker on GitHub in your default browser"
+	echo "    openissue|oi                     Opens issue tracker on GitHub in default browser"
 }
 
 #STARTCMDLINE
@@ -20258,10 +20434,6 @@ function closeSTL {
 		writelog "INFO" "${FUNCNAME[0]} - '$BROWSER' instance was created, so closing it now, to exit the game session"
 		"$PKILL" -f "$BROWSER"
 		rm "$STLSHM/KillBrowser-$AID.txt"
-	fi
-
-	if [ "$MO2MODE" != "disabled" ] && [ -n "$MODLER" ] && [ -f "$MODLER" ]; then 
-		rm "$MODLER" 2>/dev/null
 	fi
 
 	cleanSUTemp
