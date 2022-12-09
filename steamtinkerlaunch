@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v11.12.20221209-2"
+PROGVERS="v11.12.20221209-3"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -21580,23 +21580,23 @@ function installFilesSteamDeck {
 		if ! gitUpdate "$PREFIX" "$PROJECTPAGE"; then
 			writelog "WARN" "${FUNCNAME[0]} - Could not clone/pull changes from git repo, doing some checks"
 			if ! ping -q -c1 archlinux.org &>/dev/null; then
-				writelog "WARN" "${FUNCNAME[0]} - Looks like GitHub might be down, will not attempt another update right now"
-				echo "Seems like Git is down, not attempting an update."
+				writelog "WARN" "${FUNCNAME[0]} - Could not ping Arch Linux website, maybe there is a connectivity problem - Install / Update may fail"
 			else
 				writelog "WARN" "${FUNCNAME[0]} - Looks like GitHub is ok, attempting to update via a fresh clone to '${PREFIX}-temp'"
-				if ! gitUpdate "${PREFIX}-temp"; then
-					writelog "WARN" "${FUNCNAME[0]} - Still failed to download from GitHub, though it should be up -Not trying to update again, maybe something is wrong with install files"
-					echo "Could not pull down changes from Git, even though GitHub should be up. Not attempting another update right now, maybe try again later or try a fresh install if the issue persists."
-				else
-					# Currently we assume the removal of the existing files and moving of the new files will succeed ok
-					# There could be a very rare instance where due to permission faults or somethimg, this fails
-					# We aren't worried about this for now, but a PR might be welcome on this in future :-)
-					writelog "INFO" "${FUNCNAME[0]} - Fresh clone succeeded ok, overwriting existing installation with fresh clone"
-					rm -rf "$PREFIX"
-					mv "${PREFIX}-temp" "$PREFIX"
-					rm -rf "${PREFIX}-temp"
-					writelog "INFO" "${FUNCNAME[0]} - Successfully pulled updated changes!"
-				fi
+			fi
+
+			if ! gitUpdate "${PREFIX}-temp" "$PROJECTPAGE"; then
+				writelog "WARN" "${FUNCNAME[0]} - Still failed to download from GitHub, though it should be up -Not trying to update again, maybe something is wrong with install files"
+				echo "Could not pull down changes from Git, even though GitHub should be up. Not attempting another update right now, maybe try again later or try a fresh install if the issue persists."
+			else
+				# Currently we assume the removal of the existing files and moving of the new files will succeed ok
+				# There could be a very rare instance where due to permission faults or somethimg, this fails
+				# We aren't worried about this for now, but a PR might be welcome on this in future :-)
+				writelog "INFO" "${FUNCNAME[0]} - Fresh clone succeeded ok, overwriting existing installation with fresh clone"
+				rm -rf "$PREFIX"
+				mv "${PREFIX}-temp" "$PREFIX"
+				rm -rf "${PREFIX}-temp"
+				writelog "INFO" "${FUNCNAME[0]} - Successfully pulled updated changes!"
 			fi
 		else
 			writelog "INFO" "${FUNCNAME[0]} - Fetching from git seems to have succeeded ok."
@@ -22115,7 +22115,7 @@ function main {
 }
 
 function stlCleanup {
-	if [ "$USETRAYICON" -eq 1 ];
+	if [ "$USETRAYICON" -eq 1 ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Ensuring tray icon is definitely removed"
 		"$PKILL" -9 "$YADTRAYPID"  # Stops tray icon from lingering
 	fi
