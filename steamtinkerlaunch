@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v11.12.20221211-1"
+PROGVERS="v11.12.20221212-1"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -9857,6 +9857,28 @@ function getWinecfgExecutable {
 	fi
 }
 
+# Extracted from part of setModWine
+# Does not handle Proton version mismatches but this should hopefully be handled before game launch -- a PR would be welcome for this until I get around to it :-)
+function getWineBinFromProtPath {
+	INPROTON="$1"
+
+	CHECKDNWINED="$(dirname "$INPROTON")/$DBW"  # Valve Proton structure
+	CHECKDNWINEF="$(dirname "$INPROTON")/$FBW"  # GE-Proton structure
+
+	FWINEVAR=""
+	if [ -f "$CHECKDNWINED" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - CHECKDNWINED is a file -- '${CHECKDNWINED}' -- Looks like we have a Valve Proton here"
+		FWINEVAR="$CHECKDNWINED"
+	elif [ -f "$CHECKDNWINEF" ]; then
+		FWINEVAR="$CHECKDNWINEF"
+		writelog "INFO" "${FUNCNAME[0]} - CHECKDNWINEF is a file -- '${CHECKDNWINEF}' -- Looks like we have a GE-Proton here"
+	else
+		writelog "ERROR" "${FUNCNAME[0]} - Could not find Wine binary for Proton '$INPROTON' - can't continue"
+	fi
+
+	echo "$FWINEVAR"
+}
+
 # These functions will always use the game Proton version instead of the Proton version in the dropdown
 # I don't think there's a way for us to get the Proton version in this dropdown to use with the game
 #
@@ -9866,12 +9888,13 @@ function getWinecfgExecutable {
 # I think this is a better tradeoff than having the menu close, as the amount of users who would change the Proton version are probably minimal
 # compared to the users who would be annoyed by the dialog closing
 function oneTimeWinecfg {
-	writelog "INFO" "${FUNCNAME[0]} - Running OneTime Winecfg"
+	OTPROT="$( getProtPathFromCSV "$USEPROTON" )"
+	RUNWINE="$( getWineBinFromProtPath "$OTPROT" )"  # $RUNWINE is used as the WINE argument for extWine64Run
+	
+	writelog "INFO" "${FUNCNAME[0]} - Running OneTime Winecfg with Wine '$RUNWINE'"
 	
 	getWinecfgExecutable
 	extWine64Run "$OTWINECFGEXE"
-	# PROTWINECMD="${RUNPROTON//\"/}/bin/wine"
-	# WINE="$PROTWINECMD" WINEPREFIX="$GPFX" "$PROTWINECMD" "${WINECFG}.exe"  # Maybe check if we're on Steam Deck and use Winetricks for this? Would also require Winetricks but we could fetch and install that  
 }
 
 function oneTimeWinetricks {
@@ -9880,8 +9903,11 @@ function oneTimeWinetricks {
 	if [ ! -x "$(command -v "$WINETRICKS")" ]; then
 		writelog "WARN" "${FUNCNAME[0]} - Could not run one-time Winetricks because Winetricks is not installed - Skipping"
 	else
-		writelog "INFO" "${FUNCNAME[0]} - Running OneTime Winetricks for prefix '$GPFX'"  # TODO set wine/proton version here with WINE=
-		WINEPREFIX="$GPFX" "$WINETRICKS"
+		OTPROT="$( getProtPathFromCSV "$USEPROTON" )"
+		OTWINE="$( getWineBinFromProtPath "$OTPROT" )"  # $RUNWINE is used as the WINE argument for extWine64Run
+
+		writelog "INFO" "${FUNCNAME[0]} - Running OneTime Winetricks for prefix '$GPFX' with Wine '$OTPROTWINE'"  # TODO set wine/proton version here with WINE=
+		WINE="$OTWINE" WINEPREFIX="$GPFX" "$WINETRICKS"
 	fi
 }
 
@@ -13995,10 +14021,10 @@ function setModWine {
 		writelog "INFO" "${FUNCNAME[0]} - CHECKDWINEF is '$CHECKDNWINEF'"
 		if [ -f "$CHECKDNWINED" ]; then
 			FWINEVAR="$CHECKDNWINED"
-			writelog "INFO" "CHECKDNWINED is a file -- '${CHECKDNWINED}'"
+			writelog "INFO" "${FUNCNAME[0]} - CHECKDNWINED is a file -- '${CHECKDNWINED}'"
 		elif [ -f "$CHECKDNWINEF" ]; then
 			FWINEVAR="$CHECKDNWINEF"
-			writelog "INFO" "CHECKDNWINEF is a file -- '${CHECKDNWINEF}'"
+			writelog "INFO" "${FUNCNAME[0]} - CHECKDNWINEF is a file -- '${CHECKDNWINEF}'"
 		else
 			writelog "ERROR" "${FUNCNAME[0]} - $DNWINEVAR was not found - can't continue"
 		fi
