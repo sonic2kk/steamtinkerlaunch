@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v11.12.20221212-6"
+PROGVERS="v11.12.20221214-1"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -9889,7 +9889,7 @@ function getWineBinFromProtPath {
 # compared to the users who would be annoyed by the dialog closing
 function oneTimeWinecfg {
 	OTPROT="$( getProtPathFromCSV "$USEPROTON" )"
-	RUNWINE="$( getWineBinFromProtPath "$OTPROT" )"  # $RUNWINE is used as the WINE argument for extWine64Run
+	OTWINE="$( getWineBinFromProtPath "$OTPROT" )" 
 
 	if [ -z "$GPFX" ]; then
 		getGameFiles "$AID"  # Potentially fix GPFX not being set in some situations
@@ -9900,9 +9900,9 @@ function oneTimeWinecfg {
 	if [ -z "$RUNPROTON" ]; then 
 		RUNPROTON="$OTPROT"  # Makes getWinecfgExecutable happy
 	fi
+
 	getWinecfgExecutable
-	
-	extWine64Run "$OTWINECFGEXE" # GPFX is not defined on Steam Deck for some reason? Need to fix, then this should work
+	WINEDEBUG="-all" WINEPREFIX="$GPFX" "$OTWINE" "$OTWINECFGEXE" # GPFX is not defined on Steam Deck for some reason? Need to fix, then this should work
 }
 
 function oneTimeWinetricks {
@@ -9912,13 +9912,13 @@ function oneTimeWinetricks {
 		writelog "WARN" "${FUNCNAME[0]} - Could not run one-time Winetricks because Winetricks is not installed - Skipping"
 	else
 		OTPROT="$( getProtPathFromCSV "$USEPROTON" )"
-		OTWINE="$( getWineBinFromProtPath "$OTPROT" )"  # $RUNWINE is used as the WINE argument for extWine64Run
+		OTWINE="$( getWineBinFromProtPath "$OTPROT" )"
 
 		if [ -z "$GPFX" ]; then
 			getGameFiles "$AID"  # Potentially fix GPFX not being set in some situations
 		fi
 
-		writelog "INFO" "${FUNCNAME[0]} - Running OneTime Winetricks for prefix '$GPFX' with Wine '$OTWINE'"
+		writelog "INFO" "${FUNCNAME[0]} - Running OneTime Winetricks for prefix '$GPFX'"
 		
 		WINE="$OTWINE" WINEPREFIX="$GPFX" "$WINETRICKS"  # GPFX is not defined on Steam Deck for some reason? Need to fix, then this should work
 	fi
@@ -22227,12 +22227,15 @@ function main {
 	# Check quiet mode to hide notifier
 	STLQUIET=0
 	if echo "$@" | grep -qow '\-q'; then
-		commandline "$@"
+		# commandline "$@"
+		writelog "INFO" "${FUNCNAME[0]} - Quiet mode enabled with '-q', suppressing notifier for this execution"
+		export STLQUIET=1
+		USENOTIFIER=0
 	fi
 
 	steamdedeckt
 	setLocalInstall
-	getCurrentCommandline "$@"
+	getCurrentCommandline "$@"  # Maybe pass args with removed '-q' flag in the above if block
 	saveOrgVars
 	emptyVars "O"
 
