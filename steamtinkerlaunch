@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v11.12.20221212-4"
+PROGVERS="v11.12.20221212-5"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -5624,7 +5624,7 @@ function MainMenu {
 	if [ "$SMALLDESK" -eq 1 ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Looks like we're in Steam Deck desktop mode here on the Main Menu"
 
-		SETHEAD="$SETHEAD \n <b>${GUI_SDCR}:</b> $STEAMDECKCOMPATRATING"
+		SETHEAD="$SETHEAD \n<b>${GUI_SDCR}:</b> $STEAMDECKCOMPATRATING"
 	fi
 
 	if [ "$SMALLDESK" -eq 0 ]; then
@@ -9890,12 +9890,18 @@ function getWineBinFromProtPath {
 function oneTimeWinecfg {
 	OTPROT="$( getProtPathFromCSV "$USEPROTON" )"
 	RUNWINE="$( getWineBinFromProtPath "$OTPROT" )"  # $RUNWINE is used as the WINE argument for extWine64Run
-	
-	getGameFiles "$AID"  # Potentially fix GPFX not being set in some situations
+
+	if [ -z "$GPFX" ]; then
+		getGameFiles "$AID"  # Potentially fix GPFX not being set in some situations
+	fi
 
 	writelog "INFO" "${FUNCNAME[0]} - Running OneTime Winecfg with Wine '$RUNWINE'"
-	
+
+	if [ -z "$RUNPROTON" ]; then 
+		RUNPROTON="$OTPROT"  # Makes getWinecfgExecutable happy
+	fi
 	getWinecfgExecutable
+	
 	extWine64Run "$OTWINECFGEXE" # GPFX is not defined on Steam Deck for some reason? Need to fix, then this should work
 }
 
@@ -9908,7 +9914,9 @@ function oneTimeWinetricks {
 		OTPROT="$( getProtPathFromCSV "$USEPROTON" )"
 		OTWINE="$( getWineBinFromProtPath "$OTPROT" )"  # $RUNWINE is used as the WINE argument for extWine64Run
 
-		getGameFiles "$AID"  # Potentially fix GPFX not being set in some situations
+		if [ -z "$GPFX" ]; then
+			getGameFiles "$AID"  # Potentially fix GPFX not being set in some situations
+		fi
 
 		writelog "INFO" "${FUNCNAME[0]} - Running OneTime Winetricks for prefix '$GPFX' with Wine '$OTWINE'"
 		
