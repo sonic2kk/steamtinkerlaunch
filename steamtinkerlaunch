@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v11.12.20221214-1"
+PROGVERS="v11.12.20221215-1"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -9887,6 +9887,13 @@ function getWineBinFromProtPath {
 #
 # I think this is a better tradeoff than having the menu close, as the amount of users who would change the Proton version are probably minimal
 # compared to the users who would be annoyed by the dialog closing
+
+
+
+# These two winecfg and winetricks functions need to be updated to accomodate a passed in AppID from the command line
+# - needs to be able to get game config / proton versions
+# - handle cases where a Proton version is not set for a game that has never been launched with STL
+# - abort for native games (may need to check executable for this?)
 function oneTimeWinecfg {
 	OTPROT="$( getProtPathFromCSV "$USEPROTON" )"
 	OTWINE="$( getWineBinFromProtPath "$OTPROT" )" 
@@ -9905,6 +9912,7 @@ function oneTimeWinecfg {
 	WINEDEBUG="-all" WINEPREFIX="$GPFX" "$OTWINE" "$OTWINECFGEXE" # GPFX is not defined on Steam Deck for some reason? Need to fix, then this should work
 }
 
+# Needs updated to accomodate a passed in AppID from the command line
 function oneTimeWinetricks {
 	writelog "INFO" "${FUNCNAME[0]} - Getting Winetricks binary"
 	chooseWinetricks
@@ -19538,10 +19546,31 @@ function commandline {
 	elif [ "$1" == "winetricks" ] || [ "$1" == "wt" ]; then
 		FUSEID "$2"
 		chooseWinetricksPrefix "$USEID"
-	elif [ "$1" == "runwinecfg" ]; then
-		oneTimeWinecfg
-	elif [ "$1" == "runwinetricks" ]; then
-		oneTimeWinetricks
+	elif [ "$1" == "runwinecfg" ] || [ "$1" == "onetimewinecfg" ] || [ "$1" == "otwcfg" ]; then
+		# Assumes that if `runwinecfg` is called without any arguments that it's an internal call
+		# Otherwise we assume if *any* arguments are passed that we're a user calling it from the command-line
+		if [ -n "$2" ]; then 
+			# Always assume second argument is the AppID
+			#
+			# Could be improved in future by trying to find a matching game based on an entered game name
+			# In the case of multiple matches we could just take the first match
+			#
+			# (Maybe AppID should be checked for first, on the off-chance that a game's names is the same as an AppID? 
+			writelog "INFO" "${FUNCNAME[0]} - Looks like we're a user calling this from the command line -- User passed '$2'"
+			oneTimeWinecfg "$2"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Looks like we're getting an internal One-Time Winecfg call"
+			oneTimeWinecfg
+		fi
+	elif [ "$1" == "runwinetricks" ] || [ "$1" == "onetimewinetricks" ] || [ "$1" == "otwt" ]; then
+		# All of the above comments about Winecfg apply to this Winetricks logic as well
+		if [ -n "$2" ]; then 
+			writelog "INFO" "${FUNCNAME[0]} - Looks like we're a user calling this from the command line -- User passed '$2'"
+			oneTimeWinetricks "$2"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Looks like we're getting an internal One-Time Winetricks call"
+			oneTimeWinetricks
+		fi
 	elif [ "$1" == "winedebugchannel" ] || [ "$1" == "wdc" ]; then
 		FUSEID "$2"
 		SetWineDebugChannels "$USEID"
