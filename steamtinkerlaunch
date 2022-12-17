@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v11.12.20221215-2"
+PROGVERS="v11.12.20221217-1"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -10699,10 +10699,16 @@ function redirectSCDP {
 		else
 			writelog "INFO" "${FUNCNAME[0]} - Using regular $CODA '$STEAM_COMPAT_DATA_PATH'"
 			if [ -L "$STEAM_COMPAT_DATA_PATH" ]; then
-				rm "${STEAM_COMPAT_DATA_PATH}/used_by-$AID" 2>/dev/null
-				writelog "INFO" "${FUNCNAME[0]} - '$STEAM_COMPAT_DATA_PATH' is a symlink. Removing it, as REDIRCOMPDATA is $REDIRCOMPDATA"
-				rm "$STEAM_COMPAT_DATA_PATH"
-				mkProjDir "$STEAM_COMPAT_DATA_PATH"
+				if [ -f "${STEAM_COMPAT_DATA_PATH}/used_by-$AID" ]; then
+					rm "${STEAM_COMPAT_DATA_PATH}/used_by-$AID" 2>/dev/null
+					writelog "INFO" "${FUNCNAME[0]} - '$STEAM_COMPAT_DATA_PATH' is a symlink. Removing it, as REDIRCOMPDATA is $REDIRCOMPDATA"
+					rm "$STEAM_COMPAT_DATA_PATH"
+					mkProjDir "$STEAM_COMPAT_DATA_PATH"
+				else
+					# See STL issue #692 for background on the above removing logic removing valid user prefixes
+					writelog "INFO" "${FUNCNAME[0]} - '$STEAM_COMPAT_DATA_PATH' is a symlink, but we don't have a 'used_by-$AID' file in this game's prefix -- Assuming this is a user-created symlink and not removing"
+					writelog "INFO" "${FUNCNAME[0]} - User-created symlinks are valid on Steam Deck to work around some Steam Client bugs"
+				fi
 			fi
 		fi
 	fi
