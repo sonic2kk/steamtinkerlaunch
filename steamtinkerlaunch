@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v11.12.20221217-1"
+PROGVERS="v11.12.20221218-1"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -9975,8 +9975,10 @@ function OneTimeRunGui {
 			--field="$GUI_OTEXE!$DESC_OTEXE":FL "${OTEXE//\"}" \
 			--field="$GUI_OTARGS!$DESC_OTARGS" "${OTARGS//\"}"\
 			--field="$BUT_RUNWINECFG!$DESC_RUNWINECFG":FBTN "$( realpath "$0" ) runwinecfg" \
-			--field="$BUT_RUNWINETRICKS!$DESC_RUNWINETRICKS":FBTN "$( realpath "$0" ) runwinetricks" \
+			--field="$GUI_OTRCUSTWORKINGDIR!$DESC_OTRCUSTWORKINGDIR" "" \
+			--field="$GUI_OTRUSEEXEDIR!$DESC_OTRUSEEXEDIR":CHK "FALSE" \
 			--field="$GUI_OTSAVE!$DESC_OTSAVE":CHK "FALSE" \
+			--field="$BUT_RUNWINETRICKS!$DESC_RUNWINETRICKS":FBTN "$( realpath "$0" ) runwinetricks" \
 			--button="$BUT_CAN:0" \
 			--button="$BUT_RUNONETIMECMD:2" \
 			"$GEOM"
@@ -9994,7 +9996,9 @@ function OneTimeRunGui {
 						OTEXE="${OTARR[1]}"
 						OTARGS="${OTARR[2]}"
 						# OTARR[3] and OTARR[4] are the WINECFG and WINETRICKS buttons
-						OTSAVE="${OTARR[5]}"	
+						OTUSEEXEDIR="${OTARR[5]}"
+						OTCUSTWORKDIR="${OTARR[6]}"
+						OTSAVE="${OTARR[7]}"	
 
 						RUNOTPROTON="$(getProtPathFromCSV "$OTPROTON")"
 						if [ ! -f "$RUNOTPROTON" ]; then
@@ -10006,6 +10010,7 @@ function OneTimeRunGui {
 						elif [ ! -f "$OTEXE" ]; then
 							writelog "SKIP" "${FUNCNAME[0]} - No executable found"
 						else
+							# Set the custom arguments passed from the textbox for the exe
 							if [ -z "$OTARGS" ]; then
 								RUNOTARGS=""
 							else
@@ -10022,8 +10027,30 @@ function OneTimeRunGui {
 								updateConfigEntry "OTARGS" "$OTARGS" "$STLGAMECFG"
 							fi
 
+							OTRUNDIR="$( pwd )"
+							if [ "$OTUSEEXEDIR" == "TRUE" ]; then
+								OTRUNDIR="$( dirname "$OTEXE" )"
+								if [ -d "$OTRUNDIR" ]; then
+									writelog "INFO" "${FUNCNAME[0]} - User enabled 'OTUSEEXEDIR' - Setting directory to run executable to same directory - '$OTRUNDIR'"
+								else
+									writelog "WARN" "${FUNCNAME[0]} - User enabled 'OTUSEEXEDIR' but its directory '$OTRUNDIR' did NOT exist - Ignoring and calling back to pwd - '$( pwd )'"
+									OTRUNDIR="$( pwd )"
+								fi
+							elif [ -n "$OTCUSTWORKDIR" ]; then
+								if [ -d "$OTCUSTWORKDIR" ]; then
+									OTRUNDIR="$OTCUSTWORKDIR"
+									writelog "INFO" "${FUNCNAME[0]} - User entered path for a custom working directory and it exists - Using '$OTCUSTWORKDIR' as directory to run executable from"
+								else
+									writelog "WARN" "${FUNCNAME[0]} - User entered path for a custom working directory but it does NOT exist - Ignoring and sticking with current script working directory based on 'pwd' - '$OTRUNDIR'"
+								fi
+							else
+								writelog "INFO" "${FUNCNAME[0]} - User did not select any custom executable path options - Keeping as default based on current script directory with 'pwd' - '$OTRUNDIR'"
+							fi
+
+							# Run in subshell to avoid messing with current script paths
+							# TODO - Allow running native Linux programs here too
 							writelog "INFO" "${FUNCNAME[0]} - Starting '$OTEXE' with '$OTPROTON' with STEAM_COMPAT_DATA_PATH '$STEAM_COMPAT_DATA_PATH'"
-							STEAM_COMPAT_DATA_PATH="$STEAM_COMPAT_DATA_PATH" "$RUNOTPROTON" run "$OTEXE" "${RUNOTARGS[@]}"
+							(cd "$OTRUNDIR" && STEAM_COMPAT_DATA_PATH="$STEAM_COMPAT_DATA_PATH" "$RUNOTPROTON" run "$OTEXE" "${RUNOTARGS[@]}")
 						fi
 					}
 				;;	
