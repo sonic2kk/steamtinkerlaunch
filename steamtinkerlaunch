@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v11.12.20221219-1"
+PROGVERS="v11.12.20221221-1 (reshade-custcmd-fix)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -7800,11 +7800,25 @@ function ShaderRepoDialog {
 }
 
 function setFullGameExePath {
-	if [[ ( "$USECUSTOMCMD" -eq 1 && -f "$CUSTOMCMD" ) ]] || [[ ( "$USECUSTOMCMD" -eq 1 && -f "$CUSTOMCMD" && "$CUSTOMCMDRESHADE" -eq 1 ) || "$ONLY_CUSTOMCMD" -eq 1 ]]; then
+	# if [[ ( "$USECUSTOMCMD" -eq 1 && -f "$CUSTOMCMD" ) ]] || [[ ( "$USECUSTOMCMD" -eq 1 && -f "$CUSTOMCMD" && "$CUSTOMCMDRESHADE" -eq 1 ) || "$ONLY_CUSTOMCMD" -eq 1 ]]; then
+	if [[ ( "$USECUSTOMCMD" -eq 1 && -f "$CUSTOMCMD" && "$CUSTOMCMDRESHADE" -eq 1 ) || "$ONLY_CUSTOMCMD" -eq 1 ]]; then
 		FGEP="${CUSTOMCMD%/*}"
+
 		writelog "INFO" "${FUNCNAME[0]} - Using the directory '$FGEP' of the used custom command as absolute game exe path"
+
+		if [ "$CUSTOMCMDRESHADE" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - User enabled 'CUSTOMCMDRESHADE' - Using custom command directory with exe as ReShade installation directory"
+		fi
+
 		export "$1"="$FGEP"
 	else
+		if [ "$USECUSTOMCMD" -eq 1 ] && [ ! -f "$CUSTOMCMD" ]; then
+			writelog "WARN" "${FUNCNAME[0]} - User enabled Custom Command, but custom command at '$CUSTOMCMD' is not a file!"
+		fi
+
+		if [ "$CUSTOMCMDRESHADE" -eq 0 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - User did not enable 'CUSTOMCMDRESHADE' - Using the game's exe directroy as the ReShade installation directory"
+		fi
 		setShaderDest
 		if [ -n "$SHADDESTDIR" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Using SHADDESTDIR '$SHADDESTDIR' for '$1'"
