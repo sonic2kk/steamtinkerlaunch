@@ -24,7 +24,7 @@ If you don't press any buttons it just goes with the defaults and launches the g
 The menus can get a little confusing but it consolidates it all in one place and is way more simple
 than trying to remember dozens of commands for various settings that one might need."_
 
-![image](https://user-images.githubusercontent.com/7917345/186237765-8803c246-a025-413b-be8c-f2c13243291d.png)
+![image](https://user-images.githubusercontent.com/7917345/209706023-40eefb0d-b115-48a5-aa6f-c6509863811b.png)
 
 ## What Does It Do?
 SteamTinkerLaunch offers a huge variety of features, too many to list in this Readme. Please see the [Features List](https://github.com/sonic2kk/steamtinkerlaunch/wiki#features) and their associated wiki pages for a full breakdown. However, here are some of the key features offered by SteamTinkerLaunch. Note that some of these features may not work with Flatpak Steam!
