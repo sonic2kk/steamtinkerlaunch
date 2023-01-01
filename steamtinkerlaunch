@@ -250,7 +250,8 @@ SHADERREPOBLOCKLIST="$STLSHADDIR/repoblocklist.txt"
 TWEAKDIR="$STLCFGDIR/tweaks"																# the parent directory for all user tweakfiles
 USERTWEAKDIR="$TWEAKDIR/user"																# the place for the users own main tweakfiles
 TWEAKCMDDIR="$TWEAKDIR/cmd"																	# dir for scriptfiles used by tweakfiles
-SBSTWEAKDIR="$TWEAKDIR/sbs"																	# directory for optional config overrides for easier side-by-side VR gaming
+SBSTWEAKDIR="$TWEAKDIR/sbs"
+D8VKDLDIR="$STLDLDIR/d8vk"																# directory for optional config overrides for easier side-by-side VR gaming
 MO2DLDIR="$STLDLDIR/mo2"
 HMMDLDIR="$STLDLDIR/hedgemodmanager"
 HMMVERFILE="$HMMDLDIR/hmmver.txt"
@@ -5217,6 +5218,7 @@ function prepareMenu {
 
 function openGameMenu {
 	prepareMenu "$@"
+	autoBumpD8VK  # Should this go here?
 	if [ -z "$2" ]; then
 		FUNC="$NON"
 	else
@@ -8698,18 +8700,62 @@ function useSpecialK {
 
 ### D8VK START ###
 function autoBumpD8VK {
-	# See autoBumpReShade
+	# Probably just has to remove existing D8VK files so fetchLatestD8VK will automatically update
 	:
 }
 
+# Would handle the version checking and downloading, as well as checking if D8VK already exists in STLCFGDIR
 function fetchLatestD8VK {
-	:
+	# NOTE: At time of writing, D8VK does not package releases and is only available from GitHub Actions builds
+	# Use similar logic to HMM Nightly downloading to fetch D8VK
+	writelog "INFO" "${FUNCNAME[0]} - Fetching latest D8VK version"
+
+	D8VKAPIURLPATH="${D8VKPROJURL//$GHURL}"
+
+	D8VKLATESTBUILD="${HMMPROJURL}/$( fetchLatestGitHubActionsBuild "${AGHURL}/repos${D8VKAPIURLPATH}" 1 "X" )"  # Used to get the latest dev version SHA
+	D8VKLATESTSHA="$( echo "$D8VKLATESTBUILD" | cut -d ";" -f 2 )"
+
+	D8VKARCHIVENAME="d8vk-master-${D8VKLATESTSHA}.zip"
+	D8VKARCHIVEPATH="$D8VKDLDIR/${D8VKARCHIVENAME}"
+
+	# D8VK URL from nightly will be something like 'https://nightly.link/AlpyneDreams/d8vk/workflows/artifacts/master/d8vk-master-{latest_commit_sha}.zip'
+	# Construct this URL based on the commit SHA returned from D8VKLATESTBUILD
+	# This has to be the FULL commit SHA
+	#
+	# If the build artifact naming changes, the artifact name may need changing from `master`
+	# A good way to sanity check this would be to check if `https://nightly.link/AlpyneDreams/d8vk/workflows/artifacts/master` is still valid
+	# Not sure how likely this is to change though
+	D8VKLATESTDEVURL="https://nightly.link${D8VKAPIURLPATH}/workflows/artifacts/master/${D8VKARCHIVENAME}"  # Use nightly.link to get latest artifact download link for D8VK
+
+	# Only download if we don't have D8VK downloaded already - Even if the version is out of date, autoBumpD8VK will take care of updating
+	# Also don't check if D8VK is already installed here, leave that to installD8VK
+	mkProjDir "$D8VKDLDIR"
+
+	
+
+	# if [ ! -f "$D8VKARCHIVEPATH" ] || [ ! -d "${D8VKEXTRACTPATH%.*}" ]; then
+		# dlCheck "$D8VKLATESTDEVURL" "$D8VKARCHIVEPATH" "X" "Downloading Latest D8VK" &>/dev/null
+
+		# Assume download success
+		# if [ -f "$D8VKARCHIVEPATH" ]; then
+
+		# fi
+	# else
+		# writelog "INFO" "${FUNCNAME[0]} - Either D8VK archive already downloaded or folder already exists, not downloading"
+	# fi
 }
 
 function installD8VK {
-	:
+	if [ -n "$GPFX" ] && [ -d "$GPFX" ]; then
+		# TODO check if already installed first + manage autoBump
+    	writelog "INFO" "${FUNCNAME[0]} - Installing D8VK for '$AID' to prefix '$GPFX'"
+		fetchLatestD8VK
+	else
+		writelog "ERROR" "${FUNCNAME[0]} - GPFX is invalid - '$GPFX' - Cannot install D8VK to invalid game prefix! Aborting..."
+	fi
 }
 
+# Should only be removed from game prefix using script -- Should not remove from downloads as other games may be using it
 function uninstallD8VK {
 	:
 }
@@ -12362,6 +12408,7 @@ function updateWineRegistryKey {
 function fetchLatestGitHubActionsBuild {
     PROJAPIURL="$1"
     ARTIFACTNUM=$2
+	FULLSHA="$3"  # Could be passed as a value like "X", any value will trigger this
 
     # /actions/runs
     ARTIFACTRUNSRESP="$( curl -s "${PROJAPIURL}/actions/runs" | jq '.workflow_runs[0]' )"
@@ -12372,9 +12419,14 @@ function fetchLatestGitHubActionsBuild {
     LATESTARTIFACTRESP="$( curl -s "${LATESTARTIFACTURL}" | jq ".artifacts[${ARTIFACTNUM}]" )"
     LATESTARTIFACTID="$( echo "$LATESTARTIFACTRESP" | jq ".id" )"
     LATESTARTIFACTSHA="$( echo "$LATESTARTIFACTRESP" | jq ".workflow_run.head_sha" | cut -d '"' -f 2 )"
-    
+	
+	# Return latest SHA - Optionally return full SHA
     ARTIFACTDLURL="suites/${ARTIFACTRUNSUITEID}/artifacts/${LATESTARTIFACTID}"
-    echo "${ARTIFACTDLURL};${LATESTARTIFACTSHA::7}"
+	if [ -z "$FULLSHA" ]; then
+    	echo "${ARTIFACTDLURL};${LATESTARTIFACTSHA::7}"
+	else
+		echo "${ARTIFACTDLURL};${LATESTARTIFACTSHA}"
+	fi
 }
 
 # HMM doesn't really have a "setup" exe, but MO2 and Vortex use this naming convention so... keeping it :-)
