@@ -98,6 +98,7 @@ Several great people have mentioned SteamTinkerLaunch on their platforms/channel
 | **[Mark Dougherty](https://linuxgamingcentral.com/)** | Has written [several](https://linuxgamingcentral.com/posts/news-stl-v10-released/) [articles](https://linuxgamingcentral.com/posts/stl-v11-released/) about SteamTinkerLaunch |
 | **[Kevin Wammer](https://overkill.wtf/author/kevin/)** | Wrote [this article](https://overkill.wtf/steam-deck-steam-tinker-launch-stl/) |
 | **[Starlogical from HiTechLoLife](https://www.youtube.com/c/HiTechLoLife)** | Created [this video](https://www.youtube.com/watch?v=4FRU2fuvLlw) describing SteamTinkerLaunch |
+| **[joker1007](https://joker1007.hatenablog.com)** (Japanese) | Wrote a [huge article](https://joker1007.hatenablog.com/entry/2022/11/28/014825) on SteamTinkerLaunch for Japanese users |
 
  
 ## Configuration
@@ -128,7 +129,7 @@ As well as logs, there is a wiki page for [troubleshooting](https://github.com/s
 Keep in mind that you are using SteamTinkerLaunch at your own risk and that you are responsible for the third party programs that you launch with it. SteamTinkerLaunch is not affiliated with Valve Corporation or Steam.
 
 ## Contributing
-SteamTinkerLaunch is always looking for new contributors. See [CONTRIBUTING.md](https://github.com/sonic2kk/steamtinkerlaunch/blob/master/CONTRIBUTING.md) for some more information on how to contribute to the project. 
+SteamTinkerLaunch is always looking for new contributors. See [CONTRIBUTING.md](https://github.com/sonic2kk/steamtinkerlaunch/blob/master/CONTRIBUTING.md) for some more information on how to contribute to the project.
 
 ## License
 SteamTinkerLaunch is licensed under the GNU General Public License v3.0. See [LICENSE](https://github.com/sonic2kk/steamtinkerlaunch/blob/master/LICENSE) for more information.
