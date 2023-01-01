@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v12.12.20230101"
+PROGVERS="v12.12.20230101-2"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -12288,23 +12288,28 @@ function installDotNet {
 	else
 		DNVER="48"
 	fi
-	LOGSUFFIX="$4"
+	LOGSUFFIX=" ${4}"
 	DNFORCE="$5"
 	chooseWinetricks
 	ILOG="$STLSHM/installDotNet.log"
-	rm "$ILOG" 2>/dev/null
+	DNLOGPRETTYNAME="${ILOG}${LOGSUFFIX}"  # Mainly used for HMM game install logs
+	rm "${ILOG}${LOGNAME}" 2>/dev/null
 
 	# Experiment -- Add option to 'force' dotnet install (idea here is to fix dotnet48 failing)
+	# Adding --force will force it to always be installed for a given prefix, even if it is already installed  -- May not even fix issues, but could
+	writelog "INFO" "${FUNCNAME[0]} - Starting $DOTN$DNVER install - check ${DNLOGPRETTYNAME}"
 	if [ -z "$DNFORCE" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - Starting $DOTN$DNVER install - check $ILOG"
 		writelog "INFO" "${FUNCNAME[0]} - WINEDEBUG=\"-all\" WINEPREFIX=\"$INSTPFX\" WINE=\"$INSTWINE\" \"$WINETRICKS\" --unattended \"$DOTN$DNVER\""
+		
+		WINEDEBUG="-all" WINEPREFIX="$INSTPFX" WINE="$INSTWINE" "$WINETRICKS" --unattended "$DOTN$DNVER" >> "${DNLOGPRETTYNAME}"
 	else
-		writelog "INFO" "${FUNCNAME[0]} - Starting $DOTN$DNVER install (with '--force') - check $ILOG"
-		writelog "INFO" "${FUNCNAME[0]} - WINEDEBUG=\"-all\" WINEPREFIX=\"$INSTPFX\" WINE=\"$INSTWINE\" \"$WINETRICKS\" --force --unattended \"$DOTN$DNVER\""		
+		writelog "INFO" "${FUNCNAME[0]} - WINEDEBUG=\"-all\" WINEPREFIX=\"$INSTPFX\" WINE=\"$INSTWINE\" \"$WINETRICKS\" --force --unattended \"$DOTN$DNVER\""
+		
+		WINEDEBUG="-all" WINEPREFIX="$INSTPFX" WINE="$INSTWINE" "$WINETRICKS" --force --unattended "$DOTN$DNVER" >> "${DNLOGPRETTYNAME}"
 	fi
 
-	WINEDEBUG="-all" WINEPREFIX="$INSTPFX" WINE="$INSTWINE" "$WINETRICKS" --unattended "$DOTN$DNVER" >> "${ILOG}${LOGSUFFIX}"
-	writelog "INFO" "${FUNCNAME[0]} - Stopped $DOTN$DNVER install - check $ILOG"
+	# WINEDEBUG="-all" WINEPREFIX="$INSTPFX" WINE="$INSTWINE" "$WINETRICKS" --unattended "$DOTN$DNVER" >> "${ILOG}${LOGSUFFIX}"
+	writelog "INFO" "${FUNCNAME[0]} - Stopped $DOTN$DNVER install - check ${DNLOGPRETTYNAME}"
 }
 
 function updateWineRegistryKey {
@@ -12787,9 +12792,15 @@ function prepareHMMGames {
 
 				writelog "INFO" "${FUNCNAME[0]} - Install dotnet48 for install 64bit HedgeModManager game '$HMMGN'"
 				notiShow "$( strFix "$NOTY_HMMGAMCONFIG" "$HMMGN" )" "X"
-				echo "Running configuration for '$HMMGN'"
-				installDotNet "$HMMGPFX" "$HMMWINE" "48" &>/dev/null
-				writelog "INFO" "${FUNCNAME[0]} - Finished installing dotnet48 for '$HMMGN'"
+				if [ -z "$1" ]; then
+					echo "Running configuration for '$HMMGN'"
+					installDotNet "$HMMGPFX" "$HMMWINE" "48" "$HMMGN" &>/dev/null
+					writelog "INFO" "${FUNCNAME[0]} - Finished installing dotnet48 for '$HMMGN'"
+				else
+					echo "Running configuration for '$HMMGN' using --force"
+					installDotNet "$HMMGPFX" "$HMMWINE" "48" "$HMMGN" "X" &>/dev/null
+					writelog "INFO" "${FUNCNAME[0]} - Finished installing dotnet48 for '$HMMGN' using --force"
+				fi
 			else
 				writelog "SKIP" "${FUNCNAME[0]} - Could not find compatdata dir for '$HMMGN' - Assuming that it is not installed"
 			fi
@@ -12807,10 +12818,13 @@ function startHMM {
 	# TODO:
 	# - Refine UI (add HMM button, etc)
 	HMMDLVERARG="$1"
+	HMMDOTNETFORCE="$2"
 
 	dlLatestHMM "$HMMDLVERARG"
 	installHMM
-	prepareHMMGames
+
+	# If this variable has *any* value, `--force` will be added to the installDotNet for each HMM game - This essentially forces a reinstall of dotnet for each game on each HMM bootup
+	prepareHMMGames "$HMMDOTNETFORCE" 
 	
 	writelog "INFO" "${FUNCNAME[0]} - Starting HedgeModManager in prefix '$HMMPFX' with Wine '$HMMWINE' and using executable at '$HMMEXE'"
 	echo "Starting HedgeModManager"
@@ -12993,7 +13007,7 @@ function createHMMDesktopFile {
 
 	# Associate GameBanana Mimes with DL desktop file
 	if [ -x "$(command -v "$XDGMIME" 2>/dev/null)" ]; then
-		writelog "INFO" "Setting download defaults for HedgeModManager GameBanana protocols via '$XDGMIME' pointing at '$HMMDFDLPA'"
+		writelog "INFO" "${FUNCNAME[0]} - Setting download defaults for HedgeModManager GameBanana protocols via '$XDGMIME' pointing at '$HMMDFDLPA'"
 		for HMMMIME in ${HMMGAMEMIMES//;/ }; do
 			"$XDGMIME" default "$HMMDFDL" "$HMMMIME"
 		done
@@ -19271,7 +19285,12 @@ function commandline {
 				dlLatestHMM "$CMDHMMDLVER"
 				installHMM
 			elif [ "$2" == "start" ] || [ "$2" == "s" ]; then
-				startHMM "$CMDHMMDLVER"
+				if [ "$4" == "--force" ] || [ "$4" == "-f" ]; then
+					# This will force dotnet48 to be reinstalled for each installed 64bit HMM game if `--force` or `-f` is passed to `steamtinkerlaunch hmm start` 
+					startHMM "$CMDHMMDLVER" "X"
+				else
+					startHMM "$CMDHMMDLVER"
+				fi
 			elif [ "$2" == "list-supported" ] || [ "$2" == "ls" ]; then
 				listSupportedHMMGames
 			elif [ "$2" == "list-installed" ] || [ "$2" == "li" ]; then
