@@ -44,6 +44,8 @@ You are also free to translate the string, if you speak the language. But if not
 This section has some tips and guidance to help with writing code for SteamTinkerLaunch.
 
 ### Use ShellCheck
+**Note**: You may have to use [ShellCheck v0.8.0](https://github.com/koalaman/shellcheck/releases/tag/v0.8.0) with SteamTinkerLaunch, due to an issue with memory consumption with newer versions of ShellCheck ([koalaman/shellcheck#2652](https://github.com/koalaman/shellcheck/issues/2652)).
+
 There is an awesome utility called [ShellCheck](http://shellcheck.net/) which helps ensure shell code is bug-free. It is strongly recommended to use this when developing for SteamTinkerLaunch, it's a good way to catch bugs and write well structured code.
 
 There may be rare instances where ShellCheck is a bit *too* helpful. In cases like that, you can add a `shellcheck disable` check to your code. In Pull Requests and/or in a comment near that section, please note the reason for disabling that ShellCheck warning.
