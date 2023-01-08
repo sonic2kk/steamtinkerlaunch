@@ -8704,10 +8704,13 @@ function autoBumpD8VK {
 	:
 }
 
-# Would handle the version checking and downloading, as well as checking if D8VK already exists in STLCFGDIR
+# Checks if D8VK already exists in STLCFGDIR and downloads if not
+#
+# D8VK doesn't have clear releases or versions (it's only available via GitHub Actions at time of writing), and while we could rely on SHAs for the version or find a way to fetch the version,
+# for now we will just download one version of D8VK and use that each time D8VK is selected.
+#
+# The auto-bump option exists to allow updating
 function fetchLatestD8VK {
-	# NOTE: At time of writing, D8VK does not package releases and is only available from GitHub Actions builds
-	# Use similar logic to HMM Nightly downloading to fetch D8VK
 	writelog "INFO" "${FUNCNAME[0]} - Fetching latest D8VK version"
 
 	D8VKAPIURLPATH="${D8VKPROJURL//$GHURL}"
@@ -8715,12 +8718,15 @@ function fetchLatestD8VK {
 	D8VKLATESTBUILD="${HMMPROJURL}/$( fetchLatestGitHubActionsBuild "${AGHURL}/repos${D8VKAPIURLPATH}" 1 "X" )"  # Used to get the latest dev version SHA
 	D8VKLATESTSHA="$( echo "$D8VKLATESTBUILD" | cut -d ";" -f 2 )"
 
-	D8VKARCHIVENAME="d8vk-master-${D8VKLATESTSHA}.zip"
-	D8VKARCHIVEPATH="$D8VKDLDIR/${D8VKARCHIVENAME}"
+	# We don't use the SHA in the filename we're looking for as this will change with each new D8VK build, meaning we wouldn't
+	# be able to rely on it to know if we already downloaded D8VK and we could end up with duplicates each time a new release is out
+	D8VKARCHIVENAME="d8vk-master-${D8VKLATESTSHA}.zip"  # Name of file at nightly.link
+	D8VKPRETTYARCHIVENAME="d8vk.zip"  # Name that we want to give the file when we download it
+	D8VKARCHIVEPATH="$D8VKDLDIR/${D8VKPRETTYARCHIVENAME}"  # Path to archive so we can check if it exists, etc
+	D8VKEXTRACTPATH="$D8VKDLDIR/d8vk-stl"  # Folder to extract D8VK into, makes it easier to remove D8VK (only remove one folder instead of X files)
 
 	# D8VK URL from nightly will be something like 'https://nightly.link/AlpyneDreams/d8vk/workflows/artifacts/master/d8vk-master-{latest_commit_sha}.zip'
-	# Construct this URL based on the commit SHA returned from D8VKLATESTBUILD
-	# This has to be the FULL commit SHA
+	# Construct this URL based on the commit SHA returned from D8VKLATESTBUILD - This has to be the FULL commit SHA
 	#
 	# If the build artifact naming changes, the artifact name may need changing from `master`
 	# A good way to sanity check this would be to check if `https://nightly.link/AlpyneDreams/d8vk/workflows/artifacts/master` is still valid
@@ -8731,18 +8737,25 @@ function fetchLatestD8VK {
 	# Also don't check if D8VK is already installed here, leave that to installD8VK
 	mkProjDir "$D8VKDLDIR"
 
-	
+	if [ ! -d "$D8VKEXTRACTPATH" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - No existing D8VK folder found, assuming D8VK has never been installed before"
+		if [ ! -f "$D8VKARCHIVEPATH" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Downloading D8VK archive from nightly.link '$D8VKLATESTDEVURL' to path '$D8VKARCHIVEPATH'"
+			dlCheck "$D8VKLATESTDEVURL" "$D8VKARCHIVEPATH"
 
-	# if [ ! -f "$D8VKARCHIVEPATH" ] || [ ! -d "${D8VKEXTRACTPATH%.*}" ]; then
-		# dlCheck "$D8VKLATESTDEVURL" "$D8VKARCHIVEPATH" "X" "Downloading Latest D8VK" &>/dev/null
+			"$UNZIP" -qo "$D8VKARCHIVEPATH" -d "$D8VKEXTRACTPATH"  # Extract D8VK archive to a subfolder in D8VK DL folder called 'd8vk-stl'
 
-		# Assume download success
-		# if [ -f "$D8VKARCHIVEPATH" ]; then
-
-		# fi
-	# else
-		# writelog "INFO" "${FUNCNAME[0]} - Either D8VK archive already downloaded or folder already exists, not downloading"
-	# fi
+			if [ -d "$D8VKEXTRACTPATH" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - D8VK archive successfully extracted to '$D8VKEXTRACTPATH'"
+			else
+				writelog "WARN" "${FUNCNAME[0]} - D8VK extract path '$D8VKEXTRACTPATH' does not seem to exist - Extraction may have failed!"
+			fi
+		else
+			writelog "INFO" "${FUNCNAME[0]} - D8VK archive already exists at '$D8VKDLDIR' - Not redownloading"
+		fi
+	else
+		writelog "INFO" "${FUNCNAME[0]} - D8VK extract folder found at '$D8VKEXTRACTPATH' - Assuming D8VK is ready for installation (already downloaded + extracted)"
+	fi
 }
 
 function installD8VK {
