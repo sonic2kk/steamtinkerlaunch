@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v12.12.20230101-2"
+PROGVERS="v12.12.20230108-1"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -2698,6 +2698,7 @@ function setDefaultCfgValues {
 		if [ -z "$CUSTOMCMD_ARGS" ]						; then	CUSTOMCMD_ARGS="$NON"; fi
 		if [ -z "$ONLY_CUSTOMCMD" ]						; then	ONLY_CUSTOMCMD="0";	fi
 		if [ -z "$FORK_CUSTOMCMD" ]						; then	FORK_CUSTOMCMD="0";	fi
+		if [ -z "$CUSTOMCMDFORCEWIN" ]					; then  CUSTOMCMDFORCEWIN="0"; fi
 		if [ -z "$WAITFORCUSTOMCMD" ]					; then	WAITFORCUSTOMCMD="0"; fi
 		if [ -z "$INJECT_CUSTOMCMD" ]					; then	INJECT_CUSTOMCMD="0"; fi
 		if [ -z "$INJECTWAIT" ]							; then	INJECTWAIT="0";	fi
@@ -3197,6 +3198,8 @@ function saveCfg {
 			echo "ONLY_CUSTOMCMD=\"$ONLY_CUSTOMCMD\""
 			echo "## $DESC_FORK_CUSTOMCMD"
 			echo "FORK_CUSTOMCMD=\"$FORK_CUSTOMCMD\""
+			echo "## $DESC_CUSTOMCMD_FORCEWIN"
+			echo "CUSTOMCMDFORCEWIN=\"$CUSTOMCMDFORCEWIN\""
 			echo "## $DESC_WAITFORCUSTOMCMD"
 			echo "WAITFORCUSTOMCMD=\"$WAITFORCUSTOMCMD\""
 			echo "## $DESC_INJECT_CUSTOMCMD"
@@ -4911,6 +4914,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_CUSTOMCMD_ARGS!$DESC_CUSTOMCMD_ARGS ('CUSTOMCMD_ARGS')" "${CUSTOMCMD_ARGS/#-/ -}" `#CAT_Misc` `#MENU_GAME` \
 --field="     $GUI_FORK_CUSTOMCMD!$DESC_FORK_CUSTOMCMD ('FORK_CUSTOMCMD')":CHK "${FORK_CUSTOMCMD/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_ONLY_CUSTOMCMD!$DESC_ONLY_CUSTOMCMD ('ONLY_CUSTOMCMD')":CHK "${ONLY_CUSTOMCMD/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_CUSTOMCMD_FORCEWIN!$DESC_CUSTOMCMD_FORCEWIN ('CUSTOMCMDFORCEWIN')":CHK "${CUSTOMCMDFORCEWIN/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_WAITFORCUSTOMCMD!$DESC_WAITFORCUSTOMCMD ('WAITFORCUSTOMCMD')":NUM "${WAITFORCUSTOMCMD/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_INJECT_CUSTOMCMD!$DESC_INJECT_CUSTOMCMD ('INJECT_CUSTOMCMD')":CHK "${INJECT_CUSTOMCMD/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_INJECTWAIT!$DESC_INJECTWAIT ('INJECTWAIT')":NUM "${INJECTWAIT/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
@@ -10191,9 +10195,20 @@ function launchCustomProg {
 			cd "$CUSTDIR" >/dev/null || return
 			writelog "INFO" "${FUNCNAME[0]} - Changed pwd into the custom directory '$PWD'"
 		fi
-	
-		if [ "$(file "$CUSTCOM" | grep -c "PE32")" -eq 1 ] || grep -q ".bat" <<< "$CUSTCOM"; then
-			writelog "INFO" "${FUNCNAME[0]} - '$CUSTCOM' seems to be a MS Windows program - starting through proton"
+
+		# Cannot always rely on `file` to return `PE32` even for Windows executables -- See #710
+		if [ "$(file "$CUSTCOM" | grep -c "PE32")" -eq 1 ] || grep -q ".bat" <<< "$CUSTCOM" || [ "$CUSTOMCMDFORCEWIN" -eq 1 ]; then
+			if [ "$CUSTOMCMDFORCEWIN" -eq 1 ]; then
+				writelog "INFO" "${FUNCNAME[0]} - CUSTOMCMDFORCEWIN is '$CUSTOMCMDFORCEWIN' - User wants to force this custom command as a Windows program"
+				if [ "$(file "$CUSTCOM" | grep -c "PE32")" -eq 0 ]; then
+					writelog "WARN" "${FUNCNAME[0]} - Custom command does not appear to be a Windows program by normal SteamTinkerLaunch checks, but CUSTOMCMDFORCEWIN was enabled, so using Proton anyway"
+				else
+					writelog "INFO" "${FUNCNAME[0]} - Custom command seems to be a Windows program anyway even though CUSTOMCMDFORCEWIN was enabled"
+				fi
+			else
+				writelog "INFO" "${FUNCNAME[0]} - '$CUSTCOM' seems to be a MS Windows program - starting through proton"
+			fi
+
 			if [ "$USEWICO" -eq 1 ] && [ "$(file "$CUSTCOM" | grep -c "(console)")" -eq 1 ]; then
 				writelog "INFO" "${FUNCNAME[0]} - '$CUSTCOM' seems to be a MS console program - starting using '$WICO'"
 				if [ "$FORK_CUSTOMCMD" -eq 1 ]; then	
