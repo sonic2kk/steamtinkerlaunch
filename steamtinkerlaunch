@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v12.12.20230101-2 (d8vk-support)"
+PROGVERS="v12.12.20230109-1 (d8vk-support)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -8699,20 +8699,8 @@ function useSpecialK {
 }
 
 ### D8VK START ###
-function autoBumpD8VK {
-	# Probably just has to remove existing D8VK files so fetchLatestD8VK will automatically update
-	:
-}
-
-# Checks if D8VK already exists in STLCFGDIR and downloads if not
-#
-# D8VK doesn't have clear releases or versions (it's only available via GitHub Actions at time of writing), and while we could rely on SHAs for the version or find a way to fetch the version,
-# for now we will just download one version of D8VK and use that each time D8VK is selected.
-#
-# The auto-bump option exists to allow updating
-function fetchLatestD8VK {
-	writelog "INFO" "${FUNCNAME[0]} - Fetching latest D8VK version"
-
+# Set vars so other D8VK functions can access them e.g. fetchLatestD8VK and installD8VK
+function setD8VKVars {
 	D8VKAPIURLPATH="${D8VKPROJURL//$GHURL}"
 
 	D8VKLATESTBUILD="${HMMPROJURL}/$( fetchLatestGitHubActionsBuild "${AGHURL}/repos${D8VKAPIURLPATH}" 1 "X" )"  # Used to get the latest dev version SHA
@@ -8732,6 +8720,27 @@ function fetchLatestD8VK {
 	# A good way to sanity check this would be to check if `https://nightly.link/AlpyneDreams/d8vk/workflows/artifacts/master` is still valid
 	# Not sure how likely this is to change though
 	D8VKLATESTDEVURL="https://nightly.link${D8VKAPIURLPATH}/workflows/artifacts/master/${D8VKARCHIVENAME}"  # Use nightly.link to get latest artifact download link for D8VK
+
+	D8VKSETUP="$D8VKEXTRACTPATH/setup_d3d8.sh"
+}
+
+function autoBumpD8VK {
+	# Probably just has to remove existing D8VK files so fetchLatestD8VK will automatically update
+	:
+}
+
+# Checks if D8VK already exists in STLCFGDIR and downloads if not
+#
+# D8VK doesn't have clear releases or versions (it's only available via GitHub Actions at time of writing), and while we could rely on SHAs for the version or find a way to fetch the version,
+# for now we will just download one version of D8VK and use that each time D8VK is selected.
+#
+# May be an idea to store the last downloaded SHA anyway, kind of like how we do for HMM, so auto-bump only re-downloads if the versions are different
+#
+# The auto-bump option exists to allow updating
+function fetchLatestD8VK {
+	writelog "INFO" "${FUNCNAME[0]} - Fetching latest D8VK version"
+
+	setD8VKVars
 
 	# Only download if we don't have D8VK downloaded already - Even if the version is out of date, autoBumpD8VK will take care of updating
 	# Also don't check if D8VK is already installed here, leave that to installD8VK
@@ -8761,8 +8770,34 @@ function fetchLatestD8VK {
 function installD8VK {
 	if [ -n "$GPFX" ] && [ -d "$GPFX" ]; then
 		# TODO check if already installed first + manage autoBump
-    	writelog "INFO" "${FUNCNAME[0]} - Installing D8VK for '$AID' to prefix '$GPFX'"
-		fetchLatestD8VK
+		# if [ ! d8vk already installed in pfx ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Installing D8VK for '$AID' to prefix '$GPFX'"
+			fetchLatestD8VK
+
+			if [ -d "$D8VKEXTRACTPATH" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Found D8VK extraction folder '$D8VKEXTRACTPATH' - Installing from this folder"
+
+				if [ -f "$D8VKSETUP" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Running D8VK install script with the following command:"
+					writelog "INFO" "${FUNCNAME[0]} - WINEPREFIX=\"$GPFX\" \"./${D8VKSETUP} install\""
+
+					WINEPREFIX="$GPFX" "./${D8VKSETUP} install"
+
+					# TODO check if prefix looks correct after installation
+					# if [ d8vk installed correctly ]; then
+						writelog "INFO" "${FUNCNAME[0]} - Successfully installed D8VK for '$AID' - Installed into prefix '$GPFX'"
+					# else
+						# writelog "ERROR" "${FUNCNAME[0]} - Failed to install D8VK - Probably should not happen, maybe something changed upstream or some permissions got messed up?"
+					# fi
+				else
+					writelog "ERROR" "D8VK setup script '$D8VKSETUP' not found -- D8VK cannot install, this issue should be reported as it means upstream has likely changed something!"
+				fi
+			else
+				writelog "ERROR" "${FUNCNAME[0]} - D8VK extraction folder '$D8VKEXTRACTPATH' does not exist, this is required for installation - Cannot install D8VK!"
+			fi
+		# else
+			# writelog "INFO" "${FUNCNAME[0]} - D8VK already installed"
+		# fi
 	else
 		writelog "ERROR" "${FUNCNAME[0]} - GPFX is invalid - '$GPFX' - Cannot install D8VK to invalid game prefix! Aborting..."
 	fi
