@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v12.12.20230115-3 (gamescope-updates)"
+PROGVERS="v12.12.20230115-4 (gamescope-updates)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -9644,10 +9644,10 @@ function GameScopeGui {
 
 	# Custom cursor image (--cursor) -- File picker
 	if [ -z "$GSCURSOR" ]; then
-		if grep -qw "\-\-cursor" <<< "$GAMESCOPE_ARGS"; then
+		if ! grep -qw "\-\-cursor" <<< "$GAMESCOPE_ARGS"; then
 			GSCURSOR=""
 		else
-			GSCURSOR="$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -A1 "\-\-cursor" | tail -n1)"
+			GSCURSOR="$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -A1 "\-\-cursor" | tail -n1 | sed -r -e "s/\s/\\\ /g")"  # Turns path '/home/gaben/Half Life 3/cur.png' into '/home/gaben/Half\ Life\ 3/cur.png'
 		fi
 	fi
 
@@ -9776,7 +9776,8 @@ function GameScopeGui {
 						fi
 
 						if [ -f "$GSCURSOR" ]; then
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --cursor ${GSCURSOR}"
+							ESCAPEDCURSORPATH="$( echo "${GSCURSOR}" | sed -r -e "s/\s/\\\ /g")"  # Escape cursor path, replacing spaces in path with '\ ', same as when we fetch the value on load
+							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --cursor ${ESCAPEDCURSORPATH}\""
 						fi
 
 						# Only force orientation if option other than default 'normal' is selected
