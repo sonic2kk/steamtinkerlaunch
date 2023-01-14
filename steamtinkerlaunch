@@ -9616,10 +9616,10 @@ function GameScopeGui {
 	# Max Scale Factor -- No idea how this option actually works, the documentation is a bit sparce but Steam Deck seems to default it to 2 (https://github.com/Plagman/gamescope/issues/588#issue-1338038588)
 	# Numberbox
 	if [ -z "$GSMSF" ]; then
-		if grep -qw "\-U" <<< "$GAMESCOPE_ARGS"; then
-			GSMSF="1"
-		else
+		if ! grep -qw "\-U" <<< "$GAMESCOPE_ARGS"; then
 			GSMSF="0"
+		else
+			GSMSF="$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -A1 "\-m" | tail -n1)"
 		fi
 	fi
 
@@ -9675,6 +9675,7 @@ function GameScopeGui {
 			--field="$GUI_GSNN!$DESC_GSNN ('GSNN')":CHK "$GSNN" \
 			--field="$GUI_GSFSR!$DESC_GSFSR ('GSFSR')":CHK "$GSFSR" \
 			--field="$GUI_GSNIS!$DESC_GSNIS ('GSNIS')":CHK "$GSNIS" \
+			--field="$GUI_GSMSF!$DESC_GSMSF ('GSMSF')":NUM "$GSMSF" \
 			--field="$(spanFont "$GUI_GSHDRSET" "H")":LBL "SKIP" \
 			--field="$GUI_GSHDR!$DESC_GSHDR ('GSHDR')":CHK "$GSHDR" \
 			--field="$GUI_GSHDRWGFS!$DESC_GSHDRWGFS ('GSHDRWGFS')":CHK "$GSHDRWGFS" \
@@ -9707,10 +9708,12 @@ function GameScopeGui {
 						GSNN="${GSARR[15]}"
 						GSFSR="${GSARR[16]}"
 						GSNIS="${GSARR[17]}"
-						# GSARR[18] is the HDR heading
-						GSHDR="${GSARR[19]}"
-						GSHDRWGFS="${GSARR[20]}"
-						GSHDRSCNITS="${GSARR[21]}"
+						GSMSF="${GSARR[18]}"
+						# GSARR[19] is the HDR heading
+						GSHDR="${GSARR[20]}"
+						GSHDRWGFS="${GSARR[21]}"
+						GSHDRSCNITS="${GSARR[22]}"
+						# GSARR[23] is the Embedded heading
 
 
 
@@ -9814,6 +9817,11 @@ function GameScopeGui {
 							fi
 						else
 							writelog "INFO" "${FUNCNAME[0]} - GSHDRSCNITS (--hdr-sdr-content-nits) option for GameScope was left at default 400 - GameScope should use this anyway - Ignoring as this option would have no effect"
+						fi
+
+						# Ignore Max Scale Factor if 0
+						if [ ! "$GSMSF" == "0" ]; then
+							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -m ${GSMSF}"
 						fi
 
 						GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --"
