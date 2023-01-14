@@ -9473,7 +9473,12 @@ function GameScopeGui {
 	GSFOOROPTS="left!right!${GSNORM}!upsidedown"
 
 	GSDEF="default"
-	GSTOUCHMODES="${GSDEF}!hover:0!leftclick:1!rightclick:2!middleclick:3!passthrough:4" # Corresponds to 0,1,2,3,4 respectively internally by GameScope -- Default is ingored and the flag is not passed to GameScope
+	GSHOVER="hover:0"
+	GSLEFTCLICK="leftclick:1"
+	GSRIGHTCLICK="rightclick:2"
+	GSMIDDLECLICK="middleclick:3"
+	GSPASSTHRU="passthrough:4"
+	GSTOUCHMODES="${GSDEF}!${GSHOVER}!${GSLEFTCLICK}!${GSRIGHTCLICK}!${GSMIDDLECLICK}!${GSPASSTHRU}" # Corresponds to 0,1,2,3,4 respectively internally by GameScope -- Default is ingored and the flag is not passed to GameScope
 
 	# GameScope Show Resolution (corresponds to -W, -H options, uppercase) -- Actual GameScope window size -- Dropdown
 	if [ -z "$GSSHWRES" ]; then
@@ -9770,7 +9775,26 @@ function GameScopeGui {
 		if ! grep -qw "\-\-default\-touch\-mode" <<< "$GAMESCOPE_ARGS"; then
 			GSDEFTOUCHMODE="${GSDEF}"
 		else
+			# Only the number is passed to the GameScope option, so we match the number to the dropdown value
+			# There is probably a way to improve this, but it works for now
 			GSDEFTOUCHMODE="$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -A1 "\-\-default\-touch\-mode" | tail -n1)"
+			case $GSDEFTOUCHMODE in
+				0)
+					GSDEFTOUCHMODE="${GSHOVER}"
+					;;
+				1)
+					GSDEFTOUCHMODE="${GSLEFTCLICK}"
+					;;
+				2)
+					GSDEFTOUCHMODE="${GSRIGHTCLICK}"
+					;;
+				3)
+					GSDEFTOUCHMODE="${GSMIDDLECLICK}"
+					;;
+				4)
+					GSDEFTOUCHMODE="${GSPASSTHRU}"
+					;;
+			esac
 		fi
 	fi
 
@@ -9830,7 +9854,7 @@ function GameScopeGui {
 			--field="$GUI_GSVRCONTROLBARCLOSE!$DESC_GSVRCONTROLBARCLOSE ('GSVRCONTROLBARCLOSE')":CHK "$GSVRCONTROLBARCLOSE" \
 			--field="$GUI_GSVRMODAL!$DESC_GSVRMODAL ('GSVRMODAL')":CHK "$GSVRMODAL" \
 			--field="$(spanFont "$GUI_GSEMBEDDEDSET" "H")":LBL "SKIP" \
-			--field="$GUI_GSDEFTOUCHMODE!$DESC_GSDEFTOUCHMODE ('GSDEFTOUCHMODE')":CB "$(cleanDropDown "default" "${GSTOUCHMODES}")" \
+			--field="$GUI_GSDEFTOUCHMODE!$DESC_GSDEFTOUCHMODE ('GSDEFTOUCHMODE')":CB "$(cleanDropDown "${GSDEFTOUCHMODE}" "${GSTOUCHMODES}")" \
 			--field="$GUI_GSIMMEDIATEFLIPS!$DESC_GSIMMEDIATEFLIPS ('GSIMMEDIATEFLIPS')":CHK "$GSIMMEDIATEFLIPS" \
 			--field="$GUI_GSADAPTIVESYNC!$DESC_GSADAPTIVESYNC ('GSADAPTIVESYNC')":CHK "$GSADAPTIVESYNC" \
 			--button="$BUT_CAN:0" --button="$BUT_DONE:2" "$GEOM"
