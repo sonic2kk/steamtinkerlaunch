@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v12.12.20230108-1"
+PROGVERS="v12.12.20230115-1 (gamescope-updates)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -9448,6 +9448,8 @@ function checkXliveless {
 }
 
 function GameScopeGui {
+	# NOTE: Logic for some options here could potentially be improved in future to avoid duplication
+
 	if [ -n "$1" ]; then
 		AID="$1"
 		setAIDCfgs
@@ -9464,7 +9466,9 @@ function GameScopeGui {
 	pollWinRes "$TITLE"
 	setShowPic
 	UL="unlimited"
+	FSRS_STR="\-\-fsr\-sharpness"
 
+	# GameScope Show Resolution (corresponds to -W, -H options, uppercase) -- Actual GameScope window size -- Dropdown
 	if [ -z "$GSSHWRES" ]; then
 		if ! grep -q "\-w" <<< "$GAMESCOPE_ARGS" || ! grep -q "\-h" <<< "$GAMESCOPE_ARGS"; then
 			GSSHWRES="1280x720"
@@ -9473,6 +9477,7 @@ function GameScopeGui {
 		fi
 	fi
 	
+	# GameScope Internal Resolution (corresponds to -w, -h options, lowercase) -- Resolution that games see -- Dropdown
 	if [ -z "$GSINTRES" ]; then
 		if ! grep -q "\-w" <<< "$GAMESCOPE_ARGS" || ! grep -q "\-h" <<< "$GAMESCOPE_ARGS"; then
 			GSINTRES="1280x720"
@@ -9480,7 +9485,7 @@ function GameScopeGui {
 			GSINTRES="$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -A1 "\-w" | tail -n1)x$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -A1 "\-h" | tail -n1)"
 		fi
 	fi
-	
+
 	if [ -z "$GSINTRES" ]; then
 		GSINTRES="$NON"
 	fi
@@ -9489,6 +9494,7 @@ function GameScopeGui {
 		GSSHWRES="$NON"
 	fi
 
+	# Focused Frame Rate Limit -- Dropdown
 	if [ -z "$GSFLR" ]; then
 		if ! grep -q "\-r" <<< "$GAMESCOPE_ARGS"; then
 			GSFLR="$UL"
@@ -9497,6 +9503,7 @@ function GameScopeGui {
 		fi
 	fi
 
+	# Unfocused Frame Rate Limit -- Dropdown
 	if [ -z "$GSFLU" ]; then
 		if ! grep -q "\-o" <<< "$GAMESCOPE_ARGS"; then
 			GSFLU="$UL"
@@ -9505,14 +9512,16 @@ function GameScopeGui {
 		fi
 	fi
 
+	# AMD FidelityFX 1.0 / NVIDIA Image Sharpening upscaler value -- Spinner
 	if [ -z "$GSFSRS" ]; then
-		if ! grep -q "\-\-fsr\-sharpness" <<< "$GAMESCOPE_ARGS"; then 
+		if ! grep -q "$FSRS_STR" <<< "$GAMESCOPE_ARGS"; then 
 			GSFSRS="2"
 		else 
-			GSFSRS="$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -A1 "\-\-fsr\-sharpness" | tail -n1)"
+			GSFSRS="$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -A1 "$FSRS_STR" | tail -n1)"
 		fi
 	fi
 
+	# Integer scaling (-i) -- Checkbox
 	if [ -z "$GSIS" ]; then
 		if grep -q "\-i" <<< "$GAMESCOPE_ARGS"; then
 			GSIS="1"
@@ -9521,6 +9530,7 @@ function GameScopeGui {
 		fi
 	fi
 
+	# Nearest Neighbor (-n) -- Checkbox
 	if [ -z "$GSNN" ]; then 
 		if grep -q "\-n" <<< "$GAMESCOPE_ARGS"; then
 			GSNN="1"
@@ -9529,6 +9539,7 @@ function GameScopeGui {
 		fi
 	fi
 
+	# Fullscreen (-f) -- Checkbox
 	if [ -z "$GSFS" ]; then
 		if grep -q "\-f" <<< "$GAMESCOPE_ARGS"; then
 			GSFS="1"
@@ -9537,6 +9548,7 @@ function GameScopeGui {
 		fi
 	fi
 
+	# Borderless Window (-b) -- Checkbox
 	if [ -z "$GSBW" ]; then
 		if grep -q "\-b" <<< "$GAMESCOPE_ARGS"; then
 			GSBW="1"
@@ -9545,6 +9557,7 @@ function GameScopeGui {
 		fi
 	fi
 	
+	# FidelityFX 1.0 enabled (-U) -- Checkbox
 	if [ -z "$GSFSR" ]; then 
 		if grep -q "\-U" <<< "$GAMESCOPE_ARGS"; then
 			GSFSR="1"
@@ -9553,6 +9566,7 @@ function GameScopeGui {
 		fi
 	fi
 
+	# NVIDIA Image Scaling v1.0.3 (-Y) -- Checkbox
 	if [ -z "$GSNIS" ]; then
 		if grep -q "\-Y" <<< "$GAMESCOPE_ARGS"; then
 			GSNIS="1"
@@ -9561,6 +9575,7 @@ function GameScopeGui {
 		fi
 	fi
 
+	# Steam Integration (-e) -- Can fix some strange bugs with some peripherals -- Checkbox
 	if [ -z "$GSSE" ]; then 
 		if grep -q "\-e" <<< "$GAMESCOPE_ARGS"; then 
 			GSSE="1"
@@ -9569,6 +9584,58 @@ function GameScopeGui {
 		fi
 	fi
 
+	# HDR (--hdr-enabled) -- Checkbox
+	if [ -z "$GSHDR" ]; then
+		if grep -q "\-\-hdr\-enabled" <<< "$GAMESCOPE_ARGS"; then
+			GSHDR="1"
+		else
+			GSHDR="0"
+		fi 
+	fi
+
+	# HDR Wide Gammut for SDR (--hdr-wide-gammut-for-sdr) - Checkbox
+	if [ -z "$GSHDRWGFS" ]; then
+		if grep -q "\-\-hdr\-wide-gammut-for-sdr" <<< "$GAMESCOPE_ARGS"; then
+			GSHDRWGFS="1"
+		else
+			GSHDRWGFS="0"
+		fi
+	fi
+
+	# HDR SDR Content Nits (--hdr-sdr-content-nits) -- Defaults to 400 -- Numberbox
+	if [ -z "$GSHDRSCNITS" ]; then
+		if grep -q "\-\-hdr\-sdr\-content\-nits" <<< "$GAMESCOPE_ARGS"; then
+			GSHDRSCNITS="400"  # 400 nits is the default value according to `gamescope --help` 
+		else 
+			GSHDRSCNITS="$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -A1 "\-\-hdr\-sdr\-content\-nits" | tail -n1)"
+		fi
+	fi
+
+	# Max Scale Factor -- No idea how this option actually works, the documentation is a bit sparce but Steam Deck seems to default it to 2 (https://github.com/Plagman/gamescope/issues/588#issue-1338038588)
+	# Numberbox
+	if [ -z "$GSMSF" ]; then
+		if grep -q "\-U" <<< "$GAMESCOPE_ARGS"; then
+			GSMSF="1"
+		else
+			GSMSF="0"
+		fi
+	fi
+
+	# Orientation (--force-orientation) -- Can be either 'left', 'right', 'normal', 'upsidedown' -- Dropdown
+	# Dropdown has special 'none' which means SteamTinkerLaunch will ignore it
+	#
+	# Logic here mirrors logic for FSR
+	if [ -z "$GSFOOR" ]; then
+		if ! grep -q "\-\-force\-orientation" <<< "$GAMESCOPE_ARGS"; then
+			GSFOOR="$NON"  # Default
+		else
+			GSFOOR="$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -A1 "\-\-force\-orientation" | tail -n1)"
+		fi
+	fi
+
+	# TODO Add headings to better separate out GameScope options
+	# GameScope now accepts VR options, it also accepts Embedded Mode options (e.g. when running in a TTY). We could also have a seaprate heading for HDR options
+	# Subheadings would better separate these
 	GASCOS="$("$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top $WINDECO \
 			--title="$TITLE" --separator="|" \
 			--text="$(spanFont "$(strFix "$GUI_GASCOSET" "$SGNAID")" "H")" \
@@ -9584,6 +9651,9 @@ function GameScopeGui {
 			--field="$GUI_GSFSR!$DESC_GSFSR ('GSFSR')":CHK "$GSFSR" \
 			--field="$GUI_GSNIS!$DESC_GSNIS ('GSNIS')":CHK "$GSNIS" \
 			--field="$GUI_GSSE!$DESC_GSSE ('GSSE')":CHK "$GSSE" \
+			--field="$GUI_GSHDR!$DESC_GSHDR ('GSHDR')":CHK "$GSHDR" \
+			--field="$GUI_GSHDRWGFS!$DESC_GSHDRWGFS ('GSHDRWGFS')":CHK "$GSHDRWGFS" \
+			--field="$GUI_GSHDRSCNITS!$DESC_GSHDRSCNITS ('GSHDRSCNITS')":NUM "$GSHDRSCNITS" \
 			--field="$GUI_USEGAMESCOPE!$DESC_USEGAMESCOPE ('USEGAMESCOPE')":CHK "${USEGAMESCOPE/#-/ -}" \
 			--button="$BUT_CAN:0" --button="$BUT_DONE:2" "$GEOM"
 			)"
@@ -9593,6 +9663,7 @@ function GameScopeGui {
 					}
 				;;
 				2)	{
+						# Get selected GameScope options
 						mapfile -d "|" -t -O "${#GSARR[@]}" GSARR < <(printf '%s' "$GASCOS")
 						GSINTRES="${GSARR[0]}"
 						GSSHWRES="${GSARR[1]}"
@@ -9606,8 +9677,12 @@ function GameScopeGui {
 						GSFSR="${GSARR[9]}"
 						GSNIS="${GSARR[10]}"
 						GSSE="${GSARR[11]}"
-						USEGAMESCOPE="${GSARR[12]}"
+						GSHDR="${GSARR[12]}"
+						GSHDRWGFS="${GSARR[13]}"
+						GSHDRSCNITS="${GSARR[14]}"
+						USEGAMESCOPE="${GSARR[15]}"
 
+						# Build the GameScope arguments string
 						unset GAMESCOPE_ARGS
 						GSINTW1="${GSINTRES%x*}"
 						GSINTW="${GSINTW1%%-*}"
@@ -9657,7 +9732,7 @@ function GameScopeGui {
 						# Sharpness Value should only be passed if FSR or NIS is enabled
 						if  [ "$GSFSRS" -eq "$GSFSRS" ] 2>/dev/null && [ "$GSFSR" == "TRUE" ] || [ "$GSNIS" == "TRUE" ]; then
 							writelog "INFO" "${FUNCNAME[0]} - Adding sharpness parameter to the gamescope arguments:"
-							if grep -q "\-\-fsr\-sharpness" <<< "$("$(command -v "$GAMESCOPE")" --help 2>&1)"; then
+							if grep -q "$FSRS_STR" <<< "$("$(command -v "$GAMESCOPE")" --help 2>&1)"; then
 								writelog "INFO" "${FUNCNAME[0]} - using '--fsr-sharpness ${GSFSRS}'"
 								GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --fsr-sharpness ${GSFSRS}"
 							else
@@ -9668,6 +9743,20 @@ function GameScopeGui {
 
 						if [ "$GSSE" == "TRUE" ]; then
 							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -e"
+						fi
+
+						if [ "$GSHDR" == "TRUE" ]; then
+							# Possible to check if any HDR displays available and warn if not?
+							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --hdr-enabled"
+						fi
+
+						# Don't enable GSHDRWGFS if GSHDR is not enabled first
+						if [ "$GSHDRWGFS" == "TRUE" ]; then
+							if [ "$GSHDR" == "TRUE" ]; then 
+								GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --hdr-wide-gammut-for-sdr"
+							else
+								writelog "WARN" "${FUNCNAME[0]} - GSHDRWGFS (--hdr-wide-gammut-for-sdr) option for GameScope enabled but HDR was not enabled - Ignoring"
+							fi
 						fi
 
 						GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --"
