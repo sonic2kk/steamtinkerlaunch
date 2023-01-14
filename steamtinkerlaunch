@@ -9651,6 +9651,15 @@ function GameScopeGui {
 		fi
 	fi
 
+	# Enable OpenVR (--openvr) -- Checkbox
+	if [ -z "$GSVR" ]; then
+		if ! grep -qw "\-\-openvr" <<< "$GAMESCOPE_ARGS"; then
+			GSVR="0"
+		else
+			GSVR="1"
+		fi
+	fi
+
 	# TODO Add headings to better separate out GameScope options
 	# GameScope now accepts VR options, it also accepts Embedded Mode options (e.g. when running in a TTY). We could also have a seaprate heading for HDR options
 	# Subheadings would better separate these
@@ -9680,6 +9689,8 @@ function GameScopeGui {
 			--field="$GUI_GSHDR!$DESC_GSHDR ('GSHDR')":CHK "$GSHDR" \
 			--field="$GUI_GSHDRWGFS!$DESC_GSHDRWGFS ('GSHDRWGFS')":CHK "$GSHDRWGFS" \
 			--field="$GUI_GSHDRSCNITS!$DESC_GSHDRSCNITS ('GSHDRSCNITS')":NUM "${GSHDRSCNITS/#-/ -}" \
+			--field="$(spanFont "$GUI_GSVRSET" "H")":LBL "SKIP" \
+			--field="$GUI_GSVR!$DESC_GSVR ('GSVR')":CHK "$GSVR" \
 			--button="$BUT_CAN:0" --button="$BUT_DONE:2" "$GEOM"
 			)"
 			case $? in
@@ -9713,7 +9724,8 @@ function GameScopeGui {
 						GSHDR="${GSARR[20]}"
 						GSHDRWGFS="${GSARR[21]}"
 						GSHDRSCNITS="${GSARR[22]}"
-						# GSARR[23] is the Embedded heading
+						# GSARR[23] is the VR heading
+						GSVR="${GSARR[24]}"
 
 
 
@@ -9740,14 +9752,6 @@ function GameScopeGui {
 							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -o ${GSFLU}"
 						fi	
 
-						if [ "$GSIS" == "TRUE" ]; then
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -i"
-						fi
-
-						if [ "$GSNN" == "TRUE" ]; then
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -n"
-						fi 
-
 						if [ "$GSFS" == "TRUE" ]; then
 							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -f"
 						fi
@@ -9755,6 +9759,32 @@ function GameScopeGui {
 						if [ "$GSBW" == "TRUE" ]; then
 							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -b"
 						fi
+
+						if [ "$GSSE" == "TRUE" ]; then
+							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -e"
+						fi
+
+						if [ "$GSFWF" == "TRUE" ]; then
+							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --force-windows-fullscreen"
+						fi
+
+						if [ -f "$GSCURSOR" ]; then
+							ESCAPEDCURSORPATH="$( echo "${GSCURSOR}" | sed -r -e "s/\s/\\\ /g")"  # Escape cursor path, replacing spaces in path with '\ ', same as when we fetch the value on load
+							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --cursor ${ESCAPEDCURSORPATH}\""
+						fi
+
+						# Only force orientation if option other than default 'normal' is selected
+						if [ ! "$GSFOOR" == "$GSNORM" ]; then
+							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --force-orientation ${GSFOOR}"
+						fi
+
+						if [ "$GSIS" == "TRUE" ]; then
+							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -i"
+						fi
+
+						if [ "$GSNN" == "TRUE" ]; then
+							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -n"
+						fi 
 						
 						if [ "$GSFSR" == "TRUE" ]; then
 							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -U"
@@ -9776,22 +9806,9 @@ function GameScopeGui {
 							fi
 						fi
 
-						if [ "$GSSE" == "TRUE" ]; then
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -e"
-						fi
-
-						if [ "$GSFWF" == "TRUE" ]; then
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --force-windows-fullscreen"
-						fi
-
-						if [ -f "$GSCURSOR" ]; then
-							ESCAPEDCURSORPATH="$( echo "${GSCURSOR}" | sed -r -e "s/\s/\\\ /g")"  # Escape cursor path, replacing spaces in path with '\ ', same as when we fetch the value on load
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --cursor ${ESCAPEDCURSORPATH}\""
-						fi
-
-						# Only force orientation if option other than default 'normal' is selected
-						if [ ! "$GSFOOR" == "$GSNORM" ]; then
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --force-orientation ${GSFOOR}"
+						# Ignore Max Scale Factor if 0
+						if [ ! "$GSMSF" == "0" ]; then
+							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -m ${GSMSF}"
 						fi
 
 						if [ "$GSHDR" == "TRUE" ]; then
@@ -9819,9 +9836,8 @@ function GameScopeGui {
 							writelog "INFO" "${FUNCNAME[0]} - GSHDRSCNITS (--hdr-sdr-content-nits) option for GameScope was left at default 400 - GameScope should use this anyway - Ignoring as this option would have no effect"
 						fi
 
-						# Ignore Max Scale Factor if 0
-						if [ ! "$GSMSF" == "0" ]; then
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -m ${GSMSF}"
+						if [ "$GSVR" == "TRUE" ]; then
+							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --openvr"
 						fi
 
 						GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --"
