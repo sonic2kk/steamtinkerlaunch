@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v12.12.20230115-12 (gamescope-updates)"
+PROGVERS="v12.12.20230115-15 (gamescope-updates)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -9482,6 +9482,8 @@ function GameScopeGui {
 
 	GSDRMMODES="${GSDEF}!cvt!fixed"
 
+	# TODO some options like the cursor paths etc need checkboxes to enable/disable them if a cursor is selected, to work around a Yad limitation
+
 	# GameScope Show Resolution (corresponds to -W, -H options, uppercase) -- Actual GameScope window size -- Dropdown
 	if [ -z "$GSSHWRES" ]; then
 		if ! grep -qw "\-w" <<< "$GAMESCOPE_ARGS" || ! grep -qw "\-h" <<< "$GAMESCOPE_ARGS"; then
@@ -9837,6 +9839,78 @@ function GameScopeGui {
 		fi
 	fi
 
+	# TODO:
+	# - Stats Path (file picker)
+	# - Hide cursor delay - Time until hide cursor in milliseconds (spinner)
+	# - Force composition - Disable direct scan-out (checkbox)
+	# - Debug HUD (checkbox)
+	# - HDR Force Output (checkbox)
+	# - HDR Force Support (checkbox)
+	# - prefer-vk-device (checkbox)
+
+	# Path to write GameScope statistics to (-T) -- File picker
+	if [ -z "$GSSTATSPATH" ]; then
+		if ! grep -qw "\-T" <<< "$GAMESCOPE_ARGS"; then
+			GSSTATSPATH=""
+		else 
+			GSSTATSPATH="\"$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -A1 "\-T" | tail -n1 | sed -r -e "s/\s/\\\ /g")\""  # Same as cursor path logic
+		fi
+	fi
+
+	# Amount of time in milliseconds to wait before hiding the cursor (-C) -- Spinner
+	if [ -z "$GSHIDECURSORDELAY" ]; then
+		if ! grep -qw "\-C" <<< "$GAMESCOPE_ARGS"; then
+			GSHIDECURSORDELAY="0"  # 0 means we ignore it
+		else
+			GSHIDECURSORDELAY="$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -A1 "\-C" | tail -n1)"
+		fi
+	fi
+
+	# Disables direct scan-out (--force-composition) -- Checkbox
+	if [ -z "$GSFORCECOMP" ]; then
+		if ! grep -qw "\-\-force\-composition" <<< "$GAMESCOPE_ARGS"; then
+			GSFORCECOMP="0"
+		else
+			GSFORCECOMP="1"
+		fi
+	fi
+
+	# Draw debug hud (--debug-hud) -- Checkbox
+	if [ -z "$GSDEBUGHUD" ]; then
+		if ! grep -qw "\-\-debug\-hud" <<< "$GAMESCOPE_ARGS"; then
+			GSDEBUGHUD="0"
+		else
+			GSDEBUGHUD="1"
+		fi
+	fi
+
+	# Force HDR support flag (--hdr-debug-force-support) -- Checkbox
+	if [ -z "$GSFORCEHDRSUPPORT" ]; then
+		if ! grep -qw "\-\-hdr\-debug\-force-support" <<< "$GAMESCOPE_ARGS"; then
+			GSFORCEHDRSUPPORT="0"
+		else
+			GSFORCEHDRSUPPORT="1"
+		fi
+	fi
+
+	# Force HDR output on display (--hdr-debug-force-output) -- Will look terrible if unsupported -- Checkbox
+	if [ -z "$GSFORCEHDROUTPUT" ]; then
+		if ! grep -qw "\-\-hdr\-debug\-force-output" <<< "$GAMESCOPE_ARGS"; then
+			GSFORCEHDROUTPUT="0"
+		else
+			GSFORCEHDROUTPUT="1"
+		fi
+	fi
+
+	# Prefer Vulkan device for compositing (--prefer-vk-device) -- Checkbox
+	if [ -z "$GSPREFERVKDEVICE" ]; then
+		if ! grep -qw "\-\-prefer\-vk\-device" <<< "$GAMESCOPE_ARGS"; then
+			GSPREFERVKDEVICE="0"
+		else
+			GSPREFERVKDEVICE="1"
+		fi
+	fi
+
 	GASCOS="$("$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --scroll --window-icon="$STLICON" --form --center --on-top $WINDECO \
 			--title="$TITLE" --separator="|" \
 			--text="$(spanFont "$(strFix "$GUI_GASCOSET" "$SGNAID")" "H")" \
@@ -9880,8 +9954,15 @@ function GameScopeGui {
 			--field="$GUI_GSADAPTIVESYNC!$DESC_GSADAPTIVESYNC ('GSADAPTIVESYNC')":CHK "$GSADAPTIVESYNC" \
 			--field="$GUI_GSPREFOUT!$DESC_GSPREFOUT ('GSPREFOUT')" "" \
 			--field="$GUI_GSDRMMODE!$DESC_GSDRMMODE ('GSDRMMODE')":CB "$(cleanDropDown "${GSDRMMODE}" "${GSDRMMODES}")" \
+			--field="$(spanFont "$GUI_GSADVOPTIONS" "H")":LBL "SKIP" \
+			--field="$GUI_GSSTATSPATH!$DESC_GSSTATSPATH ('GSSTATSPATH')":DIR "${GSSTATSPATH//\"}" \
+			--field="$GUI_GSHIDECURSORDELAY!$DESC_GSHIDECURSORDELAY ('GSHIDECURSORDELAY')":NUM "${GSHIDECURSORDELAY/#-/ -}" \
+			--field="$GUI_GSFORCECOMP!$DESC_GSFORCECOMP ('GSFORCECOMP')":CHK "$GSFORCECOMP" \
+			--field="$GUI_GSDEBUGHUD!$DESC_GSDEBUGHUD ('GSDEBUGHUD')":CHK "$GSDEBUGHUD" \
+			--field="$GUI_GSFORCEHDRSUPPORT!$DESC_GSFORCEHDRSUPPORT ('GSFORCEHDRSUPPORT')":CHK "$GSFORCEHDRSUPPORT" \
+			--field="$GUI_GSFORCEHDROUTPUT!$DESC_GSFORCEHDROUTPUT ('GSFORCEHDROUTPUT')":CHK "$GSFORCEHDROUTPUT" \
+			--field="$GUI_GSPREFERVKDEVICE!$DESC_GSPREFERVKDEVICE ('GSPREFERVKDEVICE')":CHK "$GSPREFERVKDEVICE" \
 			--button="$BUT_CAN:0" --button="$BUT_DONE:2" "$GEOM"
-		
 			)"
 			case $? in
 				0)	{
@@ -9931,6 +10012,14 @@ function GameScopeGui {
 						GSADAPTIVESYNC="${GSARR[37]}"
 						GSPREFOUT="${GSARR[38]}"
 						GSDRMMODE="${GSARR[39]}"
+						# GSARR[40] is the Advanced heading
+						GSSTATSPATH="${GSARR[41]}"
+						GSHIDECURSORDELAY="${GSARR[42]}"
+						GSFORCECOMP="${GSARR[43]}"
+						GSDEBUGHUD="${GSARR[44]}"
+						GSFORCEHDRSUPPORT="${GSARR[45]}"
+						GSFORCEHDROUTPUT="${GSARR[46]}"
+						GSPREFERVKDEVICE="${GSARR[47]}"
 
 						# Build the GameScope arguments string
 						unset GAMESCOPE_ARGS
@@ -10068,8 +10157,8 @@ function GameScopeGui {
 						if [ -f "$GSVRICON" ]; then
 							# TODO this is broken if there are spaces in the path still
 							# Escape SteamVR icon path, replacing spaces in path with '\ '
-							ESCAPEDCURSORPATH="$( echo "${GSVRICON}" | sed -r -e "s/\s/\\\ /g")"
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --vr-overlay-icon \"${GSVRICON}\""
+							ESCAPEDICONPATH="$( echo "${GSVRICON}" | sed -r -e "s/\s/\\\ /g")"
+							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --vr-overlay-icon \"${ESCAPEDICONPATH}\""
 						fi
 
 						if [ "$GSVRSHOIMM" == "TRUE" ]; then
@@ -10117,6 +10206,37 @@ function GameScopeGui {
 						# Don't pass DRM mode if "default"
 						if [ ! "$GSDRMMODE" == "${GSDEF}" ]; then
 							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --generate-drm-mode ${GSDRMMODE}"
+						fi
+
+						# TODO ensure this selects a folder, may need to be a different Yad widget
+						if [ -d "$GSSTATSPATH" ]; then
+							ESCAPEDSTATSPATH="$( echo "${GSVRICON}" | sed -r -e "s/\s/\\\ /g")"
+							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -T \"${ESCAPEDSTATSPATH}\""  # Escapes path, same as cursor logic
+						fi
+
+						# Ignore cursor delay if it's 0
+						if [ ! "$GSHIDECURSORDELAY" == "0" ]; then
+							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -C ${GSHIDECURSORDELAY}"
+						fi
+
+						if [ "$GSFORCECOMP" == "TRUE" ]; then
+							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --force-composition"
+						fi
+
+						if [ "$GSDEBUGHUD" == "TRUE" ]; then
+							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --debug-hud"
+						fi
+
+						if [ "$GSFORCEHDRSUPPORT" == "TRUE" ]; then
+							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --hdr-debug-force-support"
+						fi
+						
+						if [ "$GSFORCEHDROUTPUT" == "TRUE" ]; then
+							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --hdr-debug-force-output"
+						fi
+
+						if [ "$GSPREFERVKDEVICE" == "TRUE" ]; then
+							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --prefer-vk-device"
 						fi
 
 						GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --"
