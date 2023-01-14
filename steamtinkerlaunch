@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v12.12.20230115-15 (gamescope-updates)"
+PROGVERS="v12.12.20230115-16 (gamescope-updates)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -9657,6 +9657,12 @@ function GameScopeGui {
 	fi
 
 	# Custom cursor image (--cursor) -- File picker
+	if [ -z "$GSENABLECUSTCUR" ]; then
+		GSENABLECUSTCUR="0"
+	else
+		GSENABLECUSTCUR="1"
+	fi
+
 	if [ -z "$GSCURSOR" ]; then
 		if ! grep -qw "\-\-cursor" <<< "$GAMESCOPE_ARGS"; then
 			GSCURSOR=""
@@ -9702,6 +9708,12 @@ function GameScopeGui {
 	fi
 
 	# SteamVR Overlay Icon (--vr-overlay-icon) -- Similar to cursor picker -- File picker 
+	if [ -z "$GSVRICONENABLE" ]; then
+		GSVRICONENABLE="0"
+	else
+		GSVRICONENABLE="1"
+	fi
+
 	if [ -z "$GSVRICON" ]; then
 		if ! grep -qw "\-\-vr\-overlay\-icon" <<< "$GAMESCOPE_ARGS"; then
 			GSCURSOR=""
@@ -9839,16 +9851,13 @@ function GameScopeGui {
 		fi
 	fi
 
-	# TODO:
-	# - Stats Path (file picker)
-	# - Hide cursor delay - Time until hide cursor in milliseconds (spinner)
-	# - Force composition - Disable direct scan-out (checkbox)
-	# - Debug HUD (checkbox)
-	# - HDR Force Output (checkbox)
-	# - HDR Force Support (checkbox)
-	# - prefer-vk-device (checkbox)
-
 	# Path to write GameScope statistics to (-T) -- File picker
+	if [ -z "$GSSTATSPATHENABLE" ]; then
+		GSSTATSPATHENABLE="0"
+	else
+		GSSTATSPATHENABLE="1"
+	fi
+
 	if [ -z "$GSSTATSPATH" ]; then
 		if ! grep -qw "\-T" <<< "$GAMESCOPE_ARGS"; then
 			GSSTATSPATH=""
@@ -9926,6 +9935,7 @@ function GameScopeGui {
 			--field="$GUI_GSFWF!$DESC_GSFWF ('GSFWF')":CHK "$GSFWF" \
 			--field="$GUI_GSFGC!$DESC_GSFGC ('GSFGC')":CHK "$GSFGC" \
 			--field="$GUI_GSFOOR!$GESC_GSFOOR ('GSFOOR')":CB "$(cleanDropDown "${GSFOOR}" "${GSFOOROPTS}")" \
+			--field="$GUI_GSENABLECUSTCUR!$DESC_GSENABLECUSTCUR ('GSENABLECUSTCUR')":CHK "$GSENABLECUSTCUR" \
 			--field="$GUI_GSCURSOR!$DESC_GSCURSOR ('GSCURSOR')":FL "${GSCURSOR//\"}" \
 			--field="$(spanFont "$GUI_GSFILTERINGSET" "H")":LBL "SKIP" \
 			--field="$GUI_GSFSRS!$DESC_GSFSRS ('GSFSRS')":NUM "${GSFSRS/#-/ -}:!0..20" \
@@ -9942,6 +9952,7 @@ function GameScopeGui {
 			--field="$GUI_GSVR!$DESC_GSVR ('GSVR')":CHK "$GSVR" \
 			--field="$GUI_GSVREXNA!$DESC_GSVREXNA ('GSVREXNA')" "$GSVREXNA" \
 			--field="$GUI_GSVRDEFNAM!$DESC_GSVRDEFNAM ('GSVRDEFNAM')" "$GSVRDEFNAM" \
+			--field="$GUI_GSVRICONENABLE!$DESC_GSVRICONENABLE ('GSVRICONENABLE')":CHK "$GSVRICONENABLE" \
 			--field="$GUI_GSVRICON!$DESC_GSVRICON ('GSVRICON')":FL "${GSVRICON//\"}" \
 			--field="$GUI_GSVRSHOIMM!$DESC_GSVRSHOIMM ('GSVRSHOIMM')":CHK "$GSVRSHOIMM" \
 			--field="$GUI_GSVRCONTROLBAR!$DESC_GSVRCONTROLBAR ('GSVRCONTROLBAR')":CHK "$GSVRCONTROLBAR" \
@@ -9955,6 +9966,7 @@ function GameScopeGui {
 			--field="$GUI_GSPREFOUT!$DESC_GSPREFOUT ('GSPREFOUT')" "" \
 			--field="$GUI_GSDRMMODE!$DESC_GSDRMMODE ('GSDRMMODE')":CB "$(cleanDropDown "${GSDRMMODE}" "${GSDRMMODES}")" \
 			--field="$(spanFont "$GUI_GSADVOPTIONS" "H")":LBL "SKIP" \
+			--field="$GUI_GSSTATSPATHENABLE!$DESC_GSSTATSPATHENABLE ('GSSTATSPATHENABLE')":CHK "$GSSTATSPATHENABLE" \
 			--field="$GUI_GSSTATSPATH!$DESC_GSSTATSPATH ('GSSTATSPATH')":DIR "${GSSTATSPATH//\"}" \
 			--field="$GUI_GSHIDECURSORDELAY!$DESC_GSHIDECURSORDELAY ('GSHIDECURSORDELAY')":NUM "${GSHIDECURSORDELAY/#-/ -}" \
 			--field="$GUI_GSFORCECOMP!$DESC_GSFORCECOMP ('GSFORCECOMP')":CHK "$GSFORCECOMP" \
@@ -9984,42 +9996,45 @@ function GameScopeGui {
 						GSFWF="${GSARR[9]}"
 						GSFGC="${GSARR[10]}"
 						GSFOOR="${GSARR[11]}"
-						GSCURSOR="${GSARR[12]}"
-						# GSARR[13] is the Filtering heading
-						GSFSRS="${GSARR[14]}"
-						GSIS="${GSARR[15]}"
-						GSNN="${GSARR[16]}"
-						GSFSR="${GSARR[17]}"
-						GSNIS="${GSARR[18]}"
-						GSMSF="${GSARR[19]}"
-						# GSARR[20] is the HDR heading
-						GSHDR="${GSARR[21]}"
-						GSHDRWGFS="${GSARR[22]}"
-						GSHDRSCNITS="${GSARR[23]}"
-						# GSARR[23] is the VR heading
-						GSVR="${GSARR[25]}"
-						GSVREXNA="${GSARR[26]}"
-						GSVRDEFNAM="${GSARR[27]}"
-						GSVRICON="${GSARR[28]}"
-						GSVRSHOIMM="${GSARR[29]}"
-						GSVRCONTROLBAR="${GSARR[30]}"
-						GSVRCONTROLBARKEYBOARD="${GSARR[31]}"
-						GSVRCONTROLBARCLOSE="${GSARR[32]}"
-						GSVRMODAL="${GSARR[33]}"
-						# GSARR[34] is the Embedded heading
-						GSDEFTOUCHMODE="${GSARR[35]}"
-						GSIMMEDIATEFLIPS="${GSARR[36]}"
-						GSADAPTIVESYNC="${GSARR[37]}"
-						GSPREFOUT="${GSARR[38]}"
-						GSDRMMODE="${GSARR[39]}"
-						# GSARR[40] is the Advanced heading
-						GSSTATSPATH="${GSARR[41]}"
-						GSHIDECURSORDELAY="${GSARR[42]}"
-						GSFORCECOMP="${GSARR[43]}"
-						GSDEBUGHUD="${GSARR[44]}"
-						GSFORCEHDRSUPPORT="${GSARR[45]}"
-						GSFORCEHDROUTPUT="${GSARR[46]}"
-						GSPREFERVKDEVICE="${GSARR[47]}"
+						GSENABLECUSTCUR="${GSARR[12]}"
+						GSCURSOR="${GSARR[13]}"
+						# GSARR[14] is the Filtering heading
+						GSFSRS="${GSARR[15]}"
+						GSIS="${GSARR[16]}"
+						GSNN="${GSARR[17]}"
+						GSFSR="${GSARR[18]}"
+						GSNIS="${GSARR[19]}"
+						GSMSF="${GSARR[20]}"
+						# GSARR[21] is the HDR heading
+						GSHDR="${GSARR[22]}"
+						GSHDRWGFS="${GSARR[23]}"
+						GSHDRSCNITS="${GSARR[24]}"
+						# GSARR[25] is the VR heading
+						GSVR="${GSARR[26]}"
+						GSVREXNA="${GSARR[27]}"
+						GSVRDEFNAM="${GSARR[28]}"
+						GSVRICONENABLE="${GSARR[28]}"
+						GSVRICON="${GSARR[29]}"
+						GSVRSHOIMM="${GSARR[30]}"
+						GSVRCONTROLBAR="${GSARR[31]}"
+						GSVRCONTROLBARKEYBOARD="${GSARR[32]}"
+						GSVRCONTROLBARCLOSE="${GSARR[33]}"
+						GSVRMODAL="${GSARR[34]}"
+						# GSARR[35] is the Embedded heading
+						GSDEFTOUCHMODE="${GSARR[36]}"
+						GSIMMEDIATEFLIPS="${GSARR[37]}"
+						GSADAPTIVESYNC="${GSARR[38]}"
+						GSPREFOUT="${GSARR[39]}"
+						GSDRMMODE="${GSARR[40]}"
+						# GSARR[41] is the Advanced heading
+						GSSTATSPATHENABLE="${GSARR[42]}"
+						GSSTATSPATH="${GSARR[43]}"
+						GSHIDECURSORDELAY="${GSARR[44]}"
+						GSFORCECOMP="${GSARR[45]}"
+						GSDEBUGHUD="${GSARR[46]}"
+						GSFORCEHDRSUPPORT="${GSARR[47]}"
+						GSFORCEHDROUTPUT="${GSARR[48]}"
+						GSPREFERVKDEVICE="${GSARR[49]}"
 
 						# Build the GameScope arguments string
 						unset GAMESCOPE_ARGS
@@ -10065,7 +10080,7 @@ function GameScopeGui {
 							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --force-grab-cursor"
 						fi
 
-						if [ -f "$GSCURSOR" ]; then
+						if [ -f "$GSCURSOR" ] && [ "$GSENABLECUSTCUR" == "TRUE" ]; then
 							# TODO this is broken if there are spaces in the path still
 							# Escape cursor path, replacing spaces in path with '\ ', same as when we fetch the value on load
 							ESCAPEDCURSORPATH="$( echo "${GSCURSOR}" | sed -r -e "s/\s/\\\ /g")"
@@ -10154,7 +10169,7 @@ function GameScopeGui {
 							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --vr-overlay-default-name \"${GSVRDEFNAM}\""
 						fi
 
-						if [ -f "$GSVRICON" ]; then
+						if [ -f "$GSVRICON" ] && [ "$GSVRICONENABLE" == "TRUE" ]; then
 							# TODO this is broken if there are spaces in the path still
 							# Escape SteamVR icon path, replacing spaces in path with '\ '
 							ESCAPEDICONPATH="$( echo "${GSVRICON}" | sed -r -e "s/\s/\\\ /g")"
@@ -10209,7 +10224,7 @@ function GameScopeGui {
 						fi
 
 						# TODO ensure this selects a folder, may need to be a different Yad widget
-						if [ -d "$GSSTATSPATH" ]; then
+						if [ -d "$GSSTATSPATH" ] && [ "$GSSTATSPATHENABLE" == "TRUE" ]; then
 							ESCAPEDSTATSPATH="$( echo "${GSVRICON}" | sed -r -e "s/\s/\\\ /g")"
 							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -T \"${ESCAPEDSTATSPATH}\""  # Escapes path, same as cursor logic
 						fi
