@@ -9614,7 +9614,7 @@ function GameScopeGui {
 	# Max Scale Factor -- No idea how this option actually works, the documentation is a bit sparce but Steam Deck seems to default it to 2 (https://github.com/Plagman/gamescope/issues/588#issue-1338038588)
 	# Numberbox
 	if [ -z "$GSMSF" ]; then
-		if grep -q "\-U" <<< "$GAMESCOPE_ARGS"; then
+		if grep -qw "\-U" <<< "$GAMESCOPE_ARGS"; then
 			GSMSF="1"
 		else
 			GSMSF="0"
@@ -9626,10 +9626,19 @@ function GameScopeGui {
 	#
 	# Logic here mirrors logic for FSR
 	if [ -z "$GSFOOR" ]; then
-		if ! grep -q "\-\-force\-orientation" <<< "$GAMESCOPE_ARGS"; then
+		if ! grep -qw "\-\-force\-orientation" <<< "$GAMESCOPE_ARGS"; then
 			GSFOOR="$NON"  # Default
 		else
 			GSFOOR="$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -A1 "\-\-force\-orientation" | tail -n1)"
+		fi
+	fi
+
+	# Force windows to be fullscreen inside the nested dislay (--force-windows-fullscreen) -- Checkbox 
+	if [ -z "$GSFWF" ]; then
+		if grep -qw "\-\-force\-windows\-fullscreen" <<< "$GAMESCOPE_ARGS"; then
+			GSFWF="1"
+		else
+			GSFWF="0"
 		fi
 	fi
 
@@ -9651,6 +9660,7 @@ function GameScopeGui {
 			--field="$GUI_GSFSR!$DESC_GSFSR ('GSFSR')":CHK "$GSFSR" \
 			--field="$GUI_GSNIS!$DESC_GSNIS ('GSNIS')":CHK "$GSNIS" \
 			--field="$GUI_GSSE!$DESC_GSSE ('GSSE')":CHK "$GSSE" \
+			--field="$GUI_GSFWF!$DESC_GSFWF ('GSFWF')":CHK "$GSFWF" \
 			--field="$(spanFont "$GUI_GSHDRSET" "H")":LBL "SKIP" \
 			--field="$GUI_GSHDR!$DESC_GSHDR ('GSHDR')":CHK "$GSHDR" \
 			--field="$GUI_GSHDRWGFS!$DESC_GSHDRWGFS ('GSHDRWGFS')":CHK "$GSHDRWGFS" \
@@ -9678,11 +9688,12 @@ function GameScopeGui {
 						GSFSR="${GSARR[9]}"
 						GSNIS="${GSARR[10]}"
 						GSSE="${GSARR[11]}"
-
-						GSHDR="${GSARR[13]}"
-						GSHDRWGFS="${GSARR[14]}"
-						GSHDRSCNITS="${GSARR[15]}"
-						USEGAMESCOPE="${GSARR[16]}"
+						GSFWF="${GSARR[12]}"
+						# GSARR[13] is the HDR heading
+						GSHDR="${GSARR[14]}"
+						GSHDRWGFS="${GSARR[15]}"
+						GSHDRSCNITS="${GSARR[16]}"
+						USEGAMESCOPE="${GSARR[17]}"
 
 						# Build the GameScope arguments string
 						unset GAMESCOPE_ARGS
@@ -9745,6 +9756,10 @@ function GameScopeGui {
 
 						if [ "$GSSE" == "TRUE" ]; then
 							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -e"
+						fi
+
+						if [ "$GSFWF" == "TRUE" ]; then
+							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --force-windows-fullscreen"
 						fi
 
 						if [ "$GSHDR" == "TRUE" ]; then
