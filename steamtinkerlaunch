@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v12.12.20230115-2 (gamescope-updates)"
+PROGVERS="v12.12.20230115-3 (gamescope-updates)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -9467,6 +9467,8 @@ function GameScopeGui {
 	setShowPic
 	UL="unlimited"
 	FSRS_STR="\-\-fsr\-sharpness"
+	GSNORM="normal"
+	GSFOOROPTS="left!right!${GSNORM}!upsidedown"
 
 	# GameScope Show Resolution (corresponds to -W, -H options, uppercase) -- Actual GameScope window size -- Dropdown
 	if [ -z "$GSSHWRES" ]; then
@@ -9622,14 +9624,12 @@ function GameScopeGui {
 	fi
 
 	# Orientation (--force-orientation) -- Can be either 'left', 'right', 'normal', 'upsidedown' -- Dropdown
-	# Dropdown has special 'none' which means SteamTinkerLaunch will ignore it
-	#
-	# Logic here mirrors logic for FSR
+	# Defaults to 'normal' ('GSNORM')
 	if [ -z "$GSFOOR" ]; then
 		if ! grep -qw "\-\-force\-orientation" <<< "$GAMESCOPE_ARGS"; then
-			GSFOOR="$NON"  # Default
+			GSFOOR="$GSNORM"  # Default
 		else
-			GSFOOR="$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -A1 "\-\-force\-orientation" | tail -n1)"
+			GSFOOR="$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -wA1 "\-\-force\-orientation" | tail -n1)"
 		fi
 	fi
 
@@ -9661,6 +9661,7 @@ function GameScopeGui {
 			--field="$GUI_GSNIS!$DESC_GSNIS ('GSNIS')":CHK "$GSNIS" \
 			--field="$GUI_GSSE!$DESC_GSSE ('GSSE')":CHK "$GSSE" \
 			--field="$GUI_GSFWF!$DESC_GSFWF ('GSFWF')":CHK "$GSFWF" \
+			--field="$GUI_GSFOOR!$GESC_GSFOOR ('GSFOOR')":CB "$(cleanDropDown "${GSFOOR}" "${GSFOOROPTS}")" \
 			--field="$(spanFont "$GUI_GSHDRSET" "H")":LBL "SKIP" \
 			--field="$GUI_GSHDR!$DESC_GSHDR ('GSHDR')":CHK "$GSHDR" \
 			--field="$GUI_GSHDRWGFS!$DESC_GSHDRWGFS ('GSHDRWGFS')":CHK "$GSHDRWGFS" \
@@ -9689,11 +9690,12 @@ function GameScopeGui {
 						GSNIS="${GSARR[10]}"
 						GSSE="${GSARR[11]}"
 						GSFWF="${GSARR[12]}"
-						# GSARR[13] is the HDR heading
-						GSHDR="${GSARR[14]}"
-						GSHDRWGFS="${GSARR[15]}"
-						GSHDRSCNITS="${GSARR[16]}"
-						USEGAMESCOPE="${GSARR[17]}"
+						GSFOOR="${GSARR[13]}"
+						# GSARR[14] is the HDR heading
+						GSHDR="${GSARR[15]}"
+						GSHDRWGFS="${GSARR[16]}"
+						GSHDRSCNITS="${GSARR[17]}"
+						USEGAMESCOPE="${GSARR[18]}"
 
 						# Build the GameScope arguments string
 						unset GAMESCOPE_ARGS
@@ -9760,6 +9762,11 @@ function GameScopeGui {
 
 						if [ "$GSFWF" == "TRUE" ]; then
 							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --force-windows-fullscreen"
+						fi
+
+						# Only force orientation if option other than default 'normal' is selected
+						if [ ! "$GSFOOR" == "$GSNORM" ]; then
+							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --force-orientation ${GSFOOR}"
 						fi
 
 						if [ "$GSHDR" == "TRUE" ]; then
