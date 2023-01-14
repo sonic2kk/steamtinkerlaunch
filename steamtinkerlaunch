@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v12.12.20230115-10 (gamescope-updates)"
+PROGVERS="v12.12.20230115-12 (gamescope-updates)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -9480,6 +9480,8 @@ function GameScopeGui {
 	GSPASSTHRU="passthrough:4"
 	GSTOUCHMODES="${GSDEF}!${GSHOVER}!${GSLEFTCLICK}!${GSRIGHTCLICK}!${GSMIDDLECLICK}!${GSPASSTHRU}" # Corresponds to 0,1,2,3,4 respectively internally by GameScope -- Default is ingored and the flag is not passed to GameScope
 
+	GSDRMMODES="${GSDEF}!cvt!fixed"
+
 	# GameScope Show Resolution (corresponds to -W, -H options, uppercase) -- Actual GameScope window size -- Dropdown
 	if [ -z "$GSSHWRES" ]; then
 		if ! grep -qw "\-w" <<< "$GAMESCOPE_ARGS" || ! grep -qw "\-h" <<< "$GAMESCOPE_ARGS"; then
@@ -9681,7 +9683,7 @@ function GameScopeGui {
 
 	# SteamVR Explicit Name (--vr-overlay-explicit-name) -- Textbox
 	if [ -z "$GSVREXNA" ]; then
-		if ! grep -qw "-\-\vr\-overlay\-explicit\-name" <<< "$GAMESCOPE_ARGS"; then
+		if ! grep -qw "\-\-\vr\-overlay\-explicit\-name" <<< "$GAMESCOPE_ARGS"; then
 			GSVREXNA=""
 		else
 			GSVREXNA="$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -A1 "\-\-vr\-overlay\-explicit\-name" | tail -n1)"
@@ -9690,10 +9692,10 @@ function GameScopeGui {
 
 	# SteamVR Default Name when no window title available (--vr-overlay-default-name) -- Textbox
 	if [ -z "$GSVRDEFNAM" ]; then 
-		if ! grep -qw "-\-\vr\-overlay\-default\-name" <<< "$GAMESCOPE_ARGS"; then
+		if ! grep -qw "\-\-\vr\-overlay\-default\-name" <<< "$GAMESCOPE_ARGS"; then
 			GSVRDEFNAM=""
 		else
-			GSVRDEFNAM="$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -A1 "-\-\vr\-overlay\-default\-name" | tail -n1)"
+			GSVRDEFNAM="$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -A1 "\-\-\vr\-overlay\-default\-name" | tail -n1)"
 		fi
 	fi
 
@@ -9798,7 +9800,7 @@ function GameScopeGui {
 		fi
 	fi
 
-	# Enable Immediate Flips -- Probably equivalent to the Steam Deck's "allow tearing" option -- Checkbox
+	# Enable Immediate Flips (--imediate-flips) -- Probably equivalent to the Steam Deck's "allow tearing" option -- Checkbox
 	if [ -z "$GSIMMEDIATEFLIPS" ]; then
 		if ! grep -qw "\-\-immediate\-flips" <<< "$GAMESCOPE_ARGS"; then
 			GSIMMEDIATEFLIPS="0"
@@ -9807,12 +9809,31 @@ function GameScopeGui {
 		fi
 	fi
 
-	# Enable Adaptive Sync / VRR -- Checkbox
+	# Enable Adaptive Sync / VRR (--adaptive-sync) -- Checkbox
 	if [ -z "$GSADAPTIVESYNC" ]; then 
 		if ! grep -qw "\-\-adaptive\-sync" <<< "$GAMESCOPE_ARGS"; then
 			GSADAPTIVESYNC="0"
 		else
 			GSADAPTIVESYNC="1"
+		fi
+	fi
+
+	# Preferred GameScope Output in order of preference -- Not sure how exactly this should be passed and it can take N number of outputs
+	# For this reason we just give the user a textbox and let them enter their displays manually
+	if [ -z "$GSPREFOUT" ]; then
+		if ! grep -qw "\-O" <<< "$GAMESCOPE_ARGS"; then
+			GSPREFOUT=""
+		else
+			GSPREFOUT="$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -A1 "\-O" | tail -n1)"
+		fi
+	fi
+
+	# GameScope DRM Mode Generation algorithm to use -- GameScope takes either "cvt" or "fixed", but we will have a "default" option in the dropdown which means we will ignore the flag altogether
+	if [ -z "$GSDRMMODE" ]; then
+		if ! grep -qw "\-\-generate\-drm\-mode" <<< "$GAMESCOPE_ARGS"; then
+			GSDRMMODE="${GSDEF}"
+		else
+			GSDRMMODE="$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -A1 "\-\-generate\-drm\-mode" | tail -n1)"
 		fi
 	fi
 
@@ -9857,6 +9878,8 @@ function GameScopeGui {
 			--field="$GUI_GSDEFTOUCHMODE!$DESC_GSDEFTOUCHMODE ('GSDEFTOUCHMODE')":CB "$(cleanDropDown "${GSDEFTOUCHMODE}" "${GSTOUCHMODES}")" \
 			--field="$GUI_GSIMMEDIATEFLIPS!$DESC_GSIMMEDIATEFLIPS ('GSIMMEDIATEFLIPS')":CHK "$GSIMMEDIATEFLIPS" \
 			--field="$GUI_GSADAPTIVESYNC!$DESC_GSADAPTIVESYNC ('GSADAPTIVESYNC')":CHK "$GSADAPTIVESYNC" \
+			--field="$GUI_GSPREFOUT!$DESC_GSPREFOUT ('GSPREFOUT')" "" \
+			--field="$GUI_GSDRMMODE!$DESC_GSDRMMODE ('GSDRMMODE')":CB "$(cleanDropDown "${GSDRMMODE}" "${GSDRMMODES}")" \
 			--button="$BUT_CAN:0" --button="$BUT_DONE:2" "$GEOM"
 		
 			)"
@@ -9906,7 +9929,8 @@ function GameScopeGui {
 						GSDEFTOUCHMODE="${GSARR[35]}"
 						GSIMMEDIATEFLIPS="${GSARR[36]}"
 						GSADAPTIVESYNC="${GSARR[37]}"
-
+						GSPREFOUT="${GSARR[38]}"
+						GSDRMMODE="${GSARR[39]}"
 
 						# Build the GameScope arguments string
 						unset GAMESCOPE_ARGS
@@ -9922,6 +9946,7 @@ function GameScopeGui {
 						GSSHWH1="${GSSHWRES#*x}"
 						GSSHWH="${GSSHWH1%%-*}"
 
+						# General Options
 						GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -W ${GSSHWW} -H ${GSSHWH}"
 						if [ "$GSFLR" -eq "$GSFLR" ] 2>/dev/null; then
 							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -r ${GSFLR}"
@@ -9963,6 +9988,7 @@ function GameScopeGui {
 							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --force-orientation ${GSFOOR}"
 						fi
 
+						# Filtering Options
 						if [ "$GSIS" == "TRUE" ]; then
 							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -i"
 						fi
@@ -9996,6 +10022,7 @@ function GameScopeGui {
 							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -m ${GSMSF}"
 						fi
 
+						# HDR Options
 						if [ "$GSHDR" == "TRUE" ]; then
 							# Possible to check if any HDR displays available and warn if not?
 							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --hdr-enabled"
@@ -10021,6 +10048,7 @@ function GameScopeGui {
 							writelog "INFO" "${FUNCNAME[0]} - GSHDRSCNITS (--hdr-sdr-content-nits) option for GameScope was left at default 400 - GameScope should use this anyway - Ignoring as this option would have no effect"
 						fi
 
+						# VR Options
 						if [ "$GSVR" == "TRUE" ]; then
 							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --openvr"
 						fi
@@ -10064,6 +10092,8 @@ function GameScopeGui {
 							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --vr-overlay-modal"
 						fi
 
+						# Embedded Options
+						#
 						# Don't pass default touch mode option if we left at default
 						if [ ! "$GSDEFTOUCHMODE" == "${GSDEF}" ]; then 
 							# Get the corresponding number that should be passed to GameScope from the number in the dropdown string, e.g. gets "0" from "hover:0"
@@ -10077,6 +10107,16 @@ function GameScopeGui {
 
 						if [ "$GSADAPTIVESYNC" == "TRUE" ]; then
 							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --adaptive-sync"
+						fi
+
+						# Don't pass preferred output(s) if the textbox is blank
+						if [ "${#GSPREFOUT}" -gt 0 ]; then
+							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -O ${GSPREFOUT}"
+						fi
+
+						# Don't pass DRM mode if "default"
+						if [ ! "$GSDRMMODE" == "${GSDEF}" ]; then
+							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --generate-drm-mode ${GSDRMMODE}"
 						fi
 
 						GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --"
