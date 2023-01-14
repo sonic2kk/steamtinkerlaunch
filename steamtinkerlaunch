@@ -9466,9 +9466,14 @@ function GameScopeGui {
 	pollWinRes "$TITLE"
 	setShowPic
 	UL="unlimited"
+	
 	FSRS_STR="\-\-fsr\-sharpness"
+	
 	GSNORM="normal"
 	GSFOOROPTS="left!right!${GSNORM}!upsidedown"
+
+	GSDEF="default"
+	GSTOUCHMODES="${GSDEF}!hover:0!leftclick:1!rightclick:2!middleclick:3!passthrough:4" # Corresponds to 0,1,2,3,4 respectively internally by GameScope -- Default is ingored and the flag is not passed to GameScope
 
 	# GameScope Show Resolution (corresponds to -W, -H options, uppercase) -- Actual GameScope window size -- Dropdown
 	if [ -z "$GSSHWRES" ]; then
@@ -9752,6 +9757,40 @@ function GameScopeGui {
 	# Usage on these options is also a bit unclear, probably documented in the GameScope source but not sure
 	# We could add these in future if it is requested
 
+	# Default action on touch (--default-touch-mode)
+	# 0: hover
+	# 1: leftclick
+	# 2: rightclick
+	# 3: middleclick
+	# 4: passthrough
+	# More information in the GameScope commit that added it: https://github.com/Plagman/gamescope/commit/39c9e93e0c0539d4c767e1be1c96e0d38778af12 
+	# 
+	# Dropdown
+	if [ -z "$GSDEFTOUCHMODE" ]; then
+		if ! grep -qw "\-\-default\-touch\-mode" <<< "$GAMESCOPE_ARGS"; then
+			GSDEFTOUCHMODE="${GSDEF}"
+		else
+			GSDEFTOUCHMODE="$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -A1 "\-\-default\-touch\-mode" | tail -n1)"
+		fi
+	fi
+
+	# Enable Immediate Flips -- Probably equivalent to the Steam Deck's "allow tearing" option -- Checkbox
+	if [ -z "$GSIMMEDIATEFLIPS" ]; then
+		if ! grep -qw "\-\-immediate\-flips" <<< "$GAMESCOPE_ARGS"; then
+			GSIMMEDIATEFLIPS="0"
+		else 
+			GSIMMEDIATEFLIPS="1"
+		fi
+	fi
+
+	# Enable Adaptive Sync / VRR -- Checkbox
+	if [ -z "$GSADAPTIVESYNC" ]; then 
+		if ! grep -qw "\-\-adaptive\-sync" <<< "$GAMESCOPE_ARGS"; then
+			GSADAPTIVESYNC="0"
+		else
+			GSADAPTIVESYNC="1"
+		fi
+	fi
 
 	GASCOS="$("$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --scroll --window-icon="$STLICON" --form --center --on-top $WINDECO \
 			--title="$TITLE" --separator="|" \
@@ -9790,7 +9829,12 @@ function GameScopeGui {
 			--field="$GUI_GSVRCONTROLBARKEYBOARD!$DESC_GSVRCONTROLBARKEYBOARD ('GSVRCONTROLBARKEYBOARD')":CHK "$GSVRCONTROLBARKEYBOARD" \
 			--field="$GUI_GSVRCONTROLBARCLOSE!$DESC_GSVRCONTROLBARCLOSE ('GSVRCONTROLBARCLOSE')":CHK "$GSVRCONTROLBARCLOSE" \
 			--field="$GUI_GSVRMODAL!$DESC_GSVRMODAL ('GSVRMODAL')":CHK "$GSVRMODAL" \
+			--field="$(spanFont "$GUI_GSEMBEDDEDSET" "H")":LBL "SKIP" \
+			--field="$GUI_GSDEFTOUCHMODE!$DESC_GSDEFTOUCHMODE ('GSDEFTOUCHMODE')":CB "$(cleanDropDown "default" "${GSTOUCHMODES}")" \
+			--field="$GUI_GSIMMEDIATEFLIPS!$DESC_GSIMMEDIATEFLIPS ('GSIMMEDIATEFLIPS')":CHK "$GSIMMEDIATEFLIPS" \
+			--field="$GUI_GSADAPTIVESYNC!$DESC_GSADAPTIVESYNC ('GSADAPTIVESYNC')":CHK "$GSADAPTIVESYNC" \
 			--button="$BUT_CAN:0" --button="$BUT_DONE:2" "$GEOM"
+		
 			)"
 			case $? in
 				0)	{
@@ -9834,6 +9878,10 @@ function GameScopeGui {
 						GSVRCONTROLBARKEYBOARD="${GSARR[31]}"
 						GSVRCONTROLBARCLOSE="${GSARR[32]}"
 						GSVRMODAL="${GSARR[33]}"
+						# GSARR[34] is the Embedded heading
+						GSDEFTOUCHMODE="${GSARR[35]}"
+						GSIMMEDIATEFLIPS="${GSARR[36]}"
+						GSADAPTIVESYNC="${GSARR[37]}"
 
 
 						# Build the GameScope arguments string
@@ -9990,6 +10038,21 @@ function GameScopeGui {
 
 						if [ "$GSVRMODAL" == "TRUE" ]; then
 							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --vr-overlay-modal"
+						fi
+
+						# Don't pass default touch mode option if we left at default
+						if [ ! "$GSDEFTOUCHMODE" == "${GSDEF}" ]; then 
+							# Get the corresponding number that should be passed to GameScope from the number in the dropdown string, e.g. gets "0" from "hover:0"
+							SELECTEDTOUCHMODE="$( echo "$GSDEFTOUCHMODE" | cut -d ":" -f 2 )" 
+							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --default-touch-mode ${SELECTEDTOUCHMODE}"
+						fi
+
+						if [ "$GSIMMEDIATEFLIPS" == "TRUE" ]; then
+							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --immediate-flips"
+						fi
+
+						if [ "$GSADAPTIVESYNC" == "TRUE" ]; then
+							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --adaptive-sync"
 						fi
 
 						GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --"
