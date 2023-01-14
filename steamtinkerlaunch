@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v12.12.20230115-8 (gamescope-updates)"
+PROGVERS="v12.12.20230115-10 (gamescope-updates)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -9647,7 +9647,7 @@ function GameScopeGui {
 		if ! grep -qw "\-\-cursor" <<< "$GAMESCOPE_ARGS"; then
 			GSCURSOR=""
 		else
-			GSCURSOR="$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -A1 "\-\-cursor" | tail -n1 | sed -r -e "s/\s/\\\ /g")"  # Turns path '/home/gaben/Half Life 3/cur.png' into '/home/gaben/Half\ Life\ 3/cur.png'
+			GSCURSOR="\"$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -A1 "\-\-cursor" | tail -n1 | sed -r -e "s/\s/\\\ /g")\""  # Turns path '/home/gaben/Half Life 3/cur.png' into '/home/gaben/Half\ Life\ 3/cur.png'
 		fi
 	fi
 
@@ -9669,9 +9669,90 @@ function GameScopeGui {
 		fi
 	fi
 
-	# TODO Add headings to better separate out GameScope options
-	# GameScope now accepts VR options, it also accepts Embedded Mode options (e.g. when running in a TTY). We could also have a seaprate heading for HDR options
-	# Subheadings would better separate these
+	# SteamVR Explicit Name (--vr-overlay-explicit-name) -- Textbox
+	if [ -z "$GSVREXNA" ]; then
+		if ! grep -qw "-\-\vr\-overlay\-explicit\-name" <<< "$GAMESCOPE_ARGS"; then
+			GSVREXNA=""
+		else
+			GSVREXNA="$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -A1 "\-\-vr\-overlay\-explicit\-name" | tail -n1)"
+		fi
+	fi
+
+	# SteamVR Default Name when no window title available (--vr-overlay-default-name) -- Textbox
+	if [ -z "$GSVRDEFNAM" ]; then 
+		if ! grep -qw "-\-\vr\-overlay\-default\-name" <<< "$GAMESCOPE_ARGS"; then
+			GSVRDEFNAM=""
+		else
+			GSVRDEFNAM="$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -A1 "-\-\vr\-overlay\-default\-name" | tail -n1)"
+		fi
+	fi
+
+	# SteamVR Overlay Icon (--vr-overlay-icon) -- Similar to cursor picker -- File picker 
+	if [ -z "$GSVRICON" ]; then
+		if ! grep -qw "\-\-vr\-overlay\-icon" <<< "$GAMESCOPE_ARGS"; then
+			GSCURSOR=""
+		else
+			# Replace spaces in path, just like we do for cursor
+			GSCURSOR="\"$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -A1 "\-\-vr\-overlay\-icon" | tail -n1 | sed -r -e "s/\s/\\\ /g")\""  # Same as cursor path logic
+		fi
+	fi
+
+	# Focus VR overlay immediately (--vr-overlay-show-immediately) -- Checkbox
+	if [ -z "$GSVRSHOIMM" ]; then
+		if ! grep -qw "\-\-vr\-overlay\-show\-immediately" <<< "$GAMESCOPE_ARGS"; then
+			GSVRSHOIMM="0"
+		else
+			GSVRSHOIMM="1"
+		fi
+	fi
+
+	# Enable SteamVR Control Bar (--vr-overlay-enable-control-bar) -- Checkbox
+	if [ -z "$GSVRCONTROLBAR" ]; then
+		if ! grep -qw "\-\-vr\-overlay\-enable\-control\-bar" <<< "$GAMESCOPE_ARGS"; then
+			GSVRCONTROLBAR="0"
+		else
+			GSVRCONTROLBAR="1"
+		fi
+	fi
+
+	# Enable SteamVR Keyboard Button on Control Bar (--vr-overlay-enable-control-bar-keyboard) -- Checkbox
+	if [ -z "$GSVRCONTROLBARKEYBOARD" ]; then
+		if ! grep -qw "\-\-vr\-overlay\-enable\-control\-bar\-keyboard" <<< "$GAMESCOPE_ARGS"; then
+			GSVRCONTROLBARKEYBOARD="0"
+		else
+			GSVRCONTROLBARKEYBOARD="1"
+		fi
+	fi
+
+	# Enable SteamVR Close Button on Control Bar (--vr-overlay-enable-control-bar-close) -- Checkbox
+	if [ -z "$GSVRCONTROLBARCLOSE" ]; then
+		if ! grep -qw "\-\-vr\-overlay\-enable\-control\-bar\-close" <<< "$GAMESCOPE_ARGS"; then
+			GSVRCONTROLBARCLOSE="0"
+		else
+			GSVRCONTROLBARCLOSE="1"
+		fi
+	fi
+
+	# Show SteamVR Overlay as Modal (--vr-overlay-modal) -- Checkbox
+	if [ -z "$GSVRMODAL" ]; then
+		if ! grep -qw "\-\-vr\-overlay\-modal" <<< "$GAMESCOPE_ARGS"; then
+			GSVRMODAL="0"
+		else
+			GSVRMODAL="1"
+		fi
+	fi
+
+	# NOTE: There are some other GameScope VR options:
+	# - --vr-overlay-physical-width
+	# - --vr-overlay-physical-curvature
+	# - --vr-overlay-physical-pre-curve-pitch
+	#
+	# These options are probably very bespoke and not important to the average user
+	# Especially the physcial width option which takes a value in metres!
+	# Usage on these options is also a bit unclear, probably documented in the GameScope source but not sure
+	# We could add these in future if it is requested
+
+
 	GASCOS="$("$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --scroll --window-icon="$STLICON" --form --center --on-top $WINDECO \
 			--title="$TITLE" --separator="|" \
 			--text="$(spanFont "$(strFix "$GUI_GASCOSET" "$SGNAID")" "H")" \
@@ -9701,6 +9782,14 @@ function GameScopeGui {
 			--field="$GUI_GSHDRSCNITS!$DESC_GSHDRSCNITS ('GSHDRSCNITS')":NUM "${GSHDRSCNITS/#-/ -}" \
 			--field="$(spanFont "$GUI_GSVRSET" "H")":LBL "SKIP" \
 			--field="$GUI_GSVR!$DESC_GSVR ('GSVR')":CHK "$GSVR" \
+			--field="$GUI_GSVREXNA!$DESC_GSVREXNA ('GSVREXNA')" "$GSVREXNA" \
+			--field="$GUI_GSVRDEFNAM!$DESC_GSVRDEFNAM ('GSVRDEFNAM')" "$GSVRDEFNAM" \
+			--field="$GUI_GSVRICON!$DESC_GSVRICON ('GSVRICON')":FL "${GSVRICON//\"}" \
+			--field="$GUI_GSVRSHOIMM!$DESC_GSVRSHOIMM ('GSVRSHOIMM')":CHK "$GSVRSHOIMM" \
+			--field="$GUI_GSVRCONTROLBAR!$DESC_GSVRCONTROLBAR ('GSVRCONTROLBAR')":CHK "$GSVRCONTROLBAR" \
+			--field="$GUI_GSVRCONTROLBARKEYBOARD!$DESC_GSVRCONTROLBARKEYBOARD ('GSVRCONTROLBARKEYBOARD')":CHK "$GSVRCONTROLBARKEYBOARD" \
+			--field="$GUI_GSVRCONTROLBARCLOSE!$DESC_GSVRCONTROLBARCLOSE ('GSVRCONTROLBARCLOSE')":CHK "$GSVRCONTROLBARCLOSE" \
+			--field="$GUI_GSVRMODAL!$DESC_GSVRMODAL ('GSVRMODAL')":CHK "$GSVRMODAL" \
 			--button="$BUT_CAN:0" --button="$BUT_DONE:2" "$GEOM"
 			)"
 			case $? in
@@ -9737,6 +9826,14 @@ function GameScopeGui {
 						GSHDRSCNITS="${GSARR[23]}"
 						# GSARR[23] is the VR heading
 						GSVR="${GSARR[25]}"
+						GSVREXNA="${GSARR[26]}"
+						GSVRDEFNAM="${GSARR[27]}"
+						GSVRICON="${GSARR[28]}"
+						GSVRSHOIMM="${GSARR[29]}"
+						GSVRCONTROLBAR="${GSARR[30]}"
+						GSVRCONTROLBARKEYBOARD="${GSARR[31]}"
+						GSVRCONTROLBARCLOSE="${GSARR[32]}"
+						GSVRMODAL="${GSARR[33]}"
 
 
 						# Build the GameScope arguments string
@@ -9786,7 +9883,7 @@ function GameScopeGui {
 							# TODO this is broken if there are spaces in the path still
 							# Escape cursor path, replacing spaces in path with '\ ', same as when we fetch the value on load
 							ESCAPEDCURSORPATH="$( echo "${GSCURSOR}" | sed -r -e "s/\s/\\\ /g")"
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --cursor ${ESCAPEDCURSORPATH}\""
+							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --cursor \"${ESCAPEDCURSORPATH}\""
 						fi
 
 						# Only force orientation if option other than default 'normal' is selected
@@ -9854,6 +9951,45 @@ function GameScopeGui {
 
 						if [ "$GSVR" == "TRUE" ]; then
 							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --openvr"
+						fi
+
+						# Don't set explicit name if it's blank
+						# TODO how does this work with spaces/quotes?
+						if [ "${#GSVREXNA}" -gt 0 ]; then
+							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --vr-overlay-explicit-name \"${GSVREXNA}\""
+						fi
+
+						# Don't set default name if it's blank
+						# TODO same as above, how does it work with quotes?
+						if [ "${#GSVRDEFNAM}" -gt 0 ]; then
+							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --vr-overlay-default-name \"${GSVRDEFNAM}\""
+						fi
+
+						if [ -f "$GSVRICON" ]; then
+							# TODO this is broken if there are spaces in the path still
+							# Escape SteamVR icon path, replacing spaces in path with '\ '
+							ESCAPEDCURSORPATH="$( echo "${GSVRICON}" | sed -r -e "s/\s/\\\ /g")"
+							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --vr-overlay-icon \"${GSVRICON}\""
+						fi
+
+						if [ "$GSVRSHOIMM" == "TRUE" ]; then
+							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --vr-overlay-show-immediately"
+						fi
+
+						if [ "$GSVRCONTROLBAR" == "TRUE" ]; then
+							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --vr-overlay-enable-control-bar"
+						fi
+
+						if [ "$GSVRCONTROLBARKEYBOARD" == "TRUE" ]; then
+							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --vr-overlay-enable-control-bar-keyboard"
+						fi
+
+						if [ "$GSVRCONTROLBARCLOSE" == "TRUE" ]; then
+							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --vr-overlay-enable-control-bar-close"
+						fi
+
+						if [ "$GSVRMODAL" == "TRUE" ]; then
+							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --vr-overlay-modal"
 						fi
 
 						GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --"
