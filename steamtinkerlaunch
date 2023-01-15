@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v12.12.20230115-18 (gamescope-updates)"
+PROGVERS="v12.12.20230115-20 (gamescope-updates)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -9662,7 +9662,7 @@ function GameScopeGui {
 			GSCURSOR="$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -A1 "\-\-cursor" | tail -n1 | sed -r -e "s/\s/\\\ /g")"  # Turns path '/home/gaben/Half Life 3/cur.png' into '/home/gaben/Half\ Life\ 3/cur.png'
 			GSENABLECUSTCUR="1"
 
-			echo "Loaded path is '$GSCURSOR'"
+			echo "Loaded cursor path is '$GSCURSOR'"
 		fi
 	fi
 
@@ -9705,11 +9705,11 @@ function GameScopeGui {
 	# SteamVR Overlay Icon (--vr-overlay-icon) -- Similar to cursor picker -- File picker 
 	if [ -z "$GSVRICON" ]; then
 		if ! grep -qw "\-\-vr\-overlay\-icon" <<< "$GAMESCOPE_ARGS"; then
-			GSCURSOR=""
+			GSVRICON=""
 			GSVRICONENABLE="0"
 		else
 			# Replace spaces in path, just like we do for cursor
-			GSCURSOR="\"$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -A1 "\-\-vr\-overlay\-icon" | tail -n1 | sed -r -e "s/\s/\\\ /g")\""  # Same as cursor path logic
+			GSVRICON="$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -A1 "\-\-vr\-overlay\-icon" | tail -n1 | sed -r -e "s/\s/\\\ /g")"  # Same as cursor path logic
 			GSVRICONENABLE="1"
 		fi
 	fi
@@ -9848,7 +9848,7 @@ function GameScopeGui {
 			GSSTATSPATH=""
 			GSSTATSPATHENABLE="0"
 		else 
-			GSSTATSPATH="\"$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -A1 "\-T" | tail -n1 | sed -r -e "s/\s/\\\ /g")\""  # Same as cursor path logic
+			GSSTATSPATH="$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -A1 "\-T" | tail -n1 | sed -r -e "s/\s/\\\ /g")"  # Same as cursor path logic
 			GSSTATSPATHENABLE="1"
 		fi
 	fi
@@ -9907,6 +9907,7 @@ function GameScopeGui {
 		fi
 	fi
 
+	echo "GSCURSOR is '$GSCURSOR'"
 	GASCOS="$("$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --scroll --window-icon="$STLICON" --form --center --on-top $WINDECO \
 			--title="$TITLE" --separator="|" \
 			--text="$(spanFont "$(strFix "$GUI_GASCOSET" "$SGNAID")" "H")" \
@@ -9923,7 +9924,7 @@ function GameScopeGui {
 			--field="$GUI_GSFGC!$DESC_GSFGC ('GSFGC')":CHK "$GSFGC" \
 			--field="$GUI_GSFOOR!$DESC_GSFOOR ('GSFOOR')":CB "$(cleanDropDown "${GSFOOR}" "${GSFOOROPTS}")" \
 			--field="$GUI_GSENABLECUSTCUR!$GUI_GSENABLECUSTCUR ('GSENABLECUSTCUR')":CHK "$GSENABLECUSTCUR" \
-			--field="$GUI_GSCURSOR!$DESC_GSCURSOR ('GSCURSOR')":FL "${GSCURSOR//\"}" \
+			--field="$GUI_GSCURSOR!$DESC_GSCURSOR ('GSCURSOR')":FL "${GSCURSOR/#-/ -}" \
 			--field="$(spanFont "$GUI_GSFILTERINGSET" "H")":LBL "SKIP" \
 			--field="$GUI_GSFSRS!$DESC_GSFSRS ('GSFSRS')":NUM "${GSFSRS/#-/ -}:!0..20" \
 			--field="$GUI_GSIS!$DESC_GSIS ('GSIS')":CHK "$GSIS" \
@@ -10072,7 +10073,7 @@ function GameScopeGui {
 							# Escape cursor path, replacing spaces in path with '\ ', same as when we fetch the value on load
 							ESCAPEDCURSORPATH="$( echo "${GSCURSOR}" | sed -r -e "s/\s/\\\ /g")"
 							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --cursor ${ESCAPEDCURSORPATH}"
-							echo "Path is \"${ESCAPEDCURSORPATH}\""
+							echo "Saved cursor path on exit is '${ESCAPEDCURSORPATH}'"
 						fi
 
 						# Only force orientation if option other than default 'normal' is selected
@@ -10161,7 +10162,7 @@ function GameScopeGui {
 							# TODO this is broken if there are spaces in the path still
 							# Escape SteamVR icon path, replacing spaces in path with '\ '
 							ESCAPEDICONPATH="$( echo "${GSVRICON}" | sed -r -e "s/\s/\\\ /g")"
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --vr-overlay-icon \"${ESCAPEDICONPATH}\""
+							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --vr-overlay-icon ${ESCAPEDICONPATH}"
 						fi
 
 						if [ "$GSVRSHOIMM" == "TRUE" ]; then
@@ -10214,7 +10215,7 @@ function GameScopeGui {
 						# TODO ensure this selects a folder, may need to be a different Yad widget
 						if [ -d "$GSSTATSPATH" ] && [ "$GSSTATSPATHENABLE" == "TRUE" ]; then
 							ESCAPEDSTATSPATH="$( echo "${GSVRICON}" | sed -r -e "s/\s/\\\ /g")"
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -T \"${ESCAPEDSTATSPATH}\""  # Escapes path, same as cursor logic
+							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -T ${ESCAPEDSTATSPATH}"
 						fi
 
 						# Ignore cursor delay if it's 0
