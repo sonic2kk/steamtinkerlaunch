@@ -9655,17 +9655,21 @@ function GameScopeGui {
 	fi
 
 	# Custom cursor image (--cursor) -- File picker
-	if [ -z "$GSENABLECUSTCUR" ]; then
-		GSENABLECUSTCUR="0"
-	else
-		GSENABLECUSTCUR="1"
-	fi
+	# if [ -z "$GSENABLECUSTCUR" ]; then
+	# 	GSENABLECUSTCUR="0"
+	# else
+	# 	GSENABLECUSTCUR="1"
+	# fi
 
 	if [ -z "$GSCURSOR" ]; then
 		if ! grep -qw "\-\-cursor" <<< "$GAMESCOPE_ARGS"; then
 			GSCURSOR=""
+			GSENABLECUSTCUR="0"
 		else
-			GSCURSOR="\"$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -A1 "\-\-cursor" | tail -n1 | sed -r -e "s/\s/\\\ /g")\""  # Turns path '/home/gaben/Half Life 3/cur.png' into '/home/gaben/Half\ Life\ 3/cur.png'
+			GSCURSOR="$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -A1 "\-\-cursor" | tail -n1 | sed -r -e "s/\s/\\\ /g")"  # Turns path '/home/gaben/Half Life 3/cur.png' into '/home/gaben/Half\ Life\ 3/cur.png'
+			GSENABLECUSTCUR="1"
+
+			echo "Loaded path is '$GSCURSOR'"
 		fi
 	fi
 
@@ -9706,18 +9710,20 @@ function GameScopeGui {
 	fi
 
 	# SteamVR Overlay Icon (--vr-overlay-icon) -- Similar to cursor picker -- File picker 
-	if [ -z "$GSVRICONENABLE" ]; then
-		GSVRICONENABLE="0"
-	else
-		GSVRICONENABLE="1"
-	fi
+	# if [ -z "$GSVRICONENABLE" ]; then
+	# 	GSVRICONENABLE="0"
+	# else
+	# 	GSVRICONENABLE="1"
+	# fi
 
 	if [ -z "$GSVRICON" ]; then
 		if ! grep -qw "\-\-vr\-overlay\-icon" <<< "$GAMESCOPE_ARGS"; then
 			GSCURSOR=""
+			GSVRICONENABLE="0"
 		else
 			# Replace spaces in path, just like we do for cursor
 			GSCURSOR="\"$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -A1 "\-\-vr\-overlay\-icon" | tail -n1 | sed -r -e "s/\s/\\\ /g")\""  # Same as cursor path logic
+			GSVRICONENABLE="1"
 		fi
 	fi
 
@@ -9850,17 +9856,19 @@ function GameScopeGui {
 	fi
 
 	# Path to write GameScope statistics to (-T) -- File picker
-	if [ -z "$GSSTATSPATHENABLE" ]; then
-		GSSTATSPATHENABLE="0"
-	else
-		GSSTATSPATHENABLE="1"
-	fi
+	# if [ -z "$GSSTATSPATHENABLE" ]; then
+	# 	GSSTATSPATHENABLE="0"
+	# else
+	# 	GSSTATSPATHENABLE="1"
+	# fi
 
 	if [ -z "$GSSTATSPATH" ]; then
 		if ! grep -qw "\-T" <<< "$GAMESCOPE_ARGS"; then
 			GSSTATSPATH=""
+			GSSTATSPATHENABLE="0"
 		else 
 			GSSTATSPATH="\"$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -A1 "\-T" | tail -n1 | sed -r -e "s/\s/\\\ /g")\""  # Same as cursor path logic
+			GSSTATSPATHENABLE="1"
 		fi
 	fi
 
@@ -9932,7 +9940,7 @@ function GameScopeGui {
 			--field="$GUI_GSSE!$DESC_GSSE ('GSSE')":CHK "$GSSE" \
 			--field="$GUI_GSFWF!$DESC_GSFWF ('GSFWF')":CHK "$GSFWF" \
 			--field="$GUI_GSFGC!$DESC_GSFGC ('GSFGC')":CHK "$GSFGC" \
-			--field="$GUI_GSFOOR!$GESC_GSFOOR ('GSFOOR')":CB "$(cleanDropDown "${GSFOOR}" "${GSFOOROPTS}")" \
+			--field="$GUI_GSFOOR!$DESC_GSFOOR ('GSFOOR')":CB "$(cleanDropDown "${GSFOOR}" "${GSFOOROPTS}")" \
 			--field="$GUI_GSENABLECUSTCUR!$DESC_GSENABLECUSTCUR ('GSENABLECUSTCUR')":CHK "$GSENABLECUSTCUR" \
 			--field="$GUI_GSCURSOR!$DESC_GSCURSOR ('GSCURSOR')":FL "${GSCURSOR//\"}" \
 			--field="$(spanFont "$GUI_GSFILTERINGSET" "H")":LBL "SKIP" \
@@ -10082,7 +10090,8 @@ function GameScopeGui {
 							# TODO this is broken if there are spaces in the path still
 							# Escape cursor path, replacing spaces in path with '\ ', same as when we fetch the value on load
 							ESCAPEDCURSORPATH="$( echo "${GSCURSOR}" | sed -r -e "s/\s/\\\ /g")"
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --cursor \"${ESCAPEDCURSORPATH}\""
+							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --cursor ${ESCAPEDCURSORPATH}"
+							echo "Path is \"${ESCAPEDCURSORPATH}\""
 						fi
 
 						# Only force orientation if option other than default 'normal' is selected
