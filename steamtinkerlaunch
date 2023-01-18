@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v12.12.20230115-20 (gamescope-updates)"
+PROGVERS="v12.12.20230118-1 (gamescope-updates)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -9449,6 +9449,18 @@ function checkXliveless {
 
 # NOTE: Logic for some options here could potentially be improved in future to avoid duplication
 function GameScopeGui {
+
+	# Gets the path passed to a flag e.g. '--cursor /home/gaben/half life 3/cursor.png'
+	# The other args use `tr ' ' '\n'`, but we can't use this when it comes to flags because a space in the path can cause issues
+	function getGameScopePathArg {
+		ARGS="$1"  # e.g. "$GAMESCOPE_ARGS"
+		FLAG="$2"  # e.g. "--cursor"
+
+		ESC_FLAG="${FLAG/--/\\-\\-}"
+
+		echo "$ARGS" | sed 's:--:\n--:g' | grep -A1 "$ESC_FLAG" | head -n1 | sed "s:${FLAG}::g" | xargs
+	}
+
 	if [ -n "$1" ]; then
 		AID="$1"
 		setAIDCfgs
@@ -9659,8 +9671,7 @@ function GameScopeGui {
 			GSCURSOR=""
 			GSENABLECUSTCUR="0"
 		else
-			# GSCURSOR="$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -A1 "\-\-cursor" | tail -n1 | sed -r -e "s/\s/\\\ /g")"  # Turns path '/home/gaben/Half Life 3/cur.png' into '/home/gaben/Half\ Life\ 3/cur.png'
-			GSCURSOR="$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -A1 "\-\-cursor" | tail -n1)"  # Turns path '/home/gaben/Half Life 3/cur.png' into '/home/gaben/Half\ Life\ 3/cur.png'
+			GSCURSOR="$( getGameScopePathArg "$GAMESCOPE_ARGS" "--cursor" )"
 			GSENABLECUSTCUR="1"
 
 			echo "Loaded cursor path is '$GSCURSOR'"
