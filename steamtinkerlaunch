@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v12.12.20230118-1 (gamescope-updates)"
+PROGVERS="v12.12.20230118-2"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -9701,7 +9701,7 @@ function GameScopeGui {
 		if ! grep -qw "\-\-vr\-overlay\-explicit\-name" <<< "$GAMESCOPE_ARGS"; then
 			GSVREXNA=""
 		else
-			GSVREXNA="$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -A1 "\-\-vr\-overlay\-explicit\-name" | tail -n1)"
+			GSVREXNA="$( getGameScopePathArg "$GAMESCOPE_ARGS" "--vr-overlay-default-name" )"
 		fi
 	fi
 
@@ -9710,7 +9710,7 @@ function GameScopeGui {
 		if ! grep -qw "\-\-vr\-overlay\-default\-name" <<< "$GAMESCOPE_ARGS"; then
 			GSVRDEFNAM=""
 		else
-			GSVRDEFNAM="$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -A1 "\-\-vr\-overlay\-default\-name" | tail -n1)"
+			GSVRDEFNAM="$( getGameScopePathArg "$GAMESCOPE_ARGS" "--vr-overlay-default-name" )"
 		fi
 	fi
 
@@ -9720,8 +9720,7 @@ function GameScopeGui {
 			GSVRICON=""
 			GSVRICONENABLE="0"
 		else
-			# Replace spaces in path, just like we do for cursor
-			GSVRICON="$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -A1 "\-\-vr\-overlay\-icon" | tail -n1 | sed -r -e "s/\s/\\\ /g")"  # Same as cursor path logic
+			GSVRICON="$( getGameScopePathArg "$GAMESCOPE_ARGS" "--vr-overlay-icon" )"
 			GSVRICONENABLE="1"
 		fi
 	fi
@@ -9854,13 +9853,14 @@ function GameScopeGui {
 		fi
 	fi
 
-	# Path to write GameScope statistics to (-T) -- File picker
+	# Path to write GameScope statistics to (--stats-path) -- File picker
+	# '-T' option is also availsble, but we have to use '--stats-path' because of how 'getGameScopePathArg' works
 	if [ -z "$GSSTATSPATH" ]; then
-		if ! grep -qw "\-T" <<< "$GAMESCOPE_ARGS"; then
+		if ! grep -qw "\-\-stats\-path" <<< "$GAMESCOPE_ARGS"; then
 			GSSTATSPATH=""
 			GSSTATSPATHENABLE="0"
 		else 
-			GSSTATSPATH="$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -A1 "\-T" | tail -n1 | sed -r -e "s/\s/\\\ /g")"  # Same as cursor path logic
+			GSSTATSPATH="$( getGameScopePathArg "$GAMESCOPE_ARGS" "--stats-path" )"
 			GSSTATSPATHENABLE="1"
 		fi
 	fi
@@ -9919,7 +9919,6 @@ function GameScopeGui {
 		fi
 	fi
 
-	echo "GSCURSOR is '$GSCURSOR'"
 	GASCOS="$("$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --scroll --window-icon="$STLICON" --form --center --on-top $WINDECO \
 			--title="$TITLE" --separator="|" \
 			--text="$(spanFont "$(strFix "$GUI_GASCOSET" "$SGNAID")" "H")" \
@@ -10081,15 +10080,7 @@ function GameScopeGui {
 						fi
 
 						if [ -f "$GSCURSOR" ] && [ "$GSENABLECUSTCUR" == "TRUE" ]; then
-							# TODO this is broken if there are spaces in the path still
-
-							# Escape cursor path, replacing spaces in path with '\ ', same as when we fetch the value on load
-							# ESCAPEDCURSORPATH="$( echo "${GSCURSOR}" | sed -r -e "s/\s/\\\ /g")"
-							# GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --cursor ${ESCAPEDCURSORPATH}"
-							# echo "Saved cursor path on exit is '${ESCAPEDCURSORPATH}'"
-
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --cursor ${GSCURSOR}"
-							echo "Saved cursor path on exit is '${GSCURSOR}'"
+							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --cursor '${GSCURSOR}'"
 						fi
 
 						# Only force orientation if option other than default 'normal' is selected
@@ -10163,22 +10154,17 @@ function GameScopeGui {
 						fi
 
 						# Don't set explicit name if it's blank
-						# TODO how does this work with spaces/quotes?
 						if [ "${#GSVREXNA}" -gt 0 ]; then
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --vr-overlay-explicit-name \"${GSVREXNA}\""
+							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --vr-overlay-explicit-name '${GSVREXNA}'"
 						fi
 
 						# Don't set default name if it's blank
-						# TODO same as above, how does it work with quotes?
 						if [ "${#GSVRDEFNAM}" -gt 0 ]; then
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --vr-overlay-default-name \"${GSVRDEFNAM}\""
+							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --vr-overlay-default-name '${GSVRDEFNAM}'"
 						fi
 
 						if [ -f "$GSVRICON" ] && [ "$GSVRICONENABLE" == "TRUE" ]; then
-							# TODO this is broken if there are spaces in the path still
-							# Escape SteamVR icon path, replacing spaces in path with '\ '
-							ESCAPEDICONPATH="$( echo "${GSVRICON}" | sed -r -e "s/\s/\\\ /g")"
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --vr-overlay-icon ${ESCAPEDICONPATH}"
+							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --vr-overlay-icon '${GSVRICON}'"
 						fi
 
 						if [ "$GSVRSHOIMM" == "TRUE" ]; then
@@ -10228,10 +10214,8 @@ function GameScopeGui {
 							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --generate-drm-mode ${GSDRMMODE}"
 						fi
 
-						# TODO ensure this selects a folder, may need to be a different Yad widget
 						if [ -d "$GSSTATSPATH" ] && [ "$GSSTATSPATHENABLE" == "TRUE" ]; then
-							ESCAPEDSTATSPATH="$( echo "${GSVRICON}" | sed -r -e "s/\s/\\\ /g")"
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -T ${ESCAPEDSTATSPATH}"
+							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --stats-path '${GSSTATSPATH}'"
 						fi
 
 						# Ignore cursor delay if it's 0
