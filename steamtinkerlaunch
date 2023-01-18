@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v12.12.20230118-3"
+PROGVERS="v12.12.20230119-1 (steamdeck-autodeps-update)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -22394,17 +22394,90 @@ function fetchAndExtractDependency {
 }
 
 function checkSteamDeckDependencies {
-	
 	function installDependencyVersionFromURL {
 		local DEPCMD="$1"
 		local DEPFILENAME="$2"
 		local DEPDIR="$3"
 		local REPOURL="$4"
+		local EXPECTEDDEPVER="$5"  # e.g. If we expect "1.9-7" for innoextract, check the version we have locally
 
+		local DEPVERTXT="${DEPCMD}_ver.txt"  # e.g. ~/stl/deps/innoextract_ver.txt
+
+		local STOREDDEPVER=""  # This is the version last downloaded, e.g. if "1.9-5" and "1.9-7" is what SteamTinkerLaunch wants with `EXPECTEDDEPVER`, we know to bump
+		local DEPSHOULDUPDATE=0
+		local DEPEXISTS=0  # Check if dependency exists so we can remove it before updating, also controls some of the pre-install checks
+
+		# Check if dependency already installed
 		if [ -f "$(command -v "$DEPCMD")" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Using '$DEPCMD' binary found in path: '$(command -v "$DEPCMD")'"
-			echo "Dependency '$DEPCMD' already installed, nothing to do."
+
+			DEPEXISTS=1
 		else
+			writelog "INFO" "${FUNCNAME[0]} - Dependency '$DEPCMD' is not already installed, skipping version check and installing normally"
+		fi
+
+		# Check dependency version
+		if [ -f "$DEPVERTXT" ] && [ "$DEPEXISTS" -eq 1 ]; then
+			# Ensure file is not empty
+			if [ ! -e "$DEPVERTXT" ]; then
+				STOREDDEPVER="$( head -n1 "$DEPVERTXT" )"
+
+				# e.g. we pass "1.9-7" but we have "1.9-5" as the last version installed
+				if [[ "$EXPECTEDDEPVER" > "$STOREDDEPVER"  ]]; then
+					if [ "$INTERNETCONNECTION" -eq 1 ]; then
+						writelog "INFO" "${FUNCNAME[0]} - Last installed version for dependency '$DEPCMD' was '$STOREDDEPVER', however version '$EXPECTEDDEPVER' was requested"
+						writelog "INFO" "${FUNCNAME[0]} - Updating '$DEPCMD' to '$EXPECTEDDEPVER'"
+						
+						DEPSHOULDUPDATE=1
+					else
+						# We know the stored version is older than the expected version, but we can't update without an internet connection, so log a warning and continue
+						writelog "INFO" "${FUNCNAME[0]} - Last installed version for dependency '$DEPCMD' was '$STOREDDEPVER', version '$EXPECTEDDEPVER' was requested - But there is no Internet connection and we cannot update"
+						writelog "WARN" "${FUNCNAME[0]} - Dependency '$DEPCMD' may be out of date and may not work correctly!"
+
+						DEPSHOULDUPDATE=0  # Don't attempt to update if we're offline
+					fi
+				fi
+			else
+				if [ "$INTERNETCONNECTION" -eq 1 ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Dependency version file for '$DEPCMD' was found at '$DEPVERTXT' but it was empty - Assuming we need to update"
+				
+					DEPSHOULDUPDATE=1
+				else
+					writelog "WARN" "${FUNCNAME[0]} - Dependency version file for '$DEPCMD' was found at '$DEPVERTXT' but it was empty - However there is no internet connection, so we cannot update"
+					writelog "WARN" "${FUNCNAME[0]} - Dependency '$DEPCMD' may be out of date and may not work correctly!"
+				
+					DEPSHOULDUPDATE=0  # Don't attempt to update if we're offline
+				fi
+			fi
+		else
+			if [ "$DEPEXISTS" -eq 0 ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Dependency '$DEPCMD' was not found, so assuming we don't have anything to update"
+			
+				DEPSHOULDUPDATE=0  # Setting to 0 so we don't attempt to remove a file that doesn't exist
+			elif [ "$INTERNETCONNECTION" -eq 1  ]; then
+				writelog "INFO" "${FUNCNAME[0]} - No stored version file for dependency '$DEPCMD' found - Assuming we have to update"
+
+				DEPSHOULDUPDATE=1  # No dep ver file, assume we need to bump
+			else
+				writelog "INFO" "${FUNCNAME[0]} - No Internet connection, will not attempt to bump dependency version"
+				writelog "INFO" "${FUNCNAME[0]} - Will attempt to bump version next time we have an internet connection"
+
+				DEPSHOULDUPDATE=0
+			fi
+		fi
+
+		if [ "$DEPEXISTS" -eq 1 ] && [ "$DEPSHOULDUPDATE" -eq 0 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Using '$DEPCMD' binary found in path '$(command -v "$DEPCMD")' and is up-to-date"
+			echo "Dependency '$DEPCMD' already installed and appears up-to-date, nothing to do."
+		else
+			# Does not check for an Internet connection but there shouldn't be a case where the dependency needs updating and where there is no internet connection based on how `$DEPSHOULDUPDATE` is set
+			if [ "$DEPEXISTS" -eq 1 ] && [ "$DEPSHOULDUPDATE" -eq 1 ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Dependency '$DEPCMD' already exists but is out of date, removing so it can be redownloaded"
+				echo "Dependency '$DEPCMD' already installed but appears to be out of date, updating ('$STOREDDEPVER' -> '$EXPECTEDDEPVER')"
+				
+				rm "$( command -v "$DEPCMD" )"  # Remove dependency so logic below will re-download it
+			fi
+
 			writelog "INFO" "${FUNCNAME[0]} - Downloading $DEPCMD version automatically from URL '$REPOURL'"
 			writelog "INFO" "${FUNCNAME[0]} - curl -Lq \"$REPOURL\" -o \"$DEPDIR/$DEPFILENAME\""
 
@@ -22412,6 +22485,9 @@ function checkSteamDeckDependencies {
 			strFix "$NOTY_STEAMDECK_DEPSDOWNLOAD" "$DEPCMD"
 
 			fetchAndExtractDependency "$REPOURL" "$DEPDIR" "$DEPFILENAME" || steamDeckInstallFail
+
+			writelog "INFO" "${FUNCNAME[0]} - Storing current version of '$DEPCMD' to '$EXPECTEDDEPVER'"
+			echo "$EXPECTEDDEPVER" >> "$DEPVERTXT"
 
 			STEAMDECKWASUPDATE=1
 		fi
@@ -22437,9 +22513,9 @@ function checkSteamDeckDependencies {
 
 	printf '\n'
 
-	installDependencyVersionFromURL "$WGET" "$WGETFILE" "$STLDEPS" "$WGETURL" || steamDeckInstallFail 
-	installDependencyVersionFromURL "$INNOEXTRACT" "$INNOEXTRACTFILE" "$STLDEPS" "$INNOEXTRACTURL" || steamDeckInstallFail
-	installDependencyVersionFromURL "$CABEXTRACT" "$CABEXTRACTFILE" "$STLDEPS" "$CABEXTRACTURL" || steamDeckInstallFail
+	installDependencyVersionFromURL "$WGET" "$WGETFILE" "$STLDEPS" "$WGETURL" "$WGETVERS" || steamDeckInstallFail 
+	installDependencyVersionFromURL "$INNOEXTRACT" "$INNOEXTRACTFILE" "$STLDEPS" "$INNOEXTRACTURL" "$INNOEXTRACTVERS" || steamDeckInstallFail
+	installDependencyVersionFromURL "$CABEXTRACT" "$CABEXTRACTFILE" "$STLDEPS" "$CABEXTRACTURL" "$CABEXTRACTVERS" || steamDeckInstallFail
 
 	if [ -f "$(command -v "yad")" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Using yad binary found in path: '$(command -v "yad")'"
