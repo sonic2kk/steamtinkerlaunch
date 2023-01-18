@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v12.12.20230118-3"
+PROGVERS="v12.12.20230119-1 (winecfg-custom-prefix)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -14889,6 +14889,21 @@ function askVortex {
 	fi
 }
 
+# vtxWinecfg and mo2Winecfg are separate functions and separate from oneTimeWinetricks in case they may need some custom logics
+function vtxWinecfg {
+	setVortexVars
+	getWinecfgExecutable
+
+	if [ -d "$VORTEXPFX" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Running Winecfg for Vortex"
+		writelog "INFO" "${FUNCNAME[0]} - WINEDEBUG=\"-all\" WINEPREFIX=\"$VORTEXPFX\" \"$VORTEXWINE\" \"$OTWINECFGEXE\""
+		WINEDEBUG="-all" WINEPREFIX="$VORTEXPFX" "$VORTEXWINE" "$OTWINECFGEXE"
+	else
+		writelog "ERROR" "${FUNCNAME[0]} - Vortex is not installed, cannot run Winecfg for Vortex"
+		echo "Vortex is not installed, cannot run Winecfg for Vortex"
+	fi
+}
+
 #### VORTEX STOP ####
 
 #### MO2 MOD ORGANIZER START: ####
@@ -15503,6 +15518,20 @@ function checkMO2 {
 			writelog "INFO" "${FUNCNAME[0]} - Disabling custom command, because $MO2 is enabled"
 			USECUSTOMCMD=0
 		fi
+	fi
+}
+
+function mo2Winecfg {
+	setMO2Vars
+	getWinecfgExecutable
+
+	if [ -d "$MO2PFX" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Running Winecfg for MO2"
+		writelog "INFO" "${FUNCNAME[0]} - WINEDEBUG=\"-all\" WINEPREFIX=\"$VORTEXPFX\" \"$MO2WINE\" \"$OTWINECFGEXE\""
+		WINEDEBUG="-all" WINEPREFIX="$MO2PFX" "$MO2WINE" "$OTWINECFGEXE"
+	else
+		writelog "ERROR" "${FUNCNAME[0]} - ModOrganizer 2 is not installed, cannot run Winecfg for MO2"
+		echo "ModOrganizer 2 is not installed, cannot run Winecfg for ModOrganizer 2"
 	fi
 }
 
@@ -20153,6 +20182,8 @@ function commandline {
 				StatusWindow "$(strFix "$NOTY_DLCUSTOMPROTON" "${VTX^}")" "dlLatestVortex S" "DownloadVortexStatus"
 			elif [ "$2" == "activate" ] && { [ -n "$3" ]  && [ "$3" -eq "$3" ] 2>/dev/null;}; then
 				startVortex "activate" "$3"
+			elif [ "$2" == "winecfg" ]; then
+				vtxWinecfg
 			else	
 				writelog "INFO" "${FUNCNAME[0]} - arg2 '$2' is no valid command"
 				howto
