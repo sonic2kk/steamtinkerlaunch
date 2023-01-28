@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v12.12.20230127-1"
+PROGVERS="v12.12.20230128-1"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -6904,6 +6904,54 @@ function pickGameWindowNameMeta {
 	fi
 }
 
+# General function for the "steamtinkerlaunch list <arg> function"
+# Can take two types of commands:
+# - `steamtinkerlaunch list owned/installed` - Returns "Game Name (AppID)"
+# - `steamtinkerlaunch list owned/installed id/name/path/full` - Returns either AppID, Game Name, Game Paths, or all in the format "Game Name (AppID) -> /path/to/game"
+function listSteamGames {
+	LSFILTER="$1"  # e.g. "owned", "installed"
+	LSTYPE="$2"  # e.g. "id", "name", "path", "full"
+
+	LISTAIDS=""
+
+	if [ "$LSFILTER" == "owned" ] || [ "$LSFILTER" == "o" ]; then
+		LISTAIDS="$( getOwnedAids )"
+	elif [ "$LSFILTER" == "installed" ] || [ "$LSFILTER" == "i" ]; then
+		if [ "$(listInstalledGameIDs | wc -l)" -eq 0 ]; then
+			writelog "SKIP" "${FUNCNAME[0]} - No installed games found!" "E"
+			echo "No installed games found!"
+			
+			exit
+		else
+			LISTAIDS="$( listInstalledGameIDs )"
+		fi
+	else
+		echo "unknown argument passed to 'list' command - '$LSFILTER'"
+	fi
+
+	if [ -n "$LISTAIDS" ]; then
+		readarray -t LISTAIDSARR <<<"$LISTAIDS"
+
+		if [ "$LSTYPE" == "id" ]; then
+			for AID in "${LISTAIDSARR[@]}"; do 
+				echo "$AID"
+			done
+		elif [ "$LSTYPE" == "name" ]; then
+			for AID in "${LISTAIDSARR[@]}"; do 
+				getTitleFromID "${AID}"
+			done
+		elif [ "$LSTYPE" == "path" ]; then
+			for AID in "${LISTAIDSARR[@]}"; do
+				getGameDir "$AID"
+			done
+		elif [ "$LSTYPE" == "full" ] || [ -z "$LSTYPE" ]; then  # This is the default if id/name/path/full is not passed
+			for AID in "${LISTAIDSARR[@]}"; do
+				getGameDir "${AID}"
+			done
+		fi
+	fi
+}
+
 function getIDFromTitle {
 	if [ -z "$1" ]; then
 		echo "A Game Title (part of it might be enough) is required as argument"
@@ -7014,7 +7062,7 @@ function getCompatData {
 function getValueFromAppManifest {
 	KEY="$1"
 	APPMA="$2"
-	grep -m1 "$KEY" "$APPMA" | sed "s-\t- -g;s-\"${KEY}\"--g;s-\"--g" | xargs 
+	grep -m1 "$KEY" "$APPMA" | sed "s-\t- -g;s-\"${KEY}\"--g;s-\"--g" | xargs  # xargs gets angry when names have single quotes, e.g. "Shantae and the Pirate's Curse"
 }
 
 # Returns game install directory in the format "Game (AppID) -> /path/to/gamefolder"
@@ -19851,16 +19899,10 @@ function commandline {
 	elif [ "$1" == "launcher" ]; then
 		openGameLauncher "$2" "$3"
 	elif [ "$1" == "list" ]; then
-		if [ "$2" == "owned" ] || [ "$2" == "o" ]; then
-			getOwnedAids
-		elif [ "$2" == "installed" ] || [ "$2" == "i" ]; then
-			if [ "$(listInstalledGameIDs | wc -l)" -eq 0 ]; then
-				writelog "SKIP" "${FUNCNAME[0]} - No installed games found!" "E"
-			else
-				listInstalledGameIDs
-			fi
-		elif [ "$2" == "appmanifests" ] || [ "$2" == "am" ]; then
-			listAppManifests
+		if [ -z "$2" ]; then
+			echo "invalid usage - must pass one additional argument to 'list' command, either 'owned' or 'installed'"
+		else
+			listSteamGames "$2" "$3"  # 3rd parameter is optional
 		fi
 	elif [ "$1" == "meta" ]; then
 		createMetaData "yes"
