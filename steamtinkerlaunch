@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v12.12.20230128-7"
+PROGVERS="v12.12.20230129-1"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -6950,7 +6950,6 @@ function listSteamGames {
 				done
 			fi
 		elif [ "$LSTYPE" == "full" ] || [ -z "$LSTYPE" ]; then  # This is the default if id/name/path/full is not passed
-			# TODO refactor for owned, as we will only want to print the path for installed games
 			for AID in "${LISTAIDSARR[@]}"; do
 				GAMDIR="$( getGameDir "$AID" )"
 				GAMDIREXISTS=$?
@@ -6959,8 +6958,13 @@ function listSteamGames {
 				# This means we won't return an error if we're returning OWNED games, as some owned games may not have paths
 				if [ $GAMDIREXISTS -eq 1 ]; then
 					GAMNAM="$( getTitleFromID "$AID" )"
+					GAMNAMEXISTS=$?
 
-					echo "$GAMNAM ($AID)"
+					if [ $GAMNAMEXISTS -eq 1 ]; then
+						echo "$AID"  # Game name unknown, probably never installed before? Just return AppID in this case
+					else
+						echo "$GAMNAM ($AID)"
+					fi
 				else
 					echo "$GAMDIR"
 				fi
@@ -7008,12 +7012,14 @@ function getTitleFromID {
 			fi
 		else
 			# Try to get AppManifest based on passed ID if we don't have a data file
-			GAMEMANIFEST="$( listAppManifests | grep -m1 "${1}.acf" )"
+			GAMEMANIFEST="$( listAppManifests | grep -m1 "appmanifest_${1}.acf" )"
 
 			if [ -n "$GAMEMANIFEST" ]; then
 				getValueFromAppManifest "name" "$GAMEMANIFEST"
 			else
 				echo "No Title found for '$1'"
+
+				return 1
 			fi
 		fi
 	fi
