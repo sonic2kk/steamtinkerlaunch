@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v12.12.20230127-1"
+PROGVERS="v12.12.20230128-5"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -6904,6 +6904,54 @@ function pickGameWindowNameMeta {
 	fi
 }
 
+# General function for the "steamtinkerlaunch list <arg> function"
+# Can take two types of commands:
+# - `steamtinkerlaunch list owned/installed` - Returns "Game Name (AppID)"
+# - `steamtinkerlaunch list owned/installed id/name/path/full` - Returns either AppID, Game Name, Game Paths, or all in the format "Game Name (AppID) -> /path/to/game"
+function listSteamGames {
+	LSFILTER="$1"  # e.g. "owned", "installed"
+	LSTYPE="$2"  # e.g. "id", "name", "path", "full"
+
+	LISTAIDS=""
+
+	if [ "$LSFILTER" == "owned" ] || [ "$LSFILTER" == "o" ]; then
+		LISTAIDS="$( getOwnedAids )"
+	elif [ "$LSFILTER" == "installed" ] || [ "$LSFILTER" == "i" ]; then
+		if [ "$(listInstalledGameIDs | wc -l)" -eq 0 ]; then
+			writelog "SKIP" "${FUNCNAME[0]} - No installed games found!" "E"
+			echo "No installed games found!"
+
+			exit
+		else
+			LISTAIDS="$( listInstalledGameIDs )"
+		fi
+	else
+		echo "unknown argument passed to 'list' command - '$LSFILTER'"
+	fi
+
+	if [ -n "$LISTAIDS" ]; then
+		readarray -t LISTAIDSARR <<<"$LISTAIDS"
+
+		if [ "$LSTYPE" == "id" ]; then
+			for AID in "${LISTAIDSARR[@]}"; do 
+				echo "$AID"
+			done
+		elif [ "$LSTYPE" == "name" ]; then
+			for AID in "${LISTAIDSARR[@]}"; do 
+				getTitleFromID "${AID}"
+			done
+		elif [ "$LSTYPE" == "path" ]; then
+			for AID in "${LISTAIDSARR[@]}"; do
+				getGameDir "$AID" "1"
+			done
+		elif [ "$LSTYPE" == "full" ] || [ -z "$LSTYPE" ]; then  # This is the default if id/name/path/full is not passed
+			for AID in "${LISTAIDSARR[@]}"; do
+				getGameDir "${AID}"
+			done
+		fi
+	fi
+}
+
 function getIDFromTitle {
 	if [ -z "$1" ]; then
 		echo "A Game Title (part of it might be enough) is required as argument"
@@ -7014,11 +7062,13 @@ function getCompatData {
 function getValueFromAppManifest {
 	KEY="$1"
 	APPMA="$2"
-	grep -m1 "$KEY" "$APPMA" | sed "s-\t- -g;s-\"${KEY}\"--g;s-\"--g" | xargs 
+	grep -m1 "$KEY" "$APPMA" | sed "s-\t- -g;s-\"${KEY}\"--g;s-\"--g" | xargs  # xargs gets angry when names have single quotes, e.g. "Shantae and the Pirate's Curse"
 }
 
 # Returns game install directory in the format "Game (AppID) -> /path/to/gamefolder"
 function getGameDir {
+	ONLYPATH="$2"
+
 	if [ -z "$1" ]; then
 		echo "A Game ID or Game Title is required as argument"
 	else
@@ -7048,11 +7098,16 @@ function getGameDir {
 		APPMAINSTDIR="$( getValueFromAppManifest "installdir" "$SEARCHMANIFEST" )"
 		APPMALIBFLDR="$( dirname "$SEARCHMANIFEST" )"
 		GAMINSTDIR="$APPMALIBFLDR/common/$APPMAINSTDIR"
-		if [ -d "$GAMINSTDIR" ]; then
+		MUSINSTDIR="$APPMALIBFLDR/music/$APPMAINSTDIR"  # Fixes a not found error for installed soundtracks
+		if [ -d "$GAMINSTDIR" ] || [ -d "$MUSINSTDIR" ]; then
 			APPMAGN="$( getValueFromAppManifest "name" "$SEARCHMANIFEST" )"
 			APPMAAID="$( getValueFromAppManifest "appid" "$SEARCHMANIFEST" )"
 
-			printf "%s (%s) -> %s\n" "$APPMAGN" "$APPMAAID" "$GAMINSTDIR"
+			if [ -z "$ONLYPATH" ]; then
+				printf "%s (%s) -> %s\n" "$APPMAGN" "$APPMAAID" "$GAMINSTDIR"
+			else
+				printf "%s\n" "$GAMINSTDIR"  # Only output path, used by "listSteamGames"
+			fi
 		else
 			echo "Could not find install directory for '$1'"
 		fi
@@ -19568,7 +19623,8 @@ function howto {
 	echo "    getid|gi <gametitle>             Print the SteamAppId for <gametitle>"
 	echo "    gettitle|gt <gameid>             Print the Game Title for <gameid>"
 	echo "    getcompatdata|gc <gameid/title>  Print the Game compatdata path"
-	echo "    getgamedir|gg <gameid/title>     Print the Game install directory"
+	echo "    getgamedir|gg <gameid/title>     Print the Game install directory with game name and AppID"
+	echo "                  only                 Only display install directory"
 	echo "    hedgemodmanager|hmm              HedgeModManager"
 	echo "            install|i                  install latest stable HedgeModManager"
 	echo "            download|d <channel>       download latest HedgeModManager release (stable or nightly)"
@@ -19601,6 +19657,8 @@ function howto {
 	echo "             update                    ReCreate all Collection Menus"
 	echo "                                       Can be combined with auto"
 	echo "    list <owned|installed>           List ids of <owned|o,installed|i> games"
+	echo "         <id|name|path|full>           Optionally specify whether you want to see"
+	echo "                                       each game's <id|name|path|full>"
 	echo "    meta                             Generates/Updates metadata"
 	echo "                                       for all installed games"
 	echo "    mo2                              Mod Organizer 2"
@@ -19839,7 +19897,11 @@ function commandline {
 	elif [ "$1" == "getcompatdata" ] || [ "$1" == "gc" ]; then
 		getCompatData "$2"
 	elif [ "$1" == "getgamedir" ] || [ "$1" == "gg" ]; then
-		getGameDir "$2"
+		if [ "$3" == "only" ]; then
+			getGameDir "$2" "X"
+		else
+			getGameDir "$2"
+		fi
 	elif [ "$1" == "help" ] || [ "$1" == "--help" ] || [ "$1" == "-h" ]; then
 		howto
 	elif [ "$1" == "helpurl" ] || [ "$1" == "hu" ]; then
@@ -19851,16 +19913,10 @@ function commandline {
 	elif [ "$1" == "launcher" ]; then
 		openGameLauncher "$2" "$3"
 	elif [ "$1" == "list" ]; then
-		if [ "$2" == "owned" ] || [ "$2" == "o" ]; then
-			getOwnedAids
-		elif [ "$2" == "installed" ] || [ "$2" == "i" ]; then
-			if [ "$(listInstalledGameIDs | wc -l)" -eq 0 ]; then
-				writelog "SKIP" "${FUNCNAME[0]} - No installed games found!" "E"
-			else
-				listInstalledGameIDs
-			fi
-		elif [ "$2" == "appmanifests" ] || [ "$2" == "am" ]; then
-			listAppManifests
+		if [ -z "$2" ]; then
+			echo "invalid usage - must pass one additional argument to 'list' command, either 'owned' or 'installed'"
+		else
+			listSteamGames "$2" "$3"  # 3rd parameter is optional
 		fi
 	elif [ "$1" == "meta" ]; then
 		createMetaData "yes"
