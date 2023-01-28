@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v12.12.20230128-6"
+PROGVERS="v12.12.20230128-7"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -6941,14 +6941,29 @@ function listSteamGames {
 				getTitleFromID "${AID}"
 			done
 		elif [ "$LSTYPE" == "path" ]; then
-			# TODO refactor for owned, as owned games that are not installed will print not found message
-			for AID in "${LISTAIDSARR[@]}"; do
-				getGameDir "$AID" "1"
-			done
+			if [ "$LSFILTER" == "owned" ] || [ "$LSFILTER" == "o" ]; then
+				echo "Cannot use 'path' option when returning 'owned' games, as not all owned games will have an installation path!"
+				echo "Use another option instead, or leave blank to only return path for games which have an installation path."
+			else
+				for AID in "${LISTAIDSARR[@]}"; do
+					getGameDir "$AID" "1"
+				done
+			fi
 		elif [ "$LSTYPE" == "full" ] || [ -z "$LSTYPE" ]; then  # This is the default if id/name/path/full is not passed
 			# TODO refactor for owned, as we will only want to print the path for installed games
 			for AID in "${LISTAIDSARR[@]}"; do
-				getGameDir "${AID}"
+				GAMDIR="$( getGameDir "$AID" )"
+				GAMDIREXISTS=$?
+
+				# Only display game dir if the game is installed, i.e. if getGameDir does not return 1
+				# This means we won't return an error if we're returning OWNED games, as some owned games may not have paths
+				if [ $GAMDIREXISTS -eq 1 ]; then
+					GAMNAM="$( getTitleFromID "$AID" )"
+
+					echo "$GAMNAM ($AID)"
+				else
+					echo "$GAMDIR"
+				fi
 			done
 		fi
 	fi
@@ -7101,7 +7116,7 @@ function getGameDir {
 			if [ -z "$SEARCHMANIFEST" ]; then
 				writelog "ERROR" "${FUNCNAME[0]} - Could not find game directory for '$1' - Maybe it is not installed"
 				echo "Could not find game directory for '$1'"
-				return
+				return 1
 			else
 				writelog "INFO" "${FUNCNAME[0]} - Found matching App Manifest '$SEARCHMANIFEST'"
 			fi
