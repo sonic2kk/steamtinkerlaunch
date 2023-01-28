@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v12.12.20230128-1"
+PROGVERS="v12.12.20230128-2"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -6920,7 +6920,7 @@ function listSteamGames {
 		if [ "$(listInstalledGameIDs | wc -l)" -eq 0 ]; then
 			writelog "SKIP" "${FUNCNAME[0]} - No installed games found!" "E"
 			echo "No installed games found!"
-			
+
 			exit
 		else
 			LISTAIDS="$( listInstalledGameIDs )"
@@ -6942,7 +6942,7 @@ function listSteamGames {
 			done
 		elif [ "$LSTYPE" == "path" ]; then
 			for AID in "${LISTAIDSARR[@]}"; do
-				getGameDir "$AID"
+				getGameDir "$AID" "1"
 			done
 		elif [ "$LSTYPE" == "full" ] || [ -z "$LSTYPE" ]; then  # This is the default if id/name/path/full is not passed
 			for AID in "${LISTAIDSARR[@]}"; do
@@ -7067,6 +7067,8 @@ function getValueFromAppManifest {
 
 # Returns game install directory in the format "Game (AppID) -> /path/to/gamefolder"
 function getGameDir {
+	ONLYPATH="$2"
+
 	if [ -z "$1" ]; then
 		echo "A Game ID or Game Title is required as argument"
 	else
@@ -7100,7 +7102,11 @@ function getGameDir {
 			APPMAGN="$( getValueFromAppManifest "name" "$SEARCHMANIFEST" )"
 			APPMAAID="$( getValueFromAppManifest "appid" "$SEARCHMANIFEST" )"
 
-			printf "%s (%s) -> %s\n" "$APPMAGN" "$APPMAAID" "$GAMINSTDIR"
+			if [ -z "$ONLYPATH" ]; then
+				printf "%s (%s) -> %s\n" "$APPMAGN" "$APPMAAID" "$GAMINSTDIR"
+			else
+				printf "%s\n" "$GAMINSTDIR"  # Only output path, used by "listSteamGames"
+			fi
 		else
 			echo "Could not find install directory for '$1'"
 		fi
