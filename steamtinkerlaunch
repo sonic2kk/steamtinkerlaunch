@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v12.12.20230129-1"
+PROGVERS="v12.12.20230202-1 (customprogram-externalprogram-args)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -6277,6 +6277,7 @@ function extWine64Run {
 	fi
 }
 
+# NOTE: This needs an update to support launch commands set with `buildCustomCmdLaunch` - e.g. ONLY_CUSTOMCMD
 function extProtonRun {
 	MODE="$1"
 	PROGRAM="$2"
@@ -10755,6 +10756,125 @@ function setOPCustPath {
 	fi
 }
 
+function setCommandLaunchVars {
+	if [ "$USEGAMEMODERUN" -eq 1 ]; then
+		GMR="$(command -v "$GAMEMODERUN")"
+	fi
+
+	if [ "$USEOBSCAP" -eq 1 ]; then
+		OBSC="$(command -v "$OBSCAP")"
+	fi
+
+	if [ "$USEGAMESCOPE" -eq 1 ]; then
+		if [ "$USEMANGOAPP" -eq 1 ]; then
+			if [ "$ONSTEAMDECK" -eq 1 ]; then
+				if [ "$FIXGAMESCOPE" -eq 1 ]; then
+					writelog "SKIP" "${FUNCNAME[0]} - Disabling USEMANGOAPP variable in Steam Deck Game Mode, because Steam Deck uses $MANGOAPP already by default"
+					USEMANGOAPP=0
+				else
+					writelog "INFO" "${FUNCNAME[0]} - Allowing USEMANGOAPP variable in Steam Deck Desktop Mode"
+					USEMANGOAPP=1
+				fi
+			else
+				writelog "SKIP" "${FUNCNAME[0]} - Not adding $GAMESCOPE to the game launch command, because $MANGOAPP is enabled, which triggers it automatically"
+				USEGAMESCOPE=0
+			fi
+		else
+			GSC="$(command -v "$GAMESCOPE")"
+		fi
+	fi
+
+	if [ "$USEZINK" -eq 1 ]; then
+		export __GLX_VENDOR_LIBRARY_NAME=mesa
+		export MESA_LOADER_DRIVER_OVERRIDE=zink
+		export GALLIUM_DRIVER=zink
+	fi
+	
+	if [ "$ENABLE_WINESYNC" -eq 1 ]; then
+		export WINEESYNC=0
+		export WINEFSYNC=0
+		export WINEFSYNC_FUTEX2=0
+	fi
+
+	if [ "$USEPRIMERUN" -eq 1 ]; then
+		export __NV_PRIME_RENDER_OFFLOAD=1
+		export __VK_LAYER_NV_optimus=NVIDIA_only
+		export __GLX_VENDOR_LIBRARY_NAME=nvidia
+	fi
+}
+
+# Used to create the launch command for custom commands 
+# May be applicable to launchSteamGame in future to some extent, but for now is only for custom commands
+function buildCustomCmdLaunch {
+
+	setCommandLaunchVars  # Checks for things like GameMode, GameScope, etc
+
+	# TODO logic around `launchSteamGame` should be taken as reference
+	FINALOUTCMD=()
+
+	# Lifted originally from `launchSteamGame` - Could potentially be used in launchSteamGame too
+	if [ -n "$GMR" ]; then
+		if [ -n "${FINALOUTCMD[0]}" ]; then
+			FINALOUTCMD=("${FINALOUTCMD[@]}" "$GMR")
+		else
+			FINALOUTCMD=("$GMR")
+		fi
+	fi
+
+	# GameScope has to be appended before other commands
+	if [ -n "$GSC" ]; then
+		if [ -n "${FINALOUTCMD[0]}" ]; then
+			FINALOUTCMD=("${FINALOUTCMD[@]}" "$GSC")
+		else
+			FINALOUTCMD=("$GSC")
+		fi
+		
+		if [ -n "${FINALOUTCMD[0]}" ]; then
+			FINALOUTCMD=("${FINALOUTCMD[@]}" "${GAMESCOPEARGSARR[@]}")
+		fi
+	fi
+
+	if [ "$USEOBSCAP" -eq 1 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - USEOBSCAP is enabled - preparing $OBSCAP command"
+		if [ -n "${FINALOUTCMD[0]}" ]; then
+			FINALOUTCMD=("${FINALOUTCMD[@]}" "$OBSC")
+		else
+			FINALOUTCMD=("$OBSC")
+		fi
+	fi
+	
+	if [ "$USEMANGOHUD" -eq 1 ]; then
+		if [ "$MAHUARGS" != "$NON" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Exporting MANGOHUD_CONFIG with $MAHU arguments '$MAHUARGS'"
+			export MANGOHUD_CONFIG="$MAHUARGS"
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - Not exporting  MANGOHUD_CONFIG '$MAHUARGS'"
+		fi
+
+		if [ "$MAHUVAR" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Exporting MANHOGUD variable and skipping all $MAHU binary settings, because MAHUVAR is '$MAHUVAR'"
+			export MANGOHUD=1
+		else
+			if [ -f "$MAHUBIN" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - $MAHU is enabled"
+				if [ "$LDPMAHU" -eq 1 ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Preloading $MAHU"
+					export LD_PRELOAD="$LD_PRELOAD $MAHUBIN"
+				else
+					if [ -n "${FINALOUTCMD[0]}" ]; then
+						FINALOUTCMD=("${FINALOUTCMD[@]}" "$MAHUBIN")
+					else
+						FINALOUTCMD=("$MAHUBIN")
+					fi	
+				fi
+			else
+				writelog "WARN" "${FUNCNAME[0]} - $MAHU binary not found - disabling"
+				USEMANGOHUD=0
+			fi
+		fi
+	fi
+}
+
 function launchCustomProg {
 	if [ -n "$1" ]; then
 		CUSTOMCMD="$WICO"
@@ -10879,6 +10999,15 @@ function launchCustomProg {
 				fi
 			else
 				writelog "INFO" "${FUNCNAME[0]} - '$CUSTCOM' seems to be a MS Windows program - starting through proton"
+			fi
+
+			# TODO somewhere around here, attach arguments like mangohud/gamescope/etc to $LACO if we have ONLY_CUSTOMCMD
+			if [ "$ONLY_CUSTOMCMD" -eq 1 ]; then 
+				writelog "INFO" "${FUNCNAME[0]} - ONLY_CUSTOMCMD was set to '$ONLY_CUSTOMCMD', so checking for custom arguments like MangoHUD and GameScope"
+
+				buildCustomCmdLaunch
+
+				writelog "INFO" "${FUNCNAME[0]} - Generated arguments for custom command are now '${FINALOUTCMD[*]}'"
 			fi
 
 			if [ "$USEWICO" -eq 1 ] && [ "$(file "$CUSTCOM" | grep -c "(console)")" -eq 1 ]; then
@@ -19111,51 +19240,53 @@ function setProtonCmd {
 function launchSteamGame {
 ########################
 	steamdeckBeforeGame
-	
-	if [ "$USEGAMEMODERUN" -eq 1 ]; then
-		GMR="$(command -v "$GAMEMODERUN")"
-	fi
 
-	if [ "$USEOBSCAP" -eq 1 ]; then
-		OBSC="$(command -v "$OBSCAP")"
-	fi
-	
-	if [ "$USEGAMESCOPE" -eq 1 ]; then
-		if [ "$USEMANGOAPP" -eq 1 ]; then
-			if [ "$ONSTEAMDECK" -eq 1 ]; then
-				if [ "$FIXGAMESCOPE" -eq 1 ]; then
-					writelog "SKIP" "${FUNCNAME[0]} - Disabling USEMANGOAPP variable in Steam Deck Game Mode, because Steam Deck uses $MANGOAPP already by default"
-					USEMANGOAPP=0
-				else
-					writelog "INFO" "${FUNCNAME[0]} - Allowing USEMANGOAPP variable in Steam Deck Desktop Mode"
-					USEMANGOAPP=1
-				fi
-			else
-				writelog "SKIP" "${FUNCNAME[0]} - Not adding $GAMESCOPE to the game launch command, because $MANGOAPP is enabled, which triggers it automatically"
-				USEGAMESCOPE=0
-			fi
-		else
-			GSC="$(command -v "$GAMESCOPE")"
-		fi
-	fi
-	
-	if [ "$USEZINK" -eq 1 ]; then
-		export __GLX_VENDOR_LIBRARY_NAME=mesa
-		export MESA_LOADER_DRIVER_OVERRIDE=zink
-		export GALLIUM_DRIVER=zink
-	fi
-	
-	if [ "$ENABLE_WINESYNC" -eq 1 ]; then
-		export WINEESYNC=0
-		export WINEFSYNC=0
-		export WINEFSYNC_FUTEX2=0
-	fi
+	setCommandLaunchVars  # Re-usable function for Steam games and custom program launches
 
-	if [ "$USEPRIMERUN" -eq 1 ]; then
-		export __NV_PRIME_RENDER_OFFLOAD=1
-		export __VK_LAYER_NV_optimus=NVIDIA_only
-		export __GLX_VENDOR_LIBRARY_NAME=nvidia
-	fi
+	# if [ "$USEGAMEMODERUN" -eq 1 ]; then
+	# 	GMR="$(command -v "$GAMEMODERUN")"
+	# fi
+
+	# if [ "$USEOBSCAP" -eq 1 ]; then
+	# 	OBSC="$(command -v "$OBSCAP")"
+	# fi
+	
+	# if [ "$USEGAMESCOPE" -eq 1 ]; then
+	# 	if [ "$USEMANGOAPP" -eq 1 ]; then
+	# 		if [ "$ONSTEAMDECK" -eq 1 ]; then
+	# 			if [ "$FIXGAMESCOPE" -eq 1 ]; then
+	# 				writelog "SKIP" "${FUNCNAME[0]} - Disabling USEMANGOAPP variable in Steam Deck Game Mode, because Steam Deck uses $MANGOAPP already by default"
+	# 				USEMANGOAPP=0
+	# 			else
+	# 				writelog "INFO" "${FUNCNAME[0]} - Allowing USEMANGOAPP variable in Steam Deck Desktop Mode"
+	# 				USEMANGOAPP=1
+	# 			fi
+	# 		else
+	# 			writelog "SKIP" "${FUNCNAME[0]} - Not adding $GAMESCOPE to the game launch command, because $MANGOAPP is enabled, which triggers it automatically"
+	# 			USEGAMESCOPE=0
+	# 		fi
+	# 	else
+	# 		GSC="$(command -v "$GAMESCOPE")"
+	# 	fi
+	# fi
+	
+	# if [ "$USEZINK" -eq 1 ]; then
+	# 	export __GLX_VENDOR_LIBRARY_NAME=mesa
+	# 	export MESA_LOADER_DRIVER_OVERRIDE=zink
+	# 	export GALLIUM_DRIVER=zink
+	# fi
+	
+	# if [ "$ENABLE_WINESYNC" -eq 1 ]; then
+	# 	export WINEESYNC=0
+	# 	export WINEFSYNC=0
+	# 	export WINEFSYNC_FUTEX2=0
+	# fi
+
+	# if [ "$USEPRIMERUN" -eq 1 ]; then
+	# 	export __NV_PRIME_RENDER_OFFLOAD=1
+	# 	export __VK_LAYER_NV_optimus=NVIDIA_only
+	# 	export __GLX_VENDOR_LIBRARY_NAME=nvidia
+	# fi
 
 	writelog "INFO" "${FUNCNAME[0]} - Initial game command is '${INGCMD[*]}'"
 
