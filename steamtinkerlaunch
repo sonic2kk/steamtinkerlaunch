@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v12.12.20230202-4 (customprogram-externalprogram-args)"
+PROGVERS="v12.12.20230202-5 (customprogram-externalprogram-args)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -6322,54 +6322,56 @@ function extProtonRun {
 
 		# TODO pass "$EXTPROGRAMARGS" to programs running with Wine as well(?)
 		# TODO refactor a bit to be a little cleaner if possible
-		# TODO show notifier
-		if [ "$MODE" == "F" ]; then
+		CUSTPROGNAME="$( basename "$PROGRAM" )"
+		if [ "$MODE" == "F" ]; then  # Forked Proton/Wine 'normal' custom program
 			if [ -n "${RUNPROGARGS[0]}" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Starting '$PROGRAM' with arguments '${RUNPROGARGS[*]}' forked into the background"
 				restoreOrgVars
 				if [ "$EXTWINERUN" -eq 1 ]; then
-					(sleep "$FWAIT"; extWine64Run "$PROGRAM" "${RUNPROGARGS[@]}") &
+					(sleep "$FWAIT"; "$( strFix "$NOTY_CUSTPROG_FORKED_ARGS_WINE" "$CUSTPROGNAME" )"; extWine64Run "$PROGRAM" "${RUNPROGARGS[@]}") &
 				else
-					(sleep "$FWAIT"; "${RUNEXTPROGRAMARGS[@]}" "$RUNPROTON" run "$PROGRAM" "${RUNPROGARGS[@]}" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log") &
+					(sleep "$FWAIT"; "$( strFix "$NOTY_CUSTPROG_FORKED_ARGS" "$CUSTPROGNAME" )"; "${RUNEXTPROGRAMARGS[@]}" "$RUNPROTON" run "$PROGRAM" "${RUNPROGARGS[@]}" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log") &
 				fi
 				emptyVars "O" "X"
 			else
 				writelog "INFO" "${FUNCNAME[0]} - Starting '$PROGRAM' forked into the background"
 				restoreOrgVars
 				if [ "$EXTWINERUN" -eq 1 ]; then
-					(sleep "$FWAIT"; extWine64Run "$PROGRAM") &
+					(sleep "$FWAIT"; "$( strFix "$NOTY_CUSTPROG_FORKED_WINE" "$CUSTPROGNAME" )"; extWine64Run "$PROGRAM") &
 				else
-					(sleep "$FWAIT"; "${RUNEXTPROGRAMARGS[@]}" "$RUNPROTON" run "$PROGRAM" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log") &
+					(sleep "$FWAIT"; "$( strFix "$NOTY_CUSTPROG_FORKED" "$CUSTPROGNAME" )"; "${RUNEXTPROGRAMARGS[@]}" "$RUNPROTON" run "$PROGRAM" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log") &
 				fi
 				emptyVars "O" "X"
 			fi
-		elif [ "$MODE" == "FC" ]; then
+		elif [ "$MODE" == "FC" ]; then  # Forked Proton/Wine 'command line' custom program
 			if [ -n "${RUNPROGARGS[0]}" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Starting '$WICO $PROGRAM' with arguments '${RUNPROGARGS[*]}' forked into the background"
 				restoreOrgVars
 				if [ "$EXTWINERUN" -eq 1 ]; then
-					(sleep "$FWAIT"; extWine64Run "$RUNWICO" "$PROGRAM" "${RUNPROGARGS[@]}") &
+					(sleep "$FWAIT"; notiShow "$( strFix "$NOTY_CUSTPROG_FORKED_ARGS_WINE" "$CUSTPROGNAME" )"; extWine64Run "$RUNWICO" "$PROGRAM" "${RUNPROGARGS[@]}") &
 				else
-					(sleep "$FWAIT"; "${RUNEXTPROGRAMARGS[@]}" "$RUNPROTON" run "$WICO" "$PROGRAM" "${RUNPROGARGS[@]}" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log") &
+					(sleep "$FWAIT"; notiShow "$( strFix "$NOTY_CUSTPROG_FORKED_ARGS" "$CUSTPROGNAME" )"; "${RUNEXTPROGRAMARGS[@]}" "$RUNPROTON" run "$WICO" "$PROGRAM" "${RUNPROGARGS[@]}" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log") &
 				fi
 				emptyVars "O" "X"
 			else
 				writelog "INFO" "${FUNCNAME[0]} - Starting '$WICO $PROGRAM' forked into the background"
 				restoreOrgVars
 				if [ "$EXTWINERUN" -eq 1 ]; then
-					(sleep "$FWAIT"; extWine64Run "$RUNWICO" "$PROGRAM") &
+					(sleep "$FWAIT"; notiShow "$( strFix "$NOTY_CUSTPROG_FORKED_WINE" "$CUSTPROGNAME" )"; extWine64Run "$RUNWICO" "$PROGRAM") &
 				else
-					(sleep "$FWAIT"; "${RUNEXTPROGRAMARGS[@]}" "$RUNPROTON" run "$WICO" "$PROGRAM" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log") &
+					(sleep "$FWAIT"; notiShow "$( strFix "$NOTY_CUSTPROG_FORKED" "$CUSTPROGNAME" )"; "${RUNEXTPROGRAMARGS[@]}" "$RUNPROTON" run "$WICO" "$PROGRAM" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log") &
 				fi
 				emptyVars "O" "X"
 			fi
-		elif [ "$MODE" == "R" ]; then
+		elif [ "$MODE" == "R" ]; then  # Regular (no fork/wait/etc) Proton/Wine custom program
 			if [ -n "${RUNPROGARGS[0]}" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Starting '$PROGRAM' with arguments '${RUNPROGARGS[*]}' regularly"
 				restoreOrgVars
 				if [ "$EXTWINERUN" -eq 1 ]; then
+					notiShow "$( strFix "$NOTY_CUSTPROG_REG_ARGS_WINE" "$CUSTPROGNAME" )"
 					extWine64Run "$PROGRAM" "${RUNPROGARGS[@]}"
 				else
+					notiShow "$( strFix "$NOTY_CUSTPROG_REG_ARGS" "$CUSTPROGNAME" )"
 					"${RUNEXTPROGRAMARGS[@]}" "$RUNPROTON" run "$PROGRAM" "${RUNPROGARGS[@]}" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log"
 				fi
 				emptyVars "O" "X"
@@ -6377,20 +6379,23 @@ function extProtonRun {
 				writelog "INFO" "${FUNCNAME[0]} - Starting '$PROGRAM' regularly"
 				restoreOrgVars
 				if [ "$EXTWINERUN" -eq 1 ]; then
+					notiShow "$( strFix "$NOTY_CUSTPROG_REG_WINE" "$CUSTPROGNAME" )"
 					extWine64Run "$PROGRAM"
 				else
-					writelog "INFO" "${FUNCNAME[0]} - Starting with launch command '${EXTPROGRAMARGS[*]} ${RUNPROTON} run ${PROGRAM}'"
+					notiShow "$( strFix "$NOTY_CUSTPROG_REG" "$CUSTPROGNAME" )"
 					"${RUNEXTPROGRAMARGS[@]}" "$RUNPROTON" run "$PROGRAM" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log"
 				fi
 				emptyVars "O" "X"
 			fi
-		elif [ "$MODE" == "RC" ]; then
+		elif [ "$MODE" == "RC" ]; then  # Regular (no fork/wait/etc) Proton/Wine 'command line' custom program
 			if [ -n "${RUNPROGARGS[0]}" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Starting '$WICO $PROGRAM' with arguments '${RUNPROGARGS[*]}' regularly"
 				restoreOrgVars
 				if [ "$EXTWINERUN" -eq 1 ]; then
+					notiShow "$( strFix "$NOTY_CUSTPROG_REG_ARGS_WINE" "$CUSTPROGNAME" )"
 					extWine64Run "$RUNWICO" "$PROGRAM" "${RUNPROGARGS[@]}"
 				else
+					notiShow "$( strFix "$NOTY_CUSTPROG_REG_ARGS" "$CUSTPROGNAME" )"
 					"$EXTPROGRAMARGS" "$RUNPROTON" run "$WICO" "$PROGRAM" "${RUNPROGARGS[@]}" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log"
 				fi
 				emptyVars "O" "X"
@@ -6398,8 +6403,10 @@ function extProtonRun {
 				writelog "INFO" "${FUNCNAME[0]} - Starting '$WICO $PROGRAM' regularly"
 				restoreOrgVars
 				if [ "$EXTWINERUN" -eq 1 ]; then
+					notiShow "$( strFix "$NOTY_CUSTPROG_REG_WINE" "$CUSTPROGNAME" )"
 					extWine64Run "$RUNWICO" "$PROGRAM"
 				else
+					notiShow "$( strFix "$NOTY_CUSTPROG_REG" "$CUSTPROGNAME" )"
 					"$EXTPROGRAMARGS" "$RUNPROTON" run "$WICO" "$PROGRAM" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log"
 				fi
 				emptyVars "O" "X"
