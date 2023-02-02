@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v12.12.20230202-2 (customprogram-externalprogram-args)"
+PROGVERS="v12.12.20230202-3 (customprogram-externalprogram-args)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -6311,8 +6311,18 @@ function extProtonRun {
 
 		FWAIT=2
 
-		# TODO build launch arg `if [ -n "$EXTPROGRAMARGS" ]`, somehow
+		# mirrors above RUNPROGARGS 
+		if [ -z "$EXTPROGRAMARGS" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - No external program args here it seems"
+			RUNEXTPROGRAMARGS=( "" )  # Initialise to array with empty string so we don't have to do checks in each if block
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Looks like we got some external program args, '${EXTPROGRAMARGS}'"
+			mapfile -d " " -t -O "${#RUNEXTPROGRAMARGS[@]}" RUNEXTPROGRAMARGS < <(printf '%s' "$EXTPROGRAMARGS")
+		fi
 
+		# TODO pass "$EXTPROGRAMARGS" to programs running with Wine as well(?)
+		# TODO refactor a bit to be a little cleaner if possible
+		# TODO show notifier
 		if [ "$MODE" == "F" ]; then
 			if [ -n "${RUNPROGARGS[0]}" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Starting '$PROGRAM' with arguments '${RUNPROGARGS[*]}' forked into the background"
@@ -6320,7 +6330,7 @@ function extProtonRun {
 				if [ "$EXTWINERUN" -eq 1 ]; then
 					(sleep "$FWAIT"; extWine64Run "$PROGRAM" "${RUNPROGARGS[@]}") &
 				else
-					(sleep "$FWAIT"; "$RUNPROTON" run "$PROGRAM" "${RUNPROGARGS[@]}" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log") &
+					(sleep "$FWAIT"; "${RUNEXTPROGRAMARGS[@]}" "$RUNPROTON" run "$PROGRAM" "${RUNPROGARGS[@]}" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log") &
 				fi
 				emptyVars "O" "X"
 			else
@@ -6329,7 +6339,7 @@ function extProtonRun {
 				if [ "$EXTWINERUN" -eq 1 ]; then
 					(sleep "$FWAIT"; extWine64Run "$PROGRAM") &
 				else
-					(sleep "$FWAIT"; "$RUNPROTON" run "$PROGRAM" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log") &
+					(sleep "$FWAIT"; "${RUNEXTPROGRAMARGS[@]}" "$RUNPROTON" run "$PROGRAM" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log") &
 				fi
 				emptyVars "O" "X"
 			fi
@@ -6340,7 +6350,7 @@ function extProtonRun {
 				if [ "$EXTWINERUN" -eq 1 ]; then
 					(sleep "$FWAIT"; extWine64Run "$RUNWICO" "$PROGRAM" "${RUNPROGARGS[@]}") &
 				else
-					(sleep "$FWAIT"; "$RUNPROTON" run "$WICO" "$PROGRAM" "${RUNPROGARGS[@]}" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log") &
+					(sleep "$FWAIT"; "${RUNEXTPROGRAMARGS[@]}" "$RUNPROTON" run "$WICO" "$PROGRAM" "${RUNPROGARGS[@]}" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log") &
 				fi
 				emptyVars "O" "X"
 			else
@@ -6349,7 +6359,7 @@ function extProtonRun {
 				if [ "$EXTWINERUN" -eq 1 ]; then
 					(sleep "$FWAIT"; extWine64Run "$RUNWICO" "$PROGRAM") &
 				else
-					(sleep "$FWAIT"; "$RUNPROTON" run "$WICO" "$PROGRAM" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log") &
+					(sleep "$FWAIT"; "${RUNEXTPROGRAMARGS[@]}" "$RUNPROTON" run "$WICO" "$PROGRAM" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log") &
 				fi
 				emptyVars "O" "X"
 			fi
@@ -6360,7 +6370,7 @@ function extProtonRun {
 				if [ "$EXTWINERUN" -eq 1 ]; then
 					extWine64Run "$PROGRAM" "${RUNPROGARGS[@]}"
 				else
-					"$RUNPROTON" run "$PROGRAM" "${RUNPROGARGS[@]}" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log"
+					"${RUNEXTPROGRAMARGS[@]}" "$RUNPROTON" run "$PROGRAM" "${RUNPROGARGS[@]}" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log"
 				fi
 				emptyVars "O" "X"
 			else
@@ -6369,8 +6379,8 @@ function extProtonRun {
 				if [ "$EXTWINERUN" -eq 1 ]; then
 					extWine64Run "$PROGRAM"
 				else
-					writelog "INFO" "${FUNCNAME[0]} - Starting with launch command '$RUNPROTON run $PROGRAM'"
-					"$RUNPROTON" run "$PROGRAM" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log"
+					writelog "INFO" "${FUNCNAME[0]} - Starting with launch command '${EXTPROGRAMARGS[*]} ${RUNPROTON} run ${PROGRAM}'"
+					"${RUNEXTPROGRAMARGS[@]}" "$RUNPROTON" run "$PROGRAM" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log"
 				fi
 				emptyVars "O" "X"
 			fi
@@ -6381,7 +6391,7 @@ function extProtonRun {
 				if [ "$EXTWINERUN" -eq 1 ]; then
 					extWine64Run "$RUNWICO" "$PROGRAM" "${RUNPROGARGS[@]}"
 				else
-					"$RUNPROTON" run "$WICO" "$PROGRAM" "${RUNPROGARGS[@]}" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log"
+					"$EXTPROGRAMARGS" "$RUNPROTON" run "$WICO" "$PROGRAM" "${RUNPROGARGS[@]}" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log"
 				fi
 				emptyVars "O" "X"
 			else
@@ -6390,7 +6400,7 @@ function extProtonRun {
 				if [ "$EXTWINERUN" -eq 1 ]; then
 					extWine64Run "$RUNWICO" "$PROGRAM"
 				else
-					"$RUNPROTON" run "$WICO" "$PROGRAM" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log"
+					"$EXTPROGRAMARGS" "$RUNPROTON" run "$WICO" "$PROGRAM" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log"
 				fi
 				emptyVars "O" "X"
 			fi
@@ -11018,9 +11028,9 @@ function launchCustomProg {
 				if [ "$FORK_CUSTOMCMD" -eq 1 ]; then	
 					writelog "INFO" "${FUNCNAME[0]} - FORK_CUSTOMCMD is set to 1 - forking the custom program in background and continue"
 					extProtonRun "FC" "$LACO" "$CUSTOMCMD_ARGS"
-				elif [ "$ONLY_CUSTOMCMD" -eq 1 ] && [ -n "$FINALOUTCMD" ]; then
+				elif [ "$ONLY_CUSTOMCMD" -eq 1 ] && [ -n "${FINALOUTCMD[*]}" ]; then
 					writelog "INFO" "${FUNCNAME[0]} - ONLY_CUSTOMCMD is set to 1 and we have some arguments in FINALOUTCMD - passing to extProtonRun to build a valid start command"
-					extProtonRun "R" "$LACO" "$CUSTOMCMD_ARGS" "${FINALOUTCMD[@]}"  # extProtonRun will handle adding the FINALOUTCMD args to 
+					extProtonRun "R" "$LACO" "$CUSTOMCMD_ARGS" "$FINALOUTCMD"  # extProtonRun will handle adding the FINALOUTCMD args to 
 				else
 					extProtonRun "RC" "$LACO" "$CUSTOMCMD_ARGS"
 				fi
@@ -11032,7 +11042,7 @@ function launchCustomProg {
 					extProtonRun "F" "$LACO" "$CUSTOMCMD_ARGS"
 				elif [ "$ONLY_CUSTOMCMD" -eq 1 ] && [ -n "$FINALOUTCMD" ]; then
 					writelog "INFO" "${FUNCNAME[0]} - ONLY_CUSTOMCMD is set to 1 and we have some arguments in FINALOUTCMD - passing to extProtonRun to build a valid start command"
-					extProtonRun "R" "$LACO" "$CUSTOMCMD_ARGS" "${FINALOUTCMD[@]}"  # extProtonRun will handle adding the FINALOUTCMD args to 
+					extProtonRun "R" "$LACO" "$CUSTOMCMD_ARGS" "${FINALOUTCMD[*]}"  # extProtonRun will handle adding the FINALOUTCMD args to 
 				else
 					extProtonRun "R" "$LACO" "$CUSTOMCMD_ARGS"
 				fi
@@ -19251,51 +19261,6 @@ function launchSteamGame {
 	steamdeckBeforeGame
 
 	setCommandLaunchVars  # Re-usable function for Steam games and custom program launches
-
-	# if [ "$USEGAMEMODERUN" -eq 1 ]; then
-	# 	GMR="$(command -v "$GAMEMODERUN")"
-	# fi
-
-	# if [ "$USEOBSCAP" -eq 1 ]; then
-	# 	OBSC="$(command -v "$OBSCAP")"
-	# fi
-	
-	# if [ "$USEGAMESCOPE" -eq 1 ]; then
-	# 	if [ "$USEMANGOAPP" -eq 1 ]; then
-	# 		if [ "$ONSTEAMDECK" -eq 1 ]; then
-	# 			if [ "$FIXGAMESCOPE" -eq 1 ]; then
-	# 				writelog "SKIP" "${FUNCNAME[0]} - Disabling USEMANGOAPP variable in Steam Deck Game Mode, because Steam Deck uses $MANGOAPP already by default"
-	# 				USEMANGOAPP=0
-	# 			else
-	# 				writelog "INFO" "${FUNCNAME[0]} - Allowing USEMANGOAPP variable in Steam Deck Desktop Mode"
-	# 				USEMANGOAPP=1
-	# 			fi
-	# 		else
-	# 			writelog "SKIP" "${FUNCNAME[0]} - Not adding $GAMESCOPE to the game launch command, because $MANGOAPP is enabled, which triggers it automatically"
-	# 			USEGAMESCOPE=0
-	# 		fi
-	# 	else
-	# 		GSC="$(command -v "$GAMESCOPE")"
-	# 	fi
-	# fi
-	
-	# if [ "$USEZINK" -eq 1 ]; then
-	# 	export __GLX_VENDOR_LIBRARY_NAME=mesa
-	# 	export MESA_LOADER_DRIVER_OVERRIDE=zink
-	# 	export GALLIUM_DRIVER=zink
-	# fi
-	
-	# if [ "$ENABLE_WINESYNC" -eq 1 ]; then
-	# 	export WINEESYNC=0
-	# 	export WINEFSYNC=0
-	# 	export WINEFSYNC_FUTEX2=0
-	# fi
-
-	# if [ "$USEPRIMERUN" -eq 1 ]; then
-	# 	export __NV_PRIME_RENDER_OFFLOAD=1
-	# 	export __VK_LAYER_NV_optimus=NVIDIA_only
-	# 	export __GLX_VENDOR_LIBRARY_NAME=nvidia
-	# fi
 
 	writelog "INFO" "${FUNCNAME[0]} - Initial game command is '${INGCMD[*]}'"
 
