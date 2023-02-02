@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v12.12.20230129-1"
+PROGVERS="v12.12.20230203-3"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -2698,6 +2698,7 @@ function setDefaultCfgValues {
 		if [ -z "$CUSTOMCMD_ARGS" ]						; then	CUSTOMCMD_ARGS="$NON"; fi
 		if [ -z "$ONLY_CUSTOMCMD" ]						; then	ONLY_CUSTOMCMD="0";	fi
 		if [ -z "$FORK_CUSTOMCMD" ]						; then	FORK_CUSTOMCMD="0";	fi
+		if [ -z "$EXTPROGS_CUSTOMCMD" ]					; then  EXTPROGS_CUSTOMCMD="0"; fi
 		if [ -z "$CUSTOMCMDFORCEWIN" ]					; then  CUSTOMCMDFORCEWIN="0"; fi
 		if [ -z "$WAITFORCUSTOMCMD" ]					; then	WAITFORCUSTOMCMD="0"; fi
 		if [ -z "$INJECT_CUSTOMCMD" ]					; then	INJECT_CUSTOMCMD="0"; fi
@@ -3199,6 +3200,8 @@ function saveCfg {
 			echo "ONLY_CUSTOMCMD=\"$ONLY_CUSTOMCMD\""
 			echo "## $DESC_FORK_CUSTOMCMD"
 			echo "FORK_CUSTOMCMD=\"$FORK_CUSTOMCMD\""
+			echo "## $DESC_EXTPROGS_CUSTOMCMD"
+			echo "EXTPROGS_CUSTOMCMD=\"$EXTPROGS_CUSTOMCMD\""
 			echo "## $DESC_CUSTOMCMD_FORCEWIN"
 			echo "CUSTOMCMDFORCEWIN=\"$CUSTOMCMDFORCEWIN\""
 			echo "## $DESC_WAITFORCUSTOMCMD"
@@ -4916,6 +4919,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_CUSTOMCMD!$DESC_CUSTOMCMD $GUI_ECHOPLAC ('CUSTOMCMD')":FL "${OPCUSTPATH/#-/ -}" `#CAT_Misc` `#MENU_GAME` \
 --field="     $GUI_CUSTOMCMD_ARGS!$DESC_CUSTOMCMD_ARGS ('CUSTOMCMD_ARGS')" "${CUSTOMCMD_ARGS/#-/ -}" `#CAT_Misc` `#MENU_GAME` \
 --field="     $GUI_FORK_CUSTOMCMD!$DESC_FORK_CUSTOMCMD ('FORK_CUSTOMCMD')":CHK "${FORK_CUSTOMCMD/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_EXTPROGS_CUSTOMCMD!$DESC_EXTPROGS_CUSTOMCMD ('EXTPROGS_CUSTOMCMD')":CHK "${EXTPROGS_CUSTOMCMD/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_ONLY_CUSTOMCMD!$DESC_ONLY_CUSTOMCMD ('ONLY_CUSTOMCMD')":CHK "${ONLY_CUSTOMCMD/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_CUSTOMCMD_FORCEWIN!$DESC_CUSTOMCMD_FORCEWIN ('CUSTOMCMDFORCEWIN')":CHK "${CUSTOMCMDFORCEWIN/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_WAITFORCUSTOMCMD!$DESC_WAITFORCUSTOMCMD ('WAITFORCUSTOMCMD')":NUM "${WAITFORCUSTOMCMD/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
@@ -6277,10 +6281,12 @@ function extWine64Run {
 	fi
 }
 
+# NOTE: This needs an update to support launch commands set with `buildCustomCmdLaunch` - e.g. ONLY_CUSTOMCMD
 function extProtonRun {
 	MODE="$1"
 	PROGRAM="$2"
 	PROGARGS="$3"
+	EXTPROGRAMARGS="$4"  # e.g. args like GameScope/GameMode taken from `buildCustomCmdLaunch` for ONLY_CUSTOMCMD
 	EXTWINERUN=0
 
 	if [ "$USEWINE" -eq 1 ] && [[ ! "$WINEVERSION" =~ ${DUMMYBIN}$ ]] && [ "$WINEVERSION" != "$NON" ]; then
@@ -6309,84 +6315,135 @@ function extProtonRun {
 
 		FWAIT=2
 
-		if [ "$MODE" == "F" ]; then
+		# mirrors above RUNPROGARGS 
+		if [ -z "$EXTPROGRAMARGS" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - No external program args here it seems"
+			RUNEXTPROGRAMARGS=( "" ) 
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Looks like we got some external program args, '${EXTPROGRAMARGS}'"
+			mapfile -d " " -t -O "${#RUNEXTPROGRAMARGS[@]}" RUNEXTPROGRAMARGS < <(printf '%s' "$EXTPROGRAMARGS")
+		fi
+
+		# TODO pass "$EXTPROGRAMARGS" to programs running with Wine as well(?)
+		# TODO refactor a bit to be a little cleaner if possible
+		CUSTPROGNAME="$( basename "$PROGRAM" )"
+		if [ "$MODE" == "F" ]; then  # Forked Proton/Wine 'normal' custom program
 			if [ -n "${RUNPROGARGS[0]}" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Starting '$PROGRAM' with arguments '${RUNPROGARGS[*]}' forked into the background"
 				restoreOrgVars
 				if [ "$EXTWINERUN" -eq 1 ]; then
-					(sleep "$FWAIT"; extWine64Run "$PROGRAM" "${RUNPROGARGS[@]}") &
+					(sleep "$FWAIT"; notiShow "$( strFix "$NOTY_CUSTPROG_FORKED_ARGS_WINE" "$CUSTPROGNAME" )"; extWine64Run "$PROGRAM" "${RUNPROGARGS[@]}") &
 				else
-					(sleep "$FWAIT"; "$RUNPROTON" run "$PROGRAM" "${RUNPROGARGS[@]}" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log") &
+					if [ -n "${RUNEXTPROGRAMARGS[0]}" ]; then
+						(sleep "$FWAIT"; notiShow "$( strFix "$NOTY_CUSTPROG_FORKED_ARGS" "$CUSTPROGNAME" )"; "${RUNEXTPROGRAMARGS[@]}" "$RUNPROTON" run "$PROGRAM" "${RUNPROGARGS[@]}" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log") &
+					else
+						(sleep "$FWAIT"; notiShow "$( strFix "$NOTY_CUSTPROG_FORKED_ARGS" "$CUSTPROGNAME" )"; "$RUNPROTON" run "$PROGRAM" "${RUNPROGARGS[@]}" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log") &
+					fi
 				fi
 				emptyVars "O" "X"
 			else
 				writelog "INFO" "${FUNCNAME[0]} - Starting '$PROGRAM' forked into the background"
 				restoreOrgVars
 				if [ "$EXTWINERUN" -eq 1 ]; then
-					(sleep "$FWAIT"; extWine64Run "$PROGRAM") &
+					(sleep "$FWAIT"; notiShow "$( strFix "$NOTY_CUSTPROG_FORKED_WINE" "$CUSTPROGNAME" )"; extWine64Run "$PROGRAM") &
 				else
-					(sleep "$FWAIT"; "$RUNPROTON" run "$PROGRAM" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log") &
+					if [ -n "${RUNEXTPROGRAMARGS[0]}" ]; then
+						(sleep "$FWAIT"; notiShow "$( strFix "$NOTY_CUSTPROG_FORKED" "$CUSTPROGNAME" )"; "${RUNEXTPROGRAMARGS[@]}" "$RUNPROTON" run "$PROGRAM" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log") &
+					else
+						(sleep "$FWAIT"; notiShow "$( strFix "$NOTY_CUSTPROG_FORKED" "$CUSTPROGNAME" )"; "$RUNPROTON" run "$PROGRAM" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log") &
+					fi
 				fi
 				emptyVars "O" "X"
 			fi
-		elif [ "$MODE" == "FC" ]; then
+		elif [ "$MODE" == "FC" ]; then  # Forked Proton/Wine 'command line' custom program
 			if [ -n "${RUNPROGARGS[0]}" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Starting '$WICO $PROGRAM' with arguments '${RUNPROGARGS[*]}' forked into the background"
 				restoreOrgVars
 				if [ "$EXTWINERUN" -eq 1 ]; then
-					(sleep "$FWAIT"; extWine64Run "$RUNWICO" "$PROGRAM" "${RUNPROGARGS[@]}") &
+					(sleep "$FWAIT"; notiShow "$( strFix "$NOTY_CUSTPROG_FORKED_ARGS_WINE" "$CUSTPROGNAME" )"; extWine64Run "$RUNWICO" "$PROGRAM" "${RUNPROGARGS[@]}") &
 				else
-					(sleep "$FWAIT"; "$RUNPROTON" run "$WICO" "$PROGRAM" "${RUNPROGARGS[@]}" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log") &
+					if [ -n "${RUNEXTPROGRAMARGS[0]}" ]; then
+						(sleep "$FWAIT"; notiShow "$( strFix "$NOTY_CUSTPROG_FORKED_ARGS" "$CUSTPROGNAME" )"; "${RUNEXTPROGRAMARGS[@]}" "$RUNPROTON" run "$WICO" "$PROGRAM" "${RUNPROGARGS[@]}" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log") &
+					else
+						(sleep "$FWAIT"; notiShow "$( strFix "$NOTY_CUSTPROG_FORKED_ARGS" "$CUSTPROGNAME" )"; "$RUNPROTON" run "$WICO" "$PROGRAM" "${RUNPROGARGS[@]}" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log") &
+					fi
 				fi
 				emptyVars "O" "X"
 			else
 				writelog "INFO" "${FUNCNAME[0]} - Starting '$WICO $PROGRAM' forked into the background"
 				restoreOrgVars
 				if [ "$EXTWINERUN" -eq 1 ]; then
-					(sleep "$FWAIT"; extWine64Run "$RUNWICO" "$PROGRAM") &
+					(sleep "$FWAIT"; notiShow "$( strFix "$NOTY_CUSTPROG_FORKED_WINE" "$CUSTPROGNAME" )"; extWine64Run "$RUNWICO" "$PROGRAM") &
 				else
-					(sleep "$FWAIT"; "$RUNPROTON" run "$WICO" "$PROGRAM" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log") &
+					if [ -n "${RUNEXTPROGRAMARGS[0]}" ]; then
+						(sleep "$FWAIT"; notiShow "$( strFix "$NOTY_CUSTPROG_FORKED" "$CUSTPROGNAME" )"; "${RUNEXTPROGRAMARGS[@]}" "$RUNPROTON" run "$WICO" "$PROGRAM" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log") &
+					else
+						(sleep "$FWAIT"; notiShow "$( strFix "$NOTY_CUSTPROG_FORKED" "$CUSTPROGNAME" )"; "$RUNPROTON" run "$WICO" "$PROGRAM" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log") &
+					fi
 				fi
 				emptyVars "O" "X"
 			fi
-		elif [ "$MODE" == "R" ]; then
+		elif [ "$MODE" == "R" ]; then  # Regular (no fork/wait/etc) Proton/Wine custom program
 			if [ -n "${RUNPROGARGS[0]}" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Starting '$PROGRAM' with arguments '${RUNPROGARGS[*]}' regularly"
 				restoreOrgVars
 				if [ "$EXTWINERUN" -eq 1 ]; then
+					notiShow "$( strFix "$NOTY_CUSTPROG_REG_ARGS_WINE" "$CUSTPROGNAME" )"
 					extWine64Run "$PROGRAM" "${RUNPROGARGS[@]}"
 				else
-					"$RUNPROTON" run "$PROGRAM" "${RUNPROGARGS[@]}" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log"
+					notiShow "$( strFix "$NOTY_CUSTPROG_REG_ARGS" "$CUSTPROGNAME" )"
+					if [ -n "${RUNEXTPROGRAMARGS[0]}" ]; then
+						"${RUNEXTPROGRAMARGS[@]}" "$RUNPROTON" run "$PROGRAM" "${RUNPROGARGS[@]}" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log"
+					else
+						"$RUNPROTON" run "$PROGRAM" "${RUNPROGARGS[@]}" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log"
+					fi
 				fi
 				emptyVars "O" "X"
 			else
 				writelog "INFO" "${FUNCNAME[0]} - Starting '$PROGRAM' regularly"
 				restoreOrgVars
 				if [ "$EXTWINERUN" -eq 1 ]; then
+					notiShow "$( strFix "$NOTY_CUSTPROG_REG_WINE" "$CUSTPROGNAME" )"
 					extWine64Run "$PROGRAM"
 				else
-					writelog "INFO" "${FUNCNAME[0]} - Starting with launch command '$RUNPROTON run $PROGRAM'"
-					"$RUNPROTON" run "$PROGRAM" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log"
+					notiShow "$( strFix "$NOTY_CUSTPROG_REG" "$CUSTPROGNAME" )"
+					if [ -n "${RUNEXTPROGRAMARGS[0]}" ]; then
+						"${RUNEXTPROGRAMARGS[@]}" "$RUNPROTON" run "$PROGRAM" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log"
+					else
+						"$RUNPROTON" run "$PROGRAM" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log"
+					fi
 				fi
 				emptyVars "O" "X"
 			fi
-		elif [ "$MODE" == "RC" ]; then
+		elif [ "$MODE" == "RC" ]; then  # Regular (no fork/wait/etc) Proton/Wine 'command line' custom program
 			if [ -n "${RUNPROGARGS[0]}" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Starting '$WICO $PROGRAM' with arguments '${RUNPROGARGS[*]}' regularly"
 				restoreOrgVars
 				if [ "$EXTWINERUN" -eq 1 ]; then
+					notiShow "$( strFix "$NOTY_CUSTPROG_REG_ARGS_WINE" "$CUSTPROGNAME" )"
 					extWine64Run "$RUNWICO" "$PROGRAM" "${RUNPROGARGS[@]}"
 				else
-					"$RUNPROTON" run "$WICO" "$PROGRAM" "${RUNPROGARGS[@]}" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log"
+					notiShow "$( strFix "$NOTY_CUSTPROG_REG_ARGS" "$CUSTPROGNAME" )"
+					if [ -n "${RUNEXTPROGRAMARGS[0]}" ]; then
+						"${RUNEXTPROGRAMARGS[@]}" "$RUNPROTON" run "$WICO" "$PROGRAM" "${RUNPROGARGS[@]}" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log"
+					else
+						"$RUNPROTON" run "$WICO" "$PROGRAM" "${RUNPROGARGS[@]}" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log"
+					fi
 				fi
 				emptyVars "O" "X"
 			else
 				writelog "INFO" "${FUNCNAME[0]} - Starting '$WICO $PROGRAM' regularly"
 				restoreOrgVars
 				if [ "$EXTWINERUN" -eq 1 ]; then
+					notiShow "$( strFix "$NOTY_CUSTPROG_REG_WINE" "$CUSTPROGNAME" )"
 					extWine64Run "$RUNWICO" "$PROGRAM"
 				else
-					"$RUNPROTON" run "$WICO" "$PROGRAM" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log"
+					notiShow "$( strFix "$NOTY_CUSTPROG_REG" "$CUSTPROGNAME" )"
+					if [ -n "${RUNEXTPROGRAMARGS[0]}" ]; then
+						"${RUNEXTPROGRAMARGS[@]}" "$RUNPROTON" run "$WICO" "$PROGRAM" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log"
+					else
+						"$RUNPROTON" run "$WICO" "$PROGRAM" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log"
+					fi
 				fi
 				emptyVars "O" "X"
 			fi
@@ -10755,6 +10812,129 @@ function setOPCustPath {
 	fi
 }
 
+function setCommandLaunchVars {
+	if [ "$USEGAMEMODERUN" -eq 1 ]; then
+		GMR="$(command -v "$GAMEMODERUN")"
+	fi
+
+	if [ "$USEOBSCAP" -eq 1 ]; then
+		OBSC="$(command -v "$OBSCAP")"
+	fi
+
+	if [ "$USEGAMESCOPE" -eq 1 ]; then
+		if [ "$USEMANGOAPP" -eq 1 ]; then
+			if [ "$ONSTEAMDECK" -eq 1 ]; then
+				if [ "$FIXGAMESCOPE" -eq 1 ]; then
+					writelog "SKIP" "${FUNCNAME[0]} - Disabling USEMANGOAPP variable in Steam Deck Game Mode, because Steam Deck uses $MANGOAPP already by default"
+					USEMANGOAPP=0
+				else
+					writelog "INFO" "${FUNCNAME[0]} - Allowing USEMANGOAPP variable in Steam Deck Desktop Mode"
+					USEMANGOAPP=1
+				fi
+			else
+				writelog "SKIP" "${FUNCNAME[0]} - Not adding $GAMESCOPE to the game launch command, because $MANGOAPP is enabled, which triggers it automatically"
+				USEGAMESCOPE=0
+			fi
+		else
+			GSC="$(command -v "$GAMESCOPE")"
+			
+			gameScopeArgs "$GAMESCOPE_ARGS"  # Create GameScope args array - Looks like this is called twice for regular game launches but no big deal for now :-)
+		fi
+	fi
+
+	if [ "$USEZINK" -eq 1 ]; then
+		export __GLX_VENDOR_LIBRARY_NAME=mesa
+		export MESA_LOADER_DRIVER_OVERRIDE=zink
+		export GALLIUM_DRIVER=zink
+	fi
+	
+	if [ "$ENABLE_WINESYNC" -eq 1 ]; then
+		export WINEESYNC=0
+		export WINEFSYNC=0
+		export WINEFSYNC_FUTEX2=0
+	fi
+
+	if [ "$USEPRIMERUN" -eq 1 ]; then
+		export __NV_PRIME_RENDER_OFFLOAD=1
+		export __VK_LAYER_NV_optimus=NVIDIA_only
+		export __GLX_VENDOR_LIBRARY_NAME=nvidia
+	fi
+}
+
+# Used to create the launch command for custom commands 
+# May be applicable to launchSteamGame in future to some extent, but for now is only for custom commands
+function buildCustomCmdLaunch {
+
+	setCommandLaunchVars  # Checks for things like GameMode, GameScope, etc
+
+	# TODO logic around `launchSteamGame` should be taken as reference
+	FINALOUTCMD=()
+
+	# Lifted originally from `launchSteamGame` - Could potentially be used in launchSteamGame too
+	if [ -n "$GMR" ]; then
+		if [ -n "${FINALOUTCMD[0]}" ]; then
+			FINALOUTCMD=("${FINALOUTCMD[@]}" "$GMR")
+		else
+			FINALOUTCMD=("$GMR")
+		fi
+	fi
+
+	# GameScope has to be appended before other commands
+	if [ -n "$GSC" ]; then
+		if [ -n "${FINALOUTCMD[0]}" ]; then
+			FINALOUTCMD=("${FINALOUTCMD[@]}" "$GSC")
+		else
+			FINALOUTCMD=("$GSC")
+		fi
+		
+		if [ -n "${FINALOUTCMD[0]}" ]; then
+			FINALOUTCMD=("${FINALOUTCMD[@]}" "${GAMESCOPEARGSARR[@]}")
+		fi
+	fi
+
+	if [ "$USEOBSCAP" -eq 1 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - USEOBSCAP is enabled - preparing $OBSCAP command"
+		if [ -n "${FINALOUTCMD[0]}" ]; then
+			FINALOUTCMD=("${FINALOUTCMD[@]}" "$OBSC")
+		else
+			FINALOUTCMD=("$OBSC")
+		fi
+	fi
+	
+	if [ "$USEMANGOHUD" -eq 1 ]; then
+		if [ "$MAHUARGS" != "$NON" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Exporting MANGOHUD_CONFIG with $MAHU arguments '$MAHUARGS'"
+			export MANGOHUD_CONFIG="$MAHUARGS"
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - Not exporting  MANGOHUD_CONFIG '$MAHUARGS'"
+		fi
+
+		if [ "$MAHUVAR" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Exporting MANHOGUD variable and skipping all $MAHU binary settings, because MAHUVAR is '$MAHUVAR'"
+			export MANGOHUD=1
+		else
+			if [ -f "$MAHUBIN" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - $MAHU is enabled"
+				if [ "$LDPMAHU" -eq 1 ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Preloading $MAHU"
+					export LD_PRELOAD="$LD_PRELOAD $MAHUBIN"
+				else
+					if [ -n "${FINALOUTCMD[0]}" ]; then
+						FINALOUTCMD=("${FINALOUTCMD[@]}" "$MAHUBIN")
+					else
+						FINALOUTCMD=("$MAHUBIN")
+					fi	
+				fi
+			else
+				writelog "WARN" "${FUNCNAME[0]} - $MAHU binary not found - disabling"
+				USEMANGOHUD=0
+			fi
+		fi
+
+		# In future, SLR could be added here maybe?
+	fi
+}
+
 function launchCustomProg {
 	if [ -n "$1" ]; then
 		CUSTOMCMD="$WICO"
@@ -10795,7 +10975,7 @@ function launchCustomProg {
 	
 	if [ -z "$CUSTOMCMD" ]; then
 		writelog "ERROR" "${FUNCNAME[0]} - CUSTOMCMD variable is empty - but it shouldn't be empty here!"
-	fi	
+	fi
 	
 	CHCUSTDIR=0
 	if [ -n "$1" ]; then
@@ -10868,9 +11048,17 @@ function launchCustomProg {
 			writelog "INFO" "${FUNCNAME[0]} - Changed pwd into the custom directory '$PWD'"
 		fi
 
-		# Cannot always rely on `file` to return `PE32` even for Windows executables -- See #710
+		# Putting logic here means we have FINALOUTCMD for Wine/Proton *and* native games
+		if [ "$EXTPROGS_CUSTOMCMD" -eq 1 ]; then 
+			writelog "INFO" "${FUNCNAME[0]} - EXTPROGS_CUSTOMCMD was set to 1, so checking for custom arguments like MangoHUD and GameScope"
+			buildCustomCmdLaunch  # Create FINALOUTCMD
+			writelog "INFO" "${FUNCNAME[0]} - Generated arguments for custom command are now '${FINALOUTCMD[*]}'"
+		fi
+
+		# Cannot always rely on `file` to return `PE32` even for Windows executables -- See #710 (seems to be when exe files are built on Linux they are not PE32)
 		if [ "$(file "$CUSTCOM" | grep -c "PE32")" -eq 1 ] || grep -q ".bat" <<< "$CUSTCOM" || [ "$CUSTOMCMDFORCEWIN" -eq 1 ]; then
 			if [ "$CUSTOMCMDFORCEWIN" -eq 1 ]; then
+				# Force custom command to use Wine/Proton, even if we do not detect it as a valid Windows binary
 				writelog "INFO" "${FUNCNAME[0]} - CUSTOMCMDFORCEWIN is '$CUSTOMCMDFORCEWIN' - User wants to force this custom command as a Windows program"
 				if [ "$(file "$CUSTCOM" | grep -c "PE32")" -eq 0 ]; then
 					writelog "WARN" "${FUNCNAME[0]} - Custom command does not appear to be a Windows program by normal SteamTinkerLaunch checks, but CUSTOMCMDFORCEWIN was enabled, so using Proton anyway"
@@ -10881,25 +11069,34 @@ function launchCustomProg {
 				writelog "INFO" "${FUNCNAME[0]} - '$CUSTCOM' seems to be a MS Windows program - starting through proton"
 			fi
 
-			if [ "$USEWICO" -eq 1 ] && [ "$(file "$CUSTCOM" | grep -c "(console)")" -eq 1 ]; then
+			if [ "$USEWICO" -eq 1 ] && [ "$(file "$CUSTCOM" | grep -c "(console)")" -eq 1 ]; then  # Command line Wine/Proton custom program
 				writelog "INFO" "${FUNCNAME[0]} - '$CUSTCOM' seems to be a MS console program - starting using '$WICO'"
 				if [ "$FORK_CUSTOMCMD" -eq 1 ]; then	
 					writelog "INFO" "${FUNCNAME[0]} - FORK_CUSTOMCMD is set to 1 - forking the custom program in background and continue"
 					extProtonRun "FC" "$LACO" "$CUSTOMCMD_ARGS"
+				elif [ "$ONLY_CUSTOMCMD" -eq 1 ] && [ -n "${FINALOUTCMD[*]}" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - ONLY_CUSTOMCMD is set to 1 and we have some arguments in FINALOUTCMD - passing to extProtonRun to build a valid start command"
+					extProtonRun "R" "$LACO" "$CUSTOMCMD_ARGS" "$FINALOUTCMD"  # extProtonRun will handle adding the FINALOUTCMD args to 
 				else
 					extProtonRun "RC" "$LACO" "$CUSTOMCMD_ARGS"
 				fi
-			else
+			else  # GUI Wine/Proton program
 				writelog "INFO" "${FUNCNAME[0]} - '$CUSTCOM' seems to be a MS gui program - starting regularly"
 
 				if [ "$FORK_CUSTOMCMD" -eq 1 ]; then	
 					writelog "INFO" "${FUNCNAME[0]} - FORK_CUSTOMCMD is set to 1 - forking the custom program in background and continue"
 					extProtonRun "F" "$LACO" "$CUSTOMCMD_ARGS"
+				elif [ "$ONLY_CUSTOMCMD" -eq 1 ] && [ -n "$FINALOUTCMD" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - ONLY_CUSTOMCMD is set to 1 and we have some arguments in FINALOUTCMD - passing to extProtonRun to build a valid start command"
+					extProtonRun "R" "$LACO" "$CUSTOMCMD_ARGS" "${FINALOUTCMD[*]}"  # extProtonRun will handle adding the FINALOUTCMD args
 				else
 					extProtonRun "R" "$LACO" "$CUSTOMCMD_ARGS"
 				fi
 			fi
-		else
+		else  # Native custom command 
+			writelog "INFO" "${FUNCNAME[0]} - Seems like we may have a Linux executable here"
+
+			# Arguments to append to executable
 			if [ -z "$CUSTOMCMD_ARGS" ] || [ "$CUSTOMCMD_ARGS" == "$NON" ]; then
 				RUNCUSTOMCMD_ARGS=""
 			else
@@ -10907,22 +11104,46 @@ function launchCustomProg {
 				mapfile -d " " -t -O "${#RUNCUSTOMCMD_ARGS[@]}" RUNCUSTOMCMD_ARGS < <(printf '%s' "$CUSTOMCMD_ARGS")
 			fi
 
+			# Custom program args to preceed executable (e.g. /usr/bin/gamemode /usr/bin/gamescope -- ./game.sh) 
+			if [ -z "$FINALOUTCMD" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - No external program args here it seems"
+				RUNEXTPROGRAMARGS=( "" )  # Initialise to array with empty string so we don't have to do checks in each if block
+			else
+				writelog "INFO" "${FUNCNAME[0]} - Looks like we got some external program args, '${FINALOUTCMD[*]}'"
+				mapfile -d " " -t -O "${#RUNEXTPROGRAMARGS[@]}" RUNEXTPROGRAMARGS < <(printf '%s' "${FINALOUTCMD[*]}")
+			fi
+
+			FWAIT=2
+
+			# Launch native custom command
+			NATIVEPROGNAME="$( basename "$LACO" )"
 			if [ -n "$1" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Starting only the '$WICO' with command: '$LACO'"
-				"$LACO"
+				"${RUNEXTPROGRAMARGS[@]}" "$LACO"
 				writelog "STOP" "######### CLEANUP #########"
 				closeSTL "######### DONE - $PROGNAME $PROGVERS #########"
 				exit
 			else
 				writelog "INFO" "${FUNCNAME[0]} - '$CUSTCOM' doesn't seem to be a MS Windows exe - regular start (without further analysing)"
-				if [ "$FORK_CUSTOMCMD" -eq 1 ]; then	
+				if [ "$FORK_CUSTOMCMD" -eq 1 ]; then  # Forked native custom program
 					writelog "INFO" "${FUNCNAME[0]} - FORK_CUSTOMCMD is set to 1 - forking the custom program in background and continue"
-					(sleep 2; "$LACO" "${RUNCUSTOMCMD_ARGS[@]}") &
-				else
-					"$LACO" "${RUNCUSTOMCMD_ARGS[@]}"
+					if [ -n "${RUNEXTPROGRAMARGS[0]}" ]; then
+						(sleep "$FWAIT"; notiShow "$( strFix "$NOTY_CUSTPROG_FORKED_NATIVE" "$NATIVEPROGNAME" )"; "${RUNEXTPROGRAMARGS[@]}" "$LACO" "${RUNCUSTOMCMD_ARGS[@]}") &
+					else
+						(sleep "$FWAIT"; notiShow "$( strFix "$NOTY_CUSTPROG_FORKED_NATIVE" "$NATIVEPROGNAME" )"; "$LACO" "${RUNCUSTOMCMD_ARGS[@]}") &
+					fi
+				else  # Regular native executable
+					writelog "INFO" "${FUNCNAME[0]} - Starting native custom command regularly"
+					notiShow "$( strFix "$NOTY_CUSTPROG_REG_NATIVE" "$NATIVEPROGNAME" )"
+					if [ -n "${RUNEXTPROGRAMARGS[0]}" ]; then
+						"${RUNEXTPROGRAMARGS[@]}" "$LACO" "${RUNCUSTOMCMD_ARGS[@]}"
+					else
+						"$LACO" "${RUNCUSTOMCMD_ARGS[@]}"
+					fi
 				fi
 			fi
 		fi
+
 		if [ "$CHCUSTDIR" -eq 1 ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Changing pwd into previous directory"
 			cd - >/dev/null || return
@@ -19111,51 +19332,8 @@ function setProtonCmd {
 function launchSteamGame {
 ########################
 	steamdeckBeforeGame
-	
-	if [ "$USEGAMEMODERUN" -eq 1 ]; then
-		GMR="$(command -v "$GAMEMODERUN")"
-	fi
 
-	if [ "$USEOBSCAP" -eq 1 ]; then
-		OBSC="$(command -v "$OBSCAP")"
-	fi
-	
-	if [ "$USEGAMESCOPE" -eq 1 ]; then
-		if [ "$USEMANGOAPP" -eq 1 ]; then
-			if [ "$ONSTEAMDECK" -eq 1 ]; then
-				if [ "$FIXGAMESCOPE" -eq 1 ]; then
-					writelog "SKIP" "${FUNCNAME[0]} - Disabling USEMANGOAPP variable in Steam Deck Game Mode, because Steam Deck uses $MANGOAPP already by default"
-					USEMANGOAPP=0
-				else
-					writelog "INFO" "${FUNCNAME[0]} - Allowing USEMANGOAPP variable in Steam Deck Desktop Mode"
-					USEMANGOAPP=1
-				fi
-			else
-				writelog "SKIP" "${FUNCNAME[0]} - Not adding $GAMESCOPE to the game launch command, because $MANGOAPP is enabled, which triggers it automatically"
-				USEGAMESCOPE=0
-			fi
-		else
-			GSC="$(command -v "$GAMESCOPE")"
-		fi
-	fi
-	
-	if [ "$USEZINK" -eq 1 ]; then
-		export __GLX_VENDOR_LIBRARY_NAME=mesa
-		export MESA_LOADER_DRIVER_OVERRIDE=zink
-		export GALLIUM_DRIVER=zink
-	fi
-	
-	if [ "$ENABLE_WINESYNC" -eq 1 ]; then
-		export WINEESYNC=0
-		export WINEFSYNC=0
-		export WINEFSYNC_FUTEX2=0
-	fi
-
-	if [ "$USEPRIMERUN" -eq 1 ]; then
-		export __NV_PRIME_RENDER_OFFLOAD=1
-		export __VK_LAYER_NV_optimus=NVIDIA_only
-		export __GLX_VENDOR_LIBRARY_NAME=nvidia
-	fi
+	setCommandLaunchVars  # Re-usable function for Steam games and custom program launches
 
 	writelog "INFO" "${FUNCNAME[0]} - Initial game command is '${INGCMD[*]}'"
 
@@ -19204,65 +19382,9 @@ function launchSteamGame {
 	if [ "$USEWINE" -eq 0 ]; then
 		# concatenate final game start command
 
-		if [ -n "$GMR" ]; then
-			if [ -n "${FINALSTARTCMD[0]}" ]; then
-				FINALSTARTCMD=("${FINALSTARTCMD[@]}" "$GMR")
-			else
-				FINALSTARTCMD=("$GMR")
-			fi
-		fi
+		buildCustomCmdLaunch
 
-		if [ -n "$GSC" ]; then
-			if [ -n "${FINALSTARTCMD[0]}" ]; then
-				FINALSTARTCMD=("${FINALSTARTCMD[@]}" "$GSC")
-			else
-				FINALSTARTCMD=("$GSC")
-			fi
-			
-			if [ -n "${GAMESCOPEARGSARR[0]}" ]; then
-				FINALSTARTCMD=("${FINALSTARTCMD[@]}" "${GAMESCOPEARGSARR[@]}")
-			fi
-		fi
-
-		if [ "$USEOBSCAP" -eq 1 ]; then
-			writelog "INFO" "${FUNCNAME[0]} - USEOBSCAP is enabled - preparing $OBSCAP command"
-			if [ -n "${FINALSTARTCMD[0]}" ]; then
-				FINALSTARTCMD=("${FINALSTARTCMD[@]}" "$OBSC")
-			else
-				FINALSTARTCMD=("$OBSC")
-			fi
-		fi
-		
-		if [ "$USEMANGOHUD" -eq 1 ]; then
-			if [ "$MAHUARGS" != "$NON" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Exporting MANGOHUD_CONFIG with $MAHU arguments '$MAHUARGS'"
-				export MANGOHUD_CONFIG="$MAHUARGS"
-			else
-				writelog "SKIP" "${FUNCNAME[0]} - Not exporting  MANGOHUD_CONFIG '$MAHUARGS'"
-			fi
-
-			if [ "$MAHUVAR" -eq 1 ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Exporting MANHOGUD variable and skipping all $MAHU binary settings, because MAHUVAR is '$MAHUVAR'"
-				export MANGOHUD=1
-			else
-				if [ -f "$MAHUBIN" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - $MAHU is enabled"
-					if [ "$LDPMAHU" -eq 1 ]; then
-						writelog "INFO" "${FUNCNAME[0]} - Preloading $MAHU"
-						export LD_PRELOAD="$LD_PRELOAD $MAHUBIN"
-					else
-						if [ -n "${FINALSTARTCMD[0]}" ]; then
-							FINALSTARTCMD=("${FINALSTARTCMD[@]}" "$MAHUBIN")
-						else
-							FINALSTARTCMD=("$MAHUBIN")
-						fi	
-					fi
-				else
-					writelog "WARN" "${FUNCNAME[0]} - $MAHU binary not found - disabling"
-					USEMANGOHUD=0
-				fi
-			fi
-		fi
+		FINALSTARTCMD=( "${FINALOUTCMD[@]}" )  # Use FINALOUTCMD from buildCustomCmdLaunch
 
 		if [ -n "${SLRCMD[0]}" ]; then
 			if [ -n "${FINALSTARTCMD[0]}" ]; then
