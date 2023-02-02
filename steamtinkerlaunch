@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v12.12.20230202-5 (customprogram-externalprogram-args)"
+PROGVERS="v12.12.20230202-6 (customprogram-externalprogram-args)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -10937,7 +10937,7 @@ function launchCustomProg {
 	
 	if [ -z "$CUSTOMCMD" ]; then
 		writelog "ERROR" "${FUNCNAME[0]} - CUSTOMCMD variable is empty - but it shouldn't be empty here!"
-	fi	
+	fi
 	
 	CHCUSTDIR=0
 	if [ -n "$1" ]; then
@@ -11010,9 +11010,17 @@ function launchCustomProg {
 			writelog "INFO" "${FUNCNAME[0]} - Changed pwd into the custom directory '$PWD'"
 		fi
 
-		# Cannot always rely on `file` to return `PE32` even for Windows executables -- See #710
+		# Putting logic here means we have FINALOUTCMD for Wine/Proton *and* native games
+		if [ "$ONLY_CUSTOMCMD" -eq 1 ]; then 
+			writelog "INFO" "${FUNCNAME[0]} - ONLY_CUSTOMCMD was set to '$ONLY_CUSTOMCMD', so checking for custom arguments like MangoHUD and GameScope"
+			buildCustomCmdLaunch  # Create FINALOUTCMD
+			writelog "INFO" "${FUNCNAME[0]} - Generated arguments for custom command are now '${FINALOUTCMD[*]}'"
+		fi
+
+		# Cannot always rely on `file` to return `PE32` even for Windows executables -- See #710 (seems to be when exe files are built on Linux they are not PE32)
 		if [ "$(file "$CUSTCOM" | grep -c "PE32")" -eq 1 ] || grep -q ".bat" <<< "$CUSTCOM" || [ "$CUSTOMCMDFORCEWIN" -eq 1 ]; then
 			if [ "$CUSTOMCMDFORCEWIN" -eq 1 ]; then
+				# Force custom command to use Wine/Proton, even if we do not detect it as a valid Windows binary
 				writelog "INFO" "${FUNCNAME[0]} - CUSTOMCMDFORCEWIN is '$CUSTOMCMDFORCEWIN' - User wants to force this custom command as a Windows program"
 				if [ "$(file "$CUSTCOM" | grep -c "PE32")" -eq 0 ]; then
 					writelog "WARN" "${FUNCNAME[0]} - Custom command does not appear to be a Windows program by normal SteamTinkerLaunch checks, but CUSTOMCMDFORCEWIN was enabled, so using Proton anyway"
@@ -11023,16 +11031,7 @@ function launchCustomProg {
 				writelog "INFO" "${FUNCNAME[0]} - '$CUSTCOM' seems to be a MS Windows program - starting through proton"
 			fi
 
-			# TODO somewhere around here, attach arguments like mangohud/gamescope/etc to $LACO if we have ONLY_CUSTOMCMD
-			if [ "$ONLY_CUSTOMCMD" -eq 1 ]; then 
-				writelog "INFO" "${FUNCNAME[0]} - ONLY_CUSTOMCMD was set to '$ONLY_CUSTOMCMD', so checking for custom arguments like MangoHUD and GameScope"
-
-				buildCustomCmdLaunch
-
-				writelog "INFO" "${FUNCNAME[0]} - Generated arguments for custom command are now '${FINALOUTCMD[*]}'"
-			fi
-
-			if [ "$USEWICO" -eq 1 ] && [ "$(file "$CUSTCOM" | grep -c "(console)")" -eq 1 ]; then
+			if [ "$USEWICO" -eq 1 ] && [ "$(file "$CUSTCOM" | grep -c "(console)")" -eq 1 ]; then  # Command line Wine/Proton custom program
 				writelog "INFO" "${FUNCNAME[0]} - '$CUSTCOM' seems to be a MS console program - starting using '$WICO'"
 				if [ "$FORK_CUSTOMCMD" -eq 1 ]; then	
 					writelog "INFO" "${FUNCNAME[0]} - FORK_CUSTOMCMD is set to 1 - forking the custom program in background and continue"
@@ -11043,7 +11042,7 @@ function launchCustomProg {
 				else
 					extProtonRun "RC" "$LACO" "$CUSTOMCMD_ARGS"
 				fi
-			else
+			else  # GUI Wine/Proton program
 				writelog "INFO" "${FUNCNAME[0]} - '$CUSTCOM' seems to be a MS gui program - starting regularly"
 
 				if [ "$FORK_CUSTOMCMD" -eq 1 ]; then	
@@ -11056,7 +11055,10 @@ function launchCustomProg {
 					extProtonRun "R" "$LACO" "$CUSTOMCMD_ARGS"
 				fi
 			fi
-		else
+		else  # Native custom command 
+			writelog "INFO" "${FUNCNAME[0]} - Seems like we may have a Linux executable here"
+
+			# Arguments to append to executable
 			if [ -z "$CUSTOMCMD_ARGS" ] || [ "$CUSTOMCMD_ARGS" == "$NON" ]; then
 				RUNCUSTOMCMD_ARGS=""
 			else
@@ -11064,22 +11066,36 @@ function launchCustomProg {
 				mapfile -d " " -t -O "${#RUNCUSTOMCMD_ARGS[@]}" RUNCUSTOMCMD_ARGS < <(printf '%s' "$CUSTOMCMD_ARGS")
 			fi
 
+			# Custom program args to preceed executable (e.g. /usr/bin/gamemode /usr/bin/gamescope -- ./game.sh) 
+			if [ -z "$FINALOUTCMD" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - No external program args here it seems"
+				RUNEXTPROGRAMARGS=( "" )  # Initialise to array with empty string so we don't have to do checks in each if block
+			else
+				writelog "INFO" "${FUNCNAME[0]} - Looks like we got some external program args, '${FINALOUTCMD}'"
+				mapfile -d " " -t -O "${#RUNEXTPROGRAMARGS[@]}" RUNEXTPROGRAMARGS < <(printf '%s' "$FINALOUTCMD")
+			fi
+
+			FWAIT=2
+
+			# Launch native game
 			if [ -n "$1" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Starting only the '$WICO' with command: '$LACO'"
-				"$LACO"
+				"${RUNEXTPROGRAMARGS[@]}" "$LACO"
 				writelog "STOP" "######### CLEANUP #########"
 				closeSTL "######### DONE - $PROGNAME $PROGVERS #########"
 				exit
 			else
 				writelog "INFO" "${FUNCNAME[0]} - '$CUSTCOM' doesn't seem to be a MS Windows exe - regular start (without further analysing)"
-				if [ "$FORK_CUSTOMCMD" -eq 1 ]; then	
+				if [ "$FORK_CUSTOMCMD" -eq 1 ]; then  # Forked native custom program
 					writelog "INFO" "${FUNCNAME[0]} - FORK_CUSTOMCMD is set to 1 - forking the custom program in background and continue"
-					(sleep 2; "$LACO" "${RUNCUSTOMCMD_ARGS[@]}") &
-				else
-					"$LACO" "${RUNCUSTOMCMD_ARGS[@]}"
+					(sleep "$FWAIT"; "${RUNEXTPROGRAMARGS[@]}" "$LACO" "${RUNCUSTOMCMD_ARGS[@]}") &
+				else  # Regular native executable
+					writelog "INFO" "${FUNCNAME[0]} - Starting native custom command regularly"
+					"${RUNEXTPROGRAMARGS[@]}" "$LACO" "${RUNCUSTOMCMD_ARGS[@]}"
 				fi
 			fi
 		fi
+
 		if [ "$CHCUSTDIR" -eq 1 ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Changing pwd into previous directory"
 			cd - >/dev/null || return
