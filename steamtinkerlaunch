@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v12.12.20230203-3"
+PROGVERS="v12.12.20230210-1 (slr-fix)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -520,6 +520,7 @@ STLPROTSTUSDIR="$STLPROTDIR/$STUS"
 STLEARLYPROTCONF="$STLPROTDIR/earlyproton.conf"
 PROCU="proton/custom"
 CTVDF="compatibilitytool.vdf"
+TOMA="toolmanifest.vdf"
 LIFOVDF="libraryfolders.vdf"
 SCV="sharedconfig.vdf"
 AIVDF="$APIN.vdf"
@@ -19061,7 +19062,7 @@ function setSLRReap {
 		fi
 		
 		if [ "$HAVESLR" -eq 1 ] && [ "$USESLR" -eq 1 ]; then
-			writelog "INFO" "${FUNCNAME[0]} - ## SLR is enabled via USESLR=$USESLR - prepending SLR from command line to the current launch command"
+			writelog "INFO" "${FUNCNAME[0]} - ## SLR is enabled via =$USESLR - prepending SLR from command line to the current launch command"
 			SLRCMD=("${RUNSLR[@]}")
 		fi
 
@@ -19077,7 +19078,41 @@ function setSLRReap {
 				SLRCMD=("${LASTSLRARR[@]}")
 				RUNFORCESLR=1
 			else
-				writelog "SKIP" "${FUNCNAME[0]} - No SLR was provided via command line, so configuration USESLR '$USESLR' is ignored '${LASTSLR% --verb*}' $FORCESLR"
+				# Steam usually does not pass the SLR in the start command anymore, and gets it
+				# from the `toolmanifest.vdf` with the `"require_tool_appid": "<app_id>"`
+				#
+				# Get the appropriate SLR from this required AppID and pass it to the launch options
+				# Currently only checks this for Proton, probably fine but if this changes in future we may need to reconsider -- Perhaps other tools will pass SLR from the command line?
+				# It is also possible that compatibility tools' `require_tool_appid` may *not* be SLR, so we do a loose check to see if this is an SLR
+				# Probably it will always be though, I have not seen a case where it isn't
+				writelog "INFO" "${FUNCNAME[0]} - No SLR provided from command line, attempting to fetch required SLR from current compatibility tool's '$TOMA.vdf'"
+				PROTON_TOOLMANIFEST="$( dirname "$RUNPROTON" )/$TOMA"
+
+				if [ -f "$PROTON_TOOLMANIFEST" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Found tool manifest at '$TOMA.vdf', attempting to get 'require_tool_appid' value..."
+					REQUIRED_APPID="$( getValueFromAppManifest "require_tool_appid" "$PROTON_TOOLMANIFEST" )"  # ToolManifest.vdf and some other files have identical structures to AppManifest files, so this works :-)
+					
+					if [ -n "$REQUIRED_APPID" ]; then
+						writelog "INFO" "${FUNCNAME[0]} - Got 'require_tool_appid' from '$PROTON_TOOLMANIFEST' ('$REQUIRED_APPID') - Trying to get path for tool"
+						SLR_PATH="$( getGameDir "$REQUIRED_APPID" "X" )"
+
+						if [ -d "$SLR_PATH" ]; then
+							writelog "INFO" "${FUNCNAME[0]} - '$SLR_PATH' exists - Path gotten from AppID for this required tool looks valid"
+							
+							# Based on usage under `usage()` in `_v2-entry-point` script,
+							# The `suite` argument can be automatically inferred if left blank
+							# We should only need to pass the verb
+
+							SLRCMD=("$SLR_PATH/_v2-entry-point --verb=$WFEAR --")
+						else
+							writelog "INFO" "${FUNCNAME[0]} - Could not get path to 'require_tool_appid ($REQUIRED_APPID)' from path - SLR_PATH '$SLR_PATH' is not a valid directory"
+						fi
+					else
+						writelog "INFO" "${FUNCNAME[0]} - Could not get 'require_tool_appid' from existing file '$PROTON_TOOLMANIFEST' - Assuming the key was not present (not all Proton versions have this, so this is probably fine)"
+					fi
+				else
+					writelog "SKIP" "${FUNCNAME[0]} - Could not get SLR, could not find tool manifest at '$PROTON_TOOLMANIFEST' - so configuration USESLR '$USESLR' is ignored '${LASTSLR% --verb*}' $FORCESLR"
+				fi
 			fi
 		fi
 	
