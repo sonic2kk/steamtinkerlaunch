@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v12.12.20230210-3 (slr-fix)"
+PROGVERS="v12.12.20230210-4 (slr-fix)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -19085,7 +19085,7 @@ function setSLRReap {
 				# Currently only checks this for Proton, probably fine but if this changes in future we may need to reconsider -- Perhaps other tools will pass SLR from the command line?
 				# It is also possible that compatibility tools' `require_tool_appid` may *not* be SLR, so we do a loose check to see if this is an SLR
 				# Probably it will always be though, I have not seen a case where it isn't
-				writelog "INFO" "${FUNCNAME[0]} - No SLR provided from command line, attempting to fetch required SLR from current compatibility tool's '$TOMA.vdf'"
+				writelog "INFO" "${FUNCNAME[0]} - No SLR provided from command line, attempting to fetch required SLR from current compatibility tool's '$TOMA'"
 				PROTON_TOOLMANIFEST="$( dirname "$RUNPROTON" )/$TOMA"
 
 				if [ -f "$PROTON_TOOLMANIFEST" ]; then
@@ -19098,24 +19098,26 @@ function setSLRReap {
 
 						# TODO maybe some kind of logic to download a required tool if not available?
 
-						if [ -d "$SLR_PATH" ]; then
-							writelog "INFO" "${FUNCNAME[0]} - '$SLR_PATH' exists - Path gotten from AppID for this required tool looks valid"
-							
-							# Based on usage under `usage()` in `_v2-entry-point` script,
-							# The `suite` argument can be automatically inferred if left blank
-							# We should only need to pass the verb
-							SLRENTRYPOINT="$SLR_PATH/_v2-entry-point"
 
-							if [ -f "$SLRENTRYPOINT" ]; then
-								writelog "INFO" "${FUNCNAME[0]} - Found Steam Linux Runtime entry point script at '$SLRENTRYPOINT'"
-								REQUIREDSLRCMD="$SLR_PATH/_v2-entry-point --verb=$WFEAR --"
-								mapfile -d " " -t -O "${#REQSLRARR[@]}" REQSLRARR < <(printf '%s' "$REQUIREDSLRCMD")
-								SLRCMD=("${REQSLRARR[@]}")
-							else
-								writelog "WARN" "${FUNCNAME[0]} - Could not find entry point script for required tool ('$REQUIRED_APPID'), maybe this is not SLR or maybe the entry point changed?"
-							fi
+						if [ ! -d "$SLR_PATH" ]; then
+							writelog "WARN" "${FUNCNAME[0]} - Could not get path to 'require_tool_appid ($REQUIRED_APPID)' from path - Will ask Steam nicely to install it"
+							steam steam://install/"$REQUIRED_APPID"  # What to do if this is not found?
+						fi
+
+						writelog "INFO" "${FUNCNAME[0]} - '$SLR_PATH' exists - Path gotten from AppID for this required tool looks valid"
+
+						# Based on usage under `usage()` in `_v2-entry-point` script,
+						# The `suite` argument can be automatically inferred if left blank
+						# We should only need to pass the verb
+						SLRENTRYPOINT="$SLR_PATH/_v2-entry-point"
+
+						if [ -f "$SLRENTRYPOINT" ]; then
+							writelog "INFO" "${FUNCNAME[0]} - Found Steam Linux Runtime entry point script at '$SLRENTRYPOINT'"
+							REQUIREDSLRCMD="$SLR_PATH/_v2-entry-point --verb=$WFEAR --"
+							mapfile -d " " -t -O "${#REQSLRARR[@]}" REQSLRARR < <(printf '%s' "$REQUIREDSLRCMD")
+							SLRCMD=("${REQSLRARR[@]}")
 						else
-							writelog "WARN" "${FUNCNAME[0]} - Could not get path to 'require_tool_appid ($REQUIRED_APPID)' from path - SLR_PATH '$SLR_PATH' is not a valid directory"
+							writelog "WARN" "${FUNCNAME[0]} - Could not find entry point script for required tool ('$REQUIRED_APPID'), maybe this is not SLR or maybe the entry point changed?"
 						fi
 					else
 						writelog "INFO" "${FUNCNAME[0]} - Could not get 'require_tool_appid' from existing file '$PROTON_TOOLMANIFEST' - Assuming the key was not present (not all Proton versions have this, so this is probably fine)"
