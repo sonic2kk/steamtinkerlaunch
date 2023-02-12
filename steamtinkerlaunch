@@ -19096,28 +19096,24 @@ function setSLRReap {
 						writelog "INFO" "${FUNCNAME[0]} - Got 'require_tool_appid' from '$PROTON_TOOLMANIFEST' ('$REQUIRED_APPID') - Trying to get path for tool"
 						SLR_PATH="$( getGameDir "$REQUIRED_APPID" "X" )"
 
-						# TODO maybe some kind of logic to download a required tool if not available?
+						if [ -d "$SLR_PATH" ]; then
+							writelog "INFO" "${FUNCNAME[0]} - '$SLR_PATH' exists - Path gotten from AppID for this required tool looks valid"
 
+							# Based on usage under `usage()` in `_v2-entry-point` script, the `suite` argument can be automatically inferred if left blank
+							# Seems we don't have to pass any verbs, at least for regular SLR and SLR Soldier (Sniper untested, no more are available at time of writing)
+							SLRENTRYPOINT="$SLR_PATH/_v2-entry-point"
 
-						if [ ! -d "$SLR_PATH" ]; then
-							writelog "WARN" "${FUNCNAME[0]} - Could not get path to 'require_tool_appid ($REQUIRED_APPID)' from path - Will ask Steam nicely to install it"
-							steam steam://install/"$REQUIRED_APPID"  # What to do if this is not found?
-						fi
-
-						writelog "INFO" "${FUNCNAME[0]} - '$SLR_PATH' exists - Path gotten from AppID for this required tool looks valid"
-
-						# Based on usage under `usage()` in `_v2-entry-point` script,
-						# The `suite` argument can be automatically inferred if left blank
-						# We should only need to pass the verb
-						SLRENTRYPOINT="$SLR_PATH/_v2-entry-point"
-
-						if [ -f "$SLRENTRYPOINT" ]; then
-							writelog "INFO" "${FUNCNAME[0]} - Found Steam Linux Runtime entry point script at '$SLRENTRYPOINT'"
-							REQUIREDSLRCMD="$SLR_PATH/_v2-entry-point --verb=$WFEAR --"
-							mapfile -d " " -t -O "${#REQSLRARR[@]}" REQSLRARR < <(printf '%s' "$REQUIREDSLRCMD")
-							SLRCMD=("${REQSLRARR[@]}")
+							if [ -f "$SLRENTRYPOINT" ]; then
+								writelog "INFO" "${FUNCNAME[0]} - Found Steam Linux Runtime entry point script at '$SLRENTRYPOINT'"
+								REQUIREDSLRCMD="$SLR_PATH/_v2-entry-point --verb=$WFEAR --"
+								mapfile -d " " -t -O "${#REQSLRARR[@]}" REQSLRARR < <(printf '%s' "$REQUIREDSLRCMD")
+								SLRCMD=("${REQSLRARR[@]}")
+							else
+								writelog "WARN" "${FUNCNAME[0]} - Could not find entry point script for required tool ('$REQUIRED_APPID'), maybe this is not SLR or maybe the entry point changed?"
+							fi
 						else
-							writelog "WARN" "${FUNCNAME[0]} - Could not find entry point script for required tool ('$REQUIRED_APPID'), maybe this is not SLR or maybe the entry point changed?"
+							writelog "WARN" "${FUNCNAME[0]} - Could not get path to 'require_tool_appid ($REQUIRED_APPID)' from path - This will need to be installed manually!"
+							writelog "WARN" "${FUNCNAME[0]} - Running a game with the requested compatibility tool outside of SteamTinkerLaunch should force Steam to download it automatically"
 						fi
 					else
 						writelog "INFO" "${FUNCNAME[0]} - Could not get 'require_tool_appid' from existing file '$PROTON_TOOLMANIFEST' - Assuming the key was not present (not all Proton versions have this, so this is probably fine)"
