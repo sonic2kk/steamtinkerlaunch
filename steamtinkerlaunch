@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v12.12.20230212-11 (slr-fix)"
+PROGVERS="v12.12.20230212-12 (slr-fix)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -19104,9 +19104,8 @@ function setSLRReap {
 				SLRCMD=("${LASTSLRARR[@]}")
 				RUNFORCESLR=1
 			else
-				# Steam usually does not pass the SLR in the start command anymore, and gets it
-				# from the `toolmanifest.vdf` with the `"require_tool_appid": "<app_id>"` for Proton games
-				# For native games, on Steam Deck it seems Valve enforce the regular Steam Linux Runtime
+				# Steam usually does not pass the SLR in the start command anymore, and gets it from the `toolmanifest.vdf` with the `"require_tool_appid": "<app_id>"` for Proton games
+				# For native games, on Steam Deck it seems Valve enforce the regular Steam Linux Runtime, so we have separate logic for fetching that
 				writelog "INFO" "${FUNCNAME[0]} - No SLR provided from command line, attempting to fetch required SLR from current compatibility tool's '$TOMA'"
 
 				SLR_PATH=""
@@ -19127,8 +19126,10 @@ function setSLRReap {
 					NATIVE_SLR_PATH="$( getGameDir "$REQUIRED_APPID" "X" )"  # Native SLR
 					if [ -d "$NATIVE_SLR_PATH" ]; then
 						SLR_PATH="$( getRequireToolAppidPath "$NATIVE_SLR_PATH" )"  # Nested SLR path for native SLR to run inside of
-						NATIVE_SLR_ENTRYPOINT="${NATIVE_SLR_PATH}/scout-on-soldier-entry-point-v2"
 
+						writelog "INFO" "${FUNCNAME[0]} - Nested Steam Linux Runtime for native game seems to be '$SLR_PATH'"
+
+						NATIVE_SLR_ENTRYPOINT="${NATIVE_SLR_PATH}/scout-on-soldier-entry-point-v2"
 						NATIVE_SLRCMD=("$NATIVE_SLR_ENTRYPOINT" "--")  # Extra part to pass for native CMD which needs to be appended to regular SLRCMD
 					else
 						writelog "WARN" "${FUNCNAME[0]} - Could not find Steam Linux Runtime with AppID '$SLRAID' for native Linux game - This will need to be installed manually!"
@@ -19153,8 +19154,10 @@ function setSLRReap {
 
 				# Passing even a blank `NATIVE_SLRCMD[@]` prevents games from launching, so we need this check
 				if [ -n "${NATIVE_SLRCMD[*]}" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Building Steam Linux Runtime command for native game"
 					SLRCMD=("${PROTON_SLRCMD[@]}" "${NATIVE_SLRCMD[@]}")  # Not really "Proton" for native games, but naming is hard
 				else
+					writelog "INFO" "${FUNCNAME[0]} - Building Steam Linux Runtime command for Proton game"
 					SLRCMD=("${PROTON_SLRCMD[@]}") 
 				fi
 			fi
