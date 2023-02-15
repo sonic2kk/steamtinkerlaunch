@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v12.12.20230215-16 (gamescope-the-adventure-continues)"
+PROGVERS="v12.12.20230215-17 (gamescope-the-adventure-continues)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -9632,22 +9632,6 @@ function setGameScopeVars {
 		fi
 	}
 
-	### TODO: Replace this with `getGameScopeArg` (the "path" / "txt" check does exactly this)
-	#
-	# Gets the path passed to a flag e.g. '--cursor /home/gaben/half life 3/cursor.png'
-	# The other args use `tr ' ' '\n'`, but we can't use this when it comes to flags because a space in the path can cause issues
-	#
-	# Even though the function name is getGameScopePathArg, it's a general function to getting text passed to args like '--vr-overlay-explicit-name'
-	# Basically args prefixed with `--`
-	function getGameScopePathArg {
-		ARGS="$1"  # e.g. "$GAMESCOPE_ARGS"
-		FLAG="$2"  # e.g. "--cursor"
-
-		ESC_FLAG="${FLAG/--/\\-\\-}"
-
-		echo "$ARGS" | sed 's:--:\n--:g' | grep -A1 "$ESC_FLAG" | head -n1 | sed "s:${FLAG}::g" | xargs
-	}
-
 	function getGameScopeGeneralOpts {
 		# GameScope Show Resolution (corresponds to -W, -H options, uppercase) -- Actual GameScope window size -- Dropdown
 		if [ -z "$GSSHWRES" ]; then
@@ -9715,14 +9699,10 @@ function setGameScopeVars {
 		GSFOOR="$( getGameScopeArg "$GAMESCOPE_ARGS" "--force-orientation" "$GSFOOR" "" "$GSNORM" "cb")"
 
 		# Custom cursor image (--cursor) -- File picker
-		if [ -z "$GSCURSOR" ]; then
-			if ! grep -qw "\-\-cursor" <<< "$GAMESCOPE_ARGS"; then
-				GSCURSOR=""
-				GSENABLECUSTCUR="0"
-			else
-				GSCURSOR="$( getGameScopePathArg "$GAMESCOPE_ARGS" "--cursor" )"
-				GSENABLECUSTCUR="1"
-			fi
+		GSENABLECUSTCUR="0"
+		GSCURSOR="$( getGameScopeArg "$GAMESCOPE_ARGS" "--cursor" "$GSCURSOR" "" "" "path" )"
+		if [ -n "$GSCURSOR" ]; then
+			GSENABLECUSTCUR="1"
 		fi
 	}
 
@@ -9802,14 +9782,10 @@ function setGameScopeVars {
 		GSVRDEFNAM="$( getGameScopeArg "$GAMESCOPE_ARGS" "--vr-overlay-default-name" "$GSVRDEFNAM" "" "" "txt" )"	
 
 		# SteamVR Overlay Icon (--vr-overlay-icon) -- Similar to cursor picker -- File picker 
-		if [ -z "$GSVRICON" ]; then
-			if ! grep -qw "\-\-vr\-overlay\-icon" <<< "$GAMESCOPE_ARGS"; then
-				GSVRICON=""
-				GSVRICONENABLE="0"
-			else
-				GSVRICON="$( getGameScopePathArg "$GAMESCOPE_ARGS" "--vr-overlay-icon" )"
-				GSVRICONENABLE="1"
-			fi
+		GSVRICONENABLE="0"
+		GSVRICON="$( getGameScopeArg "$GAMESCOPE_ARGS" "--vr-overlay-icon" "$GSVRICON" "" "" "path" )"
+		if [ -n "$GSVRICON" ]; then
+			GSVRICONENABLE="1"
 		fi
 
 		# Focus VR overlay immediately (--vr-overlay-show-immediately) -- Checkbox
@@ -9883,15 +9859,11 @@ function setGameScopeVars {
 
 	function getGameScopeAdvancedOpts {
 		# Path to write GameScope statistics to (--stats-path) -- File picker
-		# '-T' option is also availsble, but we have to use '--stats-path' because of how 'getGameScopePathArg' works
-		if [ -z "$GSSTATSPATH" ]; then
-			if ! grep -qw "\-\-stats\-path" <<< "$GAMESCOPE_ARGS"; then
-				GSSTATSPATH=""
-				GSSTATSPATHENABLE="0"
-			else 
-				GSSTATSPATH="$( getGameScopePathArg "$GAMESCOPE_ARGS" "--stats-path" )"
-				GSSTATSPATHENABLE="1"
-			fi
+		# '-T' option is also availsble, but we have to use '--stats-path' because of how 'getGameScopeArg' works
+		GSSTATSPATHENABLE="0"
+		GSSTATSPATH="$( getGameScopeArg "$GAMESCOPE_ARGS" "--stats-path" "$GSSTATSPATH" "" "" "path" )"
+		if [ -n "$GSSTATSPATH" ]; then
+			GSSTATSPATHENABLE="1"
 		fi
 
 		# Amount of time in milliseconds to wait before hiding the cursor (-C) -- Spinner
