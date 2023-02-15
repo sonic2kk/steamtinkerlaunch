@@ -9608,6 +9608,26 @@ function checkXliveless {
 # NOTE: Logic for some options here could potentially be improved in future to avoid duplication
 function GameScopeGui {
 
+	# ---
+	# TODO function that can replace all of the duplicated GameScope arg checks
+	# ---
+	# Untested prototype below:
+	function getGameScopeArg {
+		ARGS="$1"  # e.g. "$GAMESCOPE_ARGS"
+		FLAG="${2/--/\\-\\-}"  # e.g. "--hdr-enabled" becomes "\-\-hdr\-enabled"
+		VAR="$3"  # e.g. "$GSHDR"
+		TRUEVAL="$4"  # e.g. "1"
+		DEFVAL="$5"  # e.g. "0"
+
+		if [ -z "$VAR" ]; then
+			if ! grep -qw "$FLAG" <<< "$ARGS"; then
+				echo "$DEFVAL"
+			else
+				echo "$TRUEVAL"
+			fi
+		fi
+	}
+
 	# Gets the path passed to a flag e.g. '--cursor /home/gaben/half life 3/cursor.png'
 	# The other args use `tr ' ' '\n'`, but we can't use this when it comes to flags because a space in the path can cause issues
 	function getGameScopePathArg {
@@ -9619,7 +9639,6 @@ function GameScopeGui {
 		echo "$ARGS" | sed 's:--:\n--:g' | grep -A1 "$ESC_FLAG" | head -n1 | sed "s:${FLAG}::g" | xargs
 	}
 
-	# TODO: Could we make the fullscreen options a dropdown?
 	function getGameScopeGeneralOpts {
 		# GameScope Show Resolution (corresponds to -W, -H options, uppercase) -- Actual GameScope window size -- Dropdown
 		if [ -z "$GSSHWRES" ]; then
@@ -9808,7 +9827,7 @@ function GameScopeGui {
 
 		# HDR Wide Gammut for SDR (--hdr-wide-gammut-for-sdr) - Checkbox
 		if [ -z "$GSHDRWGFS" ]; then
-			if grep -qw "\-\-hdr\-wide-gammut-for-sdr" <<< "$GAMESCOPE_ARGS"; then
+			if grep -qw "\-\-hdr\-wide\-gammut\-for\-sdr" <<< "$GAMESCOPE_ARGS"; then
 				GSHDRWGFS="1"
 			else
 				GSHDRWGFS="0"
@@ -9821,6 +9840,41 @@ function GameScopeGui {
 				GSHDRSCNITS="400"  # 400 nits is the default value according to `gamescope --help` 
 			else 
 				GSHDRSCNITS="$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -A1 "\-\-hdr\-sdr\-content\-nits" | tail -n1)"
+			fi
+		fi
+
+		# HDR Inverse Tone Mapping Enabled (--hdr-itm-enable) -- Checkbox
+		if [ -z "$GSHDRITM" ]; then
+			if ! grep -qw "\-\-hdr\-itm\-enable" <<< "$GAMESCOPE_ARGS"; then
+				GSHDRITM="0"
+			else
+				GSHDRITM="1"
+			fi
+		fi
+
+		# HDR Inverse Tone Mapping SDR NITs (--hdr-itm-sdr-nits) -- Spinner
+		# Default: 100 nits
+		# Max: 1000 nits
+		#
+		# We default to 0 though in case a user doesn't want to use it, so we won't pass when this is 0
+		if [ -z "$GSHDRITMSDRNITS" ]; then
+			if ! grep -qw "\-\-hdr\-itm\-sdr\-nits" <<< "$GAMESCOPE_ARGS"; then
+				GSHDRITMSDRNITS="0"
+			else
+				GSHDRITMSDRNITS="$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -A1 "\-\-hdr\-itm\-sdr\-nits" | tail -n1)"
+			fi
+		fi
+
+		# HDR Inverse Tone Mapping Target NITs (--hdr-itm-target-nits) -- Spinner
+		# Default: 1000 nits
+		# Max: 10000 nits
+		#
+		# Like `GSHDRITMSDRNITS`, we default to 0 because we don't want to always pass a value
+		if [ -z "$GSHDRITMTGTNITS" ]; then
+			if ! grep -qw "\-\-hdr\-itm\-target\-nits" <<< "$GAMESCOPE_ARGS"; then
+				GSHDRITMTGTNITS="0"
+			else
+				GSHDRITMTGTNITS="$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -A1 "\-\-hdr\-itm\-target\-nits" | tail -n1)"
 			fi
 		fi
 	}
