@@ -9619,6 +9619,15 @@ function GameScopeGui {
 		echo "$ARGS" | sed 's:--:\n--:g' | grep -A1 "$ESC_FLAG" | head -n1 | sed "s:${FLAG}::g" | xargs
 	}
 
+	# TODO: Could we make the fullscreen options a dropdown?
+	function getGameScopeGeneralOpts {
+		:
+	}
+
+	function getGameScopeFilteringOpts {
+		:
+	}
+
 	if [ -n "$1" ]; then
 		AID="$1"
 		setAIDCfgs
@@ -9651,6 +9660,7 @@ function GameScopeGui {
 
 	GSDRMMODES="${GSDEF}!cvt!fixed"
 
+	### GENERAL OPTIONS START ###
 	# GameScope Show Resolution (corresponds to -W, -H options, uppercase) -- Actual GameScope window size -- Dropdown
 	if [ -z "$GSSHWRES" ]; then
 		if ! grep -qw "\-w" <<< "$GAMESCOPE_ARGS" || ! grep -qw "\-h" <<< "$GAMESCOPE_ARGS"; then
@@ -9669,10 +9679,12 @@ function GameScopeGui {
 		fi
 	fi
 
+	# Default internal resolution to $NON ('none') if blank -- Ensures we don't pass invalid resolution to GameScope
 	if [ -z "$GSINTRES" ]; then
 		GSINTRES="$NON"
 	fi
 
+	# Default show resolution to $NON ('none') if blank -- Ensures we don't pass invalid resolution to GameScope
 	if [ -z "$GSSHWRES" ]; then
 		GSSHWRES="$NON"
 	fi
@@ -9695,6 +9707,76 @@ function GameScopeGui {
 		fi
 	fi
 
+	# Fullscreen (-f) -- Checkbox
+	if [ -z "$GSFS" ]; then
+		if grep -qw "\-f" <<< "$GAMESCOPE_ARGS"; then
+			GSFS="1"
+		else
+			GSFS="0"
+		fi
+	fi
+
+	# Borderless Window (-b) -- Checkbox
+	if [ -z "$GSBW" ]; then
+		if grep -qw "\-b" <<< "$GAMESCOPE_ARGS"; then
+			GSBW="1"
+		else
+			GSBW="0"
+		fi
+	fi
+
+	# Steam Integration (-e) -- Can fix some strange bugs with some peripherals -- Checkbox
+	if [ -z "$GSSE" ]; then 
+		if grep -qw "\-e" <<< "$GAMESCOPE_ARGS"; then 
+			GSSE="1"
+		else
+			GSSE="0"
+		fi
+	fi
+
+	# Force windows to be fullscreen inside the nested dislay (--force-windows-fullscreen) -- Checkbox 
+	if [ -z "$GSFWF" ]; then
+		if grep -qw "\-\-force\-windows\-fullscreen" <<< "$GAMESCOPE_ARGS"; then
+			GSFWF="1"
+		else
+			GSFWF="0"
+		fi
+	fi
+
+	# Force grab cursor -- Keeps cursor inside GameScope nested display -- Checkbox
+	if [ -z "$GSFGC" ]; then
+		if ! grep -qw "\-\-force\-grab\-cursor"; then
+			GSFGC="0"
+		else
+			GSFGC="1"
+		fi
+	fi
+
+	# Orientation (--force-orientation) -- Can be either 'left', 'right', 'normal', 'upsidedown' -- Dropdown
+	# Defaults to 'normal' ('GSNORM')
+	if [ -z "$GSFOOR" ]; then
+		if ! grep -qw "\-\-force\-orientation" <<< "$GAMESCOPE_ARGS"; then
+			GSFOOR="$GSNORM"  # Default
+		else
+			GSFOOR="$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -A1 "\-\-force\-orientation" | tail -n1)"
+		fi
+	fi
+
+	# Custom cursor image (--cursor) -- File picker
+	if [ -z "$GSCURSOR" ]; then
+		if ! grep -qw "\-\-cursor" <<< "$GAMESCOPE_ARGS"; then
+			GSCURSOR=""
+			GSENABLECUSTCUR="0"
+		else
+			GSCURSOR="$( getGameScopePathArg "$GAMESCOPE_ARGS" "--cursor" )"
+			GSENABLECUSTCUR="1"
+		fi
+	fi
+	### GENERAL OPTIONS END
+
+
+
+	### FILTERING OPTIONS START ###
 	# AMD FidelityFX 1.0 / NVIDIA Image Sharpening upscaler value -- Spinner
 	if [ -z "$GSFSRS" ]; then
 		if ! grep -qw "$FSRS_STR" <<< "$GAMESCOPE_ARGS"; then 
@@ -9722,24 +9804,6 @@ function GameScopeGui {
 		fi
 	fi
 
-	# Fullscreen (-f) -- Checkbox
-	if [ -z "$GSFS" ]; then
-		if grep -qw "\-f" <<< "$GAMESCOPE_ARGS"; then
-			GSFS="1"
-		else
-			GSFS="0"
-		fi
-	fi
-
-	# Borderless Window (-b) -- Checkbox
-	if [ -z "$GSBW" ]; then
-		if grep -qw "\-b" <<< "$GAMESCOPE_ARGS"; then
-			GSBW="1"
-		else
-			GSBW="0"
-		fi
-	fi
-	
 	# FidelityFX 1.0 enabled (-U) -- Checkbox
 	if [ -z "$GSFSR" ]; then 
 		if grep -qw "\-U" <<< "$GAMESCOPE_ARGS"; then
@@ -9758,15 +9822,25 @@ function GameScopeGui {
 		fi
 	fi
 
-	# Steam Integration (-e) -- Can fix some strange bugs with some peripherals -- Checkbox
-	if [ -z "$GSSE" ]; then 
-		if grep -qw "\-e" <<< "$GAMESCOPE_ARGS"; then 
-			GSSE="1"
+	# Max Scale Factor -- No idea how this option actually works, the documentation is a bit sparce but Steam Deck seems to default it to 2 (https://github.com/Plagman/gamescope/issues/588#issue-1338038588)
+	# Numberbox
+	if [ -z "$GSMSF" ]; then
+		if ! grep -qw "\-U" <<< "$GAMESCOPE_ARGS"; then
+			GSMSF="0"
 		else
-			GSSE="0"
+			GSMSF="$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -A1 "\-m" | tail -n1)"
 		fi
 	fi
 
+	# Ignore Max Scale Factor if 0
+	if [ ! "$GSMSF" == "0" ]; then
+		GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -m ${GSMSF}"
+	fi
+	### FILTERING OPTIONS END ###
+
+
+
+	### HDR OPTIONS START ###
 	# HDR (--hdr-enabled) -- Checkbox
 	if [ -z "$GSHDR" ]; then
 		if grep -qw "\-\-hdr\-enabled" <<< "$GAMESCOPE_ARGS"; then
@@ -9793,55 +9867,23 @@ function GameScopeGui {
 			GSHDRSCNITS="$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -A1 "\-\-hdr\-sdr\-content\-nits" | tail -n1)"
 		fi
 	fi
+	### HDR OPTIONS END ###
 
-	# Max Scale Factor -- No idea how this option actually works, the documentation is a bit sparce but Steam Deck seems to default it to 2 (https://github.com/Plagman/gamescope/issues/588#issue-1338038588)
-	# Numberbox
-	if [ -z "$GSMSF" ]; then
-		if ! grep -qw "\-U" <<< "$GAMESCOPE_ARGS"; then
-			GSMSF="0"
-		else
-			GSMSF="$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -A1 "\-m" | tail -n1)"
-		fi
-	fi
 
-	# Orientation (--force-orientation) -- Can be either 'left', 'right', 'normal', 'upsidedown' -- Dropdown
-	# Defaults to 'normal' ('GSNORM')
-	if [ -z "$GSFOOR" ]; then
-		if ! grep -qw "\-\-force\-orientation" <<< "$GAMESCOPE_ARGS"; then
-			GSFOOR="$GSNORM"  # Default
-		else
-			GSFOOR="$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -A1 "\-\-force\-orientation" | tail -n1)"
-		fi
-	fi
 
-	# Force windows to be fullscreen inside the nested dislay (--force-windows-fullscreen) -- Checkbox 
-	if [ -z "$GSFWF" ]; then
-		if grep -qw "\-\-force\-windows\-fullscreen" <<< "$GAMESCOPE_ARGS"; then
-			GSFWF="1"
-		else
-			GSFWF="0"
-		fi
-	fi
-
-	# Custom cursor image (--cursor) -- File picker
-	if [ -z "$GSCURSOR" ]; then
-		if ! grep -qw "\-\-cursor" <<< "$GAMESCOPE_ARGS"; then
-			GSCURSOR=""
-			GSENABLECUSTCUR="0"
-		else
-			GSCURSOR="$( getGameScopePathArg "$GAMESCOPE_ARGS" "--cursor" )"
-			GSENABLECUSTCUR="1"
-		fi
-	fi
-
-	# Force grab cursor
-	if [ -z "$GSFGC" ]; then
-		if ! grep -qw "\-\-force\-grab\-cursor"; then
-			GSFGC="0"
-		else
-			GSFGC="1"
-		fi
-	fi
+	### VR OPTIONS START ###
+	#
+	# --------------------
+	# NOTE: There are some other GameScope VR options:
+	# - --vr-overlay-physical-width
+	# - --vr-overlay-physical-curvature
+	# - --vr-overlay-physical-pre-curve-pitch
+	#
+	# These options are probably very bespoke and not important to the average user
+	# Especially the physcial width option which takes a value in metres!
+	# Usage on these options is also a bit unclear, probably documented in the GameScope source but not sure
+	# We could add these in future if it is requested
+	# --------------------
 
 	# Enable OpenVR (--openvr) -- Checkbox
 	if [ -z "$GSVR" ]; then
@@ -9925,17 +9967,11 @@ function GameScopeGui {
 			GSVRMODAL="1"
 		fi
 	fi
+	### VR OPTIONS END
 
-	# NOTE: There are some other GameScope VR options:
-	# - --vr-overlay-physical-width
-	# - --vr-overlay-physical-curvature
-	# - --vr-overlay-physical-pre-curve-pitch
-	#
-	# These options are probably very bespoke and not important to the average user
-	# Especially the physcial width option which takes a value in metres!
-	# Usage on these options is also a bit unclear, probably documented in the GameScope source but not sure
-	# We could add these in future if it is requested
+	### EMBEDDED OPTIONS START
 
+	# --------------------
 	# Default action on touch (--default-touch-mode)
 	# 0: hover
 	# 1: leftclick
@@ -9943,7 +9979,8 @@ function GameScopeGui {
 	# 3: middleclick
 	# 4: passthrough
 	# More information in the GameScope commit that added it: https://github.com/Plagman/gamescope/commit/39c9e93e0c0539d4c767e1be1c96e0d38778af12 
-	# 
+	# --------------------
+	#
 	# Dropdown
 	if [ -z "$GSDEFTOUCHMODE" ]; then
 		if ! grep -qw "\-\-default\-touch\-mode" <<< "$GAMESCOPE_ARGS"; then
@@ -10008,7 +10045,11 @@ function GameScopeGui {
 			GSDRMMODE="$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -A1 "\-\-generate\-drm\-mode" | tail -n1)"
 		fi
 	fi
+	### EMBEDDED OPTIONS END ###
 
+
+
+	### ADVANCED OPTIONS START ###
 	# Path to write GameScope statistics to (--stats-path) -- File picker
 	# '-T' option is also availsble, but we have to use '--stats-path' because of how 'getGameScopePathArg' works
 	if [ -z "$GSSTATSPATH" ]; then
@@ -10074,6 +10115,8 @@ function GameScopeGui {
 			GSPREFERVKDEVICE="1"
 		fi
 	fi
+	### ADVANCED OPTIONS END###
+
 
 	GASCOS="$("$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --scroll --window-icon="$STLICON" --form --center --on-top $WINDECO \
 			--title="$TITLE" --separator="|" \
@@ -10271,11 +10314,6 @@ function GameScopeGui {
 								writelog "INFO" "${FUNCNAME[0]} - using '--sharpness ${GSFSRS}'"
 								GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --sharpness ${GSFSRS}"
 							fi
-						fi
-
-						# Ignore Max Scale Factor if 0
-						if [ ! "$GSMSF" == "0" ]; then
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -m ${GSMSF}"
 						fi
 
 						# HDR Options
