@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v12.12.20230215-3 (gamescope-the-adventure-continues)"
+PROGVERS="v12.12.20230215-5 (gamescope-the-adventure-continues)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -9614,15 +9614,20 @@ function GameScopeGui {
 	# Untested prototype below:
 	function getGameScopeArg {
 		ARGS="$1"  # e.g. "$GAMESCOPE_ARGS"
-		FLAG="$2"
 		FLAG="$( echo "$2" | sed 's:-:\\-:g' )"  # e.g. "--hdr-enabled" becomes "\-\-hdr\-enabled"
 		VAR="$3"  # e.g. "$GSHDR"
 		TRUEVAL="$4"  # e.g. "1"
 		DEFVAL="$5"  # e.g. "0"
+		ARGTYPE="${6,,}"  # e.g. "chk", "cb", etc (matches Yad widget types)
 
 		if [ -z "$VAR" ]; then
 			if grep -qw "$FLAG" <<< "$ARGS"; then
-				echo "$TRUEVAL"
+				# Get the value given to the argument as the enabled/selected value, e.g. get '2' from '--fsr-sharpness 2' if we passed '--fsr-sharpness'
+				if [[ $ARGTYPE =~ "cb" ]] || [[ $ARGTYPE =~ "num" ]]; then
+					echo "$(tr ' ' '\n' <<< "$ARGS" | grep -A1 "$FLAG" | tail -n1)"
+				else
+					echo "$TRUEVAL"
+				fi
 			else
 				echo "$DEFVAL"
 			fi
@@ -9670,49 +9675,41 @@ function GameScopeGui {
 		fi
 
 		# Focused Frame Rate Limit -- Dropdown
-		if [ -z "$GSFLR" ]; then
-			if ! grep -qw "\-r" <<< "$GAMESCOPE_ARGS"; then
-				GSFLR="$UL"
-			else
-				GSFLR="$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -A1 "\-r" | tail -n1)"
-			fi
-		fi
+		GSFLR="$( getGameScopeArg "$GAMESCOPE_ARGS" "-r" "$GSFLR" "" "$UL" "cb")"
 
 		# Unfocused Frame Rate Limit -- Dropdown
-		if [ -z "$GSFLU" ]; then
-			if ! grep -qw "\-o" <<< "$GAMESCOPE_ARGS"; then
-				GSFLU="$UL"
-			else
-				GSFLU="$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -A1 "\-o" | tail -n1)"
-			fi
-		fi
+		GSFLU="$( getGameScopeArg "$GAMESCOPE_ARGS" "-o" "$GSFLU" "" "$UL" "cb")"
 
 		# Fullscreen (-f) -- Checkbox
 		GSFS="$( getGameScopeArg "$GAMESCOPE_ARGS" "-f" "$GSFS" "1" "0" )"
 
 		# Borderless Window (-b) -- Checkbox
-		GSBW="$( getGameScopeArg "$GAMESCOPE_ARGS" "-f" "$GSBW" "1" "0" )"
+		GSBW="$( getGameScopeArg "$GAMESCOPE_ARGS" "-b" "$GSBW" "1" "0" )"
 
 		# Steam Integration (-e) -- Can fix some strange bugs with some peripherals -- Checkbox
-		GSSE="$( getGameScopeArg "$GAMESCOPE_ARGS" "-f" "$GSSE" "1" "0" )"
+		#
+		# For some reason this doesn't work with `getGameScopeArg`
+		#
+		# GSSE="$( getGameScopeArg "$GAMESCOPE_ARGS" "-e" "$GSSE" "1" "0" )"
+		if [ -z "$GSSE" ]; then 
+			if grep -qw "\-e" <<< "$GAMESCOPE_ARGS"; then 
+				GSSE="1"
+			else
+				GSSE="0"
+			fi
+		fi
 
 		# Force windows to be fullscreen inside the nested dislay (--force-windows-fullscreen) -- Checkbox 
-		GSFWF="$( getGameScopeArg "$GAMESCOPE_ARGS" "-f" "$GSFWF" "1" "0" )"
+		GSFWF="$( getGameScopeArg "$GAMESCOPE_ARGS" "--force-windows-fullscreen" "$GSFWF" "1" "0" )"
 
 		# Force grab cursor -- Keeps cursor inside GameScope nested display -- Checkbox
-		GSFGC="$( getGameScopeArg "$GAMESCOPE_ARGS" "-f" "$GSFGC" "1" "0" )"
+		GSFGC="$( getGameScopeArg "$GAMESCOPE_ARGS" "--force-grab-cursor" "$GSFGC" "1" "0" )"
 
 		# Orientation (--force-orientation) -- Can be either 'left', 'right', 'normal', 'upsidedown' -- Dropdown
 		# Defaults to 'normal' ('GSNORM')
 		#
 		# NOTE: Passing this normally to GameScope (e.g. `gamescope --force-orientation upsidedown -- supertuxkart`) doesn't seem to do anything?
-		if [ -z "$GSFOOR" ]; then
-			if ! grep -qw "\-\-force\-orientation" <<< "$GAMESCOPE_ARGS"; then
-				GSFOOR="$GSNORM"  # Default
-			else
-				GSFOOR="$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -A1 "\-\-force\-orientation" | tail -n1)"
-			fi
-		fi
+		GSFOOR="$( getGameScopeArg "$GAMESCOPE_ARGS" "--force-orientation" "$GSFOOR" "" "$GSNORM" "cb")"
 
 		# Custom cursor image (--cursor) -- File picker
 		if [ -z "$GSCURSOR" ]; then
@@ -9737,13 +9734,7 @@ function GameScopeGui {
 		fi
 
 		# Integer scaling (-i) -- Checkbox
-		if [ -z "$GSIS" ]; then
-			if grep -qw "\-i" <<< "$GAMESCOPE_ARGS"; then
-				GSIS="1"
-			else
-				GSIS="0"
-			fi
-		fi
+		GSIS="$( getGameScopeArg "$GAMESCOPE_ARGS" "-i" "$GSIS" "1" "0" )"
 
 		# Nearest Neighbor (-n) -- Checkbox
 		if [ -z "$GSNN" ]; then 
