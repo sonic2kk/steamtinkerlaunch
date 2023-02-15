@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v12.12.20230215-8 (gamescope-the-adventure-continues)"
+PROGVERS="v12.12.20230215-10 (gamescope-the-adventure-continues)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -9614,17 +9614,21 @@ function GameScopeGui {
 	# Untested prototype below:
 	function getGameScopeArg {
 		ARGS="$1"  # e.g. "$GAMESCOPE_ARGS"
+		UNESCAPED_FLAG="$2"
 		FLAG="${2//-/\\-}"  # e.g. "--hdr-enabled" becomes "\-\-hdr\-enabled"
 		VAR="$3"  # e.g. "$GSHDR"
 		TRUEVAL="$4"  # e.g. "1"
 		DEFVAL="$5"  # e.g. "0"
-		ARGTYPE="${6,,}"  # e.g. "chk", "cb", etc (matches Yad widget types)
+		ARGTYPE="${6,,}"  # e.g. "chk", "cb", etc (matches Yad widget types mostly)
 
 		if [ -z "$VAR" ]; then
 			if grep -qw "$FLAG" <<< "$ARGS"; then
-				# Get the value given to the argument as the enabled/selected value, e.g. get '2' from '--fsr-sharpness 2' if we passed '--fsr-sharpness'
 				if [[ $ARGTYPE =~ "cb" ]] || [[ $ARGTYPE =~ "num" ]]; then
-					echo "$(tr ' ' '\n' <<< "$ARGS" | grep -A1 "$FLAG" | tail -n1)"
+					# Get the value given to the argument as the enabled/selected value, e.g. get '2' from '-U 2' if we passed '-U'
+					tr ' ' '\n' <<< "$ARGS" | grep -A1 "$FLAG" | tail -n1
+				elif [[ $ARGTYPE =~ "path" ]] || [[ $ARGTYPE =~ "txt" ]]; then
+					# Get value given to arguments with two dashes, like `--`
+					echo "$ARGS" | sed 's:--:\n--:g' | grep -A1 "$FLAG" | head -n1 | sed "s:${UNESCAPED_FLAG}::g" | xargs
 				else
 					echo "$TRUEVAL"
 				fi
@@ -9636,6 +9640,9 @@ function GameScopeGui {
 
 	# Gets the path passed to a flag e.g. '--cursor /home/gaben/half life 3/cursor.png'
 	# The other args use `tr ' ' '\n'`, but we can't use this when it comes to flags because a space in the path can cause issues
+	#
+	# Even though the function name is getGameScopePathArg, it's a general function to getting text passed to args like '--vr-overlay-explicit-name'
+	# Basically args prefixed with `--`
 	function getGameScopePathArg {
 		ARGS="$1"  # e.g. "$GAMESCOPE_ARGS"
 		FLAG="$2"  # e.g. "--cursor"
@@ -9725,7 +9732,7 @@ function GameScopeGui {
 
 	function getGameScopeFilteringOpts {
 		# AMD FidelityFX 1.0 / NVIDIA Image Sharpening upscaler value -- Spinner
-		GSFSRS="$( getGameScopeArg "$GAMESCOPE_ARGS" "--fsr-sharpness" "$GSFSRS" "" "2" "cb" )"
+		GSFSRS="$( getGameScopeArg "$GAMESCOPE_ARGS" "--fsr-sharpness" "$GSFSRS" "" "2" "num" )"
 
 		# Integer scaling (-i) -- Checkbox
 		GSIS="$( getGameScopeArg "$GAMESCOPE_ARGS" "-i" "$GSIS" "1" "0" )"
@@ -9740,7 +9747,7 @@ function GameScopeGui {
 		GSNIS="$( getGameScopeArg "$GAMESCOPE_ARGS" "-Y" "$GSNIS" "1" "0" )"
 
 		# Max Scale Factor -- No idea how this option actually works, the documentation is a bit sparce but Steam Deck seems to default it to 2 (https://github.com/Plagman/gamescope/issues/588#issue-1338038588)
-		GSMSF="$( getGameScopeArg "$GAMESCOPE_ARGS" "-m" "$GSMSF" "" "0" "cb" )"
+		GSMSF="$( getGameScopeArg "$GAMESCOPE_ARGS" "-m" "$GSMSF" "" "0" "num" )"
 
 		# Ignore Max Scale Factor if 0
 		if [ ! "$GSMSF" == "0" ]; then
@@ -9766,14 +9773,14 @@ function GameScopeGui {
 		# Max: 1000 nits
 		#
 		# We default to 0 though in case a user doesn't want to use it, so we won't pass when this is 0
-		GSHDRITMSDRNITS="$( getGameScopeArg "$GAMESCOPE_ARGS" "--hdr-itm-sdr-nits" "$GSHDRITMSDRNITS" "" "0" )"
+		GSHDRITMSDRNITS="$( getGameScopeArg "$GAMESCOPE_ARGS" "--hdr-itm-sdr-nits" "$GSHDRITMSDRNITS" "" "0" "num" )"
 
 		# HDR Inverse Tone Mapping Target NITs (--hdr-itm-target-nits) -- Spinner
 		# Default: 1000 nits
 		# Max: 10000 nits
 		#
 		# Like `GSHDRITMSDRNITS`, we default to 0 because we don't want to always pass a value
-		GSHDRITMTGTNITS="$( getGameScopeArg "$GAMESCOPE_ARGS" "--hdr-itm-target-nits" "$GSHDRITMTGTNITS" "" "0" )"
+		GSHDRITMTGTNITS="$( getGameScopeArg "$GAMESCOPE_ARGS" "--hdr-itm-target-nits" "$GSHDRITMTGTNITS" "" "0" "num" )"
 	}
 
 	function getGameScopeVROpts {
@@ -9790,31 +9797,13 @@ function GameScopeGui {
 		# --------------------
 
 		# Enable OpenVR (--openvr) -- Checkbox
-		if [ -z "$GSVR" ]; then
-			if ! grep -qw "\-\-openvr" <<< "$GAMESCOPE_ARGS"; then
-				GSVR="0"
-			else
-				GSVR="1"
-			fi
-		fi
+		GSVR="$( getGameScopeArg "$GAMESCOPE_ARGS" "--openvr" "$GSVR" "1" "0" )"
 
 		# SteamVR Explicit Name (--vr-overlay-explicit-name) -- Textbox
-		if [ -z "$GSVREXNA" ]; then
-			if ! grep -qw "\-\-vr\-overlay\-explicit\-name" <<< "$GAMESCOPE_ARGS"; then
-				GSVREXNA=""
-			else
-				GSVREXNA="$( getGameScopePathArg "$GAMESCOPE_ARGS" "--vr-overlay-default-name" )"
-			fi
-		fi
+		GSVREXNA="$( getGameScopeArg "$GAMESCOPE_ARGS" "--vr-overlay-explicit-name" "$GSVREXNA" "" "" "txt" )"	
 
 		# SteamVR Default Name when no window title available (--vr-overlay-default-name) -- Textbox
-		if [ -z "$GSVRDEFNAM" ]; then 
-			if ! grep -qw "\-\-vr\-overlay\-default\-name" <<< "$GAMESCOPE_ARGS"; then
-				GSVRDEFNAM=""
-			else
-				GSVRDEFNAM="$( getGameScopePathArg "$GAMESCOPE_ARGS" "--vr-overlay-default-name" )"
-			fi
-		fi
+		GSVRDEFNAM="$( getGameScopeArg "$GAMESCOPE_ARGS" "--vr-overlay-default-name" "$GSVRDEFNAM" "" "" "txt" )"	
 
 		# SteamVR Overlay Icon (--vr-overlay-icon) -- Similar to cursor picker -- File picker 
 		if [ -z "$GSVRICON" ]; then
@@ -9828,49 +9817,19 @@ function GameScopeGui {
 		fi
 
 		# Focus VR overlay immediately (--vr-overlay-show-immediately) -- Checkbox
-		if [ -z "$GSVRSHOIMM" ]; then
-			if ! grep -qw "\-\-vr\-overlay\-show\-immediately" <<< "$GAMESCOPE_ARGS"; then
-				GSVRSHOIMM="0"
-			else
-				GSVRSHOIMM="1"
-			fi
-		fi
+		GSVRSHOIMM="$( getGameScopeArg "$GAMESCOPE_ARGS" "--vr-overlay-show-immediately" "$GSVRSHOIMM" "1" "0" )"
 
 		# Enable SteamVR Control Bar (--vr-overlay-enable-control-bar) -- Checkbox
-		if [ -z "$GSVRCONTROLBAR" ]; then
-			if ! grep -qw "\-\-vr\-overlay\-enable\-control\-bar" <<< "$GAMESCOPE_ARGS"; then
-				GSVRCONTROLBAR="0"
-			else
-				GSVRCONTROLBAR="1"
-			fi
-		fi
+		GSVRCONTROLBAR="$( getGameScopeArg "$GAMESCOPE_ARGS" "--vr-overlay-enable-control-bar" "$GSVRCONTROLBAR" "1" "0" )"
 
 		# Enable SteamVR Keyboard Button on Control Bar (--vr-overlay-enable-control-bar-keyboard) -- Checkbox
-		if [ -z "$GSVRCONTROLBARKEYBOARD" ]; then
-			if ! grep -qw "\-\-vr\-overlay\-enable\-control\-bar\-keyboard" <<< "$GAMESCOPE_ARGS"; then
-				GSVRCONTROLBARKEYBOARD="0"
-			else
-				GSVRCONTROLBARKEYBOARD="1"
-			fi
-		fi
+		GSVRCONTROLBARKEYBOARD="$( getGameScopeArg "$GAMESCOPE_ARGS" "--vr-overlay-enable-control-bar-keyboard" "$GSVRCONTROLBARKEYBOARD" "1" "0" )"
 
 		# Enable SteamVR Close Button on Control Bar (--vr-overlay-enable-control-bar-close) -- Checkbox
-		if [ -z "$GSVRCONTROLBARCLOSE" ]; then
-			if ! grep -qw "\-\-vr\-overlay\-enable\-control\-bar\-close" <<< "$GAMESCOPE_ARGS"; then
-				GSVRCONTROLBARCLOSE="0"
-			else
-				GSVRCONTROLBARCLOSE="1"
-			fi
-		fi
+		GSVRCONTROLBARCLOSE="$( getGameScopeArg "$GAMESCOPE_ARGS" "--vr-overlay-enable-control-bar-close" "$GSVRCONTROLBARCLOSE" "1" "0" )"
 
 		# Show SteamVR Overlay as Modal (--vr-overlay-modal) -- Checkbox
-		if [ -z "$GSVRMODAL" ]; then
-			if ! grep -qw "\-\-vr\-overlay\-modal" <<< "$GAMESCOPE_ARGS"; then
-				GSVRMODAL="0"
-			else
-				GSVRMODAL="1"
-			fi
-		fi
+		GSVRMODAL="$( getGameScopeArg "$GAMESCOPE_ARGS" "--vr-overlay-modal" "$GSVRMODAL" "1" "0" )"
 	}
 
 	function getGameScopeEmbeddedOpts {
