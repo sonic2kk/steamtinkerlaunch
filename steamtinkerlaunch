@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v12.12.20230215-15 (gamescope-the-adventure-continues)"
+PROGVERS="v12.12.20230215-16 (gamescope-the-adventure-continues)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -9605,13 +9605,7 @@ function checkXliveless {
 	fi
 }
 
-# NOTE: Logic for some options here could potentially be improved in future to avoid duplication
-function GameScopeGui {
-
-	# ---
-	# TODO function that can replace all of the duplicated GameScope arg checks
-	# ---
-	# Untested prototype below:
+function setGameScopeVars {
 	function getGameScopeArg {
 		ARGS="$1"  # e.g. "$GAMESCOPE_ARGS"
 		UNESCAPED_FLAG="$2"
@@ -9638,6 +9632,8 @@ function GameScopeGui {
 		fi
 	}
 
+	### TODO: Replace this with `getGameScopeArg` (the "path" / "txt" check does exactly this)
+	#
 	# Gets the path passed to a flag e.g. '--cursor /home/gaben/half life 3/cursor.png'
 	# The other args use `tr ' ' '\n'`, but we can't use this when it comes to flags because a space in the path can cause issues
 	#
@@ -9920,6 +9916,30 @@ function GameScopeGui {
 		GSWAYLAND="$( getGameScopeArg "$GAMESCOPE_ARGS" "--expose-wayland" "$GSWAYLAND" "1" "0" )"
 	}
 
+	# Set storage vars
+	UL="unlimited"
+	FSRS_STR="\-\-fsr\-sharpness"
+	GSNORM="normal"
+	GSFOOROPTS="left!right!${GSNORM}!upsidedown"
+	GSDEF="default"
+	GSHOVER="hover:0"
+	GSLEFTCLICK="leftclick:1"
+	GSRIGHTCLICK="rightclick:2"
+	GSMIDDLECLICK="middleclick:3"
+	GSPASSTHRU="passthrough:4"
+	GSTOUCHMODES="${GSDEF}!${GSHOVER}!${GSLEFTCLICK}!${GSRIGHTCLICK}!${GSMIDDLECLICK}!${GSPASSTHRU}" # Corresponds to 0,1,2,3,4 respectively internally by GameScope -- Default is ingored and the flag is not passed to GameScope
+	GSDRMMODES="${GSDEF}!cvt!fixed"
+
+	# Get values for UI elements based on existing GameScope args 
+	getGameScopeGeneralOpts
+	getGameScopeFilteringOpts
+	getGameScopeHDROpts
+	getGameScopeVROpts
+	getGameScopeEmbeddedOpts
+	getGameScopeAdvancedOpts
+}
+
+function GameScopeGui {
 	if [ -n "$1" ]; then
 		AID="$1"
 		setAIDCfgs
@@ -9929,36 +9949,18 @@ function GameScopeGui {
 		GN="$2"
 		fixShowGnAid
 	fi
-	
+
+	# Setup Yad UI stuff
 	loadCfg "$STLGAMECFG"
 	export CURWIKI="$PPW/GameScope"
 	TITLE="${PROGNAME}-${FUNCNAME[0]}"
 	pollWinRes "$TITLE"
 	setShowPic
-	UL="unlimited"
-	
-	FSRS_STR="\-\-fsr\-sharpness"
-	
-	GSNORM="normal"
-	GSFOOROPTS="left!right!${GSNORM}!upsidedown"
 
-	GSDEF="default"
-	GSHOVER="hover:0"
-	GSLEFTCLICK="leftclick:1"
-	GSRIGHTCLICK="rightclick:2"
-	GSMIDDLECLICK="middleclick:3"
-	GSPASSTHRU="passthrough:4"
-	GSTOUCHMODES="${GSDEF}!${GSHOVER}!${GSLEFTCLICK}!${GSRIGHTCLICK}!${GSMIDDLECLICK}!${GSPASSTHRU}" # Corresponds to 0,1,2,3,4 respectively internally by GameScope -- Default is ingored and the flag is not passed to GameScope
+	# Get values for UI elements below
+	setGameScopeVars
 
-	GSDRMMODES="${GSDEF}!cvt!fixed"
-
-	getGameScopeGeneralOpts
-	getGameScopeFilteringOpts
-	getGameScopeHDROpts
-	getGameScopeVROpts
-	getGameScopeEmbeddedOpts
-	getGameScopeAdvancedOpts
-
+	# GameScope Yad options form
 	GASCOS="$("$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --scroll --window-icon="$STLICON" --form --center --on-top $WINDECO \
 			--title="$TITLE" --separator="|" \
 			--text="$(spanFont "$(strFix "$GUI_GASCOSET" "$SGNAID")" "H")" \
@@ -10138,7 +10140,6 @@ function GameScopeGui {
 						fi
 						### GENERAL OPTIONS END ###
 
-
 						### FILTERING OPTIONS ###
 						if [ "$GSIS" == "TRUE" ]; then
 							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -i"
@@ -10168,7 +10169,6 @@ function GameScopeGui {
 							fi
 						fi
 						## FILTERING OPTIONS END ###
-
 
 						### HDR OPTIONS ###
 						if [ "$GSHDR" == "TRUE" ]; then
@@ -10208,7 +10208,6 @@ function GameScopeGui {
 							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --hdr-itm-target-nits ${GSHDRITMTGTNITS}"
 						fi
 						### HDR OPTIONS END ###
-
 
 						### VR OPTIONS ###
 						if [ "$GSVR" == "TRUE" ]; then
@@ -10250,7 +10249,6 @@ function GameScopeGui {
 						fi
 						### VR OPTIONS END
 
-
 						### EMBEDDED OPTIONS ###
 						#
 						# Don't pass default touch mode option if we left at default
@@ -10273,7 +10271,6 @@ function GameScopeGui {
 							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -O ${GSPREFOUT}"
 						fi
 						# EMBEDDED OPTIONS END
-
 
 						## ADVANCED OPTIONS ###
 						# Don't pass DRM mode if "default"
@@ -10314,7 +10311,6 @@ function GameScopeGui {
 							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --expose-wayland"
 						fi
 						### ADVANCED OPTIONS END ###
-
 
 						GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --"
 			
