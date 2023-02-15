@@ -9733,6 +9733,8 @@ function GameScopeGui {
 
 		# Orientation (--force-orientation) -- Can be either 'left', 'right', 'normal', 'upsidedown' -- Dropdown
 		# Defaults to 'normal' ('GSNORM')
+		#
+		# NOTE: Passing this normally to GameScope (e.g. `gamescope --force-orientation upsidedown -- supertuxkart`) doesn't seem to do anything?
 		if [ -z "$GSFOOR" ]; then
 			if ! grep -qw "\-\-force\-orientation" <<< "$GAMESCOPE_ARGS"; then
 				GSFOOR="$GSNORM"  # Default
@@ -10119,6 +10121,16 @@ function GameScopeGui {
 				GSPREFERVKDEVICE="1"
 			fi
 		fi
+
+		# Expose Wayland (--expose-wayland) -- Checkbox
+		# Only works if client uses xdg-shell
+		if [ -z "$GSWAYLAND" ]; then
+			if ! grep -qw "\-\-expose\-wayland" <<< "$GAMESCOPE_ARGS"; then
+				GSWAYLAND="0"
+			else
+				GSWAYLAND="1"
+			fi
+		fi
 	}
 
 	if [ -n "$1" ]; then
@@ -10188,6 +10200,9 @@ function GameScopeGui {
 			--field="$GUI_GSHDR!$DESC_GSHDR ('GSHDR')":CHK "$GSHDR" \
 			--field="$GUI_GSHDRWGFS!$DESC_GSHDRWGFS ('GSHDRWGFS')":CHK "$GSHDRWGFS" \
 			--field="$GUI_GSHDRSCNITS!$DESC_GSHDRSCNITS ('GSHDRSCNITS')":NUM "${GSHDRSCNITS/#-/ -}" \
+			--field="$GUI_GSHDRITM!$DESC_GSHDRITM ('GSHDRITM')":CHK "$GSHDRITM" \
+			--field="$GUI_GSHDRITMSDRNITS!$DESC_GSHDRITMSDRNITS ('GSHDRITMSDRNITS')":NUM "${GSHDRITMSDRNITS/#-/ -}" \
+			--field="$GUI_GSHDRITMTGTNITS!$DESC_GSHDRITMTGTNITS ('GSHDRITMTGTNITS')":NUM "${GSHDRITMTGTNITS/#-/ -}" \
 			--field="$(spanFont "$GUI_GSVRSET" "H")":LBL "SKIP" \
 			--field="$GUI_GSVR!$DESC_GSVR ('GSVR')":CHK "$GSVR" \
 			--field="$GUI_GSVREXNA!$DESC_GSVREXNA ('GSVREXNA')" "$GSVREXNA" \
@@ -10214,6 +10229,7 @@ function GameScopeGui {
 			--field="$GUI_GSFORCEHDRSUPPORT!$DESC_GSFORCEHDRSUPPORT ('GSFORCEHDRSUPPORT')":CHK "$GSFORCEHDRSUPPORT" \
 			--field="$GUI_GSFORCEHDROUTPUT!$DESC_GSFORCEHDROUTPUT ('GSFORCEHDROUTPUT')":CHK "$GSFORCEHDROUTPUT" \
 			--field="$GUI_GSPREFERVKDEVICE!$DESC_GSPREFERVKDEVICE ('GSPREFERVKDEVICE')":CHK "$GSPREFERVKDEVICE" \
+			--field="$GUI_GSWAYLAND!$DESC_GSWAYLAND ('GSWAYLAND')":CHK "$GSWAYLAND" \
 			--button="$BUT_CAN:0" --button="$BUT_DONE:2" "$GEOM"
 			)"
 			case $? in
@@ -10290,7 +10306,8 @@ function GameScopeGui {
 						GSSHWH1="${GSSHWRES#*x}"
 						GSSHWH="${GSSHWH1%%-*}"
 
-						# General Options
+
+						### GENERAL OPTIONS ###
 						GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -W ${GSSHWW} -H ${GSSHWH}"
 						if [ "$GSFLR" -eq "$GSFLR" ] 2>/dev/null; then
 							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -r ${GSFLR}"
@@ -10328,8 +10345,10 @@ function GameScopeGui {
 						if [ ! "$GSFOOR" == "$GSNORM" ]; then
 							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --force-orientation ${GSFOOR}"
 						fi
+						### GENERAL OPTIONS END ###
 
-						# Filtering Options
+
+						### FILTERING OPTIONS ###
 						if [ "$GSIS" == "TRUE" ]; then
 							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -i"
 						fi
@@ -10357,8 +10376,10 @@ function GameScopeGui {
 								GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --sharpness ${GSFSRS}"
 							fi
 						fi
+						## FILTERING OPTIONS END ###
 
-						# HDR Options
+
+						### HDR OPTIONS ###
 						if [ "$GSHDR" == "TRUE" ]; then
 							# Possible to check if any HDR displays available and warn if not?
 							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --hdr-enabled"
@@ -10384,7 +10405,21 @@ function GameScopeGui {
 							writelog "INFO" "${FUNCNAME[0]} - GSHDRSCNITS (--hdr-sdr-content-nits) option for GameScope was left at default 400 - GameScope should use this anyway - Ignoring as this option would have no effect"
 						fi
 
-						# VR Options
+						if [ "$GSHDRITM" == "TRUE" ]; then
+							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --hdr-itm-enable"
+						fi
+
+						if [ ! "$GSHDRITMSDRNITS" == "0" ]; then
+							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --hdr-itm-sdr-nits ${GSHDRITMSDRNITS}"
+						fi
+
+						if [ ! "$GSHDRITMTGTNITS" == "0" ]; then
+							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --hdr-itm-target-nits ${GSHDRITMTGTNITS}"
+						fi
+						### HDR OPTIONS END ###
+
+
+						### VR OPTIONS ###
 						if [ "$GSVR" == "TRUE" ]; then
 							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --openvr"
 						fi
@@ -10422,8 +10457,10 @@ function GameScopeGui {
 						if [ "$GSVRMODAL" == "TRUE" ]; then
 							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --vr-overlay-modal"
 						fi
+						### VR OPTIONS END
 
-						# Embedded Options
+
+						### EMBEDDED OPTIONS ###
 						#
 						# Don't pass default touch mode option if we left at default
 						if [ ! "${GSDEFTOUCHMODE}" == "${GSDEF}" ]; then 
@@ -10444,7 +10481,10 @@ function GameScopeGui {
 						if [ "${#GSPREFOUT}" -gt 0 ]; then
 							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -O ${GSPREFOUT}"
 						fi
+						# EMBEDDED OPTIONS END
 
+
+						## ADVANCED OPTIONS ###
 						# Don't pass DRM mode if "default"
 						if [ ! "$GSDRMMODE" == "${GSDEF}" ]; then
 							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --generate-drm-mode ${GSDRMMODE}"
@@ -10478,6 +10518,12 @@ function GameScopeGui {
 						if [ "$GSPREFERVKDEVICE" == "TRUE" ]; then
 							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --prefer-vk-device"
 						fi
+
+						if [ "$GSWAYLAND" == "TRUE" ]; then
+							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --expose-wayland"
+						fi
+						### ADVANCED OPTIONS END ###
+
 
 						GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --"
 			
