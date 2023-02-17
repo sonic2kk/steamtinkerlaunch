@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v12.12.20230217-1"
+PROGVERS="v12.12.20230217-3"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -17957,7 +17957,59 @@ function gameScopeArgs {
 	unset GAMESCOPEARGSARR
 
 	if [ "$1" != "$NON" ]; then
+		# This implementation could be VASTLY improved!
+		#
+		# This removes paths from the GameScope args array as spaces in paths can cause issues,
+		# then builds the array, and then re-inserts the paths where it finds empty single-quotes
+		# which we wrap paths with in GameScopeGui.
+		#
+		# When saving from the main menu, single quotes seem to get cleared, so we need to ensure paths are wrapped with them. 
+
+		# Store paths from GameScope array string
+		IFS_backup=$IFS
+		IFS=$'\n'
+		
+		GAMESCOPE_ARGPATHS=($( echo "$ARGSTRING" | grep -oP "'/(.+?)'" ))
+
+		writelog "INFO" "${FUNCNAME[0]} - GameScope incoming args are '${ARGSTRING[*]}'"
+		# If the above is empty, try and surround any existing paths with quotes and then grep for the file paths from the quotes
+		# This means paths cannot contain quotes, but oh well. Compromise!
+		if [ -z "${GAMESCOPE_ARGPATHS[*]}" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Could not find any paths from incoming GameScope arguments, checking if we need to surround any paths in quotes..."
+
+			unset GAMESCOPE_ARGPATHS
+			ARGSTRING="$(echo "${ARGSTRING}" | sed "s:\(/\S* \S*\):'\1':g" )"  # Finds paths and surrounds them in single quotes so the below grep works!
+			GAMESCOPE_ARGPATHS=($( echo "$ARGSTRING" | grep -oP "'/(.+?)'" ))
+
+			if [ -n "${GAMESCOPE_ARGPATHS[*]}" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - We found some quoted paths!"
+				writelog "INFO" "${FUNCNAME[0]} - Updated GameScope args string is '$ARGSTRING'"
+			else
+				writelog "INFO" "${FUNCNAME[0]} - Still could not find any paths from incoming GameScope arguments, assuming we don't have any paths in our arguments"
+			fi
+		fi
+		IFS=$IFS_backup
+
+		writelog "INFO" "${FUNCNAME[0]} - GameScope arg paths are '${GAMESCOPE_ARGPATHS[*]}'"
+
+		# Remove all text between single quotes -- We assume all text between single quotes in this context will be a GameScope path arg
+		# This may be problematic because using Save on the Game Menu will remove the single quotes from path values to arguments, so we'll need to address that
+		ARGSTRING="$( echo "$ARGSTRING" | sed "s:'[^']*':'':g" )"
 		mapfile -d " " -t -O "${#GAMESCOPEARGSARR[@]}" GAMESCOPEARGSARR < <(printf '%s' "$ARGSTRING")
+
+		INSERTARG=$((0))  # Which path arg to insert from the `GAMESCOPE_ARGPATHS` array
+		GAMESCOPEARGSARR_COPY=("${GAMESCOPEARGSARR[@]}")
+		for i in "${!GAMESCOPEARGSARR_COPY[@]}"; do
+			if [[ "${GAMESCOPEARGSARR_COPY[$i]}" == *"'"* ]]; then
+				GSARG="$( echo "$GSARG" | sed "s:'[^']*'::g" )"  # Replace '' argument with corresponding path from GAMESCOPE_ARGPATHS
+				GAMESCOPEARGSARR_COPY[$i]="${GAMESCOPE_ARGPATHS[${INSERTARG}]}"
+				INSERTARG=$((INSERTARG + 1))
+			fi
+		done
+
+		# Reset array and re-assign it to copied array with updated argument values
+		unset GAMESCOPEARGSARR
+		GAMESCOPEARGSARR=("${GAMESCOPEARGSARR_COPY[@]}")
 	fi
 
 	if [ "${#GAMESCOPEARGSARR[@]}" -ge 1 ]; then
