@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v12.12.20230219-2"
+PROGVERS="v12.12.20230220-1"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -10718,7 +10718,7 @@ function setCommandLaunchVars {
 		else
 			GSC="$(command -v "$GAMESCOPE")"
 			
-			gameScopeArgs "$GAMESCOPE_ARGS"  # Create GameScope args array - Looks like this is called twice for regular game launches but no big deal for now :-)
+			gameScopeArgs "$GAMESCOPE_ARGS"  # Create GameScope args array - Is called twice because we call `setCommandLaunchVars` above and in `buildCustomCmdLaunch` it seems
 		fi
 	fi
 
@@ -10741,16 +10741,12 @@ function setCommandLaunchVars {
 	fi
 }
 
-# Used to create the launch command for custom commands 
-# May be applicable to launchSteamGame in future to some extent, but for now is only for custom commands
+# Used to create the launch command for games and custom commands so they can use various program functions i.e. GameScope
 function buildCustomCmdLaunch {
-
 	setCommandLaunchVars  # Checks for things like GameMode, GameScope, etc
-
-	# TODO logic around `launchSteamGame` should be taken as reference
 	FINALOUTCMD=()
 
-	# Lifted originally from `launchSteamGame` - Could potentially be used in launchSteamGame too
+	# Lifted originally from `launchSteamGame`
 	if [ -n "$GMR" ]; then
 		if [ -n "${FINALOUTCMD[0]}" ]; then
 			FINALOUTCMD=("${FINALOUTCMD[@]}" "$GMR")
@@ -10772,6 +10768,7 @@ function buildCustomCmdLaunch {
 		fi
 	fi
 
+	# OBS capture has to go after GameScope
 	if [ "$USEOBSCAP" -eq 1 ]; then
 		writelog "INFO" "${FUNCNAME[0]} - USEOBSCAP is enabled - preparing $OBSCAP command"
 		if [ -n "${FINALOUTCMD[0]}" ]; then
@@ -10781,6 +10778,7 @@ function buildCustomCmdLaunch {
 		fi
 	fi
 	
+	# MangoHud has to go inside GameScope
 	if [ "$USEMANGOHUD" -eq 1 ]; then
 		if [ "$MAHUARGS" != "$NON" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Exporting MANGOHUD_CONFIG with $MAHU arguments '$MAHUARGS'"
@@ -10810,8 +10808,6 @@ function buildCustomCmdLaunch {
 				USEMANGOHUD=0
 			fi
 		fi
-
-		# In future, SLR could be added here maybe?
 	fi
 }
 
