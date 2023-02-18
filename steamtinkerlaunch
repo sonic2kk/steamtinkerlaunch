@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v12.12.20230212-1"
+PROGVERS="v12.12.20230218-2"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -6968,9 +6968,16 @@ function pickGameWindowNameMeta {
 # - `steamtinkerlaunch list owned/installed` - Returns "Game Name (AppID)"
 # - `steamtinkerlaunch list owned/installed id/name/path/full` - Returns either AppID, Game Name, Game Paths, or all in the format "Game Name (AppID) -> /path/to/game"
 function listSteamGames {
-	LSFILTER="$1"  # e.g. "owned", "installed"
-	LSTYPE="$2"  # e.g. "id", "name", "path", "full"
+	function getGameCount {
+		if [ "$LSFILTER" == "owned" ] || [ "$LSFILTER" == "o" ]; then
+			printf "Total games owned: %s\n" "${#LISTAIDSARR[@]}"
+		else
+			printf "Total games installed: %s\n" "${#LISTAIDSARR[@]}"
+		fi
+	}
 
+	LSFILTER="$1"  # e.g. "owned", "installed"
+	LSTYPE="$2"  # e.g. "id", "name", "path", "count", "full"
 	LISTAIDS=""
 
 	if [ "$LSFILTER" == "owned" ] || [ "$LSFILTER" == "o" ]; then
@@ -7008,6 +7015,8 @@ function listSteamGames {
 					getGameDir "$AID" "1"
 				done
 			fi
+		elif [ "$LSTYPE" == "count" ]; then
+			printf "\n%s" "$( getGameCount )"
 		elif [ "$LSTYPE" == "full" ] || [ -z "$LSTYPE" ]; then  # This is the default if id/name/path/full is not passed
 			for AID in "${LISTAIDSARR[@]}"; do
 				GAMDIR="$( getGameDir "$AID" )"
@@ -7018,7 +7027,6 @@ function listSteamGames {
 				if [ $GAMDIREXISTS -eq 1 ]; then
 					GAMNAM="$( getTitleFromID "$AID" )"
 					GAMNAMEXISTS=$?
-
 					if [ $GAMNAMEXISTS -eq 1 ]; then
 						echo "$AID"  # Game name unknown, probably never installed before? Just return AppID in this case
 					else
@@ -7028,6 +7036,8 @@ function listSteamGames {
 					echo "$GAMDIR"
 				fi
 			done
+
+			printf "\n%s" "$( getGameCount )"  # Show total for "full"
 		fi
 	fi
 }
@@ -19896,8 +19906,8 @@ function howto {
 	echo "             update                    ReCreate all Collection Menus"
 	echo "                                       Can be combined with auto"
 	echo "    list <owned|installed>           List ids of <owned|o,installed|i> games"
-	echo "         <id|name|path|full>           Optionally specify whether you want to see"
-	echo "                                       each game's <id|name|path|full>"
+	echo "         <id|name|path|count|full>     Optionally specify whether you want to see"
+	echo "                                        each game's <id|name|path|count|full>"
 	echo "    meta                             Generates/Updates metadata"
 	echo "                                       for all installed games"
 	echo "    mo2                              Mod Organizer 2"
@@ -20155,7 +20165,7 @@ function commandline {
 		if [ -z "$2" ]; then
 			echo "invalid usage - must pass one additional argument to 'list' command, either 'owned' or 'installed'"
 		else
-			listSteamGames "$2" "$3"  # 3rd parameter is optional
+			listSteamGames "$2" "$3" # 3rd parameter is optional
 		fi
 	elif [ "$1" == "meta" ]; then
 		createMetaData "yes"
@@ -22942,7 +22952,7 @@ function steamdedeckt {
 			notiShow "$NOTY_STEAMDECK_INSTALL" "X"
 			echo "$NOTY_STEAMDECK_INSTALL on Steam Deck"
 
-			if ! ping -q -c1 archlinux.org &>/dev/null; then
+			if ! ((ping -q -c1 archlinux.org &>/dev/null) || (ping -q -c1 google.com &>/dev/null)); then
 				INTERNETCONNECTION=0
 				writelog "WARN" "${FUNCNAME[0]} - No Internet Connection detected, attempting to install SteamTinkerLaunch offline - This may not succeed!"
 				writelog "WARN" "${FUNCNAME[0]} - Make sure you have either manually installed all dependencies, or added all manual dependency archives to '$STLDEPS'"
