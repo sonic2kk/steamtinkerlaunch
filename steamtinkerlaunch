@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v12.12.20230218-1"
+PROGVERS="v12.12.20230218-2"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -156,6 +156,7 @@ FIXGAMESCOPE=0
 SMALLDESK=0
 VTX_DOTNET_ROOT="c:\\Program Files\\dotnet\\\\"
 STLQUIET=0
+SLRAID="1070560"  # Hardcoded SLR AppID for native games -- See `setSLRReap`
 
 ### default vars ###
 
@@ -520,6 +521,7 @@ STLPROTSTUSDIR="$STLPROTDIR/$STUS"
 STLEARLYPROTCONF="$STLPROTDIR/earlyproton.conf"
 PROCU="proton/custom"
 CTVDF="compatibilitytool.vdf"
+TOMA="toolmanifest.vdf"
 LIFOVDF="libraryfolders.vdf"
 SCV="sharedconfig.vdf"
 AIVDF="$APIN.vdf"
@@ -19063,6 +19065,31 @@ function setWineVars {
 	fi
 }
 
+# Get path to 'require_tool_appid' specified in toolmanifest.vdf 
+function getRequireToolAppidPath {
+	COMPATTOOLPATH="$1"
+
+	if [ -d "$COMPATTOOLPATH" ]; then
+		TOMAPATH="${COMPATTOOLPATH}/$TOMA"
+		if [ -f "$TOMAPATH" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Found tool manifest at '$TOMAPATH', attempting to get 'require_tool_appid' value..."
+			
+			REQUIRETOOLAID="$( getValueFromAppManifest "require_tool_appid" "$TOMAPATH" )"  # toolmanifest.vdf and some other files have identical structures to AppManifest files, so this works :-)
+			if [ -n "$REQUIRETOOLAID" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Got 'require_tool_appid' from '$TOMAPATH' ('$REQUIRETOOLAID') - Returning path to tool"
+
+				getGameDir "$REQUIRETOOLAID" "X"
+			else
+				writelog "INFO" "${FUNCNAME[0]} - Could not get 'require_tool_appid' from existing file '$TOMAPATH' - Assuming the key was not present"
+			fi
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - Could not get Steam Linux Runtime, could not find tool manifest at '$TOMAPATH'"
+		fi
+	else
+		writelog "INFO" "${FUNCNAME[0]} - Could not find directory for specified compat tool '$COMPATTOOLPATH'"
+	fi
+}
+
 function setSLRReap {
 	if [ -n "$USESLR" ] && [ -n "$HAVESLR" ]; then
 		if [ "$HAVESLRCT" -eq 1 ] && [ "$USESLR" -eq 1 ]; then
@@ -19087,7 +19114,62 @@ function setSLRReap {
 				SLRCMD=("${LASTSLRARR[@]}")
 				RUNFORCESLR=1
 			else
-				writelog "SKIP" "${FUNCNAME[0]} - No SLR was provided via command line, so configuration USESLR '$USESLR' is ignored '${LASTSLR% --verb*}' $FORCESLR"
+				# Steam usually does not pass the SLR in the start command anymore, and gets it from the `toolmanifest.vdf` with the `"require_tool_appid": "<app_id>"` for Proton games
+				# For native games, on Steam Deck it seems Valve enforce the regular Steam Linux Runtime, so we have separate logic for fetching that
+				writelog "INFO" "${FUNCNAME[0]} - No SLR provided from command line, attempting to fetch required SLR from current compatibility tool's '$TOMA'"
+
+				SLR_PATH=""
+				SLRENTRYPOINT=""
+				SLRVERB=""
+				PROTON_SLRCMD=("")
+				NATIVE_SLRCMD=("")
+
+				# Pressure Vessel Funtime 2nd Edition Ver. 2.31
+				# Get SLR Paths
+				if [ "$ISGAME" -eq 3 ]; then
+					# Native games already have a hardcoded initial native SLR AppID, so we can get the path from this hardcoded AppID
+					# However they need to get the required "nested" SLR from the toolmanifest from the hardcoded native SLR - This is the SLR that the regular native SLR runs inside of
+					# This nested AppID is stored in the hardcoded SLR's toolmanifest
+					writelog "INFO" "${FUNCNAME[0]} - Looks like we have a native Linux game here - Checking for plain SLR (AppID '$SLRAID')"
+					REQUIRED_APPID="$SLRAID"  # AppID of native SLR
+
+					NATIVE_SLR_PATH="$( getGameDir "$REQUIRED_APPID" "X" )"  # Native SLR
+					if [ -d "$NATIVE_SLR_PATH" ]; then
+						SLR_PATH="$( getRequireToolAppidPath "$NATIVE_SLR_PATH" )"  # Nested SLR path for native SLR to run inside of
+
+						writelog "INFO" "${FUNCNAME[0]} - Nested Steam Linux Runtime for native game seems to be '$SLR_PATH'"
+
+						NATIVE_SLR_ENTRYPOINT="${NATIVE_SLR_PATH}/scout-on-soldier-entry-point-v2"
+						NATIVE_SLRCMD=("$NATIVE_SLR_ENTRYPOINT" "--")  # Extra part to pass for native CMD which needs to be appended to regular SLRCMD
+					else
+						writelog "WARN" "${FUNCNAME[0]} - Could not find Steam Linux Runtime with AppID '$SLRAID' for native Linux game - This will need to be installed manually!"
+					fi
+				else
+					# Path to SLR based on AppID in Proton's `toolmanifest.vdf`
+					SLR_PATH="$( getRequireToolAppidPath "$( dirname "$RUNPROTON" )" )"
+				fi
+
+				# Build SLRCMD
+				if [ -d "$SLR_PATH" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - '$SLR_PATH' exists - Path gotten from specified AppID looks valid"
+					
+					SLRENTRYPOINT="${SLR_PATH}/_v2-entry-point"
+					SLRVERB="--verb=$WFEAR"
+
+					PROTON_SLRCMD=("$SLRENTRYPOINT" "$SLRVERB" "--")
+				else
+					writelog "WARN" "${FUNCNAME[0]} - Could not get path to Steam Linux Runtime - This will need to be installed manually!"
+					writelog "WARN" "${FUNCNAME[0]} - Ignoring USESLR option since valid Steam Linux Runtime could not be found"
+				fi
+
+				# Passing even a blank `NATIVE_SLRCMD[@]` prevents games from launching, so we need this check
+				if [ -n "${NATIVE_SLRCMD[*]}" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Building Steam Linux Runtime command for native game"
+					SLRCMD=("${PROTON_SLRCMD[@]}" "${NATIVE_SLRCMD[@]}")  # Not really "Proton" for native games, but naming is hard
+				else
+					writelog "INFO" "${FUNCNAME[0]} - Building Steam Linux Runtime command for Proton game"
+					SLRCMD=("${PROTON_SLRCMD[@]}") 
+				fi
 			fi
 		fi
 	
