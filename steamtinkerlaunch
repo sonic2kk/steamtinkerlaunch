@@ -2849,6 +2849,7 @@ function setDefaultCfgValues {
 		if [ -z "$MO2MODE" ]							; then	MO2MODE="disabled"; fi
 		if [ -z "$WAITMO2" ]							; then	WAITMO2="2"; fi
 		if [ -z "$USESPECIALK" ]						; then	USESPECIALK="0"; fi
+		if [ -z "$SDLUSEWAYLAND" ]						; then  SDLUSEWAYLAND="0"; fi
 		if [ -z "$SPEKVERS" ]							; then	SPEKVERS="default"; fi
 		if [ -z "$AUTOSPEK" ]							; then	AUTOSPEK="0"; fi
 		if [ -z "$USEFWS" ]								; then	USEFWS="0"; fi
@@ -3468,6 +3469,8 @@ function saveCfg {
 			echo "MO2MODE=\"$MO2MODE\""
 			echo "## $DESC_USESPECIALK"
 			echo "USESPECIALK=\"$USESPECIALK\""
+			echo "## $DESC_SDLUSEWAYLAND"
+			echo "SDLUSEWAYLAND=\"$SDLUSEWAYLAND\""
 			echo "## $DESC_SPEKVERS"
 			echo "SPEKVERS=\"$SPEKVERS\""
 			echo "## $DESC_AUTOSPEK"
@@ -3646,11 +3649,11 @@ function setNewProtVars {
 					mkProjDir "$(dirname "$RUNPROTON")/dist"
 					"$TAR" xf "$(dirname "$RUNPROTON")/$PDTGZ" -C "$(dirname "$RUNPROTON")/dist" 2>/dev/null
 				fi
-
-				setRunWineServer "${FUNCNAME[0]}"
 				
 				PROTONVERSION="$(setProtonPathVersion "$RUNPROTON")"
 				USEPROTON="$PROTONVERSION"
+
+				setRunWineServer "${FUNCNAME[0]}"
 			else
 				writelog "SKIP" "${FUNCNAME[0]} - Using Steam Proton '$FIRSTUSEPROTON' instead of ${PROGNAME,,} Proton '$USEPROTON', because '$PROGCMD' was used as '$SLO'"
 				notiShow "$(strFix "$NOTY_SETNEWPROTVARS" "$FIRSTUSEPROTON")"
@@ -3686,6 +3689,11 @@ function setNOP {
 	NOPPATH="$(getNOP "p")"
 	if [ -n "$NOPPATH" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Selected '$NOPPATH'"
+		NEWPROPA="$( dirname "$NOPPATH" )"
+		NEWPROPA="${NEWPROPA%*/}"
+		NEWPROPA="${NEWPROPA##*/}"
+		notiShow "$(strFix "$NOTY_WANTPROTON2" "$NEWPROPA" "$USEPROTON")"
+
 		setNewProtVars "$NOPPATH"
 	else
 		writelog "SKIP" "${FUNCNAME[0]} - Haven't found anything"
@@ -4961,6 +4969,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_USETERM!$DESC_USETERM ('USETERM')":FL "${USETERM/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_TERMARGS!$DESC_TERMARGS ('TERMARGS')" "${TERMARGS/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_RUNSBS!$DESC_RUNSBS ('RUNSBS')":CHK "${RUNSBS/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_SDLUSEWAYLAND!$DESC_SDLUSEWAYLAND ('SDLUSEWAYLAND')":CHK "${SDLUSEWAYLAND/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="$(spanFont "$GUI_OPTSPROTON" "H")":LBL "SKIP" `#CAT_Proton` `#HEAD_Proton` `#MENU_GAME` `#MENU_GLOBAL` \
 --field="     $GUI_USEPROTON!$DESC_USEPROTON ('USEPROTON')":CB "$(cleanDropDown  "${USEPROTON/#-/ -}" "$PROTYADLIST")" `#CAT_Proton` `#MENU_GAME` \
 --field="     $GUI_USESLR!$DESC_USESLR ('USESLR')":CHK "${USESLR/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
@@ -10738,6 +10747,11 @@ function setCommandLaunchVars {
 		export __NV_PRIME_RENDER_OFFLOAD=1
 		export __VK_LAYER_NV_optimus=NVIDIA_only
 		export __GLX_VENDOR_LIBRARY_NAME=nvidia
+	fi
+
+	# This could be expanded in future as a general option to force Wayland for games/engines that support it, e.g. '-wayland' flag for unity
+	if [ "$SDLUSEWAYLAND" -eq 1 ]; then
+		export SDL_VIDEODRIVER=wayland
 	fi
 }
 
@@ -19895,7 +19909,7 @@ function howto {
 	echo "           stage <path>                Add ${VTX^} stage via dialog"
 	echo "           resetmime                   (Re)set MimeType and application menu entries"
 	echo "           winecfg                     Run Winecfg with ${VTX^} Wine in ${VTX^} prefix"
-    echo "                                       or directly the one given in <path>"
+    echo "                                        or directly the one given in <path>"
 	echo "    vr <windowname> <SteamAppID> <s> Start SBS-VR mode for <windowname>"
 	echo "                                       and game <SteamAppID>"
 	echo "                                       's'ave windowname for the game"
