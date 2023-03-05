@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v12.12.20230305-4 (enhanced-artwork)"
+PROGVERS="v12.12.20230305-6 (enhanced-artwork)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -3981,11 +3981,39 @@ function setGameArtGui {
 	TITLE="${PROGNAME}-$SGA"
 	pollWinRes "$TITLE"
 
-	SGAGUI="$("$YAD" --f1-action="$F1ACTION" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
-	--title="$TITLE" --separator="|" \
-	--text="Test" \
-	--button="$BUT_CAN":0 --button="$BUT_DONE":2 "$GEOM"
-	)"
+	SGAGAMENAME="Unknown Game"
+	if [ -n "$1" ]; then
+		SGAGAMENAME="$( getTitleFromID "$1" )"
+		if [ -z "$AID" ] || [ "$AID" -eq "$PLACEHOLDERAID" ]; then
+			AID="$1"
+		fi
+	fi
+
+	setShowPic
+
+	# TODO dropdown to select artwork set action (copy/link/move)
+
+	SGASET="$("$YAD" --f1-action="$F1ACTION" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
+	--title="$TITLE" --separator="|" --image="$SHOWPIC" \
+	--text="$(spanFont "$( strFix "$GUI_SGATITLE" "$SGAGAMENAME" "$1" )" "H")\n$GUI_SGATEXT" \
+	--field=" ":LBL " " \
+	--field="$GUI_SGAHERO!$DESC_SGAHERO ('SGAHERO')":FL "${SGAHERO/#-/ -}" \
+	--field="$GUI_SGALOGO!$DESC_SGALOGO ('SGALOGO')":FL "${SGALOGO/#-/ -}" \
+	--field="$GUI_SGABOXART!$DESC_SGABOXART ('SGABOXART')":FL "${SGABOXART/#-/ -}" \
+	--field="$GUI_SGATENFOOT!$DESC_SGATENFOOT ('SGATENFOOT')":FL "${SGATENFOOT/#-/ -}" \
+	--button="$BUT_CAN":0 --button="$BUT_DONE":2 "$GEOM" )"
+
+	case $? in
+		0)  writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_CAN'" ;;
+		2)  writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_DONE'"
+			mapfile -d "|" -t -O "${#SGASETARR[@]}" SGASETARR < <(printf '%s' "$SGASET")
+			SGAHERO="${SGASETARR[0]}"
+			SGALOGO="${SGASETARR[1]}"
+			SGABOXART="${SGASETARR[2]}"
+			SGATENFOOT="${SGASETARR[3]}"
+
+			setGameArt --hero="$SGAHERO" --logo="$SGALOGO" --boxart="$SGABOXART" --tenfoot="$SGATENFOOT"
+	esac
 }
 
 function CustomFallbackPicture {
