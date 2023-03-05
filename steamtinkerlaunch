@@ -3901,13 +3901,66 @@ function dlCustomProtonGUI {
 	fi
 }
 
+function openSteamGridDir {
+	writelog "INFO" "${FUNCNAME[0]} - Stub"
+	# xdg-open ""
+}
+
 # Set artwork for Steam game by copying/linking/moving passed artwork to steam grid folder
 function setGameArt {
 	writelog "INFO" "${FUNCNAME[0]} - Stub"
+
+	# TODO check if actual installed game which also serves to validate that it was an actual AppID
+	GAME_APPID="$1"
+
+	# TODO Option to set SteamTinkerLaunch game pic??
+	# TODO note recommended resolutions for each art
+
+	SGCOPYART=1  # Copy file to grid folder -- Default
+	SGLINKART=0  # Symlink file to grid folder
+	SGMOVEART=0  # Move file to grid folder
+
+	for i in "$@"; do
+		case $i in
+			-hr=*|--hero=*)
+				SGHERO="${i#*=}"  # <appid>_hero.png -- Banner used on game screen, logo goes on top of this 
+				shift
+				;;
+			-lg=*|--logo=*)
+				SGLOGO="${i#*=}"  # <appid>_logo.png -- Logo used e.g. on game screen
+				shift
+				;;
+			-ba=*|--boxart=*)
+				SGBOXART="${i#*=}"  # <appid>p.png -- Used in library
+				shift
+				;;
+			-tf=*|--tenfoot=*)
+				SGTENFOOT="${i#*=}"  # <appid>.png -- Used as small boxart for e.g. most recently played banner
+				shift
+				;;
+			--copy)
+				SGCOPYART=1
+				shift
+				;;
+			--link)
+				SGLINKART=1
+				shift
+				;;
+			--move)
+				SGMOVEART=1
+
+		esac
+	done
+
+	echo "Game is: $GAME_APPID"
+	echo "Hero is: $SGHERO"
+	echo "Logo is: $SGLOGO"
+	echo "Boxart is: $SGBOXART"
+	echo "Tenfoot is: $SGTENFOOR"
 }
 
 # Shows the Yad GUI for selecting artwork to pass to setGameArt
-function setGameArtGUI {
+function setGameArtGui {
 	writelog "INFO" "${FUNCNAME[0]} - Stub"
 }
 
@@ -19820,9 +19873,21 @@ function howto {
 	echo "            list-owned               List owned games on Steam with HedgeModManager support"   
 	echo "            uninstall                Remove HedgeModManager downloads folder, desktop files and Wineprefix"
 	echo "                                      Note that this will not remove your mods or installed Winetricks"
+	echo "    opengridfolder|ogf               Open the Steam Grid folder where custom game artwork is stored using xdg-open"
+	echo "    setgameart|sga <gameid> <args>   Set the artwork for various games by their AppID"
+	echo "                                      Passing no args will open a GUI"
+	echo "                                      By default, given artwork will be copied to the Steam Grid folder"
+	echo "                                      Note that only ONE of the copy/link/move options should be used"
+	echo "      <args>:                           "
+	echo "      -hr=|--hero=	                 Hero Art path    - Banner used on the Game Screen"
+	echo "      -lg=|--logo=                     Logo Art path    - Logo that gets displayed on Game Screen"
+	echo "      -ba=|--boxart=                   Box Art path     - Cover art used in the library"
+	echo "      -tf=|--tenfoot=                  Tenfoot Art path - Small banner used for recently played game in library"
+	echo "      --copy             				 Copy art files to Steam Grid folder"
+	echo "      --link             				 Symlink art files to Steam Grid folder"
+	echo "      --move             				 Move art files to Steam Grid folder"
 	echo "    steamdeckcompat <gameid>         Get information about Steam Deck compatibility for <gameid>"
 	echo "                                       Will work offline if the information has been fetched before"
-	echo " "
 	echo "    lang=<option>                    Mostly to get translated configs"
 	echo "                                       on inital setup. <option> can be"
 	echo "                                       a language file name without suffix"
@@ -20178,6 +20243,12 @@ function commandline {
 		else
 			writelog "INFO" "arg2 '$2' is no valid command"
 			howto
+		fi
+	elif [ "$1" == "setgameart" ] || [ "$1" == "sga" ]; then
+		if [ -z "$2" ]; then
+			setGameArtGui  # Don't think this function needs to take any arguments
+		else
+			setGameArt "${@:2}"  # Pass all arguments except the first which is the command name e.g. `setgameart`
 		fi
 	elif [ "$1" == "noty" ]; then
 		if [ -n "$2" ]; then
