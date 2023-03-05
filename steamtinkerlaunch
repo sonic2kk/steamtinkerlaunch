@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v12.12.20230305-1 (enhanced-artwork)"
+PROGVERS="v12.12.20230305-4 (enhanced-artwork)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -3908,55 +3908,70 @@ function openSteamGridDir {
 
 # Set artwork for Steam game by copying/linking/moving passed artwork to steam grid folder
 function setGameArt {
-	writelog "INFO" "${FUNCNAME[0]} - Stub"
+	function applyGameArt {
+		GAMEARTAPPID="$1"
+		GAMEARTSOURCE="$2"  # e.g. /home/gaben/GamesArt/cs2_hero.png
+		GAMEARTSUFFIX="$3"  # e.g. "_hero" etc
+		GAMEARTCMD="$4"
 
-	# TODO check if actual installed game which also serves to validate that it was an actual AppID
+		SGGRIDDIR="$STUIDPATH/config/grid"
+		GAMEARTDEST="${SGGRIDDIR}/${GAMEARTAPPID}${GAMEARTSUFFIX}.${GAMEARTSOURCE#*.}"  # path to filename in grid e.g. turns "/home/gaben/GamesArt/cs2_hero.png" into "~/.local/share/Steam/userdata/1234567/config/grid/4440654_hero.png"
+
+		if [ -n "$GAMEARTSOURCE" ]; then
+			if [ -f "$GAMEARTDEST" ]; then
+				writelog "WARN" "${FUNCNAME[0]} - Existing art already exists at '$GAMEARTDEST' - Removing file..."
+				rm "$GAMEARTDEST"
+			fi
+
+			if [ -f "$GAMEARTSOURCE" ]; then
+				"$GAMEARTCMD" "$GAMEARTSOURCE" "$GAMEARTDEST"
+				writelog "INFO" "${FUNCNAME[0]} - Successfully set game art for '$GAMEARTSOURCE' at '$GAMEARTDEST'"
+			else
+				writelog "WARN" "${FUNCNAME[0]} - Given game art '$GAMEARTSOURCE' does not exist, skipping..."
+			fi
+		fi
+	}
+
+	# TODO warn if AppId does not seem to be installed/owned/valid
 	GAME_APPID="$1"
 
 	# TODO Option to set SteamTinkerLaunch game pic??
-	# TODO note recommended resolutions for each art
+	# TODO note recommended resolutions for each art (on the Yad GUI and in the command line)
 
-	SGCOPYART=1  # Copy file to grid folder -- Default
-	SGLINKART=0  # Symlink file to grid folder
-	SGMOVEART=0  # Move file to grid folder
-
+	SETARTCMD="cp"  # Default command will copy art
 	for i in "$@"; do
 		case $i in
 			-hr=*|--hero=*)
 				SGHERO="${i#*=}"  # <appid>_hero.png -- Banner used on game screen, logo goes on top of this 
-				shift
-				;;
+				shift ;;
 			-lg=*|--logo=*)
 				SGLOGO="${i#*=}"  # <appid>_logo.png -- Logo used e.g. on game screen
-				shift
-				;;
+				shift ;;
 			-ba=*|--boxart=*)
 				SGBOXART="${i#*=}"  # <appid>p.png -- Used in library
-				shift
-				;;
+				shift ;;
 			-tf=*|--tenfoot=*)
 				SGTENFOOT="${i#*=}"  # <appid>.png -- Used as small boxart for e.g. most recently played banner
-				shift
-				;;
+				shift ;;
 			--copy)
-				SGCOPYART=1
-				shift
-				;;
+				SETARTCMD="cp"  # Copy file to grid folder -- Default
+				shift ;;
 			--link)
-				SGLINKART=1
-				shift
-				;;
+				SETARTCMD="mv"  # Symlink file to grid folder
+				shift ;;
 			--move)
-				SGMOVEART=1
-
+				SETARTCMD="ln -s"  # Move file to grid folder
+				shift ;;
 		esac
 	done
 
-	echo "Game is: $GAME_APPID"
-	echo "Hero is: $SGHERO"
-	echo "Logo is: $SGLOGO"
-	echo "Boxart is: $SGBOXART"
-	echo "Tenfoot is: $SGTENFOOR"
+	applyGameArt "$GAME_APPID" "$SGHERO" "_hero" "$SETARTCMD"
+	applyGameArt "$GAME_APPID" "$SGLOGO" "_logo" "$SETARTCMD"
+	applyGameArt "$GAME_APPID" "$SGBOXART" "p" "$SETARTCMD"
+	applyGameArt "$GAME_APPID" "$SGTENFOOT" "" "$SETARTCMD"
+
+	writelog "INFO" "${FUNCNAME[0]} - Finished setting game art for '$GAME_APPID'. Restart Steam for the changes to take effect."
+	echo "Finished setting game art for '$GAME_APPID'. Restart Steam for the changes to take effect."
 }
 
 # Shows the Yad GUI for selecting artwork to pass to setGameArt
@@ -19874,7 +19889,7 @@ function howto {
 	echo "            uninstall                Remove HedgeModManager downloads folder, desktop files and Wineprefix"
 	echo "                                      Note that this will not remove your mods or installed Winetricks"
 	echo "    opengridfolder|ogf               Open the Steam Grid folder where custom game artwork is stored using xdg-open"
-	echo "    setgameart|sga <gameid> <args>   Set the artwork for various games by their AppID"
+	echo "    setgameart|sga <gameid> <args>   Set the artwork for various games by their AppID using absolute paths"
 	echo "                                      Passing no args will open a GUI"
 	echo "                                      By default, given artwork will be copied to the Steam Grid folder"
 	echo "                                      Note that only ONE of the copy/link/move options should be used"
