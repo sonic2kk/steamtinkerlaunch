@@ -560,6 +560,7 @@ HEADLINEFONT="larger"
 FONTSIZES="!xx-small!x-small!small!smaller!medium!large!larger!!x-large!xx-large!"
 SREG="system.reg"
 NSGA="non-steam game"
+SGA="set game artwork"
 BTVP="$DRC/Program Files/Black Tree Gaming Ltd/${VTX^}"
 VTXRAA="resources/app.asar"
 RABP="${VTXRAA}.unpacked/bundledPlugins"
@@ -1485,12 +1486,6 @@ function getDataForAllGamesinSharedConfig {
 		getGameData "$CATAID"
 	done <<< "$(getParsableGameList | cut -d '+' -f1 | sed "s:\"::g" | grep "[0-9]" | sort -n)"
 }
-
-# replaced by getOwnedAids which is more complete - useful for something else?
-#function getAllOwnedGames {
-# shellcheck disable=SC2016
-#	sed -n '/"Apps"/,${p;/"LastPlayedTimesSyncTime"/q}' "$FLCV" | grep "{" -B1 | grep "[0-9]" | tr -cd '[[:digit:]]\n' | sort -n
-#}
 
 function getActiveSteamCollections {
 	getParsableGameList | grep "\"tags\"" | awk -F '{+' '{print $NF}' | sed 's/\"/'$'\\\n/g' | sort -u | grep -i "^[a-z]"
@@ -3932,8 +3927,7 @@ function setGameArt {
 		fi
 	}
 
-	# TODO warn if AppId does not seem to be installed/owned/valid
-	GAME_APPID="$1"
+	GAME_APPID="$1"  # We don't validate AppID as it would drastically slow down the process for large libraries
 
 	# TODO Option to set SteamTinkerLaunch game pic??
 	# TODO note recommended resolutions for each art (on the Yad GUI and in the command line)
@@ -3976,7 +3970,22 @@ function setGameArt {
 
 # Shows the Yad GUI for selecting artwork to pass to setGameArt
 function setGameArtGui {
-	writelog "INFO" "${FUNCNAME[0]} - Stub"
+	writelog "INFO" "${FUNCNAME[0]} - Starting the GUI for setting game artwork"
+
+	if [ -z "$SUSDA" ] || [ -z "$STUIDPATH" ]; then
+		setSteamPaths
+	fi
+
+	# TODO create menu cfgs
+	export CURWIKI="$PPW/Set-Custom-Game-Artwork"
+	TITLE="${PROGNAME}-$SGA"
+	pollWinRes "$TITLE"
+
+	SGAGUI="$("$YAD" --f1-action="$F1ACTION" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
+	--title="$TITLE" --separator="|" \
+	--text="Test" \
+	--button="$BUT_CAN":0 --button="$BUT_DONE":2 "$GEOM"
+	)"
 }
 
 function CustomFallbackPicture {
@@ -20260,10 +20269,14 @@ function commandline {
 			howto
 		fi
 	elif [ "$1" == "setgameart" ] || [ "$1" == "sga" ]; then
-		if [ -z "$2" ]; then
-			setGameArtGui  # Don't think this function needs to take any arguments
+		if [ -n "$2" ]; then
+			if [ -z "$3" ]; then
+				setGameArtGui "$2"  # Don't think this function needs to take any arguments
+			else
+				setGameArt "${@:2}"  # Pass all arguments except the first which is the command name e.g. `setgameart`
+			fi
 		else
-			setGameArt "${@:2}"  # Pass all arguments except the first which is the command name e.g. `setgameart`
+			echo "At least one argument (AppID) must be provided"
 		fi
 	elif [ "$1" == "noty" ]; then
 		if [ -n "$2" ]; then
