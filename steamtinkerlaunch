@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v12.12.20230307-1 (enhanced-artwork)"
+PROGVERS="v12.12.20230307-2 (enhanced-artwork)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -3910,7 +3910,8 @@ function setGameArt {
 		GAMEARTCMD="$4"
 
 		SGGRIDDIR="$STUIDPATH/config/grid"
-		GAMEARTDEST="${SGGRIDDIR}/${GAMEARTAPPID}${GAMEARTSUFFIX}.${GAMEARTSOURCE#*.}"  # path to filename in grid e.g. turns "/home/gaben/GamesArt/cs2_hero.png" into "~/.local/share/Steam/userdata/1234567/config/grid/4440654_hero.png"
+		GAMEARTBASE="$( basename "$GAMEARTSOURCE" )"
+		GAMEARTDEST="${SGGRIDDIR}/${GAMEARTAPPID}${GAMEARTSUFFIX}.${GAMEARTBASE#*.}"  # path to filename in grid e.g. turns "/home/gaben/GamesArt/cs2_hero.png" into "~/.local/share/Steam/userdata/1234567/config/grid/4440654_hero.png"
 
 		if [ -n "$GAMEARTSOURCE" ]; then
 			if [ -f "$GAMEARTDEST" ]; then
@@ -3919,7 +3920,7 @@ function setGameArt {
 			fi
 
 			if [ -f "$GAMEARTSOURCE" ]; then
-				"$GAMEARTCMD" "$GAMEARTSOURCE" "$GAMEARTDEST"
+				$GAMEARTCMD "$GAMEARTSOURCE" "$GAMEARTDEST"
 				writelog "INFO" "${FUNCNAME[0]} - Successfully set game art for '$GAMEARTSOURCE' at '$GAMEARTDEST'"
 			else
 				writelog "WARN" "${FUNCNAME[0]} - Given game art '$GAMEARTSOURCE' does not exist, skipping..."
@@ -3951,10 +3952,10 @@ function setGameArt {
 				SETARTCMD="cp"  # Copy file to grid folder -- Default
 				shift ;;
 			--link)
-				SETARTCMD="mv"  # Symlink file to grid folder
+				SETARTCMD="ln -s"  # Symlink file to grid folder
 				shift ;;
 			--move)
-				SETARTCMD="ln -s"  # Move file to grid folder
+				SETARTCMD="mv"  # Move file to grid folder
 				shift ;;
 		esac
 	done
@@ -3992,7 +3993,9 @@ function setGameArtGui {
 	setShowPic
 
 	# TODO dropdown to select artwork set action (copy/link/move)
+	# TODO button to open grid folder?
 
+	SGASETACTIONS="copy!link!move"
 	SGASET="$("$YAD" --f1-action="$F1ACTION" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
 	--title="$TITLE" --separator="|" --image="$SHOWPIC" \
 	--text="$(spanFont "$( strFix "$GUI_SGATITLE" "$SGAGAMENAME" "$1" )" "H")\n$GUI_SGATEXT" \
@@ -4001,18 +4004,26 @@ function setGameArtGui {
 	--field="$GUI_SGALOGO!$DESC_SGALOGO ('SGALOGO')":FL "${SGALOGO/#-/ -}" \
 	--field="$GUI_SGABOXART!$DESC_SGABOXART ('SGABOXART')":FL "${SGABOXART/#-/ -}" \
 	--field="$GUI_SGATENFOOT!$DESC_SGATENFOOT ('SGATENFOOT')":FL "${SGATENFOOT/#-/ -}" \
+	--field="$GUI_SGASETACTION!$DESC_SGASETACTION ('SGASETACTION')":CB "$( cleanDropDown "copy" "$SGASETACTIONS" )" \
 	--button="$BUT_CAN":0 --button="$BUT_DONE":2 "$GEOM" )"
 
 	case $? in
 		0)  writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_CAN'" ;;
 		2)  writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_DONE'"
 			mapfile -d "|" -t -O "${#SGASETARR[@]}" SGASETARR < <(printf '%s' "$SGASET")
-			SGAHERO="${SGASETARR[0]}"
-			SGALOGO="${SGASETARR[1]}"
-			SGABOXART="${SGASETARR[2]}"
-			SGATENFOOT="${SGASETARR[3]}"
+			SGAHERO="${SGASETARR[1]}"
+			SGALOGO="${SGASETARR[2]}"
+			SGABOXART="${SGASETARR[3]}"
+			SGATENFOOT="${SGASETARR[4]}"
+			SGACOPYMETHOD="${SGASETARR[5]}"
 
-			setGameArt --hero="$SGAHERO" --logo="$SGALOGO" --boxart="$SGABOXART" --tenfoot="$SGATENFOOT"
+			if [ "$SGACOPYMETHOD" = "link" ]; then
+				setGameArt "$1" --hero="$SGAHERO" --logo="$SGALOGO" --boxart="$SGABOXART" --tenfoot="$SGATENFOOT" --link
+			elif [ "$SGACOPYMETHOD" = "move" ]; then
+				setGameArt "$1" --hero="$SGAHERO" --logo="$SGALOGO" --boxart="$SGABOXART" --tenfoot="$SGATENFOOT" --move
+			else  # Default to copy
+				setGameArt "$1" --hero="$SGAHERO" --logo="$SGALOGO" --boxart="$SGABOXART" --tenfoot="$SGATENFOOT" --copy
+			fi
 	esac
 }
 
