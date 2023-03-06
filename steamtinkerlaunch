@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v12.12.20230305-1"
+PROGVERS="v12.12.20230307-1"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -560,6 +560,7 @@ HEADLINEFONT="larger"
 FONTSIZES="!xx-small!x-small!small!smaller!medium!large!larger!!x-large!xx-large!"
 SREG="system.reg"
 NSGA="non-steam game"
+SGA="set game artwork"
 BTVP="$DRC/Program Files/Black Tree Gaming Ltd/${VTX^}"
 VTXRAA="resources/app.asar"
 RABP="${VTXRAA}.unpacked/bundledPlugins"
@@ -1485,12 +1486,6 @@ function getDataForAllGamesinSharedConfig {
 		getGameData "$CATAID"
 	done <<< "$(getParsableGameList | cut -d '+' -f1 | sed "s:\"::g" | grep "[0-9]" | sort -n)"
 }
-
-# replaced by getOwnedAids which is more complete - useful for something else?
-#function getAllOwnedGames {
-# shellcheck disable=SC2016
-#	sed -n '/"Apps"/,${p;/"LastPlayedTimesSyncTime"/q}' "$FLCV" | grep "{" -B1 | grep "[0-9]" | tr -cd '[[:digit:]]\n' | sort -n
-#}
 
 function getActiveSteamCollections {
 	getParsableGameList | grep "\"tags\"" | awk -F '{+' '{print $NF}' | sed 's/\"/'$'\\\n/g' | sort -u | grep -i "^[a-z]"
@@ -3899,6 +3894,133 @@ function dlCustomProtonGUI {
 
 		createProtonList
 	fi
+}
+
+function openSteamGridDir {
+	writelog "INFO" "${FUNCNAME[0]} - Opening Steam Grid directory"
+	"$XDGO" "$STUIDPATH/config/grid"
+}
+
+# Set artwork for Steam game by copying/linking/moving passed artwork to steam grid folder
+function setGameArt {
+	function applyGameArt {
+		GAMEARTAPPID="$1"
+		GAMEARTSOURCE="$2"  # e.g. /home/gaben/GamesArt/cs2_hero.png
+		GAMEARTSUFFIX="$3"  # e.g. "_hero" etc
+		GAMEARTCMD="$4"
+
+		SGGRIDDIR="$STUIDPATH/config/grid"
+		GAMEARTBASE="$( basename "$GAMEARTSOURCE" )"
+		GAMEARTDEST="${SGGRIDDIR}/${GAMEARTAPPID}${GAMEARTSUFFIX}.${GAMEARTBASE#*.}"  # path to filename in grid e.g. turns "/home/gaben/GamesArt/cs2_hero.png" into "~/.local/share/Steam/userdata/1234567/config/grid/4440654_hero.png"
+
+		if [ -n "$GAMEARTSOURCE" ]; then
+			if [ -f "$GAMEARTDEST" ]; then
+				writelog "WARN" "${FUNCNAME[0]} - Existing art already exists at '$GAMEARTDEST' - Removing file..."
+				rm "$GAMEARTDEST"
+			fi
+
+			if [ -f "$GAMEARTSOURCE" ]; then
+				$GAMEARTCMD "$GAMEARTSOURCE" "$GAMEARTDEST"
+				writelog "INFO" "${FUNCNAME[0]} - Successfully set game art for '$GAMEARTSOURCE' at '$GAMEARTDEST'"
+			else
+				writelog "WARN" "${FUNCNAME[0]} - Given game art '$GAMEARTSOURCE' does not exist, skipping..."
+			fi
+		fi
+	}
+
+	GAME_APPID="$1"  # We don't validate AppID as it would drastically slow down the process for large libraries
+
+	# TODO Option to set SteamTinkerLaunch game pic??
+	# TODO note recommended resolutions for each art (on the Yad GUI and in the command line)
+
+	SETARTCMD="cp"  # Default command will copy art
+	for i in "$@"; do
+		case $i in
+			-hr=*|--hero=*)
+				SGHERO="${i#*=}"  # <appid>_hero.png -- Banner used on game screen, logo goes on top of this 
+				shift ;;
+			-lg=*|--logo=*)
+				SGLOGO="${i#*=}"  # <appid>_logo.png -- Logo used e.g. on game screen
+				shift ;;
+			-ba=*|--boxart=*)
+				SGBOXART="${i#*=}"  # <appid>p.png -- Used in library
+				shift ;;
+			-tf=*|--tenfoot=*)
+				SGTENFOOT="${i#*=}"  # <appid>.png -- Used as small boxart for e.g. most recently played banner
+				shift ;;
+			--copy)
+				SETARTCMD="cp"  # Copy file to grid folder -- Default
+				shift ;;
+			--link)
+				SETARTCMD="ln -s"  # Symlink file to grid folder
+				shift ;;
+			--move)
+				SETARTCMD="mv"  # Move file to grid folder
+				shift ;;
+		esac
+	done
+
+	applyGameArt "$GAME_APPID" "$SGHERO" "_hero" "$SETARTCMD"
+	applyGameArt "$GAME_APPID" "$SGLOGO" "_logo" "$SETARTCMD"
+	applyGameArt "$GAME_APPID" "$SGBOXART" "p" "$SETARTCMD"
+	applyGameArt "$GAME_APPID" "$SGTENFOOT" "" "$SETARTCMD"
+
+	writelog "INFO" "${FUNCNAME[0]} - Finished setting game art for '$GAME_APPID'. Restart Steam for the changes to take effect."
+	echo "Finished setting game art for '$GAME_APPID'. Restart Steam for the changes to take effect."
+}
+
+# Shows the Yad GUI for selecting artwork to pass to setGameArt
+function setGameArtGui {
+	writelog "INFO" "${FUNCNAME[0]} - Starting the GUI for setting game artwork"
+
+	if [ -z "$SUSDA" ] || [ -z "$STUIDPATH" ]; then
+		setSteamPaths
+	fi
+
+	export CURWIKI="$PPW/Custom-Game-Artwork"
+	TITLE="${PROGNAME}-$SGA"
+	pollWinRes "$TITLE"
+
+	SGAGAMENAME="Unknown Game"
+	if [ -n "$1" ]; then
+		SGAGAMENAME="$( getTitleFromID "$1" )"
+		if [ -z "$AID" ] || [ "$AID" -eq "$PLACEHOLDERAID" ]; then
+			AID="$1"
+		fi
+	fi
+
+	setShowPic
+
+	SGASETACTIONS="copy!link!move"
+	SGASET="$("$YAD" --f1-action="$F1ACTION" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
+	--title="$TITLE" --separator="|" --image="$SHOWPIC" \
+	--text="$(spanFont "$( strFix "$GUI_SGATITLE" "$SGAGAMENAME" "$1" )" "H")\n$GUI_SGATEXT" \
+	--field=" ":LBL " " \
+	--field="$GUI_SGAHERO!$DESC_SGAHERO ('SGAHERO')":FL "${SGAHERO/#-/ -}" \
+	--field="$GUI_SGALOGO!$DESC_SGALOGO ('SGALOGO')":FL "${SGALOGO/#-/ -}" \
+	--field="$GUI_SGABOXART!$DESC_SGABOXART ('SGABOXART')":FL "${SGABOXART/#-/ -}" \
+	--field="$GUI_SGATENFOOT!$DESC_SGATENFOOT ('SGATENFOOT')":FL "${SGATENFOOT/#-/ -}" \
+	--field="$GUI_SGASETACTION!$DESC_SGASETACTION ('SGASETACTION')":CB "$( cleanDropDown "copy" "$SGASETACTIONS" )" \
+	--button="$BUT_CAN":0 --button="$BUT_DONE":2 "$GEOM" )"
+
+	case $? in
+		0)  writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_CAN'" ;;
+		2)  writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_DONE'"
+			mapfile -d "|" -t -O "${#SGASETARR[@]}" SGASETARR < <(printf '%s' "$SGASET")
+			SGAHERO="${SGASETARR[1]}"
+			SGALOGO="${SGASETARR[2]}"
+			SGABOXART="${SGASETARR[3]}"
+			SGATENFOOT="${SGASETARR[4]}"
+			SGACOPYMETHOD="${SGASETARR[5]}"
+
+			if [ "$SGACOPYMETHOD" = "link" ]; then
+				setGameArt "$1" --hero="$SGAHERO" --logo="$SGALOGO" --boxart="$SGABOXART" --tenfoot="$SGATENFOOT" --link
+			elif [ "$SGACOPYMETHOD" = "move" ]; then
+				setGameArt "$1" --hero="$SGAHERO" --logo="$SGALOGO" --boxart="$SGABOXART" --tenfoot="$SGATENFOOT" --move
+			else  # Default to copy
+				setGameArt "$1" --hero="$SGAHERO" --logo="$SGALOGO" --boxart="$SGABOXART" --tenfoot="$SGATENFOOT" --copy
+			fi
+	esac
 }
 
 function CustomFallbackPicture {
@@ -19810,9 +19932,21 @@ function howto {
 	echo "            list-owned               List owned games on Steam with HedgeModManager support"   
 	echo "            uninstall                Remove HedgeModManager downloads folder, desktop files and Wineprefix"
 	echo "                                      Note that this will not remove your mods or installed Winetricks"
+	echo "    opengridfolder|ogf               Open the Steam Grid folder where custom game artwork is stored using xdg-open"
+	echo "    setgameart|sga <gameid> <args>   Set the artwork for various games by their AppID using absolute paths"
+	echo "                                      Passing no args will open a GUI"
+	echo "                                      By default, given artwork will be copied to the Steam Grid folder"
+	echo "                                      Note that only ONE of the copy/link/move options should be used"
+	echo "      <args>:                           "
+	echo "      -hr=|--hero=                     Hero Art path    - Banner used on the Game Screen (3840x1240 recommended)"
+	echo "      -lg=|--logo=                     Logo Art path    - Logo that gets displayed on Game Screen (16:9 recommended)"
+	echo "      -ba=|--boxart=                   Box Art path     - Cover art used in the library (600x900 recommended)"
+	echo "      -tf=|--tenfoot=                  Tenfoot Art path - Small banner used for recently played game in library (600x350 recommended)"
+	echo "      --copy             				 Copy art files to Steam Grid folder"
+	echo "      --link             				 Symlink art files to Steam Grid folder"
+	echo "      --move             				 Move art files to Steam Grid folder"
 	echo "    steamdeckcompat <gameid>         Get information about Steam Deck compatibility for <gameid>"
 	echo "                                       Will work offline if the information has been fetched before"
-	echo " "
 	echo "    lang=<option>                    Mostly to get translated configs"
 	echo "                                       on inital setup. <option> can be"
 	echo "                                       a language file name without suffix"
@@ -20168,6 +20302,18 @@ function commandline {
 		else
 			writelog "INFO" "arg2 '$2' is no valid command"
 			howto
+		fi
+	elif [ "$1" == "opengridfolder" ] || [ "$1" == "ogf" ]; then
+		openSteamGridDir
+	elif [ "$1" == "setgameart" ] || [ "$1" == "sga" ]; then
+		if [ -n "$2" ]; then
+			if [ -z "$3" ]; then
+				setGameArtGui "$2"  # Don't think this function needs to take any arguments
+			else
+				setGameArt "${@:2}"  # Pass all arguments except the first which is the command name e.g. `setgameart`
+			fi
+		else
+			echo "At least one argument (AppID) must be provided"
 		fi
 	elif [ "$1" == "noty" ]; then
 		if [ -n "$2" ]; then
