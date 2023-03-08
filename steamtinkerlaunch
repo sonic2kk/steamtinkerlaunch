@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v12.12.20230309-3"
+PROGVERS="v12.12.20230309-4"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -4052,8 +4052,8 @@ function setShowPic {
 		# Find custom image in grid folder and store resized image at '$STLGHEADD/<org_image_name_with_extension>'
 		writelog "INFO" "${FUNCNAME[0]} - Using hero image found in Steam Grid folder - '$GRIDBANNER'"
 		CUSTPIC="$GRIDBANNER"
-		"$CONVERT" "$CUSTPIC" -resize "460x215!" "$STLGHEADD/$( basename "$GRIDBANNER" )"
-		SHOWPIC="$STLGHEADD/$( basename "$GRIDBANNER" )"
+		"$CONVERT" "$CUSTPIC" -resize "460x215!" "$STLGHEADD/${AID}.png"
+		SHOWPIC="$STLGHEADD/${AID}.png"
 	elif [ "$USEGAMEPICS" -eq 1 ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Determining game picture"
 		if [ -s "$STLGHEADD/$AID.jpg" ]; then
@@ -23335,10 +23335,11 @@ function setLocalInstall {
 }
 
 function removeEmptyFiles {
-	# Remove appinfo files that are 0 bytes (i.e. Non-Steam Games)
-	for AIF in "$STLAPPINFOIDDIR/"*; do
-		if ! [ -s "$AIF" ]; then
-			rm "$AIF" &>/dev/null
+	REFCHECKDIR="$1"
+	writelog "INFO" "${FUNCNAME[0]} - Removing empty files from '$REFCHECKDIR'"
+	for STLFILE in "$REFCHECKDIR/"*; do
+		if ! [ -s "$STLFILE" ]; then
+			rm "$STLFILE" &>/dev/null
 		fi
 	done
 }
@@ -23443,7 +23444,8 @@ function main {
 	GREETING="$( getSeasonalGreeting )"
 	writelog "INFO" "${FUNCNAME[0]} - ${GREETING:-Welcome to SteamTinkerLaunch}"
 
-	removeEmptyFiles
+	removeEmptyFiles "$STLAPPINFOIDDIR"  # Remove appinfo files that are 0 bytes (i.e. Non-Steam Games)
+	removeEmptyFiles "$STLGHEADD"  # Remove appinfo files that are 0 bytes (i.e. Non-Steam Games)
 
 	if [ -z "$1" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - No arguments provided. See '$PROGCMD --help' for possible command line parameters" "E"
