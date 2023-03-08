@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v12.12.20230309-2"
+PROGVERS="v12.12.20230309-3"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -3838,7 +3838,7 @@ function createDLProtList {
 				SRCURL="${SRCURL}/releases"
 
 				# Potentially rewrite to avoid reliance on jq?
-				"$WGET" -q "$SRCURL" -O - | jq -r '.[].assets[].browser_download_url' | grep "tar.gz\|tar.xz" | grep -v "Yad\|7.x" >> "$PROTDLLIST"
+				"$WGET" -q "$SRCURL" -O - | "$JQ" -r '.[].assets[].browser_download_url' | grep "tar.gz\|tar.xz" | grep -v "Yad\|7.x" >> "$PROTDLLIST"
 				fi
 			done <<< "$(grep "^CP_" "$STLURLCFG" | cut -d '=' -f1)"
 		fi
@@ -13263,14 +13263,14 @@ function fetchLatestGitHubActionsBuild {
     ARTIFACTNUM=$2
 
     # /actions/runs
-    ARTIFACTRUNSRESP="$( curl -s "${PROJAPIURL}/actions/runs" | jq '.workflow_runs[0]' )"
-    ARTIFACTRUNSUITEID="$( echo "$ARTIFACTRUNSRESP" | jq '.check_suite_id' )"
-    LATESTARTIFACTURL="$( echo "$ARTIFACTRUNSRESP" | jq '.artifacts_url' | cut -d '"' -f 2 )"
+    ARTIFACTRUNSRESP="$( curl -s "${PROJAPIURL}/actions/runs" | "$JQ" '.workflow_runs[0]' )"
+    ARTIFACTRUNSUITEID="$( echo "$ARTIFACTRUNSRESP" | "$JQ" '.check_suite_id' )"
+    LATESTARTIFACTURL="$( echo "$ARTIFACTRUNSRESP" | "$JQ" '.artifacts_url' | cut -d '"' -f 2 )"
 
     # /actions/runs/<artifact_id>/artifacts
-    LATESTARTIFACTRESP="$( curl -s "${LATESTARTIFACTURL}" | jq ".artifacts[${ARTIFACTNUM}]" )"
-    LATESTARTIFACTID="$( echo "$LATESTARTIFACTRESP" | jq ".id" )"
-    LATESTARTIFACTSHA="$( echo "$LATESTARTIFACTRESP" | jq ".workflow_run.head_sha" | cut -d '"' -f 2 )"
+    LATESTARTIFACTRESP="$( curl -s "${LATESTARTIFACTURL}" | "$JQ" ".artifacts[${ARTIFACTNUM}]" )"
+    LATESTARTIFACTID="$( echo "$LATESTARTIFACTRESP" | "$JQ" ".id" )"
+    LATESTARTIFACTSHA="$( echo "$LATESTARTIFACTRESP" | "$JQ" ".workflow_run.head_sha" | cut -d '"' -f 2 )"
     
     ARTIFACTDLURL="suites/${ARTIFACTRUNSUITEID}/artifacts/${LATESTARTIFACTID}"
     echo "${ARTIFACTDLURL};${LATESTARTIFACTSHA::7}"
@@ -14332,7 +14332,7 @@ function getVortexSupportedNames {
 	for VOSTGAMDIR in "$VGPDIR/game-"*/; do
 		if [ -f "$VOSTGAMDIR/$VOSTINDEXJS" ] && [ -f "$VOSTGAMDIR/$VOSTINFOJSON" ]; then
 			# Get Vortex game name from the Vortex supported gamedir's `info.json` file  
-			VOSTGAMDIRNAM="$( jq '.name' "$VOSTGAMDIR/$VOSTINFOJSON" | sed 's-^"--g;s-^Game:--g;s-"$--g;s-^Stub:--g;s-^Game--g;s-^\ --g' )"
+			VOSTGAMDIRNAM="$( "$JQ" '.name' "$VOSTGAMDIR/$VOSTINFOJSON" | sed 's-^"--g;s-^Game:--g;s-"$--g;s-^Stub:--g;s-^Game--g;s-^\ --g' )"
 
 			# Match Steam AppIDs from `index.js` file - grep order is order if preference to search on 
 			VOSTGAMDIRAID="$( sed "s-'--g;s-\"--g" "$VOSTGAMDIR/$VOSTINDEXJS" | grep -ioE "steamAppId: [0-9]+|STEAMAPP_ID = [0-9]+|STEAM_ID = [0-9]+|APPID = [0-9]+|steamId: [0-9]+" | grep -oE "[0-9]+" | head -n1 )"
@@ -18819,7 +18819,7 @@ function createDLWineList {
 			SRCURL="${SRCURL//\/releases}"
 			SRCURL="${SRCURL//$GHURL/$AGHURL\/repos}"
 			SRCURL="${SRCURL}/releases"
-			"$WGET" -q "$SRCURL" -O - | jq -r '.[].assets[].browser_download_url' | grep "tar.gz\|tar.xz" >>  "$WINEDLLIST"
+			"$WGET" -q "$SRCURL" -O - | "$JQ" -r '.[].assets[].browser_download_url' | grep "tar.gz\|tar.xz" >>  "$WINEDLLIST"
 		fi
 		done <<< "$(grep "^CW_" "$STLURLCFG" | cut -d '=' -f1)"
 	fi
@@ -23205,9 +23205,9 @@ function getSteamDeckCompatInfo {
 			writelog "INFO" "${FUNCNAME[0]} - Existing file found at '$COMPATFILE', Steam Deck compatibility information will be taken from this since we can't contact Steam - The information here could be outdated depending on when it was fetched!"
 		fi
 	else 
-		# Remove existing file - TODO only remove if it is a day old or more
+		# Remove existing file
 		if [ -f "$COMPATFILE" ]; then			
-			if ! jq -e '.success' "$COMPATFILE" 1>/dev/null; then
+			if ! "$JQ" -e '.success' "$COMPATFILE" 1>/dev/null; then
 				writelog "INFO" "${FUNCNAME[0]} - File '$COMPATFILE' containing Steam Deck compatibility information already exists, however it looks like it failed last time - Removing it so we can attempt to redownload it"
 				rm "$COMPATFILE"
 			elif [ "$(( $(date +"%s") - $(stat -c "%Y" "$COMPATFILE") ))" -gt "86400" ]; then  # Todo maybe let the user define this in the Global Menu
@@ -23231,12 +23231,12 @@ function getSteamDeckCompatInfo {
 	fi
 
 	# We were able to hit the endpoint successfully, but check if the response success is valid!
-	RESULTSLENGTH="$( jq -e '.results | length' "$COMPATFILE" )"
+	RESULTSLENGTH="$( "$JQ" -e '.results | length' "$COMPATFILE" )"
     if (( RESULTSLENGTH > 0 )); then 
         writelog "INFO" "${FUNCNAME[0]} - Successfully retrieved Steam Deck compatility information - Stored to '$COMPATFILE'"
 
         # Get Verified/Playable/Unsupported/Unknown
-        DECKCOMPATRATING="$( jq -e '.results.resolved_category' "$COMPATFILE" )"
+        DECKCOMPATRATING="$( "$JQ" -e '.results.resolved_category' "$COMPATFILE" )"
         case $DECKCOMPATRATING in
             1) COMPATTEXT="$STEAMDECKCOMPAT_UNSUPPORTED" ;;
             2) COMPATTEXT="$STEAMDECKCOMPAT_PLAYABLE" ;;
@@ -23250,7 +23250,7 @@ function getSteamDeckCompatInfo {
 
 		# Turn language tokens like '#SteamDeckVerified_TestResult_blah' into an actual translated string from the translation files
 		# Language strings credited to: https://github.com/SteamDatabase/SteamTracking
-        for LANGTOKEN in $( jq -r '.results.resolved_items[].loc_token' "$COMPATFILE" ); do
+        for LANGTOKEN in $( "$JQ" -r '.results.resolved_items[].loc_token' "$COMPATFILE" ); do
             LANGTOKEN="$( echo "$LANGTOKEN" | xargs )"
             if [ -n "$LANGTOKEN" ]; then
 				OGLANGTOKEN="$LANGTOKEN"
@@ -23272,7 +23272,7 @@ function getSteamDeckCompatInfo {
             fi
         done
 
-		DEVELOPERCOMMENTSURL="$( jq -e '.results.steam_deck_blog_url' "$COMPATFILE" )"
+		DEVELOPERCOMMENTSURL="$( "$JQ" -e '.results.steam_deck_blog_url' "$COMPATFILE" )"
 		if [ "${#DEVELOPERCOMMENTSURL}" -gt 2 ]; then  # DEVELOPERCOMMENTSURL will always have quotes around it (e.g. `""` for blank), so the minimum length will always be 2 since it will be 2 for a blank entry because of the set of quotes 
 			writelog "INFO" "${FUNCNAME[0]} - Seems like the developer has a blog post with some comments on this game's compatibility, appending it... (length is ${#DEVELOPERCOMMENTSURL}"
 			COMPATINFO+="$( strFix "$STEAMDECKVERIFIED_CUSTOMRESULT_DEVPOST" "$DEVELOPERCOMMENTSURL" );"
