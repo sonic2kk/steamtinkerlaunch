@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v12.12.20230309-1"
+PROGVERS="v12.12.20230309-2"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -4042,9 +4042,18 @@ function CustomFallbackPicture {
 	fi	
 }
 
+# This could use a bit of a rewrite
 function setShowPic {
+	GRIDBANNER="$( find "$STUIDPATH/config/grid" -iname "${AID}_hero.*" -type f -exec realpath {} \; | head -n1  )"
+
 	if [ "$STLPLAY" -eq 1 ] && [ -f "$STLGPNG/${AID}.png" ]; then
 		SHOWPIC="$STLGPNG/${AID}.png"
+	elif [ -n "$GRIDBANNER" ]; then
+		# Find custom image in grid folder and store resized image at '$STLGHEADD/<org_image_name_with_extension>'
+		writelog "INFO" "${FUNCNAME[0]} - Using hero image found in Steam Grid folder - '$GRIDBANNER'"
+		CUSTPIC="$GRIDBANNER"
+		"$CONVERT" "$CUSTPIC" -resize "460x215!" "$STLGHEADD/$( basename "$GRIDBANNER" )"
+		SHOWPIC="$STLGHEADD/$( basename "$GRIDBANNER" )"
 	elif [ "$USEGAMEPICS" -eq 1 ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Determining game picture"
 		if [ -s "$STLGHEADD/$AID.jpg" ]; then
