@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v12.12.20230309-5"
+PROGVERS="v12.12.20230310-2"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -1374,11 +1374,9 @@ function checkSGDbApi {
 # Takes a list of appids separated by newlines
 function getGrids {
 	if checkSGDbApi && [ "$STLPLAY" -eq 0 ]; then
-
 		# Split into batches of 100 games - too many and cloudflare blocks requests because of a too big header file
 		while mapfile -t -n 100 ary && ((${#ary[@]})); do
 			PART=$(printf '%s\n' "${ary[@]}")
-
 			# If the whole batch has no grids we get a 404 and wget gives an error. --content-on-error ensures we still get the response json and the following logic still works
 			RESPONSE="$("$WGET" --content-on-error --header="Authorization: Bearer $SGDBAPIKEY" -q "${STEAMGRIDDBAPI}/$(echo "$PART" | awk '{print $1}' | paste -s -d, -)?styles=${SGDBSTYLES}&dimensions=${SGDBDIMS}&types=${SGDBTYPES}&nsfw=${SGDBNSFW}&humor=${SGDBHUMOR}" -O - 2> >(grep -v "SSL_INIT"))"
 
@@ -1387,9 +1385,8 @@ function getGrids {
 				continue
 			fi
 
-			RESPONSE_LENGTH=$("$JQ" '.data | length' <<< "$RESPONSE")
-
 			# catch single grid without downloads
+			RESPONSE_LENGTH=$("$JQ" '.data | length' <<< "$RESPONSE")
 			if [ "$RESPONSE_LENGTH" = 0 ]; then
 				writelog "INFO" "${FUNCNAME[0]} - No grid found to download - maybe loosen filters?"
 				continue
@@ -1403,7 +1400,6 @@ function getGrids {
 			fi
 
 			for i in $(seq 0 $(("$RESPONSE_LENGTH" - 1))); do
-
 				# match the current json array member against the appid list
 				# this assumes we get the same order back we put in before
 				APPID=$(sed "$((i + 1))q;d" <<< "$PART")
@@ -1412,7 +1408,6 @@ function getGrids {
 					writelog "INFO" "${FUNCNAME[0]} - The server response for '$APPID' wasn't 'success'"
 					continue
 				fi
-
 				if ! URLSTR=$("$JQ" -e -r ".data[$i].data[0].url" <<< "$RESPONSE"); then
 					writelog "INFO" "${FUNCNAME[0]} - No grid found to download for '$APPID' - maybe loosen filters?"
 					continue
@@ -1426,7 +1421,6 @@ function getGrids {
 						if [ -z "$SUSDA" ]; then
 							setSteamPaths
 						fi
-
 						if [ -d "$SUIC" ]; then
 							GRIDDLDIR="${SUIC}/grid"
 						fi
@@ -1549,7 +1543,6 @@ function listSteamLibraries {
 	}
 	
 	MAXAGE=360
-
 	if [ ! -f "$STELILIST" ] || test "$(find "$STELILIST" -mmin +"$MAXAGE")"; then
 		writelog "INFO" "${FUNCNAME[0]} - (Re-)creating '$STELILIST'"
 		rm "$STELILIST" 2>/dev/null
@@ -2185,7 +2178,7 @@ function setCustomGameVars {
 	EFD="$(dirname "$GP")"
 	# need to just guess here, because of missing fix strings
 	GFD="$EFD"
-	GN="$GE"															
+	GN="$GE"
 
 	while read -r ORGARG; do
 		mapfile -t -O "${#ORGGCMD[@]}" ORGGCMD <<< "$ORGARG"
@@ -2198,7 +2191,6 @@ function setCustomGameVars {
 
 function prepareGUI {
 	WINDECO="--undecorated"
-
 	if [ -n "$USEWINDECO" ]; then
 		if [ "$USEWINDECO" -eq 1 ]; then
 			WINDECO="--decorated"
@@ -2297,45 +2289,43 @@ function loadLangFile {
 }
 
 function loadLanguage {
-#	if [ ! -f "$STLSHM/lola-$AID.txt" ] ;then
-		writelog "INFO" "${FUNCNAME[0]} - First load the default language '$STLDEFLANG' to make sure all variables are filled"
-		loadLangFile "$STLDEFLANG"
+	writelog "INFO" "${FUNCNAME[0]} - First load the default language '$STLDEFLANG' to make sure all variables are filled"
+	loadLangFile "$STLDEFLANG"
 
-		saveCfg "$STLDEFGLOBALCFG" X
-		loadCfg "$STLDEFGLOBALCFG" X
+	saveCfg "$STLDEFGLOBALCFG" X
+	loadCfg "$STLDEFGLOBALCFG" X
 
-		writelog "INFO" "${FUNCNAME[0]} - Loading STLLANG from '$STLDEFGLOBALCFG'"
+	writelog "INFO" "${FUNCNAME[0]} - Loading STLLANG from '$STLDEFGLOBALCFG'"
 
-		ARGSLANG="$(awk -F 'lang=' '{print $2}' <<< "$@" | cut -d ' ' -f1)"
-		if [ -n "$ARGSLANG" ]; then
-			STLLANG="$ARGSLANG"
-			writelog "INFO" "${FUNCNAME[0]} - STLLANG from command line' is '$STLLANG'"
+	ARGSLANG="$(awk -F 'lang=' '{print $2}' <<< "$@" | cut -d ' ' -f1)"
+	if [ -n "$ARGSLANG" ]; then
+		STLLANG="$ARGSLANG"
+		writelog "INFO" "${FUNCNAME[0]} - STLLANG from command line' is '$STLLANG'"
 
-		elif [ -f "$STLDEFGLOBALCFG" ]; then
-			STLLRAW="$(grep "^STLLANG" "$STLDEFGLOBALCFG" | cut -d '=' -f2)"
-			STLLANG="${STLLRAW//\"/}"
-			writelog "INFO" "${FUNCNAME[0]} - STLLANG from '$STLDEFGLOBALCFG' is '$STLLANG'"
-		else
-			writelog "WARN" "${FUNCNAME[0]} - Could not determine STLLANG"
-		fi
+	elif [ -f "$STLDEFGLOBALCFG" ]; then
+		STLLRAW="$(grep "^STLLANG" "$STLDEFGLOBALCFG" | cut -d '=' -f2)"
+		STLLANG="${STLLRAW//\"/}"
+		writelog "INFO" "${FUNCNAME[0]} - STLLANG from '$STLDEFGLOBALCFG' is '$STLLANG'"
+	else
+		writelog "WARN" "${FUNCNAME[0]} - Could not determine STLLANG"
+	fi
 
-		if [ -n "$STLLANG" ] && [ "$STLLANG" != "$STLDEFLANG" ]; then 
-			writelog "INFO" "${FUNCNAME[0]} - Now load the language file '$STLLANG'"
-			loadLangFile "$STLLANG"
-			touch "$FUPDATE"
-			updateConfigEntry "STLLANG" "$STLLANG" "$STLDEFGLOBALCFG"
-		fi
-		
+	if [ -n "$STLLANG" ] && [ "$STLLANG" != "$STLDEFLANG" ]; then 
+		writelog "INFO" "${FUNCNAME[0]} - Now load the language file '$STLLANG'"
+		loadLangFile "$STLLANG"
+		touch "$FUPDATE"
+		updateConfigEntry "STLLANG" "$STLLANG" "$STLDEFGLOBALCFG"
+	fi
+	
 #		touch "$STLSHM/lola-$AID.txt"
-		
-		if [ -z "$DESC_STLLANG" ]; then # example variable, if it is empty it means no language file was loaded above
-			writelog "ERROR" "${FUNCNAME[0]} - ###############################" "E"
-			writelog "ERROR" "${FUNCNAME[0]} - No language file could be loaded! For the initial setup at least one file (default english) is required" "E"
-			writelog "ERROR" "${FUNCNAME[0]} - You can ether copy a valid file to '$STLLANGDIR' or '$SYSTEMSTLCFGDIR/lang' or provide an absolute path via command line using the lang= option" "E"
-			writelog "ERROR" "${FUNCNAME[0]} - ###############################" "E"
-			exit
-		fi
-#	fi
+	
+	if [ -z "$DESC_STLLANG" ]; then # example variable, if it is empty it means no language file was loaded above
+		writelog "ERROR" "${FUNCNAME[0]} - ###############################" "E"
+		writelog "ERROR" "${FUNCNAME[0]} - No language file could be loaded! For the initial setup at least one file (default english) is required" "E"
+		writelog "ERROR" "${FUNCNAME[0]} - You can ether copy a valid file to '$STLLANGDIR' or '$SYSTEMSTLCFGDIR/lang' or provide an absolute path via command line using the lang= option" "E"
+		writelog "ERROR" "${FUNCNAME[0]} - ###############################" "E"
+		exit
+	fi
 }
 
 function setProtonPathVersion {
@@ -2358,14 +2348,12 @@ function setProtonPathVersion {
 				if grep -q "Proton 3.7" <<<"$PRTPATH"; then
 					PROTVOUT="proton-3.7-8"
 				else
-				# fallback if everything fails - in the rare cases where this unknown proton version is used this might cause problems
-				# if you need it open an issue and it will get a hardcoded entry as well
+					# fallback if everything fails - in the rare cases where this unknown proton version is used this might cause problems
+					# if you need it open an issue and it will get a hardcoded entry as well
 					PROTVOUT="proton-unknown-$((900 + RANDOM % 100))"
 				fi
 			fi
-
 			#writelog "INFO" "${FUNCNAME[0]} - Setting the Proton Version for '$1' to '${PROTVOUT//\"/}'"	# checking $PROTONCSV should be enough
-
 			echo "${PROTVOUT//\"/}"
 		fi
 	fi
@@ -2377,10 +2365,10 @@ function fillProtonCSV {
 	else
 		protonfileV="$(setProtonPathVersion "$PROTBIN")"
 	fi
+
 	if [ -n "$protonfileV" ]; then
 		PCSV="\"${protonfileV//\"/}\";\"$(readlink -f "$PROTBIN")\""
-#		writelog "INFO" "${FUNCNAME[0]} - Adding Proton '${PCSV//\"}'" # too much info, $PCSV can always be read if interested
-		if [[ ! " ${ProtonCSV[*]} " =~ $PCSV ]]; then
+		if [[ ! " ${ProtonCSV[*]} " =~ $PCSV ]]; then  # $PCSV can always be read if interested
 			mapfile -t -O "${#ProtonCSV[@]}" ProtonCSV <<< "$PCSV"
 		else
 			writelog "SKIP" "${FUNCNAME[0]} - '$PCSV' is already in the Proton array"
@@ -3541,7 +3529,6 @@ function notiShow {
 		fi
 
 		if [ -n "$USENOTIFIER" ] && [ "$USENOTIFIER" -eq 1 ] && { [ -z "$2" ] || { [ -n "$2" ] && [ "$2" != "S" ]; };} || { [ -n "$2" ] && [ "$2" == "X" ]; }; then
-
 			if [ -x "$(command -v "$NOTY")" ]; then
 				if [ -z "${NOTYARGSARR[0]}" ]; then
 					mapfile -d " " -t -O "${#NOTYARGSARR[@]}" NOTYARGSARR < <(printf '%s' "$NOTYARGS")
@@ -3562,7 +3549,6 @@ function notiShow {
 
 function strFix {
 	STRIN="$1"
-
 	if [ -z "$2" ]; then
 		echo "$STRIN"
 	else
@@ -3592,7 +3578,7 @@ function setRunWineServer {
 		if [ -n "$USEPROTON" ] && [ ! -f "$(getProtPathFromCSV "$USEPROTON")" ] && [ "$HAVEINPROTON" -eq 0 ]; then
 			fixProtonVersionMismatch "USEPROTON" "$STLGAMECFG"
 		fi
-		
+
 		if [ -z "$RUNPROTON" ] && [ "$HAVEINPROTON" -eq 1 ]; then
 			RUNPROTON="${INPROTCMD[*]}"
 		fi
@@ -3638,7 +3624,6 @@ function setNewProtVars {
 				writelog "INFO" "${FUNCNAME[0]} - Continuing with RUNPROTON='$RUNPROTON'"
 
 				PDTGZ="proton_dist.tar.gz"
-				
 				if [ ! -f "$CHECKWINED" ] && [ ! -f "$CHECKWINEF" ] && [ -f "$(dirname "$RUNPROTON")/$PDTGZ" ]; then
 					writelog "INFO" "${FUNCNAME[0]} - Wine binary not found, but a proton archive '$PDTGZ' - extracting now"
 					mkProjDir "$(dirname "$RUNPROTON")/dist"
@@ -3748,7 +3733,6 @@ function dlCustomProton {
 	
 	PROTNAMERAW="${CPURLFILE%%.tar*}"
 	PROTNAME="${PROTNAMERAW//.zip/}"
-
 	if [ -d "$CUPROEXTDIR/$PROTNAME" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - directory '$CUPROEXTDIR/$PROTNAME' already exists - nothing to extract"
 	else
@@ -3832,13 +3816,12 @@ function createDLProtList {
 			rm "$PROTDLLIST" 2>/dev/null
 			while read -r CPURL; do
 				if grep -q "$GHURL" <<< "${!CPURL}"; then
-				SRCURL="${!CPURL}"
-				SRCURL="${SRCURL//\/releases}"
-				SRCURL="${SRCURL//$GHURL/$AGHURL\/repos}"
-				SRCURL="${SRCURL}/releases"
+					SRCURL="${!CPURL}"
+					SRCURL="${SRCURL//\/releases}"
+					SRCURL="${SRCURL//$GHURL/$AGHURL\/repos}"
+					SRCURL="${SRCURL}/releases"
 
-				# Potentially rewrite to avoid reliance on jq?
-				"$WGET" -q "$SRCURL" -O - | "$JQ" -r '.[].assets[].browser_download_url' | grep "tar.gz\|tar.xz" | grep -v "Yad\|7.x" >> "$PROTDLLIST"
+					"$WGET" -q "$SRCURL" -O - | "$JQ" -r '.[].assets[].browser_download_url' | grep "tar.gz\|tar.xz" | grep -v "Yad\|7.x" >> "$PROTDLLIST"
 				fi
 			done <<< "$(grep "^CP_" "$STLURLCFG" | cut -d '=' -f1)"
 		fi
@@ -3860,7 +3843,6 @@ function createDLProtList {
 }
 
 function dlCustomProtonGUI {
-
 	createDLProtList
 
 	writelog "INFO" "${FUNCNAME[0]} - Opening dialog to choose a download"
@@ -3929,9 +3911,6 @@ function setGameArt {
 	}
 
 	GAME_APPID="$1"  # We don't validate AppID as it would drastically slow down the process for large libraries
-
-	# TODO Option to set SteamTinkerLaunch game pic??
-	# TODO note recommended resolutions for each art (on the Yad GUI and in the command line)
 
 	SETARTCMD="cp"  # Default command will copy art
 	for i in "$@"; do
@@ -4229,7 +4208,6 @@ function addCustomProton {
 }
 
 function saveMenuEntries {
-
 	SAVMENUCAT="$1"
 	writelog "INFO" "${FUNCNAME[0]} - Saving changed Settings"
 	writelog "INFO" "${FUNCNAME[0]} - Clearing Results array with '${#Results[@]}' elements"
@@ -4245,19 +4223,19 @@ function saveMenuEntries {
 		VAR="$(grep -oP "\('\K[^\')]+" <<< "$RAWENT")"
 
 		if [ -n "$VAL" ]; then
-				if grep -q "MENU_GAME" <<< "$RAWENT"; then
-					if [ "$SAVMENUCAT" == "$GAMETEMPMENU" ]; then
-						SAVECFG="$STLDEFGAMECFG"
-					else
-						SAVECFG="$STLGAMECFG"
-					fi
-				elif grep -q "MENU_URL" <<< "$RAWENT"; then
-					SAVECFG="$STLURLCFG"
-				elif grep -q "MENU_GLOBAL" <<< "$RAWENT"; then
-					SAVECFG="$STLDEFGLOBALCFG"
+			if grep -q "MENU_GAME" <<< "$RAWENT"; then
+				if [ "$SAVMENUCAT" == "$GAMETEMPMENU" ]; then
+					SAVECFG="$STLDEFGAMECFG"
 				else
-					writelog "SKIP" "${FUNCNAME[0]} - No valid configfile determined for VAR='$VAR' WRITEVAL='$WRITEVAL' - this is an error!"
+					SAVECFG="$STLGAMECFG"
 				fi
+			elif grep -q "MENU_URL" <<< "$RAWENT"; then
+				SAVECFG="$STLURLCFG"
+			elif grep -q "MENU_GLOBAL" <<< "$RAWENT"; then
+				SAVECFG="$STLDEFGLOBALCFG"
+			else
+				writelog "SKIP" "${FUNCNAME[0]} - No valid configfile determined for VAR='$VAR' WRITEVAL='$WRITEVAL' - this is an error!"
+			fi
 			VALUNQ="${VAL//\'/}"
 			WRITEVAL="${VALUNQ/# -/-}"
 			
@@ -4296,15 +4274,11 @@ function updateThisWinTemplate {
 }
 
 function updateWinRes {
-	if [ -z "$SAVESETSIZE" ]; then
+	if [ -z "$SAVESETSIZE" ] || [ "$ONSTEAMDECK" -eq 1 ]; then
 		SAVESETSIZE=0
 	fi
 	
-	if [ "$ONSTEAMDECK" -eq 1 ]; then
-		SAVESETSIZE=0
-	fi
-	
-	if [ "$SAVESETSIZE" -eq 1 ] ; then
+	if [ "$SAVESETSIZE" -eq 1 ]; then
 		WNAM="$1"
 		CFG="$2"
 		TEMPLGUICFG="$3"
@@ -4494,9 +4468,7 @@ function EditorDialog {
 	writelog "INFO" "${FUNCNAME[0]} - Opening Editor Dialog"
 
 	resetAID "$1"
-	
 	loadCfg "$STLGAMECFG" X
-
 	getAvailableCfgs
 	
 	if [ "$BACKUPSTEAMUSER" -eq 1 ]; then
@@ -4996,7 +4968,6 @@ function favoritesMenu {
 }
 
 function listAllSettingsEntries {
-
 	if [ -f "$STLSETENTRIES" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - '$STLSETENTRIES' already exists - nothing to do"
 	else
@@ -5753,7 +5724,6 @@ function MainMenu {
 
 	LAPL="$(getLaPl)"
 	SETHEAD="$(spanFont "${PROGNAME} (${PROGNAME,,}) - ${PROGVERS} \n \n$SGNAID" "H")"
-	# SETHEAD="$(spanFont "${PROGNAME} (${PROGNAME,,}) - ${PROGVERS} \n \n$SGNAID" "H")\n<i>$LAPL\n(${#CfgFiles[@]} $GUI_EDITABLECFGS)\n($GUI_EDITABLEGAMECFGS)\n</i>"
 
 	TT_OPENURL="Help Url Gui"
 
@@ -5769,20 +5739,16 @@ function MainMenu {
 
 	# Show Steam Deck compatibility on Main Menu when in Steam Deck Desktop Mode
 	if [ "$SMALLDESK" -eq 1 ]; then
-		writelog "INFO" "${FUNCNAME[0]} - Looks like we're in Steam Deck desktop mode here on the Main Menu"
-
 		SETHEAD="$SETHEAD \n<b>${GUI_SDCR}:</b> $STEAMDECKCOMPATRATING"
 	fi
 
 	if [ "$SMALLDESK" -eq 0 ]; then
-		writelog "INFO" "${FUNCNAME[0]} - Looks like we're loading the Main Menu regularly"
-
 		if [ -n "$DEVELOPER" ]; then
-			SETHEAD="$SETHEAD \n\n <b>${GUI_DEV}:</b> $DEVELOPER"
+			SETHEAD="$SETHEAD \n\n<b>${GUI_DEV}:</b> $DEVELOPER"
 		fi
 
 		if [ -n "$PUBLISHER" ]; then
-			SETHEAD="$SETHEAD \n <b>${GUI_PUB}:</b> $PUBLISHER"
+			SETHEAD="$SETHEAD \n<b>${GUI_PUB}:</b> $PUBLISHER"
 		fi
 	
 		prepareProtonDBRating
@@ -5806,30 +5772,30 @@ function MainMenu {
 		fi
 
 		if [ -n "$STEAMDECKCOMPATRATING" ]; then
-			SETHEAD="$SETHEAD \n <b>${GUI_SDCR}:</b> $STEAMDECKCOMPATRATING"
+			SETHEAD="$SETHEAD \n<b>${GUI_SDCR}:</b> $STEAMDECKCOMPATRATING"
 		fi
 
 		if [ -L "$GPFX/$DRCU/$STUS" ]; then
-			SETHEAD="$SETHEAD \n <b>${GUI_SSU}:</b> symlink to $(readlink "$GPFX/$DRCU/$STUS")"
+			SETHEAD="$SETHEAD \n<b>${GUI_SSU}:</b> symlink to $(readlink "$GPFX/$DRCU/$STUS")"
 		fi
 
 		if [ "$ISORIGIN" -eq 1 ]; then
-			SETHEAD="$SETHEAD \n <b>${GUI_SGW}:</b> Origin interfering"
+			SETHEAD="$SETHEAD \n<b>${GUI_SGW}:</b> Origin interfering"
 		else
 			if [ -n "$GAMEWINDOW" ] && [ "$GAMEWINDOW" != "$NON" ]; then
-				SETHEAD="$SETHEAD \n <b>${GUI_SGW}:</b> $(fixShow "$GAMEWINDOW")"
+				SETHEAD="$SETHEAD \n<b>${GUI_SGW}:</b> $(fixShow "$GAMEWINDOW")"
 			fi	
 		fi
 		
 		if [ -n "$GAMEEXE" ]; then
-			SETHEAD="$SETHEAD \n <b>${GUI_SGE}:</b> $GAMEEXE"
+			SETHEAD="$SETHEAD \n<b>${GUI_SGE}:</b> $GAMEEXE"
 		fi
 
 		if [ "$ISORIGIN" -eq 1 ]; then
-			SETHEAD="$SETHEAD \n <b>${GUI_SGA}:</b> Origin $L2EA url"
+			SETHEAD="$SETHEAD \n<b>${GUI_SGA}:</b> Origin $L2EA url"
 		else
 			if [ "${#ORGCMDARGS[@]}" -ge 1 ]; then
-				SETHEAD="$SETHEAD \n <b>${GUI_SGA}:</b> ${ORGCMDARGS[*]}"
+				SETHEAD="$SETHEAD \n<b>${GUI_SGA}:</b> ${ORGCMDARGS[*]}"
 			fi
 		fi
 	fi
@@ -13372,7 +13338,6 @@ function dlLatestHMM {
 					echo "Successfully extracted HedgeModManager archive"
 					writelog "Info" "${FUNCNAME[0]} - Removing archive '$HMMARCHIVENAME' after successful extraction"
 					rm "$HMMARCHIVEPATH"
-
 					echo "$HMMVER" > "$HMMVERFILE"  # Update version on successfull download and extract
 				else
 					# Download failed
@@ -13455,12 +13420,6 @@ function dlLatestHMM {
 		else
 			writelog "WARN" "${FUNCNAME[0]} - No HMMVERFILE found at '$HMMVERFILE' - HedgeModManager may not have been installed and so may fail to start offline!"
 		fi
-
-		# EXPERIMENTALLY DISABLED -- Sometimes pinging GitHub fails, see #677
-		# For this reason we won't explicitly return when checking the connection to GitHub fails, as it could be a red herring
-		# Installation may still fail though, as if we can't ping GitHub we may not be able to download HMM anyway
-		
-		# return
 	fi
 
 	DLVER="$1"
@@ -13498,9 +13457,7 @@ function setHMMVars {
 	fi
 	HMMGAMES="$GLOBALMISCDIR/hmmgames.txt"
 	if [ -z "$HMMWINE" ] || [ ! -f "$HMMWINE" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - HMMWINE is either not set or not a file -- It is currently '$HMMWINE'"
 		if [ "$USEHMMPROTON" == "$NON" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - USEHMMPROTON is '$USEHMMPROTON'"
 			if [ ! -f "$PROTONCSV" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Looking for available Proton versions"
 				getAvailableProtonVersions "up" X
@@ -13514,13 +13471,10 @@ function setHMMVars {
 			fi
 
 			SETHMMPROT="$(grep "^GE" "$PROTONCSV" | sort -V | tail -n1)"
-			writelog "INFO" "${FUNCNAME[0]} - SETHMMPROT is currently '$SETHMMPROT'"
 			
 			SETHMMPROT="${SETHMMPROT%%;*}"
-			writelog "INFO" "${FUNCNAME[0]} - SETHMMPROT is now '$SETHMMPROT'"
 			
 			USEHMMPROTON="$SETHMMPROT"
-			writelog "INFO" "${FUNCNAME[0]} - USEHMMPROTON is '$USEHMMPROTON'"
 
 			touch "$FUPDATE"
 			updateConfigEntry "USEHMMPROTON" "$USEHMMPROTON" "$STLDEFGLOBALCFG"
@@ -13528,15 +13482,7 @@ function setHMMVars {
 		else
 			writelog "INFO" "${FUNCNAME[0]} - USEHMMPROTON was set -- it is '$USEHMMPROTON'"
 			SETHMMPROT="$USEHMMPROTON"
-			writelog "INFO" "${FUNCNAME[0]} - SETHMMPROT should equal USEHMMPROTON -- '$SETHMMPROT' == '$USEHMMPROTON'"
 		fi
-
-		writelog "INFO" "${FUNCNAME[0]} - Using '$USEHMMPROTON' for '$HMM'"
-
-		writelog "INFO" "${FUNCNAME[0]} - About to call 'setModWine' with the following vars:"
-		writelog "INFO" "${FUNCNAME[0]} - - SETHMMPROT is '$SETHMMPROT'"
-		writelog "INFO" "${FUNCNAME[0]} - - HMMRUNPROT is '$HMMRUNPROT'"
-		writelog "INFO" "${FUNCNAME[0]} - - HMMWINE is '$HMMWINE'"
 
 		# Sometimes ProtonCSV can have a version of GE-Proton that doesn't actually exist (or that used to exist, but doesn't anymore)
 		#
@@ -13745,8 +13691,7 @@ function prepareHMMGames {
 }
 
 function startHMM {
-	# TODO:
-	# - Refine UI (add HMM button, etc)
+	# TODO HMM button on UI somewhere in future? Not sure
 	HMMDLVERARG="$1"
 	HMMDOTNETFORCE="$2"
 
@@ -13776,20 +13721,17 @@ function uninstallHMM {
 		echo "Removing HedgeModManager compatdata"
 		rm -rf "$HMMCOMPDATA"
 	fi
-
 	# Downloads dir - Should always be in STL cfg dir
 	if [ -d "$HMMDLDIR" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Removing HedgeModManager downloads directory"
 		echo "Removing HedgeModManager SteamTinkerLaunch directory"
 		rm -rf "$HMMDLDIR"
 	fi
-
 	# Remove desktop files
 	if [ -d "$HMMDFPA" ]; then
 		echo "Removing HedgeModManager Desktop file at '$HMMDFPA'" 
 		rm "$HMMDFPA"
 	fi
-	
 	if [ -d "$HMMDFDLPA" ]; then
 		echo "Removing HedgeModManager Desktop file at '$HMMDFDLPA'"
 		rm "$HMMDFPA"
@@ -14066,7 +14008,6 @@ function setVortexDLMime {
 	fi
 
 	# setting mime types for nxm
-
 	if [ -x "$(command -v "$XDGMIME" 2>/dev/null)" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Setting download defaults for nexusmod protocol via $XDGMIME pointing at $VD"
 		"$XDGMIME" default "$VD" x-scheme-handler/nxm
@@ -14308,10 +14249,6 @@ function getVortexSupported {
 
 	gVSIDs "$VGPDIR"
 	gVSIDs "$VUPDIR"
-	
-	# if [ -n "$1" ]; then
-	# 	printf "%s\n" "${VOSTIDS[@]}" | sort -n
-	# fi
 }
 
 # If extra formatting is added this file may need updated 
@@ -14344,11 +14281,9 @@ function getVortexSupportedNames {
 				VORTEXGAMES="$GLOBALMISCDIR/$VOGAT"
 				VSGDN="$( basename "$VOSTGAMDIR" | sed 's:game-::g' )"
 				VOSTGAMDIRAID="$( grep -im1 "$VSGDN" "$VORTEXGAMES" | cut -d ";" -f 3 | cut -d '"' -f 2 )"
-				
 				# If we *STILL* can't find it, search Vortex games list based on the game's "full" name in `info.json`
 				if [ -z "$VOSTGAMDIRAID" ]; then
 					VOSTGAMDIRAID="$( grep -im1 "$VOSTGAMDIRNAM" "$VORTEXGAMES" | cut -d ";" -f 3 | cut -d '"' -f 2 )"
-
 					# Special hack for kotor as Vortex groups these two games together annoyingly and doesn't list them separately - an improved way to handle this would be welcome
 					if [[ $VOSTGAMDIRNAM = *"Knights of the Old Republic"* ]]; then 
 						printf "Star Wars: Knights of the Old Republic (32370)\nStar Wars: Knights of the Old Republic II (208580)\n"
@@ -14396,7 +14331,6 @@ function checkVortexRegs {
 		writelog "INFO" "${FUNCNAME[0]} - Registry path $REGKEY already set"
 		# value of the currently set registry path:
 		REGPATH="$(wineVortexRun "$VORTEXWINE" reg QUERY "$REGKEY" | grep -i "$PATHKEY" | awk -F 'REG_SZ' '{print $NF}' | awk '{$1=$1};1' | tr -d "\n\r")"
-
 		if [ "$REGPATH" == "${INSTP//\\\\/\\}" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - The registry entry '$REGPATH' for '$PATHKEY' is identical to the gamepath '${INSTP//\\\\/\\}'"
 		else
@@ -14981,44 +14915,30 @@ function VortexOptions {
 function setModWine {
 	USEDNPROTONVAR="$1"
 	USEDNPROTON="${!1}"
-#	DNPROTONVAR="$2"
 	DNPROTON="${!2}"
 	DNWINEVAR="$3"
 	INUVP="$USEDNPROTON"
 
-	writelog "INFO" "${FUNCNAME[0]} - Setting mod game wine"
-	writelog "INFO" "${FUNCNAME[0]} - USEDNPROTONVAR is '${USEDNPROTONVAR}'"
-	writelog "INFO" "${FUNCNAME[0]} - USEDNPROTON is '${USEDNPROTON}'"
-	writelog "INFO" "${FUNCNAME[0]} - DNPROTON is '${DNPROTON}'"
-	writelog "INFO" "${FUNCNAME[0]} - DNWINEVAR is '${DNWINEVAR}'"
-
 	if [ -z "$DNPROTON" ] || [ ! -f "$DNPROTON" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - DNPROTON not defined or not a file"
 		if [ -z "${ProtonCSV[0]}" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Getting avaialble Proton versions"
 			getAvailableProtonVersions "up" X
-		else
-			writelog "${FUNCNAME[0]} - DNPROTON is either a file or it is defined"
 		fi
 		DNPROTON="$(getProtPathFromCSV "$USEDNPROTON")"
-		writelog "INFO" "${FUNCNAME[0]} - DNPROTON was gotten from CSV path - It is '${DNPROTON}'"
 		if [ ! -f "$DNPROTON" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Proton version mismatch"
 			DNPROTON="$(fixProtonVersionMismatch "$USEDNPROTONVAR" "$STLDEFGLOBALCFG" X)"
 			writelog "INFO" "${FUNCNAME[0]} - Resolve, USEDNPROTONVAR is now '$USEDNPROTONVAR'"
-		else
-			writelog "INFO" "${FUNCNAME[0]} - DNPROTON is a file -- '$DNPROTON'"
 		fi
+		writelog "INFO" "${FUNCNAME[0]} - DNPROTON is '${DNPROTON}'"
 
 		if [ ! -f "$DNPROTON" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - DNPROTON '$DNPROTON' is not a file"
 			createDLProtList
 			DLURL="$(printf "%s\n" "${ProtonDLList[@]}" | grep -m1 "$USEDNPROTON")"
 			if [ -n "$DLURL" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Downloading: '$DLURL'" "E"
 				StatusWindow "$GUI_DLCUSTPROT" "dlCustomProton ${DLURL//|/\"}" "DownloadCustomProtonStatus"
 				DNPROTON="$(getProtPathFromCSV "$USEDNPROTON")"
-				writelog "INFO" "${FUNCNAME[0]} - DNPROTON in DLURL check was gotten as '$DNPROTON'"s
 			else
 				writelog "SKIP" "${FUNCNAME[0]} - No download URL found for requested '$USEDNPROTON' - skipping" "E"
 			fi
@@ -15031,32 +14951,23 @@ function setModWine {
 		export "$2"="$DNPROTON"
 		CHECKDNWINED="$(dirname "$DNPROTON")/$DBW"
 		CHECKDNWINEF="$(dirname "$DNPROTON")/$FBW"
-		
-		writelog "INFO" "${FUNCNAME[0]} - DNPROTON is defined and is a file -- '$DNPROTON'"
-		writelog "INFO" "${FUNCNAME[0]} - CHECKDNWINED is '$CHECKDNWINED'"
-		writelog "INFO" "${FUNCNAME[0]} - CHECKDWINEF is '$CHECKDNWINEF'"
+
 		if [ -f "$CHECKDNWINED" ]; then
 			FWINEVAR="$CHECKDNWINED"
-			writelog "INFO" "${FUNCNAME[0]} - CHECKDNWINED is a file -- '${CHECKDNWINED}'"
 		elif [ -f "$CHECKDNWINEF" ]; then
 			FWINEVAR="$CHECKDNWINEF"
-			writelog "INFO" "${FUNCNAME[0]} - CHECKDNWINEF is a file -- '${CHECKDNWINEF}'"
 		else
 			writelog "ERROR" "${FUNCNAME[0]} - $DNWINEVAR was not found - can't continue"
 		fi
 		
 		if [ -f "$FWINEVAR" ]; then
 			export "$DNWINEVAR"="$FWINEVAR"
-		else
-			writelog "INFO" "${FUNCNAME[0]} - FWINEVAR is not a file -- '$FWINEVAR'"
 		fi
 		
 		if [ "$INUVP" != "$USEDNPROTON" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Updating 'USEDNPROTON' in '${STLDEFGLOBALCFG##*/}' to '$USEDNPROTON'" "E"
 			touch "$FUPDATE"
 			updateConfigEntry "$USEDNPROTONVAR" "$USEDNPROTON" "$STLDEFGLOBALCFG"
-		else
-			writelog "INFO" "${FUNCNAME[0]} INUVP is not equal to USEDNPROTON -- '$INUVP' != '$USEDNPROTON'"
 		fi
 	else
 		writelog "ERROR" "${FUNCNAME[0]} - DNPROTON was not found - can't continue" "E"
@@ -17529,11 +17440,8 @@ function logPlayTime {
 
 	if [ "$LOGPLAYTIME" -eq 1 ] && [ -n "$GN" ] ; then
 		mkProjDir "$PLAYTIMELOGDIR"
-		# different date formats?
-		TIMEPLAYEDSTR="$(date +%d.%m.%Y) for $(getLengthPlayed "$1")"
-		
+		TIMEPLAYEDSTR="$(date +%d.%m.%Y) for $(getLengthPlayed "$1")" # different date formats?
 		echo "$TIMEPLAYEDSTR" >> "$PLAYTIMELOGDIR/${GN}.log"
-		# echo "$(date +%d.%m.%Y): $1 sec" >> "$PLAYTIMELOGDIR/${GN}.log"
 	fi
 }
 
@@ -18424,11 +18332,9 @@ function initPlay {
 		writelog "INFO" "${FUNCNAME[0]} - Setting AID to '$GAMEID'" "E"
 		export AID="$GAMEID"
 	fi
-
 	saveHaveCuMe
 	saveHaveGeMe
     # from here all required vars should be ready to launch
-
 	if [ -n "$AID" ] && [ "$AID" != "$PLACEHOLDERAID" ]; then
 		if [ -z "$HAVGACO" ]; then
 			HAVGACO="$STLGAMEDIRID/$AID.conf"
@@ -19896,15 +19802,6 @@ function howto {
 	echo "    compat <cmd>                     Will (add|del|get) ${PROGNAME,,} as" 
 	echo "                                       Steam compatibility tool"
 	echo "                                       under 'STEAMCOMPATOOLS'"
-	echo "    createcompatdata|ccd <gameid><gui> (Re-)create compatdata for <gameid>"
-	echo "                                       open <gui> to configure custom programs"
-	echo "    createdesktopicon|cdi <game><id> Create desktop icon for <game>"
-	echo "                                       <game> is the gameid or"
-	echo "                                       with available meta game title"
-	echo "                                       0=only internally"
-	echo "                                       1=on the desktop"
-	echo "                                       2=for the application menu"
-	echo "                                       3=for desktop and application menu"
 	echo "    createappinfo|cai <id|i|o>       Create raw appinfo for <id>"
 	echo "                                      or for 'installed|i' or 'owned|o' games"
 	echo "                                      Append any arg to update the raw file"
@@ -19914,6 +19811,15 @@ function howto {
 	echo "                                      and write to game metadata."
 	echo "                                      Append any arg to update the metadata"
 	echo "                                      (takes a long time for many games!)"
+	echo "    createcompatdata|ccd <gameid><gui> (Re-)create compatdata for <gameid>"
+	echo "                                       open <gui> to configure custom programs"
+	echo "    createdesktopicon|cdi <game><id> Create desktop icon for <game>"
+	echo "                                       <game> is the gameid or"
+	echo "                                       with available meta game title"
+	echo "                                       0=only internally"
+	echo "                                       1=on the desktop"
+	echo "                                       2=for the application menu"
+	echo "                                       3=for desktop and application menu"
 	echo "    createfirstinstall|cfi <gameid>  Open gui to create a Steam First Time Setup" 
 	echo "    <a|c|r|file> (see wiki)            file for game <gameid>"
 	echo "    configdir                        Open the SteamTinkerLaunch config directory with xdg-open"
@@ -19935,12 +19841,12 @@ function howto {
 	echo "    gamefiles|gf <gameid>            Opens menu for opening <gameid> files"
 	echo "    gamescope|gs <gameid>            Gamescope config-menu for <gameid>"
 	echo "    (get commands only for games known by ${PROGNAME,,}:)"
-	echo "    getexe|ge <gameid>               Print the Game Exe for <gameid>"
-	echo "    getid|gi <gametitle>             Print the SteamAppId for <gametitle>"
-	echo "    gettitle|gt <gameid>             Print the Game Title for <gameid>"
 	echo "    getcompatdata|gc <gameid/title>  Print the Game compatdata path"
+	echo "    getexe|ge <gameid>               Print the Game Exe for <gameid>"
 	echo "    getgamedir|gg <gameid/title>     Print the Game install directory with game name and AppID"
 	echo "                  only                 Only display install directory"
+	echo "    getid|gi <gametitle>             Print the SteamAppId for <gametitle>"
+	echo "    gettitle|gt <gameid>             Print the Game Title for <gameid>"
 	echo "    hedgemodmanager|hmm              HedgeModManager"
 	echo "            install|i                  install latest stable HedgeModManager"
 	echo "            download|d <channel>       download latest HedgeModManager release (stable or nightly)"
@@ -19957,32 +19863,13 @@ function howto {
 	echo "            resetmime                (Re)set MimeType and application menu entries"   
 	echo "            uninstall                Remove HedgeModManager downloads folder, desktop files and Wineprefix"
 	echo "                                      Note that this will not remove your mods or installed Winetricks"
-	echo "    opengridfolder|ogf               Open the Steam Grid folder where custom game artwork is stored using xdg-open"
-	echo "    setgameart|sga <gameid> <args>   Set the artwork for various games by their AppID using absolute paths"
-	echo "                                      Passing no args will open a GUI"
-	echo "                                      By default, given artwork will be copied to the Steam Grid folder"
-	echo "                                      Note that only ONE of the copy/link/move options should be used"
-	echo "      <args>:                           "
-	echo "      -hr=|--hero=                     Hero Art path    - Banner used on the Game Screen (3840x1240 recommended)"
-	echo "      -lg=|--logo=                     Logo Art path    - Logo that gets displayed on Game Screen (16:9 recommended)"
-	echo "      -ba=|--boxart=                   Box Art path     - Cover art used in the library (600x900 recommended)"
-	echo "      -tf=|--tenfoot=                  Tenfoot Art path - Small banner used for recently played game in library (600x350 recommended)"
-	echo "      --copy             				 Copy art files to Steam Grid folder"
-	echo "      --link             				 Symlink art files to Steam Grid folder"
-	echo "      --move             				 Move art files to Steam Grid folder"
-	echo "    steamdeckcompat <gameid>         Get information about Steam Deck compatibility for <gameid>"
-	echo "                                       Will work offline if the information has been fetched before"
-	echo "    lang=<option>                    Mostly to get translated configs"
-	echo "                                       on inital setup. <option> can be"
-	echo "                                       a language file name without suffix"
-	echo "                                       or an path to a valid language file"
+	echo "    lang=<option>                    Mostly to get translated configs on inital setup."
+	echo "                                      <option> can be a language file name without suffix or an path to a valid language file"
  	echo "    launcher <args>                  Start the Game Launcher"
-	echo "             COLLECTION                  Show only installed games"
-	echo "                                       from Steam collection COLLECTION"
+	echo "             COLLECTION                Show only installed games from Steam collection COLLECTION"
 	echo "             menu                      Open Steam Collection Menu"
 	echo "             last                      Open last Game as 'Menu'"
-	echo "             auto                      Create/Download data for all"
-	echo "                                       installed games first"
+	echo "             auto                      Create/Download data for all installed games first"
 	echo "             update                    ReCreate all Collection Menus"
 	echo "                                       Can be combined with auto"
 	echo "    list <owned|installed>           List ids of <owned|o,installed|i> games"
@@ -20000,6 +19887,8 @@ function howto {
 	echo "         url|u <url>                 open nxm url with MO2"
 	echo "         resetmime                   (Re)set MimeType and application menu entries"
 	echo "         winecfg                     Run Winecfg with MO2 Wine in MO2 prefix"
+	echo "    opengridfolder|ogf               Open the Steam Grid folder where custom game artwork is stored using xdg-open"
+	echo "    openissue|oi                     Opens issue tracker on GitHub in default browser"
 	echo "    play <gameid>                    Start game with id <gameid> directly" 
  	echo "    proton|p <title> <X>             Start and/or create <title> with proton"
 	echo "                                       without using steam."
@@ -20007,10 +19896,24 @@ function howto {
  	echo "    proton|p list                    Update the list of all available proton versions"
 	echo "    set <var> <for> <value>          Change configuration settings"
 	echo "                                       Example:"
-	echo "    set RUN_REPLAY all 1               Set RUN_REPLAY for all games to 1"
+	echo "      set RUN_REPLAY all 1               Set RUN_REPLAY for all games to 1"
+	echo "    setgameart|sga <gameid> <args>   Set the artwork for various games by their AppID using absolute paths"
+	echo "                                      Passing no args will open a GUI"
+	echo "                                      By default, given artwork will be copied to the Steam Grid folder"
+	echo "                                      Note that only ONE of the copy/link/move options should be used"
+	echo "      <args>:                           "
+	echo "      -hr=|--hero=                     Hero Art path    - Banner used on the Game Screen (3840x1240 recommended)"
+	echo "      -lg=|--logo=                     Logo Art path    - Logo that gets displayed on Game Screen (16:9 recommended)"
+	echo "      -ba=|--boxart=                   Box Art path     - Cover art used in the library (600x900 recommended)"
+	echo "      -tf=|--tenfoot=                  Tenfoot Art path - Small banner used for recently played game in library (600x350 recommended)"
+	echo "      --copy                            Copy art files to Steam Grid folder"
+	echo "      --link                            Symlink art files to Steam Grid folder"
+	echo "      --move                            Move art files to Steam Grid folder"
 	echo "    settings <value>                 Opens the $SETMENU"
-	echo "                                       (for 'SteamAppID' or 'last')"
 	echo "    src                              Shortcut '$STERECO'"
+	echo "    steamdeckcompat <gameid>         Get information about Steam Deck compatibility for <gameid>"
+	echo "                                       Will work offline if the information has been fetched before"
+	echo "                                       (for 'SteamAppID' or 'last')"
 	echo "    steamworksshared|sws <opts>      Steamworks Shared:"
 	echo "      <opts>:                          Options:"
 	echo "      <l>                              List packages - or"
@@ -20075,7 +19978,6 @@ function howto {
 	echo "                                         <absolute/path/to/a/yad/appimage>"
 	echo "                                         <http/s/yad/appimage/download/url>"
 	echo "                                       (see Wiki for details)"
-	echo "    openissue|oi                     Opens issue tracker on GitHub in default browser"
 }
 
 #STARTCMDLINE
@@ -21408,56 +21310,43 @@ function addNonSteamGame {
 	for i in "$@"; do
 		case $i in
 			-an=*|--appname=*)
-			NOSTAPPNAME="${i#*=}"
-			shift
-			;;
+				NOSTAPPNAME="${i#*=}"
+				shift ;;
 			-ep=*|--exepath=*)
-			QEP="${i#*=}"; NOSTEXEPATH="\"$QEP\""
-			shift
-			;;
+				QEP="${i#*=}"; NOSTEXEPATH="\"$QEP\""
+				shift ;;
 			-sd=*|--startdir=*)
-			QSD="${i#*=}"; NOSTSTDIR="\"$QSD\""
-			shift
-			;;
+				QSD="${i#*=}"; NOSTSTDIR="\"$QSD\""
+				shift ;;
 			-ip=*|--iconpath=*)
-			NOSTICONPATH="${i#*=}"
-			shift
-			;;
+				NOSTICONPATH="${i#*=}"
+				shift ;;
 			-lo=*|--launchoptions=*)
-			NOSTLAOP="${i#*=}"
-			shift
-			;;
+				NOSTLAOP="${i#*=}"
+				shift ;;
 			-hd=*|--hide=*)
-			NOSTHIDE="${i#*=}"
-			shift
-			;;
+				NOSTHIDE="${i#*=}"
+				shift ;;
 			-adc=*|--allowdesktopconf=*)
-			NOSTADC="${i#*=}"
-			shift
-			;;
+				NOSTADC="${i#*=}"
+				shift ;;
 			-ao=*|--allowoverlay=*)
-			NOSTAO="${i#*=}"
-			shift
-			;;
+				NOSTAO="${i#*=}"
+				shift ;;
 			-vr=*|--openvr=*)
-			NOSTVR="${i#*=}"
-			shift
-			;;
+				NOSTVR="${i#*=}"
+				shift ;;
 			-t=*|--tags=*)
-			NOSTTAGS="${i#*=}"
-			shift
-			;;
+				NOSTTAGS="${i#*=}"
+				shift ;;
 			-stllo=*|--stllaunchoption=*)
-			NOSTSTLLO="${i#*=}"
-			shift
-			;;
-			*)
-			;;
+				NOSTSTLLO="${i#*=}"
+				shift ;;
+			*) ;;
 		esac
 	done
 
 	if [ -n "${NOSTEXEPATH}" ]; then
-	
 		if [ -z "${NOSTAPPNAME}" ]; then
 			NOSTAPPNAME="${QEP##*/}"
 		fi
@@ -21470,15 +21359,8 @@ function addNonSteamGame {
 			NOSTGICONPATH="$STLICON"
 		fi
 
-		# looks like the appid used here is randomly generated or at least not created from CRC
-		# (like the shortcutnames found in screenshots.vdf - see commented out lines)
-		# NOSTCRC="$(getCRC "${NOSTEXEPATH}${NOSTAPPNAME}")"
-		# NOSTSCNHEX="${NOSTCRC}02000000"
-		# echo "NOSTSCNHEX = ${NOSTSCNHEX}"
-		# 
-		# Somehow other tools like Steam-Rom-Manager are able to generate correct AppIDs for Non-Steam Games
-		# Not sure how they do it even after trying to reproduce what they do in TypeScript locally
-		# Contributions would be very welcome on properly generating AppIDs for Non-Steam Games!
+		# AppID for Non-Steam Games in shortcuts.vdf is stored as 4-byte little endian integer by Steam
+		# No idea how to extract it using Bash, but there are various working Python implementations
 
 		NOSTAIDRHX="$(printf "%03x%03x%02x\n" $((RANDOM%4096)) $((RANDOM%4096)) $((RANDOM%256)))"
 		NOSTAID="$(hex2dec "$NOSTAIDRHX")"
@@ -22594,7 +22476,7 @@ function getCurrentCommandline {
 	fi
 }
 
-function initShmStl {
+function initShmStl {  # TODO can shorten?
 	mkProjDir "$MTEMP"
 	SHMVERS="$STLSHM/version"
 	
@@ -22717,13 +22599,11 @@ function steamdeckControl {
 function steamDeckInstallFail {
 	printf "\n%s\n" "$NOTY_STEAMDECK_INSTALLFAIL"
 	notiShow "$NOTY_STEAMDECK_INSTALLFAIL" "X"
-
 	exit 1;
 }
 
 # Generic function to download dependency from URL (mainly intended for fetching from package repos)
 function fetchAndExtractDependency {
-	# Remove all files extensions from filename
 	function removeFileExtension {
 		local FNAME="$1"
 		local LASTFNAME=""
@@ -22771,22 +22651,18 @@ function fetchAndExtractDependency {
 	# Download dependency
 	mkdir -p "$EXTRACTPATH"
 	if ! [ -f "$EXTRACTPATH/$ARCHIVENAME" ]; then
-		# Internet connection check
 		if ! [ "$INTERNETCONNECTION" -eq 0 ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Installing '$ARCHIVENAME' from '$ARCHIVEURL' to installation directory '$EXTRACTPATH'"
 			echo "Downloading dependency '$ARCHIVENAME'..."
-			if "$CURLCMD" -Lq "$ARCHIVEURL" -o "$EXTRACTPATH/$ARCHIVENAME"; then
-				# Not showing notifier to prevent even more notifier spam - especially on Steam Deck's built-in 7" display 
+			if "$CURLCMD" -Lq "$ARCHIVEURL" -o "$EXTRACTPATH/$ARCHIVENAME"; then  # Not showing notifier to reduce notifier spam
 				writelog "INFO" "${FUNCNAME[0]} - Successfully downloaded dependency '$ARCHIVENAME'"
 				echo "Successfully downloaded $ARCHIVENAME!"
-			else
-				# Download failure
+			else  # Download failure
 				writelog "WARN" "${FUNCNAME[0]} - Failed to download dependency '$ARCHIVENAME', will attempt to continue with installation in case dependency archives already exist at '$EXTRACTPATH'"
 				notiShow "$(strFix "$NOTY_STEAMDECK_DEPINSTALLFAIL" "$ARCHIVENAME")" "X"
 				strFix "$NOTY_STEAMDECK_DEPINSTALLFAIL" "$ARCHIVENAME"
 			fi
-		else
-			# No internet connection
+		else  # No internet connection
 			writelog "WARN" "${FUNCNAME[0]} - No internet connection, can't download dependency '$ARCHIVENAME' - Will check for locally installed dependencies later on (should be located at '$EXTRACTPATH/$ARCHIVENAME')"
 			echo "WARNING: No Internet Connection, cannot download dependency '$ARCHIVENAME'. For offline installation, manually place the file in '$EXTRACTPATH'."
 			notiShow "$(strFix "$NOTY_STEAMDECK_NOINTERNETDEPSWARN" "$ARCHIVENAME" "$EXTRACTPATH")"
@@ -22796,8 +22672,7 @@ function fetchAndExtractDependency {
 		echo "Dependency '$ARCHIVENAME' already exists at installation directory '$EXTRACTPATH', nothing to download"
 	fi
 
-	# Extracting dependencies
-	# If we can't find an exact match for the downloaded file, try to find a fuzzy match based on 'real' package name
+	# Extracting dependencies - If we can't find an exact match for the downloaded file, try to find a fuzzy match based on 'real' package name
 	if ! [ -f "$EXTRACTPATH/$ARCHIVENAME" ]; then
 		# -----
 		# Get list of files and remove version string from it, then check if this name is inside our target archive file
@@ -22826,12 +22701,10 @@ function fetchAndExtractDependency {
 						writelog "WARN" "${FUNCNAME[0]} - Could not get version from archive - This dependency version may not work if is newer than '$STLVERS'"
 						echo "Could not get version from archive - This dependency version may not work if is newer than '$STLVERS'!"
 					else
-						if [ "$LOCALVERS" = "$STLVERS" ]; then
-							# Version match
+						if [ "$LOCALVERS" = "$STLVERS" ]; then  # Version match
 							writelog "INFO" "${FUNCNAME[0]} - Archive version appears to be the same version that SteamTinkerLaunch asked for - Should be ok to install this version"
 							echo "Dependency version looks ok"
-						else
-							# Version newer/older (might still work, but warn the user anyway)
+						else  # Version newer/older (might still work, but warn the user anyway)
 							writelog "WARN" "${FUNCNAME[0]} - Archive version '${LOCALVERS}' does not match the version that SteamTinkerLaunch asked for ('$STLVERS') - This may cause problems with the installation!"
 							echo "Dependency version does not match what SteamTinkerLaunch was looking for - This may cause problems with your installation!"
 						fi
@@ -22894,7 +22767,6 @@ function checkSteamDeckDependencies {
 
 	# if this really changes, it could be grepped directly from /etc/pacman.d/mirrorlist as well: (was previously used for wget, keeping commented in case we need it in future)
 	#SDREPO="https://steamdeck-packages.steamos.cloud/archlinux-mirror/extra/os/x86_64/"
-
 	# ARCHURL="https://archlinux.org/packages/community/x86_64"
 	ARCHARCHIVEURL="https://archive.archlinux.org/packages"
 
@@ -22952,6 +22824,8 @@ function installFilesSteamDeck {
 				writelog "WARN" "${FUNCNAME[0]} - Still failed to download from GitHub, though it should be up -Not trying to update again, maybe something is wrong with install files"
 				echo "Could not pull down changes from Git, even though GitHub should be up. Not attempting another update right now, maybe try again later or try a fresh install if the issue persists."
 			else
+				# TODO clean this up
+
 				# Currently we assume the removal of the existing files and moving of the new files will succeed ok
 				# There could be a very rare instance where due to permission faults or somethimg, this fails
 				# We aren't worried about this for now, but a PR might be welcome on this in future :-)
@@ -22986,8 +22860,7 @@ function installFilesSteamDeck {
 			writelog "INFO" "${FUNCNAME[0]} - Currently installed STL version: $INSTALLEDPROGVERS"
 			writelog "INFO" "${FUNCNAME[0]} - This script's STL version: $PROGVERS"
 			# Check if we actually need to update (running script ver > currently installed script ver)
-			# Not a fool-proof test, sometimes PROGVERS isn't bumped, but a user can always manually copy the files if they want to
-			# We'll assume they downloaded the latest version ahead of time and want to manually install that
+			# Not a fool-proof test, sometimes PROGVERS isn't bumped, but a user can always manually copy the files if they want to - We'll assume they downloaded the latest version ahead of time and want to manually install that
 			if [[ "$PROGVERS" > "$INSTALLEDPROGVERS" ]]; then 
 				writelog "INFO" "${FUNCNAME[0]} - Existing SteamTinkerLaunch installation is older than current version - Installation will continue by copying downloaded files at '$SCRIPTDIR' to '$PREFIX'"
 				echo "Updating SteamTinkerLaunch to '$PROGVERS' by copying installation files to '$PREFIX' for offline installation..." 
@@ -23153,15 +23026,12 @@ function prepareSteamDeckCompatInfo {
 	if [ "${#DECKCOMPATARR[@]}" -eq "0" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - No compatibility information available for '$AID' - Is this AppID definitely correct?"
 	else
-		COMPATMARK=""
 		# HTML symbols for Verified (checkmark), Playable (circled question mark) and Unsupported (no-entry sign) 
+		COMPATMARK=""
 		case ${DECKCOMPATARR[0]} in
-			*"Verified"*) COMPATMARK="&#10003;"
-			;;
-			*"Playable"*) COMPATMARK="&#128712;"
-			;;
-			*"Unsupported"*) COMPATMARK="&#128683;"
-			;;
+			*"Verified"*) COMPATMARK="&#10003;" ;;
+			*"Playable"*) COMPATMARK="&#128712;" ;;
+			*"Unsupported"*) COMPATMARK="&#128683;" ;;
 		esac
 		STEAMDECKCOMPATRATING="${DECKCOMPATARR[0]} ${COMPATMARK}"
 	fi
@@ -23188,13 +23058,12 @@ function getSteamDeckCompatInfo {
     AID="$1"
 	mkProjDir "$STLGDECKCOMPAT"
 
-	# Unofficial ocumentation for this endpoint is available here: https://github.com/Revadike/InternalSteamWebAPI/wiki/Get-Deck-Compatibility-Report
+	# Unofficial documentation for this endpoint is available here: https://github.com/Revadike/InternalSteamWebAPI/wiki/Get-Deck-Compatibility-Report
     DECKCOMPATENDPOINT="https://store.steampowered.com/saleaction/ajaxgetdeckappcompatibilityreport?nAppID="
     COMPATFILE="$STLGDECKCOMPAT/${AID}-deckcompatrating.json"
 
-    COMPATINFO=""
-
 	# Check if we can access Steam before fetching the Deck compatibility info
+    COMPATINFO=""
 	if ! ping -q -c1 store.steampowered.com &>/dev/null; then
 		writelog "INFO" "${FUNCNAME[0]} - Looks like we can't access Steam, not removing any Steam Deck compatibility files"
 
@@ -23266,8 +23135,6 @@ function getSteamDeckCompatInfo {
 				else
 					writelog "WARN" "${FUNCNAME[0]} - Could not find translation string for returned language token '$OGLANGTOKEN' - Seems like we need to update the translation files to include a new string!"
 				fi
-
-				writelog "INFO" "${FUNCNAME[0]} - '$OGLANGTOKEN' - '$LANGTOKEN'"
             else
                 writelog "INFO" "${FUNCNAME[0]} - Skipping blank LANGTOKEN '$LANGTOKEN' - though this should probably not happen!"
             fi
@@ -23280,11 +23147,9 @@ function getSteamDeckCompatInfo {
 		else
 			writelog "INFO" "${FUNCNAME[0]} - Seems like no developer comments were left for this game - This is fine as most games don't have this, so skipping"
 		fi
-
 		writelog "INFO" "${FUNCNAME[0]} - Finished setting Steam Deck compatibility criteria strings"
     else
-		# We were able to get a response from the endpoint, but the results body wwas blank so we can't get any response information
-		# Not sure when this would happen outside of Non-Steam Games
+		# We were able to get a response from the endpoint, but the results body was blank so we can't get any response information - Not sure when this would happen outside of Non-Steam Games
 		writelog "WARN" "${FUNCNAME[0]} - No compatibility information available for '$AID' - Maybe the AppID is invalid?"
 		rm "$COMPATFILE"
 		return 1
@@ -23305,7 +23170,6 @@ function setflatpak {
 	fi
 }
 
-# Somewhat experimental for now
 # This has the side effect of being called everytime on a local install run, but since the scriptdir of a local install can change, It Has To Be This Way
 function setLocalInstall {
 	SCRIPTDIR="$( realpath "$0" )"
@@ -23313,9 +23177,7 @@ function setLocalInstall {
 	# If not on Steam Deck or Flatpak, and we don't have a system config directory, assume we have a non-root local install and set/update config folder structure to match
 	if [ "$ONSTEAMDECK" -eq 0 ] && [ ! -d "$SYSTEMSTLCFGDIR" ] && [ "$INFLATPAK" -eq 0 ]; then  # Check if "$SYSTEMSTLCFGDIR" doesn't exist because the user could be running the script for testing but have a global install
 		writelog "INFO" "${FUNCNAME[0]} - Looks like we have a non-root local install here - Updating paths..."
-		
-		# If no "$SYSTEMSTLCFGDIR" directory, assume it was looking in `/usr/something` for configs (where they would be on a root install)
-		# but since that folder doesn't exist, set it to the scriptdir 
+		# If no "$SYSTEMSTLCFGDIR" directory, assume it was looking in `/usr/something` for configs (where they would be on a root install) - but since that folder doesn't exist, set it to the scriptdir 
 		SYSTEMSTLCFGDIR="$SCRIPTDIR"
 	else
 		writelog "INFO" "${FUNCNAME[0]} - Looks like we don't have a local non-root install"
@@ -23348,7 +23210,6 @@ function removeEmptyFiles {
 ##################
 
 function main {
-
 	initShmStl
 	restoreGtkCss
 	rm "$TEMPLOG" "$WINRESLOG" "$PRELOG" "$APPMALOG" "$GGDLOG" 2>/dev/null
@@ -23356,10 +23217,9 @@ function main {
 	mkProjDir "$LOGDIRID"
 	setflatpak
 
+	USS="${PREFIX}/share/steam"
 	if [ "$INFLATPAK" -eq 1 ]; then
 		USS="/app/share/steam"
-	else
-		USS="${PREFIX}/share/steam"
 	fi
 	SYSSTEAMCOMPATOOLS="$USS/$CTD"
 
@@ -23370,8 +23230,7 @@ function main {
 	setAIDCfgs
 
 	# Respect language choice asap in running (uses correct language during Steam Deck install)
-	# Try and load either from langfile directory or `lang=` argument (prioritising lang arguments)
-	# Default if we don't get a valid `$STLLANG`
+	# Try and load either from langfile directory or `lang=` argument (prioritising lang arguments) - Default if we don't get a valid `$STLLANG`
 	loadLanguage "$@"
 	if [ -z "$STLLANG" ]; then
 		loadLangFile "$STLDEFLANG"
@@ -23380,7 +23239,6 @@ function main {
 	# Check quiet mode to hide notifier
 	STLQUIET=0
 	if echo "$@" | grep -qow '\-q'; then
-		# commandline "$@"
 		writelog "INFO" "${FUNCNAME[0]} - Quiet mode enabled with '-q', suppressing notifier for this execution"
 		export STLQUIET=1
 		USENOTIFIER=0
@@ -23393,18 +23251,15 @@ function main {
 	emptyVars "O"
 
     # Notify success on Steam Deck
-	# TODO check that this doesn't show success on regular run and close
 	if [ "$ONSTEAMDECK" -eq 1 ] && [ "$STEAMDECKSTEAMRUN" -eq 0 ]; then
 		printf '\n'
 		if [ "$STEAMDECKDIDINSTALL" -eq 1 ]; then
 			INSTALLEDPROGVERS="$( grep -i "^PROGVERS=.*." "$PREFIX/steamtinkerlaunch" | cut -d '"' -f 2 )"
 			if [ "$STEAMDECKWASUPDATE" -eq 1 ]; then
-				# Update success w/ version
-				strFix "$NOTY_STEAMDECK_UPDATE_SUCCESS!" "$INSTALLEDPROGVERS"
+				strFix "$NOTY_STEAMDECK_UPDATE_SUCCESS!" "$INSTALLEDPROGVERS"  # Update success w/ version
 				notiShow "$(strFix "$NOTY_STEAMDECK_UPDATE_SUCCESS" "$INSTALLEDPROGVERS")" "X"
 			else
-				# Install success w/ version
-				strFix "$NOTY_STEAMDECK_INSTALL_SUCCESS!" "$INSTALLEDPROGVERS"
+				strFix "$NOTY_STEAMDECK_INSTALL_SUCCESS!" "$INSTALLEDPROGVERS"  # Install success w/ version
 				notiShow "$(strFix "$NOTY_STEAMDECK_INSTALL_SUCCESS" "$INSTALLEDPROGVERS")" "X"
 			fi
 		else
@@ -23423,8 +23278,7 @@ function main {
 			rmOldLog
 			rm "$PRELOG" 2>/dev/null
 		fi
-		# from here the '$LOGFILE' is written directly
-		writelog "INFO" "${FUNCNAME[0]} - Starting with a clean log"
+		writelog "INFO" "${FUNCNAME[0]} - Starting with a clean log"  # from here the '$LOGFILE' is written directly
 	fi
 
 	writelog "INFO" "${FUNCNAME[0]} - Start creating default configs"
@@ -23472,7 +23326,6 @@ function main {
 				commandline "$@"
 			else
 				setGameVars "$@"
-
 				if [ "$ISGAME" -eq 2 ] || [ "$ISGAME" -eq 3 ]; then
 					prepareLaunch
 				else
