@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v12.12.20230311-1"
+PROGVERS="v12.12.20230311-2"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -9234,10 +9234,8 @@ function askSettings {
 						}
 					;;
 					1)  writelog "INFO" "${FUNCNAME[0]} - Selected CANCEL - Starting game without opening the $SETMENU"
-						editorSkipped
-					;;
-					70) writelog "INFO" "${FUNCNAME[0]} - TIMEOUT - Starting game without opening the $SETMENU"
-					;;
+						editorSkipped ;;
+					70) writelog "INFO" "${FUNCNAME[0]} - TIMEOUT - Starting game without opening the $SETMENU" ;;
 				esac
 			fi
 		fi
@@ -9353,8 +9351,6 @@ function updateConfigFile {
 								VARNAM=${LVAL//\$/DEF}
 							else
 								VARNAM=${LVAL//\$/}
-#								VARNAM=${VARNAM//\\} # the formatting of the lines the incoming sed command reads needs to be 100% correct (f.e. no trainling whitespace)
-#								so maybe rewrite it here later
 							fi
 							OUTVAL=${!VARNAM}
 						else
@@ -9538,45 +9534,37 @@ function updateConfigEntry {
 	if [ -z "$3" ]; then
 		writelog "SKIP" "${FUNCNAME[0]} - Expected 3 arguments - only got $*"
 	else
-#		if [ "$AID" -ne "$PLACEHOLDERAID" ]; then
-			if [ ! -f "$CFGFILE" ]; then
-				writelog "SKIP" "${FUNCNAME[0]} - Configfile '$CFGFILE' does not exist - skipping config update"
-			else
-				if [ -n "$CFGVALUE" ]; then
-					if [ "$CFGVALUE" == "TRUE" ]; then
-						CFGVALUE="1"
-					elif [ "$CFGVALUE" == "FALSE" ]; then
-						CFGVALUE="0"
-					fi	
+		if [ ! -f "$CFGFILE" ]; then
+			writelog "SKIP" "${FUNCNAME[0]} - Configfile '$CFGFILE' does not exist - skipping config update"
+		else
+			if [ -n "$CFGVALUE" ]; then
+				if [ "$CFGVALUE" == "TRUE" ]; then
+					CFGVALUE="1"
+				elif [ "$CFGVALUE" == "FALSE" ]; then
+					CFGVALUE="0"
+				fi	
 
- # issue #534
-#					if [ "$CFGVALUE" == "DUMMY" ] || \
-#						{ [ "$CFGVALUE" == "$NON" ] && \
-#						{ [ "$CFGCAT" != "DXVK_LOG_LEVEL" ] && [ "$CFGCAT" != "DXVK_LOG_PATH" ] && [ "$CFGCAT" != "STL_PV_SHELL" ] ;};}
-#					then
+				if [ "$CFGVALUE" == "DUMMY" ]; then
+					CFGVALUE=""
+				fi
 
- 					if [ "$CFGVALUE" == "DUMMY" ]; then
-						CFGVALUE=""
+				# only save value if it changed
+				if { [ "${!CFGCAT}" != "$CFGVALUE" ] && [ "${!CFGCAT}" != "${CFGVALUE//$STLCFGDIR/STLCFGDIR}" ];} || [ -f "$FUPDATE" ]; then
+					CFGVALUE="${CFGVALUE//$STLCFGDIR/STLCFGDIR}"
+					if [ "$(grep -c "#${CFGCAT}=" "$CFGFILE")" -eq 1 ]; then
+						writelog "INFO" "${FUNCNAME[0]} - Option '$CFGCAT' commented out in config '${CFGFILE##*/}' - activating it with the new value '$CFGVALUE'"
+						sed -i "/^#${CFGCAT}=/c$CFGCAT=\"$CFGVALUE\"" "$CFGFILE"
+					elif [ "$(grep -c "^${CFGCAT}=" "$CFGFILE")" -eq 0 ]; then
+						writelog "INFO" "${FUNCNAME[0]} - '$CFGCAT' option missing in config '${CFGFILE##*/}' - adding a new line"
+						echo "$CFGCAT=\"$CFGVALUE\"" >> "$CFGFILE"
+					else
+						writelog "INFO" "${FUNCNAME[0]} - Option '$CFGCAT' is updated with the new value '$CFGVALUE' in config '${CFGFILE##*/}'"
+						sed -i "/^${CFGCAT}=/c$CFGCAT=\"$CFGVALUE\"" "$CFGFILE"
 					fi
-
-					# only save value if it changed
-					if { [ "${!CFGCAT}" != "$CFGVALUE" ] && [ "${!CFGCAT}" != "${CFGVALUE//$STLCFGDIR/STLCFGDIR}" ];} || [ -f "$FUPDATE" ]; then
-						CFGVALUE="${CFGVALUE//$STLCFGDIR/STLCFGDIR}"
-						if [ "$(grep -c "#${CFGCAT}=" "$CFGFILE")" -eq 1 ]; then
-							writelog "INFO" "${FUNCNAME[0]} - Option '$CFGCAT' commented out in config '${CFGFILE##*/}' - activating it with the new value '$CFGVALUE'"
-							sed -i "/^#${CFGCAT}=/c$CFGCAT=\"$CFGVALUE\"" "$CFGFILE"
-						elif [ "$(grep -c "^${CFGCAT}=" "$CFGFILE")" -eq 0 ]; then
-							writelog "INFO" "${FUNCNAME[0]} - '$CFGCAT' option missing in config '${CFGFILE##*/}' - adding a new line"
-							echo "$CFGCAT=\"$CFGVALUE\"" >> "$CFGFILE"
-						else
-							writelog "INFO" "${FUNCNAME[0]} - Option '$CFGCAT' is updated with the new value '$CFGVALUE' in config '${CFGFILE##*/}'"
-							sed -i "/^${CFGCAT}=/c$CFGCAT=\"$CFGVALUE\"" "$CFGFILE"
-						fi
-						rm "$FUPDATE" 2>/dev/null
-					fi
+					rm "$FUPDATE" 2>/dev/null
 				fi
 			fi
-#		fi
+		fi
 	fi
 
 	CFGCAT=""
@@ -9630,7 +9618,6 @@ function autoCollectionSettings {
 						fi
 					fi
 				done <<< "$(sed -n "/\"$AID\"/,/}/p;" "$SC" | sed -n "/\"tags\"/,/}/p" | sed -n "/{/,/}/p" | grep -v '{\|}' | cut -d '"' -f4)"
-				# "$(sed -n "/\"$AID\"/,/}/p;" "$SC" | sed -n "/\"tags\"/,/}/p" | sed -n "/{/,/}/p" | grep -v '{\|}' | awk '{print $2}' | sed "s:\"::g")" # '
 			fi
 		else
 			writelog "SKIP" "${FUNCNAME[0]} - '$SUSDA' not found - this should not happen! - skipping"
@@ -9774,14 +9761,10 @@ function setGameScopeVars {
 		fi
 
 		# Default internal resolution to $NON ('none') if blank -- Ensures we don't pass invalid resolution to GameScope
-		if [ -z "$GSINTRES" ]; then
-			GSINTRES="$NON"
-		fi
+		if [ -z "$GSINTRES" ]; then  GSINTRES="$NON"; fi
 
 		# Default show resolution to $NON ('none') if blank -- Ensures we don't pass invalid resolution to GameScope
-		if [ -z "$GSSHWRES" ]; then
-			GSSHWRES="$NON"
-		fi
+		if [ -z "$GSSHWRES" ]; then  GSSHWRES="$NON"; fi
 
 		# Focused Frame Rate Limit -- Dropdown
 		GSFLR="$( getGameScopeArg "$GAMESCOPE_ARGS" "-r" "$GSFLR" "" "$UL" "cb")"
@@ -9804,21 +9787,16 @@ function setGameScopeVars {
 		# Force grab cursor -- Keeps cursor inside GameScope nested display -- Checkbox
 		GSFGC="$( getGameScopeArg "$GAMESCOPE_ARGS" "--force-grab-cursor" "$GSFGC" "1" "0" )"
 
-		# Orientation (--force-orientation) -- Can be either 'left', 'right', 'normal', 'upsidedown' -- Dropdown
-		# Defaults to 'normal' ('GSNORM')
-		#
+		# Orientation (--force-orientation) -- Can be either 'left', 'right', 'normal', 'upsidedown' (Defaults to 'normal') -- Dropdown
 		# NOTE: Passing this normally to GameScope (e.g. `gamescope --force-orientation upsidedown -- supertuxkart`) doesn't seem to do anything?
 		GSFOOR="$( getGameScopeArg "$GAMESCOPE_ARGS" "--force-orientation" "$GSFOOR" "" "$GSNORM" "cb")"
 
 		# Custom cursor image (--cursor) -- File picker
 		GSENABLECUSTCUR="0"
 		GSCURSOR="$( getGameScopeArg "$GAMESCOPE_ARGS" "--cursor" "$GSCURSOR" "" "" "path" )"
-		if [ -n "$GSCURSOR" ]; then
-			GSENABLECUSTCUR="1"
-		fi
+		if [ -n "$GSCURSOR" ]; then  GSENABLECUSTCUR="1"; fi
 
-		# There is a `--cursor-scale-height` option, but at time of writing (15/02/22) this doesn't seem to do anything
-		# We can add it in future, but not now
+		# There is a `--cursor-scale-height` option, but at time of writing (15/02/22) this doesn't seem to do anything - We can add it in future, but not now
 	}
 
 	function getGameScopeFilteringOpts {
@@ -9870,15 +9848,13 @@ function setGameScopeVars {
 	}
 
 	function getGameScopeVROpts {
-		# --------------------
-		# NOTE: There are some other GameScope VR options:
+		# There are some other GameScope VR options:
 		# * --vr-overlay-physical-width
 		# * --vr-overlay-physical-curvature
 		# * --vr-overlay-physical-pre-curve-pitch
 		#
 		# These options are probably very bespoke and not important to the average user, especially the physcial width option which takes a value in metres!
 		# Usage on these options is also a bit unclear, probably documented in the GameScope source but not sure -We could add these in future if it is requested
-		# --------------------
 
 		# Enable OpenVR (--openvr) -- Checkbox
 		GSVR="$( getGameScopeArg "$GAMESCOPE_ARGS" "--openvr" "$GSVR" "1" "0" )"
@@ -9892,9 +9868,7 @@ function setGameScopeVars {
 		# SteamVR Overlay Icon (--vr-overlay-icon) -- Similar to cursor picker -- File picker 
 		GSVRICONENABLE="0"
 		GSVRICON="$( getGameScopeArg "$GAMESCOPE_ARGS" "--vr-overlay-icon" "$GSVRICON" "" "" "path" )"
-		if [ -n "$GSVRICON" ]; then
-			GSVRICONENABLE="1"
-		fi
+		if [ -n "$GSVRICON" ]; then  GSVRICONENABLE="1"; fi
 
 		# Focus VR overlay immediately (--vr-overlay-show-immediately) -- Checkbox
 		GSVRSHOIMM="$( getGameScopeArg "$GAMESCOPE_ARGS" "--vr-overlay-show-immediately" "$GSVRSHOIMM" "1" "0" )"
@@ -9913,17 +9887,15 @@ function setGameScopeVars {
 	}
 
 	function getGameScopeEmbeddedOpts {
-		# Default action on touch (--default-touch-mode)
+		# Default action on touch (--default-touch-mode) -- Dropdown
 		# --------------------
 		# 0: hover
 		# 1: leftclick
 		# 2: rightclick
 		# 3: middleclick
 		# 4: passthrough
+		# 
 		# More information in the GameScope commit that added it: https://github.com/Plagman/gamescope/commit/39c9e93e0c0539d4c767e1be1c96e0d38778af12 
-		# --------------------
-		#
-		# Dropdown
 		GSDEFTOUCHMODE="$( getGameScopeArg "$GAMESCOPE_ARGS" "--default-touch-mode" "$GSDEFTOUCHMODE" "" "${GSDEF}" "cb" )"
 		case $GSDEFTOUCHMODE in
 			0) GSDEFTOUCHMODE="${GSHOVER}" ;;
@@ -9939,8 +9911,7 @@ function setGameScopeVars {
 		# Enable Adaptive Sync / VRR (--adaptive-sync) -- Checkbox
 		GSADAPTIVESYNC="$( getGameScopeArg "$GAMESCOPE_ARGS" "--adaptive-sync" "$GSADAPTIVESYNC" "1" "0" )"
 
-		# Preferred GameScope Output in order of preference -- Not sure how exactly this should be passed and it can take N number of outputs
-		# For this reason we just give the user a textbox and let them enter their displays manually
+		# Preferred GameScope Output in order of preference -- Not sure how exactly this should be passed and it can take N number of outputs - For this reason we just give the user a textbox and let them enter their displays manually
 		GSPREFOUT="$( getGameScopeArg "$GAMESCOPE_ARGS" "-O" "$GSPREFOUT" "" "" "txt" )"	
 
 		# GameScope DRM Mode Generation algorithm to use -- GameScope takes either "cvt" or "fixed", but we will have a "default" option in the dropdown which means we will ignore the flag altogether
@@ -9952,9 +9923,7 @@ function setGameScopeVars {
 		# '-T' option is also availsble, but we have to use '--stats-path' because of how 'getGameScopeArg' works
 		GSSTATSPATHENABLE="0"
 		GSSTATSPATH="$( getGameScopeArg "$GAMESCOPE_ARGS" "--stats-path" "$GSSTATSPATH" "" "" "path" )"
-		if [ -n "$GSSTATSPATH" ]; then
-			GSSTATSPATHENABLE="1"
-		fi
+		if [ -n "$GSSTATSPATH" ]; then  GSSTATSPATHENABLE="1"; fi
 
 		# Amount of time in milliseconds to wait before hiding the cursor (-C) -- Spinner
 		GSHIDECURSORDELAY="$( getGameScopeArg "$GAMESCOPE_ARGS" "-C" "$GSHIDECURSORDELAY" "" "0" "num" )"
@@ -10021,9 +9990,7 @@ function GameScopeGui {
 	TITLE="${PROGNAME}-${FUNCNAME[0]}"
 	pollWinRes "$TITLE"
 	setShowPic
-
-	# Get values for UI elements below
-	setGameScopeVars
+	setGameScopeVars  # Get values for UI elements below
 
 	# GameScope Yad options form
 	GASCOS="$("$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --scroll --window-icon="$STLICON" --form --center --on-top $WINDECO \
@@ -10160,78 +10127,34 @@ function GameScopeGui {
 						GSINTW="${GSINTW1%%-*}"
 						GSINTH1="${GSINTRES#*x}"
 						GSINTH="${GSINTH1%%-*}"
-
 						GAMESCOPE_ARGS="-w ${GSINTW} -h ${GSINTH}"
 
 						GSSHWW1="${GSSHWRES%x*}"
 						GSSHWW="${GSSHWW1%%-*}"
 						GSSHWH1="${GSSHWRES#*x}"
 						GSSHWH="${GSSHWH1%%-*}"
+						GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -W ${GSSHWW} -H ${GSSHWH}"
 
 						### GENERAL OPTIONS ###
-						GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -W ${GSSHWW} -H ${GSSHWH}"
-						if [ "$GSFLR" -eq "$GSFLR" ] 2>/dev/null; then
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -r ${GSFLR}"
-						fi
-
-						if [ "$GSFLU" -eq "$GSFLU" ] 2>/dev/null; then
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -o ${GSFLU}"
-						fi	
-
-						if [ "$GSFS" == "TRUE" ]; then
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -f"
-						fi
-
-						if [ "$GSBW" == "TRUE" ]; then
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -b"
-						fi
-
-						if [ "$GSSE" == "TRUE" ]; then
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -e"
-						fi
-
-						if [ "$GSFWF" == "TRUE" ]; then
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --force-windows-fullscreen"
-						fi
-
-						if [ "$GSFGC" == "TRUE" ]; then 
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --force-grab-cursor"
-						fi
-
-						if [ -f "$GSCURSOR" ] && [ "$GSENABLECUSTCUR" == "TRUE" ]; then
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --cursor '${GSCURSOR}'"
-						fi
-
-						# Only force orientation if option other than default 'normal' is selected
-						if [ ! "$GSFOOR" == "$GSNORM" ]; then
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --force-orientation ${GSFOOR}"
-						fi
+						if [ "$GSFLR" -eq "$GSFLR" ] 2>/dev/null                        ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -r ${GSFLR}"; fi
+						if [ "$GSFLU" -eq "$GSFLU" ] 2>/dev/null                        ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -o ${GSFLU}"; fi
+						if [ "$GSFS" == "TRUE" ]                                        ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -f"; fi
+						if [ "$GSBW" == "TRUE" ]                                        ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -b"; fi
+						if [ "$GSSE" == "TRUE" ]                                        ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -e"; fi
+						if [ "$GSFWF" == "TRUE" ]                                       ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --force-windows-fullscreen"; fi
+						if [ "$GSFGC" == "TRUE" ]                                       ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --force-grab-cursor"; fi
+						if [ -f "$GSCURSOR" ] && [ "$GSENABLECUSTCUR" == "TRUE" ]       ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --cursor '${GSCURSOR}'"; fi
+						if [ ! "$GSFOOR" == "$GSNORM" ]                                 ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --force-orientation ${GSFOOR}"; fi  # Only force orientation if option other than default 'normal' is selected
 						### GENERAL OPTIONS END ###
 
 						### FILTERING OPTIONS ###
-						if [ "$GSIS" == "TRUE" ]; then
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -i"
-						fi
-
-						if [ "$GSNN" == "TRUE" ]; then
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -n"
-						fi 
-						
-						if [ "$GSFSR" == "TRUE" ]; then
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -U"
-						fi
-
-						if [ "$GSNIS" == "TRUE" ]; then
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -Y"
-						fi
-
-						# Ignore Max Scale Factor if 0
-						if [ ! "$GSMSF" == "0" ]; then
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -m ${GSMSF}"
-						fi
-
-						# Sharpness Value should only be passed if FSR or NIS is enabled
-						if  [ "$GSFSRS" -eq "$GSFSRS" ] 2>/dev/null && [ "$GSFSR" == "TRUE" ] || [ "$GSNIS" == "TRUE" ]; then
+						if [ "$GSIS" == "TRUE" ]                                        ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -i"; fi
+						if [ "$GSNN" == "TRUE" ]                                        ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -n"; fi 
+						if [ "$GSFSR" == "TRUE" ]                                       ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -U"; fi
+						if [ "$GSNIS" == "TRUE" ]                                       ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -Y"; fi
+						if [ ! "$GSMSF" == "0" ]                                        ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -m ${GSMSF}"; fi # Ignore Max Scale Factor if 0
+						if [ "$GSFSRS" -eq "$GSFSRS" ] 2>/dev/null && [ "$GSFSR" == "TRUE" ] || [ "$GSNIS" == "TRUE" ]; then
+							# Sharpness Value should only be passed if FSR or NIS is enabled
 							writelog "INFO" "${FUNCNAME[0]} - Adding sharpness parameter to the gamescope arguments:"
 							if grep -q "$FSRS_STR" <<< "$("$(command -v "$GAMESCOPE")" --help 2>&1)"; then
 								writelog "INFO" "${FUNCNAME[0]} - using '--fsr-sharpness ${GSFSRS}'"
@@ -10244,22 +10167,17 @@ function GameScopeGui {
 						## FILTERING OPTIONS END ###
 
 						### HDR OPTIONS ###
-						if [ "$GSHDR" == "TRUE" ]; then
-							# Possible to check if any HDR displays available and warn if not?
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --hdr-enabled"
-						fi
-
-						# Don't enable GSHDRWGFS if GSHDR is not enabled first
+						if [ "$GSHDR" == "TRUE" ]                                       ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --hdr-enabled"; fi  # Possible to check if any HDR displays available and warn if not?
 						if [ "$GSHDRWGFS" == "TRUE" ]; then
+							# Don't enable GSHDRWGFS if GSHDR is not enabled first
 							if [ "$GSHDR" == "TRUE" ]; then 
 								GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --hdr-wide-gammut-for-sdr"
 							else
 								writelog "WARN" "${FUNCNAME[0]} - GSHDRWGFS (--hdr-wide-gammut-for-sdr) option for GameScope enabled but HDR was not enabled - Ignoring as this option would have no effect"
 							fi
 						fi
-
-						# If the nits value is not the default 400, and if HDR is enabled, pass the value to GameScope
 						if [ ! "$GSHDRSCNITS" == "400" ]; then
+							# Only pass value if nits != 400 && HDR enabled
 							if [ "$GSHDR" == "TRUE" ] && [ "$GSHDRWGFS" == "TRUE" ]; then
 								GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --hdr-sdr-content-nits ${GSHDRSCNITS}"
 							else
@@ -10268,127 +10186,48 @@ function GameScopeGui {
 						else
 							writelog "INFO" "${FUNCNAME[0]} - GSHDRSCNITS (--hdr-sdr-content-nits) option for GameScope was left at default 400 - GameScope should use this anyway - Ignoring as this option would have no effect"
 						fi
-
-						if [ "$GSHDRITM" == "TRUE" ]; then
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --hdr-itm-enable"
-						fi
-
-						if [ ! "$GSHDRITMSDRNITS" == "0" ]; then
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --hdr-itm-sdr-nits ${GSHDRITMSDRNITS}"
-						fi
-
-						if [ ! "$GSHDRITMTGTNITS" == "0" ]; then
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --hdr-itm-target-nits ${GSHDRITMTGTNITS}"
-						fi
+						if [ "$GSHDRITM" == "TRUE" ]                                    ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --hdr-itm-enable"; fi
+						if [ ! "$GSHDRITMSDRNITS" == "0" ]                              ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --hdr-itm-sdr-nits ${GSHDRITMSDRNITS}"; fi
+						if [ ! "$GSHDRITMTGTNITS" == "0" ]                              ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --hdr-itm-target-nits ${GSHDRITMTGTNITS}"; fi
 						### HDR OPTIONS END ###
 
 						### VR OPTIONS ###
-						if [ "$GSVR" == "TRUE" ]; then
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --openvr"
-						fi
-
-						# Don't set explicit name if it's blank
-						if [ "${#GSVREXNA}" -gt 0 ]; then
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --vr-overlay-explicit-name '${GSVREXNA}'"
-						fi
-
-						# Don't set default name if it's blank
-						if [ "${#GSVRDEFNAM}" -gt 0 ]; then
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --vr-overlay-default-name '${GSVRDEFNAM}'"
-						fi
-
-						if [ -f "$GSVRICON" ] && [ "$GSVRICONENABLE" == "TRUE" ]; then
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --vr-overlay-icon '${GSVRICON}'"
-						fi
-
-						if [ "$GSVRSHOIMM" == "TRUE" ]; then
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --vr-overlay-show-immediately"
-						fi
-
-						if [ "$GSVRCONTROLBAR" == "TRUE" ]; then
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --vr-overlay-enable-control-bar"
-						fi
-
-						if [ "$GSVRCONTROLBARKEYBOARD" == "TRUE" ]; then
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --vr-overlay-enable-control-bar-keyboard"
-						fi
-
-						if [ "$GSVRCONTROLBARCLOSE" == "TRUE" ]; then
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --vr-overlay-enable-control-bar-close"
-						fi
-
-						if [ "$GSVRMODAL" == "TRUE" ]; then
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --vr-overlay-modal"
-						fi
+						if [ "$GSVR" == "TRUE" ]                                        ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --openvr"; fi
+						if [ "${#GSVREXNA}" -gt 0 ]                                     ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --vr-overlay-explicit-name '${GSVREXNA}'"; fi  # Don't set explicit name if it's blank
+						if [ "${#GSVRDEFNAM}" -gt 0 ]                                   ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --vr-overlay-default-name '${GSVRDEFNAM}'"; fi  # Don't set default name if it's blank
+						if [ -f "$GSVRICON" ] && [ "$GSVRICONENABLE" == "TRUE" ]        ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --vr-overlay-icon '${GSVRICON}'"; fi
+						if [ "$GSVRSHOIMM" == "TRUE" ]                                  ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --vr-overlay-show-immediately"; fi
+						if [ "$GSVRCONTROLBAR" == "TRUE" ]                              ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --vr-overlay-enable-control-bar"; fi
+						if [ "$GSVRCONTROLBARKEYBOARD" == "TRUE" ]                      ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --vr-overlay-enable-control-bar-keyboard"; fi
+						if [ "$GSVRCONTROLBARCLOSE" == "TRUE" ]                         ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --vr-overlay-enable-control-bar-close"; fi
+						if [ "$GSVRMODAL" == "TRUE" ]                                   ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --vr-overlay-modal"; fi
 						### VR OPTIONS END
 
 						### EMBEDDED OPTIONS ###
-						#
 						# Don't pass default touch mode option if we left at default
 						if [ ! "${GSDEFTOUCHMODE}" == "${GSDEF}" ]; then 
 							# Get the corresponding number that should be passed to GameScope from the number in the dropdown string, e.g. gets "0" from "hover:0"
 							SELECTEDTOUCHMODE="$( echo "$GSDEFTOUCHMODE" | cut -d ":" -f 2 )" 
 							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --default-touch-mode ${SELECTEDTOUCHMODE}"
 						fi
-
-						if [ "$GSIMMEDIATEFLIPS" == "TRUE" ]; then
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --immediate-flips"
-						fi
-
-						if [ "$GSADAPTIVESYNC" == "TRUE" ]; then
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --adaptive-sync"
-						fi
-
-						# Don't pass preferred output(s) if the textbox is blank
-						if [ "${#GSPREFOUT}" -gt 0 ]; then
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -O ${GSPREFOUT}"
-						fi
+						if [ "$GSIMMEDIATEFLIPS" == "TRUE" ]                            ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --immediate-flips"; fi
+						if [ "$GSADAPTIVESYNC" == "TRUE" ]                              ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --adaptive-sync"; fi
+						if [ "${#GSPREFOUT}" -gt 0 ]                                    ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -O ${GSPREFOUT}"; fi  # Don't pass preferred output(s) if the textbox is blank
 						# EMBEDDED OPTIONS END
 
 						## ADVANCED OPTIONS ###
-						# Don't pass DRM mode if "default"
-						if [ ! "$GSDRMMODE" == "${GSDEF}" ]; then
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --generate-drm-mode ${GSDRMMODE}"
-						fi
-
-						if [ -d "$GSSTATSPATH" ] && [ "$GSSTATSPATHENABLE" == "TRUE" ]; then
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --stats-path '${GSSTATSPATH}'"
-						fi
-
-						# Ignore cursor delay if it's 0
-						if [ ! "$GSHIDECURSORDELAY" == "0" ]; then
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -C ${GSHIDECURSORDELAY}"
-						fi
-
-						if [ "$GSFORCECOMP" == "TRUE" ]; then
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --force-composition"
-						fi
-
-						if [ "$GSDEBUGHUD" == "TRUE" ]; then
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --debug-hud"
-						fi
-
-						if [ "$GSFORCEHDRSUPPORT" == "TRUE" ]; then
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --hdr-debug-force-support"
-						fi
-						
-						if [ "$GSFORCEHDROUTPUT" == "TRUE" ]; then
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --hdr-debug-force-output"
-						fi
-
-						if [ "$GSPREFERVKDEVICE" == "TRUE" ]; then
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --prefer-vk-device"
-						fi
-
-						if [ "$GSWAYLAND" == "TRUE" ]; then
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --expose-wayland"
-						fi
-
-						if [ "$GSRT" == "TRUE" ]; then
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --rt"
-						fi
+						if [ ! "$GSDRMMODE" == "${GSDEF}" ]                             ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --generate-drm-mode ${GSDRMMODE}"; fi  # Don't pass DRM mode if "default"
+						if [ -d "$GSSTATSPATH" ] && [ "$GSSTATSPATHENABLE" == "TRUE" ]  ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --stats-path '${GSSTATSPATH}'"; fi
+						if [ ! "$GSHIDECURSORDELAY" == "0" ]                            ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -C ${GSHIDECURSORDELAY}"; fi  # Ignore cursor delay if it's 0
+						if [ "$GSFORCECOMP" == "TRUE" ]                                 ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --force-composition"; fi
+						if [ "$GSDEBUGHUD" == "TRUE" ]                                  ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --debug-hud"; fi
+						if [ "$GSFORCEHDRSUPPORT" == "TRUE" ]                           ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --hdr-debug-force-support"; fi
+						if [ "$GSFORCEHDROUTPUT" == "TRUE" ]                            ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --hdr-debug-force-output"; fi
+						if [ "$GSPREFERVKDEVICE" == "TRUE" ]                            ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --prefer-vk-device"; fi
+						if [ "$GSWAYLAND" == "TRUE" ]                                   ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --expose-wayland"; fi
+						if [ "$GSRT" == "TRUE" ]                                        ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --rt"; fi
 						### ADVANCED OPTIONS END ###
-
+						
 						GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --"
 			
 						writelog "INFO" "${FUNCNAME[0]} - Saving configured GAMESCOPE_ARGS '$GAMESCOPE_ARGS' into '$STLGAMECFG'"
