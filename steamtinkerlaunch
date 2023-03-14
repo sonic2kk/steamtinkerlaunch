@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v12.12.20230314-1"
+PROGVERS="v12.12.20230314-2"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -1552,21 +1552,22 @@ function listSteamLibraries {
 	fi
 }
 
-# originally meant for debugging #508, but might be useful for an attempt to rewrite everything to be SLR compatible again...
-
 function setSteamLibraryPaths {
 	while read -r lpath; do
+		# Ignores library folders if they are not valid directories -- This var comes from Steam but apparently can still have invalid library folders.
+		# Noticed this when I removed a drive that had a Steam library folder, this didn't cause any major issues aside from a 'find' warning from the cmpath while loop - Could be a Steam bug?
+		if [ ! -d "$lpath" ]; then
+			writelog "WARN" "${FUNCNAME[0]} - Library folder '$lpath' does not seem to be a valid directory, even though this comes from Steam itself - Ignoring, but please report if this is invalid or causes issues"
+			continue
+		fi
+
 		if [ -z "$STEAM_COMPAT_LIBRARY_PATHS" ]; then
-			STEAM_COMPAT_LIBRARY_PATHS="$lpath"
+			STEAM_COMPAT_LIBRARY_PATHS="$lpath"  # This var should come from Steam, even the Proton script uses it
 		else
 			if ! grep -q "$lpath" <<< "$STEAM_COMPAT_LIBRARY_PATHS" ; then
 				STEAM_COMPAT_LIBRARY_PATHS="$STEAM_COMPAT_LIBRARY_PATHS:$lpath"
 			fi
 		fi
-
-# XXXXXXXXXXXX todo?:
-# remove Proton here and add it later when the used proton version is known for both variables
-# STEAM_COMPAT_TOOL_PATHS does not need STEWOS so maybe remove later
 
 		while read -r cmpath; do
 			if [ -n "$cmpath" ]; then
@@ -1574,7 +1575,7 @@ function setSteamLibraryPaths {
 					STEAM_COMPAT_MOUNTS="$cmpath"
 				else
 					if ! grep -q "$cmpath" <<< "$STEAM_COMPAT_MOUNTS" ; then
-					STEAM_COMPAT_MOUNTS="$STEAM_COMPAT_MOUNTS:$cmpath"
+						STEAM_COMPAT_MOUNTS="$STEAM_COMPAT_MOUNTS:$cmpath"
 					fi
 				fi
 
@@ -1620,7 +1621,6 @@ function listAppManifests {
 			writelog "WARN" "${FUNCNAME[0]} - Failed to parse Base Install Folder from '$in'"
 		fi
 	}
-
 
 	function listAllAppMas {
 		if [ -d "$DEFSTEAMAPPS" ]; then
@@ -1670,12 +1670,9 @@ function pollWinRes {
 		SCREENRES="$(getScreenRes r)"
 	fi
 	
-	if [ -z "$SCREENRES" ]; then
-		SCREENRES="any"
-	fi
+	if [ -z "$SCREENRES" ]; then  SCREENRES="any"; fi
 
-	# skip this if FIXGAMESCOPE is 1 - so for now only if running in GameMode on the Steam Deck
-	if [ "$FIXGAMESCOPE" -eq 0 ]; then
+	if [ "$FIXGAMESCOPE" -eq 0 ]; then  # skip this if FIXGAMESCOPE is 1 - so for now only if running in GameMode on the Steam Deck
 		TEMPL="template"
 		GAMEGUICFG="$STLGUIDIR/$SCREENRES/${AID}/${TITLE}.conf"
 		TEMPLGUICFG="$STLGUIDIR/$SCREENRES/${TEMPL}/${TITLE}.conf"
