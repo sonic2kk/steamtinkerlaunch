@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230319-2"
+PROGVERS="v14.0.20230330-1 (mangohud-dlsym)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -2704,6 +2704,7 @@ function setDefaultCfgValues {
 		if [ -z "$USEMANGOAPP" ]						; then	USEMANGOAPP="0"; fi
 		if [ -z "$MAHUBIN" ]							; then	MAHUBIN="$(command -v "$MAHU")"; fi
 		if [ -z "$MAHUARGS" ]							; then	MAHUARGS="$NON"; fi
+		if [ -z "$MAHUDLSYM" ]							; then  MAHUDLSYM="0"; fi
 		if [ -z "$LDPMAHU" ]							; then	LDPMAHU="0"; fi
 		if [ -z "$MAHUVAR" ]							; then	MAHUVAR="0"; fi
 		if [ -z "$USEMANGOHUDSTLCFG" ]					; then	USEMANGOHUDSTLCFG="0";	fi
@@ -3232,6 +3233,8 @@ function saveCfg {
 			echo "MAHUBIN=\"$MAHUBIN\""
 			echo "## $DESC_MAHUARGS"
 			echo "MAHUARGS=\"$MAHUARGS\""
+			echo "## $DESC_MAHUDLSYM"
+			echo "MAHUDLSYM=\"$MAHUDLSYM\""
 			echo "## $DESC_LDPMAHU"
 			echo "LDPMAHU=\"$LDPMAHU\""
 			echo "## $DESC_MAHUVAR"
@@ -5174,7 +5177,8 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_USEMANGOAPP!$DESC_USEMANGOAPP ('USEMANGOAPP')":CHK "${USEMANGOAPP/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_MAHUVAR!$DESC_MAHUVAR ('MAHUVAR')":CHK "${MAHUVAR/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_MAHUBIN!$DESC_MAHUBIN ('MAHUBIN')":FL "${MAHUBIN/#-/ -}" `#CAT_Tools` `#MENU_GAME` \
---field="     $GUI_MAHUARGS!$DESC_MAHUARGS ('MAHUARGS')":CBE "${MAHUARGS/#-/ -}!--dlsym" `#CAT_Tools` `#MENU_GAME` \
+--field="     $GUI_MAHUARGS!$DESC_MAHUARGS ('MAHUARGS')":CBE "${MAHUARGS/#-/ -}!no_display" `#CAT_Tools` `#MENU_GAME` \
+--field="     $GUI_MAHUDLSYM!$DESC_MAHUDLSYM ('MAHUDLSYM')":CHK "${MAHUDLSYM}" `#CAT_Tools` `#MENU_GAME` \
 --field="     $GUI_LDPMAHU!$DESC_LDPMAHU ('LDPMAHU')":CHK "${LDPMAHU/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_USEMANGOHUDSTLCFG!$DESC_USEMANGOHUDSTLCFG ('USEMANGOHUDSTLCFG')":CHK "${USEMANGOHUDSTLCFG/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_USEGAMESCOPE!$DESC_USEGAMESCOPE ('USEGAMESCOPE')":CHK "${USEGAMESCOPE/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
@@ -10756,7 +10760,13 @@ function buildCustomCmdLaunch {
 						FINALOUTCMD=("${FINALOUTCMD[@]}" "$MAHUBIN")
 					else
 						FINALOUTCMD=("$MAHUBIN")
-					fi	
+					fi
+
+					# Append '--dlsym' to mangohud command -- There is also the MANGOHUD_DLSYM=1 env var but this can be set manually, and does not always work
+					# i.e. Torchlight II works with '--dlsym' but not 'MANGOHUD_DLSYM=1'
+					if [ "$MAHUDLSYM" -eq 1 ]; then
+						FINALOUTCMD=("${FINALOUTCMD[@]}" "--dlsym")
+					fi
 				fi
 			else
 				writelog "WARN" "${FUNCNAME[0]} - $MAHU binary not found - disabling"
