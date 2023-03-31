@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230401-1 (documents-symlink)"
+PROGVERS="v14.0.20230401-3 (documents-symlink)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -58,7 +58,7 @@ PERES="peres"
 GDB="gdb"
 XDGMIME="xdg-mime"
 XDGO="xdg-open"
-XDGUD="xdg-user-dirs"
+XDGUD="xdg-user-dir"
 OBSCAP="obs-gamecapture"
 
 CHECKHMD=1
@@ -7250,6 +7250,7 @@ function getCompatData {
 				fi
 			fi
 
+			# TODO broken with games like CHAOS;CHILD - Fix!
 			if [ -n "$FCOMPDAT" ]; then
 				COMPATGAMENAME="$( echo "$FCOMPDAT" | cut -d ";" -f 1 )"
 				COMPATGAMEPATH="$( echo "$FCOMPDAT" | cut -d ";" -f 2 )"
@@ -10416,13 +10417,15 @@ function prefixDocumentsSymlink {
 		SM="delete"  # Default symmode to 'delete' (i.e. checkbox is unchecked)
 
 		# If no steamuser folder, assume a Wine user and use current username for prefix user name
-		if [ ! -d "${SRCPFX}/${DRCU}/${STUS}" ]; then
+		if [ ! -d "${GPFX}/${DRCU}/${STUS}" ]; then
 			PU="$(whoami)"
 		fi
 
 		if [ "$SYMLINKWINEDOCSDIR" -eq 1 ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Symlink checkbox is enabled - '$SYMLINKWINEDOCSDIR'"
 			SM="create"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Symlink Documents is disabled - May need to revert symlink"
 		fi
 
 		createDeletePrefixDocumentsSymlink "$GPFX" "$PU" "$SM"
@@ -10438,7 +10441,7 @@ function createDeletePrefixDocumentsSymlink {
 	PFXUSER="$2"  # Username, Proton uses "steamuser" but Wine will use system name
 	SYMMODE="${3:-create}"  # "create" or "delete", default to create
 
-	USERDOCSDIR="$HOME/$( "$XDGUD" "${DOCS^^}" )"  # xdg-user-dirs is used for non-English xdg dir names
+	USERDOCSDIR="$( "$XDGUD" "${DOCS^^}" )"  # xdg-user-dirs is used for non-English xdg dir names
 	if [ ! -d "$USERDOCSDIR" ]; then
 		USERDOCSDIR="$HOME/$DOCS"  # xdg-user-dirs couldn't find the Documents folder, fall back to a hardcoded 'Documents' (not safe outside of English, xdg-user-dirs should be used instead)
 		writelog "WARN" "${FUNCNAME[0]} - '$XDGUD' could not find Documents directory, falling back to '$USERDOCSDIR'"
@@ -10455,7 +10458,7 @@ function createDeletePrefixDocumentsSymlink {
 				if [ -d "$USERDOCSDIR" ]; then
 					if [ -d "$PFXDOCSDIR" ]; then
 						writelog "INFO" "${FUNCNAME[0]} - Symlinking '$USERDOCSDIR' to '$PFXDOCSDIR'"
-						cp "$PFXDOCSDIR" "$PFXDOCSDIRBK"  # Backup file that can be restored at any time
+						cp -r "$PFXDOCSDIR" "$PFXDOCSDIRBK"  # Backup file that can be restored at any time
 						ln -s "$USERDOCSDIR" "$PFXDOCSDIR"  # Create symlink
 						touch "$PFXDOCSSYMEXISTS"  # Blank file to indicate symlink was created here by STL
 					else
@@ -10787,8 +10790,6 @@ function setCommandLaunchVars {
 		writelog "INFO" "${FUNCNAME[0]} - STLRADV_PFTST is not empty or none - Exporting RADV_PERFTEST=$STLRAD_PFTST"
 		export RADV_PERFTEST=$STLRAD_PFTST
 	fi
-
-	prefixDocumentsSymlink  # Manage creating symlink if requested
 }
 
 # Used to create the launch command for games and custom commands so they can use various program functions i.e. GameScope
@@ -16826,6 +16827,8 @@ function prepareLaunch {
 
 	writelog "INFO" "${FUNCNAME[0]} - sortGameArgs again, in case something changed above:"
 	sortGameArgs
+
+	prefixDocumentsSymlink  # Manage creating symlink if requested
 
 	if [ "$ISGAME" -eq 2 ]; then
 		writelog "INFO" "${FUNCNAME[0]} - symlinkSteamUser:"
