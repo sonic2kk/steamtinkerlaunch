@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230330-1"
+PROGVERS="v14.0.20230401-1 (documents-symlink)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -58,6 +58,7 @@ PERES="peres"
 GDB="gdb"
 XDGMIME="xdg-mime"
 XDGO="xdg-open"
+XDGUD="xdg-user-dirs"
 OBSCAP="obs-gamecapture"
 
 CHECKHMD=1
@@ -2763,6 +2764,7 @@ function setDefaultCfgValues {
 		if [ -z "$CHECKCOLLECTIONS" ]					; then	CHECKCOLLECTIONS="1"; fi
 		if [ -z "$BACKUPSTEAMUSER" ]					; then	BACKUPSTEAMUSER="0"; fi
 		if [ -z "$RESTORESTEAMUSER" ]					; then	RESTORESTEAMUSER="$NON"; fi
+		if [ -z "$SYMLINKWINEDOCSDIR" ]					; then  SYMLINKWINEDOCSDIR="0"; fi
 		if [ -z "$USESUSYM" ]							; then	USESUSYM="0"; fi
 		if [ -z "$USEGLOBSUSYM" ]						; then	USEGLOBSUSYM="0"; fi
 		if [ -z "$STRACERUN" ]							; then	STRACERUN="0"; fi
@@ -3345,6 +3347,8 @@ function saveCfg {
 			echo "BACKUPSTEAMUSER=\"$BACKUPSTEAMUSER\""
 			echo "## $DESC_RESTORESTEAMUSER"
 			echo "RESTORESTEAMUSER=\"$RESTORESTEAMUSER\""
+			echo "## $DESC_SYMLINKWINEDOCSDIR"
+			echo "SYMLINKWINEDOCSDIR=\"$SYMLINKWINEDOCSDIR\""
 			echo "## $DESC_USESUSYM"
 			echo "USESUSYM=\"$USESUSYM\""
 			echo "## $DESC_USEGLOBSUSYM"
@@ -5113,6 +5117,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_CUSTPROTDLDIR!$DESC_CUSTPROTDLDIR ('CUSTPROTDLDIR')":DIR "${CUSTPROTDLDIR/#-/ -}" `#CAT_Proton` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_CUSTPROTEXTDIR!$DESC_CUSTPROTEXTDIR ('CUSTPROTEXTDIR')":DIR "${CUSTPROTEXTDIR/#-/ -}" `#CAT_Proton` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_CUPROTOCOMPAT!$DESC_CUPROTOCOMPAT ('CUPROTOCOMPAT')":CHK "${CUPROTOCOMPAT/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GLOBAL` \
+--field="     $GUI_SYMLINKWINEDOCSDIR!$DESC_SYMLINKWINEDOCSDIR ('SYMLINKWINEDOCSDIR')":CHK "${SYMLINKWINEDOCSDIR/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_USESUSYM!$DESC_USESUSYM ('USESUSYM')":CHK "${USESUSYM/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_USEGLOBSUSYM!$DESC_USEGLOBSUSYM ('USEGLOBSUSYM')":CHK "${USEGLOBSUSYM/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_FIXSYMLINKS!$DESC_FIXSYMLINKS ('FIXSYMLINKS')":CHK "${FIXSYMLINKS/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
@@ -10402,6 +10407,91 @@ function StandaloneProtonGame {
 
 	if [ "$SAPGUI" -eq 1 ]; then
 		SapGui
+	fi
+}
+
+# Create/remove symlink based on user option
+function prefixDocumentsSymlink {
+	if [ -d "$GPFX" ]; then
+		PU="$STUS"  # Default to 'steamuser', probably works for most cases except for Wine prefixes or Wine prefix symlinks
+		SM="delete"  # Default symmode to 'delete' (i.e. checkbox is unchecked)
+
+		# If no steamuser folder, assume a Wine user and use current username for prefix user name
+		if [ ! -d "${SRCPFX}/${DRCU}/${STUS}" ];
+			PU="$(whoami)"
+		fi
+
+		if [ "$SYMLINKWINEDOCSDIR" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Symlink checkbox is enabled - '$SYMLINKWINEDOCSDIR'"
+			SM="create"
+		fi
+
+		createDeletePrefixDocumentsSymlink "$GPFX" "$PU" "$SM"
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - Game prefix does not exist at '$GPFX' - Maybe it was never launched before or this is a native game, skipping..."
+	fi
+}
+
+# Create/remove symlink for prefix Documents folder
+# Will also manage indicating that the symlink was created, and removing the symlink too
+function createDeletePrefixDocumentsSymlink {
+	SRCPFX="$1"  # Path to prefix to symlink, will usually be GPFX
+	PFXUSER="$2"  # Username, Proton uses "steamuser" but Wine will use system name
+	SYMMODE="${3:-create}"  # "create" or "delete", default to create
+
+	USERDOCSDIR="$HOME/$( "$XDGUD" "${DOCS^^}" )"  # xdg-user-dirs is used for non-English xdg dir names
+	if [ ! -d "$USERDOCSDIR" ]; then
+		USERDOCSDIR="$HOME/$DOCS"  # xdg-user-dirs couldn't find the Documents folder, fall back to a hardcoded 'Documents' (not safe outside of English, xdg-user-dirs should be used instead)
+		writelog "WARN" "${FUNCNAME[0]} - '$XDGUD' could not find Documents directory, falling back to '$USERDOCSDIR'"
+	fi
+	PFXUSERDIR="${SRCPFX}/${DRCU}/${PFXUSER}"  # e.g. /home/Gaben/.local/share/Steam/steamapps/compatdata/693901240/pfx/drive_c/users/steamuser/
+	PFXDOCSDIR="${PFXUSERDIR}/${DOCS}"
+	PFXDOCSDIRBK="${PFXDOCSDIR}-stl-bak"
+	PFXDOCSSYMEXISTS="${PFXUSERDIR}/.stl-docsym"  # Indicator file that is created after symlink is created, so that the command only gets ran once - Also allows for "undoing" if option is unchecked
+
+	if [ -d "$SRCPFX" ]; then
+		if [ ! -f "$PFXDOCSSYMEXISTS" ]; then
+			if [ "$SYMMODE" = "create" ]; then
+				# May be dealing with a native game, don't smylink if both directories don't exist
+				if [ -d "$USERDOCSDIR" ]; then
+					if [ -d "$PFXDOCSDIR" ]; then
+						writelog "INFO" "${FUNCNAME[0]} - Symlinking '$USERDOCSDIR' to '$PFXDOCSDIR'"
+						cp "$PFXDOCSDIR" "$PFXDOCSDIRBK"  # Backup file that can be restored at any time
+						ln -s "$USERDOCSDIR" "$PFXDOCSDIR"  # Create symlink
+						touch "$PFXDOCSSYMEXISTS"  # Blank file to indicate symlink was created here by STL
+					else
+						writelog "ERROR" "${FUNCNAME[0]} - Prefix directory '$PFXDOCSDIR' does not exist - Perhaps this is a native game or there is some problem with the prefix?"
+					fi
+				else
+					writelog "ERROR" "${FUNCNAME[0]} - User Documents directory '$USERDOCSDIR' does not exist - Maybe '$XDGUD' is not installed?"
+				fi
+			fi
+		else
+			if [ "$SYMMODE" = "delete" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Removing Documents symlink in prefix '$SRCPFX' and restoring original Documents folder"
+				if [ -d "$PFXDOCSDIRBK" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Replacing existing symlinked Documents folder with backup created by SteamTinkerLaunch"
+					if [ -d "$PFXDOCSDIR" ]; then
+						writelog "INFO" "${FUNCNAME[0]} - Removing existing symlinked Documents folder in prefix"
+						rm -rf "$PFXDOCSDIR"  # Remove existing Documents folder (i.e. the symlinked one)
+					else
+						writelog "WARN" "${FUNCNAME[0]} - No existing Documents folder found in prefix - This should not happen but shouldn't cause any problems, maybe it was manually deleted"
+						writelog "SKIP" "${FUNCNAME[0]} - Skipping removing existing Documents folder in prefix as it does not exist"
+					fi
+					writelog "INFO" "${FUNCNAME[0]} - Renaming prefix Documents folder backup"
+					mv "$PFXDOCSDIRBK" "$PFXDOCSDIR"  # Rename backed up Documents folder to 'Documents' 
+					writelog "INFO" "${FUNCNAME[0]} - Successfully restored original prefix"
+				else
+					writelog "WARN" "${FUNCNAME[0]} - Could not find original Documents folder backup in prefix, but $(basename "$PFXDOCSSYMEXISTS") exists in prefix - This should not happen!"
+					writelog "WARN" "${FUNCNAME[0]} - Cannot restore original Documents folder, but removing the indicator file anyway"
+					rm "$PFXDOCSSYMEXISTS"  # Remove indicator file
+				fi
+			else
+				writelog "SKIP" "${FUNCNAME[0]} - Seems like symlink was already created at '$PFXDOCSDIR' - Nothing to do"
+			fi
+		fi
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - Function was called but prefix '$SRCPFX' does not exist"
 	fi
 }
 
