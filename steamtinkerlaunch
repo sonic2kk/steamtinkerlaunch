@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230330-1"
+PROGVERS="v14.0.20230403-1"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -7230,18 +7230,22 @@ function getCompatData {
 	if [ -z "$1" ]; then
 		echo "A Game ID or Game Title is required as argument"
 	else
+		# Sometimes the name here is not extact e.g. "SonicFrontiers" for "Sonic Frontiers", so the else fallback fetches using getGameDir
+		# If the compat folder doesn't exist *at all* then the final else will get triggered, but this should probably always exist (even if its empty)
 		if [ -d "$STLCOMPDAT" ]; then
 			unset FCOMPDAT
-			if [ "$1" -eq "$1" ] 2>/dev/null; then
+
+			# Skips games which have ';' in the name (i.e. "ROBOTICS;NOTES"), as this throws off the 'cut' command, and instead we fall back to the getGameDir check
+			if [ "$1" -eq "$1" ] 2>/dev/null; then  # This is for AppID check (-eq will fail if not integer expression)
 				while read -r "complink"; do
-				TEST="$(readlink "$complink" | grep "/$1$")"
-				if [ -d "$TEST" ]; then
-					FCOMPDAT="${complink##*/};$TEST"
-				fi
+					TEST="$(readlink "$complink" | grep "/$1$")"
+					if [ -d "$TEST" ] && ! [[ "${complink##*/}" == *";"* ]]; then
+						FCOMPDAT="${complink##*/};$TEST"
+					fi
 				done <<< "$(find "$STLCOMPDAT")"
-			else
+			else  # This is for Game Name checks
 				TEST="$(find "$STLCOMPDAT" -iname "*${1}*" | head -n1)"
-				if [ -n "$TEST" ]; then
+				if [ -n "$TEST" ] && ! [[ "${TEST##*/}" == *";"* ]]; then
 					FCOMPDAT="${TEST##*/};$(readlink "$TEST")"
 				fi
 			fi
@@ -7253,7 +7257,27 @@ function getCompatData {
 
 				echo "${COMPATGAMENAME} (${COMPATGAMEAID}) -> ${COMPATGAMEPATH}"
 			else
-				echo "No $CODA dir found for '$1'"
+				# If no symlink found in STL dir, check the game's library folder, with fallback to the Steam root library folder (i.e. non-steam games)
+				writelog "INFO" "${FUNCNAME[0]} - Could not find compatdata named in STL symlink dir, searching with getGameLibraryFolder..."
+				SEARCHGAMEDIR="$( getGameDir "$1" )"
+
+				COMPATGAMESTR=""  # Final output string
+				NOTFOUNDSTR="No $CODA dir found for '$1'"
+				COMPATGAMEPATH="${SEARCHGAMEDIR##*-> }"
+				if [ -d "$COMPATGAMEPATH" ]; then
+					COMPATGAMENAME="$( echo "${SEARCHGAMEDIR%(*}" | xargs )" # e.g. TEKKEN 7
+					COMPATGAMEAID="$( echo "$SEARCHGAMEDIR" | grep -oE '\([^)]+\)' | tail -n1 | sed 's:(::g;s:)::g' )"  # e.g. 389730
+
+					LIFOCOMPATDIR="$( realpath "$COMPATGAMEPATH/../../$CODA/$COMPATGAMEAID" )"
+					SROOTCOMPATDIR="$SROOT/$SA/$CODA/$COMPATGAMEAID"
+
+					COMPATDATADIR="$( [ -d "$LIFOCOMPATDIR" ] && echo "$LIFOCOMPATDIR" || echo "$SROOTCOMPATDIR" )"
+					if [ -d "$COMPATDATADIR" ]; then
+						COMPATGAMESTR="$COMPATGAMENAME ($COMPATGAMEAID) -> $COMPATDATADIR"
+					fi
+				fi
+
+				echo "${COMPATGAMESTR:-$NOTFOUNDSTR}"
 			fi
 		else
 			echo "No $CODA dir found for '$1'"
@@ -7264,10 +7288,8 @@ function getCompatData {
 # Credit to StackOverflow community wiki
 function trimWhitespaces {
 	INSTR="$*"
-	# remove leading whitespace characters
-	INSTR="${INSTR#"${INSTR%%[![:space:]]*}"}"
-	# remove trailing whitespace characters
-	INSTR="${INSTR%"${INSTR##*[![:space:]]}"}"
+	INSTR="${INSTR#"${INSTR%%[![:space:]]*}"}"  # remove leading whitespace characters
+	INSTR="${INSTR%"${INSTR##*[![:space:]]}"}"  # remove trailing whitespace characters
 	echo "$INSTR"
 }
 
