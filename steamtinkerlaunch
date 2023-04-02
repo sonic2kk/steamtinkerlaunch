@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230403-1"
+PROGVERS="v14.0.20230403-2"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -7205,24 +7205,36 @@ function getTitleFromID {
 	fi
 }
 
-function getExeFromID {
+# Relies on game executable existing in STL meta file (i.e. any game launched before with STL)
+function getGameExe {
 	if [ -z "$1" ]; then
 		echo "A Game ID is required as argument"
 	else
-		if [ -f "$GEMETA/${1}.conf" ]; then
+		INAID="$1"
+		EXE=""
+		NOTFOUNDSTR="No Executable or SteamTinkerLaunch file found for '$1'"
+
+		# Try to get appid from game name -- If nultiple values, just pick first one
+		if ! [ "$INAID" -eq "$INAID" ] 2>/dev/null; then
+			INAID="$( getIDFromTitle "$INAID" | head -n1 )"
+			INAID="$( trimWhitespaces "${INAID%(*}")"
+		fi
+
+		EXEGAMNAM="$( getTitleFromID "$INAID" )"
+
+		if [ -n "$INAID" ] && [ -f "$GEMETA/${INAID}.conf" ]; then
 			# Some games might only have "EXECUTABLE" in their meta conf file
-			EXE="$(grep "^EXECUTABLE" "$GEMETA/${1}.conf" | cut -d '"' -f2)"
+			EXE="$(grep "^EXECUTABLE" "$GEMETA/${INAID}.conf" | cut -d '"' -f2)"
 			if [ -z "${EXE}" ]; then
-				EXE="$(grep "^GAMEEXE" "$GEMETA/${1}.conf" | cut -d '"' -f2)"
+				EXE="$(grep "^GAMEEXE" "$GEMETA/${INAID}.conf" | cut -d '"' -f2)"
 			fi
-			
-			if [ -n "${EXE}" ]; then
-				echo "$EXE"
-				return
+
+			if [ -n "$EXE" ]; then
+				EXE="$EXEGAMNAM ($INAID) -> $( getGameDir "$INAID" "only" )/$EXE"
 			fi
 		fi
 
-		echo "No Executable or SteamTinkerLaunch file found for '$1'"
+		echo "${EXE:-$NOTFOUNDSTR}"
 	fi
 }
 
@@ -19725,9 +19737,9 @@ function howto {
 	echo "                                       (for 'SteamAppID' or 'last')"
 	echo "    gamefiles|gf <gameid>            Opens menu for opening <gameid> files"
 	echo "    gamescope|gs <gameid>            Gamescope config-menu for <gameid>"
-	echo "    (get commands only for games known by ${PROGNAME,,}:)"
+	echo "    (get commands work most reliably for games previously launched with ${PROGNAME,,}:)"
 	echo "    getcompatdata|gc <gameid/title>  Print the Game compatdata path"
-	echo "    getexe|ge <gameid>               Print the Game Exe for <gameid>"
+	echo "    getexe|ge <gameid>               Print the Game Exe for <gameid/title>"
 	echo "    getgamedir|gg <gameid/title>     Print the Game install directory with game name and AppID"
 	echo "                  only                 Only display install directory"
 	echo "    getid|gi <gametitle>             Print the SteamAppId for <gametitle>"
@@ -20009,7 +20021,7 @@ function commandline {
 		FUSEID "$2"
 		GameScopeGui "$USEID" "$3"
 	elif [ "$1" == "getexe" ] || [ "$1" == "ge" ]; then
-		getExeFromID "$2"
+		getGameExe "$2"
 	elif [ "$1" == "getid" ] || [ "$1" == "gi" ]; then
 		getIDFromTitle "$2"
 	elif [ "$1" == "gettitle" ] || [ "$1" == "gt" ]; then
