@@ -6,7 +6,8 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230331-2 (nonsteam-slr)"
+
+PROGVERS="v14.0.20230412-1"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -2380,6 +2381,25 @@ function fillProtonCSV {
 
 function printProtonArr {
 	printf "%s\n" "${ProtonCSV[@]//\"/}"
+}
+
+function prettyPrintProtonArr {
+	for PV in "${ProtonCSV[@]//\"/}"
+	do
+		PVNAME=$( echo "$PV" | cut -d ';' -f1 )
+		PVPATH=$( echo "$PV" | cut -d ';' -f2 )
+
+		if [ -n "$1" ]; then
+			if [ "$1" == "name" ] || [ "$1" == "n" ]; then
+				printf "%s\n" "$PVNAME"
+			elif [ "$1" == "path" ] || [ "$1" == "p" ]; then
+				printf "%s\n" "$PVPATH"
+			fi
+		else
+			printf "%s -> %s\n" "$PVNAME" "$PVPATH"
+		fi
+
+	done
 }
 
 function delEmptyFile {
@@ -5777,7 +5797,7 @@ function MainMenu {
 		fi
 		
 		if [ -f "$PDBRAINFO" ] && grep -q "[0-9]" "$PDBRAINFO" ;then
-			SETHEAD="$SETHEAD \n $(cat "$PDBRASINF")"
+			SETHEAD="$SETHEAD \n$(cat "$PDBRASINF")"
 			TT_OPENURL="$(cat "$PDBRAINFO")"
 		fi
 
@@ -5797,6 +5817,10 @@ function MainMenu {
 			fi	
 		fi
 		
+		# Fetch game exe from metadata files if not defined yet
+		if [ -z "$GAMEEXE" ]; then
+			GAMEEXE="$( basename "$( getGameExe "$AID" )" )"
+		fi
 		if [ -n "$GAMEEXE" ]; then
 			SETHEAD="$SETHEAD \n<b>${GUI_SGE}:</b> $GAMEEXE"
 		fi
@@ -7210,24 +7234,36 @@ function getTitleFromID {
 	fi
 }
 
-function getExeFromID {
+# Relies on game executable existing in STL meta file (i.e. any game launched before with STL)
+function getGameExe {
 	if [ -z "$1" ]; then
 		echo "A Game ID is required as argument"
 	else
-		if [ -f "$GEMETA/${1}.conf" ]; then
+		INAID="$1"
+		EXE=""
+		NOTFOUNDSTR="No Executable or SteamTinkerLaunch file found for '$1'"
+
+		# Try to get appid from game name -- If nultiple values, just pick first one
+		if ! [ "$INAID" -eq "$INAID" ] 2>/dev/null; then
+			INAID="$( getIDFromTitle "$INAID" | head -n1 )"
+			INAID="$( trimWhitespaces "${INAID%(*}")"
+		fi
+
+		EXEGAMNAM="$( getTitleFromID "$INAID" )"
+
+		if [ -n "$INAID" ] && [ -f "$GEMETA/${INAID}.conf" ]; then
 			# Some games might only have "EXECUTABLE" in their meta conf file
-			EXE="$(grep "^EXECUTABLE" "$GEMETA/${1}.conf" | cut -d '"' -f2)"
+			EXE="$(grep "^EXECUTABLE" "$GEMETA/${INAID}.conf" | cut -d '"' -f2)"
 			if [ -z "${EXE}" ]; then
-				EXE="$(grep "^GAMEEXE" "$GEMETA/${1}.conf" | cut -d '"' -f2)"
+				EXE="$(grep "^GAMEEXE" "$GEMETA/${INAID}.conf" | cut -d '"' -f2)"
 			fi
-			
-			if [ -n "${EXE}" ]; then
-				echo "$EXE"
-				return
+
+			if [ -n "$EXE" ]; then
+				EXE="$EXEGAMNAM ($INAID) -> $( getGameDir "$INAID" "only" )/$EXE"
 			fi
 		fi
 
-		echo "No Executable or SteamTinkerLaunch file found for '$1'"
+		echo "${EXE:-$NOTFOUNDSTR}"
 	fi
 }
 
@@ -7235,18 +7271,22 @@ function getCompatData {
 	if [ -z "$1" ]; then
 		echo "A Game ID or Game Title is required as argument"
 	else
+		# Sometimes the name here is not extact e.g. "SonicFrontiers" for "Sonic Frontiers", so the else fallback fetches using getGameDir
+		# If the compat folder doesn't exist *at all* then the final else will get triggered, but this should probably always exist (even if its empty)
 		if [ -d "$STLCOMPDAT" ]; then
 			unset FCOMPDAT
-			if [ "$1" -eq "$1" ] 2>/dev/null; then
+
+			# Skips games which have ';' in the name (i.e. "ROBOTICS;NOTES"), as this throws off the 'cut' command, and instead we fall back to the getGameDir check
+			if [ "$1" -eq "$1" ] 2>/dev/null; then  # This is for AppID check (-eq will fail if not integer expression)
 				while read -r "complink"; do
-				TEST="$(readlink "$complink" | grep "/$1$")"
-				if [ -d "$TEST" ]; then
-					FCOMPDAT="${complink##*/};$TEST"
-				fi
+					TEST="$(readlink "$complink" | grep "/$1$")"
+					if [ -d "$TEST" ] && ! [[ "${complink##*/}" == *";"* ]]; then
+						FCOMPDAT="${complink##*/};$TEST"
+					fi
 				done <<< "$(find "$STLCOMPDAT")"
-			else
+			else  # This is for Game Name checks
 				TEST="$(find "$STLCOMPDAT" -iname "*${1}*" | head -n1)"
-				if [ -n "$TEST" ]; then
+				if [ -n "$TEST" ] && ! [[ "${TEST##*/}" == *";"* ]]; then
 					FCOMPDAT="${TEST##*/};$(readlink "$TEST")"
 				fi
 			fi
@@ -7258,7 +7298,27 @@ function getCompatData {
 
 				echo "${COMPATGAMENAME} (${COMPATGAMEAID}) -> ${COMPATGAMEPATH}"
 			else
-				echo "No $CODA dir found for '$1'"
+				# If no symlink found in STL dir, check the game's library folder, with fallback to the Steam root library folder (i.e. non-steam games)
+				writelog "INFO" "${FUNCNAME[0]} - Could not find compatdata named in STL symlink dir, searching with getGameLibraryFolder..."
+				SEARCHGAMEDIR="$( getGameDir "$1" )"
+
+				COMPATGAMESTR=""  # Final output string
+				NOTFOUNDSTR="No $CODA dir found for '$1'"
+				COMPATGAMEPATH="${SEARCHGAMEDIR##*-> }"
+				if [ -d "$COMPATGAMEPATH" ]; then
+					COMPATGAMENAME="$( echo "${SEARCHGAMEDIR%(*}" | xargs )" # e.g. TEKKEN 7
+					COMPATGAMEAID="$( echo "$SEARCHGAMEDIR" | grep -oE '\([^)]+\)' | tail -n1 | sed 's:(::g;s:)::g' )"  # e.g. 389730
+
+					LIFOCOMPATDIR="$( realpath "$COMPATGAMEPATH/../../$CODA/$COMPATGAMEAID" )"
+					SROOTCOMPATDIR="$SROOT/$SA/$CODA/$COMPATGAMEAID"
+
+					COMPATDATADIR="$( [ -d "$LIFOCOMPATDIR" ] && echo "$LIFOCOMPATDIR" || echo "$SROOTCOMPATDIR" )"
+					if [ -d "$COMPATDATADIR" ]; then
+						COMPATGAMESTR="$COMPATGAMENAME ($COMPATGAMEAID) -> $COMPATDATADIR"
+					fi
+				fi
+
+				echo "${COMPATGAMESTR:-$NOTFOUNDSTR}"
 			fi
 		else
 			echo "No $CODA dir found for '$1'"
@@ -7269,10 +7329,8 @@ function getCompatData {
 # Credit to StackOverflow community wiki
 function trimWhitespaces {
 	INSTR="$*"
-	# remove leading whitespace characters
-	INSTR="${INSTR#"${INSTR%%[![:space:]]*}"}"
-	# remove trailing whitespace characters
-	INSTR="${INSTR%"${INSTR##*[![:space:]]}"}"
+	INSTR="${INSTR#"${INSTR%%[![:space:]]*}"}"  # remove leading whitespace characters
+	INSTR="${INSTR%"${INSTR##*[![:space:]]}"}"  # remove trailing whitespace characters
 	echo "$INSTR"
 }
 
@@ -19711,9 +19769,9 @@ function howto {
 	echo "                                       (for 'SteamAppID' or 'last')"
 	echo "    gamefiles|gf <gameid>            Opens menu for opening <gameid> files"
 	echo "    gamescope|gs <gameid>            Gamescope config-menu for <gameid>"
-	echo "    (get commands only for games known by ${PROGNAME,,}:)"
+	echo "    (get commands work most reliably for games previously launched with ${PROGNAME,,}:)"
 	echo "    getcompatdata|gc <gameid/title>  Print the Game compatdata path"
-	echo "    getexe|ge <gameid>               Print the Game Exe for <gameid>"
+	echo "    getexe|ge <gameid>               Print the Game Exe for <gameid/title>"
 	echo "    getgamedir|gg <gameid/title>     Print the Game install directory with game name and AppID"
 	echo "                  only                 Only display install directory"
 	echo "    getid|gi <gametitle>             Print the SteamAppId for <gametitle>"
@@ -19746,6 +19804,9 @@ function howto {
 	echo "    list <owned|installed>           List ids of <owned|o,installed|i> games"
 	echo "         <id|name|path|count|full>     Optionally specify whether you want to see"
 	echo "                                        each game's <id|name|path|count|full>"
+	echo "    listproton|lp                    List name and path of all Proton versions known to SteamTinkerLaunch"
+	echo "         name|n                        Only list the Proton version names"
+	echo "         path|p                        Only list paths to the Proton versions"
 	echo "    meta                             Generates/Updates metadata"
 	echo "                                       for all installed games"
 	echo "    mo2                              Mod Organizer 2"
@@ -19969,6 +20030,8 @@ function commandline {
 	elif [ "$1" == "dxvkhud" ] || [ "$1" == "dxh" ]; then
 		FUSEID "$2"
 		DxvkHudPick "$USEID"
+	elif [ "$1" == "listproton" ] || [ "$1" == "lp" ]; then
+		prettyPrintProtonArr "$2"
 	elif [ "$1" == "dotnet" ]; then
 		if [ -n "$3" ]; then
 			installDotNet "$2" "$3" "$4"
@@ -19995,7 +20058,7 @@ function commandline {
 		FUSEID "$2"
 		GameScopeGui "$USEID" "$3"
 	elif [ "$1" == "getexe" ] || [ "$1" == "ge" ]; then
-		getExeFromID "$2"
+		getGameExe "$2"
 	elif [ "$1" == "getid" ] || [ "$1" == "gi" ]; then
 		getIDFromTitle "$2"
 	elif [ "$1" == "gettitle" ] || [ "$1" == "gt" ]; then
