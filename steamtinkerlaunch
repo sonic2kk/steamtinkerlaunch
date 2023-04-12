@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230412-1"
+PROGVERS="v14.0.20230412-2 (network-toggles)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -2645,6 +2645,7 @@ function setDefaultCfgValues {
 		if [ -z "$USECUSTOMFALLBACKPIC" ]				; then	USECUSTOMFALLBACKPIC="0"; fi
 		if [ -z "$GITHUBUSER" ]							; then	GITHUBUSER="$NON"; fi
 		if [ -z "$DLGAMEDATA" ]							; then	DLGAMEDATA="1"; fi
+		if [ -z "$DLSTEAMDECKCOMPATINFO" ]				; then  DLSTEAMDECKCOMPATINFO="1"; fi
 		if [ -z "$USEPDBRATING" ]						; then	USEPDBRATING="1"; fi
 		if [ -z "$PDBRATINGCACHE" ]						; then	PDBRATINGCACHE="1"; fi
 		if [ -z "$DLWINETRICKS" ]						; then	DLWINETRICKS="0"; fi
@@ -3093,6 +3094,8 @@ function saveCfg {
 			echo "GITHUBUSER=\"$GITHUBUSER\""
 			echo "## $DESC_DLGAMEDATA"
 			echo "DLGAMEDATA=\"$DLGAMEDATA\""
+			echo "## $DESC_DLSTEAMDECKCOMPATINFO"
+			echo "DLSTEAMDECKCOMPATINFO=\"$DLSTEAMDECKCOMPATINFO\""
 			echo "## $DESC_USEPDBRATING"
 			echo "USEPDBRATING=\"$USEPDBRATING\""
 			echo "## $DESC_PDBRATINGCACHE"
@@ -5034,6 +5037,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_HEADLINEFONT!$DESC_HEADLINEFONT ('HEADLINEFONT')":CB "$(cleanDropDown "${HEADLINEFONT/#-/ -}" "$FONTSIZES")" `#CAT_Gui` `#MENU_GLOBAL` \
 --field="     $GUI_USEWINDECO!$DESC_USEWINDECO ('USEWINDECO')":CHK "${USEWINDECO/#-/ -}" `#CAT_Gui` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_DLGAMEDATA!$DESC_DLGAMEDATA ('DLGAMEDATA')":CHK "${DLGAMEDATA/#-/ -}" `#CAT_Gui` `#SUB_Checkbox` `#MENU_GLOBAL` \
+--field="     $GUI_DLSTEAMDECKCOMPATINFO!$DESC_DLSTEAMDECKCOMPATINFO ('DLSTEAMDECKCOMPATINFO')":CHK "${DLSTEAMDECKCOMPATINFO}" `#CAT_Gui` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_USEGAMEPICS!$DESC_USEGAMEPICS ('USEGAMEPICS')":CHK "${USEGAMEPICS/#-/ -}" `#CAT_Gui` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_USECUSTOMFALLBACKPIC!$DESC_USECUSTOMFALLBACKPIC ('USECUSTOMFALLBACKPIC')":CHK "${USECUSTOMFALLBACKPIC/#-/ -}" `#CAT_Gui` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_GITHUBUSER!$DESC_GITHUBUSER ('GITHUBUSER')":CBE "${GITHUBUSER/#-/ -}" `#CAT_Gui` `#MENU_GLOBAL` \
@@ -9267,10 +9271,14 @@ function askSettings {
 
 				# Tested and this should not break Non-Steam Games - Open an issue if it does!
 				prepareSteamDeckCompatInfo
-				STEAMDECKCOMPATOUT="<b>$GUI_SDCR:</b> ${STEAMDECKCOMPATRATING:$STEAMDECKCOMPAT_UNKNOWN}"
-				if ! [ -f "$STLGDECKCOMPAT/${AID}-deckcompatrating.json" ]; then
+				if [ ! -f "$STLGDECKCOMPAT/${AID}-deckcompatrating.json" ] && [ "$DLSTEAMDECKCOMPATINFO" -eq 1 ]; then
 					# If the Steam Deck compat rating json doesn't exist, assume something messed up e.g. offline or JQ is not installed
 					writelog "INFO" "${FUNCNAME[0]} - Could not retrieve Steam Deck compatibility rating, defaulting to $STEAMDECKCOMPAT_UNKNOWN - Maybe '$JQ' is missing or we are offline?"
+				fi
+
+				if [ -n "$STEAMDECKCOMPATRATING" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Fetched Steam Deck compatibility info, will show on wait requester"
+					STEAMDECKCOMPATOUT="<b>$GUI_SDCR:</b> ${STEAMDECKCOMPATRATING:$STEAMDECKCOMPAT_UNKNOWN}"
 				fi
 
 				writelog "INFO" "${FUNCNAME[0]} - Steam Deck compatibility rating string is '$STEAMDECKCOMPATOUT'"
@@ -22957,20 +22965,24 @@ function prepareSteamDeckCompatInfo {
 		return 1
 	fi
 
-	mapfile -d ";" -t -O "${#DECKCOMPATARR[@]}" DECKCOMPATARR <<< "$( getSteamDeckCompatInfo "$AID" )"
-	unset "DECKCOMPATARR[-1]"
+	if [ "$DLSTEAMDECKCOMPATINFO" -eq 1 ]; then
+		mapfile -d ";" -t -O "${#DECKCOMPATARR[@]}" DECKCOMPATARR <<< "$( getSteamDeckCompatInfo "$AID" )"
+		unset "DECKCOMPATARR[-1]"
 
-	if [ "${#DECKCOMPATARR[@]}" -eq "0" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - No compatibility information available for '$AID' - Is this AppID definitely correct?"
+		if [ "${#DECKCOMPATARR[@]}" -eq "0" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - No compatibility information available for '$AID' - Is this AppID definitely correct?"
+		else
+			# HTML symbols for Verified (checkmark), Playable (circled question mark) and Unsupported (no-entry sign) 
+			COMPATMARK=""
+			case ${DECKCOMPATARR[0]} in
+				*"Verified"*) COMPATMARK="&#10003;" ;;
+				*"Playable"*) COMPATMARK="&#128712;" ;;
+				*"Unsupported"*) COMPATMARK="&#128683;" ;;
+			esac
+			STEAMDECKCOMPATRATING="${DECKCOMPATARR[0]} ${COMPATMARK}"
+		fi
 	else
-		# HTML symbols for Verified (checkmark), Playable (circled question mark) and Unsupported (no-entry sign) 
-		COMPATMARK=""
-		case ${DECKCOMPATARR[0]} in
-			*"Verified"*) COMPATMARK="&#10003;" ;;
-			*"Playable"*) COMPATMARK="&#128712;" ;;
-			*"Unsupported"*) COMPATMARK="&#128683;" ;;
-		esac
-		STEAMDECKCOMPATRATING="${DECKCOMPATARR[0]} ${COMPATMARK}"
+		writelog "INFO" "${FUNCNAME[0]} - DLSTEAMDECKCOMPATINFO is '$DLSTEAMDECKCOMPATINFO' - Not fetching Steam Deck compatability info"
 	fi
 }
 
