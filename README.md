@@ -24,7 +24,7 @@ If you don't press any buttons it just goes with the defaults and launches the g
 The menus can get a little confusing but it consolidates it all in one place and is way more simple
 than trying to remember dozens of commands for various settings that one might need."_
 
-![image](https://user-images.githubusercontent.com/7917345/209706023-40eefb0d-b115-48a5-aa6f-c6509863811b.png)
+![Main Menu](https://user-images.githubusercontent.com/7917345/231897862-401c8702-af1b-4a51-9ace-8a3f04ca2cf2.png)
 
 ## What Does It Do?
 SteamTinkerLaunch offers a huge variety of features, too many to list in this Readme. Please see the [Features List](https://github.com/sonic2kk/steamtinkerlaunch/wiki#features) and their associated wiki pages for a full breakdown. However, here are some of the key features offered by SteamTinkerLaunch. Note that some of these features may not work with Flatpak Steam!
@@ -66,7 +66,7 @@ It is possible to use SteamTinkerLaunch as a launch option for Proton games, but
 ### Game-Specific Use
 When starting a game, a small [Wait Requester](#Wait-Requester) dialog will pop up. This will allow you to access the Main Menu either by pressing the button or pressing the spacebar, or skip to launching the game. By default, the dialog will only stay for two seconds before it times out and launches the game, but this can be configured in the SteamTinkerLaunch settings.
 
-![Wait Requester](https://github.com/frostworx/repo-assets/blob/master/pics/Wait-Requester.jpg)
+![Wait Requester](https://user-images.githubusercontent.com/7917345/231898092-86a0441e-c82e-4ec1-aff1-15de236fbf56.png)
 
 The Main Menu is the springboard to tinkering with your game options. See the [wiki page](https://github.com/sonic2kk/steamtinkerlaunch/wiki/Main-Menu) for more information on the options it provides. 
 
