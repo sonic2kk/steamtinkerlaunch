@@ -10587,6 +10587,7 @@ function setOneTimeRunVars {
 			fixCustomMeta "$METCFG" # will be removed again later
 			loadCfg "$METCFG"
 		fi
+
 		if [ -n "$WINEPREFIX" ]; then
 			STEAM_COMPAT_DATA_PATH="${WINEPREFIX%/*}"
 			writelog "INFO" "${FUNCNAME[0]} - Found STEAM_COMPAT_DATA_PATH '$STEAM_COMPAT_DATA_PATH'"
@@ -10601,14 +10602,13 @@ function setOneTimeRunVars {
 
 # Called when a user passes arguments for onetimerun
 function commandlineOneTimeRun {
-	echo "STUB"
-
 	setOneTimeRunVars "$1"
 	if [ -n "$STEAM_COMPAT_DATA_PATH" ]; then
 		# Get incoming arguments
 		OTRUNDIR="$( pwd )"  # Default to current script directory
 		USEEXEDIR=0
 		for i in "$@"; do
+			echo "hello $i"
 			case $i in 
 				--exe=*)
 					OTEXE="$( realpath "${i#*=}" )"
@@ -10642,8 +10642,8 @@ function commandlineOneTimeRun {
 			fi
 
 			if [ -d "$OTRUNDIR" ]; then  # Working directory needs to be valid
-				writelog "INFO" "${FUNCNAME[0]} - Trying to find Proton version to launch executable with from given Proton name '$OTRUNPROTON'"
-				RUNOTPROTON="$(getProtPathFromCSV "$OTPROTON")"  # TODO get default Proton from game cfg
+				writelog "INFO" "${FUNCNAME[0]} - Trying to find Proton version to launch executable with from given Proton name '$RUNOTPROTON'"
+				RUNOTPROTON="$(getProtPathFromCSV "$RUNOTPROTON")"
 				if [ ! -f "$RUNOTPROTON" ]; then
 					RUNOTPROTON="$(fixProtonVersionMismatch "OTPROTON" "$STLGAMECFG" X)"
 				fi
@@ -10669,7 +10669,7 @@ function commandlineOneTimeRun {
 					fi
 					
 					# Run in subshell to avoid messing with current script paths
-					writelog "INFO" "${FUNCNAME[0]} - Starting '$OTEXE' with '$OTPROTON' with STEAM_COMPAT_DATA_PATH '$STEAM_COMPAT_DATA_PATH' and using working directory '$OTRUNDIR'"
+					writelog "INFO" "${FUNCNAME[0]} - Starting '$OTEXE' with '$RUNOTPROTON' with STEAM_COMPAT_DATA_PATH '$STEAM_COMPAT_DATA_PATH' and using working directory '$OTRUNDIR'"
 					(cd "$OTRUNDIR" && STEAM_COMPAT_DATA_PATH="$STEAM_COMPAT_DATA_PATH" "$RUNOTPROTON" run "$OTEXE" "${RUNOTARGS[@]}")
 				else
 					writelog "ERROR" "${FUNCNAME[0]} - Could not find valid Proton to launch game with"
@@ -10687,30 +10687,6 @@ function commandlineOneTimeRun {
 
 
 function OneTimeRunGui {
-
-	# if [ -n "$1" ]; then
-	# 	AID="$1"
-	# 	setAIDCfgs
-	# fi
-	# loadCfg "$STLGAMECFG"
-
-	# if [ -z "$STEAM_COMPAT_DATA_PATH" ]; then
-	# 	METCFG="$CUMETA/${AID}.conf"
-	# 	if [ -f "$METCFG" ]; then
-	# 		writelog "INFO" "${FUNCNAME[0]} - Loading Metadata '$METCFG'"
-	# 		fixCustomMeta "$METCFG" # will be removed again later
-	# 		loadCfg "$METCFG"
-	# 	fi
-	# 	if [ -n "$WINEPREFIX" ]; then
-	# 		STEAM_COMPAT_DATA_PATH="${WINEPREFIX%/*}"
-	# 		writelog "INFO" "${FUNCNAME[0]} - Found STEAM_COMPAT_DATA_PATH '$STEAM_COMPAT_DATA_PATH'"
-	# 	fi
-	# fi
-
-	# if [ -z "$STEAM_COMPAT_DATA_PATH" ]; then
-	# 	writelog "ERROR" "${FUNCNAME[0]} - STEAM_COMPAT_DATA_PATH could not be determined"
-	# else
-	
 	setOneTimeRunVars "$1"
 	if [ -n "$STEAM_COMPAT_DATA_PATH" ]; then
 		createProtonList X
@@ -10781,59 +10757,6 @@ function OneTimeRunGui {
 							commandlineOneTimeRun "$1" --exe="$OTEXE" --proton="$OTPROTON" --args="$OTARGS"
 						fi
 					fi
-
-					# RUNOTPROTON="$(getProtPathFromCSV "$OTPROTON")"
-					# if [ ! -f "$RUNOTPROTON" ]; then
-					# 	RUNOTPROTON="$(fixProtonVersionMismatch "OTPROTON" "$STLGAMECFG" X)"
-					# fi
-	
-					# if [ ! -f "$RUNOTPROTON" ]; then
-					# 	writelog "SKIP" "${FUNCNAME[0]} - No executable for selected Proton '$OTPROTON' found"
-					# elif [ ! -f "$OTEXE" ]; then
-					# 	writelog "SKIP" "${FUNCNAME[0]} - No executable found"
-					# else
-					# 	# Set the custom arguments passed from the textbox for the exe
-					# 	if [ -z "$OTARGS" ]; then
-					# 		RUNOTARGS=""
-					# 	else
-					# 		mapfile -d " " -t -O "${#RUNOTARGS[@]}" RUNOTARGS < <(printf '%s' "$OTARGS")
-					# 	fi
-						
-					# 	if [ "$OTSAVE" == "TRUE" ];then
-					# 		writelog "INFO" "${FUNCNAME[0]} - Saving One time run settings into '$STLGAMECFG'"
-					# 		touch "$FUPDATE"
-					# 		updateConfigEntry "OTPROTON" "$OTPROTON" "$STLGAMECFG"
-					# 		touch "$FUPDATE"
-					# 		updateConfigEntry "OTEXE" "$OTEXE" "$STLGAMECFG"
-					# 		touch "$FUPDATE"
-					# 		updateConfigEntry "OTARGS" "$OTARGS" "$STLGAMECFG"
-					# 	fi
-
-					# 	OTRUNDIR="$( pwd )"
-					# 	if [ "$OTUSEEXEDIR" == "TRUE" ]; then
-					# 		OTRUNDIR="$( dirname "$OTEXE" )"
-					# 		if [ -d "$OTRUNDIR" ]; then
-					# 			writelog "INFO" "${FUNCNAME[0]} - User enabled 'OTUSEEXEDIR' - Setting directory to run executable to same directory - '$OTRUNDIR'"
-					# 		else
-					# 			writelog "WARN" "${FUNCNAME[0]} - User enabled 'OTUSEEXEDIR' but its directory '$OTRUNDIR' did NOT exist - Ignoring and calling back to pwd - '$( pwd )'"
-					# 			OTRUNDIR="$( pwd )"
-					# 		fi
-					# 	elif [ -n "$OTCUSTWORKDIR" ]; then
-					# 		if [ -d "$OTCUSTWORKDIR" ]; then
-					# 			OTRUNDIR="$OTCUSTWORKDIR"
-					# 			writelog "INFO" "${FUNCNAME[0]} - User entered path for a custom working directory and it exists - Using '$OTCUSTWORKDIR' as directory to run executable from"
-					# 		else
-					# 			writelog "WARN" "${FUNCNAME[0]} - User entered path for a custom working directory but it does NOT exist - Ignoring and sticking with current script working directory based on 'pwd' - '$OTRUNDIR'"
-					# 		fi
-					# 	else
-					# 		writelog "INFO" "${FUNCNAME[0]} - User did not select any custom executable path options - Keeping as default based on current script directory with 'pwd' - '$OTRUNDIR'"
-					# 	fi
-
-					# 	# Run in subshell to avoid messing with current script paths
-					# 	# TODO - Allow running native Linux programs here too
-					# 	writelog "INFO" "${FUNCNAME[0]} - Starting '$OTEXE' with '$OTPROTON' with STEAM_COMPAT_DATA_PATH '$STEAM_COMPAT_DATA_PATH'"
-					# 	(cd "$OTRUNDIR" && STEAM_COMPAT_DATA_PATH="$STEAM_COMPAT_DATA_PATH" "$RUNOTPROTON" run "$OTEXE" "${RUNOTARGS[@]}")
-					# fi
 				}
 			;;	
 		esac
