@@ -10673,11 +10673,28 @@ function commandlineOneTimeRun {
 						updateConfigEntry "OTEXE" "$OTEXE" "$STLGAMECFG"
 						touch "$FUPDATE"
 						updateConfigEntry "OTARGS" "$OTARGS" "$STLGAMECFG"
+						touch "$FUPDATE"
+						updateConfigEntry "OTUSEEXEDIR" "$USEEXEDIR" "$STLGAMECFG"
+
+						# If we enable USEEXEDIR, remove the OTRUNDIR value
+						# If we don't, and OTRUNDIR is a valid path that isn't the default path, write out OTRUNDIR
+						#
+						# This is a bit messy and could possibly be improved...
+						if [ "$USEEXEDIR" -eq 1 ]; then
+							touch "$FUPDATE"
+							updateConfigEntry "OTRUNDIR" "DUMMY" "$STLGAMECFG"
+						elif [ -d "$OTRUNDIR" ] && ! [ "$OTRUNDIR" == "$( pwd )" ]; then
+							touch "$FUPDATE"
+							updateConfigEntry "OTRUNDIR" "$OTRUNDIR" "$STLGAMECFG"
+						else
+							touch "$FUPDATE"
+							updateConfigEntry "OTRUNDIR" "DUMMY" "$STLGAMECFG"
+						fi
 					fi
 					
 					# Run in subshell to avoid messing with current script paths
 					writelog "INFO" "${FUNCNAME[0]} - Starting '$OTEXE' with '$RUNOTPROTON' with STEAM_COMPAT_DATA_PATH '$STEAM_COMPAT_DATA_PATH' and using working directory '$OTRUNDIR'"
-					writelog "INFO" "${FUNCNAME[0]} - cd \"$OTRUNDIR\" && STEAM_COMPAT_DATA_PATH=\"$STEAM_COMPAT_DATA_PATH\" \"$RUNOTPROTON\" run \"$OTEXE\" \"${RUNOTARGS[@]}\""
+					writelog "INFO" "${FUNCNAME[0]} - cd \"$OTRUNDIR\" && STEAM_COMPAT_DATA_PATH=\"$STEAM_COMPAT_DATA_PATH\" \"$RUNOTPROTON\" run \"$OTEXE\" \"${RUNOTARGS[*]}\""
 					(cd "$OTRUNDIR" && STEAM_COMPAT_DATA_PATH="$STEAM_COMPAT_DATA_PATH" "$RUNOTPROTON" run "$OTEXE" "${RUNOTARGS[@]}")
 				else
 					writelog "ERROR" "${FUNCNAME[0]} - Could not find valid Proton to launch game with"
@@ -10714,8 +10731,8 @@ function OneTimeRunGui {
 			--field="$GUI_OTEXE!$DESC_OTEXE":FL "${OTEXE//\"}" \
 			--field="$GUI_OTARGS!$DESC_OTARGS" "${OTARGS//\"}"\
 			--field="$BUT_RUNWINECFG!$DESC_RUNWINECFG":FBTN "$( realpath "$0" ) runwinecfg" \
-			--field="$GUI_OTRCUSTWORKINGDIR!$DESC_OTRCUSTWORKINGDIR":DIR "" \
-			--field="$GUI_OTRUSEEXEDIR!$DESC_OTRUSEEXEDIR":CHK "FALSE" \
+			--field="$GUI_OTRCUSTWORKINGDIR!$DESC_OTRCUSTWORKINGDIR":DIR "$OTRUNDIR" \
+			--field="$GUI_OTRUSEEXEDIR!$DESC_OTRUSEEXEDIR":CHK "$OTUSEEXEDIR" \
 			--field="$GUI_OTSAVE!$DESC_OTSAVE":CHK "FALSE" \
 			--field="$BUT_RUNWINETRICKS!$DESC_RUNWINETRICKS":FBTN "$( realpath "$0" ) runwinetricks" \
 			--button="$BUT_CAN:0" \
@@ -10733,7 +10750,7 @@ function OneTimeRunGui {
 					mapfile -d "|" -t -O "${#OTARR[@]}" OTARR < <(printf '%s' "$OTCMDS")
 					OTPROTON="${OTARR[0]}"
 					OTEXE="${OTARR[1]}"
-					OTARGS="${OTARR[2]}"  # NOTE: Args not working?
+					OTARGS="${OTARR[2]}"
 					# OTARR[3] and OTARR[7] are the WINECFG and WINETRICKS buttons
 					OTCUSTWORKDIR="${OTARR[4]}"
 					OTUSEEXEDIR="${OTARR[5]}"
