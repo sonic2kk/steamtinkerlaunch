@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230425-1"
+PROGVERS="v14.0.20230509-1"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -10580,8 +10580,8 @@ function oneTimeWinetricks {
 	fi
 }
 
-function OneTimeRunGui {
-
+# Does the shared setup for one-time run commandline and GUI functions
+function setOneTimeRunVars {
 	if [ -n "$1" ]; then
 		AID="$1"
 		setAIDCfgs
@@ -10595,6 +10595,7 @@ function OneTimeRunGui {
 			fixCustomMeta "$METCFG" # will be removed again later
 			loadCfg "$METCFG"
 		fi
+
 		if [ -n "$WINEPREFIX" ]; then
 			STEAM_COMPAT_DATA_PATH="${WINEPREFIX%/*}"
 			writelog "INFO" "${FUNCNAME[0]} - Found STEAM_COMPAT_DATA_PATH '$STEAM_COMPAT_DATA_PATH'"
@@ -10603,7 +10604,117 @@ function OneTimeRunGui {
 
 	if [ -z "$STEAM_COMPAT_DATA_PATH" ]; then
 		writelog "ERROR" "${FUNCNAME[0]} - STEAM_COMPAT_DATA_PATH could not be determined"
+		echo "Could not get Steam compatdata path for AppID '$1'"
+	fi
+}
+
+# Called when a user passes arguments for onetimerun
+function commandlineOneTimeRun {
+	setOneTimeRunVars "$1"
+	if [ -n "$STEAM_COMPAT_DATA_PATH" ]; then
+		# Get incoming arguments
+		OTRUNDIR="$( pwd )"  # Default to current script directory
+		USEEXEDIR=0
+		for i in "$@"; do
+			case $i in 
+				--exe=*)
+					OTEXE="$( realpath "${i#*=}" )"
+					shift ;;
+				--proton=*)
+					RUNOTPROTON="${i#*=}"
+					shift ;;
+				--workingdir=*)
+					PASSEDRUNDIR="${i#*=}"
+					if [ -n "$PASSEDRUNDIR" ] && [ -d "$PASSEDRUNDIR" ]; then  # Ensure working directory exists
+						OTRUNDIR="$PASSEDRUNDIR"
+					fi
+					shift ;;
+				--useexedir)
+					USEEXEDIR=1
+					shift ;;
+				--args=*)
+					OTARGS="${i#*=}"
+					shift ;;
+				--save)
+					OTSAVE="TRUE"
+					shift ;;
+			esac
+		done
+
+		# Ensure EXE is given and that directory to run the exe in is valid, and also ensure we have a valid Proton version to run the exe with
+		if [ -n "$OTEXE" ]; then  # Valid executable required
+			if [ "$USEEXEDIR" -eq 1 ]; then  # Use EXE dir as working dir
+				OTRUNDIR="$( dirname "$OTEXE" )"
+				writelog "INFO" "${FUNCNAME[0]} - Using executable directory '$OTRUNDIR' as working directory"
+			fi
+
+			if [ -d "$OTRUNDIR" ]; then  # Working directory needs to be valid
+				writelog "INFO" "${FUNCNAME[0]} - Trying to find Proton version to launch executable with from given Proton name '$RUNOTPROTON'"
+				RUNOTPROTON="$(getProtPathFromCSV "$RUNOTPROTON")"
+				if [ ! -f "$RUNOTPROTON" ]; then
+					RUNOTPROTON="$(fixProtonVersionMismatch "OTPROTON" "$STLGAMECFG" X)"
+				fi
+
+				# TODO check for native games
+				# One-Time Run needs support for this generally, so this can be implemented separately
+				if [ -f "$RUNOTPROTON" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Found Proton version '$RUNOTPROTON'"
+					if [ -z "$OTARGS" ]; then  # Set the custom arguments for executable
+						RUNOTARGS=""
+					else
+						mapfile -d " " -t -O "${#RUNOTARGS[@]}" RUNOTARGS < <(printf '%s' "$OTARGS")
+						writelog "INFO" "${FUNCNAME[0]} - Passing arguments to One-Time Run executable '${OTRUNARGS[*]}'"
+					fi
+
+					if [ "$OTSAVE" == "TRUE" ];then  # Save one-time settings to game config file -- Really only useful for OneTimeRunGUI
+						writelog "INFO" "${FUNCNAME[0]} - Saving One time run settings into '$STLGAMECFG'"
+						touch "$FUPDATE"
+						updateConfigEntry "OTPROTON" "$OTPROTON" "$STLGAMECFG"
+						touch "$FUPDATE"
+						updateConfigEntry "OTEXE" "$OTEXE" "$STLGAMECFG"
+						touch "$FUPDATE"
+						updateConfigEntry "OTARGS" "$OTARGS" "$STLGAMECFG"
+						touch "$FUPDATE"
+						updateConfigEntry "OTUSEEXEDIR" "$USEEXEDIR" "$STLGAMECFG"
+
+						# If we enable USEEXEDIR, remove the OTRUNDIR value
+						# If we don't, and OTRUNDIR is a valid path that isn't the default path, write out OTRUNDIR
+						#
+						# This is a bit messy and could possibly be improved...
+						if [ "$USEEXEDIR" -eq 1 ]; then
+							touch "$FUPDATE"
+							updateConfigEntry "OTRUNDIR" "DUMMY" "$STLGAMECFG"
+						elif [ -d "$OTRUNDIR" ] && ! [ "$OTRUNDIR" == "$( pwd )" ]; then
+							touch "$FUPDATE"
+							updateConfigEntry "OTRUNDIR" "$OTRUNDIR" "$STLGAMECFG"
+						else
+							touch "$FUPDATE"
+							updateConfigEntry "OTRUNDIR" "DUMMY" "$STLGAMECFG"
+						fi
+					fi
+					
+					# Run in subshell to avoid messing with current script paths
+					writelog "INFO" "${FUNCNAME[0]} - Starting '$OTEXE' with '$RUNOTPROTON' with STEAM_COMPAT_DATA_PATH '$STEAM_COMPAT_DATA_PATH' and using working directory '$OTRUNDIR'"
+					writelog "INFO" "${FUNCNAME[0]} - cd \"$OTRUNDIR\" && STEAM_COMPAT_DATA_PATH=\"$STEAM_COMPAT_DATA_PATH\" \"$RUNOTPROTON\" run \"$OTEXE\" \"${RUNOTARGS[*]}\""
+					(cd "$OTRUNDIR" && STEAM_COMPAT_DATA_PATH="$STEAM_COMPAT_DATA_PATH" "$RUNOTPROTON" run "$OTEXE" "${RUNOTARGS[@]}")
+				else
+					writelog "ERROR" "${FUNCNAME[0]} - Could not find valid Proton to launch game with"
+				fi
+			else
+				writelog "WARN" "${FUNCNAME[0]} - Working directory '$OTRUNDIR' is no valid directory -- Cannot continue"
+			fi
+		else
+			writelog "ERROR" "${FUNCNAME[0]} - One-Time Run EXE is not defined -- Cannot continue"
+		fi
 	else
+		writelog "ERROR" "${FUNCNAME[0]} - STEAM_COMPAT_DATA_PATH could not be determined -- Cannot continue one-time run"
+	fi
+}
+
+
+function OneTimeRunGui {
+	setOneTimeRunVars "$1"
+	if [ -n "$STEAM_COMPAT_DATA_PATH" ]; then
 		createProtonList X
 		export CURWIKI="$PPW/One-Time-Run"
 		TITLE="${PROGNAME}-${FUNCNAME[0]}"
@@ -10621,86 +10732,62 @@ function OneTimeRunGui {
 			--field="$GUI_OTEXE!$DESC_OTEXE":FL "${OTEXE//\"}" \
 			--field="$GUI_OTARGS!$DESC_OTARGS" "${OTARGS//\"}"\
 			--field="$BUT_RUNWINECFG!$DESC_RUNWINECFG":FBTN "$( realpath "$0" ) runwinecfg" \
-			--field="$GUI_OTRCUSTWORKINGDIR!$DESC_OTRCUSTWORKINGDIR":DIR "" \
-			--field="$GUI_OTRUSEEXEDIR!$DESC_OTRUSEEXEDIR":CHK "FALSE" \
+			--field="$GUI_OTRCUSTWORKINGDIR!$DESC_OTRCUSTWORKINGDIR":DIR "$OTRUNDIR" \
+			--field="$GUI_OTRUSEEXEDIR!$DESC_OTRUSEEXEDIR":CHK "$OTUSEEXEDIR" \
 			--field="$GUI_OTSAVE!$DESC_OTSAVE":CHK "FALSE" \
 			--field="$BUT_RUNWINETRICKS!$DESC_RUNWINETRICKS":FBTN "$( realpath "$0" ) runwinetricks" \
 			--button="$BUT_CAN:0" \
 			--button="$BUT_RUNONETIMECMD:2" \
 			"$GEOM"
 			)"
-			case $? in
-				# Selected Cancel
-				0)	{
-						writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_CAN' - Exiting"
-					}
-				;;
-				# Selected Run
-				2)	{
-						mapfile -d "|" -t -O "${#OTARR[@]}" OTARR < <(printf '%s' "$OTCMDS")
-						OTPROTON="${OTARR[0]}"
-						OTEXE="${OTARR[1]}"
-						OTARGS="${OTARR[2]}"
-						# OTARR[3] and OTARR[4] are the WINECFG and WINETRICKS buttons
-						OTUSEEXEDIR="${OTARR[5]}"
-						OTCUSTWORKDIR="${OTARR[6]}"
-						OTSAVE="${OTARR[7]}"	
+		case $? in
+			# Selected Cancel
+			0)	{
+					writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_CAN' - Exiting"
+				}
+			;;
+			# Selected Run
+			2)	{
+					mapfile -d "|" -t -O "${#OTARR[@]}" OTARR < <(printf '%s' "$OTCMDS")
+					OTPROTON="${OTARR[0]}"
+					OTEXE="${OTARR[1]}"
+					OTARGS="${OTARR[2]}"
+					# OTARR[3] and OTARR[7] are the WINECFG and WINETRICKS buttons
+					OTCUSTWORKDIR="${OTARR[4]}"
+					OTUSEEXEDIR="${OTARR[5]}"
+					OTSAVE="${OTARR[6]}"
 
-						RUNOTPROTON="$(getProtPathFromCSV "$OTPROTON")"
-						if [ ! -f "$RUNOTPROTON" ]; then
-							RUNOTPROTON="$(fixProtonVersionMismatch "OTPROTON" "$STLGAMECFG" X)"
-						fi
-		
-						if [ ! -f "$RUNOTPROTON" ]; then
-							writelog "SKIP" "${FUNCNAME[0]} - No executable for selected Proton '$OTPROTON' found"
-						elif [ ! -f "$OTEXE" ]; then
-							writelog "SKIP" "${FUNCNAME[0]} - No executable found"
+					# Maybe this check could be done better somehow?
+					if [ "$OTUSEEXEDIR" == "TRUE" ]; then  # Use Executable working dir as priority option
+						if [ "$OTSAVE" == "TRUE" ]; then
+							writelog "INFO" "${FUNCNAME[0]} - Running One-Time Run with Executable Directory as Working Directory and Save Enabled"
+							commandlineOneTimeRun "$1" --exe="$OTEXE" --proton="$OTPROTON" --args="$OTARGS" --useexedir --save
 						else
-							# Set the custom arguments passed from the textbox for the exe
-							if [ -z "$OTARGS" ]; then
-								RUNOTARGS=""
-							else
-								mapfile -d " " -t -O "${#RUNOTARGS[@]}" RUNOTARGS < <(printf '%s' "$OTARGS")
-							fi
-							
-							if [ "$OTSAVE" == "TRUE" ];then
-								writelog "INFO" "${FUNCNAME[0]} - Saving One time run settings into '$STLGAMECFG'"
-								touch "$FUPDATE"
-								updateConfigEntry "OTPROTON" "$OTPROTON" "$STLGAMECFG"
-								touch "$FUPDATE"
-								updateConfigEntry "OTEXE" "$OTEXE" "$STLGAMECFG"
-								touch "$FUPDATE"
-								updateConfigEntry "OTARGS" "$OTARGS" "$STLGAMECFG"
-							fi
-
-							OTRUNDIR="$( pwd )"
-							if [ "$OTUSEEXEDIR" == "TRUE" ]; then
-								OTRUNDIR="$( dirname "$OTEXE" )"
-								if [ -d "$OTRUNDIR" ]; then
-									writelog "INFO" "${FUNCNAME[0]} - User enabled 'OTUSEEXEDIR' - Setting directory to run executable to same directory - '$OTRUNDIR'"
-								else
-									writelog "WARN" "${FUNCNAME[0]} - User enabled 'OTUSEEXEDIR' but its directory '$OTRUNDIR' did NOT exist - Ignoring and calling back to pwd - '$( pwd )'"
-									OTRUNDIR="$( pwd )"
-								fi
-							elif [ -n "$OTCUSTWORKDIR" ]; then
-								if [ -d "$OTCUSTWORKDIR" ]; then
-									OTRUNDIR="$OTCUSTWORKDIR"
-									writelog "INFO" "${FUNCNAME[0]} - User entered path for a custom working directory and it exists - Using '$OTCUSTWORKDIR' as directory to run executable from"
-								else
-									writelog "WARN" "${FUNCNAME[0]} - User entered path for a custom working directory but it does NOT exist - Ignoring and sticking with current script working directory based on 'pwd' - '$OTRUNDIR'"
-								fi
-							else
-								writelog "INFO" "${FUNCNAME[0]} - User did not select any custom executable path options - Keeping as default based on current script directory with 'pwd' - '$OTRUNDIR'"
-							fi
-
-							# Run in subshell to avoid messing with current script paths
-							# TODO - Allow running native Linux programs here too
-							writelog "INFO" "${FUNCNAME[0]} - Starting '$OTEXE' with '$OTPROTON' with STEAM_COMPAT_DATA_PATH '$STEAM_COMPAT_DATA_PATH'"
-							(cd "$OTRUNDIR" && STEAM_COMPAT_DATA_PATH="$STEAM_COMPAT_DATA_PATH" "$RUNOTPROTON" run "$OTEXE" "${RUNOTARGS[@]}")
+							writelog "INFO" "${FUNCNAME[0]} - Running One-Time Run with Executable Directory as Working Directory"
+							commandlineOneTimeRun "$1" --exe="$OTEXE" --proton="$OTPROTON" --args="$OTARGS" --useexedir
 						fi
-					}
-				;;	
-			esac
+					elif [ -n "$OTCUSTWORKDIR" ]; then  # Fallback check if user selected custom path
+						if [ "$OTSAVE" == "TRUE" ]; then
+							writelog "INFO" "${FUNCNAME[0]} - Running One-Time Run with Custom Working Directory and Save Enabled"
+							commandlineOneTimeRun "$1" --exe="$OTEXE" --proton="$OTPROTON" --args="$OTARGS" --workingdir="$OTCUSTWORKDIR" --save
+						else
+							writelog "INFO" "${FUNCNAME[0]} - Running One-Time Run with Custom Working Directory and Save Enabled"
+							commandlineOneTimeRun "$1" --exe="$OTEXE" --proton="$OTPROTON" --args="$OTARGS" --workingdir="$OTCUSTWORKDIR"
+						fi
+					else  # Don't pass working directory
+						if [ "$OTSAVE" == "TRUE" ]; then
+							writelog "INFO" "${FUNCNAME[0]} - Running One-Time Run with Save Enabled"
+							commandlineOneTimeRun "$1" --exe="$OTEXE" --proton="$OTPROTON" --args="$OTARGS" --save
+						else
+							writelog "INFO" "${FUNCNAME[0]} - Running One-Time Run"
+							commandlineOneTimeRun "$1" --exe="$OTEXE" --proton="$OTPROTON" --args="$OTARGS"
+						fi
+					fi
+				}
+			;;	
+		esac
+	else
+		writelog "ERROR" "${FUNCNAME[0]} - STEAM_COMPAT_DATA_PATH could not be determined -- Cannot continue one-time run"
 	fi
 }
 
@@ -19838,6 +19925,17 @@ function howto {
 	echo "         winecfg                     Run Winecfg with MO2 Wine in MO2 prefix"
 	echo "    opengridfolder|ogf               Open the Steam Grid folder where custom game artwork is stored using xdg-open"
 	echo "    openissue|oi                     Opens issue tracker on GitHub in default browser"
+	echo "    onetimerun|otr <gameid>          Opens One-Time Run menu for running a one-off executable in <gameid>'s Wineprefix"
+	echo "                                       Optionally takes command-line parameters to run without the GUI. Note that only"
+	echo "                                       the path to the one-time exe is required, STL will try to infer the other options"
+	echo "                                       such as Proton version where possible."
+	echo "         <args>:"
+	echo "         --exe=                        Absolute path to the One-Time executable"
+	echo "         --proton=                     Name of the Proton version to use (see steamtinkerlaunch lp)"
+	echo "         --workingdir=                 Working directory to launch the executable from"
+	echo "         --useexedir                   Use the same directory as the executable as the working directory (overrides --workingdir)"
+	echo "         --args=                       Arguments to append to the end of the executable launch"
+	echo "         --save                        Save given configuration for use in the One-Time Run GUI for this game in future"
 	echo "    play <gameid>                    Start game with id <gameid> directly" 
  	echo "    proton|p <title> <X>             Start and/or create <title> with proton"
 	echo "                                       without using steam."
@@ -20223,7 +20321,21 @@ function commandline {
 		notiShow "$NTEXT"
 	elif [ "$1" == "onetimerun" ] || [ "$1" == "otr" ]; then
 		FUSEID "$2"
-		OneTimeRunGui "$USEID"
+		if [ -z "$2" ]; then
+			writelog "WARN" "${FUNCNAME[0]} - No AppID provided for One-Time Run, attempting to start with last known AppID '$USEID'"
+			if [ -n "$USEID" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Found AppID '$USEID' - Using this for One-Time Run"
+				OneTimeRunGui "$USEID"
+			else
+				writelog "ERROR" "${FUNCNAME[0]} - Could not find last known AppID - Aborting One-Time Run"
+			fi
+		else
+			if [ -z "$3" ]; then
+				OneTimeRunGui "$USEID"
+			else
+				commandlineOneTimeRun "${@:2}"  
+			fi
+		fi
 	elif [ "$1" == "pdb" ]; then
 		getProtonDBRating "$2"
 	elif [ "$1" == "steamdeckcompat" ] || [ "$1" == "sdc" ]; then
