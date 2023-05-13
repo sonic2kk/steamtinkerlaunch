@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230514-1 (native-linux-otr)"
+PROGVERS="v14.0.20230514-2 (native-linux-otr)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -10615,6 +10615,7 @@ function commandlineOneTimeRun {
 		# Get incoming arguments
 		OTRUNDIR="$( pwd )"  # Default to current script directory
 		USEEXEDIR=0
+		OTFORCEPROTON=0
 		for i in "$@"; do
 			case $i in 
 				--exe=*)
@@ -10635,6 +10636,9 @@ function commandlineOneTimeRun {
 				--args=*)
 					OTARGS="${i#*=}"
 					shift ;;
+				--forceproton)
+					OTFORCEPROTON=1
+					shift ;;
 				--save)
 					OTSAVE="TRUE"
 					shift ;;
@@ -10648,9 +10652,14 @@ function commandlineOneTimeRun {
 				writelog "INFO" "${FUNCNAME[0]} - Using executable directory '$OTRUNDIR' as working directory"
 			fi
 
-			# ISNATIVELINUXOTR
 			if [ -d "$OTRUNDIR" ]; then  # Working directory needs to be valid
-				ISWINDOWSEXE="$(file "$OTEXE" | grep -c "PE32")"
+				# Don't check executable type if OTFORCEPROTON
+				if [ "$OTFORCEPROTON" -eq 1 ]; then
+					ISWINDOWSEXE=1
+				else
+					ISWINDOWSEXE="$(file "$OTEXE" | grep -c "PE32")"
+				fi
+
 				if [ "$ISWINDOWSEXE" -eq 1 ]; then
 					writelog "INFO" "${FUNCNAME[0]} - Looks like we've got a Windows executable here or the user forced Proton"
 					writelog "INFO" "${FUNCNAME[0]} - Trying to find Proton version to launch executable with from given Proton name '$RUNOTPROTON'"
@@ -10662,8 +10671,6 @@ function commandlineOneTimeRun {
 					writelog "INFO" "${FUNCNAME[0]} - Given executable detected as native Linux binary, this is usually correct but if this was detected incorrectly you should force Proton!"
 				fi
 
-				# TODO check for native games
-				# One-Time Run needs support for this generally, so this can be implemented separately
 				if [ -f "$RUNOTPROTON" ] || [ "$ISWINDOWSEXE" -eq 0 ]; then
 					if [ -f "$RUNOTPROTON" ]; then
 						writelog "INFO" "${FUNCNAME[0]} - Found Proton version '$RUNOTPROTON'"
@@ -19957,6 +19964,7 @@ function howto {
 	echo "         --workingdir=                 Working directory to launch the executable from"
 	echo "         --useexedir                   Use the same directory as the executable as the working directory (overrides --workingdir)"
 	echo "         --args=                       Arguments to append to the end of the executable launch"
+	echo "         --forceproton                 Use Proton to run executable even if SteamTinkerLaunch detects it as a Linux executable"
 	echo "         --save                        Save given configuration for use in the One-Time Run GUI for this game in future"
 	echo "    play <gameid>                    Start game with id <gameid> directly" 
  	echo "    proton|p <title> <X>             Start and/or create <title> with proton"
