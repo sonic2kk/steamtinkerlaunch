@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230515-1"
+PROGVERS="v14.0.20230516-2"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -14730,36 +14730,6 @@ function startVortex {
 			WINE="$VORTEXWINE" WINEDEBUG="-all" WINEPREFIX="$VORTEXPFX" "$WINECFG"
 		fi
 
-		if [ ! -d "$VORTEXDOTNETDIR" ] || [ ! -f "$VORTEXDOTNETDIR/dotnet.exe" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - DotNet6 is not installed yet"
-			DNSRC="windowsdesktop-runtime-6.0.6-win-x64.exe"
-			DLSITE="${VORTEXDOWNLOADPATH}/site"
-			if [ ! -f "$DLSITE/$DNSRC" ]; then
-				if [ -f "${VORTEXINSTDIR}/${VTXRAA}" ]; then
-					RAWDNDL="$(grep -am1 "$DNSRC" "${VORTEXINSTDIR}/${VTXRAA}" | grep -oP '="\K[^"},]+')"
-					echo "RAWDNDL '$RAWDNDL'"
-					if grep -q "^https" <<< "$RAWDNDL"	&& grep -q "exe$" <<< "$RAWDNDL"; then
-						writelog "INFO" "${FUNCNAME[0]} - Using download URL found in $VTX '${VTXRAA}'"
-						DNDL="$RAWDNDL"
-						dlCheck "$DNDL" "$DLSITE/$DNSRC" "X" " Downloading installer '$DNSRC' for DotNet6"
-					fi		
-				fi
-				
-				if [ ! -f "$DLSITE/$DNSRC" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - Using hardcoded download URL for DotNet6"
-					DNDL="https://download.visualstudio.microsoft.com/download/pr/9d6b6b34-44b5-4cf4-b924-79a00deb9795/2f17c30bdf42b6a8950a8552438cf8c1/$DNSRC"
-				fi
-				mkdir -p "$DLSITE"
-				dlCheck "$DNDL" "$DLSITE/$DNSRC" "X" " Downloading installer '$DNSRC' for DotNet6"
-			fi
-			if [ -f "$DLSITE/$DNSRC" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Starting installation of DotNet6 using '$DLSITE/$DNSRC'"
-				cd "$DLSITE" >/dev/null || return
-				wineVortexRun "$VORTEXWINE" "$DNSRC" "/quiet"
-				cd - >/dev/null || return
-			fi			
-		fi
-
 		if [ -f "$VORTEXEXE" ]; then
 			setVortexDLMime
 			setVortexDLPath
@@ -15080,8 +15050,10 @@ function installVortex {
 			else
 				writelog "INFO" "${FUNCNAME[0]} - Using '$VORTEXPROTON' for installation" "E"
 				mkProjDir "$VORTEXCOMPDATA"
+				# Vortex 1.8.0+ only requires DotNet6 (only need to pass desktop6, as installDotNet will append dotnet)
+				writelog "INFO" "${FUNCNAME[0]} - Installing .NET 6 for Vortex Mod Manager"
 				notiShow "$(strFix "$NOTY_INSTSTART" "${DOTN^}")" "S"
-				installDotNet "$VORTEXPFX" "$VORTEXWINE" "48"
+				installDotNet "$VORTEXPFX" "$VORTEXWINE" "desktop6"  # Should be easy to bump if a newer version is ever required
 				touch "${VORTEXCOMPDATA}/tracked_files"
 				STEAM_COMPAT_CLIENT_INSTALL_PATH="$SROOT" STEAM_COMPAT_DATA_PATH="$VORTEXCOMPDATA" "$VORTEXPROTON" "run" 2> "$STLSHM/${FUNCNAME[0]}_protonrun.log"
 				notiShow "$GUI_DONE" "S"
