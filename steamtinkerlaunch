@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230509-2"
+PROGVERS="v14.0.20230514-1 (vtx-stable-pre-logic)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -5302,7 +5302,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_WAITVORTEX!$DESC_WAITVORTEX ('WAITVORTEX')":NUM "${WAITVORTEX/#-/ -}" `#CAT_Vortex` `#MENU_GAME` \
 --field="     $GUI_RUN_VORTEX_WINETRICKS!$DESC_RUN_VORTEX_WINETRICKS ('RUN_VORTEX_WINETRICKS')":CHK "${RUN_VORTEX_WINETRICKS/#-/ -}" `#CAT_Vortex` `#MENU_GAME` \
 --field="     $GUI_RUN_VORTEX_WINECFG!$DESC_RUN_VORTEX_WINECFG ('RUN_VORTEX_WINECFG')":CHK "${RUN_VORTEX_WINECFG/#-/ -}" `#CAT_Vortex` `#MENU_GAME` \
---field="     $GUI_USEVORTEXPRERELEASE!$DESCUSEVORTEXPRERELEASE ('USEVORTEXPRERELEASE')":CHK "${USEVORTEXPRERELEASE/#-/ -}" `#CAT_Vortex` `#SUB_Checkbox` `#MENU_GLOBAL`  \
+--field="     $GUI_USEVORTEXPRERELEASE!$DESC_USEVORTEXPRERELEASE ('USEVORTEXPRERELEASE')":CHK "${USEVORTEXPRERELEASE/#-/ -}" `#CAT_Vortex` `#SUB_Checkbox` `#MENU_GLOBAL`  \
 --field="     $GUI_VORTEXDOWNLOADPATH!$DESC_VORTEXDOWNLOADPATH ('VORTEXDOWNLOADPATH')":DIR "${VORTEXDOWNLOADPATH/#-/ -}" `#CAT_Vortex` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_VORTEXCOMPDATA!$DESC_VORTEXCOMPDATA ('VORTEXCOMPDATA')":DIR "${VORTEXCOMPDATA/#-/ -}" `#CAT_Vortex` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_USEVORTEXPROTON!$DESC_USEVORTEXPROTON ('USEVORTEXPROTON')":CB "$(cleanDropDown "${USEVORTEXPROTON/#-/ -}" "$PROTYADLIST")" `#CAT_Vortex` `#MENU_GLOBAL` \
@@ -13919,10 +13919,15 @@ function createHMMDesktopFile {
 function getLatestGitHubExeVer {
     SETUPNAME="$1"
     PROJURL="$2"
+    EXCLUDEPRERELEASES="${3:-0}"  # i.e. to only get latest stable Vortex
 
     RELEASESURL="${PROJURL}/releases"
     EXPANDEDASSETSURL="${RELEASESURL}/expanded_assets"
-    TAGSURL="${PROJURL}/tags"
+    if [ "$EXCLUDEPRERELEASES" -eq 1 ]; then
+        TAGSURL="${RELEASESURL}/latest"  # Will redirect to release tagged with "latest" instead of pre-release
+    else
+        TAGSURL="${PROJURL}/tags"
+    fi
 
     TAGSGREP="${RELEASESURL#"$GHURL"}/tag"
 
@@ -14037,10 +14042,16 @@ function setVortexDLMime {
 	fi
 }
 
+# Get beta Vortex (rename function to "getBetaVortVer"?)
 function getLatestVortVer {
 	VSET="$VTX-setup"
-	writelog "INFO" "${FUNCNAME[0]} - Search for latest ${VTX^} stable Release"
-	VORTEXSETUP="$(getLatestGitHubExeVer "$VSET" "$VORTEXPROJURL")"
+	if [ "$USEVORTEXPRERELEASE" -eq 1 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Search for latest ${VTX^} Beta Release, if one is available (will fall back to Stable by default)"
+		VORTEXSETUP="$(getLatestGitHubExeVer "$VSET" "$VORTEXPROJURL" )"
+	else
+		writelog "INFO" "${FUNCNAME[0]} - Search for latest ${VTX^} Stable Release"
+		VORTEXSETUP="$(getLatestGitHubExeVer "$VSET" "$VORTEXPROJURL" "1" )"
+	fi
 	writelog "INFO" "${FUNCNAME[0]} - Found '$VORTEXSETUP'"
 	echo "VORTEXSETUP=$VORTEXSETUP" > "$VTST"
 }
