@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230516-3"
+PROGVERS="v14.0.20230516-4"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -2661,6 +2661,7 @@ function setDefaultCfgValues {
 		if [ -z "$VORTEXCOMPDATA" ]						; then	VORTEXCOMPDATA="$STLVORTEXDIR/$CODA"; fi
 		if [ -z "$VORTEXDOWNLOADPATH" ]					; then	VORTEXDOWNLOADPATH="$STLVORTEXDIR/downloads"; fi
 		if [ -z "$USEVORTEXPRERELEASE" ]				; then	USEVORTEXPRERELEASE="0"; fi
+		if [ -z "$DISABLEVORTEXAUTOUPDATE" ]			; then	DISABLEVORTEXAUTOUPDATE="0"; fi
 		if [ -z "$DISABLE_AUTOSTAGES" ]					; then	DISABLE_AUTOSTAGES="0"; fi
 		if [ -z "$NOSTEAMSTLDEF" ]						; then	NOSTEAMSTLDEF="0"; fi
 		if [ -z "$SGDBAPIKEY" ]							; then	SGDBAPIKEY="$NON"; fi
@@ -3116,6 +3117,8 @@ function saveCfg {
 			echo "VORTEXDOWNLOADPATH=\"$VORTEXDOWNLOADPATH\""
 			echo "## $DESC_USEVORTEXPRERELEASE"
 			echo "USEVORTEXPRERELEASE=\"$USEVORTEXPRERELEASE\""
+			echo "## $DESC_DISABLEVORTEXAUTOUPDATE"
+			echo "DISABLEVORTEXAUTOUPDATE=\"$DISABLEVORTEXAUTOUPDATE\""
 			echo "## $(strFix "$DESC_DISABLE_AUTOSTAGES" "$PROGNAME")"
 			echo "DISABLE_AUTOSTAGES=\"$DISABLE_AUTOSTAGES\""
 			echo "## $DESC_NOSTEAMSTLDEF"
@@ -5303,6 +5306,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_RUN_VORTEX_WINETRICKS!$DESC_RUN_VORTEX_WINETRICKS ('RUN_VORTEX_WINETRICKS')":CHK "${RUN_VORTEX_WINETRICKS/#-/ -}" `#CAT_Vortex` `#MENU_GAME` \
 --field="     $GUI_RUN_VORTEX_WINECFG!$DESC_RUN_VORTEX_WINECFG ('RUN_VORTEX_WINECFG')":CHK "${RUN_VORTEX_WINECFG/#-/ -}" `#CAT_Vortex` `#MENU_GAME` \
 --field="     $GUI_USEVORTEXPRERELEASE!$DESC_USEVORTEXPRERELEASE ('USEVORTEXPRERELEASE')":CHK "${USEVORTEXPRERELEASE/#-/ -}" `#CAT_Vortex` `#SUB_Checkbox` `#MENU_GLOBAL`  \
+--field="     $GUI_DISABLEVORTEXAUTOUPDATE!$DESC_DISABLEVORTEXAUTOUPDATE ('DISABLEVORTEXAUTOUPDATE')":CHK "${DISABLEVORTEXAUTOUPDATE/#-/ -}" `#CAT_Vortex` `#SUB_Checkbox` `#MENU_GLOBAL`  \
 --field="     $GUI_VORTEXDOWNLOADPATH!$DESC_VORTEXDOWNLOADPATH ('VORTEXDOWNLOADPATH')":DIR "${VORTEXDOWNLOADPATH/#-/ -}" `#CAT_Vortex` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_VORTEXCOMPDATA!$DESC_VORTEXCOMPDATA ('VORTEXCOMPDATA')":DIR "${VORTEXCOMPDATA/#-/ -}" `#CAT_Vortex` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_USEVORTEXPROTON!$DESC_USEVORTEXPROTON ('USEVORTEXPROTON')":CB "$(cleanDropDown "${USEVORTEXPROTON/#-/ -}" "$PROTYADLIST")" `#CAT_Vortex` `#MENU_GLOBAL` \
@@ -14709,6 +14713,22 @@ function resetVortexSettings {
 	diff -u "$STLSHM/vortsetbefore.txt" "$STLSHM/vortsetafter.txt"
 }
 
+function setVortexReleaseChannel {
+	# Vortex settings.update.channel can be either 'stable', 'beta', or 'none' (where 'none' is 'No automatic updates')
+	VTXUPDATECHANNEL="stable"
+	if [ "$DISABLEVORTEXAUTOUPDATE" -eq 1 ]; then
+		VTXUPDATECHANNEL="none"
+	else
+		if [ "$USEVORTEXPRERELEASE" -eq 1 ]; then
+			VTXUPDATECHANNEL="beta"
+		else
+			VTXUPDATECHANNEL="stable"
+		fi
+	fi
+
+	setVortSet "settings.update.channel=\"\\\"$VTXUPDATECHANNEL\\\"\""
+}
+
 function startVortex {
 	setVortexVars
 	askVortex "$1"
@@ -14734,6 +14754,7 @@ function startVortex {
 			setVortexDLMime
 			setVortexDLPath
 			setVortexConfigVdf
+			setVortexReleaseChannel
 
 			if [ -n "$2" ] && [ "$2" -eq "$2" ] 2>/dev/null; then
 				StatusWindow "${VTX^}" "prepareVortexGame $2" "PrepareVortexGameStatus"
