@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230517-1 (native-linux-otr)"
+PROGVERS="v14.0.20230517-2 (native-linux-otr)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -10697,6 +10697,8 @@ function commandlineOneTimeRun {
 						updateConfigEntry "OTARGS" "$OTARGS" "$STLGAMECFG"
 						touch "$FUPDATE"
 						updateConfigEntry "OTUSEEXEDIR" "$USEEXEDIR" "$STLGAMECFG"
+						touch "$FUPDATE"
+						updateConfigEntry "OTFORCEPROTON" "$OTFORCEPROTON" "$STLGAMECFG"
 
 						# If we enable USEEXEDIR, remove the OTRUNDIR value
 						# If we don't, and OTRUNDIR is a valid path that isn't the default path, write out OTRUNDIR
@@ -10726,13 +10728,13 @@ function commandlineOneTimeRun {
 						(cd "$OTRUNDIR" && "$OTEXE" "${RUNOTARGS[@]}")
 					fi
 				else
-					writelog "ERROR" "${FUNCNAME[0]} - Could not find valid Proton to launch game with"
+					writelog "ERROR" "${FUNCNAME[0]} - Could not find valid Proton to launch custom executable with"
 				fi
 			else
 				writelog "WARN" "${FUNCNAME[0]} - Working directory '$OTRUNDIR' is no valid directory -- Cannot continue"
 			fi
 		else
-			writelog "ERROR" "${FUNCNAME[0]} - One-Time Run EXE is not defined -- Cannot continue"
+			writelog "ERROR" "${FUNCNAME[0]} - One-Time Run command is not defined -- Cannot continue"
 		fi
 	else
 		writelog "ERROR" "${FUNCNAME[0]} - STEAM_COMPAT_DATA_PATH could not be determined -- Cannot continue one-time run"
@@ -10752,14 +10754,16 @@ function OneTimeRunGui {
 			OTPROTON="$USEPROTON"
 		fi
 
+		# TODO GUI looks weird because of uneven number of checkboxes, but this will be fixed once we add a checkbox for Steam Linux Runtime as well
 		OTCMDS="$("$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top $WINDECO \
 			--title="$TITLE" --separator="|" \
 			--columns="2" \
 			--text="$(spanFont "$GUI_ONETIMERUN" "H")" \
 			--field="$GUI_OTPROTON!$DESC_OTPROTON":CB "$(cleanDropDown "${OTPROTON//\"}" "$PROTYADLIST")" \
 			--field="$GUI_OTEXE!$DESC_OTEXE":FL "${OTEXE//\"}" \
-			--field="$GUI_OTARGS!$DESC_OTARGS" "${OTARGS//\"}"\
+			--field="$GUI_OTARGS!$DESC_OTARGS" "${OTARGS//\"}" \
 			--field="$BUT_RUNWINECFG!$DESC_RUNWINECFG":FBTN "$( realpath "$0" ) runwinecfg" \
+			--field="$GUI_OTRFORCEPROTON!$DESC_OTRFORCEPROTON":CHK "$OTFORCEPROTON" \
 			--field="$GUI_OTRCUSTWORKINGDIR!$DESC_OTRCUSTWORKINGDIR":DIR "$OTRUNDIR" \
 			--field="$GUI_OTRUSEEXEDIR!$DESC_OTRUSEEXEDIR":CHK "$OTUSEEXEDIR" \
 			--field="$GUI_OTSAVE!$DESC_OTSAVE":CHK "FALSE" \
@@ -10767,7 +10771,7 @@ function OneTimeRunGui {
 			--button="$BUT_CAN:0" \
 			--button="$BUT_RUNONETIMECMD:2" \
 			"$GEOM"
-			)"
+		)"
 		case $? in
 			# Selected Cancel
 			0)	{
@@ -10777,15 +10781,17 @@ function OneTimeRunGui {
 			# Selected Run
 			2)	{
 					mapfile -d "|" -t -O "${#OTARR[@]}" OTARR < <(printf '%s' "$OTCMDS")
+
 					OTPROTON="${OTARR[0]}"
 					OTEXE="${OTARR[1]}"
 					OTARGS="${OTARR[2]}"
 					# OTARR[3] and OTARR[7] are the WINECFG and WINETRICKS buttons
-					OTCUSTWORKDIR="${OTARR[4]}"
-					OTUSEEXEDIR="${OTARR[5]}"
-					OTSAVE="${OTARR[6]}"
+					OTFORCEPROTON="${OTARR[4]}"
+					OTCUSTWORKDIR="${OTARR[5]}"
+					OTUSEEXEDIR="${OTARR[6]}"
+					OTSAVE="${OTARR[7]}"
 
-					OTR_FLAGARGS=( --exe="$OTEXE" --proton="$OTPROTON" --args="$OTARGS" )  # Default arguments that we'll always pass for Proton games
+					OTR_FLAGARGS=( --exe="$OTEXE" --proton="$OTPROTON" --args="$OTARGS" )  # Default arguments that we'll always pass (Proton will be ignored if not Windows executable, commandlineOneTimeRun figures that bit out)
 
 					# USEEXEDIR will take priority over custom working dir, cannot use both at the same time either
 					# Default is script working directory i.e. pwd
@@ -10793,6 +10799,10 @@ function OneTimeRunGui {
 						OTR_FLAGARGS+=( --useexedir )
 					elif [ -n "$OTCUSTWORKDIR" ]; then
 						OTR_FLAGARGS+=( --workingdir="$OTCUSTWORKDIR" )
+					fi
+
+					if [ "$OTFORCEPROTON" == "TRUE" ]; then
+						OTR_FLAGARGS+=( --forceproton )
 					fi
 
 					if [ "$OTSAVE" == "TRUE" ]; then
@@ -19946,12 +19956,12 @@ function howto {
 	echo "                                       the path to the one-time exe is required, STL will try to infer the other options"
 	echo "                                       such as Proton version where possible."
 	echo "         <args>:"
-	echo "         --exe=                        Absolute path to the One-Time executable"
-	echo "         --proton=                     Name of the Proton version to use (see steamtinkerlaunch lp)"
+	echo "         --exe=                        Absolute path to the One-Time executable (can be Windows or Linux executable)"
+	echo "         --proton=                     Name of the Proton version to use (see steamtinkerlaunch lp), ignored if not Windows executable"
 	echo "         --workingdir=                 Working directory to launch the executable from"
 	echo "         --useexedir                   Use the same directory as the executable as the working directory (overrides --workingdir)"
 	echo "         --args=                       Arguments to append to the end of the executable launch"
-	echo "         --forceproton                 Use Proton to run executable even if SteamTinkerLaunch detects it as a Linux executable"
+	echo "         --forceproton                 Use Proton to run executable even if SteamTinkerLaunch detects doesn't detect it as a Windows executable"
 	echo "         --save                        Save given configuration for use in the One-Time Run GUI for this game in future"
 	echo "    play <gameid>                    Start game with id <gameid> directly" 
  	echo "    proton|p <title> <X>             Start and/or create <title> with proton"
