@@ -10422,27 +10422,22 @@ function StandaloneProtonGame {
 				
 						touch "$FUPDATE" "$SAPCFG"
 						updateConfigEntry "SAPGAME" "$SAPGAME" "$SAPCFG"
-
 						if [ -n "$SAPPROTON" ];then
 							touch "$FUPDATE"
 							updateConfigEntry "SAPPROTON" "$SAPPROTON" "$SAPCFG"
 						fi
-
 						if [ -n "$SAP_COMPAT_DATA_PATH" ];then
 							touch "$FUPDATE"
 							updateConfigEntry "SAP_COMPAT_DATA_PATH" "$SAP_COMPAT_DATA_PATH" "$SAPCFG"
 						fi
-
 						if [ -n "$SAPEXE" ];then
 							touch "$FUPDATE"
 							updateConfigEntry "SAPEXE" "$SAPEXE" "$SAPCFG"
 						fi
-
 						if [ -n "$SAPARGS" ];then
 							touch "$FUPDATE"
 							updateConfigEntry "SAPARGS" "$SAPARGS" "$SAPCFG"
 						fi
-
 						if [ -n "$SAPRUN" ];then
 							touch "$FUPDATE"
 							updateConfigEntry "SAPARGS" "$SAPARGS" "$SAPCFG"
@@ -10790,32 +10785,21 @@ function OneTimeRunGui {
 					OTUSEEXEDIR="${OTARR[5]}"
 					OTSAVE="${OTARR[6]}"
 
-					# Maybe this check could be done better somehow?
-					if [ "$OTUSEEXEDIR" == "TRUE" ]; then  # Use Executable working dir as priority option
-						if [ "$OTSAVE" == "TRUE" ]; then
-							writelog "INFO" "${FUNCNAME[0]} - Running One-Time Run with Executable Directory as Working Directory and Save Enabled"
-							commandlineOneTimeRun "$1" --exe="$OTEXE" --proton="$OTPROTON" --args="$OTARGS" --useexedir --save
-						else
-							writelog "INFO" "${FUNCNAME[0]} - Running One-Time Run with Executable Directory as Working Directory"
-							commandlineOneTimeRun "$1" --exe="$OTEXE" --proton="$OTPROTON" --args="$OTARGS" --useexedir
-						fi
-					elif [ -n "$OTCUSTWORKDIR" ]; then  # Fallback check if user selected custom path
-						if [ "$OTSAVE" == "TRUE" ]; then
-							writelog "INFO" "${FUNCNAME[0]} - Running One-Time Run with Custom Working Directory and Save Enabled"
-							commandlineOneTimeRun "$1" --exe="$OTEXE" --proton="$OTPROTON" --args="$OTARGS" --workingdir="$OTCUSTWORKDIR" --save
-						else
-							writelog "INFO" "${FUNCNAME[0]} - Running One-Time Run with Custom Working Directory and Save Enabled"
-							commandlineOneTimeRun "$1" --exe="$OTEXE" --proton="$OTPROTON" --args="$OTARGS" --workingdir="$OTCUSTWORKDIR"
-						fi
-					else  # Don't pass working directory
-						if [ "$OTSAVE" == "TRUE" ]; then
-							writelog "INFO" "${FUNCNAME[0]} - Running One-Time Run with Save Enabled"
-							commandlineOneTimeRun "$1" --exe="$OTEXE" --proton="$OTPROTON" --args="$OTARGS" --save
-						else
-							writelog "INFO" "${FUNCNAME[0]} - Running One-Time Run"
-							commandlineOneTimeRun "$1" --exe="$OTEXE" --proton="$OTPROTON" --args="$OTARGS"
-						fi
+					OTR_FLAGARGS=( --exe="$OTEXE" --proton="$OTPROTON" --args="$OTARGS" )  # Default arguments that we'll always pass for Proton games
+
+					# USEEXEDIR will take priority over custom working dir, cannot use both at the same time either
+					# Default is script working directory i.e. pwd
+					if [ "$OTUSEEXEDIR" == "TRUE" ]; then
+						OTR_FLAGARGS+=( --useexedir )
+					elif [ -n "$OTCUSTWORKDIR" ]; then
+						OTR_FLAGARGS+=( --workingdir="$OTCUSTWORKDIR" )
 					fi
+
+					if [ "$OTSAVE" == "TRUE" ]; then
+						OTR_FLAGARGS+=( --save )
+					fi
+
+					commandlineOneTimeRun "$1" "${OTR_FLAGARGS[@]}"
 				}
 			;;	
 		esac
