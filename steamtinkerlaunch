@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230517-2 (native-linux-otr)"
+PROGVERS="v14.0.20230521-1 (native-linux-otr)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -10587,30 +10587,35 @@ function setOneTimeRunVars {
 	fi
 	loadCfg "$STLGAMECFG"
 
-	if [ -z "$STEAM_COMPAT_DATA_PATH" ]; then
-		METCFG="$CUMETA/${AID}.conf"
-		if [ -f "$METCFG" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Loading Metadata '$METCFG'"
-			fixCustomMeta "$METCFG" # will be removed again later
-			loadCfg "$METCFG"
+	if [ ! "$ISGAME" -eq 3 ]; then
+		if [ -z "$STEAM_COMPAT_DATA_PATH" ]; then
+			METCFG="$CUMETA/${AID}.conf"
+			if [ -f "$METCFG" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Loading Metadata '$METCFG'"
+				fixCustomMeta "$METCFG" # will be removed again later
+				loadCfg "$METCFG"
+			fi
+
+			if [ -n "$WINEPREFIX" ]; then
+				STEAM_COMPAT_DATA_PATH="${WINEPREFIX%/*}"
+				writelog "INFO" "${FUNCNAME[0]} - Found STEAM_COMPAT_DATA_PATH '$STEAM_COMPAT_DATA_PATH'"
+			fi
 		fi
 
-		if [ -n "$WINEPREFIX" ]; then
-			STEAM_COMPAT_DATA_PATH="${WINEPREFIX%/*}"
-			writelog "INFO" "${FUNCNAME[0]} - Found STEAM_COMPAT_DATA_PATH '$STEAM_COMPAT_DATA_PATH'"
+		if [ -z "$STEAM_COMPAT_DATA_PATH" ]; then
+			writelog "ERROR" "${FUNCNAME[0]} - STEAM_COMPAT_DATA_PATH could not be determined"
+			echo "Could not get Steam compatdata path for AppID '$1'"
 		fi
-	fi
-
-	if [ -z "$STEAM_COMPAT_DATA_PATH" ]; then
-		writelog "ERROR" "${FUNCNAME[0]} - STEAM_COMPAT_DATA_PATH could not be determined"
-		echo "Could not get Steam compatdata path for AppID '$1'"
+	else
+		writelog "WARN" "${FUNCNAME[0]} - Looks like we're using One-Time Run with a Native Linux title here. This means only native Linux executables can be launched here, and we won't require 'STEAM_COMPAT_DATA_PATH' to be set"
+		writelog "WARN" "${FUNCNAME[0]} - If you need to use a Windows executable you'll have to use a Windows game, or the Windows release of this game."
 	fi
 }
 
 # Called when a user passes arguments for onetimerun
 function commandlineOneTimeRun {
 	setOneTimeRunVars "$1"  # TODO remove dependency on requiring compatdata path somehow
-	if [ -n "$STEAM_COMPAT_DATA_PATH" ]; then
+	if [ -n "$STEAM_COMPAT_DATA_PATH" ] || [ "$ISGAME" -eq 3 ]; then  # ISGAME -eq 3 means native Linux games, we can still run native executables but we won't have a compat data to run any Windwos executables in
 		# Get incoming arguments
 		OTRUNDIR="$( pwd )"  # Default to current script directory
 		USEEXEDIR=0
@@ -10744,7 +10749,7 @@ function commandlineOneTimeRun {
 
 function OneTimeRunGui {
 	setOneTimeRunVars "$1"
-	if [ -n "$STEAM_COMPAT_DATA_PATH" ]; then
+	if [ -n "$STEAM_COMPAT_DATA_PATH" ] || [ "$ISGAME" -eq 3 ]; then
 		createProtonList X
 		export CURWIKI="$PPW/One-Time-Run"
 		TITLE="${PROGNAME}-${FUNCNAME[0]}"
