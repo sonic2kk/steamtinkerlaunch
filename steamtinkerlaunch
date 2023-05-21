@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230522-2 (native-linux-otr)"
+PROGVERS="v14.0.20230522-3 (native-linux-otr)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -10747,78 +10747,74 @@ function commandlineOneTimeRun {
 
 function OneTimeRunGui {
 	setOneTimeRunVars "$1"
-	if [ -n "$STEAM_COMPAT_DATA_PATH" ] || [ "$ISGAME" -eq 3 ]; then
-		createProtonList X
-		export CURWIKI="$PPW/One-Time-Run"
-		TITLE="${PROGNAME}-${FUNCNAME[0]}"
-		pollWinRes "$TITLE"
-		setShowPic
-		if [ -z "$OTPROTON" ]; then
-			OTPROTON="$USEPROTON"
-		fi
-
-		# TODO GUI looks weird because of uneven number of checkboxes, but this will be fixed once we add a checkbox for Steam Linux Runtime as well
-		OTCMDS="$("$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top $WINDECO \
-			--title="$TITLE" --separator="|" \
-			--columns="2" \
-			--text="$(spanFont "$GUI_ONETIMERUN" "H")" \
-			--field="$GUI_OTPROTON!$DESC_OTPROTON":CB "$(cleanDropDown "${OTPROTON//\"}" "$PROTYADLIST")" \
-			--field="$GUI_OTEXE!$DESC_OTEXE":FL "${OTEXE//\"}" \
-			--field="$GUI_OTARGS!$DESC_OTARGS" "${OTARGS//\"}" \
-			--field="$BUT_RUNWINECFG!$DESC_RUNWINECFG":FBTN "$( realpath "$0" ) runwinecfg" \
-			--field="$GUI_OTRFORCEPROTON!$DESC_OTRFORCEPROTON":CHK "$OTFORCEPROTON" \
-			--field="$GUI_OTRCUSTWORKINGDIR!$DESC_OTRCUSTWORKINGDIR":DIR "$OTRUNDIR" \
-			--field="$GUI_OTRUSEEXEDIR!$DESC_OTRUSEEXEDIR":CHK "$OTUSEEXEDIR" \
-			--field="$GUI_OTSAVE!$DESC_OTSAVE":CHK "FALSE" \
-			--field="$BUT_RUNWINETRICKS!$DESC_RUNWINETRICKS":FBTN "$( realpath "$0" ) runwinetricks" \
-			--button="$BUT_CAN:0" \
-			--button="$BUT_RUNONETIMECMD:2" \
-			"$GEOM"
-		)"
-		case $? in
-			# Selected Cancel
-			0)	{
-					writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_CAN' - Exiting"
-				}
-			;;
-			# Selected Run
-			2)	{
-					mapfile -d "|" -t -O "${#OTARR[@]}" OTARR < <(printf '%s' "$OTCMDS")
-
-					OTPROTON="${OTARR[0]}"
-					OTEXE="${OTARR[1]}"
-					OTARGS="${OTARR[2]}"
-					# OTARR[3] and OTARR[7] are the WINECFG and WINETRICKS buttons
-					OTFORCEPROTON="${OTARR[4]}"
-					OTCUSTWORKDIR="${OTARR[5]}"
-					OTUSEEXEDIR="${OTARR[6]}"
-					OTSAVE="${OTARR[7]}"
-
-					OTR_FLAGARGS=( --exe="$OTEXE" --proton="$OTPROTON" --args="$OTARGS" )  # Default arguments that we'll always pass (Proton will be ignored if not Windows executable, commandlineOneTimeRun figures that bit out)
-
-					# USEEXEDIR will take priority over custom working dir, cannot use both at the same time either
-					# Default is script working directory i.e. pwd
-					if [ "$OTUSEEXEDIR" == "TRUE" ]; then
-						OTR_FLAGARGS+=( --useexedir )
-					elif [ -n "$OTCUSTWORKDIR" ]; then
-						OTR_FLAGARGS+=( --workingdir="$OTCUSTWORKDIR" )
-					fi
-
-					if [ "$OTFORCEPROTON" == "TRUE" ]; then
-						OTR_FLAGARGS+=( --forceproton )
-					fi
-
-					if [ "$OTSAVE" == "TRUE" ]; then
-						OTR_FLAGARGS+=( --save )
-					fi
-
-					commandlineOneTimeRun "$1" "${OTR_FLAGARGS[@]}"
-				}
-			;;	
-		esac
-	else
-		writelog "ERROR" "${FUNCNAME[0]} - STEAM_COMPAT_DATA_PATH could not be determined -- Cannot continue one-time run"
+	createProtonList X
+	export CURWIKI="$PPW/One-Time-Run"
+	TITLE="${PROGNAME}-${FUNCNAME[0]}"
+	pollWinRes "$TITLE"
+	setShowPic
+	if [ -z "$OTPROTON" ]; then
+		OTPROTON="$USEPROTON"
 	fi
+
+	# TODO GUI looks weird because of uneven number of checkboxes, but this will be fixed once we add a checkbox for Steam Linux Runtime as well
+	OTCMDS="$("$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top $WINDECO \
+		--title="$TITLE" --separator="|" \
+		--columns="2" \
+		--text="$(spanFont "$GUI_ONETIMERUN" "H")" \
+		--field="$GUI_OTPROTON!$DESC_OTPROTON":CB "$(cleanDropDown "${OTPROTON//\"}" "$PROTYADLIST")" \
+		--field="$GUI_OTEXE!$DESC_OTEXE":FL "${OTEXE//\"}" \
+		--field="$GUI_OTARGS!$DESC_OTARGS" "${OTARGS//\"}" \
+		--field="$BUT_RUNWINECFG!$DESC_RUNWINECFG":FBTN "$( realpath "$0" ) runwinecfg" \
+		--field="$GUI_OTRFORCEPROTON!$DESC_OTRFORCEPROTON":CHK "$OTFORCEPROTON" \
+		--field="$GUI_OTRCUSTWORKINGDIR!$DESC_OTRCUSTWORKINGDIR":DIR "$OTRUNDIR" \
+		--field="$GUI_OTRUSEEXEDIR!$DESC_OTRUSEEXEDIR":CHK "$OTUSEEXEDIR" \
+		--field="$GUI_OTSAVE!$DESC_OTSAVE":CHK "FALSE" \
+		--field="$BUT_RUNWINETRICKS!$DESC_RUNWINETRICKS":FBTN "$( realpath "$0" ) runwinetricks" \
+		--button="$BUT_CAN:0" \
+		--button="$BUT_RUNONETIMECMD:2" \
+		"$GEOM"
+	)"
+	case $? in
+		# Selected Cancel
+		0)	{
+				writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_CAN' - Exiting"
+			}
+		;;
+		# Selected Run
+		2)	{
+				mapfile -d "|" -t -O "${#OTARR[@]}" OTARR < <(printf '%s' "$OTCMDS")
+
+				OTPROTON="${OTARR[0]}"
+				OTEXE="${OTARR[1]}"
+				OTARGS="${OTARR[2]}"
+				# OTARR[3] and OTARR[7] are the WINECFG and WINETRICKS buttons
+				OTFORCEPROTON="${OTARR[4]}"
+				OTCUSTWORKDIR="${OTARR[5]}"
+				OTUSEEXEDIR="${OTARR[6]}"
+				OTSAVE="${OTARR[7]}"
+
+				OTR_FLAGARGS=( --exe="$OTEXE" --proton="$OTPROTON" --args="$OTARGS" )  # Default arguments that we'll always pass (Proton will be ignored if not Windows executable, commandlineOneTimeRun figures that bit out)
+
+				# USEEXEDIR will take priority over custom working dir, cannot use both at the same time either
+				# Default is script working directory i.e. pwd
+				if [ "$OTUSEEXEDIR" == "TRUE" ]; then
+					OTR_FLAGARGS+=( --useexedir )
+				elif [ -n "$OTCUSTWORKDIR" ]; then
+					OTR_FLAGARGS+=( --workingdir="$OTCUSTWORKDIR" )
+				fi
+
+				if [ "$OTFORCEPROTON" == "TRUE" ]; then
+					OTR_FLAGARGS+=( --forceproton )
+				fi
+
+				if [ "$OTSAVE" == "TRUE" ]; then
+					OTR_FLAGARGS+=( --save )
+				fi
+
+				commandlineOneTimeRun "$1" "${OTR_FLAGARGS[@]}"
+			}
+		;;
+	esac
 }
 
 function setOPCustPath {
