@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230521-1 (native-linux-otr)"
+PROGVERS="v14.0.20230522-2 (native-linux-otr)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -10587,162 +10587,160 @@ function setOneTimeRunVars {
 	fi
 	loadCfg "$STLGAMECFG"
 
-	if [ ! "$ISGAME" -eq 3 ]; then
-		if [ -z "$STEAM_COMPAT_DATA_PATH" ]; then
-			METCFG="$CUMETA/${AID}.conf"
-			if [ -f "$METCFG" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Loading Metadata '$METCFG'"
-				fixCustomMeta "$METCFG" # will be removed again later
-				loadCfg "$METCFG"
-			fi
-
-			if [ -n "$WINEPREFIX" ]; then
-				STEAM_COMPAT_DATA_PATH="${WINEPREFIX%/*}"
-				writelog "INFO" "${FUNCNAME[0]} - Found STEAM_COMPAT_DATA_PATH '$STEAM_COMPAT_DATA_PATH'"
-			fi
+	if [ -z "$STEAM_COMPAT_DATA_PATH" ]; then
+		METCFG="$CUMETA/${AID}.conf"
+		if [ -f "$METCFG" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Loading Metadata '$METCFG'"
+			fixCustomMeta "$METCFG" # will be removed again later
+			loadCfg "$METCFG"
 		fi
 
-		if [ -z "$STEAM_COMPAT_DATA_PATH" ]; then
-			writelog "ERROR" "${FUNCNAME[0]} - STEAM_COMPAT_DATA_PATH could not be determined"
-			echo "Could not get Steam compatdata path for AppID '$1'"
+		if [ -n "$WINEPREFIX" ] && [ -d "$WINEPREFIX" ]; then
+			STEAM_COMPAT_DATA_PATH="${WINEPREFIX%/*}"
+			writelog "INFO" "${FUNCNAME[0]} - Found STEAM_COMPAT_DATA_PATH '$STEAM_COMPAT_DATA_PATH'"
 		fi
-	else
-		writelog "WARN" "${FUNCNAME[0]} - Looks like we're using One-Time Run with a Native Linux title here. This means only native Linux executables can be launched here, and we won't require 'STEAM_COMPAT_DATA_PATH' to be set"
-		writelog "WARN" "${FUNCNAME[0]} - If you need to use a Windows executable you'll have to use a Windows game, or the Windows release of this game."
+	fi
+
+	# Since we can use OTR with native Linux games, we just warn when there is no STEAM_COMPAT_DATA_PATH
+	if [ -z "$STEAM_COMPAT_DATA_PATH" ]; then
+		writelog "WARN" "${FUNCNAME[0]} - STEAM_COMPAT_DATA_PATH could not be determined - This may mean we're running a native Linux game here, in which case this can be safely ignored."
+		writelog "WARN" "${FUNCNAME[0]} - If you need to use a Windows executable you'll have to use One-Time Run with a Windows game, or the Windows release of this game."
 	fi
 }
 
 # Called when a user passes arguments for onetimerun
 function commandlineOneTimeRun {
-	setOneTimeRunVars "$1"  # TODO remove dependency on requiring compatdata path somehow
-	if [ -n "$STEAM_COMPAT_DATA_PATH" ] || [ "$ISGAME" -eq 3 ]; then  # ISGAME -eq 3 means native Linux games, we can still run native executables but we won't have a compat data to run any Windwos executables in
-		# Get incoming arguments
-		OTRUNDIR="$( pwd )"  # Default to current script directory
-		USEEXEDIR=0
-		OTFORCEPROTON=0
-		for i in "$@"; do
-			case $i in 
-				--exe=*)
-					OTEXE="$( realpath "${i#*=}" )"
-					shift ;;
-				--proton=*)
-					RUNOTPROTON="${i#*=}"
-					shift ;;
-				--workingdir=*)
-					PASSEDRUNDIR="${i#*=}"
-					if [ -n "$PASSEDRUNDIR" ] && [ -d "$PASSEDRUNDIR" ]; then  # Ensure working directory exists
-						OTRUNDIR="$PASSEDRUNDIR"
-					fi
-					shift ;;
-				--useexedir)
-					USEEXEDIR=1
-					shift ;;
-				--args=*)
-					OTARGS="${i#*=}"
-					shift ;;
-				--forceproton)
-					OTFORCEPROTON=1
-					shift ;;
-				--save)
-					OTSAVE="TRUE"
-					shift ;;
-			esac
-		done
+	setOneTimeRunVars "$1"
+	# Get incoming arguments
+	OTRUNDIR="$( pwd )"  # Default to current script directory
+	USEEXEDIR=0
+	OTFORCEPROTON=0
+	for i in "$@"; do
+		case $i in
+			--exe=*)
+				OTEXE="$( realpath "${i#*=}" )"
+				shift ;;
+			--proton=*)
+				RUNOTPROTON="${i#*=}"
+				shift ;;
+			--workingdir=*)
+				PASSEDRUNDIR="${i#*=}"
+				if [ -n "$PASSEDRUNDIR" ] && [ -d "$PASSEDRUNDIR" ]; then  # Ensure working directory exists
+					OTRUNDIR="$PASSEDRUNDIR"
+				fi
+				shift ;;
+			--useexedir)
+				USEEXEDIR=1
+				shift ;;
+			--args=*)
+				OTARGS="${i#*=}"
+				shift ;;
+			--forceproton)
+				OTFORCEPROTON=1
+				shift ;;
+			--save)
+				OTSAVE="TRUE"
+				shift ;;
+		esac
+	done
 
-		# Ensure EXE is given and that directory to run the exe in is valid, and also ensure we have a valid Proton version to run the exe with
-		if [ -n "$OTEXE" ]; then  # Valid executable required (Windows executable or Linux executable/file/etc, not really an EXE for Linux but oh well - Naming is hard!)
-			if [ "$USEEXEDIR" -eq 1 ]; then  # Use EXE dir as working dir
-				OTRUNDIR="$( dirname "$OTEXE" )"
-				writelog "INFO" "${FUNCNAME[0]} - Using executable directory '$OTRUNDIR' as working directory"
+	# Ensure EXE is given and that directory to run the exe in is valid, and also ensure we have a valid Proton version to run the exe with
+	if [ -n "$OTEXE" ]; then  # Valid executable required (Windows executable or Linux executable/file/etc, not really an EXE for Linux but oh well - Naming is hard!)
+		if [ "$USEEXEDIR" -eq 1 ]; then  # Use EXE dir as working dir
+			OTRUNDIR="$( dirname "$OTEXE" )"
+			writelog "INFO" "${FUNCNAME[0]} - Using executable directory '$OTRUNDIR' as working directory"
+		fi
+
+		if [ -d "$OTRUNDIR" ]; then  # Working directory needs to be valid
+			# Don't check executable type if OTFORCEPROTON
+			if [ "$OTFORCEPROTON" -eq 1 ]; then
+				ISWINDOWSEXE=1
+			else
+				ISWINDOWSEXE="$(file "$OTEXE" | grep -c "PE32")"  # TODO how do things like .bat scripts work here?
 			fi
 
-			if [ -d "$OTRUNDIR" ]; then  # Working directory needs to be valid
-				# Don't check executable type if OTFORCEPROTON
-				if [ "$OTFORCEPROTON" -eq 1 ]; then
-					ISWINDOWSEXE=1
-				else
-					ISWINDOWSEXE="$(file "$OTEXE" | grep -c "PE32")"
+			if [ "$ISWINDOWSEXE" -eq 1 ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Looks like we've got a Windows executable here or the user forced Proton"
+				# Ensure we have STEAM_COMPAT_DATA_PATH before we try to run a Windows executable
+				if [ -z "$STEAM_COMPAT_DATA_PATH" ]; then
+					writelog "ERROR" "${FUNCNAME[0]} - Cannot run Windows executable without a STEAM_COMPAT_DATA_PATH -- Maybe you're using One-Time Run with a native Linux game?"
+					echo "Cannot run Windows executable without a STEAM_COMPAT_DATA_PATH -- Maybe you're using One-Time Run with a native Linux game?"
+					return
 				fi
-
-				if [ "$ISWINDOWSEXE" -eq 1 ]; then
-					writelog "INFO" "${FUNCNAME[0]} - Looks like we've got a Windows executable here or the user forced Proton"
-					writelog "INFO" "${FUNCNAME[0]} - Trying to find Proton version to launch executable with from given Proton name '$RUNOTPROTON'"
-					RUNOTPROTON="$(getProtPathFromCSV "$RUNOTPROTON")"
-					if [ ! -f "$RUNOTPROTON" ]; then
-						RUNOTPROTON="$(fixProtonVersionMismatch "OTPROTON" "$STLGAMECFG" X)"
-					fi
-				else
-					writelog "INFO" "${FUNCNAME[0]} - Given executable detected as native Linux binary, this is usually correct but if this was detected incorrectly you should force Proton!"
-				fi
-
-				if [ -f "$RUNOTPROTON" ] || [ "$ISWINDOWSEXE" -eq 0 ]; then
-					if [ -f "$RUNOTPROTON" ]; then
-						writelog "INFO" "${FUNCNAME[0]} - Found Proton version '$RUNOTPROTON'"
-					else
-						writelog "INFO" "${FUNCNAME[0]} - Executable is native Linux, no Proton version required."
-					fi
-
-					if [ -z "$OTARGS" ]; then  # Set the custom arguments for executable
-						RUNOTARGS=""
-					else
-						mapfile -d " " -t -O "${#RUNOTARGS[@]}" RUNOTARGS < <(printf '%s' "$OTARGS")
-						writelog "INFO" "${FUNCNAME[0]} - Passing arguments to One-Time Run executable '${OTRUNARGS[*]}'"
-					fi
-
-					if [ "$OTSAVE" == "TRUE" ];then  # Save one-time settings to game config file -- Really only useful for OneTimeRunGUI
-						writelog "INFO" "${FUNCNAME[0]} - Saving One time run settings into '$STLGAMECFG'"
-						# Only save Proton version if we're using a Windows executable, otherwise we don't set a Proton version!
-						if [ "$ISWINDOWSEXE" -eq 1 ]; then
-							touch "$FUPDATE"
-							updateConfigEntry "OTPROTON" "$OTPROTON" "$STLGAMECFG"
-						fi
-						touch "$FUPDATE"
-						updateConfigEntry "OTEXE" "$OTEXE" "$STLGAMECFG"
-						touch "$FUPDATE"
-						updateConfigEntry "OTARGS" "$OTARGS" "$STLGAMECFG"
-						touch "$FUPDATE"
-						updateConfigEntry "OTUSEEXEDIR" "$USEEXEDIR" "$STLGAMECFG"
-						touch "$FUPDATE"
-						updateConfigEntry "OTFORCEPROTON" "$OTFORCEPROTON" "$STLGAMECFG"
-
-						# If we enable USEEXEDIR, remove the OTRUNDIR value
-						# If we don't, and OTRUNDIR is a valid path that isn't the default path, write out OTRUNDIR
-						#
-						# This is a bit messy and could possibly be improved...
-						if [ "$USEEXEDIR" -eq 1 ]; then
-							touch "$FUPDATE"
-							updateConfigEntry "OTRUNDIR" "DUMMY" "$STLGAMECFG"
-						elif [ -d "$OTRUNDIR" ] && ! [ "$OTRUNDIR" == "$( pwd )" ]; then
-							touch "$FUPDATE"
-							updateConfigEntry "OTRUNDIR" "$OTRUNDIR" "$STLGAMECFG"
-						else
-							touch "$FUPDATE"
-							updateConfigEntry "OTRUNDIR" "DUMMY" "$STLGAMECFG"
-						fi
-					fi
-					
-					# Run in subshell to avoid messing with current script paths
-					# TODO notifier (or only show notifier from GUI? or add silent option?)
-					if [ "$ISWINDOWSEXE" -eq 1 ]; then
-						writelog "INFO" "${FUNCNAME[0]} - Starting '$OTEXE' with '$RUNOTPROTON' with STEAM_COMPAT_DATA_PATH '$STEAM_COMPAT_DATA_PATH' and using working directory '$OTRUNDIR'"
-						writelog "INFO" "${FUNCNAME[0]} - cd \"$OTRUNDIR\" && STEAM_COMPAT_DATA_PATH=\"$STEAM_COMPAT_DATA_PATH\" \"$RUNOTPROTON\" run \"$OTEXE\" \"${RUNOTARGS[*]}\""
-						(cd "$OTRUNDIR" && STEAM_COMPAT_DATA_PATH="$STEAM_COMPAT_DATA_PATH" "$RUNOTPROTON" run "$OTEXE" "${RUNOTARGS[@]}")
-					else
-						writelog "INFO" "${FUNCNAME[0]} - Starting Native Linux program '$OTEXE' using working directory '$OTRUNDIR'"
-						writelog "INFO" "${FUNCNAME[0]} - cd \"$OTRUNDIR\" && \"$OTEXE\" \"${RUNOTARGS[*]}\""
-						(cd "$OTRUNDIR" && "$OTEXE" "${RUNOTARGS[@]}")
-					fi
-				else
-					writelog "ERROR" "${FUNCNAME[0]} - Could not find valid Proton to launch custom executable with"
+				writelog "INFO" "${FUNCNAME[0]} - Trying to find Proton version to launch executable with from given Proton name '$RUNOTPROTON'"
+				RUNOTPROTON="$(getProtPathFromCSV "$RUNOTPROTON")"
+				if [ ! -f "$RUNOTPROTON" ]; then
+					RUNOTPROTON="$(fixProtonVersionMismatch "OTPROTON" "$STLGAMECFG" X)"
 				fi
 			else
-				writelog "WARN" "${FUNCNAME[0]} - Working directory '$OTRUNDIR' is no valid directory -- Cannot continue"
+				writelog "INFO" "${FUNCNAME[0]} - Given executable detected as native Linux binary, this is usually correct but if this was detected incorrectly you should force Proton!"
+			fi
+
+			if [ -f "$RUNOTPROTON" ] || [ "$ISWINDOWSEXE" -eq 0 ]; then
+				if [ -f "$RUNOTPROTON" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Found Proton version '$RUNOTPROTON'"
+				else
+					writelog "INFO" "${FUNCNAME[0]} - Executable is native Linux, no Proton version required."
+				fi
+
+				if [ -z "$OTARGS" ]; then  # Set the custom arguments for executable
+					RUNOTARGS=""
+				else
+					mapfile -d " " -t -O "${#RUNOTARGS[@]}" RUNOTARGS < <(printf '%s' "$OTARGS")
+					writelog "INFO" "${FUNCNAME[0]} - Passing arguments to One-Time Run executable '${OTRUNARGS[*]}'"
+				fi
+
+				if [ "$OTSAVE" == "TRUE" ];then  # Save one-time settings to game config file -- Really only useful for OneTimeRunGUI
+					writelog "INFO" "${FUNCNAME[0]} - Saving One time run settings into '$STLGAMECFG'"
+					# Only save Proton version if we're using a Windows executable, otherwise we don't set a Proton version!
+					if [ "$ISWINDOWSEXE" -eq 1 ]; then
+						touch "$FUPDATE"
+						updateConfigEntry "OTPROTON" "$OTPROTON" "$STLGAMECFG"
+					fi
+					touch "$FUPDATE"
+					updateConfigEntry "OTEXE" "$OTEXE" "$STLGAMECFG"
+					touch "$FUPDATE"
+					updateConfigEntry "OTARGS" "$OTARGS" "$STLGAMECFG"
+					touch "$FUPDATE"
+					updateConfigEntry "OTUSEEXEDIR" "$USEEXEDIR" "$STLGAMECFG"
+					touch "$FUPDATE"
+					updateConfigEntry "OTFORCEPROTON" "$OTFORCEPROTON" "$STLGAMECFG"
+
+					# If we enable USEEXEDIR, remove the OTRUNDIR value
+					# If we don't, and OTRUNDIR is a valid path that isn't the default path, write out OTRUNDIR
+					#
+					# This is a bit messy and could possibly be improved...
+					if [ "$USEEXEDIR" -eq 1 ]; then
+						touch "$FUPDATE"
+						updateConfigEntry "OTRUNDIR" "DUMMY" "$STLGAMECFG"
+					elif [ -d "$OTRUNDIR" ] && ! [ "$OTRUNDIR" == "$( pwd )" ]; then
+						touch "$FUPDATE"
+						updateConfigEntry "OTRUNDIR" "$OTRUNDIR" "$STLGAMECFG"
+					else
+						touch "$FUPDATE"
+						updateConfigEntry "OTRUNDIR" "DUMMY" "$STLGAMECFG"
+					fi
+				fi
+
+				# Run in subshell to avoid messing with current script paths
+				# TODO notifier (or only show notifier from GUI? or add silent option?)
+				if [ "$ISWINDOWSEXE" -eq 1 ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Starting '$OTEXE' with '$RUNOTPROTON' with STEAM_COMPAT_DATA_PATH '$STEAM_COMPAT_DATA_PATH' and using working directory '$OTRUNDIR'"
+					writelog "INFO" "${FUNCNAME[0]} - cd \"$OTRUNDIR\" && STEAM_COMPAT_DATA_PATH=\"$STEAM_COMPAT_DATA_PATH\" \"$RUNOTPROTON\" run \"$OTEXE\" \"${RUNOTARGS[*]}\""
+					(cd "$OTRUNDIR" && STEAM_COMPAT_DATA_PATH="$STEAM_COMPAT_DATA_PATH" "$RUNOTPROTON" run "$OTEXE" "${RUNOTARGS[@]}")
+				else
+					writelog "INFO" "${FUNCNAME[0]} - Starting Native Linux program '$OTEXE' using working directory '$OTRUNDIR'"
+					writelog "INFO" "${FUNCNAME[0]} - cd \"$OTRUNDIR\" && \"$OTEXE\" \"${RUNOTARGS[*]}\""
+					(cd "$OTRUNDIR" && "$OTEXE" "${RUNOTARGS[@]}")
+				fi
+			else
+				writelog "ERROR" "${FUNCNAME[0]} - Could not find valid Proton to launch custom executable with"
 			fi
 		else
-			writelog "ERROR" "${FUNCNAME[0]} - One-Time Run command is not defined -- Cannot continue"
+			writelog "WARN" "${FUNCNAME[0]} - Working directory '$OTRUNDIR' is no valid directory -- Cannot continue"
 		fi
 	else
-		writelog "ERROR" "${FUNCNAME[0]} - STEAM_COMPAT_DATA_PATH could not be determined -- Cannot continue one-time run"
+		writelog "ERROR" "${FUNCNAME[0]} - One-Time Run command is not defined -- Cannot continue"
 	fi
 }
 
