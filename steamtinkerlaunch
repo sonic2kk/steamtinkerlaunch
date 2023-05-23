@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230522-1"
+PROGVERS="v14.0.20230524-3 (vtx-set-version)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -2662,6 +2662,8 @@ function setDefaultCfgValues {
 		if [ -z "$VORTEXDOWNLOADPATH" ]					; then	VORTEXDOWNLOADPATH="$STLVORTEXDIR/downloads"; fi
 		if [ -z "$USEVORTEXPRERELEASE" ]				; then	USEVORTEXPRERELEASE="0"; fi
 		if [ -z "$DISABLEVORTEXAUTOUPDATE" ]			; then	DISABLEVORTEXAUTOUPDATE="0"; fi
+		if [ -z "$USEVORTEXCUSTOMVER" ]					; then	USEVORTEXCUSTOMVER="0"; fi
+		if [ -z "$VORTEXCUSTOMVER" ]					; then	VORTEXCUSTOMVER="$NON"; fi
 		if [ -z "$DISABLE_AUTOSTAGES" ]					; then	DISABLE_AUTOSTAGES="0"; fi
 		if [ -z "$NOSTEAMSTLDEF" ]						; then	NOSTEAMSTLDEF="0"; fi
 		if [ -z "$SGDBAPIKEY" ]							; then	SGDBAPIKEY="$NON"; fi
@@ -3119,6 +3121,10 @@ function saveCfg {
 			echo "USEVORTEXPRERELEASE=\"$USEVORTEXPRERELEASE\""
 			echo "## $DESC_DISABLEVORTEXAUTOUPDATE"
 			echo "DISABLEVORTEXAUTOUPDATE=\"$DISABLEVORTEXAUTOUPDATE\""
+			echo "## $DESC_USEVORTEXCUSTOMVER"
+			echo "USEVORTEXCUSTOMVER=\"$USEVORTEXCUSTOMVER\""
+			echo "## $DESC_VORTEXCUSTOMVER"
+			echo "VORTEXCUSTOMVER=\"$VORTEXCUSTOMVER\""
 			echo "## $(strFix "$DESC_DISABLE_AUTOSTAGES" "$PROGNAME")"
 			echo "DISABLE_AUTOSTAGES=\"$DISABLE_AUTOSTAGES\""
 			echo "## $DESC_NOSTEAMSTLDEF"
@@ -5310,6 +5316,8 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_VORTEXDOWNLOADPATH!$DESC_VORTEXDOWNLOADPATH ('VORTEXDOWNLOADPATH')":DIR "${VORTEXDOWNLOADPATH/#-/ -}" `#CAT_Vortex` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_VORTEXCOMPDATA!$DESC_VORTEXCOMPDATA ('VORTEXCOMPDATA')":DIR "${VORTEXCOMPDATA/#-/ -}" `#CAT_Vortex` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_USEVORTEXPROTON!$DESC_USEVORTEXPROTON ('USEVORTEXPROTON')":CB "$(cleanDropDown "${USEVORTEXPROTON/#-/ -}" "$PROTYADLIST")" `#CAT_Vortex` `#MENU_GLOBAL` \
+--field="     $GUI_USEVORTEXCUSTOMVER!$DESC_USEVORTEXCUSTOMVER ('USEVORTEXCUSTOMVER')":CHK "${USEVORTEXCUSTOMVER#-/ -}" `#CAT_Vortex` `#SUB_checkbox` `#MENU_GLOBAL` \
+--field="     $GUI_VORTEXCUSTOMVER!$DESC_VORTEXCUSTOMVER ('VORTEXCUSTOMVER')":CBE "$( cleanDropDown "${VORTEXCUSTOMVER/#-/ -}" "v1.8.0!v1.7.0!v1.6.0!$NON" )" `#CAT_Vortex` `#SUB_checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_DISABLE_AUTOSTAGES!$(strFix "$DESC_DISABLE_AUTOSTAGES" "$PROGNAME") ('DISABLE_AUTOSTAGES')":CHK "${DISABLE_AUTOSTAGES/#-/ -}" `#CAT_Vortex` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="$(spanFont "$GUI_OPTSWINE" "H")":LBL "SKIP" `#CAT_Wine` `#HEAD_Wine` `#MENU_GAME` `#MENU_GLOBAL` \
 --field="     $GUI_USEWINE!$DESC_USEWINE ('USEWINE')":CHK "${USEWINE/#-/ -}" `#CAT_Wine` `#SUB_Checkbox` `#MENU_GAME` \
@@ -6278,7 +6286,7 @@ function gitUpdate {
 		fi
 	fi
 }
-# Get the last N tagged releases from PROJURL taken from sonic2kk
+
 function fetchGitHubTags {
     PROJURL="$1"
     N="$2"
@@ -13948,7 +13956,6 @@ function getLatestGitHubExeVer {
     EXCLUDEPRERELEASES="${3:-0}"  # i.e. to only get latest stable Vortex
 
     RELEASESURL="${PROJURL}/releases"
-    EXPANDEDASSETSURL="${RELEASESURL}/expanded_assets"
     if [ "$EXCLUDEPRERELEASES" -eq 1 ]; then
         TAGSURL="${RELEASESURL}/latest"  # Will redirect to release tagged with "latest" instead of pre-release
     else
@@ -13960,10 +13967,17 @@ function getLatestGitHubExeVer {
     LATESTTAG="$("$WGET" -q "${TAGSURL}" -O - 2> >(grep -v "SSL_INIT") | grep -m1 "$TAGSGREP" | grep -oE "${TAGSGREP}[^\"]+")"
     LATESTVER="${LATESTTAG##*/}"
 
-    LATESTRELEASEURL="${EXPANDEDASSETSURL}/${LATESTVER}"
+	getGitHubExeVer "$SETUPNAME" "$PROJURL" "$LATESTVER"
+}
 
-    SETUPFILE="$("$WGET" -q "${LATESTRELEASEURL}" -O - 2> >(grep -v "SSL_INIT") | grep "exe" | grep -m1 "$SETUPNAME" | grep -oE "${SETUPNAME}[^\"]+")"
-    echo "${SETUPFILE}"
+# Get GitHub release information for a given version tag.
+# Used by getLatestGitHubExeVer and can also be used standalone i.e. for downloading a specific Vortex version.
+function getGitHubExeVer {
+	SETUPNAME="$1"
+	PROJURL="$2"
+	TAG="$3"
+
+	"$WGET" -q "${PROJURL}/releases/expanded_assets/${TAG}" -O - 2> >(grep -v "SSL_INIT") | grep "exe" | grep -m1 "$SETUPNAME" | grep -oE "${SETUPNAME}[^\"]+"
 }
 
 #### VORTEX START: ####
@@ -14068,7 +14082,6 @@ function setVortexDLMime {
 	fi
 }
 
-# Get beta Vortex (rename function to "getBetaVortVer"?)
 function getLatestVortVer {
 	VSET="$VTX-setup"
 	if [ "$USEVORTEXPRERELEASE" -eq 1 ]; then
@@ -14082,8 +14095,30 @@ function getLatestVortVer {
 	echo "VORTEXSETUP=$VORTEXSETUP" > "$VTST"
 }
 
-function dlLatestVortex {
-	getLatestVortVer
+# Get version based on specified release tag (passed either from commandline or preference)
+function getVortVer {
+	VTXTAGVER="$1"
+	VSET="$VTX-setup"
+	VORTEXSETUP="$( getGitHubExeVer "$VSET" "$VORTEXPROJURL" "$VTXTAGVER" )"
+	if [ -z "$VORTEXSETUP" ]; then
+		writelog "WARN" "${FUNCNAME[0]} - Could not find Vortex setup executable for version '$VTXTAGVER' - VORTEXSETUP came back '$VORTEXSETUP'"
+		writelog "INFO" "${FUNCNAME[0]} - Falling back to latest Vortex version"
+
+		getLatestVortVer
+	else
+		writelog "INFO" "${FUNCNAME[0]} - Successfully fetched Vortex - Downloaded executable will be '$VORTEXSETUP'"
+	fi
+}
+
+function dlLatestVortex {	
+	# VORTEXCUSTOMVER is set in Global Menu -- Use it if it's set to a sane value and if the setting is enabled
+	if [ "$USEVORTEXCUSTOMVER" -eq 1 ] && [ "$VORTEXCUSTOMVER" != "$NON" ] && [ -n "$VORTEXCUSTOMVER" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - VORTEXCUSTOMVER specified and is '$VORTEXCUSTOMVER' - Will attempt to find and install this version"
+		getVortVer "$VORTEXCUSTOMVER"
+	else
+		writelog "INFO" "${FUNCNAME[0]} - Downloading latest Vortex version (not using any custom Vortex version)"
+		getLatestVortVer
+	fi
 
 	if [ -n "$VORTEXSETUP" ]; then
 		export VSPATH="$VORTEXDLDIR/$VORTEXSETUP"
@@ -15071,6 +15106,7 @@ function setVortexVars {
 	fi
 }
 
+# TODO handle getting passed a custom executable
 function installVortex {
 	if [ -z "$VORTEXSETUP" ]; then
 		if [ -f "$VTST" ]; then 
@@ -20545,8 +20581,25 @@ function commandline {
 	elif [ "$1" == "version" ] || [ "$1" == "--version" ] || [ "$1" == "-v" ]; then
 		echo "${PROGNAME,,}-${PROGVERS}"
 	elif [ "$1" == "$VTX" ]; then
+		# TODO Vortex uninstall option?
+		# TODO Vortex commandline flag to set no auto update (i.e. --disable-auto-update)
+
 		USEVORTEX=1
 		if [ -n "$2" ]; then
+			# If we get a third parameter and any passed command should download/install/start Vortex,
+			# set the Vortex version to download to the given version (will only be used if Vortex is not already installed)
+			#
+			# TODO handle passing a custom installer file, probably only for "install" though where we'll force set a different var
+			if [[ -n "$3" && ( "$2" == "download" || "$2" == "install" || "$2" == "start" || "$2" == "getset" ) ]]; then
+				if [ "$USEVORTEXCUSTOMVER" -eq 0 ]; then
+					writelog "WARN" "${FUNCNAME[0]} - Custom Vortex version passed ('$3') but USEVORTEXCUSTOMVER is '$USEVORTEXCUSTOMVER'"
+					writelog "WARN" "${FUNCNAME[0]} - Assuming you know what you're doing and using this version anyway..."
+				fi
+
+				USEVORTEXCUSTOMVER=1
+				VORTEXCUSTOMVER="$3"
+			fi
+
 			if [ "$2" == "install" ] || [ "$2" == "i" ]; then
 				if [ -n "$3" ] && [ "$3" == "gui" ]; then
 					installVortexGui
@@ -20555,7 +20608,7 @@ function commandline {
 					StatusWindow "$(strFix "$NOTY_INSTSTART" "${VTX^}")" "installVortex" "InstallVortexStatus"
 				fi
 			elif [ "$2" == "start" ]; then
-				startVortex "noask" "$3"
+				startVortex "noask" "$3" 
 			elif [ "$2" == "url" ] || [ "$2" == "u" ]; then
 				if [ -z "$3" ]; then
 					writelog "ERROR" "${FUNCNAME[0]} - No URL was passed for ('$3') -- Maybe this is being incorrectly launched from the XDG menu?"
@@ -20573,7 +20626,6 @@ function commandline {
 				addVortexStage "$3"
 			elif [ "$2" == "list-supported" ] || [ "$2" == "ls" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Games With ${VTX^} Support found in the ${VTX^} installation:" "E"
-				# getVortexSupported X
 				getVortexSupportedNames
 			elif [ "$2" == "list-online" ] || [ "$2" == "lo" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Games With ${VTX^} Support listed online:" "E"
