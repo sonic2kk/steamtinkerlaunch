@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230526-1"
+PROGVERS="v14.0.20230526-2"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -15250,8 +15250,21 @@ function vtxWinecfg {
 		writelog "INFO" "${FUNCNAME[0]} - WINEDEBUG=\"-all\" WINEPREFIX=\"$VORTEXPFX\" \"$VORTEXWINE\" \"$OTWINECFGEXE\""
 		WINEDEBUG="-all" WINEPREFIX="$VORTEXPFX" "$VORTEXWINE" "$OTWINECFGEXE"
 	else
-		writelog "ERROR" "${FUNCNAME[0]} - Vortex is not installed, cannot run Winecfg for Vortex"
-		echo "Vortex is not installed, cannot run Winecfg for Vortex"
+		writelog "ERROR" "${FUNCNAME[0]} - Vortex is not installed or prefix is missing, cannot run Winecfg for Vortex -- VORTEXPFX is '$VORTEXPFX'"
+		echo "Vortex is not installed or prefix is missing, cannot run Winecfg for Vortex"
+	fi
+}
+
+function vtxWinetricks {
+	setVortexVars
+	chooseWinetricks
+	if [ -d "$VORTEXPFX" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Running Winetricks for Vortex"
+		writelog "INFO" "${FUNCNAME[0]} - WINEDEBUG=\"-all\" WINEPREFIX=\"$VORTEXPFX\" WINE=\"$VORTEXWINE\" \"$WINETRICKS\""
+		WINEDEBUG="-all" WINEPREFIX="$VORTEXPFX" WINE="$VORTEXWINE" "$WINETRICKS"
+	else
+		writelog "ERROR" "${FUNCNAME[0]} - Vortex is not installed or prefix is missing, cannot run Winetricks for Vortex -- VORTEXPFX is '$VORTEXPFX'"
+		echo "Vortex is not installed or prefix is missing, cannot run Winetricks for Vortex"
 	fi
 }
 
@@ -15886,11 +15899,24 @@ function mo2Winecfg {
 
 	if [ -d "$MO2PFX" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Running Winecfg for MO2"
-		writelog "INFO" "${FUNCNAME[0]} - WINEDEBUG=\"-all\" WINEPREFIX=\"$VORTEXPFX\" \"$MO2WINE\" \"$OTWINECFGEXE\""
+		writelog "INFO" "${FUNCNAME[0]} - WINEDEBUG=\"-all\" WINEPREFIX=\"$MO2PFX\" \"$MO2WINE\" \"$OTWINECFGEXE\""
 		WINEDEBUG="-all" WINEPREFIX="$MO2PFX" "$MO2WINE" "$OTWINECFGEXE"
 	else
-		writelog "ERROR" "${FUNCNAME[0]} - ModOrganizer 2 is not installed, cannot run Winecfg for MO2"
-		echo "ModOrganizer 2 is not installed, cannot run Winecfg for ModOrganizer 2"
+		writelog "ERROR" "${FUNCNAME[0]} - ModOrganizer 2 is not installed or prefix is missing, cannot run Winecfg for MO2"
+		echo "ModOrganizer 2 is not installed or prefix is missing, cannot run Winecfg for ModOrganizer 2"
+	fi
+}
+
+function mo2Winetricks {
+	setMO2Vars
+	chooseWinetricks
+	if [ -d "$MO2PFX" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Running Winetricks for MO2"
+		writelog "INFO" "${FUNCNAME[0]} - WINEDEBUG=\"-all\" WINEPREFIX=\"$MO2PFX\" WINE=\"$MO2WINE\" \"$WINETRICKS\""
+		WINEDEBUG="-all" WINEPREFIX="$MO2PFX" WINE="$MO2WINE" "$WINETRICKS"
+	else
+		writelog "ERROR" "${FUNCNAME[0]} - ModOrganizer 2 is not installed or prefix is missing, cannot run Winetricks for MO2"
+		echo "ModOrganizer 2 is not installed or prefix is missing, cannot run Winetricks for ModOrganizer 2"
 	fi
 }
 
@@ -19975,15 +20001,17 @@ function howto {
 	echo "    meta                             Generates/Updates metadata"
 	echo "                                       for all installed games"
 	echo "    mo2                              Mod Organizer 2"
-	echo "         install|i                   install MO2 (includes download)"
+	echo "         create-instance|ci <id>     create MO2 instance for <id>"
 	echo "         download|d                  download latest MO2 release"
-	echo "         start|s                     start MO2 (includes download+install)"
+	echo "         getprefix|gp                Output path to MO2 prefix"
+	echo "         install|i                   install MO2 (includes download)"
 	echo "         list-supported|ls           list games supported by MO2"
 	echo "         list-installed|li           list installed games supported by MO2"
-	echo "         create-instance|ci <id>     create MO2 instance for <id>"
-	echo "         url|u <url>                 open nxm url with MO2"
 	echo "         resetmime                   (Re)set MimeType and application menu entries"
+	echo "         start|s                     start MO2 (includes download+install)"
+	echo "         url|u <url>                 open nxm url with MO2"
 	echo "         winecfg                     Run Winecfg with MO2 Wine in MO2 prefix"
+	echo "         winetricks|wt               Run Winetricks with MO2 Wine in MO2 prefix"
 	echo "    opengridfolder|ogf               Open the Steam Grid folder where custom game artwork is stored using xdg-open"
 	echo "    openissue|oi                     Opens issue tracker on GitHub in default browser"
 	echo "    onetimerun|otr <gameid>          Opens One-Time Run menu for running a one-off executable in <gameid>'s Wineprefix"
@@ -20057,6 +20085,7 @@ function howto {
 	echo "                                      ${VTX} download, install, and start can optionally take"
 	echo "                                       a version tag to download."
 	echo "                                      Ex: steamtinkerlaunch vortex start v1.8.0"
+	echo "           getprefix|gp                Output path to Vortex prefix"
 	echo "           install                     Installs ${VTX^}"
 	echo "           list-supported|ls           List all ${VTX^}-supported Steam Game IDs"
 	echo "                                       (offline - ${VTX^} needs to be installed)"
@@ -20070,9 +20099,10 @@ function howto {
 	echo "           getset                      Show config of installed ${VTX^}"
 	echo "           reset                       Reset all autodetected settings in ${VTX^}"
 	echo "           stage <path>                Add ${VTX^} stage via dialog"
+    echo "                                        or directly the one given in <path>"
 	echo "           resetmime                   (Re)set MimeType and application menu entries"
 	echo "           winecfg                     Run Winecfg with ${VTX^} Wine in ${VTX^} prefix"
-    echo "                                        or directly the one given in <path>"
+	echo "           winetricks|wt               Run Winetricks with ${VTX^} Wine in ${VTX^} prefix"
 	echo "    vr <windowname> <SteamAppID> <s> Start SBS-VR mode for <windowname>"
 	echo "                                       and game <SteamAppID>"
 	echo "                                       's'ave windowname for the game"
@@ -20304,8 +20334,12 @@ function commandline {
 					writelog "INFO" "${FUNCNAME[0]} - URL passed is '$3'"
 					dlMod2nexurl "$3"
 				fi
+			elif [ "$2" == "getpfx" ] || [ "$2" == "gp" ]; then
+				echo "$MO2COMPDATA/pfx"
 			elif [ "$2" == "winecfg" ]; then
 				mo2Winecfg
+			elif [ "$2" == "winetricks" ] || [ "$2" == "wt" ]; then 
+				mo2Winetricks
 			elif [ "$2" == "resetmime" ]; then
 				writelog "INFO" "${FUNCMAME[0]} - (Re)setting MO2 .desktop file entries and MimeType associations"
 				echo "(Re)setting MO2 .desktop file entries and MimeType associations"
@@ -20672,8 +20706,12 @@ function commandline {
 				StatusWindow "$(strFix "$NOTY_DLCUSTOMPROTON" "${VTX^}")" "dlLatestVortex S" "DownloadVortexStatus"
 			elif [ "$2" == "activate" ] && { [ -n "$3" ]  && [ "$3" -eq "$3" ] 2>/dev/null;}; then
 				startVortex "activate" "$3"
+			elif [ "$2" == "getprefix" ] || [ "$2" == "gp" ]; then
+				echo "$VORTEXCOMPDATA/pfx"
 			elif [ "$2" == "winecfg" ]; then
 				vtxWinecfg
+			elif [ "$2" == "winetricks" ] || [ "$2" == "wt" ]; then
+				vtxWinetricks
 			elif [ "$2" == "resetmime" ]; then
 				writelog "INFO" "${FUNCMAME[0]} - (Re)setting ${VTX^} .desktop file entries and MimeType associations"
 				echo "(Re)setting ${VTX^} .desktop file entries and MimeType associations"
