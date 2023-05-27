@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230526-3"
+PROGVERS="v14.0.20230528-1 (reaper-kill)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -19268,13 +19268,14 @@ function setSLRReap {
 				fi
 			fi
 		fi
-	
-		if [ "$HAVEREAP" -eq 1 ] && [ "$USEREAP" -eq 1 ]; then
-			writelog "INFO" "${FUNCNAME[0]} - ## reaper command is enabled via USEREAP=$USEREAP - prepending to the current launch command"
-			SLRCMD=("${REAPCMD[@]}" "${SLRCMD[@]}")
-		elif [ "$HAVEREAP" -eq 0 ] && [ "$USEREAP" -eq 1 ] && [ -n "$LASTREAP" ] && [ -f "$LASTREAP" ] && [ "$FORCEREAP" -eq 1 ]; then
-			writelog "INFO" "${FUNCNAME[0]} - ## No reaper command provided from command line, but FORCEREAP is $FORCEREAP, so prepending LASTREAP '$LASTREAP' to the current launch command"
-			SLRCMD=("$LASTREAP" "SteamLaunch" "AppId=$AID" "--" "${SLRCMD[@]}")
+
+		# Reaper is started *by Steam now* after a game launch (i.e. after %command% but *not* before)
+		# so if reaper is disabled we have to check for and kill it
+		if [ "$USEREAP" -eq 0 ]; then
+			if "$PGREP" -x "reaper"; then
+				writelog "INFO" "${FUNCNAME[0]} - USEREAP is '$USEREAP' and found reaper process, killing it!"
+				"$PKILL" -9 "reaper"
+			fi
 		fi
 
 		if [ -n "${SLRCMD[0]}" ]; then
