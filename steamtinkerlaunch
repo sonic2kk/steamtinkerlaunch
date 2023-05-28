@@ -2635,6 +2635,7 @@ function setDefaultCfgValues {
 		if [ -z "$VORTEXCOMPDATA" ]						; then	VORTEXCOMPDATA="$STLVORTEXDIR/$CODA"; fi
 		if [ -z "$VORTEXDOWNLOADPATH" ]					; then	VORTEXDOWNLOADPATH="$STLVORTEXDIR/downloads"; fi
 		if [ -z "$USEVORTEXPRERELEASE" ]				; then	USEVORTEXPRERELEASE="0"; fi
+		if [ -z "$VORTEXUSESLR" ]						; then  VORTEXUSESLR="1"; fi
 		if [ -z "$DISABLEVORTEXAUTOUPDATE" ]			; then	DISABLEVORTEXAUTOUPDATE="0"; fi
 		if [ -z "$USEVORTEXCUSTOMVER" ]					; then	USEVORTEXCUSTOMVER="0"; fi
 		if [ -z "$VORTEXCUSTOMVER" ]					; then	VORTEXCUSTOMVER="$NON"; fi
@@ -3092,6 +3093,8 @@ function saveCfg {
 			echo "VORTEXDOWNLOADPATH=\"$VORTEXDOWNLOADPATH\""
 			echo "## $DESC_USEVORTEXPRERELEASE"
 			echo "USEVORTEXPRERELEASE=\"$USEVORTEXPRERELEASE\""
+			echo "## $DESC_VORTEXUSESLR"
+			echo "VORTEXUSESLR=\"$VORTEXUSESLR\""
 			echo "## $DESC_DISABLEVORTEXAUTOUPDATE"
 			echo "DISABLEVORTEXAUTOUPDATE=\"$DISABLEVORTEXAUTOUPDATE\""
 			echo "## $DESC_USEVORTEXCUSTOMVER"
@@ -5282,6 +5285,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_RUN_VORTEX_WINETRICKS!$DESC_RUN_VORTEX_WINETRICKS ('RUN_VORTEX_WINETRICKS')":CHK "${RUN_VORTEX_WINETRICKS/#-/ -}" `#CAT_Vortex` `#MENU_GAME` \
 --field="     $GUI_RUN_VORTEX_WINECFG!$DESC_RUN_VORTEX_WINECFG ('RUN_VORTEX_WINECFG')":CHK "${RUN_VORTEX_WINECFG/#-/ -}" `#CAT_Vortex` `#MENU_GAME` \
 --field="     $GUI_USEVORTEXPRERELEASE!$DESC_USEVORTEXPRERELEASE ('USEVORTEXPRERELEASE')":CHK "${USEVORTEXPRERELEASE/#-/ -}" `#CAT_Vortex` `#SUB_Checkbox` `#MENU_GLOBAL`  \
+--field="     $GUI_VORTEXUSESLR!$DESC_VORTEXUSESLR ('VORTEXUSESLR')":CHK "${VORTEXUSESLR#-/ -}" `#CAT_Vortex` `#SUB_Checkbox` `#MENU_GLOBAL`  \
 --field="     $GUI_DISABLEVORTEXAUTOUPDATE!$DESC_DISABLEVORTEXAUTOUPDATE ('DISABLEVORTEXAUTOUPDATE')":CHK "${DISABLEVORTEXAUTOUPDATE/#-/ -}" `#CAT_Vortex` `#SUB_Checkbox` `#MENU_GLOBAL`  \
 --field="     $GUI_VORTEXDOWNLOADPATH!$DESC_VORTEXDOWNLOADPATH ('VORTEXDOWNLOADPATH')":DIR "${VORTEXDOWNLOADPATH/#-/ -}" `#CAT_Vortex` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_VORTEXCOMPDATA!$DESC_VORTEXCOMPDATA ('VORTEXCOMPDATA')":DIR "${VORTEXCOMPDATA/#-/ -}" `#CAT_Vortex` `#SUB_Directories` `#MENU_GLOBAL` \
@@ -13994,9 +13998,16 @@ function addVortexStage {
 }
 
 function wineVortexRun {
-	sleep 1 # required!
-	# LC_ALL may not be required anymore
-	PATH="$STLPATH" LD_LIBRARY_PATH="" LD_PRELOAD="" WINE="$VORTEXWINE" WINEARCH="win64" WINEDEBUG="-all" WINEPREFIX="$VORTEXPFX" "$@" > "$VWRUN" 2>/dev/null
+	sleep 1  # required!
+
+	# Is there a way to improve this without the duplicated start cmd?
+	if [ -n "${SLRCMD[*]}" ]; then  # Should only be set if VORTEXUSESLR is defined
+		PATH="$STLPATH" LD_LIBRARY_PATH="" LD_PRELOAD="" WINE="$VORTEXWINE" WINEARCH="win64" WINEDEBUG="-all" WINEPREFIX="$VORTEXPFX" "${SLRCMD[@]}" "$@" > "$VWRUN" 2>/dev/null
+	else
+		PATH="$STLPATH" LD_LIBRARY_PATH="" LD_PRELOAD="" WINE="$VORTEXWINE" WINEARCH="win64" WINEDEBUG="-all" WINEPREFIX="$VORTEXPFX" "$@" > "$VWRUN" 2>/dev/null
+	fi
+
+	unset "${SLRCMD[@]}"  # Ensure SLR is removed so that it won't be fetched and set for games launched after Vortex
 }
 
 function cleanVortex {
@@ -14748,13 +14759,17 @@ function resetVortexSettings {
 
 function setVortexReleaseChannel {
 	# Vortex settings.update.channel can be either 'stable', 'beta', or 'none' (where 'none' is 'No automatic updates')
+	writelog "INFO" "${FUNCNAME[0]} - DISABLEVORTEXAUTOUPDATE is '1'"
 	VTXUPDATECHANNEL="stable"
 	if [ "$DISABLEVORTEXAUTOUPDATE" -eq 1 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Disabling Vortex automatic updates"
 		VTXUPDATECHANNEL="none"
 	else
 		if [ "$USEVORTEXPRERELEASE" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Setting Vortex to use Pre-Release channel"
 			VTXUPDATECHANNEL="beta"
 		else
+			writelog "INFO" "${FUNCNAME[0]} - Setting Vortex to use Stable channel"
 			VTXUPDATECHANNEL="stable"
 		fi
 	fi
@@ -15038,6 +15053,24 @@ function setModWine {
 	fi
 }
 
+# Custom function to force SLR for a program outside of Steam running with Proton e.g. Vortex (may also work for One-Time Run)
+function setNonGameSLRReap {
+	USESLR=1
+	HAVESLR=0
+	HAVEREAP="${HAVEREAP:-0}"
+	HAVESLRCT="${HAVESLRCT:-0}"
+
+	FORCEPROTONSLR="$1"
+
+	# Only get SLRPROTONNAME if we're forcing Proton, otherwise ignore
+	if [ -n "$FORCEPROTONSLR" ] && [ "$FORCEPROTONSLR" -eq 1 ]; then
+		SLRPROTONNAME="$( getProtPathFromCSV "$2" )"  # This could be the name of the Proton version to run i.e. Vortex
+	fi
+
+	unset "${SLRCMD[@]}"
+	setSLRReap "1" "$FORCEPROTONSLR" "$SLRPROTONNAME"  # Get SLRCMD, optionally enforcing Proton (so we don't fall back to native Linux) and setting the Proton version to fetch the SLR info from (e.g. whether to use soldier, sniper, etc)
+}
+
 function setVortexVars {
 	VORTEXPFX="${VORTEXCOMPDATA//\"/}/pfx"
 	if [ -z "$VORTEXEXE" ]; then
@@ -15080,6 +15113,13 @@ function setVortexVars {
 	if [ -z "$VORTEXWINE" ] || [ ! -f "$VORTEXWINE" ]; then
 		setModWine "SETVTXPROT" "VORTEXPROTON" "VORTEXWINE"
 	fi
+
+	if [ "$VORTEXUSESLR" -eq 1 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - VORTEXUSESLR is '$VORTEXUSESLR', using Steam Linux Runtime with Vortex"
+		setNonGameSLRReap "1" "$USEVORTEXPROTON"  # Force the requested SLR for Vortex Proton version if we enable SLR option
+	else
+		writelog "INFO" "${FUNCNAME[0]} - Vortex will run WITHOUT the Steam Linux Runtime"
+	fi
 }
 
 # TODO handle getting passed a custom executable
@@ -15104,18 +15144,48 @@ function installVortex {
 			else
 				writelog "INFO" "${FUNCNAME[0]} - Using '$VORTEXPROTON' for installation" "E"
 				mkProjDir "$VORTEXCOMPDATA"
+
+				## TODO dotnet installation currently fails on Steam Deck because it needs to be installed with the SLR
+				## There is no clean way to run Winetricks from the SLR if it's in `/usr/bin/winetricks` or similar, so
+				## for now we leave it up to Vortex to install dotnet6.
+				##
+				## This could be fixed with some hacky symlinking of dotnet perhaps, even temporarily while we install
+				## some winetricks components, and then removed afterwards, but this would be a separate feature.
+				## Removing this line should helph get Vortex working on SteamOS for now, until they break it again.
+				## 
+				## For context, see https://github.com/sonic2kk/steamtinkerlaunch/issues/806#issuecomment-1565759961
+
 				# Vortex 1.8.0+ only requires DotNet6 (only need to pass desktop6, as installDotNet will append dotnet)
-				writelog "INFO" "${FUNCNAME[0]} - Installing .NET 6 for Vortex Mod Manager"
-				notiShow "$(strFix "$NOTY_INSTSTART" "${DOTN^}")" "S"
-				installDotNet "$VORTEXPFX" "$VORTEXWINE" "desktop6"  # Should be easy to bump if a newer version is ever required
+				# writelog "INFO" "${FUNCNAME[0]} - Installing .NET 6 for Vortex Mod Manager"
+				# notiShow "$(strFix "$NOTY_INSTSTART" "${DOTN^}")" "S"
+				# installDotNet "$VORTEXPFX" "$VORTEXWINE" "desktop6"  # Should be easy to bump if a newer version is ever required
+
 				touch "${VORTEXCOMPDATA}/tracked_files"
 				STEAM_COMPAT_CLIENT_INSTALL_PATH="$SROOT" STEAM_COMPAT_DATA_PATH="$VORTEXCOMPDATA" "$VORTEXPROTON" "run" 2> "$STLSHM/${FUNCNAME[0]}_protonrun.log"
 				notiShow "$GUI_DONE" "S"
 				sleep 3
 				writelog "INFO" "${FUNCNAME[0]} - Installing '$VSPATH' into '$VORTEXPFX'" E
 				notiShow "$(strFix "$NOTY_INSTSTART" "${VSPATH##*/}")" "S"
-				writelog "INFO" "${FUNCNAME[0]} - 'WINEDEBUG=\"-all\" WINEPREFIX=\"$VORTEXPFX\" \"$VORTEXWINE\" \"$VSPATH\" \"/S\"'" E
-				WINEDEBUG="-all" WINEPREFIX="$VORTEXPFX" "$VORTEXWINE" "$VSPATH" "/S"
+				# writelog "INFO" "${FUNCNAME[0]} - 'WINEDEBUG=\"-all\" WINEPREFIX=\"$VORTEXPFX\" \"$VORTEXWINE\" \"$VSPATH\" \"/S\"'" E
+				
+				# --------------------------
+				# Get SLR for Vortex Proton 
+				unset "${SLRCMD[@]}"
+				if [ "$VORTEXUSESLR" -eq 1 ]; then
+					setNonGameSLRReap "1" "$USEVORTEXPROTON"
+				fi
+
+				# If we got the runtime above and we want to use the SLR with Vortex, use it to install Vortex
+				if [ "$VORTEXUSESLR" -eq 1 ] && [ -n "${SLRCMD[*]}" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - 'WINEDEBUG=\"-all\" WINEPREFIX=\"$VORTEXPFX\" \"${SLRCMD[*]}\" \"$VORTEXWINE\" \"$VSPATH\" \"/S\"'" E
+					WINEDEBUG="-all" WINEPREFIX="$VORTEXPFX" "${SLRCMD[@]}" "$VORTEXWINE" "$VSPATH" "/S"
+				else
+					writelog "INFO" "${FUNCNAME[0]} - 'WINEDEBUG=\"-all\" WINEPREFIX=\"$VORTEXPFX\" \"$VORTEXWINE\" \"$VSPATH\" \"/S\"'" E
+					WINEDEBUG="-all" WINEPREFIX="$VORTEXPFX" "$VORTEXWINE" "$VSPATH" "/S"
+				fi
+				unset "${SLRCMD[@]}"
+				# --------------------------
+				
 				notiShow "$(strFix "$NOTY_INSTSTOP" "${VSPATH##*/}")" "S"
 				writelog "INFO" "${FUNCNAME[0]} - Base ${VTX^} installation finished" E
 				setVortexDLMime
@@ -19149,24 +19219,63 @@ function getRequireToolAppidPath {
 	fi
 }
 
+# Function to get SLR to append to game/program launch
+# Primarily used to set SLRCMD so it can be appended, but also sets the reaper command
 function setSLRReap {
-	if [ -n "$USESLR" ] && [ -n "$HAVESLR" ]; then
+
+	# This function has gotten a bit messy with all the override options,
+	# but these are used to allow setSLRReap to be re-used outside of regular game launches
+	# such as for Vortex.
+
+	# These variables are only passed for Non-Game SLR launches i.e. Vortex, they are ignored for game launches and use fallback values
+
+	OVERRIDESLR="$1"  # Always get SLR, ignoring other vars that specify otherwise
+	SLRFORCEPROTON="${2:-0}"  # Force fetch the Proton SLR ignoring value of ISGAME
+	SLRPROTONVER="$3"  # Proton version to fetch the SLR version from (where to find the toolmanifest.vdf from) -- Optional, will fall back to RUNPROTON set by game
+
+	# Allow overriding USESLR/HAVESLR and forcing to fetch the SLR anyway (used for times when SLR is needed outside of regular game launch e.g. Vortex)
+	if [ -n "$OVERRIDESLR" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - OVERRIDESLR is enabled, ignoring user settings and fetching SLR anyway"
+	fi
+
+	# Set the Proton path to look for the toolmanifest.vdf file in for game launches we want RUNPROTON, but for non-game SLR cases
+	# we want to set a custom Proton path without overriding RUNPROTON which could interfere with subsequent game launches) 
+	if [ -z "$SLRPROTONVER" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - SLRPROTONVER is not defined, this is fine as regular game launches don't pass this"
+		
+		writelog "INFO" "${FUNCNAME[0]} - Falling back to RUNPROTON which is '$RUNPROTON'"
+		SLRPROTONVER="${RUNPROTON}"
+	fi
+
+	# USESLR tells whether the user has chosen to get the SLR, HAVESLR refers to the legacy check for the SLR passed from the compat tool/Steam launch command
+	if [[ ( -n "$USESLR" && -n "$HAVESLR" ) || -n "$OVERRIDESLR" ]]; then
+
+		# Legacy SLR fetching (from Steam start command)
+		# --------------
+		# This is very legacy and won't happen anymore outside of very old compat tools
 		if [ "$HAVESLRCT" -eq 1 ] && [ "$USESLR" -eq 1 ]; then
 			writelog "INFO" "${FUNCNAME[0]} - ## SLR is enabled via USESLR=$USESLR - prepending SLR from Compatibility Tool to the current launch command"
 			SLRCMD=("${RUNSLRCT[@]}")
 		fi
 		
+		# This is very legacy as well, same as above but for native games
 		if [ "$HAVESLR" -eq 1 ] && [ "$USESLR" -eq 1 ]; then
 			writelog "INFO" "${FUNCNAME[0]} - ## SLR is enabled via USESLR=$USESLR - prepending SLR from command line to the current launch command"
 			SLRCMD=("${RUNSLR[@]}")
 		fi
 
+		# Legacy case to ignore SLR gotten from commandline
 		if [ "$HAVESLR" -eq 1 ] && [ "$USESLR" -eq 0 ] ; then
 			writelog "SKIP" "${FUNCNAME[0]} - USESLR is disabled, so skipping '$SLR' found in the commandline: '${RUNSLR[*]}'"
 		fi
-		RUNFORCESLR=0
+		# --------------
 
-		if [ "$HAVESLR" -eq 0 ] && [ "$USESLR" -eq 1 ] ; then
+
+
+		# Modern SLR fetching (from toolmanifest.vdf / native Linux SLR AppID)
+		# ---------------
+		RUNFORCESLR=0
+		if [[ ( "$HAVESLR" -eq 0 && "$USESLR" -eq 1 ) || -n "$OVERRIDESLR" ]]; then
 			if [ -n "$LASTSLR" ] && [ -f "${LASTSLR% --verb*}" ] && [ "$FORCESLR" -eq 1 ]; then
 				writelog "INFO" "${FUNCNAME[0]} - ## No SLR provided from command line, but FORCESLR is $FORCESLR, so prepending LASTSLR '$LASTSLR' to the current launch command"
 				mapfile -d " " -t -O "${#LASTSLRARR[@]}" LASTSLRARR < <(printf '%s' "$LASTSLR")
@@ -19186,7 +19295,8 @@ function setSLRReap {
 				# Pressure Vessel Funtime 2nd Edition Ver. 2.31
 				writelog "INFO" "${FUNCNAME[0]} - Now executing Pressure Vessel Funtime 2nd Edition Ver. 2.31"
 				# Get SLR Paths
-				if [ "$ISGAME" -eq 3 ]; then
+				if [ "$ISGAME" -eq 3 ] && [ "$SLRFORCEPROTON" -eq 0 ]; then 
+					
 					# Native games already have a hardcoded initial native SLR AppID, so we can get the path from this hardcoded AppID
 					# However they need to get the required "nested" SLR from the toolmanifest from the hardcoded native SLR - This is the SLR that the regular native SLR runs inside of
 					# This nested AppID is stored in the hardcoded SLR's toolmanifest
@@ -19205,8 +19315,7 @@ function setSLRReap {
 						writelog "WARN" "${FUNCNAME[0]} - Could not find Steam Linux Runtime with AppID '$SLRAID' for native Linux game - This will need to be installed manually!"
 					fi
 				else
-					# Path to SLR based on AppID in Proton's `toolmanifest.vdf`
-					SLR_PATH="$( getRequireToolAppidPath "$( dirname "$RUNPROTON" )" )"
+					SLR_PATH="$( getRequireToolAppidPath "$( dirname "$SLRPROTONVER" )" )"  # Path to SLR based on AppID in Proton's `toolmanifest.vdf`
 				fi
 
 				# Build SLRCMD
@@ -19228,11 +19337,13 @@ function setSLRReap {
 					SLRCMD=("${PROTON_SLRCMD[@]}" "${NATIVE_SLRCMD[@]}")  # Not really "Proton" for native games, but naming is hard
 				else
 					writelog "INFO" "${FUNCNAME[0]} - Building Steam Linux Runtime command for Proton game"
-					SLRCMD=("${PROTON_SLRCMD[@]}") 
+					SLRCMD=("${PROTON_SLRCMD[@]}")
 				fi
 			fi
 		fi
-
+    
+		# Set Reaper command (currently no way to toggle this if we call setSLRReap for non-game launches, doesn't seem to have any negative impact though?)
+		# ---------------
 		# Reaper is started *by Steam now* after a game launch (i.e. after %command% but *not* before)
 		# so if reaper is disabled we have to check for and kill it
 		if [ "$USEREAP" -eq 0 ]; then
@@ -19240,7 +19351,8 @@ function setSLRReap {
 				writelog "INFO" "${FUNCNAME[0]} - USEREAP is '$USEREAP' and found reaper process, killing it!"
 				"$PKILL" -9 "reaper"
 			fi
-		fi
+    fi
+		# ---------------
 
 		if [ -n "${SLRCMD[0]}" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Adding SLR '${SLRCMD[*]}' to the launch command"
@@ -19492,6 +19604,7 @@ function launchSteamGame {
 
 	writelog "INFO" "${FUNCNAME[0]} - Initial game command is '${INGCMD[*]}'"
 
+	unset "${SLRCMD[@]}"
 	setSLRReap
 	
 	if [ "$USEBOXTRON" -eq 1 ] || [ "$USEROBERTA" -eq 1 ] || [ "$USELUXTORPEDA" -eq 1 ]; then
