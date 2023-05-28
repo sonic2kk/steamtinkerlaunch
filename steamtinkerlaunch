@@ -1923,14 +1923,6 @@ function setGameVars {
 	# this should cover it though as well already
 		APPMAFE="$(listAppManifests | grep -m1 "${1}.acf")"
 	fi
-
-	REAPSESTR="reaper SteamLaunch"
-
-	if grep -q "$REAPSESTR" <<< "$@"; then
-		HAVEREAP=1
-	else
-		HAVEREAP=0
-	fi
 	
 	if grep -q "$SLR" <<< "$@"; then
 		HAVESLR=1
@@ -1949,30 +1941,6 @@ function setGameVars {
 	while read -r INGARG; do
 		mapfile -t -O "${#INGCMD[@]}" INGCMD <<< "$INGARG"
 	done <<< "$(printf "%s\n" "$@")"
-
-	# then put the reaper command into an array, as it is the first command in the line
-	if [ "$HAVEREAP" -eq 1 ]; then
-		FOUNDREAP=0
-		while read -r INGARG; do
-			if [ "$FOUNDREAP" -eq 0 ]; then
-				mapfile -t -O "${#REAPCMD[@]}" REAPCMD <<< "$INGARG"
-				if [ "$INGARG" == "--" ]; then
-					FOUNDREAP=1
-				fi
-			else
-				mapfile -t -O "${#WIPAGCMD[@]}" WIPAGCMD <<< "$INGARG"
-			fi
-		done <<< "$(printf "%s\n" "${INGCMD[@]}")"
-	else
-		while read -r INGARG; do
-			mapfile -t -O "${#WIPAGCMD[@]}" WIPAGCMD <<< "$INGARG"
-		done <<< "$(printf "%s\n" "${INGCMD[@]}")"
-	fi
-	THISREAP="${REAPCMD[*]}"
-	THISREAP="${THISREAP% SteamLaunch*}"
-	if [ -z "$LASTREAP" ] || { [ -n "$LASTREAP" ] && [ "$LASTREAP" != "$THISREAP" ];}; then
-		updateConfigEntry "LASTREAP" "$THISREAP" "$STLDEFGLOBALCFG"
-	fi
 
 	# if the SLR is called from command line put it into an array as well
 	if [ "$HAVESLR" -eq 1 ]; then
@@ -18248,7 +18216,6 @@ function fixCustomMeta {
 function initPlay {
 	HAVESLR=0
 	HAVESLRCT=0
-	HAVEREAP=0
 	HAVESCTP=0
 	INCOPATH=0
 	STLPLAY=1
@@ -19626,18 +19593,9 @@ function launchSteamGame {
 				echo "I '${INGCMD[*]}'"
 				echo "X '${FINALSTARTCMD[*]}'"
 				echo "$(date) - $GN ($AID) - ======================"
-				if [ "$HAVESCTP" -eq 0 ] && [ "$HAVEREAP" -eq 0 ]; then
-					echo "$(date) - $GN ($AID) - HAVESCTP='$HAVESCTP', and HAVEREAP='$HAVEREAP' - assuming ${PROGNAME,,} is used as compat tool - using regular base game command to continue"
-				elif [ "$HAVESCTP" -eq 0 ] && [ "$HAVEREAP" -eq 1 ]; then
-					echo "$(date) - $GN ($AID) - HAVESCTP='$HAVESCTP', but also HAVEREAP='$HAVEREAP' - assuming ${PROGNAME,,} is set to both command and compat tool (or compat tool is empty) - steam doesn't provide STEAM_COMPAT_TOOL_PATHS, so have to cut out the reaper line to continue; HAVESLR='$HAVESLR'"
-				elif [ "$HAVESCTP" -eq 1 ] && [ "$HAVEREAP" -eq 1 ]; then
-					echo "$(date) - $GN ($AID) - HAVESCTP='$HAVESCTP', and HAVEREAP='$HAVEREAP' - assuming $PROGCMD is used as command line tool - switching proton version is disabled"
-				elif [ "$HAVESCTP" -eq 1 ] && [ "$HAVEREAP" -eq 0 ]; then
-					echo "$(date) - $GN ($AID) - HAVESCTP='$HAVESCTP', but also HAVEREAP='$HAVEREAP' - something went wrong - never seen this in the wild"
-				fi
 				echo "$(date) - $GN ($AID) - ======================"
 				echo "$(date) - $GN ($AID) - INITIAL LAUNCH COMAND '${INGCMD[*]}'"
-				echo "$(date) - $GN ($AID) - HAVESCTP='$HAVESCTP';HAVEREAP='$HAVEREAP';HAVESLR='$HAVESLR';HAVESLRCT='$HAVESLRCT';HAVEINPROTON='$HAVEINPROTON'"
+				echo "$(date) - $GN ($AID) - HAVESCTP='$HAVESCTP';HAVESLR='$HAVESLR';HAVESLRCT='$HAVESLRCT';HAVEINPROTON='$HAVEINPROTON'"
 				echo "$(date) - $GN ($AID) - REAPCMD '${REAPCMD[*]}'"
 				echo "$(date) - $GN ($AID) - RUNSLR '${RUNSLR[*]}'"
 				echo "$(date) - $GN ($AID) - RUNSLRCT '${RUNSLRCT[*]}'"
