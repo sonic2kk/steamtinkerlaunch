@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230528-1"
+PROGVERS="v14.0.20230528-2"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -15174,10 +15174,22 @@ function installVortex {
 			else
 				writelog "INFO" "${FUNCNAME[0]} - Using '$VORTEXPROTON' for installation" "E"
 				mkProjDir "$VORTEXCOMPDATA"
+
+				## TODO dotnet installation currently fails on Steam Deck because it needs to be installed with the SLR
+				## There is no clean way to run Winetricks from the SLR if it's in `/usr/bin/winetricks` or similar, so
+				## for now we leave it up to Vortex to install dotnet6.
+				##
+				## This could be fixed with some hacky symlinking of dotnet perhaps, even temporarily while we install
+				## some winetricks components, and then removed afterwards, but this would be a separate feature.
+				## Removing this line should helph get Vortex working on SteamOS for now, until they break it again.
+				## 
+				## For context, see https://github.com/sonic2kk/steamtinkerlaunch/issues/806#issuecomment-1565759961
+
 				# Vortex 1.8.0+ only requires DotNet6 (only need to pass desktop6, as installDotNet will append dotnet)
-				writelog "INFO" "${FUNCNAME[0]} - Installing .NET 6 for Vortex Mod Manager"
-				notiShow "$(strFix "$NOTY_INSTSTART" "${DOTN^}")" "S"
-				installDotNet "$VORTEXPFX" "$VORTEXWINE" "desktop6"  # Should be easy to bump if a newer version is ever required
+				# writelog "INFO" "${FUNCNAME[0]} - Installing .NET 6 for Vortex Mod Manager"
+				# notiShow "$(strFix "$NOTY_INSTSTART" "${DOTN^}")" "S"
+				# installDotNet "$VORTEXPFX" "$VORTEXWINE" "desktop6"  # Should be easy to bump if a newer version is ever required
+
 				touch "${VORTEXCOMPDATA}/tracked_files"
 				STEAM_COMPAT_CLIENT_INSTALL_PATH="$SROOT" STEAM_COMPAT_DATA_PATH="$VORTEXCOMPDATA" "$VORTEXPROTON" "run" 2> "$STLSHM/${FUNCNAME[0]}_protonrun.log"
 				notiShow "$GUI_DONE" "S"
