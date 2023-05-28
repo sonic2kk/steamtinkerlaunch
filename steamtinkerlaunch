@@ -245,6 +245,8 @@ SUBADIRTI="$SUBADIR/title"
 RSSUB="reshade-shaders"
 WTDLDIR="$STLDLDIR/winetricks"
 DLWT="$WTDLDIR/src/winetricks"
+STLSLRSYM_DIR="$STLCFGDIR/slrsymlinks"
+STLSLRSYM_WT="$STLSLRSYM_DIR/winetricks"  # Symlink dir to put system Winetricks when running in SLR 
 STLSHADDIR="$STLDLDIR/shaders"
 SHADREPOLIST="$STLSHADDIR/repolist.txt"
 SHADERREPOBLOCKLIST="$STLSHADDIR/repoblocklist.txt"
@@ -12338,6 +12340,26 @@ function chooseWinetricks {
 			fi	
 		fi
 	fi
+
+	# Symlink Winetricks to STL dir if it's in a system dir, in case we have to use it with the Steam Linux Runtime
+	# Systemwide binaries cannot be used inside the SLR
+	WTPA="$( command -v $WINETRICKS )"
+	if [[ $WTPA == "/usr"* ]]; then
+		writelog "INFO" "${FUNCNAME[0]} - Winetricks is in a system directory, creating a symlink so we can use this with the SLR"
+		mkProjDir "$STLSLRSYM_DIR"
+		mkProjDir "$STLSLRSYM_WT"
+		SLRWT="$STLSLRSYM_WT/winetricks"
+		if [ ! -L "$SLRWT" ] || [ ! -e "$SLRWT" ] || [ ! -f "$SLRWT" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Winetricks symlink is either invalid, broken or does not exist at '$SLRWT' -- Creating  it"
+			ln -s "$WTPA" "$SLRWT"
+		fi
+		WINETRICKS="$SLRWT"  # Use symlink Winetricks
+		writelog "INFO" "${FUNCNAME[0]} - Changed Winetricks to use symlinked system Winetricks script at '$WINETRICKS'"
+	else
+		# Nothing to do -- Logging for my own peace of mind
+		writelog "INFO" "${FUNCNAME[0]} - Looks like Winetricks is not installed systemwide -- Good for now!"
+	fi
+	unset "$WTPA"
 }
 
 function SetWineDebugChannels {
