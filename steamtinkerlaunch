@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230528-3"
+PROGVERS="v14.0.20230603-1"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -19392,7 +19392,17 @@ function setSLRReap {
 		fi
 		# ---------------
 
-
+		# Reaper is started *by Steam now for Proton games* after a game launch (i.e. after %command% but *not* before)
+		# so if reaper is disabled we have to check for and kill it
+		#
+		# Doesn't apply to native games because we use 'steamtinkerlaunch %command%',
+		# and reaper is started as part of '%command%'.
+		if [ "$USEREAP" -eq 0 ]; then
+			if "$PGREP" -x "reaper"; then
+				writelog "INFO" "${FUNCNAME[0]} - USEREAP is '$USEREAP' and found reaper process, killing it!"
+				"$PKILL" -9 "reaper"
+			fi
+		fi
 
 		if [ -n "${SLRCMD[0]}" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Adding SLR '${SLRCMD[*]}' to the launch command"
