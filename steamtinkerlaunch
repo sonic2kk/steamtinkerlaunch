@@ -7213,23 +7213,18 @@ function getIDFromTitle {
 	if [ -z "$1" ]; then
 		echo "A Game Title (part of it might be enough) is required as argument"
 	else
-		# Search for all meta files with a partial match for their `NAME` field
-		# Search on `NAME` primarily, fallback to `GAMENAME`
-		mapfile -t MATCHES < <(grep -i "^NAME=.*.$1" "$GEMETA" -R)
-		if [ -z "${MATCHES[*]}" ]; then
-			mapfile -t MATCHES < <(grep -i "^GAMENAME=.*.$1" "$GEMETA" -R)
-		fi
-
-		# Echo all matches in format "AppID (Game Name)"
-		if [ -n "${MATCHES[*]}"  ]; then
-			for i in "${MATCHES[@]}"
-			do
-				MATCH_AID="$( echo "${i##*/}" | awk -F'.conf:' '{print $1}' )"
-				MATCH_NAME="$( echo "${i##*/}" | awk -F'NAME="' '{print $2}' )"
-				MATCH_NAME="$( echo "${MATCH_NAME::-1}" | xargs )"
-
-				printf '%s\t\t(%s)\n' "$MATCH_AID" "$MATCH_NAME"
-			done
+		# Check installed game appmanifests for name matches
+		FOUNDMATCHES=()
+		while read -r APPMA; do
+			APPMATITLE="$( getValueFromAppManifest "name" "$APPMA" )"
+			if [[ $APPMATITLE == *"$1"* ]]; then
+				APPMAAID="$( basename "${APPMA%.*}" | cut -d '_' -f2 )"
+				FOUNDGAMNAM="$( printf "%s\t\t(%s)" "$APPMAAID" "$APPMATITLE" )"  # Doing it this way makes tabs even for some reason
+				FOUNDMATCHES+=( "$FOUNDGAMNAM" )
+			fi
+		done <<< "$( listAppManifests )"
+		if [ "${#FOUNDMATCHES[@]}" -gt 0 ]; then
+			printf "%s\n" "${FOUNDMATCHES[@]}"
 		else
 			echo "Could not find AppID for name '$1'."
 		fi
