@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230607-1 (one-time-runtime)"
+PROGVERS="v14.0.20230607-2 (one-time-runtime)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -2421,7 +2421,7 @@ function rmDupLines {
 }
 
 function getProtNameFromPath {
-	cat "$PROTONCSV" | grep "$1" | cut -d ';' -f1
+	grep "$1" "$PROTONCSV" | cut -d ';' -f1
 }
 
 function getAvailableProtonVersions {
@@ -10708,6 +10708,7 @@ function commandlineOneTimeRun {
 				if [ "$OTSAVE" == "TRUE" ];then  # Save one-time settings to game config file -- Really only useful for OneTimeRunGUI
 					writelog "INFO" "${FUNCNAME[0]} - Saving One time run settings into '$STLGAMECFG'"
 					# Only save Proton version if we're using a Windows executable, otherwise we don't set a Proton version!
+					# TODO check if this still works?
 					if [ "$ISWINDOWSEXE" -eq 1 ]; then
 						touch "$FUPDATE"
 						updateConfigEntry "OTPROTON" "$OTPROTON" "$STLGAMECFG"
@@ -10813,11 +10814,12 @@ function OneTimeRunGui {
 		--field="$GUI_OTPROTON!$DESC_OTPROTON":CB "$(cleanDropDown "${OTPROTON//\"}" "$PROTYADLIST")" \
 		--field="$GUI_OTEXE!$DESC_OTEXE":FL "${OTEXE//\"}" \
 		--field="$GUI_OTARGS!$DESC_OTARGS" "${OTARGS//\"}" \
-		--field="$BUT_RUNWINECFG!$DESC_RUNWINECFG":FBTN "$( realpath "$0" ) runwinecfg" \
 		--field="$GUI_OTRFORCEPROTON!$DESC_OTRFORCEPROTON":CHK "$OTFORCEPROTON" \
+		--field="$BUT_RUNWINECFG!$DESC_RUNWINECFG":FBTN "$( realpath "$0" ) runwinecfg" \
 		--field="$GUI_OTRCUSTWORKINGDIR!$DESC_OTRCUSTWORKINGDIR":DIR "$OTRUNDIR" \
 		--field="$GUI_OTRUSEEXEDIR!$DESC_OTRUSEEXEDIR":CHK "$OTUSEEXEDIR" \
 		--field="$GUI_OTSAVE!$DESC_OTSAVE":CHK "FALSE" \
+		--field="$GUI_OTRSLR!$DESC_OTRSLR":CHK "$OTSLR" \
 		--field="$BUT_RUNWINETRICKS!$DESC_RUNWINETRICKS":FBTN "$( realpath "$0" ) runwinetricks" \
 		--button="$BUT_CAN:0" \
 		--button="$BUT_RUNONETIMECMD:2" \
@@ -10836,11 +10838,21 @@ function OneTimeRunGui {
 				OTPROTON="${OTARR[0]}"
 				OTEXE="${OTARR[1]}"
 				OTARGS="${OTARR[2]}"
-				# OTARR[3] and OTARR[7] are the WINECFG and WINETRICKS buttons
-				OTFORCEPROTON="${OTARR[4]}"
+				OTFORCEPROTON="${OTARR[3]}"
+				# OTARR[4] and OTARR[8] are the WINECFG and WINETRICKS buttons
 				OTCUSTWORKDIR="${OTARR[5]}"
 				OTUSEEXEDIR="${OTARR[6]}"
 				OTSAVE="${OTARR[7]}"
+				OTSLR="${OTARR[8]}"
+
+				writelog "INFO" "${FUNCNAME[0]} - OTPROTON is '$OTPROTON'"
+				writelog "INFO" "${FUNCNAME[0]} - OTEXE is '$OTEXE'"
+				writelog "INFO" "${FUNCNAME[0]} - OTARGS is '$OTARGS'"
+				writelog "INFO" "${FUNCNAME[0]} - OTFORCEPROTON is '$OTFORCEPROTON'"
+				writelog "INFO" "${FUNCNAME[0]} - OTCUSTWORKDIR is '$OTCUSTWORKDIR'"
+				writelog "INFO" "${FUNCNAME[0]} - OTUSEEXEDIR is '$OTUSEEXEDIR'"
+				writelog "INFO" "${FUNCNAME[0]} - OTSAVE is '$OTSAVE'"
+				writelog "INFO" "${FUNCNAME[0]} - OTSLR is '$OTSLR'"
 
 				OTR_FLAGARGS=( --exe="$OTEXE" --proton="$OTPROTON" --args="$OTARGS" )  # Default arguments that we'll always pass (Proton will be ignored if not Windows executable, commandlineOneTimeRun figures that bit out)
 
@@ -10854,6 +10866,10 @@ function OneTimeRunGui {
 
 				if [ "$OTFORCEPROTON" == "TRUE" ]; then
 					OTR_FLAGARGS+=( --forceproton )
+				fi
+
+				if [ "$OTSLR" == "TRUE" ]; then
+					OTR_FLAGARGS+=( --useslr )
 				fi
 
 				if [ "$OTSAVE" == "TRUE" ]; then
@@ -20783,7 +20799,7 @@ function commandline {
 	elif [ "$1" == "version" ] || [ "$1" == "--version" ] || [ "$1" == "-v" ]; then
 		echo "${PROGNAME,,}-${PROGVERS}"
 	elif [ "$1" == "debug" ]; then
-		echo "$( getProtNameFromPath "/home/emma/.config/steamtinkerlaunch/proton/custom/GE-Proton7-49/proton" )"
+		getProtNameFromPath "/home/emma/.config/steamtinkerlaunch/proton/custom/GE-Proton7-49/proton"
 	elif [ "$1" == "$VTX" ]; then
 		# TODO Vortex uninstall option?
 		# TODO Vortex commandline flag to set no auto update (i.e. --disable-auto-update)
