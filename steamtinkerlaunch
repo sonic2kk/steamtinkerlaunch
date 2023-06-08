@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230607-2"
+PROGVERS="v14.0.20230609-1 (vortex-runtime-pain)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -2664,6 +2664,7 @@ function setDefaultCfgValues {
 		if [ -z "$VORTEXDOWNLOADPATH" ]					; then	VORTEXDOWNLOADPATH="$STLVORTEXDIR/downloads"; fi
 		if [ -z "$USEVORTEXPRERELEASE" ]				; then	USEVORTEXPRERELEASE="0"; fi
 		if [ -z "$VORTEXUSESLR" ]						; then  VORTEXUSESLR="1"; fi
+		if [ -z "$VORTEXUSESLRPOSTINSTALL" ]			; then  VORTEXUSESLRPOSTINSTALL="0"; fi
 		if [ -z "$DISABLEVORTEXAUTOUPDATE" ]			; then	DISABLEVORTEXAUTOUPDATE="0"; fi
 		if [ -z "$USEVORTEXCUSTOMVER" ]					; then	USEVORTEXCUSTOMVER="0"; fi
 		if [ -z "$VORTEXCUSTOMVER" ]					; then	VORTEXCUSTOMVER="$NON"; fi
@@ -3124,6 +3125,8 @@ function saveCfg {
 			echo "USEVORTEXPRERELEASE=\"$USEVORTEXPRERELEASE\""
 			echo "## $DESC_VORTEXUSESLR"
 			echo "VORTEXUSESLR=\"$VORTEXUSESLR\""
+			echo "## $DESC_VORTEXUSESLRPOSTINSTALL"
+			echo "VORTEXUSESLR=\"$VORTEXUSESLRPOSTINSTALL\""
 			echo "## $DESC_DISABLEVORTEXAUTOUPDATE"
 			echo "DISABLEVORTEXAUTOUPDATE=\"$DISABLEVORTEXAUTOUPDATE\""
 			echo "## $DESC_USEVORTEXCUSTOMVER"
@@ -5317,14 +5320,15 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_RUN_VORTEX_WINETRICKS!$DESC_RUN_VORTEX_WINETRICKS ('RUN_VORTEX_WINETRICKS')":CHK "${RUN_VORTEX_WINETRICKS/#-/ -}" `#CAT_Vortex` `#MENU_GAME` \
 --field="     $GUI_RUN_VORTEX_WINECFG!$DESC_RUN_VORTEX_WINECFG ('RUN_VORTEX_WINECFG')":CHK "${RUN_VORTEX_WINECFG/#-/ -}" `#CAT_Vortex` `#MENU_GAME` \
 --field="     $GUI_USEVORTEXPRERELEASE!$DESC_USEVORTEXPRERELEASE ('USEVORTEXPRERELEASE')":CHK "${USEVORTEXPRERELEASE/#-/ -}" `#CAT_Vortex` `#SUB_Checkbox` `#MENU_GLOBAL`  \
---field="     $GUI_VORTEXUSESLR!$DESC_VORTEXUSESLR ('VORTEXUSESLR')":CHK "${VORTEXUSESLR#-/ -}" `#CAT_Vortex` `#SUB_Checkbox` `#MENU_GLOBAL`  \
 --field="     $GUI_DISABLEVORTEXAUTOUPDATE!$DESC_DISABLEVORTEXAUTOUPDATE ('DISABLEVORTEXAUTOUPDATE')":CHK "${DISABLEVORTEXAUTOUPDATE/#-/ -}" `#CAT_Vortex` `#SUB_Checkbox` `#MENU_GLOBAL`  \
+--field="     $GUI_VORTEXUSESLR!$DESC_VORTEXUSESLR ('VORTEXUSESLR')":CHK "${VORTEXUSESLR#-/ -}" `#CAT_Vortex` `#SUB_Checkbox` `#MENU_GLOBAL`  \
 --field="     $GUI_VORTEXDOWNLOADPATH!$DESC_VORTEXDOWNLOADPATH ('VORTEXDOWNLOADPATH')":DIR "${VORTEXDOWNLOADPATH/#-/ -}" `#CAT_Vortex` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_VORTEXCOMPDATA!$DESC_VORTEXCOMPDATA ('VORTEXCOMPDATA')":DIR "${VORTEXCOMPDATA/#-/ -}" `#CAT_Vortex` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_USEVORTEXPROTON!$DESC_USEVORTEXPROTON ('USEVORTEXPROTON')":CB "$(cleanDropDown "${USEVORTEXPROTON/#-/ -}" "$PROTYADLIST")" `#CAT_Vortex` `#MENU_GLOBAL` \
 --field="     $GUI_USEVORTEXCUSTOMVER!$DESC_USEVORTEXCUSTOMVER ('USEVORTEXCUSTOMVER')":CHK "${USEVORTEXCUSTOMVER#-/ -}" `#CAT_Vortex` `#SUB_checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_VORTEXCUSTOMVER!$DESC_VORTEXCUSTOMVER ('VORTEXCUSTOMVER')":CBE "$( cleanDropDown "${VORTEXCUSTOMVER/#-/ -}" "v1.8.0!v1.7.0!v1.6.0!$NON" )" `#CAT_Vortex` `#SUB_checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_DISABLE_AUTOSTAGES!$(strFix "$DESC_DISABLE_AUTOSTAGES" "$PROGNAME") ('DISABLE_AUTOSTAGES')":CHK "${DISABLE_AUTOSTAGES/#-/ -}" `#CAT_Vortex` `#SUB_Checkbox` `#MENU_GLOBAL` \
+--field="     $GUI_VORTEXUSESLRPOSTINSTALL!$DESC_VORTEXUSESLRPOSTINSTALL ('VORTEXUSESLRPOSTINSTALL')":CHK "${VORTEXUSESLRPOSTINSTALL#-/ -}" `#CAT_Vortex` `#SUB_Checkbox` `#MENU_GLOBAL`  \
 --field="$(spanFont "$GUI_OPTSWINE" "H")":LBL "SKIP" `#CAT_Wine` `#HEAD_Wine` `#MENU_GAME` `#MENU_GLOBAL` \
 --field="     $GUI_USEWINE!$DESC_USEWINE ('USEWINE')":CHK "${USEWINE/#-/ -}" `#CAT_Wine` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_WINEVERSION!$DESC_WINEVERSION ('WINEVERSION')":CBE "$(cleanDropDown "${WINEVERSION/#-/ -}" "$WINEYADLIST")" `#CAT_Wine` `#MENU_GAME` \
@@ -14027,8 +14031,9 @@ function addVortexStage {
 function wineVortexRun {
 	sleep 1  # required!
 
-	# Is there a way to improve this without the duplicated start cmd?
-	if [ -n "${SLRCMD[*]}" ]; then  # Should only be set if VORTEXUSESLR is defined
+	## Only use SLR is available and (if user explicitly wants to run Vortex with dotnet OR if dotnet6 is not already installed), because the SLR can cause hardlink deployment to fail
+	## See also: https://github.com/sonic2kk/steamtinkerlaunch/issues/828
+	if [[ -n "${SLRCMD[*]}" && ( "$VORTEXUSESLRPOSTINSTALL" -eq 1 || ! -d "$VORTEXPFX/$DRC/Program Files/dotnet" ) ]]; then
 		PATH="$STLPATH" LD_LIBRARY_PATH="" LD_PRELOAD="" WINE="$VORTEXWINE" WINEARCH="win64" WINEDEBUG="-all" WINEPREFIX="$VORTEXPFX" "${SLRCMD[@]}" "$@" > "$VWRUN" 2>/dev/null
 	else
 		PATH="$STLPATH" LD_LIBRARY_PATH="" LD_PRELOAD="" WINE="$VORTEXWINE" WINEARCH="win64" WINEDEBUG="-all" WINEPREFIX="$VORTEXPFX" "$@" > "$VWRUN" 2>/dev/null
@@ -15141,11 +15146,21 @@ function setVortexVars {
 		setModWine "SETVTXPROT" "VORTEXPROTON" "VORTEXWINE"
 	fi
 
+	## Both of the SLR options for Vortex assume a valid Vortex Proton version.
+	## otherwise the SLR won't be used.
+
+	# Use SLR to install Vortex -- Recommended, see https://github.com/sonic2kk/steamtinkerlaunch/issues/806
 	if [ "$VORTEXUSESLR" -eq 1 ]; then
-		writelog "INFO" "${FUNCNAME[0]} - VORTEXUSESLR is '$VORTEXUSESLR', using Steam Linux Runtime with Vortex"
+		writelog "INFO" "${FUNCNAME[0]} - VORTEXUSESLR is '$VORTEXUSESLR', using Steam Linux Runtime to install Vortex"
 		setNonGameSLRReap "1" "$USEVORTEXPROTON"  # Force the requested SLR for Vortex Proton version if we enable SLR option
 	else
 		writelog "INFO" "${FUNCNAME[0]} - Vortex will run WITHOUT the Steam Linux Runtime"
+	fi
+
+	## Use SLR for Vortex in general - Not recommended, see https://github.com/sonic2kk/steamtinkerlaunch/issues/828
+	if [ "$VORTEXUSESLRPOSTINSTALL" -eq 1 ]; then
+		writelog "WARN" "${FUNCNAME[0]} - WARNING: VORTEXUSESLRPOSTINSTALL is '$VORTEXUSESLRPOSTINSTALL', Vortex will be launched with the Steam Linux Runtime -- This may cause problems with mod deployment!"
+		setNonGameSLRReap "1" "$USEVORTEXPROTON"
 	fi
 }
 
