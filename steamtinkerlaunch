@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230610-3"
+PROGVERS="v14.0.20230611-1"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -2420,6 +2420,10 @@ function rmDupLines {
 		cp "$STLSHM/${FUNCNAME[0]}" "$1"
 		rm "$STLSHM/${FUNCNAME[0]}" 2>/dev/null
 	fi
+}
+
+function getProtNameFromPath {
+	grep "$1" "$PROTONCSV" | cut -d ';' -f1
 }
 
 function getAvailableProtonVersions {
@@ -10628,13 +10632,16 @@ function commandlineOneTimeRun {
 	OTRUNDIR="$( pwd )"  # Default to current script directory
 	USEEXEDIR=0
 	OTFORCEPROTON=0
+	OTSLR=0
 	for i in "$@"; do
 		case $i in
 			--exe=*)
 				OTEXE="$( realpath "${i#*=}" )"
 				shift ;;
 			--proton=*)
+				# Needed for saving to work, since RUNOTPROTON gets overridden with Proton path from CSV
 				RUNOTPROTON="${i#*=}"
+				OTPROTON="$RUNOTPROTON"
 				shift ;;
 			--workingdir=*)
 				PASSEDRUNDIR="${i#*=}"
@@ -10650,6 +10657,9 @@ function commandlineOneTimeRun {
 				shift ;;
 			--forceproton)
 				OTFORCEPROTON=1
+				shift ;;
+			--useslr)
+				OTSLR=1
 				shift ;;
 			--save)
 				OTSAVE="TRUE"
@@ -10683,7 +10693,7 @@ function commandlineOneTimeRun {
 				writelog "INFO" "${FUNCNAME[0]} - Trying to find Proton version to launch executable with from given Proton name '$RUNOTPROTON'"
 				RUNOTPROTON="$(getProtPathFromCSV "$RUNOTPROTON")"
 				if [ ! -f "$RUNOTPROTON" ]; then
-					RUNOTPROTON="$(fixProtonVersionMismatch "OTPROTON" "$STLGAMECFG" X)"
+					RUNOTPROTON="$(fixProtonVersionMismatch "OTPROTON" "$STLGAMECFG" X)"  # TODO re-check to make sure this is valid?
 				fi
 			else
 				writelog "INFO" "${FUNCNAME[0]} - Given executable detected as native Linux binary, this is usually correct but if this was detected incorrectly you should force Proton!"
@@ -10706,6 +10716,7 @@ function commandlineOneTimeRun {
 				if [ "$OTSAVE" == "TRUE" ];then  # Save one-time settings to game config file -- Really only useful for OneTimeRunGUI
 					writelog "INFO" "${FUNCNAME[0]} - Saving One time run settings into '$STLGAMECFG'"
 					# Only save Proton version if we're using a Windows executable, otherwise we don't set a Proton version!
+					# TODO check if this still works?
 					if [ "$ISWINDOWSEXE" -eq 1 ]; then
 						touch "$FUPDATE"
 						updateConfigEntry "OTPROTON" "$OTPROTON" "$STLGAMECFG"
@@ -10718,6 +10729,8 @@ function commandlineOneTimeRun {
 					updateConfigEntry "OTUSEEXEDIR" "$USEEXEDIR" "$STLGAMECFG"
 					touch "$FUPDATE"
 					updateConfigEntry "OTFORCEPROTON" "$OTFORCEPROTON" "$STLGAMECFG"
+					touch "$FUPDATE"
+					updateConfigEntry "OTSLR" "$OTSLR" "$STLGAMECFG"
 
 					# If we enable USEEXEDIR, remove the OTRUNDIR value
 					# If we don't, and OTRUNDIR is a valid path that isn't the default path, write out OTRUNDIR
@@ -10736,21 +10749,50 @@ function commandlineOneTimeRun {
 				fi
 
 				# Run in subshell to avoid messing with current script paths
-				# TODO notifier (or only show notifier from GUI? or add silent option?)
 				if [ "$ISWINDOWSEXE" -eq 1 ]; then
-					writelog "INFO" "${FUNCNAME[0]} - Starting '$OTEXE' with '$RUNOTPROTON' with STEAM_COMPAT_DATA_PATH '$STEAM_COMPAT_DATA_PATH' and using working directory '$OTRUNDIR'"
-					writelog "INFO" "${FUNCNAME[0]} - cd \"$OTRUNDIR\" && STEAM_COMPAT_DATA_PATH=\"$STEAM_COMPAT_DATA_PATH\" \"$RUNOTPROTON\" run \"$OTEXE\" \"${RUNOTARGS[*]}\""
+					if [ "$OTSLR" -eq 1 ]; then
+						# Get SLR for given OTR Proton
+						OTSLRPROT="$( getProtNameFromPath "$RUNOTPROTON" )"
+						setNonGameSLRReap "1" "$OTSLRPROT"
+					fi
 
 					NOTYPROTNAME="$( basename "$( dirname "$RUNOTPROTON" )" )"  # NOTE: This will need updated if we allow Wine as the path will be different!
 
-					notiShow "$( strFix "$NOTY_OTRSTART" "$( basename "$OTEXE" )" "$NOTYPROTNAME" )"
-					(cd "$OTRUNDIR" && STEAM_COMPAT_DATA_PATH="$STEAM_COMPAT_DATA_PATH" "$RUNOTPROTON" run "$OTEXE" "${RUNOTARGS[@]}")
-				else
-					writelog "INFO" "${FUNCNAME[0]} - Starting Native Linux program '$OTEXE' using working directory '$OTRUNDIR'"
-					writelog "INFO" "${FUNCNAME[0]} - cd \"$OTRUNDIR\" && \"$OTEXE\" \"${RUNOTARGS[*]}\""
-					notiShow "$( strFix "$NOTY_OTRSTARTNATIVE" "$( basename "$OTEXE" )" )"
+					if [ -n "${SLRCMD[*]}" ] && [ "$OTSLR" -eq 1 ]; then  # Use SLR
+						writelog "INFO" "${FUNCNAME[0]} - Starting '$OTEXE' with '$RUNOTPROTON' with STEAM_COMPAT_DATA_PATH '$STEAM_COMPAT_DATA_PATH' and using working directory '$OTRUNDIR' and using the Steam Linux Runtime"
+						writelog "INFO" "${FUNCNAME[0]} - cd \"$OTRUNDIR\" && STEAM_COMPAT_DATA_PATH=\"$STEAM_COMPAT_DATA_PATH\" \"${SLRCMD[*]}\" \"$RUNOTPROTON\" run \"$OTEXE\" \"${RUNOTARGS[*]}\""
 
-					(cd "$OTRUNDIR" && "$OTEXE" "${RUNOTARGS[@]}")
+						notiShow "$( strFix "$NOTY_OTRSTARTSLR" "$( basename "$OTEXE" )" "$NOTYPROTNAME" )"
+
+						(cd "$OTRUNDIR" && STEAM_COMPAT_DATA_PATH="$STEAM_COMPAT_DATA_PATH" "${SLRCMD[@]}" "$RUNOTPROTON" run "$OTEXE" "${RUNOTARGS[@]}")
+					else  # No SLR
+						writelog "INFO" "${FUNCNAME[0]} - Starting '$OTEXE' with '$RUNOTPROTON' with STEAM_COMPAT_DATA_PATH '$STEAM_COMPAT_DATA_PATH' and using working directory '$OTRUNDIR'"
+						writelog "INFO" "${FUNCNAME[0]} - cd \"$OTRUNDIR\" && STEAM_COMPAT_DATA_PATH=\"$STEAM_COMPAT_DATA_PATH\" \"$RUNOTPROTON\" run \"$OTEXE\" \"${RUNOTARGS[*]}\""
+
+						notiShow "$( strFix "$NOTY_OTRSTART" "$( basename "$OTEXE" )" "$NOTYPROTNAME" )"
+
+						(cd "$OTRUNDIR" && STEAM_COMPAT_DATA_PATH="$STEAM_COMPAT_DATA_PATH" "$RUNOTPROTON" run "$OTEXE" "${RUNOTARGS[@]}")
+					fi
+				else  # Native Linux
+					if [ "$OTSLR" -eq 1 ]; then
+						setNonGameSLRReap
+					fi
+
+					if [ -n "${SLRCMD[*]}" ] && [ "$OTSLR" -eq 1 ]; then  # Use SLR
+						writelog "INFO" "${FUNCNAME[0]} - Starting Native Linux program '$OTEXE' using working directory '$OTRUNDIR' and the Steam Linux Runtime"
+						writelog "INFO" "${FUNCNAME[0]} - cd \"$OTRUNDIR\" && \"${SLRCMD[*]}\" \"$OTEXE\" \"${RUNOTARGS[*]}\""
+
+						notiShow "$( strFix "$NOTY_OTRSTARTNATIVESLR" "$( basename "$OTEXE" )" )"
+
+						(cd "$OTRUNDIR" && "${SLRCMD[@]}" "$OTEXE" "${RUNOTARGS[@]}")
+					else  # No SLR
+						writelog "INFO" "${FUNCNAME[0]} - Starting Native Linux program '$OTEXE' using working directory '$OTRUNDIR'"
+						writelog "INFO" "${FUNCNAME[0]} - cd \"$OTRUNDIR\" && \"$OTEXE\" \"${RUNOTARGS[*]}\""
+
+						notiShow "$( strFix "$NOTY_OTRSTARTNATIVE" "$( basename "$OTEXE" )" )"
+
+						(cd "$OTRUNDIR" && "$OTEXE" "${RUNOTARGS[@]}")
+					fi
 				fi
 			else
 				writelog "ERROR" "${FUNCNAME[0]} - Could not find valid Proton to launch custom executable with"
@@ -10783,11 +10825,12 @@ function OneTimeRunGui {
 		--field="$GUI_OTPROTON!$DESC_OTPROTON":CB "$(cleanDropDown "${OTPROTON//\"}" "$PROTYADLIST")" \
 		--field="$GUI_OTEXE!$DESC_OTEXE":FL "${OTEXE//\"}" \
 		--field="$GUI_OTARGS!$DESC_OTARGS" "${OTARGS//\"}" \
-		--field="$BUT_RUNWINECFG!$DESC_RUNWINECFG":FBTN "$( realpath "$0" ) runwinecfg" \
 		--field="$GUI_OTRFORCEPROTON!$DESC_OTRFORCEPROTON":CHK "$OTFORCEPROTON" \
+		--field="$BUT_RUNWINECFG!$DESC_RUNWINECFG":FBTN "$( realpath "$0" ) runwinecfg" \
 		--field="$GUI_OTRCUSTWORKINGDIR!$DESC_OTRCUSTWORKINGDIR":DIR "$OTRUNDIR" \
 		--field="$GUI_OTRUSEEXEDIR!$DESC_OTRUSEEXEDIR":CHK "$OTUSEEXEDIR" \
 		--field="$GUI_OTSAVE!$DESC_OTSAVE":CHK "FALSE" \
+		--field="$GUI_OTRSLR!$DESC_OTRSLR":CHK "$OTSLR" \
 		--field="$BUT_RUNWINETRICKS!$DESC_RUNWINETRICKS":FBTN "$( realpath "$0" ) runwinetricks" \
 		--button="$BUT_CAN:0" \
 		--button="$BUT_RUNONETIMECMD:2" \
@@ -10806,11 +10849,21 @@ function OneTimeRunGui {
 				OTPROTON="${OTARR[0]}"
 				OTEXE="${OTARR[1]}"
 				OTARGS="${OTARR[2]}"
-				# OTARR[3] and OTARR[7] are the WINECFG and WINETRICKS buttons
-				OTFORCEPROTON="${OTARR[4]}"
+				OTFORCEPROTON="${OTARR[3]}"
+				# OTARR[4] and OTARR[8] are the WINECFG and WINETRICKS buttons
 				OTCUSTWORKDIR="${OTARR[5]}"
 				OTUSEEXEDIR="${OTARR[6]}"
 				OTSAVE="${OTARR[7]}"
+				OTSLR="${OTARR[8]}"
+
+				writelog "INFO" "${FUNCNAME[0]} - OTPROTON is '$OTPROTON'"
+				writelog "INFO" "${FUNCNAME[0]} - OTEXE is '$OTEXE'"
+				writelog "INFO" "${FUNCNAME[0]} - OTARGS is '$OTARGS'"
+				writelog "INFO" "${FUNCNAME[0]} - OTFORCEPROTON is '$OTFORCEPROTON'"
+				writelog "INFO" "${FUNCNAME[0]} - OTCUSTWORKDIR is '$OTCUSTWORKDIR'"
+				writelog "INFO" "${FUNCNAME[0]} - OTUSEEXEDIR is '$OTUSEEXEDIR'"
+				writelog "INFO" "${FUNCNAME[0]} - OTSAVE is '$OTSAVE'"
+				writelog "INFO" "${FUNCNAME[0]} - OTSLR is '$OTSLR'"
 
 				OTR_FLAGARGS=( --exe="$OTEXE" --proton="$OTPROTON" --args="$OTARGS" )  # Default arguments that we'll always pass (Proton will be ignored if not Windows executable, commandlineOneTimeRun figures that bit out)
 
@@ -10824,6 +10877,10 @@ function OneTimeRunGui {
 
 				if [ "$OTFORCEPROTON" == "TRUE" ]; then
 					OTR_FLAGARGS+=( --forceproton )
+				fi
+
+				if [ "$OTSLR" == "TRUE" ]; then
+					OTR_FLAGARGS+=( --useslr )
 				fi
 
 				if [ "$OTSAVE" == "TRUE" ]; then
@@ -19357,7 +19414,7 @@ function setSLRReap {
 				# Pressure Vessel Funtime 2nd Edition Ver. 2.31
 				writelog "INFO" "${FUNCNAME[0]} - Now executing Pressure Vessel Funtime 2nd Edition Ver. 2.31"
 				# Get SLR Paths
-				if [ "$ISGAME" -eq 3 ] && [ "$SLRFORCEPROTON" -eq 0 ]; then 
+				if [ "$ISGAME" -eq 3 ] && [ "$SLRFORCEPROTON" -eq 0 ]; then  # ISGAME -eq 3 is always true for running outside of Steam eg One-Time Run...
 					
 					# Native games already have a hardcoded initial native SLR AppID, so we can get the path from this hardcoded AppID
 					# However they need to get the required "nested" SLR from the toolmanifest from the hardcoded native SLR - This is the SLR that the regular native SLR runs inside of
@@ -20185,6 +20242,7 @@ function howto {
 	echo "         --useexedir                   Use the same directory as the executable as the working directory (overrides --workingdir)"
 	echo "         --args=                       Arguments to append to the end of the executable launch"
 	echo "         --forceproton                 Use Proton to run executable even if SteamTinkerLaunch detects doesn't detect it as a Windows executable"
+	echo "         --useslr                      Use the Steam Linux Runtime to run the application, if available (uses SLR specified by Proton version or native Linux Steam Linux Runtime)"
 	echo "         --save                        Save given configuration for use in the One-Time Run GUI for this game in future"
 	echo "    play <gameid>                    Start game with id <gameid> directly" 
  	echo "    proton|p <title> <X>             Start and/or create <title> with proton"
