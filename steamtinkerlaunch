@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230610-1"
+PROGVERS="v14.0.20230610-2"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -14033,9 +14033,12 @@ function wineVortexRun {
 
 	## Only use SLR is available and (if user explicitly wants to run Vortex with dotnet OR if dotnet6 is not already installed), because the SLR can cause hardlink deployment to fail
 	## See also: https://github.com/sonic2kk/steamtinkerlaunch/issues/828
+
 	if [[ -n "${SLRCMD[*]}" && ( "$VORTEXUSESLRPOSTINSTALL" -eq 1 || ! -d "$VORTEXPFX/$DRC/Program Files/dotnet" ) ]]; then
+		writelog "INFO" "${FUNCNAME[0]} - running with SLR for '${@}'"
 		PATH="$STLPATH" LD_LIBRARY_PATH="" LD_PRELOAD="" WINE="$VORTEXWINE" WINEARCH="win64" WINEDEBUG="-all" WINEPREFIX="$VORTEXPFX" "${SLRCMD[@]}" "$@" > "$VWRUN" 2>/dev/null
 	else
+		writelog "INFO" "${FUNCNAME[0]} - Running without SLR"
 		PATH="$STLPATH" LD_LIBRARY_PATH="" LD_PRELOAD="" WINE="$VORTEXWINE" WINEARCH="win64" WINEDEBUG="-all" WINEPREFIX="$VORTEXPFX" "$@" > "$VWRUN" 2>/dev/null
 	fi
 
@@ -14811,6 +14814,7 @@ function setVortexReleaseChannel {
 
 function startVortex {
 	setVortexVars
+	setVortexSLR
 	askVortex "$1"
 	if [ "$USEVORTEX" -eq 1 ]; then
 		if [ ! -f "$VORTEXEXE" ]; then
@@ -15145,7 +15149,16 @@ function setVortexVars {
 	if [ -z "$VORTEXWINE" ] || [ ! -f "$VORTEXWINE" ]; then
 		setModWine "SETVTXPROT" "VORTEXPROTON" "VORTEXWINE"
 	fi
+}
 
+## NOTE: We can't use this in setVortexVars because the SLR should only be used to install Vortex pretty much, but there
+## are cases where the user can force it. So we only call this and then unset SLRCMD when necessary. Using this function
+## gives us creater control over when the SLR is used because we have to *explicitly* use it (setVortexVars is called
+## from a bunch of places).
+##
+## This can fix prepareAllInstalledVortexGames failing when trying to create links, which it can't seem to do on SteamOS when running in the SLR!!
+## See #823 for background.
+function setVortexSLR {
 	## Both of the SLR options for Vortex assume a valid Vortex Proton version.
 	## otherwise the SLR won't be used.
 
@@ -15178,6 +15191,7 @@ function installVortex {
 
 	if [ -f "$VSPATH" ]; then
 		setVortexVars
+		setVortexSLR
 		if [ -f "$VORTEXEXE" ]; then
 			writelog "SKIP" "${FUNCNAME[0]} - '$VORTEXEXE' does already exists - nothing to install - skipping" "E"
 		else
@@ -15237,6 +15251,8 @@ function installVortex {
 	else
 		writelog "SKIP" "${FUNCNAME[0]} - '$VSPATH' not found - nothing to install - skipping"
 	fi
+
+	unset "${SLRCMD[@]}"
 }
 
 function installVortexGui {
