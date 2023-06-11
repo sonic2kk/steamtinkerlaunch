@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230611-2"
+PROGVERS="v14.0.20230612-1"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -10625,6 +10625,34 @@ function setOneTimeRunVars {
 	fi
 }
 
+function OneTimeRunReset {
+	# Reset all One-Time Run variables with the dummy value (easier than removing them, which should be unnecessary)
+	writelog "INFO" "${FUNCNAME[0]} - Restoring defaults for One Time Run variables"
+
+	# Remove config file entries -- Blank entries will act as "(none)" for files/paths, "false" for checkboxes, and the
+	# Proton version is handled already with a mismatch check
+	touch "$FUPDATE"
+	updateConfigEntry "OTPROTON" "DUMMY" "$STLGAMECFG"
+	touch "$FUPDATE"
+	updateConfigEntry "OTEXE" "DUMMY" "$STLGAMECFG"
+	touch "$FUPDATE"
+	updateConfigEntry "OTARGS" "DUMMY" "$STLGAMECFG"
+	touch "$FUPDATE"
+	updateConfigEntry "OTUSEEXEDIR" "DUMMY" "$STLGAMECFG"
+	touch "$FUPDATE"
+	updateConfigEntry "OTFORCEPROTON" "DUMMY" "$STLGAMECFG"
+	touch "$FUPDATE"
+	updateConfigEntry "OTSLR" "DUMMY" "$STLGAMECFG"
+
+	# Unset variables to ensure values are cleared on the UI
+	unset "$OTPROTON"
+	unset "$OTEXE"
+	unset "$OTARGS"
+	unset "$OTUSEEXEDIR"
+	unset "$OTFORCEPROTON"
+	unset "$OTSLR"
+}
+
 # Called when a user passes arguments for onetimerun
 function commandlineOneTimeRun {
 	setOneTimeRunVars "$1"
@@ -10633,6 +10661,7 @@ function commandlineOneTimeRun {
 	USEEXEDIR=0
 	OTFORCEPROTON=0
 	OTSLR=0
+	OTRESET=0
 	for i in "$@"; do
 		case $i in
 			--exe=*)
@@ -10664,8 +10693,18 @@ function commandlineOneTimeRun {
 			--save)
 				OTSAVE="TRUE"
 				shift ;;
+			--default)
+				OneTimeRunReset
+				OTRESET=1
+				shift ;;
 		esac
 	done
+
+	# When default is passed, all other options are ignored, as it should be used standalone
+	# (and priamrily internally for the defaults button)
+	if [ "$OTRESET" -eq 1 ]; then
+		return
+	fi
 
 	# Ensure EXE is given and that directory to run the exe in is valid, and also ensure we have a valid Proton version to run the exe with
 	if [ -n "$OTEXE" ]; then  # Valid executable required (Windows executable or Linux executable/file/etc, not really an EXE for Linux but oh well - Naming is hard!)
@@ -10713,6 +10752,7 @@ function commandlineOneTimeRun {
 					writelog "INFO" "${FUNCNAME[0]} - Passing arguments to One-Time Run executable '${OTRUNARGS[*]}'"
 				fi
 
+				# NOTE: Having save here means values won't save unless a launch is successful -- This is probably ok, but just a note for future reference
 				if [ "$OTSAVE" == "TRUE" ];then  # Save one-time settings to game config file -- Really only useful for OneTimeRunGUI
 					writelog "INFO" "${FUNCNAME[0]} - Saving One time run settings into '$STLGAMECFG'"
 					# Only save Proton version if we're using a Windows executable, otherwise we don't set a Proton version!
@@ -10764,14 +10804,14 @@ function commandlineOneTimeRun {
 
 						notiShow "$( strFix "$NOTY_OTRSTARTSLR" "$( basename "$OTEXE" )" "$NOTYPROTNAME" )"
 
-						(cd "$OTRUNDIR" && STEAM_COMPAT_DATA_PATH="$STEAM_COMPAT_DATA_PATH" "${SLRCMD[@]}" "$RUNOTPROTON" run "$OTEXE" "${RUNOTARGS[@]}")
+						(cd "$OTRUNDIR" && STEAM_COMPAT_CLIENT_INSTALL_PATH="$SROOT" STEAM_COMPAT_DATA_PATH="$STEAM_COMPAT_DATA_PATH" "${SLRCMD[@]}" "$RUNOTPROTON" run "$OTEXE" "${RUNOTARGS[@]}")
 					else  # No SLR
 						writelog "INFO" "${FUNCNAME[0]} - Starting '$OTEXE' with '$RUNOTPROTON' with STEAM_COMPAT_DATA_PATH '$STEAM_COMPAT_DATA_PATH' and using working directory '$OTRUNDIR'"
 						writelog "INFO" "${FUNCNAME[0]} - cd \"$OTRUNDIR\" && STEAM_COMPAT_DATA_PATH=\"$STEAM_COMPAT_DATA_PATH\" \"$RUNOTPROTON\" run \"$OTEXE\" \"${RUNOTARGS[*]}\""
 
 						notiShow "$( strFix "$NOTY_OTRSTART" "$( basename "$OTEXE" )" "$NOTYPROTNAME" )"
 
-						(cd "$OTRUNDIR" && STEAM_COMPAT_DATA_PATH="$STEAM_COMPAT_DATA_PATH" "$RUNOTPROTON" run "$OTEXE" "${RUNOTARGS[@]}")
+						(cd "$OTRUNDIR" && STEAM_COMPAT_CLIENT_INSTALL_PATH="$SROOT" STEAM_COMPAT_DATA_PATH="$STEAM_COMPAT_DATA_PATH" "$RUNOTPROTON" run "$OTEXE" "${RUNOTARGS[@]}")
 					fi
 				else  # Native Linux
 					if [ "$OTSLR" -eq 1 ]; then
@@ -10833,7 +10873,8 @@ function OneTimeRunGui {
 		--field="$GUI_OTRSLR!$DESC_OTRSLR":CHK "$OTSLR" \
 		--field="$BUT_RUNWINETRICKS!$DESC_RUNWINETRICKS":FBTN "$( realpath "$0" ) runwinetricks" \
 		--button="$BUT_CAN:0" \
-		--button="$BUT_RUNONETIMECMD:2" \
+		--button="$BUT_DGM:2" \
+		--button="$BUT_RUNONETIMECMD:4" \
 		"$GEOM"
 	)"
 	case $? in
@@ -10842,8 +10883,14 @@ function OneTimeRunGui {
 				writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_CAN' - Exiting"
 			}
 		;;
+		2) {
+				writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_DGM' - Resetting One-Time Run values"
+				OneTimeRunReset
+				OneTimeRunGui
+		   }
+		;;
 		# Selected Run
-		2)	{
+		4)	{
 				mapfile -d "|" -t -O "${#OTARR[@]}" OTARR < <(printf '%s' "$OTCMDS")
 
 				OTPROTON="${OTARR[0]}"
@@ -20246,6 +20293,7 @@ function howto {
 	echo "         --forceproton                 Use Proton to run executable even if SteamTinkerLaunch detects doesn't detect it as a Windows executable"
 	echo "         --useslr                      Use the Steam Linux Runtime to run the application, if available (uses SLR specified by Proton version or native Linux Steam Linux Runtime)"
 	echo "         --save                        Save given configuration for use in the One-Time Run GUI for this game in future"
+	echo "         --default                     Restore all saved One-Time Run values to default"
 	echo "    play <gameid>                    Start game with id <gameid> directly" 
  	echo "    proton|p <title> <X>             Start and/or create <title> with proton"
 	echo "                                       without using steam."
