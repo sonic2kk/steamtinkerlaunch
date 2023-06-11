@@ -10625,6 +10625,24 @@ function setOneTimeRunVars {
 	fi
 }
 
+function OneTimeRunReset {
+	# Reset all One-Time Run variables with the dummy value (easier than removing them, which should be unnecessary)
+	writelog "INFO" "${FUNCNAME[0]} - Restoring defaults for One Time Run variables"
+
+	touch "$FUPDATE"
+	updateConfigEntry "OTPROTON" "DUMMY" "$STLGAMECFG"
+	touch "$FUPDATE"
+	updateConfigEntry "OTEXE" "DUMMY" "$STLGAMECFG"
+	touch "$FUPDATE"
+	updateConfigEntry "OTARGS" "DUMMY" "$STLGAMECFG"
+	touch "$FUPDATE"
+	updateConfigEntry "OTUSEEXEDIR" "DUMMY" "$STLGAMECFG"
+	touch "$FUPDATE"
+	updateConfigEntry "OTFORCEPROTON" "DUMMY" "$STLGAMECFG"
+	touch "$FUPDATE"
+	updateConfigEntry "OTSLR" "DUMMY" "$STLGAMECFG"
+}
+
 # Called when a user passes arguments for onetimerun
 function commandlineOneTimeRun {
 	setOneTimeRunVars "$1"
@@ -10633,6 +10651,7 @@ function commandlineOneTimeRun {
 	USEEXEDIR=0
 	OTFORCEPROTON=0
 	OTSLR=0
+	OTRESET=0
 	for i in "$@"; do
 		case $i in
 			--exe=*)
@@ -10664,8 +10683,18 @@ function commandlineOneTimeRun {
 			--save)
 				OTSAVE="TRUE"
 				shift ;;
+			--default)
+				OneTimeRunReset
+				OTRESET=1
+				shift ;;
 		esac
 	done
+
+	# When default is passed, all other options are ignored, as it should be used standalone
+	# (and priamrily internally for the defaults button)
+	if [ "$OTRESET" -eq 1 ]; then
+		return
+	fi
 
 	# Ensure EXE is given and that directory to run the exe in is valid, and also ensure we have a valid Proton version to run the exe with
 	if [ -n "$OTEXE" ]; then  # Valid executable required (Windows executable or Linux executable/file/etc, not really an EXE for Linux but oh well - Naming is hard!)
@@ -10764,14 +10793,14 @@ function commandlineOneTimeRun {
 
 						notiShow "$( strFix "$NOTY_OTRSTARTSLR" "$( basename "$OTEXE" )" "$NOTYPROTNAME" )"
 
-						(cd "$OTRUNDIR" && STEAM_COMPAT_DATA_PATH="$STEAM_COMPAT_DATA_PATH" "${SLRCMD[@]}" "$RUNOTPROTON" run "$OTEXE" "${RUNOTARGS[@]}")
+						(cd "$OTRUNDIR" && STEAM_COMPAT_CLIENT_INSTALL_PATH="$SROOT" STEAM_COMPAT_DATA_PATH="$STEAM_COMPAT_DATA_PATH" "${SLRCMD[@]}" "$RUNOTPROTON" run "$OTEXE" "${RUNOTARGS[@]}")
 					else  # No SLR
 						writelog "INFO" "${FUNCNAME[0]} - Starting '$OTEXE' with '$RUNOTPROTON' with STEAM_COMPAT_DATA_PATH '$STEAM_COMPAT_DATA_PATH' and using working directory '$OTRUNDIR'"
 						writelog "INFO" "${FUNCNAME[0]} - cd \"$OTRUNDIR\" && STEAM_COMPAT_DATA_PATH=\"$STEAM_COMPAT_DATA_PATH\" \"$RUNOTPROTON\" run \"$OTEXE\" \"${RUNOTARGS[*]}\""
 
 						notiShow "$( strFix "$NOTY_OTRSTART" "$( basename "$OTEXE" )" "$NOTYPROTNAME" )"
 
-						(cd "$OTRUNDIR" && STEAM_COMPAT_DATA_PATH="$STEAM_COMPAT_DATA_PATH" "$RUNOTPROTON" run "$OTEXE" "${RUNOTARGS[@]}")
+						(cd "$OTRUNDIR" && STEAM_COMPAT_CLIENT_INSTALL_PATH="$SROOT" STEAM_COMPAT_DATA_PATH="$STEAM_COMPAT_DATA_PATH" "$RUNOTPROTON" run "$OTEXE" "${RUNOTARGS[@]}")
 					fi
 				else  # Native Linux
 					if [ "$OTSLR" -eq 1 ]; then
