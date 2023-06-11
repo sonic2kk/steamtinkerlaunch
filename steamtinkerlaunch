@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230612-1"
+PROGVERS="v14.0.20230612-2 (otr-improve-notifier)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -10707,7 +10707,7 @@ function commandlineOneTimeRun {
 	fi
 
 	# Ensure EXE is given and that directory to run the exe in is valid, and also ensure we have a valid Proton version to run the exe with
-	if [ -n "$OTEXE" ]; then  # Valid executable required (Windows executable or Linux executable/file/etc, not really an EXE for Linux but oh well - Naming is hard!)
+	if [ -n "$OTEXE" ] && [ -f "$OTEXE" ]; then  # Valid executable required (Windows executable or Linux executable/file/etc, not really an EXE for Linux but oh well - Naming is hard!)
 		if [ "$USEEXEDIR" -eq 1 ]; then  # Use EXE dir as working dir
 			OTRUNDIR="$( dirname "$OTEXE" )"
 			writelog "INFO" "${FUNCNAME[0]} - Using executable directory '$OTRUNDIR' as working directory"
@@ -10836,12 +10836,24 @@ function commandlineOneTimeRun {
 				fi
 			else
 				writelog "ERROR" "${FUNCNAME[0]} - Could not find valid Proton to launch custom executable with"
+				notiShow "$( strFix "$NOTY_OTRPROTINVALID" "$OTPROTON" )"
+				echo "Could not find valid Proton to launch custom executable with ('$OTPROTON') -- Is it definitely installed?"
 			fi
 		else
 			writelog "WARN" "${FUNCNAME[0]} - Working directory '$OTRUNDIR' is no valid directory -- Cannot continue"
+			notiShow "$( strFix "$NOTY_OTRRUNDIRINVALID" "$OTRUNDIR" )"
+			echo "Working directory '$OTRUNDIR' doesn't appear to be valid -- Does it definitely exist and have correct permissions?"
+
 		fi
 	else
-		writelog "ERROR" "${FUNCNAME[0]} - One-Time Run command is not defined -- Cannot continue"
+		writelog "ERROR" "${FUNCNAME[0]} - One-Time Run command '$OTEXE' is not valid -- Cannot continue"
+		if [ -z "$OTEXE" ]; then
+			notiShow "$NOTY_OTREXEBLANK" "X"
+			echo "Selected One-Time Run executable appears to be blank: '$OTEXE'"
+		else
+			notiShow "$( strFix "$NOTY_OTREXEINVALID" "$OTEXE" )"
+			echo "Selected One-Time Run executable '$OTEXE' doesn't appear to be valid."
+		fi
 	fi
 }
 
