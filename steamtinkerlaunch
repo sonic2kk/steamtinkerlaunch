@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230616-1"
+PROGVERS="v14.0.20230619-1 (set-cmd-global-cfg)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -20767,7 +20767,12 @@ function commandline {
 		fi
 	elif [ "$1" == "set" ]; then
 		if [ -n "$2" ]; then
-				ENTLIST="$(sed -n "/#STARTsaveCfgdefault_template/,/#ENDsaveCfgdefault_template/p;/#ENDsaveCfgdefault_template/q" "$0" | grep "echo" | grep "=" | cut -d '"' -f2 | cut -d '=' -f1 | sed 's/^#//')"
+				if [ "$3" == "global" ]; then
+					ENTLIST="$(sed -n "/#STARTsaveCfgglobal/,/ENDsaveCfgglobal/p;/#ENDsaveCfgglobal/q" "$0" | grep "echo" | grep "=" | cut -d '"' -f2 | cut -d '=' -f1 | sed 's/^#//')"
+				else
+					ENTLIST="$(sed -n "/#STARTsaveCfgdefault_template/,/#ENDsaveCfgdefault_template/p;/#ENDsaveCfgdefault_template/q" "$0" | grep "echo" | grep "=" | cut -d '"' -f2 | cut -d '=' -f1 | sed 's/^#//')"
+				fi
+
 				if ! grep "$2" <<< "$ENTLIST" >/dev/null; then
 					writelog "INFO" "${FUNCNAME[0]} - '$2' is no valid entry - valid are:" "E"
 					writelog "INFO" "${FUNCNAME[0]} ------------------------" "E"
@@ -20792,6 +20797,10 @@ function commandline {
 							writelog "INFO" "${FUNCNAME[0]} - updating entry '$2' to value '$4' in config '$STLGAMEDIRID/$3.conf'" "E"
 							touch "$FUPDATE"
 							updateConfigEntry "$2" "$4" "$STLGAMEDIRID/$3.conf"
+						elif [ "$3" == "global" ] && [ -f "$STLDEFGLOBALCFG" ]; then
+							writelog "INFO" "${FUNCNAME[0]} - update global config entry '$2' to value '$3' in global config file '$STLDEFGLOBALCFG'" "E"
+							touch "$FUPDATE"
+							updateConfigEntry "$2" "$4" "$STLDEFGLOBALCFG"
 						else
 							writelog "INFO" "${FUNCNAME[0]} - config file '$STLGAMEDIRID/$3.conf' does not exist - nothing to do - exit" "E"
 							exit
