@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230616-1"
+PROGVERS="v14.0.20230624-1"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -20321,9 +20321,11 @@ function howto {
 	echo "                                       without using steam."
 	echo "                                       Optional <X> opens gui"
  	echo "    proton|p list                    Update the list of all available proton versions"
-	echo "    set <var> <for> <value>          Change configuration settings"
+	echo "    set <var> <for> <value>          Change configuration settings, either per-game (<AppID>), for all games (<all>),"
+	echo "                                      or in the Global config (<global>)"
 	echo "                                       Example:"
 	echo "      set RUN_REPLAY all 1               Set RUN_REPLAY for all games to 1"
+	echo "      set STLEDITOR global \"/path\"     Set the path to the STLEDITOR binary in the global config"
 	echo "    setgameart|sga <gameid> <args>   Set the artwork for various games by their AppID using absolute paths"
 	echo "                                      Passing no args will open a GUI"
 	echo "                                      By default, given artwork will be copied to the Steam Grid folder"
@@ -20767,7 +20769,12 @@ function commandline {
 		fi
 	elif [ "$1" == "set" ]; then
 		if [ -n "$2" ]; then
-				ENTLIST="$(sed -n "/#STARTsaveCfgdefault_template/,/#ENDsaveCfgdefault_template/p;/#ENDsaveCfgdefault_template/q" "$0" | grep "echo" | grep "=" | cut -d '"' -f2 | cut -d '=' -f1 | sed 's/^#//')"
+				if [ "$3" == "global" ]; then
+					ENTLIST="$(sed -n "/#STARTsaveCfgglobal/,/ENDsaveCfgglobal/p;/#ENDsaveCfgglobal/q" "$0" | grep "echo" | grep "=" | cut -d '"' -f2 | cut -d '=' -f1 | sed 's/^#//')"
+				else
+					ENTLIST="$(sed -n "/#STARTsaveCfgdefault_template/,/#ENDsaveCfgdefault_template/p;/#ENDsaveCfgdefault_template/q" "$0" | grep "echo" | grep "=" | cut -d '"' -f2 | cut -d '=' -f1 | sed 's/^#//')"
+				fi
+
 				if ! grep "$2" <<< "$ENTLIST" >/dev/null; then
 					writelog "INFO" "${FUNCNAME[0]} - '$2' is no valid entry - valid are:" "E"
 					writelog "INFO" "${FUNCNAME[0]} ------------------------" "E"
@@ -20792,6 +20799,10 @@ function commandline {
 							writelog "INFO" "${FUNCNAME[0]} - updating entry '$2' to value '$4' in config '$STLGAMEDIRID/$3.conf'" "E"
 							touch "$FUPDATE"
 							updateConfigEntry "$2" "$4" "$STLGAMEDIRID/$3.conf"
+						elif [ "$3" == "global" ] && [ -f "$STLDEFGLOBALCFG" ]; then
+							writelog "INFO" "${FUNCNAME[0]} - update global config entry '$2' to value '$3' in global config file '$STLDEFGLOBALCFG'" "E"
+							touch "$FUPDATE"
+							updateConfigEntry "$2" "$4" "$STLDEFGLOBALCFG"
 						else
 							writelog "INFO" "${FUNCNAME[0]} - config file '$STLGAMEDIRID/$3.conf' does not exist - nothing to do - exit" "E"
 							exit
