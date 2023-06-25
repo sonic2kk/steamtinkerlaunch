@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230626-1"
+PROGVERS="v14.0.20230626-2 (gamescope-default-button)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -9823,6 +9823,7 @@ function setGameScopeVars {
 		DEFVAL="$5"  # e.g. "0" (on UI)
 		ARGTYPE="${6,,}"  # e.g. "chk", "cb", etc (matches Yad widget types mostly)
 
+		# Set values for undefined arguments
 		if [ -z "$VAR" ]; then
 			if grep -qw "$FLAG" <<< "$ARGS"; then
 				if [[ $ARGTYPE =~ "cb" ]] || [[ $ARGTYPE =~ "num" ]]; then
@@ -10155,14 +10156,20 @@ function GameScopeGui {
 			--field="$GUI_GSWAYLAND!$DESC_GSWAYLAND ('GSWAYLAND')":CHK "$GSWAYLAND" \
 			--field="$GUI_GSRT!$DESC_GSRT ('GSRT')":CHK "$GSRT" \
 			--field="$GUI_GSHDLS!$DESC_GSHDLS ('GSHDLS')":CHK "$GSHDLS" \
-			--button="$BUT_CAN:0" --button="$BUT_DONE:2" "$GEOM"
+			--button="$BUT_CAN:0" --button="$BUT_DGM:2" --button="$BUT_DONE:4" "$GEOM"
 			)"
 			case $? in
 				0)	{
 						writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_CAN' - Exiting"
 					}
 				;;
-				2)	{
+				2)  {
+						writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_DGM' - Resetting GameScope options to default"
+						GameScopeReset
+						GameScopeGui
+				    }
+				;;
+				4)	{
 						# TODO This section could still be simplified a bit further probably
 						
 						# Get selected GameScope options
@@ -10248,7 +10255,7 @@ function GameScopeGui {
 						if [ "$GSFWF" == "TRUE" ]                                       ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --force-windows-fullscreen"; fi
 						if [ "$GSFGC" == "TRUE" ]                                       ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --force-grab-cursor"; fi
 						if [ -f "$GSCURSOR" ] && [ "$GSENABLECUSTCUR" == "TRUE" ]       ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --cursor '${GSCURSOR}'"; fi
-						if [ ! "$GSFOOR" == "$GSNORM" ]                                 ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --force-orientation ${GSFOOR}"; fi  # Only force orientation if option other than default 'normal' is selected
+						if [ ! "$GSFOOR" == "$GSNORM" ] && [ -n "$GSFOOR" ]             ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --force-orientation ${GSFOOR}"; fi  # Only force orientation if option other than default 'normal' is selected
 						### GENERAL OPTIONS END ###
 
 						### FILTERING OPTIONS ###
@@ -10309,7 +10316,7 @@ function GameScopeGui {
 
 						### EMBEDDED OPTIONS ###
 						# Don't pass default touch mode option if we left at default
-						if [ ! "${GSDEFTOUCHMODE}" == "${GSDEF}" ]; then 
+						if [ ! "${GSDEFTOUCHMODE}" == "${GSDEF}" ] && [ -n "${GSDEFTOUCHMODE}" ]; then 
 							# Get the corresponding number that should be passed to GameScope from the number in the dropdown string, e.g. gets "0" from "hover:0"
 							SELECTEDTOUCHMODE="$( echo "$GSDEFTOUCHMODE" | cut -d ":" -f 2 )" 
 							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --default-touch-mode ${SELECTEDTOUCHMODE}"
@@ -10320,7 +10327,7 @@ function GameScopeGui {
 						# EMBEDDED OPTIONS END
 
 						## ADVANCED OPTIONS ###
-						if [ ! "$GSDRMMODE" == "${GSDEF}" ]                             ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --generate-drm-mode ${GSDRMMODE}"; fi  # Don't pass DRM mode if "default"
+						if [ ! "$GSDRMMODE" == "${GSDEF}" ] && [ -n "$GSDRMMODE" ]      ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --generate-drm-mode ${GSDRMMODE}"; fi  # Don't pass DRM mode if "default"
 						if [ -d "$GSSTATSPATH" ] && [ "$GSSTATSPATHENABLE" == "TRUE" ]  ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --stats-path '${GSSTATSPATH}'"; fi
 						if [ ! "$GSHIDECURSORDELAY" == "0" ]                            ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -C ${GSHIDECURSORDELAY}"; fi  # Ignore cursor delay if it's 0
 						if [ "$GSFORCECOMP" == "TRUE" ]                                 ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --force-composition"; fi
@@ -10343,6 +10350,15 @@ function GameScopeGui {
 					}
 				;;	
 			esac
+}
+
+function GameScopeReset {
+	# This resets the options on the GUI to blank, but when the UI is re-loaded the options are set again to their menu defaults
+	# once the "Done" button is pressed e.g. the resolutions default to 1280x720
+	GAMESCOPE_ARGS="$NON"
+	touch "$FUPDATE"
+	updateConfigEntry "GAMESCOPE_ARGS" "$GAMESCOPE_ARGS" "$STLGAMECFG"
+	setGameScopeVars  # This needs to be called to fix empty dropdown values for some reason (even though it should get called from GameScopeGui /shrug)
 }
 
 function StandaloneProtonGame {
