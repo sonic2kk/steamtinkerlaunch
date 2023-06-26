@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230627-1 (gamescope-new-scale-filter-ui)"
+PROGVERS="v14.0.20230627-2 (gamescope-new-scale-filter-ui)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -9896,15 +9896,64 @@ function setGameScopeVars {
 		GSCURSOR="$( getGameScopeArg "$GAMESCOPE_ARGS" "--cursor" "$GSCURSOR" "" "" "path" )"
 		if [ -n "$GSCURSOR" ]; then  GSENABLECUSTCUR="1"; fi
 
-		# There is a `--cursor-scale-height` option, but at time of writing (15/02/22) this doesn't seem to do anything - We can add it in future, but not now
+		# There is a `--cursor-scale-height` option, but at time of writing (15/02/23) this doesn't seem to do anything - We can add it in future, but not now
 	}
 
 	function getGameScopeFilteringOpts {
-		# Filtering option (-F) -- Combobox (replaces old individual Nearest/FSR/NIS options)
-		GSFLTR="$( getGameScopeArg "$GAMESCOPE_ARGS" "-F" "$GSFLTR" "" "$NON" "cb" )"
+		# Equivalent to check for --fsr-sharpness or --sharpness, so should work fine
+		if grep -q "\-\-filter" <<< "$("$(command -v "$GAMESCOPE")" --help 2>&1)"; then
+			GSNEWFILTERMODE=1  # Even though it's called NEWFILTERMODE, it also applies to scaling - Naming is hard
+		fi
 
-		# Scaling option (-S) -- Combobox (replaces old individual Integer Scaling option)
-		GSSCALE="$( getGameScopeArg "$GAMESCOPE_ARGS" "-S" "$GSSCALE" "" "$NON" "cb" )"
+		# Default scale/filter to none to be safe
+		GSFLTR="$NON"
+		GSSCALE="$NON"
+		if [ "$GSNEWFILTERMODE" -eq 1 ]; then
+			## !!These are the newer flags for checking filter/scale!!
+
+			# Filtering option (-F) -- Combobox (replaces old individual Nearest/FSR/NIS options)
+			GSFLTR="$( getGameScopeArg "$GAMESCOPE_ARGS" "-F" "$GSFLTR" "" "$NON" "cb" )"
+
+			# Scaling option (-S) -- Combobox (replaces old individual Integer Scaling option)
+			GSSCALE="$( getGameScopeArg "$GAMESCOPE_ARGS" "-S" "$GSSCALE" "" "$NON" "cb" )"
+		else
+			## !!These are legacy flags with individual switches!!
+			## These values are checked for and used to apply the correct filter selection
+			## on the UI (i.e. passing -U will select FSR for the filter dropdown)
+
+
+			## Scale
+			# Integer scaling (-i)
+			GSIS="$( getGameScopeArg "$GAMESCOPE_ARGS" "-i" "$GSIS" "1" "0" )"
+			if [ -n "$GSIS" ]; then
+				GSFLTR="integer"  # This is hardcoded but /shrug, this is probably not going to matter when parsing a legacy GameScope switch
+			fi
+
+			## Filtering
+			# Nearest Neighbor (-n)
+			GSNN="$( getGameScopeArg "$GAMESCOPE_ARGS" "-n" "$GSNN" "1" "0" )"
+
+			# FidelityFX 1.0 enabled (-U)
+			GSFSR="$( getGameScopeArg "$GAMESCOPE_ARGS" "-U" "$GSFSR" "1" "0" )"
+
+			# NVIDIA Image Scaling v1.0.3 (-Y) -- Checkbox
+			GSNIS="$( getGameScopeArg "$GAMESCOPE_ARGS" "-Y" "$GSNIS" "1" "0" )"
+
+
+			# This copies the way GameScope prioritises the check (see parse_upscaler_filter in GameScope main.cpp)
+			# This maps the old-style filter switches (-U, -Y, -n) to the GameScope dropdowns
+			#
+			# Eventually this will no longer be needed, once a suitable length of time has passed, but for now it exists
+			# to serve as backwards compatibility for users between GameScope versions. Once `-F`/`-S` are standard, we
+			# can remove this code
+			if [ -n "$GSNN" ]; then
+				GSFLTR="nearest"
+			elif [ -n "$GSFSR" ]; then
+				GSFLTR="fsr"
+			elif [ -n "$GSNIS" ]; then
+				GSFLTR="nis"
+			fi
+		fi
 
 		# AMD FidelityFX 1.0 / NVIDIA Image Sharpening upscaler value -- Spinner
 		GSFSRS="$( getGameScopeArg "$GAMESCOPE_ARGS" "--fsr-sharpness" "$GSFSRS" "" "2" "num" )"
@@ -10062,6 +10111,7 @@ function setGameScopeVars {
 	GSPASSTHRU="passthrough:4"
 	GSTOUCHMODES="${GSDEF}!${GSHOVER}!${GSLEFTCLICK}!${GSRIGHTCLICK}!${GSMIDDLECLICK}!${GSPASSTHRU}" # Corresponds to 0,1,2,3,4 respectively internally by GameScope -- Default is ingored and the flag is not passed to GameScope
 	GSDRMMODES="${GSDEF}!cvt!fixed"
+	GSNEWFILTERMODE=0  # Whether gamescope uses -U/-Y/-n/-i (legacy) or -F/-S (new)
 
 	# Get values for UI elements based on existing GameScope args 
 	getGameScopeGeneralOpts
@@ -10269,12 +10319,41 @@ function GameScopeGui {
 						# this could be true (new -F option but ONLY if we pass fsr/nis, or legacy -U/-S option)
 						GSAPPLYSHARPNESS=0
 						if [ ! "$GSFLTR" == "$NON" ] && [ -n "$GSFLTR" ]; then
-							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -F ${GSFLTR}"
+							# Pass -F if available for current GameScope version, otherwise pass legacy switches
+							if [ "$GSNEWFILTERMODE" -eq 1 ]; then
+								GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -F ${GSFLTR}"
+							else
+								# Only manages -U/-Y/-n, because those were the only filtering switches available
+								# we don't have any other to account for with older GameScope versions -- If a different
+								# option is selected for GSFLTR, then we just don't pass any flags
+								#
+								# Even though with legacy options, all 3 of these could be passed, the -F flag won't support this and neither
+								# will the UI, so we only support selecting 1
+								if [ "$GSFLTR" == "nearest" ]; then
+									GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -n"
+								elif [ "$GSFLTR" == "fsr" ]; then
+									GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -U"
+								elif [ "$GSFLTR" == "nis" ]; then
+									GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -Y"
+								fi
+							fi
+
 							if [ "$GSFLTR" == "fsr" ] || [ "$GSFLTR" == "nis" ]; then  # CASE SENSITIVE
 								GSAPPLYSHARPNESS=1
 							fi
 						fi
-						if [ ! "$GSSCALE" == "$NON" ] && [ -n "$GSSCALE" ]              ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -S ${GSSCALE}"; fi
+
+						if [ ! "$GSSCALE" == "$NON" ] && [ -n "$GSSCALE" ]; then
+							if [ "$GSNEWFILTERMODE" -eq 1 ]; then
+								GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -S ${GSSCALE}"
+							else
+								# This is the only legacy scale switch, -i
+								if [ "$GSSCALE" == "integer" ]; then
+									GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -i"
+								fi
+							fi
+						fi
+
 						if [ ! "$GSMSF" == "0" ]                                        ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -m ${GSMSF}"; fi # Ignore Max Scale Factor if 0
 						if [ "$GSFSRS" -eq "$GSFSRS" ] 2>/dev/null && [ "$GSAPPLYSHARPNESS" -eq 1 ]; then
 							# Sharpness Value should only be passed if FSR or NIS is enabled
