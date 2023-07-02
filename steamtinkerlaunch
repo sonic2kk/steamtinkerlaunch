@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230702-1"
+PROGVERS="v14.0.20230702-2"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -9896,24 +9896,65 @@ function setGameScopeVars {
 		GSCURSOR="$( getGameScopeArg "$GAMESCOPE_ARGS" "--cursor" "$GSCURSOR" "" "" "path" )"
 		if [ -n "$GSCURSOR" ]; then  GSENABLECUSTCUR="1"; fi
 
-		# There is a `--cursor-scale-height` option, but at time of writing (15/02/22) this doesn't seem to do anything - We can add it in future, but not now
+		# There is a `--cursor-scale-height` option, but at time of writing (15/02/23) this doesn't seem to do anything - We can add it in future, but not now
 	}
 
 	function getGameScopeFilteringOpts {
+		# Equivalent to check for --fsr-sharpness or --sharpness, so should work fine
+		if grep -q "\-\-filter" <<< "$("$(command -v "$GAMESCOPE")" --help 2>&1)"; then
+			GSNEWFILTERMODE=1  # Even though it's called NEWFILTERMODE, it also applies to scaling - Naming is hard
+		fi
+
+		# Default scale/filter to none to be safe
+		if [ "$GSNEWFILTERMODE" -eq 1 ]; then
+			## !!These are the newer flags for checking filter/scale!!
+
+			# Filtering option (-F) -- Combobox (replaces old individual Nearest/FSR/NIS options)
+			GSFLTR="$( getGameScopeArg "$GAMESCOPE_ARGS" "-F" "$GSFLTR" "" "$NON" "cb" )"
+
+			# Scaling option (-S) -- Combobox (replaces old individual Integer Scaling option)
+			GSSCALE="$( getGameScopeArg "$GAMESCOPE_ARGS" "-S" "$GSSCALE" "" "$NON" "cb" )"
+		else
+			## !!These are legacy flags with individual switches!!
+			## These values are checked for and used to apply the correct filter selection
+			## on the UI (i.e. passing -U will select FSR for the filter dropdown)
+
+
+			## Scale
+			# Integer scaling (-i)
+			GSIS="$( getGameScopeArg "$GAMESCOPE_ARGS" "-i" "$GSIS" "1" "" )"
+			if [ -n "$GSIS" ]; then
+				GSSCALE="integer"  # This is hardcoded but /shrug, this is probably not going to matter when parsing a legacy GameScope switch
+			fi
+
+			## Filtering (no default values so that if these aren't in the gamescope args, they are -z)
+			# Nearest Neighbor (-n)
+			GSNN="$( getGameScopeArg "$GAMESCOPE_ARGS" "-n" "$GSNN" "nearest" "" )"
+
+			# FidelityFX 1.0 enabled (-U)
+			GSFSR="$( getGameScopeArg "$GAMESCOPE_ARGS" "-U" "$GSFSR" "fsr" "" )"
+
+			# NVIDIA Image Scaling v1.0.3 (-Y) -- Checkbox
+			GSNIS="$( getGameScopeArg "$GAMESCOPE_ARGS" "-Y" "$GSNIS" "nis" "" )"
+
+
+			# This copies the way GameScope prioritises the check (see parse_upscaler_filter in GameScope main.cpp)
+			# This maps the old-style filter switches (-U, -Y, -n) to the GameScope dropdowns
+			#
+			# Eventually this will no longer be needed, once a suitable length of time has passed, but for now it exists
+			# to serve as backwards compatibility for users between GameScope versions. Once `-F`/`-S` are standard, we
+			# can remove this code
+			if [ -n "$GSNN" ]; then
+				GSFLTR="nearest"
+			elif [ -n "$GSFSR" ]; then
+				GSFLTR="fsr"
+			elif [ -n "$GSNIS" ]; then
+				GSFLTR="nis"
+			fi
+		fi
+
 		# AMD FidelityFX 1.0 / NVIDIA Image Sharpening upscaler value -- Spinner
 		GSFSRS="$( getGameScopeArg "$GAMESCOPE_ARGS" "--fsr-sharpness" "$GSFSRS" "" "2" "num" )"
-
-		# Integer scaling (-i) -- Checkbox
-		GSIS="$( getGameScopeArg "$GAMESCOPE_ARGS" "-i" "$GSIS" "1" "0" )"
-
-		# Nearest Neighbor (-n) -- Checkbox
-		GSNN="$( getGameScopeArg "$GAMESCOPE_ARGS" "-n" "$GSNN" "1" "0" )"
-
-		# FidelityFX 1.0 enabled (-U) -- Checkbox
-		GSFSR="$( getGameScopeArg "$GAMESCOPE_ARGS" "-U" "$GSFSR" "1" "0" )"
-
-		# NVIDIA Image Scaling v1.0.3 (-Y) -- Checkbox
-		GSNIS="$( getGameScopeArg "$GAMESCOPE_ARGS" "-Y" "$GSNIS" "1" "0" )"
 
 		# Max Scale Factor -- No idea how this option actually works, the documentation is a bit sparce but Steam Deck seems to default it to 2 (https://github.com/Plagman/gamescope/issues/588#issue-1338038588)
 		GSMSF="$( getGameScopeArg "$GAMESCOPE_ARGS" "-m" "$GSMSF" "" "0" "num" )"
@@ -10058,6 +10099,8 @@ function setGameScopeVars {
 	FSRS_STR="\-\-fsr\-sharpness"
 	GSNORM="normal"
 	GSFOOROPTS="left!right!${GSNORM}!upsidedown"
+	GSFLTROPTS="$NON!linear!nearest!fsr!nis"
+	GSSCALEOPTS="$NON!auto!integer!fit!fill!stretch"
 	GSDEF="default"
 	GSHOVER="hover:0"
 	GSLEFTCLICK="leftclick:1"
@@ -10066,6 +10109,7 @@ function setGameScopeVars {
 	GSPASSTHRU="passthrough:4"
 	GSTOUCHMODES="${GSDEF}!${GSHOVER}!${GSLEFTCLICK}!${GSRIGHTCLICK}!${GSMIDDLECLICK}!${GSPASSTHRU}" # Corresponds to 0,1,2,3,4 respectively internally by GameScope -- Default is ingored and the flag is not passed to GameScope
 	GSDRMMODES="${GSDEF}!cvt!fixed"
+	GSNEWFILTERMODE=0  # Whether gamescope uses -U/-Y/-n/-i (legacy) or -F/-S (new)
 
 	# Get values for UI elements based on existing GameScope args 
 	getGameScopeGeneralOpts
@@ -10114,11 +10158,9 @@ function GameScopeGui {
 			--field="$GUI_GSENABLECUSTCUR!$GUI_GSENABLECUSTCUR ('GSENABLECUSTCUR')":CHK "$GSENABLECUSTCUR" \
 			--field="$GUI_GSCURSOR!$DESC_GSCURSOR ('GSCURSOR')":FL "${GSCURSOR/#-/ -}" \
 			--field="$(spanFont "$GUI_GSFILTERINGSET" "H")":LBL "SKIP" \
+			--field="$GUI_GSFLTR!$DESC_GSFLTR ('GSFLTR')":CBE "$(cleanDropDown "${GSFLTR}" "${GSFLTROPTS}")" \
+			--field="$GUI_GSSCALE!$DESC_GSSCALE ('GSSCALE')":CBE "$(cleanDropDown "${GSSCALE}" "${GSSCALEOPTS}")" \
 			--field="$GUI_GSFSRS!$DESC_GSFSRS ('GSFSRS')":NUM "${GSFSRS/#-/ -}:!0..20" \
-			--field="$GUI_GSIS!$DESC_GSIS ('GSIS')":CHK "$GSIS" \
-			--field="$GUI_GSNN!$DESC_GSNN ('GSNN')":CHK "$GSNN" \
-			--field="$GUI_GSFSR!$DESC_GSFSR ('GSFSR')":CHK "$GSFSR" \
-			--field="$GUI_GSNIS!$DESC_GSNIS ('GSNIS')":CHK "$GSNIS" \
 			--field="$GUI_GSMSF!$DESC_GSMSF ('GSMSF')":NUM "$GSMSF" \
 			--field="$(spanFont "$GUI_GSHDRSET" "H")":LBL "SKIP" \
 			--field="$GUI_GSHDR!$DESC_GSHDR ('GSHDR')":CHK "$GSHDR" \
@@ -10189,48 +10231,46 @@ function GameScopeGui {
 						GSENABLECUSTCUR="${GSARR[12]}"
 						GSCURSOR="${GSARR[13]}"
 						# GSARR[14] is the Filtering heading
-						GSFSRS="${GSARR[15]}"
-						GSIS="${GSARR[16]}"
-						GSNN="${GSARR[17]}"
-						GSFSR="${GSARR[18]}"
-						GSNIS="${GSARR[19]}"
-						GSMSF="${GSARR[20]}"
-						# GSARR[21] is the HDR heading
-						GSHDR="${GSARR[22]}"
-						GSHDRWGFS="${GSARR[23]}"
-						GSHDRSCNITS="${GSARR[24]}"
-						GSHDRITM="${GSARR[25]}"
-						GSHDRITMSDRNITS="${GSARR[26]}"
-						GSHDRITMTGTNITS="${GSARR[27]}"
-						# GSARR[28] is the VR heading
-						GSVR="${GSARR[29]}"
-						GSVREXNA="${GSARR[30]}"
-						GSVRDEFNAM="${GSARR[31]}"
-						GSVRICONENABLE="${GSARR[32]}"
-						GSVRICON="${GSARR[33]}"
-						GSVRSHOIMM="${GSARR[34]}"
-						GSVRCONTROLBAR="${GSARR[35]}"
-						GSVRCONTROLBARKEYBOARD="${GSARR[36]}"
-						GSVRCONTROLBARCLOSE="${GSARR[37]}"
-						GSVRMODAL="${GSARR[38]}"
-						# GSARR[39] is the Embedded heading
-						GSDEFTOUCHMODE="${GSARR[40]}"
-						GSIMMEDIATEFLIPS="${GSARR[41]}"
-						GSADAPTIVESYNC="${GSARR[42]}"
-						GSPREFOUT="${GSARR[43]}"
-						GSDRMMODE="${GSARR[44]}"
-						# GSARR[45] is the Advanced heading
-						GSSTATSPATHENABLE="${GSARR[46]}"
-						GSSTATSPATH="${GSARR[47]}"
-						GSHIDECURSORDELAY="${GSARR[48]}"
-						GSFORCECOMP="${GSARR[49]}"
-						GSDEBUGHUD="${GSARR[50]}"
-						GSFORCEHDRSUPPORT="${GSARR[51]}"
-						GSFORCEHDROUTPUT="${GSARR[52]}"
-						GSPREFERVKDEVICE="${GSARR[53]}"
-						GSWAYLAND="${GSARR[54]}"
-						GSRT="${GSARR[55]}"
-						GSHDLS="${GSARR[56]}"
+						GSFLTR="${GSARR[15]}"
+						GSSCALE="${GSARR[16]}"
+						GSFSRS="${GSARR[17]}"
+						GSMSF="${GSARR[18]}"
+						# GSARR[19] is the HDR heading
+						GSHDR="${GSARR[20]}"
+						GSHDRWGFS="${GSARR[21]}"
+						GSHDRSCNITS="${GSARR[22]}"
+						GSHDRITM="${GSARR[23]}"
+						GSHDRITMSDRNITS="${GSARR[24]}"
+						GSHDRITMTGTNITS="${GSARR[25]}"
+						# GSARR[26] is the VR heading
+						GSVR="${GSARR[27]}"
+						GSVREXNA="${GSARR[28]}"
+						GSVRDEFNAM="${GSARR[29]}"
+						GSVRICONENABLE="${GSARR[30]}"
+						GSVRICON="${GSARR[31]}"
+						GSVRSHOIMM="${GSARR[32]}"
+						GSVRCONTROLBAR="${GSARR[33]}"
+						GSVRCONTROLBARKEYBOARD="${GSARR[34]}"
+						GSVRCONTROLBARCLOSE="${GSARR[35]}"
+						GSVRMODAL="${GSARR[36]}"
+						# GSARR[37] is the Embedded heading
+						GSDEFTOUCHMODE="${GSARR[38]}"
+						GSIMMEDIATEFLIPS="${GSARR[39]}"
+						GSADAPTIVESYNC="${GSARR[40]}"
+						GSPREFOUT="${GSARR[41]}"
+						GSDRMMODE="${GSARR[42]}"
+						# GSARR[43] is the Advanced heading
+						GSSTATSPATHENABLE="${GSARR[44]}"
+						GSSTATSPATH="${GSARR[45]}"
+						GSHIDECURSORDELAY="${GSARR[46]}"
+						GSFORCECOMP="${GSARR[47]}"
+						GSDEBUGHUD="${GSARR[48]}"
+						GSFORCEHDRSUPPORT="${GSARR[49]}"
+						GSFORCEHDROUTPUT="${GSARR[50]}"
+						GSPREFERVKDEVICE="${GSARR[51]}"
+						GSWAYLAND="${GSARR[52]}"
+						GSRT="${GSARR[53]}"
+						GSHDLS="${GSARR[54]}"
 
 						# Build the GameScope arguments string
 						unset GAMESCOPE_ARGS
@@ -10259,12 +10299,47 @@ function GameScopeGui {
 						### GENERAL OPTIONS END ###
 
 						### FILTERING OPTIONS ###
-						if [ "$GSIS" == "TRUE" ]                                        ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -i"; fi
-						if [ "$GSNN" == "TRUE" ]                                        ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -n"; fi 
-						if [ "$GSFSR" == "TRUE" ]                                       ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -U"; fi
-						if [ "$GSNIS" == "TRUE" ]                                       ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -Y"; fi
+						# Used to control whether to apply --sharpness since there are various conditions where
+						# this could be true (new -F option but ONLY if we pass fsr/nis, or legacy -U/-S option)
+						GSAPPLYSHARPNESS=0
+						if [ ! "$GSFLTR" == "$NON" ] && [ -n "$GSFLTR" ]; then
+							# Pass -F if available for current GameScope version, otherwise pass legacy switches
+							if [ "$GSNEWFILTERMODE" -eq 1 ]; then
+								GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -F ${GSFLTR}"
+							else
+								# Only manages -U/-Y/-n, because those were the only filtering switches available
+								# we don't have any other to account for with older GameScope versions -- If a different
+								# option is selected for GSFLTR, then we just don't pass any flags
+								#
+								# Even though with legacy options, all 3 of these could be passed, the -F flag won't support this and neither
+								# will the UI, so we only support selecting 1
+								if [ "$GSFLTR" == "nearest" ]; then
+									GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -n"
+								elif [ "$GSFLTR" == "fsr" ]; then
+									GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -U"
+								elif [ "$GSFLTR" == "nis" ]; then
+									GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -Y"
+								fi
+							fi
+
+							if [ "$GSFLTR" == "fsr" ] || [ "$GSFLTR" == "nis" ]; then  # CASE SENSITIVE
+								GSAPPLYSHARPNESS=1
+							fi
+						fi
+
+						if [ ! "$GSSCALE" == "$NON" ] && [ -n "$GSSCALE" ]; then
+							if [ "$GSNEWFILTERMODE" -eq 1 ]; then
+								GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -S ${GSSCALE}"
+							else
+								# This is the only legacy scale switch, -i
+								if [ "$GSSCALE" == "integer" ]; then
+									GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -i"
+								fi
+							fi
+						fi
+
 						if [ ! "$GSMSF" == "0" ]                                        ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -m ${GSMSF}"; fi # Ignore Max Scale Factor if 0
-						if [ "$GSFSRS" -eq "$GSFSRS" ] 2>/dev/null && [ "$GSFSR" == "TRUE" ] || [ "$GSNIS" == "TRUE" ]; then
+						if [ "$GSFSRS" -eq "$GSFSRS" ] 2>/dev/null && [ "$GSAPPLYSHARPNESS" -eq 1 ]; then
 							# Sharpness Value should only be passed if FSR or NIS is enabled
 							writelog "INFO" "${FUNCNAME[0]} - Adding sharpness parameter to the gamescope arguments:"
 							if grep -q "$FSRS_STR" <<< "$("$(command -v "$GAMESCOPE")" --help 2>&1)"; then
