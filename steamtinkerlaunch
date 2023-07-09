@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230709-2"
+PROGVERS="v14.0.20230710-1"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -9887,6 +9887,9 @@ function setGameScopeVars {
 		# Force grab cursor -- Keeps cursor inside GameScope nested display -- Checkbox
 		GSFGC="$( getGameScopeArg "$GAMESCOPE_ARGS" "--force-grab-cursor" "$GSFGC" "1" "0" )"
 
+		# Force grab keyboard -- Keeps keyboard input locked to GameScope nested display -- Checkbox
+		GSFGK="$( getGameScopeArg "$GAMESCOPE_ARGS" "-g" "$GSFGK" "1" "0" )"
+
 		# Orientation (--force-orientation) -- Can be either 'left', 'right', 'normal', 'upsidedown' (Defaults to 'normal') -- Dropdown
 		# NOTE: Passing this normally to GameScope (e.g. `gamescope --force-orientation upsidedown -- supertuxkart`) doesn't seem to do anything?
 		GSFOOR="$( getGameScopeArg "$GAMESCOPE_ARGS" "--force-orientation" "$GSFOOR" "" "$GSNORM" "cb")"
@@ -9897,6 +9900,7 @@ function setGameScopeVars {
 		if [ -n "$GSCURSOR" ]; then  GSENABLECUSTCUR="1"; fi
 
 		# There is a `--cursor-scale-height` option, but at time of writing (15/02/23) this doesn't seem to do anything - We can add it in future, but not now
+		# There is a `--framerate-limit` option, but I am not totally sure how it differs from -r/-o -- I tested it out and the behaviour seemed identical? Maybe one works in both nested/embedded and the other doesn't, not sure...
 	}
 
 	function getGameScopeFilteringOpts {
@@ -9908,7 +9912,7 @@ function setGameScopeVars {
 		# Default scale/filter to none to be safe
 		if [ "$GSNEWFILTERMODE" -eq 1 ]; then
 			## !!These are the newer flags for checking filter/scale!!
-
+			#
 			# Filtering option (-F) -- Combobox (replaces old individual Nearest/FSR/NIS options)
 			GSFLTR="$( getGameScopeArg "$GAMESCOPE_ARGS" "-F" "$GSFLTR" "" "$NON" "cb" )"
 
@@ -9918,8 +9922,7 @@ function setGameScopeVars {
 			## !!These are legacy flags with individual switches!!
 			## These values are checked for and used to apply the correct filter selection
 			## on the UI (i.e. passing -U will select FSR for the filter dropdown)
-
-
+			##
 			## Scale
 			# Integer scaling (-i)
 			GSIS="$( getGameScopeArg "$GAMESCOPE_ARGS" "-i" "$GSIS" "1" "" )"
@@ -10160,6 +10163,7 @@ function GameScopeGui {
 			--field="$GUI_GSSE!$DESC_GSSE ('GSSE')":CHK "$GSSE" \
 			--field="$GUI_GSFWF!$DESC_GSFWF ('GSFWF')":CHK "$GSFWF" \
 			--field="$GUI_GSFGC!$DESC_GSFGC ('GSFGC')":CHK "$GSFGC" \
+			--field="$GUI_GSFGK!$DESC_GSFGK ('GSFGK')":CHK "$GSFGK" \
 			--field="$GUI_GSFOOR!$DESC_GSFOOR ('GSFOOR')":CB "$(cleanDropDown "${GSFOOR}" "${GSFOOROPTS}")" \
 			--field="$GUI_GSENABLECUSTCUR!$GUI_GSENABLECUSTCUR ('GSENABLECUSTCUR')":CHK "$GSENABLECUSTCUR" \
 			--field="$GUI_GSCURSOR!$DESC_GSCURSOR ('GSCURSOR')":FL "${GSCURSOR/#-/ -}" \
@@ -10235,52 +10239,53 @@ function GameScopeGui {
 						GSSE="${GSARR[8]}"
 						GSFWF="${GSARR[9]}"
 						GSFGC="${GSARR[10]}"
-						GSFOOR="${GSARR[11]}"
-						GSENABLECUSTCUR="${GSARR[12]}"
-						GSCURSOR="${GSARR[13]}"
-						# GSARR[14] is the Filtering heading
-						GSFLTR="${GSARR[15]}"
-						GSSCALE="${GSARR[16]}"
-						GSFSRS="${GSARR[17]}"
-						GSMSF="${GSARR[18]}"
-						# GSARR[19] is the HDR heading
-						GSHDR="${GSARR[20]}"
-						GSHDRWGFS="${GSARR[21]}"
-						GSHDRSCNITS="${GSARR[22]}"
-						GSHDRITM="${GSARR[23]}"
-						GSHDRITMSDRNITS="${GSARR[24]}"
-						GSHDRITMTGTNITS="${GSARR[25]}"
-						# GSARR[26] is the VR heading
-						GSVR="${GSARR[27]}"
-						GSVREXNA="${GSARR[28]}"
-						GSVRDEFNAM="${GSARR[29]}"
-						GSVROVERLAYKEY="${GSARR[30]}"
-						GSVRICONENABLE="${GSARR[31]}"
-						GSVRICON="${GSARR[32]}"
-						GSVRSHOIMM="${GSARR[33]}"
-						GSVRCONTROLBAR="${GSARR[34]}"
-						GSVRCONTROLBARKEYBOARD="${GSARR[35]}"
-						GSVRCONTROLBARCLOSE="${GSARR[36]}"
-						GSVRSCROLLSSPEED="${GSARR[37]}"
-						GSVRMODAL="${GSARR[38]}"
-						# GSARR[39] is the Embedded heading
-						GSDEFTOUCHMODE="${GSARR[40]}"
-						GSIMMEDIATEFLIPS="${GSARR[41]}"
-						GSADAPTIVESYNC="${GSARR[42]}"
-						GSPREFOUT="${GSARR[43]}"
-						GSDRMMODE="${GSARR[44]}"
-						# GSARR[45] is the Advanced heading
-						GSSTATSPATHENABLE="${GSARR[46]}"
-						GSSTATSPATH="${GSARR[47]}"
-						GSHIDECURSORDELAY="${GSARR[48]}"
-						GSFORCECOMP="${GSARR[49]}"
-						GSDEBUGHUD="${GSARR[50]}"
-						GSFORCEHDRSUPPORT="${GSARR[51]}"
-						GSFORCEHDROUTPUT="${GSARR[52]}"
-						GSPREFERVKDEVICE="${GSARR[53]}"
-						GSWAYLAND="${GSARR[54]}"
-						GSRT="${GSARR[55]}"
-						GSHDLS="${GSARR[56]}"
+						GSFGK="${GSARR[11]}"
+						GSFOOR="${GSARR[12]}"
+						GSENABLECUSTCUR="${GSARR[13]}"
+						GSCURSOR="${GSARR[14]}"
+						# GSARR[15] is the Filtering heading
+						GSFLTR="${GSARR[16]}"
+						GSSCALE="${GSARR[17]}"
+						GSFSRS="${GSARR[18]}"
+						GSMSF="${GSARR[19]}"
+						# GSARR[20] is the HDR heading
+						GSHDR="${GSARR[21]}"
+						GSHDRWGFS="${GSARR[22]}"
+						GSHDRSCNITS="${GSARR[23]}"
+						GSHDRITM="${GSARR[24]}"
+						GSHDRITMSDRNITS="${GSARR[25]}"
+						GSHDRITMTGTNITS="${GSARR[26]}"
+						# GSARR[27] is the VR heading
+						GSVR="${GSARR[28]}"
+						GSVREXNA="${GSARR[29]}"
+						GSVRDEFNAM="${GSARR[30]}"
+						GSVROVERLAYKEY="${GSARR[31]}"
+						GSVRICONENABLE="${GSARR[32]}"
+						GSVRICON="${GSARR[33]}"
+						GSVRSHOIMM="${GSARR[34]}"
+						GSVRCONTROLBAR="${GSARR[35]}"
+						GSVRCONTROLBARKEYBOARD="${GSARR[36]}"
+						GSVRCONTROLBARCLOSE="${GSARR[37]}"
+						GSVRSCROLLSSPEED="${GSARR[38]}"
+						GSVRMODAL="${GSARR[39]}"
+						# GSARR[40] is the Embedded heading
+						GSDEFTOUCHMODE="${GSARR[41]}"
+						GSIMMEDIATEFLIPS="${GSARR[42]}"
+						GSADAPTIVESYNC="${GSARR[43]}"
+						GSPREFOUT="${GSARR[44]}"
+						GSDRMMODE="${GSARR[45]}"
+						# GSARR[46] is the Advanced heading
+						GSSTATSPATHENABLE="${GSARR[47]}"
+						GSSTATSPATH="${GSARR[48]}"
+						GSHIDECURSORDELAY="${GSARR[49]}"
+						GSFORCECOMP="${GSARR[50]}"
+						GSDEBUGHUD="${GSARR[51]}"
+						GSFORCEHDRSUPPORT="${GSARR[52]}"
+						GSFORCEHDROUTPUT="${GSARR[53]}"
+						GSPREFERVKDEVICE="${GSARR[54]}"
+						GSWAYLAND="${GSARR[55]}"
+						GSRT="${GSARR[56]}"
+						GSHDLS="${GSARR[57]}"
 
 						# Build the GameScope arguments string
 						unset GAMESCOPE_ARGS
@@ -10304,6 +10309,7 @@ function GameScopeGui {
 						if [ "$GSSE" == "TRUE" ]                                        ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -e"; fi
 						if [ "$GSFWF" == "TRUE" ]                                       ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --force-windows-fullscreen"; fi
 						if [ "$GSFGC" == "TRUE" ]                                       ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --force-grab-cursor"; fi
+						if [ "$GSFGK" == "TRUE" ]                                       ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -g"; fi
 						if [ -f "$GSCURSOR" ] && [ "$GSENABLECUSTCUR" == "TRUE" ]       ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --cursor '${GSCURSOR}'"; fi
 						if [ ! "$GSFOOR" == "$GSNORM" ] && [ -n "$GSFOOR" ]             ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --force-orientation ${GSFOOR}"; fi  # Only force orientation if option other than default 'normal' is selected
 						### GENERAL OPTIONS END ###
