@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230710-2"
+PROGVERS="v14.0.20230716-1"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -20329,9 +20329,12 @@ function howto {
 	echo "    backup <value>                   Backup found '$STUS' files"
 	echo "                                       (for 'SteamAppID' or 'all')"
 	echo "    block                            Opens the category Block selection menu"
+	echo "    cleardeckdeps                    Remove downloaded Steam Deck dependencies, allowing them to"
+	echo "                                      update on next launch (This option is only applicable to SteamOS 3.X)"
 	echo "    compat <cmd>                     Will (add|del|get) ${PROGNAME,,} as" 
 	echo "                                       Steam compatibility tool"
 	echo "                                       under 'STEAMCOMPATOOLS'"
+	echo "    configdir                        Open the SteamTinkerLaunch config directory with xdg-open"
 	echo "    createappinfo|cai <id|i|o>       Create raw appinfo for <id>"
 	echo "                                      or for 'installed|i' or 'owned|o' games"
 	echo "                                      Append any arg to update the raw file"
@@ -20352,7 +20355,6 @@ function howto {
 	echo "                                       3=for desktop and application menu"
 	echo "    createfirstinstall|cfi <gameid>  Open gui to create a Steam First Time Setup" 
 	echo "    <a|c|r|file> (see wiki)            file for game <gameid>"
-	echo "    configdir                        Open the SteamTinkerLaunch config directory with xdg-open"
 	echo "    ${DPRS,}|dprs                    Prepare/launch ${DPRS}"
 	echo "    dlcustomproton|dcp <url|l>       Download/install custom Proton"
 	echo "                                       - from filerequester"
@@ -20565,6 +20567,14 @@ function commandline {
 	elif [ "$1" == "block" ]; then
 		FUSEID "$2"
 		setGuiBlockSelection "$USEID"
+	elif [ "$1" == "cleardeckdeps" ]; then
+		# We check this in clearDeckDeps too, but thsis is just insurance
+		if [ "$ONSTEAMDECK" -eq 1 ]; then
+			clearDeckDeps
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - Not on Steam Deck, nothing to do."
+			echo "Not on Steam Deck, nothing to do."
+		fi
 	elif [ "$1" == "sort" ]; then
 		setGuiSortOrder
 	elif [ "$1" == "compat" ]; then
@@ -23610,6 +23620,8 @@ function steamdedeckt {
 		else
 			writelog "INFO" "${FUNCNAME[0]} - Seems like we're being run by Steam here, not doing any installation steps"
 		fi
+	else
+		writelog "INFO" "${FUNCNAME[0]} - Not on Steam Deck I guess"
 	fi
 }
 
@@ -23769,6 +23781,27 @@ function getSteamDeckCompatInfo {
     fi
 
 	echo "$COMPATINFO"
+}
+
+# Clear dependencies in /home/deck/stl/deps so that they can be redownloaded the next time SteamTinkerLaunch is ran on Steam Deck
+# This also serves as a quickfix for #719, as dependencies an be quickly removed and then re-downloaded to ensure better compatibility with SteamOS updates
+# In future, STL should auto-bump these somehow
+function clearDeckDeps {
+	if [ "$ONSTEAMDECK" -eq 1 ]; then
+		# This should be set by steamdedeckt, the regex check at the end is just for extra peace of mind that we don't rm -rf an incorrect directory!
+		if [ -n "$STLDEPS" ] && [ -d "$STLDEPS" ]  && [[ $STLDEPS == *"deps"* ]]; then
+			writelog "INFO" "${FUNCNAME[0]} - Removing '$STLDEPS' directory"
+			rm -rf "$STLDEPS"
+			writelog "INFO" "${FUNCNAME[0]} - Successfully removed '$STLDEPS'"
+			echo "Removed Steam Deck dependencies, they will be re-downloaded on next launch."
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - Could not find STL Steam Deck dependencies directory, STLDEPS is '$STLDEPS' - Nothing to do."
+			echo "Could not find STL Steam Deck dependencies directory, skipping"
+		fi
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - Not on Steam Deck, nothing to do"
+		echo "Not on Steam Deck, nothing to do."
+	fi
 }
 
 ### STEAM DECK END
