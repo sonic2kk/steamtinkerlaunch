@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230716-1"
+PROGVERS="v14.0.20230717-1"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -19688,6 +19688,66 @@ function setSLRReap {
 	fi
 }
 
+## Fetch the AppID required by a game's selected Proton version, and prompt Steam to install it with steam://install/<appid>
+##
+## Could be extended to a GUI in future, similar to commandlineOneTimeRun and OneTimeRunGui
+## Ideally we would use a Main Menu button for it (maybe replace wiki button?)
+function commandlineFetchGameSLR {
+	FUSEID "$1"
+	USENATIVE="$2"  # We could pass this from the UI if we know we have a native game (ISGAME -eq 3)
+
+	if [ "$USENATIVE" -eq 1 ]; then  # Get native Linux SLR
+		# Check if SLR is already installed
+		EXISTINGSLRPATH="$( getGameDir "$SLRAID" "only" )"
+		echo "$EXISTINGSLRPATH"
+		if [ -d "$EXISTINGSLRPATH" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Required Steam Linux Runtime ('$SLRAID') is already installed at '$EXISTINGSLRPATH' -- Nothing to do."
+			echo "Required Steam Linux Runtime ('$SLRAID') is already installed at '$EXISTINGSLRPATH' -- Nothing to do."
+			return
+		fi
+
+		SLRINSTALLCMD="steam steam://install/$SLRAID"
+		writelog "INFO" "${FUNCNAME[0]} - Installing Steam Linux Runtime for Native Linux games"
+		echo "Installing Steam Linux Runtime for Native Linux games"
+
+		eval "$SLRINSTALLCMD"
+		echo "Continue installation of tool from Steam install dialog."
+	elif [ -f "$STLGAMECFG" ] && [ -n "$USEPROTON" ]; then  # If this is a game launched before with STL, get the Steam Linux Runtime for it
+		PROTPATH="$( dirname "$( getProtPathFromCSV "$USEPROTON" )" )"
+		
+		# Very similar to logic in getRequireToolAppidPath
+		TOMAPATH="${PROTPATH}/$TOMA"
+		if [ -f "$TOMAPATH" ]; then
+			SLRID="$( getValueFromAppManifest "require_tool_appid" "$TOMAPATH" )"
+			if [ -n "$SLRID" ]; then
+				# Check if SLR is already installed
+				EXISTINGSLRPATH="$( getGameDir "$SLRID" "only" )"
+				if [ -d "$EXISTINGSLRPATH" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Required Steam Linux Runtime ('$SLRID') is already installed at '$EXISTINGSLRPATH' -- Nothing to do."
+					echo "Required Steam Linux Runtime ('$SLRID') is already installed at '$EXISTINGSLRPATH' -- Nothing to do."
+					return
+				fi
+
+				SLRINSTALLCMD="steam steam://install/$SLRID"
+				writelog "INFO" "${FUNCNAME[0]} - Game Proton version '$USEPROTON' expects Steam Linux Runtime with AppID '$SLRID' - Requesting it from Steam..."
+				echo "Game Proton version '$USEPROTON' expects Steam Linux Runtime with AppID '$SLRID' - Requesting it from Steam..."
+
+				eval "$SLRINSTALLCMD"
+				echo "Continue installation of tool from Steam install dialog."
+			else  # No require_tool_appid set in toolmanifest.vdf
+				writelog "ERROR" "${FUNCNAME[0]} - require_tool_appid was not defined ('$SLRID') -- Maybe no Steam Linux Runtime is required for this Proton version?"
+				echo "require_tool_appid was not defined ('$SLRID') -- Maybe no Steam Linux Runtime is required for this Proton version?"
+			fi
+		else  # No toolmanifest.vdf set at all
+			writelog "ERROR" "${FUNCNAME[0]} - Could not find $TOMA for Proton version '$USEPROTON' at path '$PROTPATH'"
+			echo "Could not find $TOMA for Proton version '$USEPROTON' at path '$PROTPATH'"
+		fi
+	else  # Not a valid game used with STL before
+		writelog "ERROR" "${FUNCNAME[0]} - Could not find STLGAMECFG ('$STLGAMECFG') or USEPROTON ('$USEPROTON') for AppID '$AID'"
+		echo "Could not find STLGAMECFG ('$STLGAMECFG') or USEPROTON ('$USEPROTON') for AppID '$AID'"
+	fi
+}
+
 function setBoxtronCmd {
 	DOSEXE="$GP"
 	if [ -x "$(command -v "$BOXTRONCMD" 2>/dev/null)" ]; then
@@ -20379,6 +20439,8 @@ function howto {
 	echo "                  only                 Only display install directory"
 	echo "    getid|gi|gid <gametitle>         Print the SteamAppId for <gametitle>"
 	echo "    gettitle|gt <gameid>             Print the Game Title for <gameid>"
+	echo "    getslr <gameid>                  Fetch the required Steam Linux Runtime for <gameid>'s SteamTinkerLaunch Proton version"
+	echo "               native                  (optional) get the native Steam Linux Runtime"
 	echo "    hedgemodmanager|hmm              HedgeModManager"
 	echo "            install|i                  install latest stable HedgeModManager"
 	echo "            download|d <channel>       download latest HedgeModManager release (stable or nightly)"
@@ -20723,6 +20785,13 @@ function commandline {
 		fi
 	elif [ "$1" == "meta" ]; then
 		createMetaData "yes"
+	elif [ "$1" == "getslr" ]; then
+		if [ "$3" == "native" ]; then
+			FETCHNATIVESLR=1
+		else
+			FETCHNATIVESLR=0
+		fi
+		commandlineFetchGameSLR "$2" "$FETCHNATIVESLR"
 	elif [ "$1" == "mo2" ]; then
 		if [ -n "$2" ]; then
 			if [ "$2" == "download" ] || [ "$2" == "d" ]; then
