@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230717-1"
+PROGVERS="v14.0.20230723-1 (compatredir-major-proton)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -2711,6 +2711,7 @@ function setDefaultCfgValues {
 		if [ -z "$USEPROTON" ]							; then	USEPROTON="$(getDefaultProton)"; fi
 		if [ -z "$REDIRCOMPDATA" ]						; then	REDIRCOMPDATA="disabled"; fi
 		if [ -z "$REDIRSTEAMUSER" ]						; then	REDIRSTEAMUSER="disabled"; fi
+		if [ -z "$ONLYPROTMAJORREDIRECT" ]              ; then  ONLYPROTMAJORREDIRECT="0"; fi
 		if [ -z "$AUTOBUMPGE" ]							; then	AUTOBUMPGE="0"; fi
 		if [ -z "$AUTOBUMPPROTON" ]						; then	AUTOBUMPPROTON="0"; fi
 		if [ -z "$USECUSTOMCMD" ]						; then	USECUSTOMCMD="0"; fi
@@ -3225,6 +3226,8 @@ function saveCfg {
 			echo "REDIRCOMPDATA=\"$REDIRCOMPDATA\""
 			echo "## $DESC_REDIRSTEAMUSER"
 			echo "REDIRSTEAMUSER=\"$REDIRSTEAMUSER\""
+			echo "## $DESC_ONLYPROTMAJORREDIRECT"
+			echo "ONLYPROTMAJORREDIRECT=\"$ONLYPROTMAJORREDIRECT\""
 			echo "## $DESC_AUTOBUMPGE"
 			echo "AUTOBUMPGE=\"$AUTOBUMPGE\""
 			echo "## $DESC_AUTOBUMPPROTON"
@@ -5140,6 +5143,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_AUTOLASTPROTON!$DESC_AUTOLASTPROTON ('AUTOLASTPROTON')":CHK "${AUTOLASTPROTON/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_REDIRCOMPDATA!$DESC_REDIRCOMPDATA ('REDIRCOMPDATA')":CB "$(cleanDropDown "${REDIRCOMPDATA/#-/ -}" "disabled!single-proton!global-proton")" `#CAT_Proton` `#MENU_GAME` \
 --field="     $GUI_REDIRSTEAMUSER!$DESC_REDIRSTEAMUSER ('REDIRSTEAMUSER')":CB "$(cleanDropDown "${REDIRSTEAMUSER/#-/ -}" "disabled!symlink!restore-backup")" `#CAT_Proton` `#MENU_GAME` \
+--field="     $GUI_ONLYPROTMAJORREDIRECT!$DESC_ONLYPROTMAJORREDIRECT ('ONLYPROTMAJORREDIRECT')":CHK "${ONLYPROTMAJORREDIRECT/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_AUTOBUMPGE!$DESC_AUTOBUMPGE ('AUTOBUMPGE')":CHK "${AUTOBUMPGE/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_AUTOBUMPPROTON!$DESC_AUTOBUMPPROTON ('AUTOBUMPPROTON')":CHK "${AUTOBUMPPROTON/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_PROTON_LOG!$DESC_PROTON_LOG $HOME/steam-$AID.log ('PROTON_LOG')":CHK "${PROTON_LOG/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
@@ -11900,12 +11904,18 @@ function redirectSCDP {
 		fi		
 	}
 
+	## There is room for improvement here, community contributions welcome!
 	if [ -n "$STEAM_COMPAT_DATA_PATH" ]; then # should be enough
-		VERSFIX="$(grep "${USEPROTON%-*}" "$PROTONCSV" | cut -d ';' -f1 | sort -nr | head -n1)"
-		if [ -n "$VERSFIX" ]; then
+		VERSPROTMAJOR="${USEPROTON%-*}"  # Turns Proton name from "proton-8.0-3c" to "proton-8.0" 
+		VERSFIX="$(grep "${PROTVERSNOMINOR}" "$PROTONCSV" | cut -d ';' -f1 | sort -nr | head -n1)"
+
+		if [ "${ONLYPROTMAJORREDIRECT}" -eq 1 ]; then  # Only create redirect folders for major Proton version bumps, such as GE-Proton7 -> GE-Proton8, or Proton 7.0 -> Proton 8.0 (IGNORING minor fix versions)
+			DESTPROT1="${VERSPROTMAJOR//proton-}"
+			writelog "INFO" "${FUNCNAME[0]} - Using major Proton version without minor version fix '$DESTPROT1' for $CODA directory name, because ONLYPROTMAJORREDIRECT is '$ONLYPROTMAJORREDIRECT'"
+		elif [ -n "$VERSFIX" ]; then  # Create a compat directory lile 'proton-8.0-3c', WITH the minor fix version
 			DESTPROT1="${VERSFIX//proton-}"
 			writelog "INFO" "${FUNCNAME[0]} - Using Proton version with minor version fix '$DESTPROT1' for $CODA directory name"
-		else
+		else  # ???
 			DESTPROT1="${USEPROTON//proton-}"
 			writelog "INFO" "${FUNCNAME[0]} - Using Proton version '$DESTPROT1' for '$CODA' directory name"
 		fi
