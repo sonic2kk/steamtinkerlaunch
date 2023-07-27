@@ -53,6 +53,8 @@ There may be rare instances where ShellCheck is a bit *too* helpful. In cases li
 ### Clearing Temp Files
 Before running development builds, it can be a good idea to clear out the `/dev/shm/steamtinkerlaunch` folder. Before each execution you can run `rm -rf /dev/shm/steamtinkerlaunch`.
 
+If you want to test SteamTinkerLaunch from a "clean" slate, you can optionally use this Python script by [tetoNidan](https://github.com/tetoNidan) to remove any SteamTinkerLaunch related files: https://gist.github.com/tetoNidan/27223269c35cb922988b6b05858d0f37/ - This may be useful to do if you want to test SteamTinkerLaunch on another machine from as fresh of a state as possible.
+
 ### Testing Development Builds
 There are a few ways to test development builds of SteamTinkerLaunch. One of the first things you should do is change the `PROGVERS` at the top of the script. For development purposes you can set this to anything you like, as this will help you ensure you are definitely running the development version of SteamTinkerLaunch. You could append `-dev` to the end of the `PROGVERS`, for example.
 
