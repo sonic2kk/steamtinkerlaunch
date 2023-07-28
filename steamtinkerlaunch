@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230729-1"
+PROGVERS="v14.0.20230729-1 (slr-mainmenu-button)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -5904,7 +5904,7 @@ function MainMenu {
 	--field="$FBUT_GUISET_GASCO!$TT_GASCO":FBTN "$(realpath "$0") gs \"$AID\" \"$GN\"" \
 	--field="$FBUT_GUISET_VORTEX!$TT_VORTEX":FBTN "$(realpath "$0") vortex gui" \
 	--field="$FBUT_GUISET_MO!$TT_MO":FBTN "$(realpath "$0") mo2 start" \
-	--field="$FBUT_GUISET_WIKI":FBTN "$(realpath "$0") wiki" \
+	--field="$FBUT_GUISET_GETSLR!$TT_GETSLR":FBTN "$(realpath "$0") getslrbtn \"$AID\"" \
 	--field="$GUI_GAFI!$TT_GAFI":FBTN "$(realpath "$0") gf \"$AID\"" \
 	--button="$BUT_EXIT":0 \
 	--button="$BUT_GUISET_CATMENUSHORT":4 \
@@ -19702,6 +19702,14 @@ function setSLRReap {
 	fi
 }
 
+function fetchGameSLRGui {
+	if [ "$ISGAME" -eq 3 ]; then
+		commandlineFetchGameSLR "$1" "1"  # Native Linux SLR
+	else
+		commandlineFetchGameSLR "$1" "0"  # Proton SLR
+	fi
+}
+
 ## Fetch the AppID required by a game's selected Proton version, and prompt Steam to install it with steam://install/<appid>
 ##
 ## Could be extended to a GUI in future, similar to commandlineOneTimeRun and OneTimeRunGui
@@ -19713,7 +19721,6 @@ function commandlineFetchGameSLR {
 	if [ "$USENATIVE" -eq 1 ]; then  # Get native Linux SLR
 		# Check if SLR is already installed
 		EXISTINGSLRPATH="$( getGameDir "$SLRAID" "only" )"
-		echo "$EXISTINGSLRPATH"
 		if [ -d "$EXISTINGSLRPATH" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Required Steam Linux Runtime ('$SLRAID') is already installed at '$EXISTINGSLRPATH' -- Nothing to do."
 			echo "Required Steam Linux Runtime ('$SLRAID') is already installed at '$EXISTINGSLRPATH' -- Nothing to do."
@@ -20806,6 +20813,9 @@ function commandline {
 			FETCHNATIVESLR=0
 		fi
 		commandlineFetchGameSLR "$2" "$FETCHNATIVESLR"
+	elif [ "$1" == "getslrbtn" ]; then  # Internal use only for the Main Menu button
+		echo "1 is $2"
+		fetchGameSLRGui "$2"
 	elif [ "$1" == "mo2" ]; then
 		if [ -n "$2" ]; then
 			if [ "$2" == "download" ] || [ "$2" == "d" ]; then
