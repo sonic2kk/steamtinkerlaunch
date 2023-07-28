@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230723-1"
+PROGVERS="v14.0.20230728-1"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -2646,6 +2646,7 @@ function setDefaultCfgValues {
 		if [ -z "$DLSHADER" ]							; then	DLSHADER="1"; fi
 		if [ -z "$SAVESETSIZE" ]						; then	SAVESETSIZE="1"; fi
 		if [ -z "$STARTMENU" ]							; then	STARTMENU="Menu"; fi
+		if [ -z "$YADFORCEXWAYLAND" ]                   ; then  YADFORCEXWAYLAND="0"; fi
 		if [ -z "$USEWINDECO" ]							; then	USEWINDECO="1"; fi
 		if [ -z "$HEADLINEFONT" ]						; then	HEADLINEFONT="larger"; fi
 		if [ -z "$USETRAYICON" ]						; then	USETRAYICON="1"; fi
@@ -3100,6 +3101,8 @@ function saveCfg {
 			echo "STARTMENU=\"$STARTMENU\""
 			echo "## $DESC_HEADLINEFONT"
 			echo "HEADLINEFONT=\"$HEADLINEFONT\""
+			echo "## $DESC_YADFORCEXWAYLAND"
+			echo "YADFORCEXWAYLAND=\"$YADFORCEXWAYLAND\""
 			echo "## $DESC_USEWINDECO"
 			echo "USEWINDECO=\"$USEWINDECO\""
 			echo "## $DESC_USETRAYICON"
@@ -5065,6 +5068,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_USETRAYICON!$DESC_USETRAYICON ('USETRAYICON')":CHK "${USETRAYICON/#-/ -}" `#CAT_Gui` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_USENOTIFIER!$DESC_USENOTIFIER ('USENOTIFIER')":CHK "${USENOTIFIER/#-/ -}" `#CAT_Gui` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_HEADLINEFONT!$DESC_HEADLINEFONT ('HEADLINEFONT')":CB "$(cleanDropDown "${HEADLINEFONT/#-/ -}" "$FONTSIZES")" `#CAT_Gui` `#MENU_GLOBAL` \
+--field="     $GUI_YADFORCEXWAYLAND!$DESC_YADFORCEXWAYLAND ('YADFORCEXWAYLAND')":CHK "${YADFORCEXWAYLAND/#-/ -}" `#CAT_Gui` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_USEWINDECO!$DESC_USEWINDECO ('USEWINDECO')":CHK "${USEWINDECO/#-/ -}" `#CAT_Gui` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_DLGAMEDATA!$DESC_DLGAMEDATA ('DLGAMEDATA')":CHK "${DLGAMEDATA/#-/ -}" `#CAT_Gui` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_DLSTEAMDECKCOMPATINFO!$DESC_DLSTEAMDECKCOMPATINFO ('DLSTEAMDECKCOMPATINFO')":CHK "${DLSTEAMDECKCOMPATINFO}" `#CAT_Gui` `#SUB_Checkbox` `#MENU_GLOBAL` \
@@ -23895,6 +23899,19 @@ function setflatpak {
 	fi
 }
 
+# GDK_BACKEND can be either x11 or wayland -- User may want, in some instances, to force X11 over defaulting to Wayland for compatibility
+# Option to force Yad to use XWayland is on Global Menu
+function setGDKBackend {
+	if [ "$XDG_SESSION_TYPE" == "wayland" ] || [ -z "$XDG_SESSION_TYPE" ]; then
+		if [ "$YADFORCEXWAYLAND" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - XDG_SESSION_TYPE is either Wayland or undefined ('$XDG_SESSION_TYPE'), and the user chose to force XWayland, so setting GDK_BACKEND=x11"
+			export GDK_BACKEND=x11  # May affect other programs launched with STL but we'll see, we may need a way to store the OG value and default it back somehow if this causes problems i.e. when Wine gets Wayland support, or for native games that may use this 
+		fi
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - XDG_SESSION_TYPE is defined and is not Wayland, it is '$XDG_SESSION_TYPE' - No need to set GDK_BACKEND=x11 as it will already default to X11"
+	fi
+}
+
 # This has the side effect of being called everytime on a local install run, but since the scriptdir of a local install can change, It Has To Be This Way
 function setLocalInstall {
 	SCRIPTDIR="$( realpath "$0" )"
@@ -24026,6 +24043,8 @@ function main {
 
 	removeEmptyFiles "$STLAPPINFOIDDIR"  # Remove appinfo files that are 0 bytes (i.e. Non-Steam Games)
 	removeEmptyFiles "$STLGHEADD"  # Remove appinfo files that are 0 bytes (i.e. Non-Steam Games)
+
+	setGDKBackend
 
 	if [ -z "$1" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - No arguments provided. See '$PROGCMD --help' for possible command line parameters" "E"
