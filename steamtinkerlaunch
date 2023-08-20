@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230821-4 (reshade-dll-custom-name)"
+PROGVERS="v14.0.20230821-5 (reshade-dll-custom-name)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -8627,6 +8627,9 @@ function installReshade {
 		fi
 
 		if [ -d "$INSTDESTDIR" ]; then
+			# Get ReShade DLL names from comma separated list -- User will probably mostly only pass one, but this will handle cases where they might want multiple (ex: d3d9, opengl32)
+			mapfile -d "," -t -O "${#RSDLLNAMEARR[@]}" RSDLLNAMEARR < <(printf '%s' "$RESHADEDLLNAME")
+
 			# TODO this could probably be simplified now that the ReShade logic is simpler
 			#32bit:
 			if [ "$(getArch "$CHARCH")" == "32" ]; then
@@ -8635,8 +8638,9 @@ function installReshade {
 				installd3d47dll "$D3D47_32" "$INSTDESTDIR"
 
 				# actual ReShade DLL name (either d3d9/d3d11/dxgi, or a custom user selected name)
-				# TODO handle comma-separated ReShade DLL names
-				installRSdll "$RESHADEDLLNAME" "0" "$RS_32"
+				for CUSTRSDLL in "${RSDLLNAMEARR[@]}"; do
+					installRSdll "$CUSTRSDLL" "0" "$RS_32"
+				done
 			# 64bit:
 			elif [ "$(getArch "$CHARCH")" == "64" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Installing 64bit ${RESH} as '$CHARCH' is 64bit" 
@@ -8644,8 +8648,9 @@ function installReshade {
 				installd3d47dll "$D3D47_64" "$INSTDESTDIR"
 				
 				# actual ReShade DLL name (either d3d9/d3d11/dxgi, or a custom user selected name)
-				# TODO handle comma-separated ReShade DLL names
-				installRSdll "$RESHADEDLLNAME" "0" "$RS_64"
+				for CUSTRSDLL in "${RSDLLNAMEARR[@]}"; do
+					installRSdll "$CUSTRSDLL" "0" "$RS_64"
+				done
 			else
 				writelog "SKIP" "${FUNCNAME[0]} - ERROR in ${RESH} installation - no file information detected for '$CHARCH' or any 'neighbor file' - setting USERESHADE=0 for this session"
 				export USERESHADE=0
