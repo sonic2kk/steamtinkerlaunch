@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230824-1 (reshade-dll-custom-name)"
+PROGVERS="v14.0.20230824-2 (reshade-dll-custom-name)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -8565,6 +8565,7 @@ function installRSdll {
 			if [ ! -f "$RESHADESRCDIR/$RSVERS/$3" ]; then
 				writelog "SKIP" "${FUNCNAME[0]} - Sourcefile '$RESHADESRCDIR/$RSVERS/$3' missing - skipping this file" 
 			else
+				# Installing DLL for the first time
 				cp "$RESHADESRCDIR/$RSVERS/$3" "$INSTDESTDIR/$1" >/dev/null 2>/dev/null
 				echo "$1" >> "$INSTDESTDIR/$RSTXT"
 				sort "$INSTDESTDIR/$RSTXT" -u -o "$INSTDESTDIR/$RSTXT"
@@ -8576,8 +8577,17 @@ function installRSdll {
 			writelog "SKIP" "${FUNCNAME[0]} - Destfile '$INSTDESTDIR/$1' already exists, but not checking the installed version, because RESHADEUPDATE is '$RESHADEUPDATE'" 
 		else
 			if grep -q "$RSVERS" <<< "$(strings "$INSTDESTDIR/$1" | grep "^Initializing")"; then
-				writelog "SKIP" "${FUNCNAME[0]} - Destfile '$INSTDESTDIR/$1' already exists in the same version '$RSVERS' - skipping this file" 
+				# Existing ReShade DLL found 
+				writelog "SKIP" "${FUNCNAME[0]} - Destfile '$INSTDESTDIR/$1' already exists - skipping this file"
+			if [ -f "$INSTDESTDIR/$1" ] && ! grep -qw "$INSTDESTDIR/$1" "$INSTDESTDIR/$RSTXT"; then
+				# DLL with name matching our ReShade DLL name exists, but was not installed by us (missing from ReShade.txt) - Backing up existing DLL and installing ReShade DLL anyway
+				writelog "WARN" "${FUNCNAME[0]} - DLL with name '$1' found in game dir '$INSTDESTDIR' - This is possibly a game/mod DLL"
+				writelog "WARN" "${FUNCNAME[0]} - Backing up DLL at '$INSTDESTDIR/$1' to '$INSTDESTDIR/${1}.bak' and moving our ReShade DLL anyway"
+
+				mv "$INSTDESTDIR/$1" "$INSTDESTDIR/${1}.bak" 2>/dev/null
+				cp "$RESHADESRCDIR/$RSVERS/$3" "$INSTDESTDIR/$1" >/dev/null 2>/dev/null
 			else
+				# Updating existing DLL
 				writelog "INFO" "${FUNCNAME[0]} - Destfile '$INSTDESTDIR/$1' already exists, but has a different version - updating"
 				cp "$RESHADESRCDIR/$RSVERS/$3" "$INSTDESTDIR/$1" >/dev/null 2>/dev/null
 			fi
