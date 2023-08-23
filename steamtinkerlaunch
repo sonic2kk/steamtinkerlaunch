@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v12.12-dlom"
+PROGVERS="v14.0.20230820-1"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -2179,6 +2179,11 @@ function setCustomGameVars {
 	GFD="$EFD"
 	GN="$GE"
 
+	# Allows custom programs to use SLR and force it from the toolmanifest -- May not be a good idea but ¯\_(ツ)_/¯
+	# TODO allow SLR for custom programs?
+	USESLR=1
+	HAVESLR=0
+
 	while read -r ORGARG; do
 		mapfile -t -O "${#ORGGCMD[@]}" ORGGCMD <<< "$ORGARG"
 	done <<< "$(printf "%s\n" "$@")"
@@ -2260,8 +2265,10 @@ function loadLangFile {
 
 				if [ -n "$UPDATELANGFILEPATH" ]; then
 					writelog "INFO" "${FUNCNAME[0]} - Found lang file to replace the existing user-installed file with under '$UPDATELANGFILEPATH'"
+					chmod +w "$LAFI" #Ensure write permissions before removing
 					rm "$LAFI"
 					cp "$UPDATELANGFILEPATH" "$LAFI"
+					chmod -R +w "$STLLANGDIR" #Ensure write permissions for next update!
 				else
 					writelog "INFO" "${FUNCNAME[0]} - No lang file to replace existing user-installed file with, not updating langfile"
 				fi
@@ -2379,6 +2386,25 @@ function printProtonArr {
 	printf "%s\n" "${ProtonCSV[@]//\"/}"
 }
 
+function prettyPrintProtonArr {
+	for PV in "${ProtonCSV[@]//\"/}"
+	do
+		PVNAME=$( echo "$PV" | cut -d ';' -f1 )
+		PVPATH=$( echo "$PV" | cut -d ';' -f2 )
+
+		if [ -n "$1" ]; then
+			if [ "$1" == "name" ] || [ "$1" == "n" ]; then
+				printf "%s\n" "$PVNAME"
+			elif [ "$1" == "path" ] || [ "$1" == "p" ]; then
+				printf "%s\n" "$PVPATH"
+			fi
+		else
+			printf "%s -> %s\n" "$PVNAME" "$PVPATH"
+		fi
+
+	done
+}
+
 function delEmptyFile {
 	if [ -f "$1" ]; then
 		if [ "$(wc -l < "$1")" -le 1 ]; then
@@ -2396,6 +2422,10 @@ function rmDupLines {
 		cp "$STLSHM/${FUNCNAME[0]}" "$1"
 		rm "$STLSHM/${FUNCNAME[0]}" 2>/dev/null
 	fi
+}
+
+function getProtNameFromPath {
+	grep "$1" "$PROTONCSV" | cut -d ';' -f1
 }
 
 function getAvailableProtonVersions {
@@ -2558,6 +2588,8 @@ function setDefaultCfgValues {
 		if [ -z "$MO2PROJURL" ]							; then  MO2PROJURL="$GHURL/ModOrganizer2/modorganizer"; fi
 		if [ -z "$HMMPROJURL" ]                         ; then  HMMPROJURL="$GHURL/thesupersonic16/HedgeModManager"; fi
 		if [ -z "$CW_KRON4EK" ]							; then	CW_KRON4EK="$GHURL/Kron4ek/Wine-Builds/releases"; fi
+		if [ -z "$CW_LUTRIS" ]							; then  CW_LUTRIS="$GHURL/lutris/wine/releases"; fi
+		if [ -z "$CW_WINEGE" ]							; then  CW_WINEGE="$GHURL/GloriousEggroll/wine-ge-custom/releases"; fi
 		if [ -z "$IGCSZIP" ]							; then	IGCSZIP="$GHURL/FransBouma/InjectableGenericCameraSystem/releases/download/IGCSInjector_102/IGCSInjector_v102.zip"; fi
 		if [ -z "$UUUURL" ]								; then	UUUURL="https://framedsc.github.io/GeneralGuides/universal_ue4_consoleunlocker.htm#downloading-the-uuu"; fi
 		if [ -z "$OVRFSRURL" ]							; then	OVRFSRURL="$GHURL/fholger/$OVFS/releases"; fi
@@ -2603,7 +2635,7 @@ function setDefaultCfgValues {
 		if [ -z "$ROBERTAARGS" ]						; then	ROBERTAARGS="--wait-before-run"; fi
 		if [ -z "$LUXTORPEDACMD" ]						; then	LUXTORPEDACMD="$STEAMCOMPATOOLS/luxtorpeda/luxtorpeda"; fi
 		if [ -z "$LUXTORPEDAARGS" ]						; then	LUXTORPEDAARGS="wait-before-run"; fi
-		if [ -z "$RSVERS" ]								; then	RSVERS="5.4.2"; fi
+		if [ -z "$RSVERS" ]								; then	RSVERS="5.9.1"; fi
 		if [ -z "$AUTOBUMPRESHADE" ]					; then	AUTOBUMPRESHADE="0"; fi
 		if [ -z "$DOWNLOAD_RESHADE" ]					; then	DOWNLOAD_RESHADE="1"; fi
 		if [ -z "$RESHADESRCDIR" ]						; then	RESHADESRCDIR="$STLDLDIR/reshade"; fi
@@ -2616,6 +2648,7 @@ function setDefaultCfgValues {
 		if [ -z "$DLSHADER" ]							; then	DLSHADER="1"; fi
 		if [ -z "$SAVESETSIZE" ]						; then	SAVESETSIZE="1"; fi
 		if [ -z "$STARTMENU" ]							; then	STARTMENU="Menu"; fi
+		if [ -z "$YADFORCEXWAYLAND" ]                   ; then  YADFORCEXWAYLAND="0"; fi
 		if [ -z "$USEWINDECO" ]							; then	USEWINDECO="1"; fi
 		if [ -z "$HEADLINEFONT" ]						; then	HEADLINEFONT="larger"; fi
 		if [ -z "$USETRAYICON" ]						; then	USETRAYICON="1"; fi
@@ -2623,6 +2656,7 @@ function setDefaultCfgValues {
 		if [ -z "$USECUSTOMFALLBACKPIC" ]				; then	USECUSTOMFALLBACKPIC="0"; fi
 		if [ -z "$GITHUBUSER" ]							; then	GITHUBUSER="$NON"; fi
 		if [ -z "$DLGAMEDATA" ]							; then	DLGAMEDATA="1"; fi
+		if [ -z "$DLSTEAMDECKCOMPATINFO" ]				; then  DLSTEAMDECKCOMPATINFO="1"; fi
 		if [ -z "$USEPDBRATING" ]						; then	USEPDBRATING="1"; fi
 		if [ -z "$PDBRATINGCACHE" ]						; then	PDBRATINGCACHE="1"; fi
 		if [ -z "$DLWINETRICKS" ]						; then	DLWINETRICKS="0"; fi
@@ -2636,6 +2670,11 @@ function setDefaultCfgValues {
 		if [ -z "$VORTEXCOMPDATA" ]						; then	VORTEXCOMPDATA="$STLVORTEXDIR/$CODA"; fi
 		if [ -z "$VORTEXDOWNLOADPATH" ]					; then	VORTEXDOWNLOADPATH="$STLVORTEXDIR/downloads"; fi
 		if [ -z "$USEVORTEXPRERELEASE" ]				; then	USEVORTEXPRERELEASE="0"; fi
+		if [ -z "$VORTEXUSESLR" ]						; then  VORTEXUSESLR="1"; fi
+		if [ -z "$VORTEXUSESLRPOSTINSTALL" ]			; then  VORTEXUSESLRPOSTINSTALL="0"; fi
+		if [ -z "$DISABLEVORTEXAUTOUPDATE" ]			; then	DISABLEVORTEXAUTOUPDATE="0"; fi
+		if [ -z "$USEVORTEXCUSTOMVER" ]					; then	USEVORTEXCUSTOMVER="0"; fi
+		if [ -z "$VORTEXCUSTOMVER" ]					; then	VORTEXCUSTOMVER="$NON"; fi
 		if [ -z "$DISABLE_AUTOSTAGES" ]					; then	DISABLE_AUTOSTAGES="0"; fi
 		if [ -z "$NOSTEAMSTLDEF" ]						; then	NOSTEAMSTLDEF="0"; fi
 		if [ -z "$SGDBAPIKEY" ]							; then	SGDBAPIKEY="$NON"; fi
@@ -2675,6 +2714,7 @@ function setDefaultCfgValues {
 		if [ -z "$USEPROTON" ]							; then	USEPROTON="$(getDefaultProton)"; fi
 		if [ -z "$REDIRCOMPDATA" ]						; then	REDIRCOMPDATA="disabled"; fi
 		if [ -z "$REDIRSTEAMUSER" ]						; then	REDIRSTEAMUSER="disabled"; fi
+		if [ -z "$ONLYPROTMAJORREDIRECT" ]              ; then  ONLYPROTMAJORREDIRECT="0"; fi
 		if [ -z "$AUTOBUMPGE" ]							; then	AUTOBUMPGE="0"; fi
 		if [ -z "$AUTOBUMPPROTON" ]						; then	AUTOBUMPPROTON="0"; fi
 		if [ -z "$USECUSTOMCMD" ]						; then	USECUSTOMCMD="0"; fi
@@ -2706,6 +2746,7 @@ function setDefaultCfgValues {
 		if [ -z "$USEMANGOAPP" ]						; then	USEMANGOAPP="0"; fi
 		if [ -z "$MAHUBIN" ]							; then	MAHUBIN="$(command -v "$MAHU")"; fi
 		if [ -z "$MAHUARGS" ]							; then	MAHUARGS="$NON"; fi
+		if [ -z "$MAHUDLSYM" ]							; then  MAHUDLSYM="0"; fi
 		if [ -z "$LDPMAHU" ]							; then	LDPMAHU="0"; fi
 		if [ -z "$MAHUVAR" ]							; then	MAHUVAR="0"; fi
 		if [ -z "$USEMANGOHUDSTLCFG" ]					; then	USEMANGOHUDSTLCFG="0";	fi
@@ -2873,6 +2914,10 @@ function saveCfg {
 			echo "CP_PROTONSTL=\"$CP_PROTONSTL\""
 			echo "## Wine Kron4ek URL"
 			echo "CW_KRON4EK=\"$CW_KRON4EK\""
+			echo "## Lutris Wine URL"
+			echo "CW_LUTRIS=\"$CW_LUTRIS\""
+			echo "## Wine-GE URL"
+			echo "CW_WINEGE=\"$CW_WINEGE\""
 			echo "## d3d47 64bit DL URL "
 			echo "DL_D3D47_64=\"$DL_D3D47_64\""
 			echo "## d3d47 32bit DL URL"
@@ -3058,6 +3103,8 @@ function saveCfg {
 			echo "STARTMENU=\"$STARTMENU\""
 			echo "## $DESC_HEADLINEFONT"
 			echo "HEADLINEFONT=\"$HEADLINEFONT\""
+			echo "## $DESC_YADFORCEXWAYLAND"
+			echo "YADFORCEXWAYLAND=\"$YADFORCEXWAYLAND\""
 			echo "## $DESC_USEWINDECO"
 			echo "USEWINDECO=\"$USEWINDECO\""
 			echo "## $DESC_USETRAYICON"
@@ -3070,6 +3117,8 @@ function saveCfg {
 			echo "GITHUBUSER=\"$GITHUBUSER\""
 			echo "## $DESC_DLGAMEDATA"
 			echo "DLGAMEDATA=\"$DLGAMEDATA\""
+			echo "## $DESC_DLSTEAMDECKCOMPATINFO"
+			echo "DLSTEAMDECKCOMPATINFO=\"$DLSTEAMDECKCOMPATINFO\""
 			echo "## $DESC_USEPDBRATING"
 			echo "USEPDBRATING=\"$USEPDBRATING\""
 			echo "## $DESC_PDBRATINGCACHE"
@@ -3084,6 +3133,16 @@ function saveCfg {
 			echo "VORTEXDOWNLOADPATH=\"$VORTEXDOWNLOADPATH\""
 			echo "## $DESC_USEVORTEXPRERELEASE"
 			echo "USEVORTEXPRERELEASE=\"$USEVORTEXPRERELEASE\""
+			echo "## $DESC_VORTEXUSESLR"
+			echo "VORTEXUSESLR=\"$VORTEXUSESLR\""
+			echo "## $DESC_VORTEXUSESLRPOSTINSTALL"
+			echo "VORTEXUSESLR=\"$VORTEXUSESLRPOSTINSTALL\""
+			echo "## $DESC_DISABLEVORTEXAUTOUPDATE"
+			echo "DISABLEVORTEXAUTOUPDATE=\"$DISABLEVORTEXAUTOUPDATE\""
+			echo "## $DESC_USEVORTEXCUSTOMVER"
+			echo "USEVORTEXCUSTOMVER=\"$USEVORTEXCUSTOMVER\""
+			echo "## $DESC_VORTEXCUSTOMVER"
+			echo "VORTEXCUSTOMVER=\"$VORTEXCUSTOMVER\""
 			echo "## $(strFix "$DESC_DISABLE_AUTOSTAGES" "$PROGNAME")"
 			echo "DISABLE_AUTOSTAGES=\"$DISABLE_AUTOSTAGES\""
 			echo "## $DESC_NOSTEAMSTLDEF"
@@ -3172,6 +3231,8 @@ function saveCfg {
 			echo "REDIRCOMPDATA=\"$REDIRCOMPDATA\""
 			echo "## $DESC_REDIRSTEAMUSER"
 			echo "REDIRSTEAMUSER=\"$REDIRSTEAMUSER\""
+			echo "## $DESC_ONLYPROTMAJORREDIRECT"
+			echo "ONLYPROTMAJORREDIRECT=\"$ONLYPROTMAJORREDIRECT\""
 			echo "## $DESC_AUTOBUMPGE"
 			echo "AUTOBUMPGE=\"$AUTOBUMPGE\""
 			echo "## $DESC_AUTOBUMPPROTON"
@@ -3234,6 +3295,8 @@ function saveCfg {
 			echo "MAHUBIN=\"$MAHUBIN\""
 			echo "## $DESC_MAHUARGS"
 			echo "MAHUARGS=\"$MAHUARGS\""
+			echo "## $DESC_MAHUDLSYM"
+			echo "MAHUDLSYM=\"$MAHUDLSYM\""
 			echo "## $DESC_LDPMAHU"
 			echo "LDPMAHU=\"$LDPMAHU\""
 			echo "## $DESC_MAHUVAR"
@@ -5007,8 +5070,10 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_USETRAYICON!$DESC_USETRAYICON ('USETRAYICON')":CHK "${USETRAYICON/#-/ -}" `#CAT_Gui` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_USENOTIFIER!$DESC_USENOTIFIER ('USENOTIFIER')":CHK "${USENOTIFIER/#-/ -}" `#CAT_Gui` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_HEADLINEFONT!$DESC_HEADLINEFONT ('HEADLINEFONT')":CB "$(cleanDropDown "${HEADLINEFONT/#-/ -}" "$FONTSIZES")" `#CAT_Gui` `#MENU_GLOBAL` \
+--field="     $GUI_YADFORCEXWAYLAND!$DESC_YADFORCEXWAYLAND ('YADFORCEXWAYLAND')":CHK "${YADFORCEXWAYLAND/#-/ -}" `#CAT_Gui` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_USEWINDECO!$DESC_USEWINDECO ('USEWINDECO')":CHK "${USEWINDECO/#-/ -}" `#CAT_Gui` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_DLGAMEDATA!$DESC_DLGAMEDATA ('DLGAMEDATA')":CHK "${DLGAMEDATA/#-/ -}" `#CAT_Gui` `#SUB_Checkbox` `#MENU_GLOBAL` \
+--field="     $GUI_DLSTEAMDECKCOMPATINFO!$DESC_DLSTEAMDECKCOMPATINFO ('DLSTEAMDECKCOMPATINFO')":CHK "${DLSTEAMDECKCOMPATINFO}" `#CAT_Gui` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_USEGAMEPICS!$DESC_USEGAMEPICS ('USEGAMEPICS')":CHK "${USEGAMEPICS/#-/ -}" `#CAT_Gui` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_USECUSTOMFALLBACKPIC!$DESC_USECUSTOMFALLBACKPIC ('USECUSTOMFALLBACKPIC')":CHK "${USECUSTOMFALLBACKPIC/#-/ -}" `#CAT_Gui` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_GITHUBUSER!$DESC_GITHUBUSER ('GITHUBUSER')":CBE "${GITHUBUSER/#-/ -}" `#CAT_Gui` `#MENU_GLOBAL` \
@@ -5084,6 +5149,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_AUTOLASTPROTON!$DESC_AUTOLASTPROTON ('AUTOLASTPROTON')":CHK "${AUTOLASTPROTON/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_REDIRCOMPDATA!$DESC_REDIRCOMPDATA ('REDIRCOMPDATA')":CB "$(cleanDropDown "${REDIRCOMPDATA/#-/ -}" "disabled!single-proton!global-proton")" `#CAT_Proton` `#MENU_GAME` \
 --field="     $GUI_REDIRSTEAMUSER!$DESC_REDIRSTEAMUSER ('REDIRSTEAMUSER')":CB "$(cleanDropDown "${REDIRSTEAMUSER/#-/ -}" "disabled!symlink!restore-backup")" `#CAT_Proton` `#MENU_GAME` \
+--field="     $GUI_ONLYPROTMAJORREDIRECT!$DESC_ONLYPROTMAJORREDIRECT ('ONLYPROTMAJORREDIRECT')":CHK "${ONLYPROTMAJORREDIRECT/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_AUTOBUMPGE!$DESC_AUTOBUMPGE ('AUTOBUMPGE')":CHK "${AUTOBUMPGE/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_AUTOBUMPPROTON!$DESC_AUTOBUMPPROTON ('AUTOBUMPPROTON')":CHK "${AUTOBUMPPROTON/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_PROTON_LOG!$DESC_PROTON_LOG $HOME/steam-$AID.log ('PROTON_LOG')":CHK "${PROTON_LOG/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
@@ -5176,7 +5242,8 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_USEMANGOAPP!$DESC_USEMANGOAPP ('USEMANGOAPP')":CHK "${USEMANGOAPP/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_MAHUVAR!$DESC_MAHUVAR ('MAHUVAR')":CHK "${MAHUVAR/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_MAHUBIN!$DESC_MAHUBIN ('MAHUBIN')":FL "${MAHUBIN/#-/ -}" `#CAT_Tools` `#MENU_GAME` \
---field="     $GUI_MAHUARGS!$DESC_MAHUARGS ('MAHUARGS')":CBE "${MAHUARGS/#-/ -}!--dlsym" `#CAT_Tools` `#MENU_GAME` \
+--field="     $GUI_MAHUARGS!$DESC_MAHUARGS ('MAHUARGS')":CBE "${MAHUARGS/#-/ -}!no_display!fps_limit=60,show_fps_limit!ram,vram!battery,battery_icon,gamepad_battery,gamepad_battery_icon!arch!gamemode!vsync!gl_vsync!vulkan_driver!wine" `#CAT_Tools` `#MENU_GAME` \
+--field="     $GUI_MAHUDLSYM!$DESC_MAHUDLSYM ('MAHUDLSYM')":CHK "${MAHUDLSYM}" `#CAT_Tools` `#MENU_GAME` \
 --field="     $GUI_LDPMAHU!$DESC_LDPMAHU ('LDPMAHU')":CHK "${LDPMAHU/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_USEMANGOHUDSTLCFG!$DESC_USEMANGOHUDSTLCFG ('USEMANGOHUDSTLCFG')":CHK "${USEMANGOHUDSTLCFG/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_USEGAMESCOPE!$DESC_USEGAMESCOPE ('USEGAMESCOPE')":CHK "${USEGAMESCOPE/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
@@ -5233,6 +5300,8 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_CP_PROTONGE!$DESC_CP_PROTONGE ('CP_PROTONGE')" "${CP_PROTONGE/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="     $GUI_CP_PROTONSTL!$DESC_CP_PROTONSTL ('CP_PROTONSTL')" "${CP_PROTONSTL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="     $GUI_CW_KRON4EK!$DESC_CW_KRON4EK ('CW_KRON4EK')" "${CW_KRON4EK/#-/ -}" `#CAT_Urls` `#MENU_URL` \
+--field="     $GUI_CW_LUTRIS!$DESC_CW_LUTRIS ('CW_LUTRIS')" "${CW_LUTRIS/#-/ -}" `#CAT_Urls` `#MENU_URL` \
+--field="     $GUI_CW_WINEGE!$DESC_CW_WINEGE ('CW_WINEGE')" "${CW_WINEGE/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="     $GUI_DL_D3D47_64!$DESC_DL_D3D47_64 ('DL_D3D47_64')" "${DL_D3D47_64/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="     $GUI_DL_D3D47_32!$DESC_DL_D3D47_32 ('DL_D3D47_32')" "${DL_D3D47_32/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="     $GUI_RESHADEDLURL!$DESC_RESHADEDLURL ('RESHADEDLURL')" "${RESHADEDLURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
@@ -5264,11 +5333,16 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_WAITVORTEX!$DESC_WAITVORTEX ('WAITVORTEX')":NUM "${WAITVORTEX/#-/ -}" `#CAT_Vortex` `#MENU_GAME` \
 --field="     $GUI_RUN_VORTEX_WINETRICKS!$DESC_RUN_VORTEX_WINETRICKS ('RUN_VORTEX_WINETRICKS')":CHK "${RUN_VORTEX_WINETRICKS/#-/ -}" `#CAT_Vortex` `#MENU_GAME` \
 --field="     $GUI_RUN_VORTEX_WINECFG!$DESC_RUN_VORTEX_WINECFG ('RUN_VORTEX_WINECFG')":CHK "${RUN_VORTEX_WINECFG/#-/ -}" `#CAT_Vortex` `#MENU_GAME` \
---field="     $GUI_USEVORTEXPRERELEASE!$DESCUSEVORTEXPRERELEASE ('USEVORTEXPRERELEASE')":CHK "${USEVORTEXPRERELEASE/#-/ -}" `#CAT_Vortex` `#SUB_Checkbox` `#MENU_GLOBAL`  \
+--field="     $GUI_USEVORTEXPRERELEASE!$DESC_USEVORTEXPRERELEASE ('USEVORTEXPRERELEASE')":CHK "${USEVORTEXPRERELEASE/#-/ -}" `#CAT_Vortex` `#SUB_Checkbox` `#MENU_GLOBAL`  \
+--field="     $GUI_DISABLEVORTEXAUTOUPDATE!$DESC_DISABLEVORTEXAUTOUPDATE ('DISABLEVORTEXAUTOUPDATE')":CHK "${DISABLEVORTEXAUTOUPDATE/#-/ -}" `#CAT_Vortex` `#SUB_Checkbox` `#MENU_GLOBAL`  \
+--field="     $GUI_VORTEXUSESLR!$DESC_VORTEXUSESLR ('VORTEXUSESLR')":CHK "${VORTEXUSESLR#-/ -}" `#CAT_Vortex` `#SUB_Checkbox` `#MENU_GLOBAL`  \
 --field="     $GUI_VORTEXDOWNLOADPATH!$DESC_VORTEXDOWNLOADPATH ('VORTEXDOWNLOADPATH')":DIR "${VORTEXDOWNLOADPATH/#-/ -}" `#CAT_Vortex` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_VORTEXCOMPDATA!$DESC_VORTEXCOMPDATA ('VORTEXCOMPDATA')":DIR "${VORTEXCOMPDATA/#-/ -}" `#CAT_Vortex` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_USEVORTEXPROTON!$DESC_USEVORTEXPROTON ('USEVORTEXPROTON')":CB "$(cleanDropDown "${USEVORTEXPROTON/#-/ -}" "$PROTYADLIST")" `#CAT_Vortex` `#MENU_GLOBAL` \
+--field="     $GUI_USEVORTEXCUSTOMVER!$DESC_USEVORTEXCUSTOMVER ('USEVORTEXCUSTOMVER')":CHK "${USEVORTEXCUSTOMVER#-/ -}" `#CAT_Vortex` `#SUB_checkbox` `#MENU_GLOBAL` \
+--field="     $GUI_VORTEXCUSTOMVER!$DESC_VORTEXCUSTOMVER ('VORTEXCUSTOMVER')":CBE "$( cleanDropDown "${VORTEXCUSTOMVER/#-/ -}" "v1.8.0!v1.7.0!v1.6.0!$NON" )" `#CAT_Vortex` `#SUB_checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_DISABLE_AUTOSTAGES!$(strFix "$DESC_DISABLE_AUTOSTAGES" "$PROGNAME") ('DISABLE_AUTOSTAGES')":CHK "${DISABLE_AUTOSTAGES/#-/ -}" `#CAT_Vortex` `#SUB_Checkbox` `#MENU_GLOBAL` \
+--field="     $GUI_VORTEXUSESLRPOSTINSTALL!$DESC_VORTEXUSESLRPOSTINSTALL ('VORTEXUSESLRPOSTINSTALL')":CHK "${VORTEXUSESLRPOSTINSTALL#-/ -}" `#CAT_Vortex` `#SUB_Checkbox` `#MENU_GLOBAL`  \
 --field="$(spanFont "$GUI_OPTSWINE" "H")":LBL "SKIP" `#CAT_Wine` `#HEAD_Wine` `#MENU_GAME` `#MENU_GLOBAL` \
 --field="     $GUI_USEWINE!$DESC_USEWINE ('USEWINE')":CHK "${USEWINE/#-/ -}" `#CAT_Wine` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_WINEVERSION!$DESC_WINEVERSION ('WINEVERSION')":CBE "$(cleanDropDown "${WINEVERSION/#-/ -}" "$WINEYADLIST")" `#CAT_Wine` `#MENU_GAME` \
@@ -5770,7 +5844,7 @@ function MainMenu {
 		fi
 		
 		if [ -f "$PDBRAINFO" ] && grep -q "[0-9]" "$PDBRAINFO" ;then
-			SETHEAD="$SETHEAD \n $(cat "$PDBRASINF")"
+			SETHEAD="$SETHEAD \n$(cat "$PDBRASINF")"
 			TT_OPENURL="$(cat "$PDBRAINFO")"
 		fi
 
@@ -5790,6 +5864,10 @@ function MainMenu {
 			fi	
 		fi
 		
+		# Fetch game exe from metadata files if not defined yet
+		if [ -z "$GAMEEXE" ]; then
+			GAMEEXE="$( basename "$( getGameExe "$AID" )" )"
+		fi
 		if [ -n "$GAMEEXE" ]; then
 			SETHEAD="$SETHEAD \n<b>${GUI_SGE}:</b> $GAMEEXE"
 		fi
@@ -5815,19 +5893,19 @@ function MainMenu {
 	--field="$FBUT_GUISET_RECREATEPFX":FBTN "$(realpath "$0") ccd \"$AID\" \"s\"" \
 	--field="$FBUT_GUISET_WDC":FBTN "$(realpath "$0") wdc \"$AID\"" \
 	--field="$FBUT_GUISET_WTSEL":FBTN "$(realpath "$0") wt \"$AID\"" \
-	--field="$FBUT_GUISET_ADDNSGA":FBTN "$(realpath "$0") ansg" \
+	--field="$FBUT_GUISET_ADDNSGA!$TT_ADDNSGA":FBTN "$(realpath "$0") ansg" \
 	--field="$FBUT_GUISET_CREATEEVALSC":FBTN "$(realpath "$0") cfi \"$AID\"" \
-	--field="$FBUT_GUISET_OTR":FBTN "$(realpath "$0") otr \"$AID\"" \
+	--field="$FBUT_GUISET_OTR!$TT_OTR":FBTN "$(realpath "$0") otr \"$AID\"" \
 	--field="$FBUT_GUISET_DXHSEL":FBTN "$(realpath "$0") dxh \"$AID\"" \
-	--field="$FBUT_GUISET_SHADERREPOS":FBTN "$(realpath "$0") update shaders repos" \
-	--field="$FBUT_GUISET_UPSHADER":FBTN "$(realpath "$0") update gameshaders \"$SHADDESTDIR\"" \
-	--field="$FBUT_GUISET_FAVSEL":FBTN "$(realpath "$0") fav \"$AID\" set"\
+	--field="$FBUT_GUISET_SHADERREPOS!$TT_SHADERREPOS":FBTN "$(realpath "$0") update shaders repos" \
+	--field="$FBUT_GUISET_UPSHADER!$TT_UPSHADER":FBTN "$(realpath "$0") update gameshaders \"$SHADDESTDIR\"" \
+	--field="$FBUT_GUISET_FAVSEL!$TT_FAVSEL":FBTN "$(realpath "$0") fav \"$AID\" set"\
 	--field="$FBUT_GUISET_BLOCKCAT":FBTN "$(realpath "$0") block" \
-	--field="$FBUT_GUISET_SORTCAT":FBTN "$(realpath "$0") sort" \
+	--field="$FBUT_GUISET_SORTCAT!$TT_SORTCAT":FBTN "$(realpath "$0") sort" \
 	--field="$FBUT_GUISET_OPURL!$TT_OPENURL":FBTN "$(realpath "$0") hu \"$AID\" X" \
-	--field="$FBUT_GUISET_GASCO":FBTN "$(realpath "$0") gs \"$AID\" \"$GN\"" \
-	--field="$FBUT_GUISET_VORTEX":FBTN "$(realpath "$0") vortex gui" \
-	--field="$FBUT_GUISET_MO":FBTN "$(realpath "$0") mo2 start" \
+	--field="$FBUT_GUISET_GASCO!$TT_GASCO":FBTN "$(realpath "$0") gs \"$AID\" \"$GN\"" \
+	--field="$FBUT_GUISET_VORTEX!$TT_VORTEX":FBTN "$(realpath "$0") vortex gui" \
+	--field="$FBUT_GUISET_MO!$TT_MO":FBTN "$(realpath "$0") mo2 start" \
 	--field="$FBUT_GUISET_WIKI":FBTN "$(realpath "$0") wiki" \
 	--field="$GUI_GAFI!$TT_GAFI":FBTN "$(realpath "$0") gf \"$AID\"" \
 	--button="$BUT_EXIT":0 \
@@ -6232,7 +6310,7 @@ function gitUpdate {
 		fi
 	fi
 }
-# Get the last N tagged releases from PROJURL taken from sonic2kk
+
 function fetchGitHubTags {
     PROJURL="$1"
     N="$2"
@@ -7155,23 +7233,18 @@ function getIDFromTitle {
 	if [ -z "$1" ]; then
 		echo "A Game Title (part of it might be enough) is required as argument"
 	else
-		# Search for all meta files with a partial match for their `NAME` field
-		# Search on `NAME` primarily, fallback to `GAMENAME`
-		mapfile -t MATCHES < <(grep -i "^NAME=.*.$1" "$GEMETA" -R)
-		if [ -z "${MATCHES[*]}" ]; then
-			mapfile -t MATCHES < <(grep -i "^GAMENAME=.*.$1" "$GEMETA" -R)
-		fi
-
-		# Echo all matches in format "AppID (Game Name)"
-		if [ -n "${MATCHES[*]}"  ]; then
-			for i in "${MATCHES[@]}"
-			do
-				MATCH_AID="$( echo "${i##*/}" | awk -F'.conf:' '{print $1}' )"
-				MATCH_NAME="$( echo "${i##*/}" | awk -F'NAME="' '{print $2}' )"
-				MATCH_NAME="$( echo "${MATCH_NAME::-1}" | xargs )"
-
-				printf '%s\t\t(%s)\n' "$MATCH_AID" "$MATCH_NAME"
-			done
+		# Check installed game appmanifests for name matches
+		FOUNDMATCHES=()
+		while read -r APPMA; do
+			APPMATITLE="$( getValueFromAppManifest "name" "$APPMA" )"
+			if [[ ${APPMATITLE,,} == *"${1,,}"* ]]; then
+				APPMAAID="$( basename "${APPMA%.*}" | cut -d '_' -f2 )"
+				FOUNDGAMNAM="$( printf "%s\t\t(%s)" "$APPMAAID" "$APPMATITLE" )"  # Doing it this way makes tabs even for some reason
+				FOUNDMATCHES+=( "$FOUNDGAMNAM" )
+			fi
+		done <<< "$( listAppManifests )"
+		if [ "${#FOUNDMATCHES[@]}" -gt 0 ]; then
+			printf "%s\n" "${FOUNDMATCHES[@]}"
 		else
 			echo "Could not find AppID for name '$1'."
 		fi
@@ -7203,24 +7276,36 @@ function getTitleFromID {
 	fi
 }
 
-function getExeFromID {
+# Relies on game executable existing in STL meta file (i.e. any game launched before with STL)
+function getGameExe {
 	if [ -z "$1" ]; then
 		echo "A Game ID is required as argument"
 	else
-		if [ -f "$GEMETA/${1}.conf" ]; then
+		INAID="$1"
+		EXE=""
+		NOTFOUNDSTR="No Executable or SteamTinkerLaunch file found for '$1'"
+
+		# Try to get appid from game name -- If nultiple values, just pick first one
+		if ! [ "$INAID" -eq "$INAID" ] 2>/dev/null; then
+			INAID="$( getIDFromTitle "$INAID" | head -n1 )"
+			INAID="$( trimWhitespaces "${INAID%(*}")"
+		fi
+
+		EXEGAMNAM="$( getTitleFromID "$INAID" )"
+
+		if [ -n "$INAID" ] && [ -f "$GEMETA/${INAID}.conf" ]; then
 			# Some games might only have "EXECUTABLE" in their meta conf file
-			EXE="$(grep "^EXECUTABLE" "$GEMETA/${1}.conf" | cut -d '"' -f2)"
+			EXE="$(grep "^EXECUTABLE" "$GEMETA/${INAID}.conf" | cut -d '"' -f2)"
 			if [ -z "${EXE}" ]; then
-				EXE="$(grep "^GAMEEXE" "$GEMETA/${1}.conf" | cut -d '"' -f2)"
+				EXE="$(grep "^GAMEEXE" "$GEMETA/${INAID}.conf" | cut -d '"' -f2)"
 			fi
-			
-			if [ -n "${EXE}" ]; then
-				echo "$EXE"
-				return
+
+			if [ -n "$EXE" ]; then
+				EXE="$EXEGAMNAM ($INAID) -> $( getGameDir "$INAID" "only" )/$EXE"
 			fi
 		fi
 
-		echo "No Executable or SteamTinkerLaunch file found for '$1'"
+		echo "${EXE:-$NOTFOUNDSTR}"
 	fi
 }
 
@@ -7228,18 +7313,22 @@ function getCompatData {
 	if [ -z "$1" ]; then
 		echo "A Game ID or Game Title is required as argument"
 	else
+		# Sometimes the name here is not extact e.g. "SonicFrontiers" for "Sonic Frontiers", so the else fallback fetches using getGameDir
+		# If the compat folder doesn't exist *at all* then the final else will get triggered, but this should probably always exist (even if its empty)
 		if [ -d "$STLCOMPDAT" ]; then
 			unset FCOMPDAT
-			if [ "$1" -eq "$1" ] 2>/dev/null; then
+
+			# Skips games which have ';' in the name (i.e. "ROBOTICS;NOTES"), as this throws off the 'cut' command, and instead we fall back to the getGameDir check
+			if [ "$1" -eq "$1" ] 2>/dev/null; then  # This is for AppID check (-eq will fail if not integer expression)
 				while read -r "complink"; do
-				TEST="$(readlink "$complink" | grep "/$1$")"
-				if [ -d "$TEST" ]; then
-					FCOMPDAT="${complink##*/};$TEST"
-				fi
+					TEST="$(readlink "$complink" | grep "/$1$")"
+					if [ -d "$TEST" ] && ! [[ "${complink##*/}" == *";"* ]]; then
+						FCOMPDAT="${complink##*/};$TEST"
+					fi
 				done <<< "$(find "$STLCOMPDAT")"
-			else
+			else  # This is for Game Name checks
 				TEST="$(find "$STLCOMPDAT" -iname "*${1}*" | head -n1)"
-				if [ -n "$TEST" ]; then
+				if [ -n "$TEST" ] && ! [[ "${TEST##*/}" == *";"* ]]; then
 					FCOMPDAT="${TEST##*/};$(readlink "$TEST")"
 				fi
 			fi
@@ -7251,7 +7340,27 @@ function getCompatData {
 
 				echo "${COMPATGAMENAME} (${COMPATGAMEAID}) -> ${COMPATGAMEPATH}"
 			else
-				echo "No $CODA dir found for '$1'"
+				# If no symlink found in STL dir, check the game's library folder, with fallback to the Steam root library folder (i.e. non-steam games)
+				writelog "INFO" "${FUNCNAME[0]} - Could not find compatdata named in STL symlink dir, searching with getGameLibraryFolder..."
+				SEARCHGAMEDIR="$( getGameDir "$1" )"
+
+				COMPATGAMESTR=""  # Final output string
+				NOTFOUNDSTR="No $CODA dir found for '$1'"
+				COMPATGAMEPATH="${SEARCHGAMEDIR##*-> }"
+				if [ -d "$COMPATGAMEPATH" ]; then
+					COMPATGAMENAME="$( echo "${SEARCHGAMEDIR%(*}" | xargs )" # e.g. TEKKEN 7
+					COMPATGAMEAID="$( echo "$SEARCHGAMEDIR" | grep -oE '\([^)]+\)' | tail -n1 | sed 's:(::g;s:)::g' )"  # e.g. 389730
+
+					LIFOCOMPATDIR="$( realpath "$COMPATGAMEPATH/../../$CODA/$COMPATGAMEAID" )"
+					SROOTCOMPATDIR="$SROOT/$SA/$CODA/$COMPATGAMEAID"
+
+					COMPATDATADIR="$( [ -d "$LIFOCOMPATDIR" ] && echo "$LIFOCOMPATDIR" || echo "$SROOTCOMPATDIR" )"
+					if [ -d "$COMPATDATADIR" ]; then
+						COMPATGAMESTR="$COMPATGAMENAME ($COMPATGAMEAID) -> $COMPATDATADIR"
+					fi
+				fi
+
+				echo "${COMPATGAMESTR:-$NOTFOUNDSTR}"
 			fi
 		else
 			echo "No $CODA dir found for '$1'"
@@ -7262,10 +7371,8 @@ function getCompatData {
 # Credit to StackOverflow community wiki
 function trimWhitespaces {
 	INSTR="$*"
-	# remove leading whitespace characters
-	INSTR="${INSTR#"${INSTR%%[![:space:]]*}"}"
-	# remove trailing whitespace characters
-	INSTR="${INSTR%"${INSTR##*[![:space:]]}"}"
+	INSTR="${INSTR#"${INSTR%%[![:space:]]*}"}"  # remove leading whitespace characters
+	INSTR="${INSTR%"${INSTR##*[![:space:]]}"}"  # remove trailing whitespace characters
 	echo "$INSTR"
 }
 
@@ -8092,7 +8199,7 @@ function setFullGameExePath {
 		fi
 
 		if [ "$CUSTOMCMDRESHADE" -eq 0 ]; then
-			writelog "INFO" "${FUNCNAME[0]} - User did not enable 'CUSTOMCMDRESHADE' - Using the game's exe directroy as the ReShade installation directory"
+			writelog "INFO" "${FUNCNAME[0]} - User did not enable 'CUSTOMCMDRESHADE' - Using the game's exe directory as the ReShade installation directory"
 		fi
 		setShaderDest
 		if [ -n "$SHADDESTDIR" ]; then
@@ -8581,8 +8688,7 @@ function checkReshade {
 		fi
 		sort "$RSOLIST" -u -o "$RSOLIST"
 	fi
-	#
-	
+
 	if [ "$USERESHADE" -eq 1 ]; then
 		if [ -f "$FRSINI" ]; then
 			if grep -q "EffectSearchPaths=.\$RSSUB\Shaders" "$FRSINI"; then
@@ -9204,10 +9310,14 @@ function askSettings {
 
 				# Tested and this should not break Non-Steam Games - Open an issue if it does!
 				prepareSteamDeckCompatInfo
-				STEAMDECKCOMPATOUT="<b>$GUI_SDCR:</b> ${STEAMDECKCOMPATRATING:$STEAMDECKCOMPAT_UNKNOWN}"
-				if ! [ -f "$STLGDECKCOMPAT/${AID}-deckcompatrating.json" ]; then
+				if [ ! -f "$STLGDECKCOMPAT/${AID}-deckcompatrating.json" ] && [ "$DLSTEAMDECKCOMPATINFO" -eq 1 ]; then
 					# If the Steam Deck compat rating json doesn't exist, assume something messed up e.g. offline or JQ is not installed
 					writelog "INFO" "${FUNCNAME[0]} - Could not retrieve Steam Deck compatibility rating, defaulting to $STEAMDECKCOMPAT_UNKNOWN - Maybe '$JQ' is missing or we are offline?"
+				fi
+
+				if [ -n "$STEAMDECKCOMPATRATING" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Fetched Steam Deck compatibility info, will show on wait requester"
+					STEAMDECKCOMPATOUT="<b>$GUI_SDCR:</b> ${STEAMDECKCOMPATRATING:$STEAMDECKCOMPAT_UNKNOWN}"
 				fi
 
 				writelog "INFO" "${FUNCNAME[0]} - Steam Deck compatibility rating string is '$STEAMDECKCOMPATOUT'"
@@ -9719,10 +9829,11 @@ function setGameScopeVars {
 		UNESCAPED_FLAG="$2"
 		FLAG="${2//-/\\-}"  # e.g. "--hdr-enabled" becomes "\-\-hdr\-enabled"
 		VAR="$3"  # e.g. "$GSHDR"
-		TRUEVAL="$4"  # e.g. "1"
-		DEFVAL="$5"  # e.g. "0"
+		TRUEVAL="$4"  # e.g. "1" (on UI)
+		DEFVAL="$5"  # e.g. "0" (on UI)
 		ARGTYPE="${6,,}"  # e.g. "chk", "cb", etc (matches Yad widget types mostly)
 
+		# Set values for undefined arguments
 		if [ -z "$VAR" ]; then
 			if grep -qw "$FLAG" <<< "$ARGS"; then
 				if [[ $ARGTYPE =~ "cb" ]] || [[ $ARGTYPE =~ "num" ]]; then
@@ -9786,6 +9897,9 @@ function setGameScopeVars {
 		# Force grab cursor -- Keeps cursor inside GameScope nested display -- Checkbox
 		GSFGC="$( getGameScopeArg "$GAMESCOPE_ARGS" "--force-grab-cursor" "$GSFGC" "1" "0" )"
 
+		# Force grab keyboard -- Keeps keyboard input locked to GameScope nested display -- Checkbox
+		GSFGK="$( getGameScopeArg "$GAMESCOPE_ARGS" "-g" "$GSFGK" "1" "0" )"
+
 		# Orientation (--force-orientation) -- Can be either 'left', 'right', 'normal', 'upsidedown' (Defaults to 'normal') -- Dropdown
 		# NOTE: Passing this normally to GameScope (e.g. `gamescope --force-orientation upsidedown -- supertuxkart`) doesn't seem to do anything?
 		GSFOOR="$( getGameScopeArg "$GAMESCOPE_ARGS" "--force-orientation" "$GSFOOR" "" "$GSNORM" "cb")"
@@ -9795,24 +9909,65 @@ function setGameScopeVars {
 		GSCURSOR="$( getGameScopeArg "$GAMESCOPE_ARGS" "--cursor" "$GSCURSOR" "" "" "path" )"
 		if [ -n "$GSCURSOR" ]; then  GSENABLECUSTCUR="1"; fi
 
-		# There is a `--cursor-scale-height` option, but at time of writing (15/02/22) this doesn't seem to do anything - We can add it in future, but not now
+		# There is a `--cursor-scale-height` option, but at time of writing (15/02/23) this doesn't seem to do anything - We can add it in future, but not now
+		# There is a `--framerate-limit` option, but I am not totally sure how it differs from -r/-o -- I tested it out and the behaviour seemed identical? Maybe one works in both nested/embedded and the other doesn't, not sure...
 	}
 
 	function getGameScopeFilteringOpts {
+		# Equivalent to check for --fsr-sharpness or --sharpness, so should work fine
+		if grep -q "\-\-filter" <<< "$("$(command -v "$GAMESCOPE")" --help 2>&1)"; then
+			GSNEWFILTERMODE=1  # Even though it's called NEWFILTERMODE, it also applies to scaling - Naming is hard
+		fi
+
+		# Default scale/filter to none to be safe
+		if [ "$GSNEWFILTERMODE" -eq 1 ]; then
+			## !!These are the newer flags for checking filter/scale!!
+			#
+			# Filtering option (-F) -- Combobox (replaces old individual Nearest/FSR/NIS options)
+			GSFLTR="$( getGameScopeArg "$GAMESCOPE_ARGS" "-F" "$GSFLTR" "" "$NON" "cb" )"
+
+			# Scaling option (-S) -- Combobox (replaces old individual Integer Scaling option)
+			GSSCALE="$( getGameScopeArg "$GAMESCOPE_ARGS" "-S" "$GSSCALE" "" "$NON" "cb" )"
+		else
+			## !!These are legacy flags with individual switches!!
+			## These values are checked for and used to apply the correct filter selection
+			## on the UI (i.e. passing -U will select FSR for the filter dropdown)
+			##
+			## Scale
+			# Integer scaling (-i)
+			GSIS="$( getGameScopeArg "$GAMESCOPE_ARGS" "-i" "$GSIS" "1" "" )"
+			if [ -n "$GSIS" ]; then
+				GSSCALE="integer"  # This is hardcoded but /shrug, this is probably not going to matter when parsing a legacy GameScope switch
+			fi
+
+			## Filtering (no default values so that if these aren't in the gamescope args, they are -z)
+			# Nearest Neighbor (-n)
+			GSNN="$( getGameScopeArg "$GAMESCOPE_ARGS" "-n" "$GSNN" "nearest" "" )"
+
+			# FidelityFX 1.0 enabled (-U)
+			GSFSR="$( getGameScopeArg "$GAMESCOPE_ARGS" "-U" "$GSFSR" "fsr" "" )"
+
+			# NVIDIA Image Scaling v1.0.3 (-Y) -- Checkbox
+			GSNIS="$( getGameScopeArg "$GAMESCOPE_ARGS" "-Y" "$GSNIS" "nis" "" )"
+
+
+			# This copies the way GameScope prioritises the check (see parse_upscaler_filter in GameScope main.cpp)
+			# This maps the old-style filter switches (-U, -Y, -n) to the GameScope dropdowns
+			#
+			# Eventually this will no longer be needed, once a suitable length of time has passed, but for now it exists
+			# to serve as backwards compatibility for users between GameScope versions. Once `-F`/`-S` are standard, we
+			# can remove this code
+			if [ -n "$GSNN" ]; then
+				GSFLTR="nearest"
+			elif [ -n "$GSFSR" ]; then
+				GSFLTR="fsr"
+			elif [ -n "$GSNIS" ]; then
+				GSFLTR="nis"
+			fi
+		fi
+
 		# AMD FidelityFX 1.0 / NVIDIA Image Sharpening upscaler value -- Spinner
 		GSFSRS="$( getGameScopeArg "$GAMESCOPE_ARGS" "--fsr-sharpness" "$GSFSRS" "" "2" "num" )"
-
-		# Integer scaling (-i) -- Checkbox
-		GSIS="$( getGameScopeArg "$GAMESCOPE_ARGS" "-i" "$GSIS" "1" "0" )"
-
-		# Nearest Neighbor (-n) -- Checkbox
-		GSNN="$( getGameScopeArg "$GAMESCOPE_ARGS" "-n" "$GSNN" "1" "0" )"
-
-		# FidelityFX 1.0 enabled (-U) -- Checkbox
-		GSFSR="$( getGameScopeArg "$GAMESCOPE_ARGS" "-U" "$GSFSR" "1" "0" )"
-
-		# NVIDIA Image Scaling v1.0.3 (-Y) -- Checkbox
-		GSNIS="$( getGameScopeArg "$GAMESCOPE_ARGS" "-Y" "$GSNIS" "1" "0" )"
 
 		# Max Scale Factor -- No idea how this option actually works, the documentation is a bit sparce but Steam Deck seems to default it to 2 (https://github.com/Plagman/gamescope/issues/588#issue-1338038588)
 		GSMSF="$( getGameScopeArg "$GAMESCOPE_ARGS" "-m" "$GSMSF" "" "0" "num" )"
@@ -9825,7 +9980,7 @@ function setGameScopeVars {
 		# HDR Wide Gammut for SDR (--hdr-wide-gammut-for-sdr) - Checkbox
 		GSHDRWGFS="$( getGameScopeArg "$GAMESCOPE_ARGS" "--hdr-wide-gammut-for-sdr" "$GSHDRWGFS" "1" "0" )"
 
-		# HDR SDR Content Nits (--hdr-sdr-content-nits) -- Defaults to 203 -- Numberbox
+		# HDR SDR Content Nits (--hdr-sdr-content-nits) -- Defaults to 400 -- Numberbox
 		GSHDRSCNITS="$( getGameScopeArg "$GAMESCOPE_ARGS" "--hdr-sdr-content-nits" "$GSHDRSCNITS" "1" "0" )"
 
 		# HDR Inverse Tone Mapping Enabled (--hdr-itm-enable) -- Checkbox
@@ -9844,6 +9999,9 @@ function setGameScopeVars {
 		#
 		# Like `GSHDRITMSDRNITS`, we default to 0 because we don't want to always pass a value
 		GSHDRITMTGTNITS="$( getGameScopeArg "$GAMESCOPE_ARGS" "--hdr-itm-target-nits" "$GSHDRITMTGTNITS" "" "0" "num" )"
+
+		# There is a --sdr-gamut-wideness option which takes a (float?) value between 0 and 1. Not sure how this is used or what the default is,
+		# so it is not added for now, but it could be added in future if requested/once more is known about it
 	}
 
 	function getGameScopeVROpts {
@@ -9864,6 +10022,9 @@ function setGameScopeVars {
 		# SteamVR Default Name when no window title available (--vr-overlay-default-name) -- Textbox
 		GSVRDEFNAM="$( getGameScopeArg "$GAMESCOPE_ARGS" "--vr-overlay-default-name" "$GSVRDEFNAM" "" "" "txt" )"	
 
+		# SteamVR Overlay Key String (--vr-overlay-key) -- Textbox
+		GSVROVERLAYKEY="$( getGameScopeArg "$GAMESCOPE_ARGS" "--vr-overlay-key" "$GSVROVERLAYKEY" "" "" "txt" )"
+
 		# SteamVR Overlay Icon (--vr-overlay-icon) -- Similar to cursor picker -- File picker 
 		GSVRICONENABLE="0"
 		GSVRICON="$( getGameScopeArg "$GAMESCOPE_ARGS" "--vr-overlay-icon" "$GSVRICON" "" "" "path" )"
@@ -9880,6 +10041,9 @@ function setGameScopeVars {
 
 		# Enable SteamVR Close Button on Control Bar (--vr-overlay-enable-control-bar-close) -- Checkbox
 		GSVRCONTROLBARCLOSE="$( getGameScopeArg "$GAMESCOPE_ARGS" "--vr-overlay-enable-control-bar-close" "$GSVRCONTROLBARCLOSE" "1" "0" )"
+
+		# VR Trackpad Scroll Speed (--vr-scrolls-speed) -- Spinner
+		GSVRSCROLLSSPEED="$( getGameScopeArg "$GAMESCOPE_ARGS" "--vr-scrolls-speed" "$GSVRSCROLLSSPEED" "" "8.0" "num" )"
 
 		# Show SteamVR Overlay as Modal (--vr-overlay-modal) -- Checkbox
 		GSVRMODAL="$( getGameScopeArg "$GAMESCOPE_ARGS" "--vr-overlay-modal" "$GSVRMODAL" "1" "0" )"
@@ -9947,6 +10111,9 @@ function setGameScopeVars {
 
 		# Realtime Scheduling (--rt) -- Checkbox
 		GSRT="$( getGameScopeArg "$GAMESCOPE_ARGS" "--rt" "$GSRT" "1" "0" )"
+
+		# Headless (--headless) -- Checkbox
+		GSHDLS="$( getGameScopeArg "$GAMESCOPE_ARGS" "--headless" "$GSHDLS" "1" "0" )"
 	}
 
 	# Set storage vars
@@ -9954,6 +10121,8 @@ function setGameScopeVars {
 	FSRS_STR="\-\-fsr\-sharpness"
 	GSNORM="normal"
 	GSFOOROPTS="left!right!${GSNORM}!upsidedown"
+	GSFLTROPTS="$NON!linear!nearest!fsr!nis"
+	GSSCALEOPTS="$NON!auto!integer!fit!fill!stretch"
 	GSDEF="default"
 	GSHOVER="hover:0"
 	GSLEFTCLICK="leftclick:1"
@@ -9962,6 +10131,7 @@ function setGameScopeVars {
 	GSPASSTHRU="passthrough:4"
 	GSTOUCHMODES="${GSDEF}!${GSHOVER}!${GSLEFTCLICK}!${GSRIGHTCLICK}!${GSMIDDLECLICK}!${GSPASSTHRU}" # Corresponds to 0,1,2,3,4 respectively internally by GameScope -- Default is ingored and the flag is not passed to GameScope
 	GSDRMMODES="${GSDEF}!cvt!fixed"
+	GSNEWFILTERMODE=0  # Whether gamescope uses -U/-Y/-n/-i (legacy) or -F/-S (new)
 
 	# Get values for UI elements based on existing GameScope args 
 	getGameScopeGeneralOpts
@@ -10006,15 +10176,14 @@ function GameScopeGui {
 			--field="$GUI_GSSE!$DESC_GSSE ('GSSE')":CHK "$GSSE" \
 			--field="$GUI_GSFWF!$DESC_GSFWF ('GSFWF')":CHK "$GSFWF" \
 			--field="$GUI_GSFGC!$DESC_GSFGC ('GSFGC')":CHK "$GSFGC" \
+			--field="$GUI_GSFGK!$DESC_GSFGK ('GSFGK')":CHK "$GSFGK" \
 			--field="$GUI_GSFOOR!$DESC_GSFOOR ('GSFOOR')":CB "$(cleanDropDown "${GSFOOR}" "${GSFOOROPTS}")" \
 			--field="$GUI_GSENABLECUSTCUR!$GUI_GSENABLECUSTCUR ('GSENABLECUSTCUR')":CHK "$GSENABLECUSTCUR" \
 			--field="$GUI_GSCURSOR!$DESC_GSCURSOR ('GSCURSOR')":FL "${GSCURSOR/#-/ -}" \
 			--field="$(spanFont "$GUI_GSFILTERINGSET" "H")":LBL "SKIP" \
+			--field="$GUI_GSFLTR!$DESC_GSFLTR ('GSFLTR')":CBE "$(cleanDropDown "${GSFLTR}" "${GSFLTROPTS}")" \
+			--field="$GUI_GSSCALE!$DESC_GSSCALE ('GSSCALE')":CBE "$(cleanDropDown "${GSSCALE}" "${GSSCALEOPTS}")" \
 			--field="$GUI_GSFSRS!$DESC_GSFSRS ('GSFSRS')":NUM "${GSFSRS/#-/ -}:!0..20" \
-			--field="$GUI_GSIS!$DESC_GSIS ('GSIS')":CHK "$GSIS" \
-			--field="$GUI_GSNN!$DESC_GSNN ('GSNN')":CHK "$GSNN" \
-			--field="$GUI_GSFSR!$DESC_GSFSR ('GSFSR')":CHK "$GSFSR" \
-			--field="$GUI_GSNIS!$DESC_GSNIS ('GSNIS')":CHK "$GSNIS" \
 			--field="$GUI_GSMSF!$DESC_GSMSF ('GSMSF')":NUM "$GSMSF" \
 			--field="$(spanFont "$GUI_GSHDRSET" "H")":LBL "SKIP" \
 			--field="$GUI_GSHDR!$DESC_GSHDR ('GSHDR')":CHK "$GSHDR" \
@@ -10027,12 +10196,14 @@ function GameScopeGui {
 			--field="$GUI_GSVR!$DESC_GSVR ('GSVR')":CHK "$GSVR" \
 			--field="$GUI_GSVREXNA!$DESC_GSVREXNA ('GSVREXNA')" "$GSVREXNA" \
 			--field="$GUI_GSVRDEFNAM!$DESC_GSVRDEFNAM ('GSVRDEFNAM')" "$GSVRDEFNAM" \
+			--field="$GUI_GSVROVERLAYKEY!$DESC_GSVROVERLAYKEY ('GSVROVERLAYKEY')" "$GSVROVERLAYKEY" \
 			--field="$GUI_GSVRICONENABLE!$DESC_GSVRICONENABLE ('GSVRICONENABLE')":CHK "$GSVRICONENABLE" \
 			--field="$GUI_GSVRICON!$DESC_GSVRICON ('GSVRICON')":FL "${GSVRICON//\"}" \
 			--field="$GUI_GSVRSHOIMM!$DESC_GSVRSHOIMM ('GSVRSHOIMM')":CHK "$GSVRSHOIMM" \
 			--field="$GUI_GSVRCONTROLBAR!$DESC_GSVRCONTROLBAR ('GSVRCONTROLBAR')":CHK "$GSVRCONTROLBAR" \
 			--field="$GUI_GSVRCONTROLBARKEYBOARD!$DESC_GSVRCONTROLBARKEYBOARD ('GSVRCONTROLBARKEYBOARD')":CHK "$GSVRCONTROLBARKEYBOARD" \
 			--field="$GUI_GSVRCONTROLBARCLOSE!$DESC_GSVRCONTROLBARCLOSE ('GSVRCONTROLBARCLOSE')":CHK "$GSVRCONTROLBARCLOSE" \
+			--field="$GUI_GSVRSCROLLSSPEED!$DESC_GSVRSCROLLSSPEED ('GSVRSCROLLSSPEED')":NUM "$GSVRSCROLLSSPEED" \
 			--field="$GUI_GSVRMODAL!$DESC_GSVRMODAL ('GSVRMODAL')":CHK "$GSVRMODAL" \
 			--field="$(spanFont "$GUI_GSEMBEDDEDSET" "H")":LBL "SKIP" \
 			--field="$GUI_GSDEFTOUCHMODE!$DESC_GSDEFTOUCHMODE ('GSDEFTOUCHMODE')":CB "$(cleanDropDown "${GSDEFTOUCHMODE}" "${GSTOUCHMODES}")" \
@@ -10051,14 +10222,21 @@ function GameScopeGui {
 			--field="$GUI_GSPREFERVKDEVICE!$DESC_GSPREFERVKDEVICE ('GSPREFERVKDEVICE')":CHK "$GSPREFERVKDEVICE" \
 			--field="$GUI_GSWAYLAND!$DESC_GSWAYLAND ('GSWAYLAND')":CHK "$GSWAYLAND" \
 			--field="$GUI_GSRT!$DESC_GSRT ('GSRT')":CHK "$GSRT" \
-			--button="$BUT_CAN:0" --button="$BUT_DONE:2" "$GEOM"
+			--field="$GUI_GSHDLS!$DESC_GSHDLS ('GSHDLS')":CHK "$GSHDLS" \
+			--button="$BUT_CAN:0" --button="$BUT_DGM:2" --button="$BUT_DONE:4" "$GEOM"
 			)"
 			case $? in
 				0)	{
 						writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_CAN' - Exiting"
 					}
 				;;
-				2)	{
+				2)  {
+						writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_DGM' - Resetting GameScope options to default"
+						GameScopeReset
+						GameScopeGui
+				    }
+				;;
+				4)	{
 						# TODO This section could still be simplified a bit further probably
 						
 						# Get selected GameScope options
@@ -10074,51 +10252,53 @@ function GameScopeGui {
 						GSSE="${GSARR[8]}"
 						GSFWF="${GSARR[9]}"
 						GSFGC="${GSARR[10]}"
-						GSFOOR="${GSARR[11]}"
-						GSENABLECUSTCUR="${GSARR[12]}"
-						GSCURSOR="${GSARR[13]}"
-						# GSARR[14] is the Filtering heading
-						GSFSRS="${GSARR[15]}"
-						GSIS="${GSARR[16]}"
-						GSNN="${GSARR[17]}"
-						GSFSR="${GSARR[18]}"
-						GSNIS="${GSARR[19]}"
-						GSMSF="${GSARR[20]}"
-						# GSARR[21] is the HDR heading
-						GSHDR="${GSARR[22]}"
-						GSHDRWGFS="${GSARR[23]}"
-						GSHDRSCNITS="${GSARR[24]}"
-						GSHDRITM="${GSARR[25]}"
-						GSHDRITMSDRNITS="${GSARR[26]}"
-						GSHDRITMTGTNITS="${GSARR[27]}"
-						# GSARR[28] is the VR heading
-						GSVR="${GSARR[29]}"
-						GSVREXNA="${GSARR[30]}"
-						GSVRDEFNAM="${GSARR[31]}"
+						GSFGK="${GSARR[11]}"
+						GSFOOR="${GSARR[12]}"
+						GSENABLECUSTCUR="${GSARR[13]}"
+						GSCURSOR="${GSARR[14]}"
+						# GSARR[15] is the Filtering heading
+						GSFLTR="${GSARR[16]}"
+						GSSCALE="${GSARR[17]}"
+						GSFSRS="${GSARR[18]}"
+						GSMSF="${GSARR[19]}"
+						# GSARR[20] is the HDR heading
+						GSHDR="${GSARR[21]}"
+						GSHDRWGFS="${GSARR[22]}"
+						GSHDRSCNITS="${GSARR[23]}"
+						GSHDRITM="${GSARR[24]}"
+						GSHDRITMSDRNITS="${GSARR[25]}"
+						GSHDRITMTGTNITS="${GSARR[26]}"
+						# GSARR[27] is the VR heading
+						GSVR="${GSARR[28]}"
+						GSVREXNA="${GSARR[29]}"
+						GSVRDEFNAM="${GSARR[30]}"
+						GSVROVERLAYKEY="${GSARR[31]}"
 						GSVRICONENABLE="${GSARR[32]}"
 						GSVRICON="${GSARR[33]}"
 						GSVRSHOIMM="${GSARR[34]}"
 						GSVRCONTROLBAR="${GSARR[35]}"
 						GSVRCONTROLBARKEYBOARD="${GSARR[36]}"
 						GSVRCONTROLBARCLOSE="${GSARR[37]}"
-						GSVRMODAL="${GSARR[38]}"
-						# GSARR[39] is the Embedded heading
-						GSDEFTOUCHMODE="${GSARR[40]}"
-						GSIMMEDIATEFLIPS="${GSARR[41]}"
-						GSADAPTIVESYNC="${GSARR[42]}"
-						GSPREFOUT="${GSARR[43]}"
-						GSDRMMODE="${GSARR[44]}"
-						# GSARR[45] is the Advanced heading
-						GSSTATSPATHENABLE="${GSARR[46]}"
-						GSSTATSPATH="${GSARR[47]}"
-						GSHIDECURSORDELAY="${GSARR[48]}"
-						GSFORCECOMP="${GSARR[49]}"
-						GSDEBUGHUD="${GSARR[50]}"
-						GSFORCEHDRSUPPORT="${GSARR[51]}"
-						GSFORCEHDROUTPUT="${GSARR[52]}"
-						GSPREFERVKDEVICE="${GSARR[53]}"
-						GSWAYLAND="${GSARR[54]}"
-						GSRT="${GSARR[55]}"
+						GSVRSCROLLSSPEED="${GSARR[38]}"
+						GSVRMODAL="${GSARR[39]}"
+						# GSARR[40] is the Embedded heading
+						GSDEFTOUCHMODE="${GSARR[41]}"
+						GSIMMEDIATEFLIPS="${GSARR[42]}"
+						GSADAPTIVESYNC="${GSARR[43]}"
+						GSPREFOUT="${GSARR[44]}"
+						GSDRMMODE="${GSARR[45]}"
+						# GSARR[46] is the Advanced heading
+						GSSTATSPATHENABLE="${GSARR[47]}"
+						GSSTATSPATH="${GSARR[48]}"
+						GSHIDECURSORDELAY="${GSARR[49]}"
+						GSFORCECOMP="${GSARR[50]}"
+						GSDEBUGHUD="${GSARR[51]}"
+						GSFORCEHDRSUPPORT="${GSARR[52]}"
+						GSFORCEHDROUTPUT="${GSARR[53]}"
+						GSPREFERVKDEVICE="${GSARR[54]}"
+						GSWAYLAND="${GSARR[55]}"
+						GSRT="${GSARR[56]}"
+						GSHDLS="${GSARR[57]}"
 
 						# Build the GameScope arguments string
 						unset GAMESCOPE_ARGS
@@ -10142,17 +10322,53 @@ function GameScopeGui {
 						if [ "$GSSE" == "TRUE" ]                                        ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -e"; fi
 						if [ "$GSFWF" == "TRUE" ]                                       ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --force-windows-fullscreen"; fi
 						if [ "$GSFGC" == "TRUE" ]                                       ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --force-grab-cursor"; fi
+						if [ "$GSFGK" == "TRUE" ]                                       ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -g"; fi
 						if [ -f "$GSCURSOR" ] && [ "$GSENABLECUSTCUR" == "TRUE" ]       ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --cursor '${GSCURSOR}'"; fi
-						if [ ! "$GSFOOR" == "$GSNORM" ]                                 ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --force-orientation ${GSFOOR}"; fi  # Only force orientation if option other than default 'normal' is selected
+						if [ ! "$GSFOOR" == "$GSNORM" ] && [ -n "$GSFOOR" ]             ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --force-orientation ${GSFOOR}"; fi  # Only force orientation if option other than default 'normal' is selected
 						### GENERAL OPTIONS END ###
 
 						### FILTERING OPTIONS ###
-						if [ "$GSIS" == "TRUE" ]                                        ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -i"; fi
-						if [ "$GSNN" == "TRUE" ]                                        ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -n"; fi 
-						if [ "$GSFSR" == "TRUE" ]                                       ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -U"; fi
-						if [ "$GSNIS" == "TRUE" ]                                       ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -Y"; fi
+						# Used to control whether to apply --sharpness since there are various conditions where
+						# this could be true (new -F option but ONLY if we pass fsr/nis, or legacy -U/-S option)
+						GSAPPLYSHARPNESS=0
+						if [ ! "$GSFLTR" == "$NON" ] && [ -n "$GSFLTR" ]; then
+							# Pass -F if available for current GameScope version, otherwise pass legacy switches
+							if [ "$GSNEWFILTERMODE" -eq 1 ]; then
+								GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -F ${GSFLTR}"
+							else
+								# Only manages -U/-Y/-n, because those were the only filtering switches available
+								# we don't have any other to account for with older GameScope versions -- If a different
+								# option is selected for GSFLTR, then we just don't pass any flags
+								#
+								# Even though with legacy options, all 3 of these could be passed, the -F flag won't support this and neither
+								# will the UI, so we only support selecting 1
+								if [ "$GSFLTR" == "nearest" ]; then
+									GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -n"
+								elif [ "$GSFLTR" == "fsr" ]; then
+									GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -U"
+								elif [ "$GSFLTR" == "nis" ]; then
+									GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -Y"
+								fi
+							fi
+
+							if [ "$GSFLTR" == "fsr" ] || [ "$GSFLTR" == "nis" ]; then  # CASE SENSITIVE
+								GSAPPLYSHARPNESS=1
+							fi
+						fi
+
+						if [ ! "$GSSCALE" == "$NON" ] && [ -n "$GSSCALE" ]; then
+							if [ "$GSNEWFILTERMODE" -eq 1 ]; then
+								GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -S ${GSSCALE}"
+							else
+								# This is the only legacy scale switch, -i
+								if [ "$GSSCALE" == "integer" ]; then
+									GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -i"
+								fi
+							fi
+						fi
+
 						if [ ! "$GSMSF" == "0" ]                                        ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -m ${GSMSF}"; fi # Ignore Max Scale Factor if 0
-						if [ "$GSFSRS" -eq "$GSFSRS" ] 2>/dev/null && [ "$GSFSR" == "TRUE" ] || [ "$GSNIS" == "TRUE" ]; then
+						if [ "$GSFSRS" -eq "$GSFSRS" ] 2>/dev/null && [ "$GSAPPLYSHARPNESS" -eq 1 ]; then
 							# Sharpness Value should only be passed if FSR or NIS is enabled
 							writelog "INFO" "${FUNCNAME[0]} - Adding sharpness parameter to the gamescope arguments:"
 							if grep -q "$FSRS_STR" <<< "$("$(command -v "$GAMESCOPE")" --help 2>&1)"; then
@@ -10175,8 +10391,8 @@ function GameScopeGui {
 								writelog "WARN" "${FUNCNAME[0]} - GSHDRWGFS (--hdr-wide-gammut-for-sdr) option for GameScope enabled but HDR was not enabled - Ignoring as this option would have no effect"
 							fi
 						fi
-						if [ ! "$GSHDRSCNITS" == "203" ]; then
-							# Only pass value if nits != 203 && HDR enabled
+						if [ ! "$GSHDRSCNITS" == "400" ]; then
+							# Only pass value if nits != 400 && HDR enabled (400 is the default)
 							if [ "$GSHDR" == "TRUE" ] && [ "$GSHDRWGFS" == "TRUE" ]; then
 								GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --hdr-sdr-content-nits ${GSHDRSCNITS}"
 							else
@@ -10194,17 +10410,19 @@ function GameScopeGui {
 						if [ "$GSVR" == "TRUE" ]                                        ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --openvr"; fi
 						if [ "${#GSVREXNA}" -gt 0 ]                                     ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --vr-overlay-explicit-name '${GSVREXNA}'"; fi  # Don't set explicit name if it's blank
 						if [ "${#GSVRDEFNAM}" -gt 0 ]                                   ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --vr-overlay-default-name '${GSVRDEFNAM}'"; fi  # Don't set default name if it's blank
+						if [ "${#GSVROVERLAYKEY}" -gt 0 ] 								; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --vr-overlay-key '${GSVROVERLAYKEY}'"; fi  # Don't set overlay key if it's blank
 						if [ -f "$GSVRICON" ] && [ "$GSVRICONENABLE" == "TRUE" ]        ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --vr-overlay-icon '${GSVRICON}'"; fi
 						if [ "$GSVRSHOIMM" == "TRUE" ]                                  ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --vr-overlay-show-immediately"; fi
 						if [ "$GSVRCONTROLBAR" == "TRUE" ]                              ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --vr-overlay-enable-control-bar"; fi
 						if [ "$GSVRCONTROLBARKEYBOARD" == "TRUE" ]                      ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --vr-overlay-enable-control-bar-keyboard"; fi
 						if [ "$GSVRCONTROLBARCLOSE" == "TRUE" ]                         ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --vr-overlay-enable-control-bar-close"; fi
+						if [ "$GSVRSCROLLSSPEED" -gt 8 ]                                ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --vr-scrolls-speed ${GSVRSCROLLSSPEED}"; fi  # 8.0 is the default value
 						if [ "$GSVRMODAL" == "TRUE" ]                                   ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --vr-overlay-modal"; fi
 						### VR OPTIONS END
 
 						### EMBEDDED OPTIONS ###
 						# Don't pass default touch mode option if we left at default
-						if [ ! "${GSDEFTOUCHMODE}" == "${GSDEF}" ]; then 
+						if [ ! "${GSDEFTOUCHMODE}" == "${GSDEF}" ] && [ -n "${GSDEFTOUCHMODE}" ]; then 
 							# Get the corresponding number that should be passed to GameScope from the number in the dropdown string, e.g. gets "0" from "hover:0"
 							SELECTEDTOUCHMODE="$( echo "$GSDEFTOUCHMODE" | cut -d ":" -f 2 )" 
 							GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --default-touch-mode ${SELECTEDTOUCHMODE}"
@@ -10215,7 +10433,7 @@ function GameScopeGui {
 						# EMBEDDED OPTIONS END
 
 						## ADVANCED OPTIONS ###
-						if [ ! "$GSDRMMODE" == "${GSDEF}" ]                             ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --generate-drm-mode ${GSDRMMODE}"; fi  # Don't pass DRM mode if "default"
+						if [ ! "$GSDRMMODE" == "${GSDEF}" ] && [ -n "$GSDRMMODE" ]      ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --generate-drm-mode ${GSDRMMODE}"; fi  # Don't pass DRM mode if "default"
 						if [ -d "$GSSTATSPATH" ] && [ "$GSSTATSPATHENABLE" == "TRUE" ]  ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --stats-path '${GSSTATSPATH}'"; fi
 						if [ ! "$GSHIDECURSORDELAY" == "0" ]                            ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} -C ${GSHIDECURSORDELAY}"; fi  # Ignore cursor delay if it's 0
 						if [ "$GSFORCECOMP" == "TRUE" ]                                 ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --force-composition"; fi
@@ -10225,6 +10443,7 @@ function GameScopeGui {
 						if [ "$GSPREFERVKDEVICE" == "TRUE" ]                            ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --prefer-vk-device"; fi
 						if [ "$GSWAYLAND" == "TRUE" ]                                   ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --expose-wayland"; fi
 						if [ "$GSRT" == "TRUE" ]                                        ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --rt"; fi
+						if [ "$GSHDLS" == "TRUE" ]                                      ; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --headless"; fi
 						### ADVANCED OPTIONS END ###
 						
 						GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --"
@@ -10237,6 +10456,15 @@ function GameScopeGui {
 					}
 				;;	
 			esac
+}
+
+function GameScopeReset {
+	# This resets the options on the GUI to blank, but when the UI is re-loaded the options are set again to their menu defaults
+	# once the "Done" button is pressed e.g. the resolutions default to 1280x720
+	GAMESCOPE_ARGS="$NON"
+	touch "$FUPDATE"
+	updateConfigEntry "GAMESCOPE_ARGS" "$GAMESCOPE_ARGS" "$STLGAMECFG"
+	setGameScopeVars  # This needs to be called to fix empty dropdown values for some reason (even though it should get called from GameScopeGui /shrug)
 }
 
 function StandaloneProtonGame {
@@ -10339,27 +10567,22 @@ function StandaloneProtonGame {
 				
 						touch "$FUPDATE" "$SAPCFG"
 						updateConfigEntry "SAPGAME" "$SAPGAME" "$SAPCFG"
-
 						if [ -n "$SAPPROTON" ];then
 							touch "$FUPDATE"
 							updateConfigEntry "SAPPROTON" "$SAPPROTON" "$SAPCFG"
 						fi
-
 						if [ -n "$SAP_COMPAT_DATA_PATH" ];then
 							touch "$FUPDATE"
 							updateConfigEntry "SAP_COMPAT_DATA_PATH" "$SAP_COMPAT_DATA_PATH" "$SAPCFG"
 						fi
-
 						if [ -n "$SAPEXE" ];then
 							touch "$FUPDATE"
 							updateConfigEntry "SAPEXE" "$SAPEXE" "$SAPCFG"
 						fi
-
 						if [ -n "$SAPARGS" ];then
 							touch "$FUPDATE"
 							updateConfigEntry "SAPARGS" "$SAPARGS" "$SAPCFG"
 						fi
-
 						if [ -n "$SAPRUN" ];then
 							touch "$FUPDATE"
 							updateConfigEntry "SAPARGS" "$SAPARGS" "$SAPCFG"
@@ -10501,8 +10724,8 @@ function oneTimeWinetricks {
 	fi
 }
 
-function OneTimeRunGui {
-
+# Does the shared setup for one-time run commandline and GUI functions
+function setOneTimeRunVars {
 	if [ -n "$1" ]; then
 		AID="$1"
 		setAIDCfgs
@@ -10516,113 +10739,345 @@ function OneTimeRunGui {
 			fixCustomMeta "$METCFG" # will be removed again later
 			loadCfg "$METCFG"
 		fi
-		if [ -n "$WINEPREFIX" ]; then
+
+		if [ -n "$WINEPREFIX" ] && [ -d "$WINEPREFIX" ]; then
 			STEAM_COMPAT_DATA_PATH="${WINEPREFIX%/*}"
 			writelog "INFO" "${FUNCNAME[0]} - Found STEAM_COMPAT_DATA_PATH '$STEAM_COMPAT_DATA_PATH'"
 		fi
 	fi
 
+	# Since we can use OTR with native Linux games, we just warn when there is no STEAM_COMPAT_DATA_PATH
 	if [ -z "$STEAM_COMPAT_DATA_PATH" ]; then
-		writelog "ERROR" "${FUNCNAME[0]} - STEAM_COMPAT_DATA_PATH could not be determined"
-	else
-		createProtonList X
-		export CURWIKI="$PPW/One-Time-Run"
-		TITLE="${PROGNAME}-${FUNCNAME[0]}"
-		pollWinRes "$TITLE"
-		setShowPic
-		if [ -z "$OTPROTON" ]; then
-			OTPROTON="$USEPROTON"
+		writelog "WARN" "${FUNCNAME[0]} - STEAM_COMPAT_DATA_PATH could not be determined - This may mean we're running a native Linux game here, in which case this can be safely ignored."
+		writelog "WARN" "${FUNCNAME[0]} - If you need to use a Windows executable you'll have to use One-Time Run with a Windows game, or the Windows release of this game."
+	fi
+}
+
+function OneTimeRunReset {
+	# Reset all One-Time Run variables with the dummy value (easier than removing them, which should be unnecessary)
+	writelog "INFO" "${FUNCNAME[0]} - Restoring defaults for One Time Run variables"
+
+	# Remove config file entries -- Blank entries will act as "(none)" for files/paths, "false" for checkboxes, and the
+	# Proton version is handled already with a mismatch check
+	touch "$FUPDATE"
+	updateConfigEntry "OTPROTON" "DUMMY" "$STLGAMECFG"
+	touch "$FUPDATE"
+	updateConfigEntry "OTEXE" "DUMMY" "$STLGAMECFG"
+	touch "$FUPDATE"
+	updateConfigEntry "OTARGS" "DUMMY" "$STLGAMECFG"
+	touch "$FUPDATE"
+	updateConfigEntry "OTUSEEXEDIR" "DUMMY" "$STLGAMECFG"
+	touch "$FUPDATE"
+	updateConfigEntry "OTFORCEPROTON" "DUMMY" "$STLGAMECFG"
+	touch "$FUPDATE"
+	updateConfigEntry "OTSLR" "DUMMY" "$STLGAMECFG"
+
+	# Unset variables to ensure values are cleared on the UI
+	unset "$OTPROTON"
+	unset "$OTEXE"
+	unset "$OTARGS"
+	unset "$OTUSEEXEDIR"
+	unset "$OTFORCEPROTON"
+	unset "$OTSLR"
+}
+
+# Called when a user passes arguments for onetimerun
+function commandlineOneTimeRun {
+	setOneTimeRunVars "$1"
+	# Get incoming arguments
+	OTRUNDIR="$( pwd )"  # Default to current script directory
+	USEEXEDIR=0
+	OTFORCEPROTON=0
+	OTSLR=0
+	OTRESET=0
+	for i in "$@"; do
+		case $i in
+			--exe=*)
+				OTEXE="$( realpath "${i#*=}" )"
+				shift ;;
+			--proton=*)
+				# Needed for saving to work, since RUNOTPROTON gets overridden with Proton path from CSV
+				RUNOTPROTON="${i#*=}"
+				OTPROTON="$RUNOTPROTON"
+				shift ;;
+			--workingdir=*)
+				PASSEDRUNDIR="${i#*=}"
+				if [ -n "$PASSEDRUNDIR" ] && [ -d "$PASSEDRUNDIR" ]; then  # Ensure working directory exists
+					OTRUNDIR="$PASSEDRUNDIR"
+				fi
+				shift ;;
+			--useexedir)
+				USEEXEDIR=1
+				shift ;;
+			--args=*)
+				OTARGS="${i#*=}"
+				shift ;;
+			--forceproton)
+				OTFORCEPROTON=1
+				shift ;;
+			--useslr)
+				OTSLR=1
+				shift ;;
+			--save)
+				OTSAVE="TRUE"
+				shift ;;
+			--default)
+				OneTimeRunReset
+				OTRESET=1
+				shift ;;
+		esac
+	done
+
+	# When default is passed, all other options are ignored, as it should be used standalone
+	# (and priamrily internally for the defaults button)
+	if [ "$OTRESET" -eq 1 ]; then
+		return
+	fi
+
+	# Ensure EXE is given and that directory to run the exe in is valid, and also ensure we have a valid Proton version to run the exe with
+	if [ -n "$OTEXE" ] && [ -f "$OTEXE" ]; then  # Valid executable required (Windows executable or Linux executable/file/etc, not really an EXE for Linux but oh well - Naming is hard!)
+		if [ "$USEEXEDIR" -eq 1 ]; then  # Use EXE dir as working dir
+			OTRUNDIR="$( dirname "$OTEXE" )"
+			writelog "INFO" "${FUNCNAME[0]} - Using executable directory '$OTRUNDIR' as working directory"
 		fi
 
-		OTCMDS="$("$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top $WINDECO \
-			--title="$TITLE" --separator="|" \
-			--columns="2" \
-			--text="$(spanFont "$GUI_ONETIMERUN" "H")" \
-			--field="$GUI_OTPROTON!$DESC_OTPROTON":CB "$(cleanDropDown "${OTPROTON//\"}" "$PROTYADLIST")" \
-			--field="$GUI_OTEXE!$DESC_OTEXE":FL "${OTEXE//\"}" \
-			--field="$GUI_OTARGS!$DESC_OTARGS" "${OTARGS//\"}"\
-			--field="$BUT_RUNWINECFG!$DESC_RUNWINECFG":FBTN "$( realpath "$0" ) runwinecfg" \
-			--field="$GUI_OTRCUSTWORKINGDIR!$DESC_OTRCUSTWORKINGDIR":DIR "" \
-			--field="$GUI_OTRUSEEXEDIR!$DESC_OTRUSEEXEDIR":CHK "FALSE" \
-			--field="$GUI_OTSAVE!$DESC_OTSAVE":CHK "FALSE" \
-			--field="$BUT_RUNWINETRICKS!$DESC_RUNWINETRICKS":FBTN "$( realpath "$0" ) runwinetricks" \
-			--button="$BUT_CAN:0" \
-			--button="$BUT_RUNONETIMECMD:2" \
-			"$GEOM"
-			)"
-			case $? in
-				# Selected Cancel
-				0)	{
-						writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_CAN' - Exiting"
-					}
-				;;
-				# Selected Run
-				2)	{
-						mapfile -d "|" -t -O "${#OTARR[@]}" OTARR < <(printf '%s' "$OTCMDS")
-						OTPROTON="${OTARR[0]}"
-						OTEXE="${OTARR[1]}"
-						OTARGS="${OTARR[2]}"
-						# OTARR[3] and OTARR[4] are the WINECFG and WINETRICKS buttons
-						OTUSEEXEDIR="${OTARR[5]}"
-						OTCUSTWORKDIR="${OTARR[6]}"
-						OTSAVE="${OTARR[7]}"	
+		if [ -d "$OTRUNDIR" ]; then  # Working directory needs to be valid
+			# Don't check executable type if OTFORCEPROTON
+			if [ "$OTFORCEPROTON" -eq 1 ]; then
+				ISWINDOWSEXE=1
+			else
+				ISWINDOWSEXE="$(file "$OTEXE" | grep -c "PE32")"  # TODO how do things like .bat scripts work here?
+			fi
 
-						RUNOTPROTON="$(getProtPathFromCSV "$OTPROTON")"
-						if [ ! -f "$RUNOTPROTON" ]; then
-							RUNOTPROTON="$(fixProtonVersionMismatch "OTPROTON" "$STLGAMECFG" X)"
-						fi
-		
-						if [ ! -f "$RUNOTPROTON" ]; then
-							writelog "SKIP" "${FUNCNAME[0]} - No executable for selected Proton '$OTPROTON' found"
-						elif [ ! -f "$OTEXE" ]; then
-							writelog "SKIP" "${FUNCNAME[0]} - No executable found"
-						else
-							# Set the custom arguments passed from the textbox for the exe
-							if [ -z "$OTARGS" ]; then
-								RUNOTARGS=""
-							else
-								mapfile -d " " -t -O "${#RUNOTARGS[@]}" RUNOTARGS < <(printf '%s' "$OTARGS")
-							fi
-							
-							if [ "$OTSAVE" == "TRUE" ];then
-								writelog "INFO" "${FUNCNAME[0]} - Saving One time run settings into '$STLGAMECFG'"
-								touch "$FUPDATE"
-								updateConfigEntry "OTPROTON" "$OTPROTON" "$STLGAMECFG"
-								touch "$FUPDATE"
-								updateConfigEntry "OTEXE" "$OTEXE" "$STLGAMECFG"
-								touch "$FUPDATE"
-								updateConfigEntry "OTARGS" "$OTARGS" "$STLGAMECFG"
-							fi
+			if [ "$ISWINDOWSEXE" -eq 1 ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Looks like we've got a Windows executable here or the user forced Proton"
+				# Ensure we have STEAM_COMPAT_DATA_PATH before we try to run a Windows executable
+				if [ -z "$STEAM_COMPAT_DATA_PATH" ]; then
+					writelog "ERROR" "${FUNCNAME[0]} - Cannot run Windows executable without a STEAM_COMPAT_DATA_PATH -- Maybe you're using One-Time Run with a native Linux game?"
+					echo "Cannot run Windows executable without a STEAM_COMPAT_DATA_PATH -- Maybe you're using One-Time Run with a native Linux game?"
+					return
+				fi
+				writelog "INFO" "${FUNCNAME[0]} - Trying to find Proton version to launch executable with from given Proton name '$RUNOTPROTON'"
+				RUNOTPROTON="$(getProtPathFromCSV "$RUNOTPROTON")"
+				if [ ! -f "$RUNOTPROTON" ]; then
+					RUNOTPROTON="$(fixProtonVersionMismatch "OTPROTON" "$STLGAMECFG" X)"  # TODO re-check to make sure this is valid?
+				fi
+			else
+				writelog "INFO" "${FUNCNAME[0]} - Given executable detected as native Linux binary, this is usually correct but if this was detected incorrectly you should force Proton!"
+			fi
 
-							OTRUNDIR="$( pwd )"
-							if [ "$OTUSEEXEDIR" == "TRUE" ]; then
-								OTRUNDIR="$( dirname "$OTEXE" )"
-								if [ -d "$OTRUNDIR" ]; then
-									writelog "INFO" "${FUNCNAME[0]} - User enabled 'OTUSEEXEDIR' - Setting directory to run executable to same directory - '$OTRUNDIR'"
-								else
-									writelog "WARN" "${FUNCNAME[0]} - User enabled 'OTUSEEXEDIR' but its directory '$OTRUNDIR' did NOT exist - Ignoring and calling back to pwd - '$( pwd )'"
-									OTRUNDIR="$( pwd )"
-								fi
-							elif [ -n "$OTCUSTWORKDIR" ]; then
-								if [ -d "$OTCUSTWORKDIR" ]; then
-									OTRUNDIR="$OTCUSTWORKDIR"
-									writelog "INFO" "${FUNCNAME[0]} - User entered path for a custom working directory and it exists - Using '$OTCUSTWORKDIR' as directory to run executable from"
-								else
-									writelog "WARN" "${FUNCNAME[0]} - User entered path for a custom working directory but it does NOT exist - Ignoring and sticking with current script working directory based on 'pwd' - '$OTRUNDIR'"
-								fi
-							else
-								writelog "INFO" "${FUNCNAME[0]} - User did not select any custom executable path options - Keeping as default based on current script directory with 'pwd' - '$OTRUNDIR'"
-							fi
+			if [ -f "$RUNOTPROTON" ] || [ "$ISWINDOWSEXE" -eq 0 ]; then
+				if [ -f "$RUNOTPROTON" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Found Proton version '$RUNOTPROTON'"
+				else
+					writelog "INFO" "${FUNCNAME[0]} - Executable is native Linux, no Proton version required."
+				fi
 
-							# Run in subshell to avoid messing with current script paths
-							# TODO - Allow running native Linux programs here too
-							writelog "INFO" "${FUNCNAME[0]} - Starting '$OTEXE' with '$OTPROTON' with STEAM_COMPAT_DATA_PATH '$STEAM_COMPAT_DATA_PATH'"
-							(cd "$OTRUNDIR" && STEAM_COMPAT_DATA_PATH="$STEAM_COMPAT_DATA_PATH" "$RUNOTPROTON" run "$OTEXE" "${RUNOTARGS[@]}")
-						fi
-					}
-				;;	
-			esac
+				if [ -z "$OTARGS" ]; then  # Set the custom arguments for executable
+					RUNOTARGS=""
+				else
+					mapfile -d " " -t -O "${#RUNOTARGS[@]}" RUNOTARGS < <(printf '%s' "$OTARGS")
+					writelog "INFO" "${FUNCNAME[0]} - Passing arguments to One-Time Run executable '${OTRUNARGS[*]}'"
+				fi
+
+				# NOTE: Having save here means values won't save unless a launch is successful -- This is probably ok, but just a note for future reference
+				if [ "$OTSAVE" == "TRUE" ];then  # Save one-time settings to game config file -- Really only useful for OneTimeRunGUI
+					writelog "INFO" "${FUNCNAME[0]} - Saving One time run settings into '$STLGAMECFG'"
+					# Only save Proton version if we're using a Windows executable, otherwise we don't set a Proton version!
+					# TODO check if this still works?
+					if [ "$ISWINDOWSEXE" -eq 1 ]; then
+						touch "$FUPDATE"
+						updateConfigEntry "OTPROTON" "$OTPROTON" "$STLGAMECFG"
+					fi
+					touch "$FUPDATE"
+					updateConfigEntry "OTEXE" "$OTEXE" "$STLGAMECFG"
+					touch "$FUPDATE"
+					updateConfigEntry "OTARGS" "$OTARGS" "$STLGAMECFG"
+					touch "$FUPDATE"
+					updateConfigEntry "OTUSEEXEDIR" "$USEEXEDIR" "$STLGAMECFG"
+					touch "$FUPDATE"
+					updateConfigEntry "OTFORCEPROTON" "$OTFORCEPROTON" "$STLGAMECFG"
+					touch "$FUPDATE"
+					updateConfigEntry "OTSLR" "$OTSLR" "$STLGAMECFG"
+
+					# If we enable USEEXEDIR, remove the OTRUNDIR value
+					# If we don't, and OTRUNDIR is a valid path that isn't the default path, write out OTRUNDIR
+					#
+					# This is a bit messy and could possibly be improved...
+					if [ "$USEEXEDIR" -eq 1 ]; then
+						touch "$FUPDATE"
+						updateConfigEntry "OTRUNDIR" "DUMMY" "$STLGAMECFG"
+					elif [ -d "$OTRUNDIR" ] && ! [ "$OTRUNDIR" == "$( pwd )" ]; then
+						touch "$FUPDATE"
+						updateConfigEntry "OTRUNDIR" "$OTRUNDIR" "$STLGAMECFG"
+					else
+						touch "$FUPDATE"
+						updateConfigEntry "OTRUNDIR" "DUMMY" "$STLGAMECFG"
+					fi
+				fi
+
+				# Run in subshell to avoid messing with current script paths
+				if [ "$ISWINDOWSEXE" -eq 1 ]; then
+					if [ "$OTSLR" -eq 1 ]; then
+						# Get SLR for given OTR Proton
+						OTSLRPROT="$( getProtNameFromPath "$RUNOTPROTON" )"
+						setNonGameSLRReap "1" "$OTSLRPROT"
+					fi
+
+					NOTYPROTNAME="$( basename "$( dirname "$RUNOTPROTON" )" )"  # NOTE: This will need updated if we allow Wine as the path will be different!
+
+					if [ -n "${SLRCMD[*]}" ] && [ "$OTSLR" -eq 1 ]; then  # Use SLR
+						writelog "INFO" "${FUNCNAME[0]} - Starting '$OTEXE' with '$RUNOTPROTON' with STEAM_COMPAT_DATA_PATH '$STEAM_COMPAT_DATA_PATH' and using working directory '$OTRUNDIR' and using the Steam Linux Runtime"
+						writelog "INFO" "${FUNCNAME[0]} - cd \"$OTRUNDIR\" && STEAM_COMPAT_DATA_PATH=\"$STEAM_COMPAT_DATA_PATH\" \"${SLRCMD[*]}\" \"$RUNOTPROTON\" run \"$OTEXE\" \"${RUNOTARGS[*]}\""
+
+						notiShow "$( strFix "$NOTY_OTRSTARTSLR" "$( basename "$OTEXE" )" "$NOTYPROTNAME" )"
+
+						(cd "$OTRUNDIR" && STEAM_COMPAT_CLIENT_INSTALL_PATH="$SROOT" STEAM_COMPAT_DATA_PATH="$STEAM_COMPAT_DATA_PATH" "${SLRCMD[@]}" "$RUNOTPROTON" run "$OTEXE" "${RUNOTARGS[@]}")
+					else  # No SLR
+						writelog "INFO" "${FUNCNAME[0]} - Starting '$OTEXE' with '$RUNOTPROTON' with STEAM_COMPAT_DATA_PATH '$STEAM_COMPAT_DATA_PATH' and using working directory '$OTRUNDIR'"
+						writelog "INFO" "${FUNCNAME[0]} - cd \"$OTRUNDIR\" && STEAM_COMPAT_DATA_PATH=\"$STEAM_COMPAT_DATA_PATH\" \"$RUNOTPROTON\" run \"$OTEXE\" \"${RUNOTARGS[*]}\""
+
+						notiShow "$( strFix "$NOTY_OTRSTART" "$( basename "$OTEXE" )" "$NOTYPROTNAME" )"
+
+						(cd "$OTRUNDIR" && STEAM_COMPAT_CLIENT_INSTALL_PATH="$SROOT" STEAM_COMPAT_DATA_PATH="$STEAM_COMPAT_DATA_PATH" "$RUNOTPROTON" run "$OTEXE" "${RUNOTARGS[@]}")
+					fi
+				else  # Native Linux
+					if [ "$OTSLR" -eq 1 ]; then
+						setNonGameSLRReap
+					fi
+
+					if [ -n "${SLRCMD[*]}" ] && [ "$OTSLR" -eq 1 ]; then  # Use SLR
+						writelog "INFO" "${FUNCNAME[0]} - Starting Native Linux program '$OTEXE' using working directory '$OTRUNDIR' and the Steam Linux Runtime"
+						writelog "INFO" "${FUNCNAME[0]} - cd \"$OTRUNDIR\" && \"${SLRCMD[*]}\" \"$OTEXE\" \"${RUNOTARGS[*]}\""
+
+						notiShow "$( strFix "$NOTY_OTRSTARTNATIVESLR" "$( basename "$OTEXE" )" )"
+
+						(cd "$OTRUNDIR" && "${SLRCMD[@]}" "$OTEXE" "${RUNOTARGS[@]}")
+					else  # No SLR
+						writelog "INFO" "${FUNCNAME[0]} - Starting Native Linux program '$OTEXE' using working directory '$OTRUNDIR'"
+						writelog "INFO" "${FUNCNAME[0]} - cd \"$OTRUNDIR\" && \"$OTEXE\" \"${RUNOTARGS[*]}\""
+
+						notiShow "$( strFix "$NOTY_OTRSTARTNATIVE" "$( basename "$OTEXE" )" )"
+
+						(cd "$OTRUNDIR" && "$OTEXE" "${RUNOTARGS[@]}")
+					fi
+				fi
+			else
+				writelog "ERROR" "${FUNCNAME[0]} - Could not find valid Proton to launch custom executable with"
+				notiShow "$( strFix "$NOTY_OTRPROTINVALID" "$OTPROTON" )"
+				echo "Could not find valid Proton to launch custom executable with ('$OTPROTON') -- Is it definitely installed?"
+			fi
+		else
+			writelog "WARN" "${FUNCNAME[0]} - Working directory '$OTRUNDIR' is no valid directory -- Cannot continue"
+			notiShow "$( strFix "$NOTY_OTRRUNDIRINVALID" "$OTRUNDIR" )"
+			echo "Working directory '$OTRUNDIR' doesn't appear to be valid -- Does it definitely exist and have correct permissions?"
+
+		fi
+	else
+		writelog "ERROR" "${FUNCNAME[0]} - One-Time Run command '$OTEXE' is not valid -- Cannot continue"
+		if [ -z "$OTEXE" ]; then
+			notiShow "$NOTY_OTREXEBLANK" "X"
+			echo "Selected One-Time Run executable appears to be blank: '$OTEXE'"
+		else
+			notiShow "$( strFix "$NOTY_OTREXEINVALID" "$OTEXE" )"
+			echo "Selected One-Time Run executable '$OTEXE' doesn't appear to be valid."
+		fi
 	fi
+}
+
+
+function OneTimeRunGui {
+	setOneTimeRunVars "$1"
+	createProtonList X
+	export CURWIKI="$PPW/One-Time-Run"
+	TITLE="${PROGNAME}-${FUNCNAME[0]}"
+	pollWinRes "$TITLE"
+	setShowPic
+	if [ -z "$OTPROTON" ]; then
+		OTPROTON="$USEPROTON"
+	fi
+
+	# TODO GUI looks weird because of uneven number of checkboxes, but this will be fixed once we add a checkbox for Steam Linux Runtime as well
+	OTCMDS="$("$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top $WINDECO \
+		--title="$TITLE" --separator="|" \
+		--columns="2" \
+		--text="$(spanFont "$GUI_ONETIMERUN" "H")" \
+		--field="$GUI_OTPROTON!$DESC_OTPROTON":CB "$(cleanDropDown "${OTPROTON//\"}" "$PROTYADLIST")" \
+		--field="$GUI_OTEXE!$DESC_OTEXE":FL "${OTEXE//\"}" \
+		--field="$GUI_OTARGS!$DESC_OTARGS" "${OTARGS//\"}" \
+		--field="$GUI_OTRFORCEPROTON!$DESC_OTRFORCEPROTON":CHK "$OTFORCEPROTON" \
+		--field="$BUT_RUNWINECFG!$DESC_RUNWINECFG":FBTN "$( realpath "$0" ) runwinecfg" \
+		--field="$GUI_OTRCUSTWORKINGDIR!$DESC_OTRCUSTWORKINGDIR":DIR "$OTRUNDIR" \
+		--field="$GUI_OTRUSEEXEDIR!$DESC_OTRUSEEXEDIR":CHK "$OTUSEEXEDIR" \
+		--field="$GUI_OTSAVE!$DESC_OTSAVE":CHK "FALSE" \
+		--field="$GUI_OTRSLR!$DESC_OTRSLR":CHK "$OTSLR" \
+		--field="$BUT_RUNWINETRICKS!$DESC_RUNWINETRICKS":FBTN "$( realpath "$0" ) runwinetricks" \
+		--button="$BUT_CAN:0" \
+		--button="$BUT_DGM:2" \
+		--button="$BUT_RUNONETIMECMD:4" \
+		"$GEOM"
+	)"
+	case $? in
+		# Selected Cancel
+		0)	{
+				writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_CAN' - Exiting"
+			}
+		;;
+		2) {
+				writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_DGM' - Resetting One-Time Run values"
+				OneTimeRunReset
+				OneTimeRunGui
+		   }
+		;;
+		# Selected Run
+		4)	{
+				mapfile -d "|" -t -O "${#OTARR[@]}" OTARR < <(printf '%s' "$OTCMDS")
+
+				OTPROTON="${OTARR[0]}"
+				OTEXE="${OTARR[1]}"
+				OTARGS="${OTARR[2]}"
+				OTFORCEPROTON="${OTARR[3]}"
+				# OTARR[4] and OTARR[8] are the WINECFG and WINETRICKS buttons
+				OTCUSTWORKDIR="${OTARR[5]}"
+				OTUSEEXEDIR="${OTARR[6]}"
+				OTSAVE="${OTARR[7]}"
+				OTSLR="${OTARR[8]}"
+
+				writelog "INFO" "${FUNCNAME[0]} - OTPROTON is '$OTPROTON'"
+				writelog "INFO" "${FUNCNAME[0]} - OTEXE is '$OTEXE'"
+				writelog "INFO" "${FUNCNAME[0]} - OTARGS is '$OTARGS'"
+				writelog "INFO" "${FUNCNAME[0]} - OTFORCEPROTON is '$OTFORCEPROTON'"
+				writelog "INFO" "${FUNCNAME[0]} - OTCUSTWORKDIR is '$OTCUSTWORKDIR'"
+				writelog "INFO" "${FUNCNAME[0]} - OTUSEEXEDIR is '$OTUSEEXEDIR'"
+				writelog "INFO" "${FUNCNAME[0]} - OTSAVE is '$OTSAVE'"
+				writelog "INFO" "${FUNCNAME[0]} - OTSLR is '$OTSLR'"
+
+				OTR_FLAGARGS=( --exe="$OTEXE" --proton="$OTPROTON" --args="$OTARGS" )  # Default arguments that we'll always pass (Proton will be ignored if not Windows executable, commandlineOneTimeRun figures that bit out)
+
+				# USEEXEDIR will take priority over custom working dir, cannot use both at the same time either
+				# Default is script working directory i.e. pwd
+				if [ "$OTUSEEXEDIR" == "TRUE" ]; then
+					OTR_FLAGARGS+=( --useexedir )
+				elif [ -n "$OTCUSTWORKDIR" ]; then
+					OTR_FLAGARGS+=( --workingdir="$OTCUSTWORKDIR" )
+				fi
+
+				if [ "$OTFORCEPROTON" == "TRUE" ]; then
+					OTR_FLAGARGS+=( --forceproton )
+				fi
+
+				if [ "$OTSLR" == "TRUE" ]; then
+					OTR_FLAGARGS+=( --useslr )
+				fi
+
+				if [ "$OTSAVE" == "TRUE" ]; then
+					OTR_FLAGARGS+=( --save )
+				fi
+
+				commandlineOneTimeRun "$1" "${OTR_FLAGARGS[@]}"
+			}
+		;;
+	esac
 }
 
 function setOPCustPath {
@@ -10759,7 +11214,13 @@ function buildCustomCmdLaunch {
 						FINALOUTCMD=("${FINALOUTCMD[@]}" "$MAHUBIN")
 					else
 						FINALOUTCMD=("$MAHUBIN")
-					fi	
+					fi
+
+					# Append '--dlsym' to mangohud command -- There is also the MANGOHUD_DLSYM=1 env var but this can be set manually, and does not always work
+					# i.e. Torchlight II works with '--dlsym' but not 'MANGOHUD_DLSYM=1'
+					if [ "$MAHUDLSYM" -eq 1 ]; then
+						FINALOUTCMD=("${FINALOUTCMD[@]}" "--dlsym")
+					fi
 				fi
 			else
 				writelog "WARN" "${FUNCNAME[0]} - $MAHU binary not found - disabling"
@@ -11495,12 +11956,18 @@ function redirectSCDP {
 		fi		
 	}
 
+	## There is room for improvement here, community contributions welcome!
 	if [ -n "$STEAM_COMPAT_DATA_PATH" ]; then # should be enough
-		VERSFIX="$(grep "${USEPROTON%-*}" "$PROTONCSV" | cut -d ';' -f1 | sort -nr | head -n1)"
-		if [ -n "$VERSFIX" ]; then
+		VERSPROTMAJOR="${USEPROTON%-*}"  # Turns Proton name from "proton-8.0-3c" to "proton-8.0" 
+		VERSFIX="$(grep "${PROTVERSNOMINOR}" "$PROTONCSV" | cut -d ';' -f1 | sort -nr | head -n1)"
+
+		if [ "${ONLYPROTMAJORREDIRECT}" -eq 1 ]; then  # Only create redirect folders for major Proton version bumps, such as GE-Proton7 -> GE-Proton8, or Proton 7.0 -> Proton 8.0 (IGNORING minor fix versions)
+			DESTPROT1="${VERSPROTMAJOR//proton-}"
+			writelog "INFO" "${FUNCNAME[0]} - Using major Proton version without minor version fix '$DESTPROT1' for $CODA directory name, because ONLYPROTMAJORREDIRECT is '$ONLYPROTMAJORREDIRECT'"
+		elif [ -n "$VERSFIX" ]; then  # Create a compat directory lile 'proton-8.0-3c', WITH the minor fix version
 			DESTPROT1="${VERSFIX//proton-}"
 			writelog "INFO" "${FUNCNAME[0]} - Using Proton version with minor version fix '$DESTPROT1' for $CODA directory name"
-		else
+		else  # ???
 			DESTPROT1="${USEPROTON//proton-}"
 			writelog "INFO" "${FUNCNAME[0]} - Using Proton version '$DESTPROT1' for '$CODA' directory name"
 		fi
@@ -11749,7 +12216,7 @@ function checkIGCSInjector {
 			if [ ! -f "$IGCSSRC" ]; then
 				IGCSDST="$IGCSDL/${IGCSZIP##*/}"
 				if [ ! -f "$IGCSDST" ]; then
-					 "$IGCSZIP" "$IGCSDST" "X" "'$IGCSDST' not found - downloading automatically from '$IGCSZIP'"
+					dlCheck "$IGCSZIP" "$IGCSDST" "X" "'$IGCSDST' not found - downloading automatically from '$IGCSZIP'"
 				fi
 				"$UNZIP" "$IGCSDST" -d "$IGCSDL"
 			fi
@@ -13736,7 +14203,11 @@ function createHMMDesktopFile {
 		echo "Name=${HMMNICE}"
 		echo "Comment=A mod manager for Hedgehog Engine games on PC (Installed by SteamTinkerLaunch)"
 		echo "MimeType=x-scheme-handler/hedgemm"
-		echo "Exec=$(realpath "$0") ${HMM,,} start ${HMMAUTO} \"%u\""  # "hmm start" takes dl channel as argument, next arg is the URL
+		if [ "$INFLATPAK" -eq 1 ]; then
+			echo "Exec=/usr/bin/flatpak run --command=steamtinkerlaunch $FLATPAK_ID ${HMM,,} start ${HMMAUTO} \"%u\""  # "hmm start" takes dl channel as argument, next arg is the URL
+		else
+			echo "Exec=$(realpath "$0") ${HMM,,} start ${HMMAUTO} \"%u\""  # "hmm start" takes dl channel as argument, next arg is the URL
+		fi
 		echo "Icon=${HMMICOPATH}"
 		echo "Terminal=false"
 		echo "X-KeepTerminal=false"
@@ -13768,7 +14239,11 @@ function createHMMDesktopFile {
 		echo "Terminal=false"
 		echo "X-KeepTerminal=false"
 		echo "Path=$HMMDLDIR"
-		echo "Exec=$(realpath "$0") ${HMM,,} u %u"  # "hmm start" takes dl channel as argument, next arg is the URL
+		if [ "$INFLATPAK" -eq 1 ]; then
+			echo "Exec=/usr/bin/flatpak run --command=steamtinkerlaunch $FLATPAK_ID ${HMM,,} u %u"  # "hmm start" takes dl channel as argument, next arg is the URL
+		else
+			echo "Exec=$(realpath "$0") ${HMM,,} u %u"  # "hmm start" takes dl channel as argument, next arg is the URL
+		fi
 		echo "NoDisplay=false"
 		echo "Hidden=false"
 	} >> "$HMMDFDLPA"
@@ -13793,20 +14268,31 @@ function createHMMDesktopFile {
 function getLatestGitHubExeVer {
     SETUPNAME="$1"
     PROJURL="$2"
+    EXCLUDEPRERELEASES="${3:-0}"  # i.e. to only get latest stable Vortex
 
     RELEASESURL="${PROJURL}/releases"
-    EXPANDEDASSETSURL="${RELEASESURL}/expanded_assets"
-    TAGSURL="${PROJURL}/tags"
+    if [ "$EXCLUDEPRERELEASES" -eq 1 ]; then
+        TAGSURL="${RELEASESURL}/latest"  # Will redirect to release tagged with "latest" instead of pre-release
+    else
+        TAGSURL="${PROJURL}/tags"
+    fi
 
     TAGSGREP="${RELEASESURL#"$GHURL"}/tag"
 
     LATESTTAG="$("$WGET" -q "${TAGSURL}" -O - 2> >(grep -v "SSL_INIT") | grep -m1 "$TAGSGREP" | grep -oE "${TAGSGREP}[^\"]+")"
     LATESTVER="${LATESTTAG##*/}"
 
-    LATESTRELEASEURL="${EXPANDEDASSETSURL}/${LATESTVER}"
+	getGitHubExeVer "$SETUPNAME" "$PROJURL" "$LATESTVER"
+}
 
-    SETUPFILE="$("$WGET" -q "${LATESTRELEASEURL}" -O - 2> >(grep -v "SSL_INIT") | grep "exe" | grep -m1 "$SETUPNAME" | grep -oE "${SETUPNAME}[^\"]+")"
-    echo "${SETUPFILE}"
+# Get GitHub release information for a given version tag.
+# Used by getLatestGitHubExeVer and can also be used standalone i.e. for downloading a specific Vortex version.
+function getGitHubExeVer {
+	SETUPNAME="$1"
+	PROJURL="$2"
+	TAG="$3"
+
+	"$WGET" -q "${PROJURL}/releases/expanded_assets/${TAG}" -O - 2> >(grep -v "SSL_INIT") | grep "exe" | grep -m1 "$SETUPNAME" | grep -oE "${SETUPNAME}[^\"]+"
 }
 
 #### VORTEX START: ####
@@ -13847,8 +14333,18 @@ function addVortexStage {
 }
 
 function wineVortexRun {
-	sleep 1 # required!
-	LC_ALL="C" PATH="$STLPATH" LD_LIBRARY_PATH="" LD_PRELOAD="" WINE="$VORTEXWINE" WINEARCH="win64" WINEDEBUG="-all" WINEPREFIX="$VORTEXPFX" "$@" > "$VWRUN" 2>/dev/null
+	sleep 1  # required!
+
+	## Only use SLR is available and (if user explicitly wants to run Vortex with dotnet OR if dotnet6 is not already installed), because the SLR can cause hardlink deployment to fail
+	## See also: https://github.com/sonic2kk/steamtinkerlaunch/issues/828
+
+	if [[ -n "${SLRCMD[*]}" && ( "$VORTEXUSESLRPOSTINSTALL" -eq 1 || ! -d "$VORTEXPFX/$DRC/Program Files/dotnet" ) ]]; then
+		PATH="$STLPATH" LD_LIBRARY_PATH="" LD_PRELOAD="" WINE="$VORTEXWINE" WINEARCH="win64" WINEDEBUG="-all" WINEPREFIX="$VORTEXPFX" "${SLRCMD[@]}" "$@" > "$VWRUN" 2>/dev/null
+	else
+		PATH="$STLPATH" LD_LIBRARY_PATH="" LD_PRELOAD="" WINE="$VORTEXWINE" WINEARCH="win64" WINEDEBUG="-all" WINEPREFIX="$VORTEXPFX" "$@" > "$VWRUN" 2>/dev/null
+	fi
+
+	unset "${SLRCMD[@]}"  # Ensure SLR is removed so that it won't be fetched and set for games launched after Vortex
 }
 
 function cleanVortex {
@@ -13878,7 +14374,11 @@ function setVortexDLMime {
 		echo "Terminal=false"
 		echo "X-KeepTerminal=false"
 		echo "Path=$(dirname "$VORTEXEXE")"
-		echo "Exec=$(realpath "$0") $VTX u %u"
+		if [ "$INFLATPAK" -eq 1 ]; then
+			echo "Exec=/usr/bin/flatpak run --command=steamtinkerlaunch $FLATPAK_ID ${HMM,,} $VTX u %u"
+		else
+			echo "Exec=$(realpath "$0") $$VTX u %u"
+		fi
 		echo "NoDisplay=false"
 		echo "Hidden=false"
 		} >> "$FVD"
@@ -13912,14 +14412,41 @@ function setVortexDLMime {
 
 function getLatestVortVer {
 	VSET="$VTX-setup"
-	writelog "INFO" "${FUNCNAME[0]} - Search for latest ${VTX^} stable Release"
-	VORTEXSETUP="$(getLatestGitHubExeVer "$VSET" "$VORTEXPROJURL")"
+	if [ "$USEVORTEXPRERELEASE" -eq 1 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Search for latest ${VTX^} Beta Release, if one is available (will fall back to Stable by default)"
+		VORTEXSETUP="$(getLatestGitHubExeVer "$VSET" "$VORTEXPROJURL" )"
+	else
+		writelog "INFO" "${FUNCNAME[0]} - Search for latest ${VTX^} Stable Release"
+		VORTEXSETUP="$(getLatestGitHubExeVer "$VSET" "$VORTEXPROJURL" "1" )"
+	fi
 	writelog "INFO" "${FUNCNAME[0]} - Found '$VORTEXSETUP'"
 	echo "VORTEXSETUP=$VORTEXSETUP" > "$VTST"
 }
 
-function dlLatestVortex {
-	getLatestVortVer
+# Get version based on specified release tag (passed either from commandline or preference)
+function getVortVer {
+	VTXTAGVER="$1"
+	VSET="$VTX-setup"
+	VORTEXSETUP="$( getGitHubExeVer "$VSET" "$VORTEXPROJURL" "$VTXTAGVER" )"
+	if [ -z "$VORTEXSETUP" ]; then
+		writelog "WARN" "${FUNCNAME[0]} - Could not find Vortex setup executable for version '$VTXTAGVER' - VORTEXSETUP came back '$VORTEXSETUP'"
+		writelog "INFO" "${FUNCNAME[0]} - Falling back to latest Vortex version"
+
+		getLatestVortVer
+	else
+		writelog "INFO" "${FUNCNAME[0]} - Successfully fetched Vortex - Downloaded executable will be '$VORTEXSETUP'"
+	fi
+}
+
+function dlLatestVortex {	
+	# VORTEXCUSTOMVER is set in Global Menu -- Use it if it's set to a sane value and if the setting is enabled
+	if [ "$USEVORTEXCUSTOMVER" -eq 1 ] && [ "$VORTEXCUSTOMVER" != "$NON" ] && [ -n "$VORTEXCUSTOMVER" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - VORTEXCUSTOMVER specified and is '$VORTEXCUSTOMVER' - Will attempt to find and install this version"
+		getVortVer "$VORTEXCUSTOMVER"
+	else
+		writelog "INFO" "${FUNCNAME[0]} - Downloading latest Vortex version (not using any custom Vortex version)"
+		getLatestVortVer
+	fi
 
 	if [ -n "$VORTEXSETUP" ]; then
 		export VSPATH="$VORTEXDLDIR/$VORTEXSETUP"
@@ -14044,6 +14571,10 @@ function VortexGamesDialog {
 	VGNSCLIST="$STLSHM/VGNSCLIST.txt"
 
 	VINGAMES="$(while read -r f; do
+		if [ -z "$f" ]; then
+			continue
+		fi
+
 		loadCfg "$GEMETA/$f.conf" X
 		VTXGAMFILENAME="$( grep "$f" "$VORTEXGAMES" | cut -d ";" -f 2 | cut -d '"' -f 2 )"
 		if [ -n "$VTXGAMFILENAME" ]; then
@@ -14290,7 +14821,7 @@ function setGameVortexStaging {
 	else
 		writelog "INFO" "${FUNCNAME[0]} - Looking for the mount point of the partition where the game dir '$VGAMEDIR' is"
 		# find matching Staging Directory:
-		GAMEMP="$(df -P "$VGAMEDIR" | awk 'END{print $NF}')"
+		GAMEMP="$( df --output=target "$VGAMEDIR" | tail -n1 )"  # df returns "Mounted on" heaqding, use tail to get actual path (using this method ensures file paths with spaces work too)
 		writelog "INFO" "${FUNCNAME[0]} - Mount point of partition where the game is installed: '$GAMEMP'"
 		unset CONFSTAGE VORTEXSTAGING
 
@@ -14468,6 +14999,11 @@ function setInstPathReg {
 
 function prepareVortexGame {
 	VAID="$1"
+
+	if [ -z "$VAID" ]; then
+		return
+	fi
+
 	if grep -q "\"$VAID\"" "$SEENVORTEXGAMES" 2>/dev/null; then
 		NEXUSGAMEID="$(grep "\"$VAID\"" "$VORTEXGAMES" | cut -d ';' -f1)"
 		writelog "INFO" "${FUNCNAME[0]} - '$NEXUSGAMEID ($VAID)' is already setup for '${VTX^}' - remove from '$SEENVORTEXGAMES' for retry"
@@ -14524,7 +15060,7 @@ function prepareVortexGame {
 function prepareAllInstalledVortexGames {
 	writelog "INFO" "${FUNCNAME[0]} - Preparing all installed games supported by ${VTX^}" "E"
 	setVortexVars
-	while read -r line ;do
+	while read -r line; do
 		unset NEXUSGAMEID
 		prepareVortexGame "$line" "X"
 	done <<< "$(getInstalledGamesWithVortexSupport X)"
@@ -14562,8 +15098,29 @@ function resetVortexSettings {
 	diff -u "$STLSHM/vortsetbefore.txt" "$STLSHM/vortsetafter.txt"
 }
 
+function setVortexReleaseChannel {
+	# Vortex settings.update.channel can be either 'stable', 'beta', or 'none' (where 'none' is 'No automatic updates')
+	writelog "INFO" "${FUNCNAME[0]} - DISABLEVORTEXAUTOUPDATE is '1'"
+	VTXUPDATECHANNEL="stable"
+	if [ "$DISABLEVORTEXAUTOUPDATE" -eq 1 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Disabling Vortex automatic updates"
+		VTXUPDATECHANNEL="none"
+	else
+		if [ "$USEVORTEXPRERELEASE" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Setting Vortex to use Pre-Release channel"
+			VTXUPDATECHANNEL="beta"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Setting Vortex to use Stable channel"
+			VTXUPDATECHANNEL="stable"
+		fi
+	fi
+
+	setVortSet "settings.update.channel=\"\\\"$VTXUPDATECHANNEL\\\"\""
+}
+
 function startVortex {
 	setVortexVars
+	setVortexSLR
 	askVortex "$1"
 	if [ "$USEVORTEX" -eq 1 ]; then
 		if [ ! -f "$VORTEXEXE" ]; then
@@ -14583,40 +15140,11 @@ function startVortex {
 			WINE="$VORTEXWINE" WINEDEBUG="-all" WINEPREFIX="$VORTEXPFX" "$WINECFG"
 		fi
 
-		if [ ! -d "$VORTEXDOTNETDIR" ] || [ ! -f "$VORTEXDOTNETDIR/dotnet.exe" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - DotNet6 is not installed yet"
-			DNSRC="windowsdesktop-runtime-6.0.6-win-x64.exe"
-			DLSITE="${VORTEXDOWNLOADPATH}/site"
-			if [ ! -f "$DLSITE/$DNSRC" ]; then
-				if [ -f "${VORTEXINSTDIR}/${VTXRAA}" ]; then
-					RAWDNDL="$(grep -am1 "$DNSRC" "${VORTEXINSTDIR}/${VTXRAA}" | grep -oP '="\K[^"},]+')"
-					echo "RAWDNDL '$RAWDNDL'"
-					if grep -q "^https" <<< "$RAWDNDL"	&& grep -q "exe$" <<< "$RAWDNDL"; then
-						writelog "INFO" "${FUNCNAME[0]} - Using download URL found in $VTX '${VTXRAA}'"
-						DNDL="$RAWDNDL"
-						dlCheck "$DNDL" "$DLSITE/$DNSRC" "X" " Downloading installer '$DNSRC' for DotNet6"
-					fi		
-				fi
-				
-				if [ ! -f "$DLSITE/$DNSRC" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - Using hardcoded download URL for DotNet6"
-					DNDL="https://download.visualstudio.microsoft.com/download/pr/9d6b6b34-44b5-4cf4-b924-79a00deb9795/2f17c30bdf42b6a8950a8552438cf8c1/$DNSRC"
-				fi
-				mkdir -p "$DLSITE"
-				dlCheck "$DNDL" "$DLSITE/$DNSRC" "X" " Downloading installer '$DNSRC' for DotNet6"
-			fi
-			if [ -f "$DLSITE/$DNSRC" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Starting installation of DotNet6 using '$DLSITE/$DNSRC'"
-				cd "$DLSITE" >/dev/null || return
-				wineVortexRun "$VORTEXWINE" "$DNSRC" "/quiet"
-				cd - >/dev/null || return
-			fi			
-		fi
-
 		if [ -f "$VORTEXEXE" ]; then
 			setVortexDLMime
 			setVortexDLPath
 			setVortexConfigVdf
+			setVortexReleaseChannel
 
 			if [ -n "$2" ] && [ "$2" -eq "$2" ] 2>/dev/null; then
 				StatusWindow "${VTX^}" "prepareVortexGame $2" "PrepareVortexGameStatus"
@@ -14867,6 +15395,24 @@ function setModWine {
 	fi
 }
 
+# Custom function to force SLR for a program outside of Steam running with Proton e.g. Vortex (may also work for One-Time Run)
+function setNonGameSLRReap {
+	USESLR=1
+	HAVESLR=0
+	HAVEREAP="${HAVEREAP:-0}"
+	HAVESLRCT="${HAVESLRCT:-0}"
+
+	FORCEPROTONSLR="$1"
+
+	# Only get SLRPROTONNAME if we're forcing Proton, otherwise ignore
+	if [ -n "$FORCEPROTONSLR" ] && [ "$FORCEPROTONSLR" -eq 1 ]; then
+		SLRPROTONNAME="$( getProtPathFromCSV "$2" )"  # This could be the name of the Proton version to run i.e. Vortex
+	fi
+
+	unset "${SLRCMD[@]}"
+	setSLRReap "1" "$FORCEPROTONSLR" "$SLRPROTONNAME"  # Get SLRCMD, optionally enforcing Proton (so we don't fall back to native Linux) and setting the Proton version to fetch the SLR info from (e.g. whether to use soldier, sniper, etc)
+}
+
 function setVortexVars {
 	VORTEXPFX="${VORTEXCOMPDATA//\"/}/pfx"
 	if [ -z "$VORTEXEXE" ]; then
@@ -14900,7 +15446,6 @@ function setVortexVars {
 	else
 		SETVTXPROT="$USEVORTEXPROTON"
 	fi
-	VORTEXDOTNETDIR="$VORTEXPFX/$DRC/Program Files/dotnet"
 
 	export DOTNET_ROOT="$VTX_DOTNET_ROOT"
 	
@@ -14912,6 +15457,33 @@ function setVortexVars {
 	fi
 }
 
+## NOTE: We can't use this in setVortexVars because the SLR should only be used to install Vortex pretty much, but there
+## are cases where the user can force it. So we only call this and then unset SLRCMD when necessary. Using this function
+## gives us creater control over when the SLR is used because we have to *explicitly* use it (setVortexVars is called
+## from a bunch of places).
+##
+## This can fix prepareAllInstalledVortexGames failing when trying to create links, which it can't seem to do on SteamOS when running in the SLR!!
+## See #823 for background.
+function setVortexSLR {
+	## Both of the SLR options for Vortex assume a valid Vortex Proton version.
+	## otherwise the SLR won't be used.
+
+	# Use SLR to install Vortex -- Recommended, see https://github.com/sonic2kk/steamtinkerlaunch/issues/806
+	if [ "$VORTEXUSESLR" -eq 1 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - VORTEXUSESLR is '$VORTEXUSESLR', using Steam Linux Runtime to install Vortex"
+		setNonGameSLRReap "1" "$USEVORTEXPROTON"  # Force the requested SLR for Vortex Proton version if we enable SLR option
+	else
+		writelog "INFO" "${FUNCNAME[0]} - Vortex will run WITHOUT the Steam Linux Runtime"
+	fi
+
+	## Use SLR for Vortex in general - Not recommended, see https://github.com/sonic2kk/steamtinkerlaunch/issues/828
+	if [ "$VORTEXUSESLRPOSTINSTALL" -eq 1 ]; then
+		writelog "WARN" "${FUNCNAME[0]} - WARNING: VORTEXUSESLRPOSTINSTALL is '$VORTEXUSESLRPOSTINSTALL', Vortex will be launched with the Steam Linux Runtime -- This may cause problems with mod deployment!"
+		setNonGameSLRReap "1" "$USEVORTEXPROTON"
+	fi
+}
+
+# TODO handle getting passed a custom executable
 function installVortex {
 	if [ -z "$VORTEXSETUP" ]; then
 		if [ -f "$VTST" ]; then 
@@ -14925,6 +15497,7 @@ function installVortex {
 
 	if [ -f "$VSPATH" ]; then
 		setVortexVars
+		setVortexSLR
 		if [ -f "$VORTEXEXE" ]; then
 			writelog "SKIP" "${FUNCNAME[0]} - '$VORTEXEXE' does already exists - nothing to install - skipping" "E"
 		else
@@ -14933,16 +15506,48 @@ function installVortex {
 			else
 				writelog "INFO" "${FUNCNAME[0]} - Using '$VORTEXPROTON' for installation" "E"
 				mkProjDir "$VORTEXCOMPDATA"
-				notiShow "$(strFix "$NOTY_INSTSTART" "${DOTN^}")" "S"
-				installDotNet "$VORTEXPFX" "$VORTEXWINE" "48"
+
+				## TODO dotnet installation currently fails on Steam Deck because it needs to be installed with the SLR
+				## There is no clean way to run Winetricks from the SLR if it's in `/usr/bin/winetricks` or similar, so
+				## for now we leave it up to Vortex to install dotnet6.
+				##
+				## This could be fixed with some hacky symlinking of dotnet perhaps, even temporarily while we install
+				## some winetricks components, and then removed afterwards, but this would be a separate feature.
+				## Removing this line should helph get Vortex working on SteamOS for now, until they break it again.
+				## 
+				## For context, see https://github.com/sonic2kk/steamtinkerlaunch/issues/806#issuecomment-1565759961
+
+				# Vortex 1.8.0+ only requires DotNet6 (only need to pass desktop6, as installDotNet will append dotnet)
+				# writelog "INFO" "${FUNCNAME[0]} - Installing .NET 6 for Vortex Mod Manager"
+				# notiShow "$(strFix "$NOTY_INSTSTART" "${DOTN^}")" "S"
+				# installDotNet "$VORTEXPFX" "$VORTEXWINE" "desktop6"  # Should be easy to bump if a newer version is ever required
+
 				touch "${VORTEXCOMPDATA}/tracked_files"
 				STEAM_COMPAT_CLIENT_INSTALL_PATH="$SROOT" STEAM_COMPAT_DATA_PATH="$VORTEXCOMPDATA" "$VORTEXPROTON" "run" 2> "$STLSHM/${FUNCNAME[0]}_protonrun.log"
 				notiShow "$GUI_DONE" "S"
 				sleep 3
 				writelog "INFO" "${FUNCNAME[0]} - Installing '$VSPATH' into '$VORTEXPFX'" E
 				notiShow "$(strFix "$NOTY_INSTSTART" "${VSPATH##*/}")" "S"
-				writelog "INFO" "${FUNCNAME[0]} - 'WINEDEBUG=\"-all\" WINEPREFIX=\"$VORTEXPFX\" \"$VORTEXWINE\" \"$VSPATH\" \"/S\"'" E
-				WINEDEBUG="-all" WINEPREFIX="$VORTEXPFX" "$VORTEXWINE" "$VSPATH" "/S"
+				# writelog "INFO" "${FUNCNAME[0]} - 'WINEDEBUG=\"-all\" WINEPREFIX=\"$VORTEXPFX\" \"$VORTEXWINE\" \"$VSPATH\" \"/S\"'" E
+				
+				# --------------------------
+				# Get SLR for Vortex Proton 
+				unset "${SLRCMD[@]}"
+				if [ "$VORTEXUSESLR" -eq 1 ]; then
+					setNonGameSLRReap "1" "$USEVORTEXPROTON"
+				fi
+
+				# If we got the runtime above and we want to use the SLR with Vortex, use it to install Vortex
+				if [ "$VORTEXUSESLR" -eq 1 ] && [ -n "${SLRCMD[*]}" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - 'WINEDEBUG=\"-all\" WINEPREFIX=\"$VORTEXPFX\" \"${SLRCMD[*]}\" \"$VORTEXWINE\" \"$VSPATH\" \"/S\"'" E
+					WINEDEBUG="-all" WINEPREFIX="$VORTEXPFX" "${SLRCMD[@]}" "$VORTEXWINE" "$VSPATH" "/S"
+				else
+					writelog "INFO" "${FUNCNAME[0]} - 'WINEDEBUG=\"-all\" WINEPREFIX=\"$VORTEXPFX\" \"$VORTEXWINE\" \"$VSPATH\" \"/S\"'" E
+					WINEDEBUG="-all" WINEPREFIX="$VORTEXPFX" "$VORTEXWINE" "$VSPATH" "/S"
+				fi
+				unset "${SLRCMD[@]}"
+				# --------------------------
+				
 				notiShow "$(strFix "$NOTY_INSTSTOP" "${VSPATH##*/}")" "S"
 				writelog "INFO" "${FUNCNAME[0]} - Base ${VTX^} installation finished" E
 				setVortexDLMime
@@ -14952,6 +15557,8 @@ function installVortex {
 	else
 		writelog "SKIP" "${FUNCNAME[0]} - '$VSPATH' not found - nothing to install - skipping"
 	fi
+
+	unset "${SLRCMD[@]}"
 }
 
 function installVortexGui {
@@ -15053,8 +15660,21 @@ function vtxWinecfg {
 		writelog "INFO" "${FUNCNAME[0]} - WINEDEBUG=\"-all\" WINEPREFIX=\"$VORTEXPFX\" \"$VORTEXWINE\" \"$OTWINECFGEXE\""
 		WINEDEBUG="-all" WINEPREFIX="$VORTEXPFX" "$VORTEXWINE" "$OTWINECFGEXE"
 	else
-		writelog "ERROR" "${FUNCNAME[0]} - Vortex is not installed, cannot run Winecfg for Vortex"
-		echo "Vortex is not installed, cannot run Winecfg for Vortex"
+		writelog "ERROR" "${FUNCNAME[0]} - Vortex is not installed or prefix is missing, cannot run Winecfg for Vortex -- VORTEXPFX is '$VORTEXPFX'"
+		echo "Vortex is not installed or prefix is missing, cannot run Winecfg for Vortex"
+	fi
+}
+
+function vtxWinetricks {
+	setVortexVars
+	chooseWinetricks
+	if [ -d "$VORTEXPFX" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Running Winetricks for Vortex"
+		writelog "INFO" "${FUNCNAME[0]} - WINEDEBUG=\"-all\" WINEPREFIX=\"$VORTEXPFX\" WINE=\"$VORTEXWINE\" \"$WINETRICKS\""
+		WINEDEBUG="-all" WINEPREFIX="$VORTEXPFX" WINE="$VORTEXWINE" "$WINETRICKS"
+	else
+		writelog "ERROR" "${FUNCNAME[0]} - Vortex is not installed or prefix is missing, cannot run Winetricks for Vortex -- VORTEXPFX is '$VORTEXPFX'"
+		echo "Vortex is not installed or prefix is missing, cannot run Winetricks for Vortex"
 	fi
 }
 
@@ -15595,7 +16215,11 @@ function setMO2DLMime {
 		echo "Terminal=false"
 		echo "X-KeepTerminal=false"
 		echo "Path=$(dirname "$MO2EXE")"
-		echo "Exec=$(realpath "$0") mo2 u %u"
+		if [ "$INFLATPAK" -eq 1 ]; then
+			echo "Exec=/usr/bin/flatpak run --command=steamtinkerlaunch $FLATPAK_ID mo2 u %u"
+		else
+			echo "Exec=$(realpath "$0") mo2 u %u"
+		fi
 		echo "NoDisplay=false"
 		echo "Hidden=false"
 		} >> "$FMO2D"
@@ -15689,11 +16313,24 @@ function mo2Winecfg {
 
 	if [ -d "$MO2PFX" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Running Winecfg for MO2"
-		writelog "INFO" "${FUNCNAME[0]} - WINEDEBUG=\"-all\" WINEPREFIX=\"$VORTEXPFX\" \"$MO2WINE\" \"$OTWINECFGEXE\""
+		writelog "INFO" "${FUNCNAME[0]} - WINEDEBUG=\"-all\" WINEPREFIX=\"$MO2PFX\" \"$MO2WINE\" \"$OTWINECFGEXE\""
 		WINEDEBUG="-all" WINEPREFIX="$MO2PFX" "$MO2WINE" "$OTWINECFGEXE"
 	else
-		writelog "ERROR" "${FUNCNAME[0]} - ModOrganizer 2 is not installed, cannot run Winecfg for MO2"
-		echo "ModOrganizer 2 is not installed, cannot run Winecfg for ModOrganizer 2"
+		writelog "ERROR" "${FUNCNAME[0]} - ModOrganizer 2 is not installed or prefix is missing, cannot run Winecfg for MO2"
+		echo "ModOrganizer 2 is not installed or prefix is missing, cannot run Winecfg for ModOrganizer 2"
+	fi
+}
+
+function mo2Winetricks {
+	setMO2Vars
+	chooseWinetricks
+	if [ -d "$MO2PFX" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Running Winetricks for MO2"
+		writelog "INFO" "${FUNCNAME[0]} - WINEDEBUG=\"-all\" WINEPREFIX=\"$MO2PFX\" WINE=\"$MO2WINE\" \"$WINETRICKS\""
+		WINEDEBUG="-all" WINEPREFIX="$MO2PFX" WINE="$MO2WINE" "$WINETRICKS"
+	else
+		writelog "ERROR" "${FUNCNAME[0]} - ModOrganizer 2 is not installed or prefix is missing, cannot run Winetricks for MO2"
+		echo "ModOrganizer 2 is not installed or prefix is missing, cannot run Winetricks for ModOrganizer 2"
 	fi
 }
 
@@ -15969,7 +16606,8 @@ function startDepressurizer {
 			mkProjDir "$DPRSSUDIR"
 			cd "$DPRSSUDIR" >/dev/null || return
 			sleep 1
-			LC_ALL="C" PATH="$STLPATH" LD_LIBRARY_PATH="" LD_PRELOAD="" WINE="$DPRSWINE" WINEARCH="win64" WINEDEBUG="$DPRSWINEDEBUG" WINEPREFIX="$DPRSPFX" "$DPRSWINE" "$DPRSEXE" >/dev/null 2>/dev/null
+			# LC_ALL="C" was previously used here, but may not be required anymore
+			PATH="$STLPATH" LD_LIBRARY_PATH="" LD_PRELOAD="" WINE="$DPRSWINE" WINEARCH="win64" WINEDEBUG="$DPRSWINEDEBUG" WINEPREFIX="$DPRSPFX" "$DPRSWINE" "$DPRSEXE" >/dev/null 2>/dev/null
 			cd - >/dev/null || return
 		else
 			writelog "ERROR" "${FUNCNAME[0]} - Proton Wine for not found - can't start '$DPRSEXE'"
@@ -16238,6 +16876,16 @@ function checkIntDeps {
 				notiShow "$(strFix "$NOTY_NOTFOUND2" "$YADVER" "$MINYAD")"
 				if [ "$1" != "--help" ] && [ "$1" != "-h" ]; then
 					exit
+				fi
+			else
+				# If the Yad version is valid, and if we don't have Yad in the config file currently, write it out
+				if [ -f "$YAD" ] && grep -q "YAD=\"\"" "$STLDEFGLOBALCFG"; then
+					writelog "INFO" "${FUNCNAME[0]} - Internal Yad variable is '$YAD' but Yad is not defined in the Global Config, updating with Yad variable value..."
+
+					touch "$FUPDATE"
+					updateConfigEntry "YAD" "$YAD" "$STLDEFGLOBALCFG"
+				else
+					writelog "INFO" "${FUNCNAME[0]} - Yad is set correctly in the Global Config, nothing to do."
 				fi
 			fi
 		fi
@@ -18452,7 +19100,11 @@ function standaloneDesktopFile {
 				echo "[Desktop Entry]"
 				echo "Name=${GAMENAME//\"/}"
 				echo "Comment=$(strFix "$DF_SLCOMMENT" "${GAMENAME//\"/}" "$PROGNAME")"
-				echo "Exec=$(realpath "$0") play $AID"
+				if [ "$INFLATPAK" -eq 1 ]; then
+					echo "Exec=/usr/bin/flatpak run --command=steamtinkerlaunch $FLATPAK_ID play $AID"
+				else
+					echo "Exec=$(realpath "$0") play $AID"
+				fi
 				echo "Icon=$WANTGPNG"
 				echo "Terminal=false"
 				echo "Type=Application"
@@ -18666,7 +19318,7 @@ function dlWineGUI {
 	fi
 }
 
-# currently unused:
+# TODO currently unused:
 function PickSpecificWine {
 	export CURWIKI="$PPW/Download-Custom-Wine"
 	TITLE="${PROGNAME}-${FUNCNAME[0]}"
@@ -18955,24 +19607,63 @@ function getRequireToolAppidPath {
 	fi
 }
 
+# Function to get SLR to append to game/program launch
+# Primarily used to set SLRCMD so it can be appended, but also sets the reaper command
 function setSLRReap {
-	if [ -n "$USESLR" ] && [ -n "$HAVESLR" ]; then
+
+	# This function has gotten a bit messy with all the override options,
+	# but these are used to allow setSLRReap to be re-used outside of regular game launches
+	# such as for Vortex.
+
+	# These variables are only passed for Non-Game SLR launches i.e. Vortex, they are ignored for game launches and use fallback values
+
+	OVERRIDESLR="$1"  # Always get SLR, ignoring other vars that specify otherwise
+	SLRFORCEPROTON="${2:-0}"  # Force fetch the Proton SLR ignoring value of ISGAME
+	SLRPROTONVER="$3"  # Proton version to fetch the SLR version from (where to find the toolmanifest.vdf from) -- Optional, will fall back to RUNPROTON set by game
+
+	# Allow overriding USESLR/HAVESLR and forcing to fetch the SLR anyway (used for times when SLR is needed outside of regular game launch e.g. Vortex)
+	if [ -n "$OVERRIDESLR" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - OVERRIDESLR is enabled, ignoring user settings and fetching SLR anyway"
+	fi
+
+	# Set the Proton path to look for the toolmanifest.vdf file in for game launches we want RUNPROTON, but for non-game SLR cases
+	# we want to set a custom Proton path without overriding RUNPROTON which could interfere with subsequent game launches) 
+	if [ -z "$SLRPROTONVER" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - SLRPROTONVER is not defined, this is fine as regular game launches don't pass this"
+		
+		writelog "INFO" "${FUNCNAME[0]} - Falling back to RUNPROTON which is '$RUNPROTON'"
+		SLRPROTONVER="${RUNPROTON}"
+	fi
+
+	# USESLR tells whether the user has chosen to get the SLR, HAVESLR refers to the legacy check for the SLR passed from the compat tool/Steam launch command
+	if [[ ( -n "$USESLR" && -n "$HAVESLR" ) || -n "$OVERRIDESLR" ]]; then
+
+		# Legacy SLR fetching (from Steam start command)
+		# --------------
+		# This is very legacy and won't happen anymore outside of very old compat tools
 		if [ "$HAVESLRCT" -eq 1 ] && [ "$USESLR" -eq 1 ]; then
 			writelog "INFO" "${FUNCNAME[0]} - ## SLR is enabled via USESLR=$USESLR - prepending SLR from Compatibility Tool to the current launch command"
 			SLRCMD=("${RUNSLRCT[@]}")
 		fi
 		
+		# This is very legacy as well, same as above but for native games
 		if [ "$HAVESLR" -eq 1 ] && [ "$USESLR" -eq 1 ]; then
 			writelog "INFO" "${FUNCNAME[0]} - ## SLR is enabled via USESLR=$USESLR - prepending SLR from command line to the current launch command"
 			SLRCMD=("${RUNSLR[@]}")
 		fi
 
+		# Legacy case to ignore SLR gotten from commandline
 		if [ "$HAVESLR" -eq 1 ] && [ "$USESLR" -eq 0 ] ; then
 			writelog "SKIP" "${FUNCNAME[0]} - USESLR is disabled, so skipping '$SLR' found in the commandline: '${RUNSLR[*]}'"
 		fi
-		RUNFORCESLR=0
+		# --------------
 
-		if [ "$HAVESLR" -eq 0 ] && [ "$USESLR" -eq 1 ] ; then
+
+
+		# Modern SLR fetching (from toolmanifest.vdf / native Linux SLR AppID)
+		# ---------------
+		RUNFORCESLR=0
+		if [[ ( "$HAVESLR" -eq 0 && "$USESLR" -eq 1 ) || -n "$OVERRIDESLR" ]]; then
 			if [ -n "$LASTSLR" ] && [ -f "${LASTSLR% --verb*}" ] && [ "$FORCESLR" -eq 1 ]; then
 				writelog "INFO" "${FUNCNAME[0]} - ## No SLR provided from command line, but FORCESLR is $FORCESLR, so prepending LASTSLR '$LASTSLR' to the current launch command"
 				mapfile -d " " -t -O "${#LASTSLRARR[@]}" LASTSLRARR < <(printf '%s' "$LASTSLR")
@@ -18990,8 +19681,10 @@ function setSLRReap {
 				NATIVE_SLRCMD=("")
 
 				# Pressure Vessel Funtime 2nd Edition Ver. 2.31
+				writelog "INFO" "${FUNCNAME[0]} - Now executing Pressure Vessel Funtime 2nd Edition Ver. 2.31"
 				# Get SLR Paths
-				if [ "$ISGAME" -eq 3 ]; then
+				if [ "$ISGAME" -eq 3 ] && [ "$SLRFORCEPROTON" -eq 0 ]; then  # ISGAME -eq 3 is always true for running outside of Steam eg One-Time Run...
+					
 					# Native games already have a hardcoded initial native SLR AppID, so we can get the path from this hardcoded AppID
 					# However they need to get the required "nested" SLR from the toolmanifest from the hardcoded native SLR - This is the SLR that the regular native SLR runs inside of
 					# This nested AppID is stored in the hardcoded SLR's toolmanifest
@@ -19010,8 +19703,7 @@ function setSLRReap {
 						writelog "WARN" "${FUNCNAME[0]} - Could not find Steam Linux Runtime with AppID '$SLRAID' for native Linux game - This will need to be installed manually!"
 					fi
 				else
-					# Path to SLR based on AppID in Proton's `toolmanifest.vdf`
-					SLR_PATH="$( getRequireToolAppidPath "$( dirname "$RUNPROTON" )" )"
+					SLR_PATH="$( getRequireToolAppidPath "$( dirname "$SLRPROTONVER" )" )"  # Path to SLR based on AppID in Proton's `toolmanifest.vdf`
 				fi
 
 				# Build SLRCMD
@@ -19033,11 +19725,16 @@ function setSLRReap {
 					SLRCMD=("${PROTON_SLRCMD[@]}" "${NATIVE_SLRCMD[@]}")  # Not really "Proton" for native games, but naming is hard
 				else
 					writelog "INFO" "${FUNCNAME[0]} - Building Steam Linux Runtime command for Proton game"
-					SLRCMD=("${PROTON_SLRCMD[@]}") 
+					SLRCMD=("${PROTON_SLRCMD[@]}")
 				fi
 			fi
 		fi
-	
+		# ---------------
+
+
+
+		# Set Reaper command (currently no way to toggle this if we call setSLRReap for non-game launches, doesn't seem to have any negative impact though?)
+		# ---------------
 		if [ "$HAVEREAP" -eq 1 ] && [ "$USEREAP" -eq 1 ]; then
 			writelog "INFO" "${FUNCNAME[0]} - ## reaper command is enabled via USEREAP=$USEREAP - prepending to the current launch command"
 			SLRCMD=("${REAPCMD[@]}" "${SLRCMD[@]}")
@@ -19045,10 +19742,91 @@ function setSLRReap {
 			writelog "INFO" "${FUNCNAME[0]} - ## No reaper command provided from command line, but FORCEREAP is $FORCEREAP, so prepending LASTREAP '$LASTREAP' to the current launch command"
 			SLRCMD=("$LASTREAP" "SteamLaunch" "AppId=$AID" "--" "${SLRCMD[@]}")
 		fi
+		# ---------------
 
-		if [ -n "${SLRCMD[0]}" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Adding SLR '${SLRCMD[*]}' to the launch command"
+		# Reaper is started *by Steam now for Proton games* after a game launch (i.e. after %command% but *not* before)
+		# so if reaper is disabled we have to check for and kill it
+		#
+		# Doesn't apply to native games because we use 'steamtinkerlaunch %command%',
+		# and reaper is started as part of '%command%'.
+		if [ "$USEREAP" -eq 0 ]; then
+			if "$PGREP" -x "reaper"; then
+				writelog "INFO" "${FUNCNAME[0]} - USEREAP is '$USEREAP' and found reaper process, killing it!"
+				"$PKILL" -9 "reaper"
+			fi
 		fi
+
+		if [ -n "${SLRCMD[*]}" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Adding SLR '${SLRCMD[*]}' to the launch command"
+		else
+			if [ "$USESLR" -eq 1 ]; then
+				notiShow "$NOTY_SLRMISSING" "X"
+			else
+				writelog "INFO" "${FUNCNAME[0]} - SLRCMD is not defined, but USESLR is disabled, so this should be safe to ignore"
+			fi
+		fi
+	else
+		writelog "INFO" "${FUNCNAME[0]} - USESLR and HAVESLR not defined -- Probably shouldn't happen?"
+	fi
+}
+
+## Fetch the AppID required by a game's selected Proton version, and prompt Steam to install it with steam://install/<appid>
+##
+## Could be extended to a GUI in future, similar to commandlineOneTimeRun and OneTimeRunGui
+## Ideally we would use a Main Menu button for it (maybe replace wiki button?)
+function commandlineFetchGameSLR {
+	FUSEID "$1"
+	USENATIVE="$2"  # We could pass this from the UI if we know we have a native game (ISGAME -eq 3)
+
+	if [ "$USENATIVE" -eq 1 ]; then  # Get native Linux SLR
+		# Check if SLR is already installed
+		EXISTINGSLRPATH="$( getGameDir "$SLRAID" "only" )"
+		echo "$EXISTINGSLRPATH"
+		if [ -d "$EXISTINGSLRPATH" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Required Steam Linux Runtime ('$SLRAID') is already installed at '$EXISTINGSLRPATH' -- Nothing to do."
+			echo "Required Steam Linux Runtime ('$SLRAID') is already installed at '$EXISTINGSLRPATH' -- Nothing to do."
+			return
+		fi
+
+		SLRINSTALLCMD="steam steam://install/$SLRAID"
+		writelog "INFO" "${FUNCNAME[0]} - Installing Steam Linux Runtime for Native Linux games"
+		echo "Installing Steam Linux Runtime for Native Linux games"
+
+		eval "$SLRINSTALLCMD"
+		echo "Continue installation of tool from Steam install dialog."
+	elif [ -f "$STLGAMECFG" ] && [ -n "$USEPROTON" ]; then  # If this is a game launched before with STL, get the Steam Linux Runtime for it
+		PROTPATH="$( dirname "$( getProtPathFromCSV "$USEPROTON" )" )"
+		
+		# Very similar to logic in getRequireToolAppidPath
+		TOMAPATH="${PROTPATH}/$TOMA"
+		if [ -f "$TOMAPATH" ]; then
+			SLRID="$( getValueFromAppManifest "require_tool_appid" "$TOMAPATH" )"
+			if [ -n "$SLRID" ]; then
+				# Check if SLR is already installed
+				EXISTINGSLRPATH="$( getGameDir "$SLRID" "only" )"
+				if [ -d "$EXISTINGSLRPATH" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Required Steam Linux Runtime ('$SLRID') is already installed at '$EXISTINGSLRPATH' -- Nothing to do."
+					echo "Required Steam Linux Runtime ('$SLRID') is already installed at '$EXISTINGSLRPATH' -- Nothing to do."
+					return
+				fi
+
+				SLRINSTALLCMD="steam steam://install/$SLRID"
+				writelog "INFO" "${FUNCNAME[0]} - Game Proton version '$USEPROTON' expects Steam Linux Runtime with AppID '$SLRID' - Requesting it from Steam..."
+				echo "Game Proton version '$USEPROTON' expects Steam Linux Runtime with AppID '$SLRID' - Requesting it from Steam..."
+
+				eval "$SLRINSTALLCMD"
+				echo "Continue installation of tool from Steam install dialog."
+			else  # No require_tool_appid set in toolmanifest.vdf
+				writelog "ERROR" "${FUNCNAME[0]} - require_tool_appid was not defined ('$SLRID') -- Maybe no Steam Linux Runtime is required for this Proton version?"
+				echo "require_tool_appid was not defined ('$SLRID') -- Maybe no Steam Linux Runtime is required for this Proton version?"
+			fi
+		else  # No toolmanifest.vdf set at all
+			writelog "ERROR" "${FUNCNAME[0]} - Could not find $TOMA for Proton version '$USEPROTON' at path '$PROTPATH'"
+			echo "Could not find $TOMA for Proton version '$USEPROTON' at path '$PROTPATH'"
+		fi
+	else  # Not a valid game used with STL before
+		writelog "ERROR" "${FUNCNAME[0]} - Could not find STLGAMECFG ('$STLGAMECFG') or USEPROTON ('$USEPROTON') for AppID '$AID'"
+		echo "Could not find STLGAMECFG ('$STLGAMECFG') or USEPROTON ('$USEPROTON') for AppID '$AID'"
 	fi
 }
 
@@ -19294,6 +20072,7 @@ function launchSteamGame {
 
 	writelog "INFO" "${FUNCNAME[0]} - Initial game command is '${INGCMD[*]}'"
 
+	unset "${SLRCMD[@]}"
 	setSLRReap
 	
 	if [ "$USEBOXTRON" -eq 1 ] || [ "$USEROBERTA" -eq 1 ] || [ "$USELUXTORPEDA" -eq 1 ]; then
@@ -19692,9 +20471,12 @@ function howto {
 	echo "    backup <value>                   Backup found '$STUS' files"
 	echo "                                       (for 'SteamAppID' or 'all')"
 	echo "    block                            Opens the category Block selection menu"
+	echo "    cleardeckdeps                    Remove downloaded Steam Deck dependencies, allowing them to"
+	echo "                                      update on next launch (This option is only applicable to SteamOS 3.X)"
 	echo "    compat <cmd>                     Will (add|del|get) ${PROGNAME,,} as" 
 	echo "                                       Steam compatibility tool"
 	echo "                                       under 'STEAMCOMPATOOLS'"
+	echo "    configdir                        Open the SteamTinkerLaunch config directory with xdg-open"
 	echo "    createappinfo|cai <id|i|o>       Create raw appinfo for <id>"
 	echo "                                      or for 'installed|i' or 'owned|o' games"
 	echo "                                      Append any arg to update the raw file"
@@ -19715,7 +20497,6 @@ function howto {
 	echo "                                       3=for desktop and application menu"
 	echo "    createfirstinstall|cfi <gameid>  Open gui to create a Steam First Time Setup" 
 	echo "    <a|c|r|file> (see wiki)            file for game <gameid>"
-	echo "    configdir                        Open the SteamTinkerLaunch config directory with xdg-open"
 	echo "    ${DPRS,}|dprs                    Prepare/launch ${DPRS}"
 	echo "    dlcustomproton|dcp <url|l>       Download/install custom Proton"
 	echo "                                       - from filerequester"
@@ -19733,13 +20514,15 @@ function howto {
 	echo "                                       (for 'SteamAppID' or 'last')"
 	echo "    gamefiles|gf <gameid>            Opens menu for opening <gameid> files"
 	echo "    gamescope|gs <gameid>            Gamescope config-menu for <gameid>"
-	echo "    (get commands only for games known by ${PROGNAME,,}:)"
+	echo "    (get commands work most reliably for games previously launched with ${PROGNAME,,}:)"
 	echo "    getcompatdata|gc <gameid/title>  Print the Game compatdata path"
-	echo "    getexe|ge <gameid>               Print the Game Exe for <gameid>"
+	echo "    getexe|ge <gameid/title>         Print the Game Exe for <gameid/title>"
 	echo "    getgamedir|gg <gameid/title>     Print the Game install directory with game name and AppID"
 	echo "                  only                 Only display install directory"
-	echo "    getid|gi <gametitle>             Print the SteamAppId for <gametitle>"
+	echo "    getid|gi|gid <gametitle>         Print the SteamAppId for <gametitle>"
 	echo "    gettitle|gt <gameid>             Print the Game Title for <gameid>"
+	echo "    getslr <gameid>                  Fetch the required Steam Linux Runtime for <gameid>'s SteamTinkerLaunch Proton version"
+	echo "               native                  (optional) get the native Steam Linux Runtime"
 	echo "    hedgemodmanager|hmm              HedgeModManager"
 	echo "            install|i                  install latest stable HedgeModManager"
 	echo "            download|d <channel>       download latest HedgeModManager release (stable or nightly)"
@@ -19768,28 +20551,49 @@ function howto {
 	echo "    list <owned|installed>           List ids of <owned|o,installed|i> games"
 	echo "         <id|name|path|count|full>     Optionally specify whether you want to see"
 	echo "                                        each game's <id|name|path|count|full>"
+	echo "    listproton|lp                    List name and path of all Proton versions known to SteamTinkerLaunch"
+	echo "         name|n                        Only list the Proton version names"
+	echo "         path|p                        Only list paths to the Proton versions"
 	echo "    meta                             Generates/Updates metadata"
 	echo "                                       for all installed games"
 	echo "    mo2                              Mod Organizer 2"
-	echo "         install|i                   install MO2 (includes download)"
+	echo "         create-instance|ci <id>     create MO2 instance for <id>"
 	echo "         download|d                  download latest MO2 release"
-	echo "         start|s                     start MO2 (includes download+install)"
+	echo "         getprefix|gp                Output path to MO2 prefix"
+	echo "         install|i                   install MO2 (includes download)"
 	echo "         list-supported|ls           list games supported by MO2"
 	echo "         list-installed|li           list installed games supported by MO2"
-	echo "         create-instance|ci <id>     create MO2 instance for <id>"
-	echo "         url|u <url>                 open nxm url with MO2"
 	echo "         resetmime                   (Re)set MimeType and application menu entries"
+	echo "         start|s                     start MO2 (includes download+install)"
+	echo "         url|u <url>                 open nxm url with MO2"
 	echo "         winecfg                     Run Winecfg with MO2 Wine in MO2 prefix"
+	echo "         winetricks|wt               Run Winetricks with MO2 Wine in MO2 prefix"
 	echo "    opengridfolder|ogf               Open the Steam Grid folder where custom game artwork is stored using xdg-open"
 	echo "    openissue|oi                     Opens issue tracker on GitHub in default browser"
+	echo "    onetimerun|otr <gameid>          Opens One-Time Run menu for running a one-off executable in <gameid>'s Wineprefix"
+	echo "                                       Optionally takes command-line parameters to run without the GUI. Note that only"
+	echo "                                       the path to the one-time exe is required, STL will try to infer the other options"
+	echo "                                       such as Proton version where possible."
+	echo "         <args>:"
+	echo "         --exe=                        Absolute path to the One-Time executable (can be Windows or Linux executable)"
+	echo "         --proton=                     Name of the Proton version to use (see steamtinkerlaunch lp), ignored if not Windows executable"
+	echo "         --workingdir=                 Working directory to launch the executable from"
+	echo "         --useexedir                   Use the same directory as the executable as the working directory (overrides --workingdir)"
+	echo "         --args=                       Arguments to append to the end of the executable launch"
+	echo "         --forceproton                 Use Proton to run executable even if SteamTinkerLaunch detects doesn't detect it as a Windows executable"
+	echo "         --useslr                      Use the Steam Linux Runtime to run the application, if available (uses SLR specified by Proton version or native Linux Steam Linux Runtime)"
+	echo "         --save                        Save given configuration for use in the One-Time Run GUI for this game in future"
+	echo "         --default                     Restore all saved One-Time Run values to default"
 	echo "    play <gameid>                    Start game with id <gameid> directly" 
  	echo "    proton|p <title> <X>             Start and/or create <title> with proton"
 	echo "                                       without using steam."
 	echo "                                       Optional <X> opens gui"
  	echo "    proton|p list                    Update the list of all available proton versions"
-	echo "    set <var> <for> <value>          Change configuration settings"
+	echo "    set <var> <for> <value>          Change configuration settings, either per-game (<AppID>), for all games (<all>),"
+	echo "                                      or in the Global config (<global>)"
 	echo "                                       Example:"
 	echo "      set RUN_REPLAY all 1               Set RUN_REPLAY for all games to 1"
+	echo "      set STLEDITOR global \"/path\"     Set the path to the STLEDITOR binary in the global config"
 	echo "    setgameart|sga <gameid> <args>   Set the artwork for various games by their AppID using absolute paths"
 	echo "                                      Passing no args will open a GUI"
 	echo "                                      By default, given artwork will be copied to the Steam Grid folder"
@@ -19838,6 +20642,10 @@ function howto {
 	echo "           reshade <version>           (re)-download ReShade (version)"
 	echo "    version                          Output the program version"
 	echo "    ${VTX} <value>                   ${VTX^} commandline options"
+	echo "                                      ${VTX} download, install, and start can optionally take"
+	echo "                                       a version tag to download."
+	echo "                                      Ex: steamtinkerlaunch vortex start v1.8.0"
+	echo "           getprefix|gp                Output path to Vortex prefix"
 	echo "           install                     Installs ${VTX^}"
 	echo "           list-supported|ls           List all ${VTX^}-supported Steam Game IDs"
 	echo "                                       (offline - ${VTX^} needs to be installed)"
@@ -19851,9 +20659,10 @@ function howto {
 	echo "           getset                      Show config of installed ${VTX^}"
 	echo "           reset                       Reset all autodetected settings in ${VTX^}"
 	echo "           stage <path>                Add ${VTX^} stage via dialog"
+    echo "                                        or directly the one given in <path>"
 	echo "           resetmime                   (Re)set MimeType and application menu entries"
 	echo "           winecfg                     Run Winecfg with ${VTX^} Wine in ${VTX^} prefix"
-    echo "                                        or directly the one given in <path>"
+	echo "           winetricks|wt               Run Winetricks with ${VTX^} Wine in ${VTX^} prefix"
 	echo "    vr <windowname> <SteamAppID> <s> Start SBS-VR mode for <windowname>"
 	echo "                                       and game <SteamAppID>"
 	echo "                                       's'ave windowname for the game"
@@ -19902,6 +20711,14 @@ function commandline {
 	elif [ "$1" == "block" ]; then
 		FUSEID "$2"
 		setGuiBlockSelection "$USEID"
+	elif [ "$1" == "cleardeckdeps" ]; then
+		# We check this in clearDeckDeps too, but thsis is just insurance
+		if [ "$ONSTEAMDECK" -eq 1 ]; then
+			clearDeckDeps
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - Not on Steam Deck, nothing to do."
+			echo "Not on Steam Deck, nothing to do."
+		fi
 	elif [ "$1" == "sort" ]; then
 		setGuiSortOrder
 	elif [ "$1" == "compat" ]; then
@@ -19991,6 +20808,8 @@ function commandline {
 	elif [ "$1" == "dxvkhud" ] || [ "$1" == "dxh" ]; then
 		FUSEID "$2"
 		DxvkHudPick "$USEID"
+	elif [ "$1" == "listproton" ] || [ "$1" == "lp" ]; then
+		prettyPrintProtonArr "$2"
 	elif [ "$1" == "dotnet" ]; then
 		if [ -n "$3" ]; then
 			installDotNet "$2" "$3" "$4"
@@ -20017,8 +20836,8 @@ function commandline {
 		FUSEID "$2"
 		GameScopeGui "$USEID" "$3"
 	elif [ "$1" == "getexe" ] || [ "$1" == "ge" ]; then
-		getExeFromID "$2"
-	elif [ "$1" == "getid" ] || [ "$1" == "gi" ]; then
+		getGameExe "$2"
+	elif [ "$1" == "getid" ] || [ "$1" == "gi" ] || [ "$1" == "gid" ]; then
 		getIDFromTitle "$2"
 	elif [ "$1" == "gettitle" ] || [ "$1" == "gt" ]; then
 		getTitleFromID "$2"
@@ -20048,6 +20867,13 @@ function commandline {
 		fi
 	elif [ "$1" == "meta" ]; then
 		createMetaData "yes"
+	elif [ "$1" == "getslr" ]; then
+		if [ "$3" == "native" ]; then
+			FETCHNATIVESLR=1
+		else
+			FETCHNATIVESLR=0
+		fi
+		commandlineFetchGameSLR "$2" "$FETCHNATIVESLR"
 	elif [ "$1" == "mo2" ]; then
 		if [ -n "$2" ]; then
 			if [ "$2" == "download" ] || [ "$2" == "d" ]; then
@@ -20083,8 +20909,12 @@ function commandline {
 					writelog "INFO" "${FUNCNAME[0]} - URL passed is '$3'"
 					dlMod2nexurl "$3"
 				fi
+			elif [ "$2" == "getpfx" ] || [ "$2" == "gp" ]; then
+				echo "$MO2COMPDATA/pfx"
 			elif [ "$2" == "winecfg" ]; then
 				mo2Winecfg
+			elif [ "$2" == "winetricks" ] || [ "$2" == "wt" ]; then 
+				mo2Winetricks
 			elif [ "$2" == "resetmime" ]; then
 				writelog "INFO" "${FUNCMAME[0]} - (Re)setting MO2 .desktop file entries and MimeType associations"
 				echo "(Re)setting MO2 .desktop file entries and MimeType associations"
@@ -20165,7 +20995,21 @@ function commandline {
 		notiShow "$NTEXT"
 	elif [ "$1" == "onetimerun" ] || [ "$1" == "otr" ]; then
 		FUSEID "$2"
-		OneTimeRunGui "$USEID"
+		if [ -z "$2" ]; then
+			writelog "WARN" "${FUNCNAME[0]} - No AppID provided for One-Time Run, attempting to start with last known AppID '$USEID'"
+			if [ -n "$USEID" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Found AppID '$USEID' - Using this for One-Time Run"
+				OneTimeRunGui "$USEID"
+			else
+				writelog "ERROR" "${FUNCNAME[0]} - Could not find last known AppID - Aborting One-Time Run"
+			fi
+		else
+			if [ -z "$3" ]; then
+				OneTimeRunGui "$USEID"
+			else
+				commandlineOneTimeRun "${@:2}"  
+			fi
+		fi
 	elif [ "$1" == "pdb" ]; then
 		getProtonDBRating "$2"
 	elif [ "$1" == "steamdeckcompat" ] || [ "$1" == "sdc" ]; then
@@ -20208,7 +21052,12 @@ function commandline {
 		fi
 	elif [ "$1" == "set" ]; then
 		if [ -n "$2" ]; then
-				ENTLIST="$(sed -n "/#STARTsaveCfgdefault_template/,/#ENDsaveCfgdefault_template/p;/#ENDsaveCfgdefault_template/q" "$0" | grep "echo" | grep "=" | cut -d '"' -f2 | cut -d '=' -f1 | sed 's/^#//')"
+				if [ "$3" == "global" ]; then
+					ENTLIST="$(sed -n "/#STARTsaveCfgglobal/,/ENDsaveCfgglobal/p;/#ENDsaveCfgglobal/q" "$0" | grep "echo" | grep "=" | cut -d '"' -f2 | cut -d '=' -f1 | sed 's/^#//')"
+				else
+					ENTLIST="$(sed -n "/#STARTsaveCfgdefault_template/,/#ENDsaveCfgdefault_template/p;/#ENDsaveCfgdefault_template/q" "$0" | grep "echo" | grep "=" | cut -d '"' -f2 | cut -d '=' -f1 | sed 's/^#//')"
+				fi
+
 				if ! grep "$2" <<< "$ENTLIST" >/dev/null; then
 					writelog "INFO" "${FUNCNAME[0]} - '$2' is no valid entry - valid are:" "E"
 					writelog "INFO" "${FUNCNAME[0]} ------------------------" "E"
@@ -20233,6 +21082,10 @@ function commandline {
 							writelog "INFO" "${FUNCNAME[0]} - updating entry '$2' to value '$4' in config '$STLGAMEDIRID/$3.conf'" "E"
 							touch "$FUPDATE"
 							updateConfigEntry "$2" "$4" "$STLGAMEDIRID/$3.conf"
+						elif [ "$3" == "global" ] && [ -f "$STLDEFGLOBALCFG" ]; then
+							writelog "INFO" "${FUNCNAME[0]} - update global config entry '$2' to value '$3' in global config file '$STLDEFGLOBALCFG'" "E"
+							touch "$FUPDATE"
+							updateConfigEntry "$2" "$4" "$STLDEFGLOBALCFG"
 						else
 							writelog "INFO" "${FUNCNAME[0]} - config file '$STLGAMEDIRID/$3.conf' does not exist - nothing to do - exit" "E"
 							exit
@@ -20349,8 +21202,25 @@ function commandline {
 	elif [ "$1" == "version" ] || [ "$1" == "--version" ] || [ "$1" == "-v" ]; then
 		echo "${PROGNAME,,}-${PROGVERS}"
 	elif [ "$1" == "$VTX" ]; then
+		# TODO Vortex uninstall option?
+		# TODO Vortex commandline flag to set no auto update (i.e. --disable-auto-update)
+
 		USEVORTEX=1
 		if [ -n "$2" ]; then
+			# If we get a third parameter and any passed command should download/install/start Vortex,
+			# set the Vortex version to download to the given version (will only be used if Vortex is not already installed)
+			#
+			# TODO handle passing a custom installer file, probably only for "install" though where we'll force set a different var
+			if [[ -n "$3" && ( "$2" == "download" || "$2" == "install" || "$2" == "start" || "$2" == "getset" ) ]]; then
+				if [ "$USEVORTEXCUSTOMVER" -eq 0 ]; then
+					writelog "WARN" "${FUNCNAME[0]} - Custom Vortex version passed ('$3') but USEVORTEXCUSTOMVER is '$USEVORTEXCUSTOMVER'"
+					writelog "WARN" "${FUNCNAME[0]} - Assuming you know what you're doing and using this version anyway..."
+				fi
+
+				USEVORTEXCUSTOMVER=1
+				VORTEXCUSTOMVER="$3"
+			fi
+
 			if [ "$2" == "install" ] || [ "$2" == "i" ]; then
 				if [ -n "$3" ] && [ "$3" == "gui" ]; then
 					installVortexGui
@@ -20359,7 +21229,7 @@ function commandline {
 					StatusWindow "$(strFix "$NOTY_INSTSTART" "${VTX^}")" "installVortex" "InstallVortexStatus"
 				fi
 			elif [ "$2" == "start" ]; then
-				startVortex "noask" "$3"
+				startVortex "noask" "$3" 
 			elif [ "$2" == "url" ] || [ "$2" == "u" ]; then
 				if [ -z "$3" ]; then
 					writelog "ERROR" "${FUNCNAME[0]} - No URL was passed for ('$3') -- Maybe this is being incorrectly launched from the XDG menu?"
@@ -20377,7 +21247,6 @@ function commandline {
 				addVortexStage "$3"
 			elif [ "$2" == "list-supported" ] || [ "$2" == "ls" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Games With ${VTX^} Support found in the ${VTX^} installation:" "E"
-				# getVortexSupported X
 				getVortexSupportedNames
 			elif [ "$2" == "list-online" ] || [ "$2" == "lo" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Games With ${VTX^} Support listed online:" "E"
@@ -20400,6 +21269,10 @@ function commandline {
 				setVortexVars
 				VORTEXGAMES="$GLOBALMISCDIR/$VOGAT"
 				while read -r INSTALLEDVTXAID; do
+					if [ -z "$INSTALLEDVTXAID" ]; then
+						continue
+					fi
+
 					INSTALLEDVTXNAME="$( grep "$INSTALLEDVTXAID" "$VORTEXGAMES" | cut -d ";" -f 2 | cut -d '"' -f 2 )"
 
 					# Bit hacky but fixes an instance where two games (on newlines) are returned but only one AppID is returned
@@ -20417,8 +21290,12 @@ function commandline {
 				StatusWindow "$(strFix "$NOTY_DLCUSTOMPROTON" "${VTX^}")" "dlLatestVortex S" "DownloadVortexStatus"
 			elif [ "$2" == "activate" ] && { [ -n "$3" ]  && [ "$3" -eq "$3" ] 2>/dev/null;}; then
 				startVortex "activate" "$3"
+			elif [ "$2" == "getprefix" ] || [ "$2" == "gp" ]; then
+				echo "$VORTEXCOMPDATA/pfx"
 			elif [ "$2" == "winecfg" ]; then
 				vtxWinecfg
+			elif [ "$2" == "winetricks" ] || [ "$2" == "wt" ]; then
+				vtxWinetricks
 			elif [ "$2" == "resetmime" ]; then
 				writelog "INFO" "${FUNCMAME[0]} - (Re)setting ${VTX^} .desktop file entries and MimeType associations"
 				echo "(Re)setting ${VTX^} .desktop file entries and MimeType associations"
@@ -22894,6 +23771,8 @@ function steamdedeckt {
 		else
 			writelog "INFO" "${FUNCNAME[0]} - Seems like we're being run by Steam here, not doing any installation steps"
 		fi
+	else
+		writelog "INFO" "${FUNCNAME[0]} - Not on Steam Deck I guess"
 	fi
 }
 
@@ -22908,25 +23787,34 @@ function restoreGtkCss {
 } 
 
 function prepareSteamDeckCompatInfo {
+	if [ "$AID" -eq "$PLACEHOLDERAID" ]; then
+		writelog "SKIP" "${FUNCNAME[0]} - AppID '$AID' is placeholder AppID ('$PLACEHOLDERAID') -- Not fetching Steam Deck compatibility info"
+		return
+	fi
+
 	if [ ! -x "$(command -v "$JQ")" ]; then
 		writelog "WARN" "${FUNCNAME[0]} - Can't get Steam Deck compatibility information because '$JQ' is not installed"
 		return 1
 	fi
 
-	mapfile -d ";" -t -O "${#DECKCOMPATARR[@]}" DECKCOMPATARR <<< "$( getSteamDeckCompatInfo "$AID" )"
-	unset "DECKCOMPATARR[-1]"
+	if [ "$DLSTEAMDECKCOMPATINFO" -eq 1 ]; then
+		mapfile -d ";" -t -O "${#DECKCOMPATARR[@]}" DECKCOMPATARR <<< "$( getSteamDeckCompatInfo "$AID" )"
+		unset "DECKCOMPATARR[-1]"
 
-	if [ "${#DECKCOMPATARR[@]}" -eq "0" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - No compatibility information available for '$AID' - Is this AppID definitely correct?"
+		if [ "${#DECKCOMPATARR[@]}" -eq "0" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - No compatibility information available for '$AID' - Is this AppID definitely correct?"
+		else
+			# HTML symbols for Verified (checkmark), Playable (circled question mark) and Unsupported (no-entry sign) 
+			COMPATMARK=""
+			case ${DECKCOMPATARR[0]} in
+				*"Verified"*) COMPATMARK="&#10003;" ;;
+				*"Playable"*) COMPATMARK="&#128712;" ;;
+				*"Unsupported"*) COMPATMARK="&#128683;" ;;
+			esac
+			STEAMDECKCOMPATRATING="${DECKCOMPATARR[0]} ${COMPATMARK}"
+		fi
 	else
-		# HTML symbols for Verified (checkmark), Playable (circled question mark) and Unsupported (no-entry sign) 
-		COMPATMARK=""
-		case ${DECKCOMPATARR[0]} in
-			*"Verified"*) COMPATMARK="&#10003;" ;;
-			*"Playable"*) COMPATMARK="&#128712;" ;;
-			*"Unsupported"*) COMPATMARK="&#128683;" ;;
-		esac
-		STEAMDECKCOMPATRATING="${DECKCOMPATARR[0]} ${COMPATMARK}"
+		writelog "INFO" "${FUNCNAME[0]} - DLSTEAMDECKCOMPATINFO is '$DLSTEAMDECKCOMPATINFO' - Not fetching Steam Deck compatability info"
 	fi
 }
 
@@ -23051,6 +23939,27 @@ function getSteamDeckCompatInfo {
 	echo "$COMPATINFO"
 }
 
+# Clear dependencies in /home/deck/stl/deps so that they can be redownloaded the next time SteamTinkerLaunch is ran on Steam Deck
+# This also serves as a quickfix for #719, as dependencies an be quickly removed and then re-downloaded to ensure better compatibility with SteamOS updates
+# In future, STL should auto-bump these somehow
+function clearDeckDeps {
+	if [ "$ONSTEAMDECK" -eq 1 ]; then
+		# This should be set by steamdedeckt, the regex check at the end is just for extra peace of mind that we don't rm -rf an incorrect directory!
+		if [ -n "$STLDEPS" ] && [ -d "$STLDEPS" ]  && [[ $STLDEPS == *"deps"* ]]; then
+			writelog "INFO" "${FUNCNAME[0]} - Removing '$STLDEPS' directory"
+			rm -rf "$STLDEPS"
+			writelog "INFO" "${FUNCNAME[0]} - Successfully removed '$STLDEPS'"
+			echo "Removed Steam Deck dependencies, they will be re-downloaded on next launch."
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - Could not find STL Steam Deck dependencies directory, STLDEPS is '$STLDEPS' - Nothing to do."
+			echo "Could not find STL Steam Deck dependencies directory, skipping"
+		fi
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - Not on Steam Deck, nothing to do"
+		echo "Not on Steam Deck, nothing to do."
+	fi
+}
+
 ### STEAM DECK END
 
 function setflatpak {
@@ -23060,6 +23969,19 @@ function setflatpak {
 		CompatTool "add" "$FPBIN/$PROGCMD"
 	else
 		writelog "INFO" "${FUNCNAME[0]} - started $PROGNAME from ${0}"
+	fi
+}
+
+# GDK_BACKEND can be either x11 or wayland -- User may want, in some instances, to force X11 over defaulting to Wayland for compatibility
+# Option to force Yad to use XWayland is on Global Menu
+function setGDKBackend {
+	if [ "$XDG_SESSION_TYPE" == "wayland" ] || [ -z "$XDG_SESSION_TYPE" ]; then
+		if [ "$YADFORCEXWAYLAND" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - XDG_SESSION_TYPE is either Wayland or undefined ('$XDG_SESSION_TYPE'), and the user chose to force XWayland, so setting GDK_BACKEND=x11"
+			export GDK_BACKEND=x11  # May affect other programs launched with STL but we'll see, we may need a way to store the OG value and default it back somehow if this causes problems i.e. when Wine gets Wayland support, or for native games that may use this 
+		fi
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - XDG_SESSION_TYPE is defined and is not Wayland, it is '$XDG_SESSION_TYPE' - No need to set GDK_BACKEND=x11 as it will already default to X11"
 	fi
 }
 
@@ -23194,6 +24116,8 @@ function main {
 
 	removeEmptyFiles "$STLAPPINFOIDDIR"  # Remove appinfo files that are 0 bytes (i.e. Non-Steam Games)
 	removeEmptyFiles "$STLGHEADD"  # Remove appinfo files that are 0 bytes (i.e. Non-Steam Games)
+
+	setGDKBackend
 
 	if [ -z "$1" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - No arguments provided. See '$PROGCMD --help' for possible command line parameters" "E"
