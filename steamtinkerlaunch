@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230824-4 (reshade-dll-custom-name)"
+PROGVERS="v14.0.20230824-5 (reshade-dll-custom-name)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -7931,7 +7931,14 @@ function installd3d47dll {
 			fi
 		fi
 	else
-		writelog "SKIP" "${FUNCNAME[0]} - Destfile '$2/$D3D47' already exists - skipping this file" 
+		writelog "SKIP" "${FUNCNAME[0]} - Destfile '$2/$D3D47' already exists - skipping this file"
+
+		# Make sure D3D47 is always added to RSTXT if it exists but if RSTXT is missing it 
+		if [ -f "$2/$RSTXT" ] && ! grep -qw "$D3D47" "$2/$RSTXT"; then
+			writelog "INFO" "${FUNCNAME[0]} - '$D3D47' exists but is missing from '$RSTXT' -- Adding it now"
+			echo "$D3D47" >> "$2/$RSTXT"
+			sort "$2/$RSTXT" -u -o "$2/$RSTXT"
+		fi
 	fi
 }
 
@@ -8555,41 +8562,85 @@ function chooseShaders {
 	fi
 }
 
-# TODO The NOD3D9 option is no longer used, so flag $2 can probably be skipped entirely in future
-# There is possibly room for improvement with this function, since the logic around ReShade has been simplified
+# $2 used to specify NOD3D9 wehn we copied both DXGI and D3D9 DLLs, but we no longer do that, so $2 is unused 
+# Last refactored for: https://github.com/sonic2kk/steamtinkerlaunch/pull/881
 function installRSdll {
-	if [ ! -f "$INSTDESTDIR/$1" ] || [ "$1" == "F" ]; then
-		if [ -n "$2" ] && [ "$2" -eq 1 ]; then
-			writelog "SKIP" "${FUNCNAME[0]} - Skipping installation of $1 because 'NOD3D9' is enabled"
+	RSDLLNAMECONFLICTFOUND=0
+
+	# Manage creating backup if untracked DLL with our selected ReShade DLL name already exists at location
+	# This function could be changed in future to take the path as a parameter as well, but that was not important at time of writing
+	function manageDuplicateRSDLL {
+		writelog "WARN" "${FUNCNAME[0]} - DLL with name '$1' found in game dir '$INSTDESTDIR' but is not tracked by us - This is possibly a game/mod DLL"
+		writelog "WARN" "${FUNCNAME[0]} - Backing up DLL at '$INSTDESTDIR/$1' to '$INSTDESTDIR/${1}.bak' and moving our ReShade DLL anyway"
+
+		if [ -f "$INSTDESTDIR/${1}.bak" ]; then
+			writelog "ERROR" "${FUNCNAME[0]} - ERROR: Back-up DLL name '${1}.bak' already exists -- This is probably a very bad thing!"
+		fi
+
+		mv "$INSTDESTDIR/$1" "$INSTDESTDIR/${1}.bak" 2>/dev/null
+		cp "$RESHADESRCDIR/$RSVERS/$2" "$INSTDESTDIR/$1" >/dev/null 2>/dev/null
+		appendToRSTXT "$1"
+	}
+
+	# Sort & add given ReShade DLL name to our tracked list of ReShade DLLs, if it is not already present 
+	function appendToRSTXT {
+		if ! [ -f "$INSTDESTDIR/$RSTXT" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - '$INSTDESTDIR/$RSTXT' does not already exist -- Will create a new file"
+			touch "$INSTDESTDIR/$RSTXT"
+		fi
+
+		if ! grep -qw "$1" "$INSTDESTDIR/$RSTXT"; then
+			echo "$1" >> "$INSTDESTDIR/$RSTXT"
+			writelog "INFO" "${FUNCNAME[0]} - Added '$1' to list of tracked ReShade DLLs at to '$INSTDESTDIR/$RSTXT'"
 		else
-			if [ ! -f "$RESHADESRCDIR/$RSVERS/$3" ]; then
-				writelog "SKIP" "${FUNCNAME[0]} - Sourcefile '$RESHADESRCDIR/$RSVERS/$3' missing - skipping this file" 
-			else
-				# Installing DLL for the first time
-				cp "$RESHADESRCDIR/$RSVERS/$3" "$INSTDESTDIR/$1" >/dev/null 2>/dev/null
-				echo "$1" >> "$INSTDESTDIR/$RSTXT"
-				sort "$INSTDESTDIR/$RSTXT" -u -o "$INSTDESTDIR/$RSTXT"
-				writelog "INFO" "${FUNCNAME[0]} - Copied '$RESHADESRCDIR/$RSVERS/$3' to '$INSTDESTDIR/$1'" 
-			fi
+			writelog "INFO" "${FUNCNAME[0]} - ReShade DLL '$1' already on list of tracked ReShade DLLs at '$INSTDESTDIR/$RSTXT' - Nothing to do."
+		fi
+
+		sort "$INSTDESTDIR/$RSTXT" -u -o "$INSTDESTDIR/$RSTXT"
+	}
+
+	if [ ! -f "$INSTDESTDIR/$1" ] || [ "$1" == "F" ]; then
+		if [ ! -f "$RESHADESRCDIR/$RSVERS/$3" ]; then
+			writelog "SKIP" "${FUNCNAME[0]} - Sourcefile '$RESHADESRCDIR/$RSVERS/$3' missing - skipping this file" 
+		else
+			# Installing DLL for the first time
+			cp "$RESHADESRCDIR/$RSVERS/$3" "$INSTDESTDIR/$1" >/dev/null 2>/dev/null
+			appendToRSTXT "$1"
+			# echo "$1" >> "$INSTDESTDIR/$RSTXT"
+			# sort "$INSTDESTDIR/$RSTXT" -u -o "$INSTDESTDIR/$RSTXT"
+			writelog "INFO" "${FUNCNAME[0]} - Copied '$RESHADESRCDIR/$RSVERS/$3' to '$INSTDESTDIR/$1'" 
 		fi
 	else
+		# Check for ReShade DLL name conflicts
+		if [ -f "$INSTDESTDIR/$1" ] && [ -f "$INSTDESTDIR/$RSTXT" ] && ! grep -qw "$1" "$INSTDESTDIR/$RSTXT"; then
+			RSDLLNAMECONFLICTFOUND=1
+		fi
+
 		if [ "$RESHADEUPDATE" -eq 0 ]; then
-			writelog "SKIP" "${FUNCNAME[0]} - Destfile '$INSTDESTDIR/$1' already exists, but not checking the installed version, because RESHADEUPDATE is '$RESHADEUPDATE'" 
+			if [ "$RSDLLNAMECONFLICTFOUND" -eq 1 ]; then
+				# DLL with name matching our ReShade DLL name exists, but was not installed by us (missing from ReShade.txt) - Backing up existing DLL and installing ReShade DLL anyway
+				writelog "INFO" "${FUNCNAME[0]} - ReShade update is DISABLED"
+				writelog "INFO" "${FUNCNAME[0]} - Specified ReShade DLL name conflict detected!"
+
+				manageDuplicateRSDLL "$1" "$3"  # 1 = target ReShade DLL name, 3 = ReShade DLL name from STL downloads folder to copy with the name specified in $1
+			else
+				writelog "SKIP" "${FUNCNAME[0]} - Destfile '$INSTDESTDIR/$1' already exists and is tracked by us, but not checking the installed version, because RESHADEUPDATE is '$RESHADEUPDATE'" 
+			fi
 		else
 			if grep -q "$RSVERS" <<< "$(strings "$INSTDESTDIR/$1" | grep "^Initializing")"; then
-				# Existing ReShade DLL found 
-				writelog "SKIP" "${FUNCNAME[0]} - Destfile '$INSTDESTDIR/$1' already exists - skipping this file"
-			elif [ -f "$INSTDESTDIR/$1" ] && ! grep -qw "$INSTDESTDIR/$1" "$INSTDESTDIR/$RSTXT"; then
-				# DLL with name matching our ReShade DLL name exists, but was not installed by us (missing from ReShade.txt) - Backing up existing DLL and installing ReShade DLL anyway
-				writelog "WARN" "${FUNCNAME[0]} - DLL with name '$1' found in game dir '$INSTDESTDIR' - This is possibly a game/mod DLL"
-				writelog "WARN" "${FUNCNAME[0]} - Backing up DLL at '$INSTDESTDIR/$1' to '$INSTDESTDIR/${1}.bak' and moving our ReShade DLL anyway"
-
-				mv "$INSTDESTDIR/$1" "$INSTDESTDIR/${1}.bak" 2>/dev/null
-				cp "$RESHADESRCDIR/$RSVERS/$3" "$INSTDESTDIR/$1" >/dev/null 2>/dev/null
+				# Existing ReShade DLL found and matches our selected version -- Don't update
+				writelog "SKIP" "${FUNCNAME[0]} - Destfile '$INSTDESTDIR/$1' already exists and looks up-to-date - skipping this file"
 			else
-				# Updating existing DLL
-				writelog "INFO" "${FUNCNAME[0]} - Destfile '$INSTDESTDIR/$1' already exists, but has a different version - updating"
-				cp "$RESHADESRCDIR/$RSVERS/$3" "$INSTDESTDIR/$1" >/dev/null 2>/dev/null
+				if [ "$RSDLLNAMECONFLICTFOUND" -eq 1 ]; then
+					writelog "INFO" "${FUNCNAME[0]} - ReShade update is ENABLED"
+					writelog "INFO" "${FUNCNAME[0]} - Specified ReShade DLL name conflict detected!"
+
+					manageDuplicateRSDLL "$1" "$3"  # 1 = target ReShade DLL name, 3 = ReShade DLL name from STL downloads folder to copy with the name specified in $1
+				else
+					# DLL either does not already exist or if it does, it's in the ReShade.txt file
+					writelog "INFO" "${FUNCNAME[0]} - Destfile '$INSTDESTDIR/$1' already exists, but has a different version or is not a ReShade DLL - updating"
+					cp "$RESHADESRCDIR/$RSVERS/$3" "$INSTDESTDIR/$1" >/dev/null 2>/dev/null
+				fi
 			fi
 		fi
 	fi
@@ -8680,7 +8731,7 @@ function installReshade {
 			touch "$FUPDATE"
 			CONFIGRSDLLNAMESTR="$( printf '%s,' "${RSDLLNAMEARR[@]}" )"
 			writelog "INFO" "${FUNCNAME[0]} - Updating RESHADEDLLNAME config entry to include any potentially-updated ReShade DLL names so they all end with '.dll' if no extension was provided"
-			updateConfigEntry "RESHADEDLLNAME" "${CONFIGRSDLLNAMESTR%,}"
+			updateConfigEntry "RESHADEDLLNAME" "${CONFIGRSDLLNAMESTR%,}" "$STLGAMECFG"
 		else
 			writelog "SKIP" "${FUNCNAME[0]} - INSTDESTDIR '$INSTDESTDIR' not found" 
 		fi
