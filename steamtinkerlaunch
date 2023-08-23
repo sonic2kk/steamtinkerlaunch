@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230824-3 (reshade-dll-custom-name)"
+PROGVERS="v14.0.20230824-4 (reshade-dll-custom-name)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -5222,7 +5222,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_D3D47_32!$DESC_D3D47_32 ('D3D47_32')" "${D3D47_32/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#MENU_GLOBAL` \
 --field="     $GUI_D3D47_64!$DESC_D3D47_64 ('D3D47_64')" "${D3D47_64/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#MENU_GLOBAL` \
 --field="     $GUI_RESHADEOVERRIDEVERSION!$DESC_RESHADEOVERRIDEVERSION ('RSOVRVERS')":CBE "$(cleanDropDown "${RSOVRVERS/#-/ -}" "$RESHADEVERSIONS")" `#CAT_Shader` `#SUB_ReShade` `#MENU_GAME` \
---field="     $GUI_RESHADEDLLNAME!$DESC_RESHADEDLLNAME ('RESHADEDLLNAME')":CBE "$(cleanDropDown "${RESHADEDLLNAMELIST/#-/ -}" "$RESHADEDLLNAME")" `#CAT_Shader` `#SUB_ReShade` `#MENU_GAME` \
+--field="     $GUI_RESHADEDLLNAME!$DESC_RESHADEDLLNAME ('RESHADEDLLNAME')":CBE "$(cleanDropDown "${RESHADEDLLNAME/#-/ -}" "$RESHADEDLLNAMELIST")" `#CAT_Shader` `#SUB_ReShade` `#MENU_GAME` \
 --field="     $GUI_ARCHALTEXE!$DESC_ARCHALTEXE ('ARCHALTEXE')":FL "${ARCHALTEXE/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#MENU_GAME` \
 --field="     $GUI_ALTEXEPATH!$DESC_ALTEXEPATH ('ALTEXEPATH')":DIR "${ALTEXEPATH/#-/ -}" `#CAT_Shader` `#SUB_Directories` `#MENU_GAME` \
 --field="     $GUI_RESHADESRCDIR!$DESC_RESHADESRCDIR ('RESHADESRCDIR')":DIR "${RESHADESRCDIR/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#SUB_Directories` `#MENU_GLOBAL` \
@@ -8606,6 +8606,7 @@ function installReshade {
 
 		# Default ReShade DLL name to use to dxgi.dll if no DLL name is provided
 		if [ -z "$RESHADEDLLNAME" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - RESHADEDLLNAME is blank - Defaulting to '$DXGI'"
 			RESHADEDLLNAME="$DXGI"
 		fi
 
@@ -8640,8 +8641,14 @@ function installReshade {
 			# Get ReShade DLL names from comma separated list -- User will probably mostly only pass one, but this will handle cases where they might want multiple (ex: d3d9, opengl32)
 			mapfile -d "," -t -O "${#RSDLLNAMEARR[@]}" RSDLLNAMEARR < <(printf '%s' "$RESHADEDLLNAME")
 
+			# Append extension if no extension in DLL
+			for CUSTRSDLL in "${RSDLLNAMEARR[@]}"; do
+				if ! [[ $CUSTRSDLL == *.* ]]; then
+					CUSTRSDLL="${CUSTRSDLL}.dll"
+				fi
+			done
+
 			# TODO this could probably be simplified now that the ReShade logic is simpler
-			# TODO handle when DLLs don't end with `.dll`, manage this for the user
 			#32bit:
 			if [ "$(getArch "$CHARCH")" == "32" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Installing 32bit ${RESH} as '$CHARCH' is 32bit" 
@@ -8666,6 +8673,14 @@ function installReshade {
 				writelog "SKIP" "${FUNCNAME[0]} - ERROR in ${RESH} installation - no file information detected for '$CHARCH' or any 'neighbor file' - setting USERESHADE=0 for this session"
 				export USERESHADE=0
 			fi
+
+			# This makes sure if we updated any DLL names in RSDLLNAMEARR to end with '.dll' that these are written out to the game config file
+			# Doing this ensures we don't end up with the array containing 'dxgi.dll' but the config file value being 'dxgi' (if the user left out the extension)
+			# This is not strictly necessary but I wanted this consistency -- It's also why we loop through RSDLLNAMEARR twice :-)
+			touch "$FUPDATE"
+			CONFIGRSDLLNAMESTR="$( printf '%s,' "${RSDLLNAMEARR[@]}" )"
+			writelog "INFO" "${FUNCNAME[0]} - Updating RESHADEDLLNAME config entry to include any potentially-updated ReShade DLL names so they all end with '.dll' if no extension was provided"
+			updateConfigEntry "RESHADEDLLNAME" "${CONFIGRSDLLNAMESTR%,}"
 		else
 			writelog "SKIP" "${FUNCNAME[0]} - INSTDESTDIR '$INSTDESTDIR' not found" 
 		fi
