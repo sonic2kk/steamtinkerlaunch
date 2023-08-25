@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230826-1 (reshade-dll-custom-name)"
+PROGVERS="v14.0.20230826-2 (reshade-dll-custom-name)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -8589,7 +8589,6 @@ function installRSdll {
 
 		mv "$INSTDESTDIR/$1" "$INSTDESTDIR/${1}.bak" 2>/dev/null
 		cp "$RESHADESRCDIR/$RSVERS/$2" "$INSTDESTDIR/$1" >/dev/null 2>/dev/null
-		# appendToRSTXT "$1"
 	}
 
 	if [ ! -f "$INSTDESTDIR/$1" ] || [ "$1" == "F" ]; then
@@ -8598,7 +8597,6 @@ function installRSdll {
 		else
 			# Installing DLL for the first time
 			cp "$RESHADESRCDIR/$RSVERS/$3" "$INSTDESTDIR/$1" >/dev/null 2>/dev/null
-			# appendToRSTXT "$1"
 			writelog "INFO" "${FUNCNAME[0]} - Copied '$RESHADESRCDIR/$RSVERS/$3' to '$INSTDESTDIR/$1'" 
 		fi
 	else
@@ -8690,44 +8688,46 @@ function installReshade {
 				fi
 			done
 
-			# TODO this could probably be simplified now that the ReShade logic is simpler (set DLLs to use based on architecture and only call install functions once?)
-			#32bit:
+			# Check architecture to know which ReShade DLL architectures to copy over 
 			if [ "$(getArch "$CHARCH")" == "32" ]; then
+				#32bit:
 				writelog "INFO" "${FUNCNAME[0]} - Installing 32bit ${RESH} as '$CHARCH' is 32bit" 
-				#d3d47 - Required for ReShade
-				installd3d47dll "$D3D47_32" "$INSTDESTDIR"
-
-				# actual ReShade DLL name (either d3d9/d3d11/dxgi, or a custom user selected name)
-				for CUSTRSDLL in "${RSDLLNAMEARR[@]}"; do
-					installRSdll "$CUSTRSDLL" "0" "$RS_32"
-				done
-			# 64bit:
+				RSD3D47DLL="$D3D47_32"
+				RSARCHDLL="$RS_32"
 			elif [ "$(getArch "$CHARCH")" == "64" ]; then
+				#64bit:
 				writelog "INFO" "${FUNCNAME[0]} - Installing 64bit ${RESH} as '$CHARCH' is 64bit" 
-				#d3d47
-				installd3d47dll "$D3D47_64" "$INSTDESTDIR"
-				
-				# actual ReShade DLL name (either d3d9/d3d11/dxgi, or a custom user selected name)
-				for CUSTRSDLL in "${RSDLLNAMEARR[@]}"; do
-					installRSdll "$CUSTRSDLL" "0" "$RS_64"
-				done
+				RSD3D47DLL="$D3D47_64"
+				RSARCHDLL="$RS_64"
 			else
+				#feelsbad.jpg:
 				writelog "SKIP" "${FUNCNAME[0]} - ERROR in ${RESH} installation - no file information detected for '$CHARCH' or any 'neighbor file' - setting USERESHADE=0 for this session"
 				export USERESHADE=0
 			fi
 
-			# Rewrite the ReShade TXT file to ensure it only has our installed ReShade DLLs
-			# We write out in installRSdll and installd3d47dll, but even though we remove it here we keep the logic in those functions in case it is needed for other purposes
-			if [ -f "$RSTXT" ]; then
-				rm "$RSTXT"
-			fi
+			# Common conditional to install either 32bit/64bit ReShade DLLs, since process is same, just different DLL names
+			if [ "$USERESHADE" -eq 1 ]; then
+				#d3d47 - Required for ReShade
+				# NOTE 25/08/23: *Is* it still required?
+				installd3d47dll "$D3D47_32" "$RSD3D47DLL"
 
-			# Add d3dcompiler_47 and custom ReShade DLL names, removing any non-ReShade DLLs (ensures previously entered DLL names get removed and not incorrectly tracked as ReShade DLLs)
-			appendToRSTXT "$D3D47"
-			for CUSTRSDLL in "${RSDLLNAMEARR[@]}"; do
-				writelog "INFO" "${FUNCNAME[0]} - Writing '$CUSTRSDLL' to '$RSTXT'"
-				appendToRSTXT "$CUSTRSDLL"
-			done
+				# actual ReShade DLL name (either d3d9/d3d11/dxgi, or a custom user selected name)
+				for CUSTRSDLL in "${RSDLLNAMEARR[@]}"; do
+					installRSdll "$CUSTRSDLL" "0" "$RSARCHDLL"
+				done
+
+				# Rewrite the ReShade TXT file to ensure it only has our installed ReShade DLLs
+				if [ -f "$RSTXT" ]; then
+					rm "$RSTXT"
+				fi
+
+				# Add d3dcompiler_47 and custom ReShade DLL names, removing any non-ReShade DLLs (ensures previously entered DLL names get removed and not incorrectly tracked as ReShade DLLs)
+				appendToRSTXT "$D3D47"
+				for CUSTRSDLL in "${RSDLLNAMEARR[@]}"; do
+					writelog "INFO" "${FUNCNAME[0]} - Writing '$CUSTRSDLL' to '$RSTXT'"
+					appendToRSTXT "$CUSTRSDLL"
+				done
+			fi
 
 			# This makes sure if we updated any DLL names in RSDLLNAMEARR to end with '.dll' that these are written out to the game config file
 			# Doing this ensures we don't end up with the array containing 'dxgi.dll' but the config file value being 'dxgi' (if the user left out the extension)
