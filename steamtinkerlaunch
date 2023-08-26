@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230827-1 (slr-mainmenu-button)"
+PROGVERS="v14.0.20230827-2 (slr-mainmenu-button)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -19871,9 +19871,9 @@ function setSLRReap {
 
 function fetchGameSLRGui {
 	if [ "$ISGAME" -eq 3 ]; then
-		commandlineFetchGameSLR "$1" "1"  # Native Linux SLR
+		commandlineFetchGameSLR "$1" "1" "1"  # Native Linux SLR
 	else
-		commandlineFetchGameSLR "$1" "0"  # Proton SLR
+		commandlineFetchGameSLR "$1" "0" "1"  # Proton SLR
 	fi
 }
 
@@ -19884,6 +19884,7 @@ function fetchGameSLRGui {
 function commandlineFetchGameSLR {
 	FUSEID "$1"
 	USENATIVE="$2"  # We could pass this from the UI if we know we have a native game (ISGAME -eq 3)
+	SLRDISPLAYNOTIFIER="${3:-0}"
 
 	if [ "$USENATIVE" -eq 1 ]; then  # Get native Linux SLR
 		# Check if SLR is already installed
@@ -19891,6 +19892,10 @@ function commandlineFetchGameSLR {
 		if [ -d "$EXISTINGSLRPATH" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Required Steam Linux Runtime ('$SLRAID') is already installed at '$EXISTINGSLRPATH' -- Nothing to do."
 			echo "Required Steam Linux Runtime ('$SLRAID') is already installed at '$EXISTINGSLRPATH' -- Nothing to do."
+			if [ "$SLRDISPLAYNOTIFIER" -eq 1 ]; then
+				notiShow "$NOTY_INSTALLSLR_ALREADYEXISTS"
+			fi
+			
 			return
 		fi
 
@@ -19900,6 +19905,10 @@ function commandlineFetchGameSLR {
 
 		eval "$SLRINSTALLCMD"
 		echo "Continue installation of tool from Steam install dialog."
+
+		if [ "$SLRDISPLAYNOTIFIER" -eq 1 ]; then
+			notiShow "$NOTY_INSTALLSLR_DONE"
+		fi
 	elif [ -f "$STLGAMECFG" ] && [ -n "$USEPROTON" ]; then  # If this is a game launched before with STL, get the Steam Linux Runtime for it
 		PROTPATH="$( dirname "$( getProtPathFromCSV "$USEPROTON" )" )"
 		
@@ -19913,6 +19922,11 @@ function commandlineFetchGameSLR {
 				if [ -d "$EXISTINGSLRPATH" ]; then
 					writelog "INFO" "${FUNCNAME[0]} - Required Steam Linux Runtime ('$SLRID') is already installed at '$EXISTINGSLRPATH' -- Nothing to do."
 					echo "Required Steam Linux Runtime ('$SLRID') is already installed at '$EXISTINGSLRPATH' -- Nothing to do."
+					
+					if [ "$SLRDISPLAYNOTIFIER" -eq 1 ]; then
+						notiShow "$NOTY_INSTALLSLR_ALREADYEXISTS"
+					fi
+
 					return
 				fi
 
@@ -19922,17 +19936,33 @@ function commandlineFetchGameSLR {
 
 				eval "$SLRINSTALLCMD"
 				echo "Continue installation of tool from Steam install dialog."
+
+				if [ "$SLRDISPLAYNOTIFIER" -eq 1 ]; then
+					notiShow "$NOTY_INSTALLSLR_DONE"
+				fi
 			else  # No require_tool_appid set in toolmanifest.vdf
 				writelog "ERROR" "${FUNCNAME[0]} - require_tool_appid was not defined ('$SLRID') -- Maybe no Steam Linux Runtime is required for this Proton version?"
 				echo "require_tool_appid was not defined ('$SLRID') -- Maybe no Steam Linux Runtime is required for this Proton version?"
+			
+				if [ "$SLRDISPLAYNOTIFIER" -eq 1 ]; then
+					notiShow "$NOTY_INSTALLSLR_NOREQUIRETOOLAPPID"
+				fi
 			fi
 		else  # No toolmanifest.vdf set at all
 			writelog "ERROR" "${FUNCNAME[0]} - Could not find $TOMA for Proton version '$USEPROTON' at path '$PROTPATH'"
 			echo "Could not find $TOMA for Proton version '$USEPROTON' at path '$PROTPATH'"
+		
+			if [ "$SLRDISPLAYNOTIFIER" -eq 1 ]; then
+				notiShow "$NOTY_INSTALLSLR_NOTOOLMANIFEST"
+			fi
 		fi
 	else  # Not a valid game used with STL before
 		writelog "ERROR" "${FUNCNAME[0]} - Could not find STLGAMECFG ('$STLGAMECFG') or USEPROTON ('$USEPROTON') for AppID '$AID'"
 		echo "Could not find STLGAMECFG ('$STLGAMECFG') or USEPROTON ('$USEPROTON') for AppID '$AID'"
+	
+		if [ "$SLRDISPLAYNOTIFIER" -eq 1 ]; then
+			notiShow "$NOTY_INSTALLSLR_INVALIDGAME"
+		fi
 	fi
 }
 
@@ -20981,7 +21011,6 @@ function commandline {
 		fi
 		commandlineFetchGameSLR "$2" "$FETCHNATIVESLR"
 	elif [ "$1" == "getslrbtn" ]; then  # Internal use only for the Main Menu button
-		echo "1 is $2"
 		fetchGameSLRGui "$2"
 	elif [ "$1" == "mo2" ]; then
 		if [ -n "$2" ]; then
