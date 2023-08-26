@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230824-1"
+PROGVERS="v14.0.20230827-1"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -541,9 +541,11 @@ LASTRUN="$LOGDIR/lastrun.txt"
 SAIT="steam_appid.txt"
 DXGI="dxgi.dll"
 D3D9="d3d9.dll"
+D3D11="d3d11.dll"
 D3D47="d3dcompiler_47.dll"
 OGL32="opengl32.dll"
 D3D47DLDIR="$STLDLDIR/${D3D47%.*}"
+RESHADEDLLNAMELIST="$DXGI!$D3D9!$D3D11!$OGL32!$DXGI,$D3D9"
 SOMEWINEDLLOVERRIDES="dinput8=n,b!dxgi=n,b!d3d9=n,b!${D3D47//.dll}=n,b!xaudio2_7=n,b"
 RS_DX_DEST="$DXGI"
 RS_D9_DEST="$D3D9"
@@ -2785,6 +2787,7 @@ function setDefaultCfgValues {
 		if [ -z "$RESHADEUPDATE" ]						; then	RESHADEUPDATE="0"; fi
 		if [ -z "$RSOVRD" ] 							; then  RSOVRD="0"; fi
 		if [ -z "$RSOVRVERS" ] 							; then  RSOVRVERS="$RSVERS"; fi
+		if [ -z "$RESHADEDLLNAME" ]						; then  RESHADEDLLNAME="$DXGI"; fi
 		if [ -z "$CHOOSESHADERS" ]						; then	CHOOSESHADERS="0"; fi
 		if [ -z "$ALTEXEPATH" ]							; then	ALTEXEPATH="/tmp"; fi
 		if [ -z "$ARCHALTEXE" ]							; then	ARCHALTEXE="$DUMMYBIN"; fi
@@ -3369,6 +3372,8 @@ function saveCfg {
 			echo "CUSTOMCMDRESHADE=\"$CUSTOMCMDRESHADE\""
 			echo "## $DESC_RESHADEUPDATE"
 			echo "RESHADEUPDATE=\"$RESHADEUPDATE\""
+			echo "## $DESC_RESHADEDLLNAME"
+			echo "RESHADEDLLNAME=\"$RESHADEDLLNAME\""
 			echo "## $DESC_RESHADEOVERRIDETOGGLE"
 			echo "RSOVRD=\"$RSOVRD\""
 			echo "## $DESC_RESHADEOVERRIDEVERSION"
@@ -5219,6 +5224,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_D3D47_32!$DESC_D3D47_32 ('D3D47_32')" "${D3D47_32/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#MENU_GLOBAL` \
 --field="     $GUI_D3D47_64!$DESC_D3D47_64 ('D3D47_64')" "${D3D47_64/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#MENU_GLOBAL` \
 --field="     $GUI_RESHADEOVERRIDEVERSION!$DESC_RESHADEOVERRIDEVERSION ('RSOVRVERS')":CBE "$(cleanDropDown "${RSOVRVERS/#-/ -}" "$RESHADEVERSIONS")" `#CAT_Shader` `#SUB_ReShade` `#MENU_GAME` \
+--field="     $GUI_RESHADEDLLNAME!$DESC_RESHADEDLLNAME ('RESHADEDLLNAME')":CBE "$(cleanDropDown "${RESHADEDLLNAME/#-/ -}" "$RESHADEDLLNAMELIST")" `#CAT_Shader` `#SUB_ReShade` `#MENU_GAME` \
 --field="     $GUI_ARCHALTEXE!$DESC_ARCHALTEXE ('ARCHALTEXE')":FL "${ARCHALTEXE/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#MENU_GAME` \
 --field="     $GUI_ALTEXEPATH!$DESC_ALTEXEPATH ('ALTEXEPATH')":DIR "${ALTEXEPATH/#-/ -}" `#CAT_Shader` `#SUB_Directories` `#MENU_GAME` \
 --field="     $GUI_RESHADESRCDIR!$DESC_RESHADESRCDIR ('RESHADESRCDIR')":DIR "${RESHADESRCDIR/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#SUB_Directories` `#MENU_GLOBAL` \
@@ -7927,7 +7933,7 @@ function installd3d47dll {
 			fi
 		fi
 	else
-		writelog "SKIP" "${FUNCNAME[0]} - Destfile '$2/$D3D47' already exists - skipping this file" 
+		writelog "SKIP" "${FUNCNAME[0]} - Destfile '$2/$D3D47' already exists - skipping this file"
 	fi
 }
 
@@ -8551,29 +8557,81 @@ function chooseShaders {
 	fi
 }
 
+# Sort & add given ReShade DLL name to our tracked list of ReShade DLLs, if it is not already present 
+function appendToRSTXT {
+	if ! [ -f "$INSTDESTDIR/$RSTXT" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - '$INSTDESTDIR/$RSTXT' does not already exist -- Will create a new file"
+		touch "$INSTDESTDIR/$RSTXT"
+	fi
+
+	if ! grep -qw "$1" "$INSTDESTDIR/$RSTXT"; then
+		echo "$1" >> "$INSTDESTDIR/$RSTXT"
+		writelog "INFO" "${FUNCNAME[0]} - Added '$1' to list of tracked ReShade DLLs at to '$INSTDESTDIR/$RSTXT'"
+	else
+		writelog "INFO" "${FUNCNAME[0]} - ReShade DLL '$1' already on list of tracked ReShade DLLs at '$INSTDESTDIR/$RSTXT' - Nothing to do."
+	fi
+
+	sort "$INSTDESTDIR/$RSTXT" -u -o "$INSTDESTDIR/$RSTXT"
+}
+
+# $2 used to specify NOD3D9 wehn we copied both DXGI and D3D9 DLLs, but we no longer do that, so $2 is unused 
+# Last refactored for: https://github.com/sonic2kk/steamtinkerlaunch/pull/881
 function installRSdll {
+	RSDLLNAMECONFLICTFOUND=0
+
+	# Manage creating backup if untracked DLL with our selected ReShade DLL name already exists at location
+	# This function could be changed in future to take the path as a parameter as well, but that was not important at time of writing
+	function manageDuplicateRSDLL {
+		writelog "WARN" "${FUNCNAME[0]} - DLL with name '$1' found in game dir '$INSTDESTDIR' but is not tracked by us - This is possibly a game/mod DLL"
+		writelog "WARN" "${FUNCNAME[0]} - Backing up DLL at '$INSTDESTDIR/$1' to '$INSTDESTDIR/${1}.bak' and moving our ReShade DLL anyway"
+
+		if [ -f "$INSTDESTDIR/${1}.bak" ]; then
+			writelog "ERROR" "${FUNCNAME[0]} - ERROR: Back-up DLL name '${1}.bak' already exists -- This is probably a very bad thing!"
+		fi
+
+		mv "$INSTDESTDIR/$1" "$INSTDESTDIR/${1}.bak" 2>/dev/null
+		cp "$RESHADESRCDIR/$RSVERS/$2" "$INSTDESTDIR/$1" >/dev/null 2>/dev/null
+	}
+
 	if [ ! -f "$INSTDESTDIR/$1" ] || [ "$1" == "F" ]; then
-		if [ -n "$2" ] && [ "$2" -eq 1 ]; then
-			writelog "SKIP" "${FUNCNAME[0]} - Skipping installation of $1 because 'NOD3D9' is enabled"
+		if [ ! -f "$RESHADESRCDIR/$RSVERS/$3" ]; then
+			writelog "SKIP" "${FUNCNAME[0]} - Sourcefile '$RESHADESRCDIR/$RSVERS/$3' missing - skipping this file" 
 		else
-			if [ ! -f "$RESHADESRCDIR/$RSVERS/$3" ]; then
-				writelog "SKIP" "${FUNCNAME[0]} - Sourcefile '$RESHADESRCDIR/$RSVERS/$3' missing - skipping this file" 
-			else
-				cp "$RESHADESRCDIR/$RSVERS/$3" "$INSTDESTDIR/$1" >/dev/null 2>/dev/null
-				echo "$1" >> "$INSTDESTDIR/$RSTXT"
-				sort "$INSTDESTDIR/$RSTXT" -u -o "$INSTDESTDIR/$RSTXT"
-				writelog "INFO" "${FUNCNAME[0]} - Copied '$RESHADESRCDIR/$RSVERS/$3' to '$INSTDESTDIR/$1'" 
-			fi
+			# Installing DLL for the first time
+			cp "$RESHADESRCDIR/$RSVERS/$3" "$INSTDESTDIR/$1" >/dev/null 2>/dev/null
+			writelog "INFO" "${FUNCNAME[0]} - Copied '$RESHADESRCDIR/$RSVERS/$3' to '$INSTDESTDIR/$1'" 
 		fi
 	else
+		# Check for ReShade DLL name conflicts
+		if [ -f "$INSTDESTDIR/$1" ] && [ -f "$INSTDESTDIR/$RSTXT" ] && ! grep -qw "$1" "$INSTDESTDIR/$RSTXT"; then
+			RSDLLNAMECONFLICTFOUND=1
+		fi
+
 		if [ "$RESHADEUPDATE" -eq 0 ]; then
-			writelog "SKIP" "${FUNCNAME[0]} - Destfile '$INSTDESTDIR/$1' already exists, but not checking the installed version, because RESHADEUPDATE is '$RESHADEUPDATE'" 
+			if [ "$RSDLLNAMECONFLICTFOUND" -eq 1 ]; then
+				# DLL with name matching our ReShade DLL name exists, but was not installed by us (missing from ReShade.txt) - Backing up existing DLL and installing ReShade DLL anyway
+				writelog "INFO" "${FUNCNAME[0]} - ReShade update is DISABLED"
+				writelog "INFO" "${FUNCNAME[0]} - Specified ReShade DLL name conflict detected!"
+
+				manageDuplicateRSDLL "$1" "$3"  # 1 = target ReShade DLL name, 3 = ReShade DLL name from STL downloads folder to copy with the name specified in $1
+			else
+				writelog "SKIP" "${FUNCNAME[0]} - Destfile '$INSTDESTDIR/$1' already exists and is tracked by us, but not checking the installed version, because RESHADEUPDATE is '$RESHADEUPDATE'" 
+			fi
 		else
 			if grep -q "$RSVERS" <<< "$(strings "$INSTDESTDIR/$1" | grep "^Initializing")"; then
-				writelog "SKIP" "${FUNCNAME[0]} - Destfile '$INSTDESTDIR/$1' already exists in the same version '$RSVERS' - skipping this file" 
+				# Existing ReShade DLL found and matches our selected version -- Don't update
+				writelog "SKIP" "${FUNCNAME[0]} - Destfile '$INSTDESTDIR/$1' already exists and looks up-to-date - skipping this file"
 			else
-				writelog "INFO" "${FUNCNAME[0]} - Destfile '$INSTDESTDIR/$1' already exists, but has a different version - updating"
-				cp "$RESHADESRCDIR/$RSVERS/$3" "$INSTDESTDIR/$1" >/dev/null 2>/dev/null
+				if [ "$RSDLLNAMECONFLICTFOUND" -eq 1 ]; then
+					writelog "INFO" "${FUNCNAME[0]} - ReShade update is ENABLED"
+					writelog "INFO" "${FUNCNAME[0]} - Specified ReShade DLL name conflict detected!"
+
+					manageDuplicateRSDLL "$1" "$3"  # 1 = target ReShade DLL name, 3 = ReShade DLL name from STL downloads folder to copy with the name specified in $1
+				else
+					# DLL either does not already exist or if it does, it's in the ReShade.txt file
+					writelog "INFO" "${FUNCNAME[0]} - Destfile '$INSTDESTDIR/$1' already exists, but has a different version or is not a ReShade DLL - updating"
+					cp "$RESHADESRCDIR/$RSVERS/$3" "$INSTDESTDIR/$1" >/dev/null 2>/dev/null
+				fi
 			fi
 		fi
 	fi
@@ -8587,6 +8645,12 @@ function installReshade {
 		setShadDestDir
 
 		INSTDESTDIR="$SHADDESTDIR"
+
+		# Default ReShade DLL name to use to dxgi.dll if no DLL name is provided
+		if [ -z "$RESHADEDLLNAME" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - RESHADEDLLNAME is blank - Defaulting to '$DXGI'"
+			RESHADEDLLNAME="$DXGI"
+		fi
 
 		# checking for previous dll conficts between $RS_DX_DEST and $RS_D9_DEST
 		# note: modern ReShade uses "ReShade_exenamehere.log", and old versions use "dxgi.log" (if ReShade dll is named dxgi.dll). we support both names.
@@ -8616,29 +8680,64 @@ function installReshade {
 		fi
 
 		if [ -d "$INSTDESTDIR" ]; then
-			#32bit:
-			if [ "$(getArch "$CHARCH")" == "32" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Installing 32bit ${RESH} as '$CHARCH' is 32bit" 
-				#d3d47
-				installd3d47dll "$D3D47_32" "$INSTDESTDIR"
-				#dxgi:
-				installRSdll "$RS_DX_DEST" "0" "$RS_32"
-				#d3d9:
-				installRSdll "$RS_D9_DEST" "$NOD3D9" "$RS_32"
+			# Get ReShade DLL names from comma separated list -- User will probably mostly only pass one, but this will handle cases where they might want multiple (ex: d3d9, opengl32)
+			mapfile -d "," -t -O "${#RSDLLNAMEARR[@]}" RSDLLNAMEARR < <(printf '%s' "$RESHADEDLLNAME")
 
-			# 64bit:
+			for CUSTRSDLL in "${RSDLLNAMEARR[@]}"; do
+				# Append extension if no extension in DLL
+				if ! [[ $CUSTRSDLL == *.* ]]; then
+					CUSTRSDLL="${CUSTRSDLL}.dll"
+				fi
+			done
+
+			# Check architecture to know which ReShade DLL architectures to copy over 
+			if [ "$(getArch "$CHARCH")" == "32" ]; then
+				#32bit:
+				writelog "INFO" "${FUNCNAME[0]} - Installing 32bit ${RESH} as '$CHARCH' is 32bit" 
+				RSD3D47DLL="$D3D47_32"
+				RSARCHDLL="$RS_32"
 			elif [ "$(getArch "$CHARCH")" == "64" ]; then
+				#64bit:
 				writelog "INFO" "${FUNCNAME[0]} - Installing 64bit ${RESH} as '$CHARCH' is 64bit" 
-				#d3d47
-				installd3d47dll "$D3D47_64" "$INSTDESTDIR"
-				#dxgi:
-				installRSdll "$RS_DX_DEST" "0" "$RS_64"
-				#d3d9:
-				installRSdll "$RS_D9_DEST" "$NOD3D9" "$RS_64"
+				RSD3D47DLL="$D3D47_64"
+				RSARCHDLL="$RS_64"
 			else
+				#feelsbad.jpg:
 				writelog "SKIP" "${FUNCNAME[0]} - ERROR in ${RESH} installation - no file information detected for '$CHARCH' or any 'neighbor file' - setting USERESHADE=0 for this session"
 				export USERESHADE=0
 			fi
+
+			# Common conditional to install either 32bit/64bit ReShade DLLs, since process is same, just different DLL names
+			if [ "$USERESHADE" -eq 1 ]; then
+				#d3d47 - Required for ReShade
+				# NOTE 25/08/23: *Is* it still required?
+				installd3d47dll "$D3D47_32" "$RSD3D47DLL"
+
+				# actual ReShade DLL name (either d3d9/d3d11/dxgi, or a custom user selected name)
+				for CUSTRSDLL in "${RSDLLNAMEARR[@]}"; do
+					installRSdll "$CUSTRSDLL" "0" "$RSARCHDLL"
+				done
+
+				# Rewrite the ReShade TXT file to ensure it only has our installed ReShade DLLs
+				if [ -f "$RSTXT" ]; then
+					rm "$RSTXT"
+				fi
+
+				# Add d3dcompiler_47 and custom ReShade DLL names, removing any non-ReShade DLLs (ensures previously entered DLL names get removed and not incorrectly tracked as ReShade DLLs)
+				appendToRSTXT "$D3D47"
+				for CUSTRSDLL in "${RSDLLNAMEARR[@]}"; do
+					writelog "INFO" "${FUNCNAME[0]} - Writing '$CUSTRSDLL' to '$RSTXT'"
+					appendToRSTXT "$CUSTRSDLL"
+				done
+			fi
+
+			# This makes sure if we updated any DLL names in RSDLLNAMEARR to end with '.dll' that these are written out to the game config file
+			# Doing this ensures we don't end up with the array containing 'dxgi.dll' but the config file value being 'dxgi' (if the user left out the extension)
+			# This is not strictly necessary but I wanted this consistency -- It's also why we loop through RSDLLNAMEARR twice :-)
+			touch "$FUPDATE"
+			CONFIGRSDLLNAMESTR="$( printf '%s,' "${RSDLLNAMEARR[@]}" )"
+			writelog "INFO" "${FUNCNAME[0]} - Updating RESHADEDLLNAME config entry to include any potentially-updated ReShade DLL names so they all end with '.dll' if no extension was provided"
+			updateConfigEntry "RESHADEDLLNAME" "${CONFIGRSDLLNAMESTR%,}" "$STLGAMECFG"
 		else
 			writelog "SKIP" "${FUNCNAME[0]} - INSTDESTDIR '$INSTDESTDIR' not found" 
 		fi
@@ -8756,8 +8855,8 @@ function checkReshade {
 				INSTALL_RESHADE=1 installReshade F
 			fi
 
-			writelog "INFO" "${FUNCNAME[0]} - Setting WINEDLLOVERRIDES for ${RESH}: dxgi=n,b;d3d9=n,b;${D3D47//.dll}=n,b"
-			export WINEDLLOVERRIDES="$WINEDLLOVERRIDES;dxgi=n,b;d3d9=n,b;${D3D47//.dll}=n,b"
+			writelog "INFO" "${FUNCNAME[0]} - Setting WINEDLLOVERRIDES for ${RESH}: dxgi=n,b;d3d9=n,b;${D3D47//.dll}=n,b;opengl32=n,b"
+			export WINEDLLOVERRIDES="$WINEDLLOVERRIDES;dxgi=n,b;d3d9=n,b;${D3D47//.dll}=n,b;opengl32=n,b"
 #		fi
 	else	
 		if [ -f "$FRSINI" ]; then
