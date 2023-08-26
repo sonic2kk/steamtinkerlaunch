@@ -239,6 +239,7 @@ DRC="drive_c"
 DRCU="$DRC/users"
 DRCW="$DRC/windows"
 STUS="steamuser"
+PUBUS="Public"
 SUBADIR="$STLBACKDIR/$STUS"
 SUBADIRID="$SUBADIR/id"
 SUBADIRTI="$SUBADIR/title"
@@ -518,6 +519,7 @@ FBW="files/$BIWI"
 STLPROTDIR="$STLCFGDIR/proton"
 STLPROTCOMPDATDIR="$STLPROTDIR/$CODA"
 STLPROTSTUSDIR="$STLPROTDIR/$STUS"
+STLPROTPUBUSDIR="$STLPROTDIR/$PUBUS"
 STLEARLYPROTCONF="$STLPROTDIR/earlyproton.conf"
 PROCU="proton/custom"
 CTVDF="compatibilitytool.vdf"
@@ -2635,7 +2637,7 @@ function setDefaultCfgValues {
 		if [ -z "$ROBERTAARGS" ]						; then	ROBERTAARGS="--wait-before-run"; fi
 		if [ -z "$LUXTORPEDACMD" ]						; then	LUXTORPEDACMD="$STEAMCOMPATOOLS/luxtorpeda/luxtorpeda"; fi
 		if [ -z "$LUXTORPEDAARGS" ]						; then	LUXTORPEDAARGS="wait-before-run"; fi
-		if [ -z "$RSVERS" ]								; then	RSVERS="5.4.2"; fi
+		if [ -z "$RSVERS" ]								; then	RSVERS="5.9.1"; fi
 		if [ -z "$AUTOBUMPRESHADE" ]					; then	AUTOBUMPRESHADE="0"; fi
 		if [ -z "$DOWNLOAD_RESHADE" ]					; then	DOWNLOAD_RESHADE="1"; fi
 		if [ -z "$RESHADESRCDIR" ]						; then	RESHADESRCDIR="$STLDLDIR/reshade"; fi
@@ -11760,14 +11762,19 @@ function DxvkHudPick {
 function symlinkSteamUser {
 
 	SteamUserDir="$GPFX/$DRCU/$STUS"
+	PublicUserDir="$GPFX/$DRCU/$PUBUS"
 
 	if [ "$1" -eq 1 ]; then
 		mkProjDir "$STLPROTSTUSDIR"
+		mkProjDir "$STLPROTPUBUSDIR"
 
 		if [ "$USEGLOBSUSYM" -eq 1 ]; then
 			SUSYD="$STLPROTSTUSDIR/global"
+            PUBUSYD="$STLPROTPUBUSDIR/global"
+
 		else
 			SUSYD="$STLPROTSTUSDIR/$AID"
+            PUBUSYD="$STLPROTPUBUSDIR/$AID"
 		fi
 
 		writelog "INFO" "${FUNCNAME[0]} - Testing if creating a symlink '$SteamUserDir' pointing to '$SUSYD' is required"
@@ -11782,6 +11789,20 @@ function symlinkSteamUser {
 		else
 			writelog "INFO" "${FUNCNAME[0]} - '$SUSYD' does already exists"
 		fi 
+
+		writelog "INFO" "${FUNCNAME[0]} - Testing if creating a symlink '$PublicUserDir' pointing to '$PUBUSYD' is required"
+
+		if [ ! -d "$PUBUSYD" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - '$PUBUSYD' does not yet exists"
+			if [ -d "$PublicUserDir" ]; then
+				mv "$PublicUserDir" "$PUBUSYD"
+			else
+				mkProjDir "$PUBUSYD"
+			fi
+		else
+			writelog "INFO" "${FUNCNAME[0]} - '$PUBUSYD' does already exists"
+		fi 
+
 
 		if [ -L "$SteamUserDir" ]; then
 			if [ "$(readlink "$SteamUserDir")" == "$SUSYD" ]; then
@@ -11805,6 +11826,33 @@ function symlinkSteamUser {
 				ln -s "$SUSYD" "$SteamUserDir"
 			else
 				writelog "SKIP" "${FUNCNAME[0]} - '$SteamUserDir' still exists - can't create a symlink pointing to '$SUSYD'"
+			fi
+		fi
+
+        # Symlinking Public user directory
+
+		if [ -L "$PublicUserDir" ]; then
+			if [ "$(readlink "$PublicUserDir")" == "$PUBUSYD" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - '$PublicUserDir' is already a symlink pointing to '$PUBUSYD' - nothing to do"
+			else
+				writelog "INFO" "${FUNCNAME[0]} - '$PublicUserDir' is already a symlink pointing to the unexpected directory '$(readlink "$PublicUserDir")' instead of '$PUBUSYD' - nothing to do"
+			fi
+		else
+			if [ -d "$PublicUserDir" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Syncing files from '$PublicUserDir' to '$PUBUSYD'"
+				"$RSYNC" -amu "$PublicUserDir" "$PUBUSYD"
+				BACKSUD="${PublicUserDir}_${PROGNAME,,}_$((900 + RANDOM % 100))"
+				mv "$PublicUserDir" "$BACKSUD"
+				writelog "INFO" "${FUNCNAME[0]} - Backing up '$PublicUserDir' to '$BACKSUD'"
+			fi
+
+			if [ ! -d "$PublicUserDir" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Creating '$PublicUserDir' symlink pointing to '$PUBUSYD' using command:"
+				writelog "INFO" "${FUNCNAME[0]} - 'ln -s \"$PUBUSYD\" \"$PublicUserDir\"'"
+
+				ln -s "$PUBUSYD" "$PublicUserDir"
+			else
+				writelog "SKIP" "${FUNCNAME[0]} - '$PublicUserDir' still exists - can't create a symlink pointing to '$PUBUSYD'"
 			fi
 		fi
 
@@ -14426,9 +14474,9 @@ function setVortexDLMime {
 		echo "X-KeepTerminal=false"
 		echo "Path=$(dirname "$VORTEXEXE")"
 		if [ "$INFLATPAK" -eq 1 ]; then
-			echo "Exec=/usr/bin/flatpak run --command=steamtinkerlaunch $FLATPAK_ID ${HMM,,} $VTX u %u"
+			echo "Exec=/usr/bin/flatpak run --command=steamtinkerlaunch $FLATPAK_ID $VTX u %u"
 		else
-			echo "Exec=$(realpath "$0") $$VTX u %u"
+			echo "Exec=$(realpath "$0") $VTX u %u"
 		fi
 		echo "NoDisplay=false"
 		echo "Hidden=false"
