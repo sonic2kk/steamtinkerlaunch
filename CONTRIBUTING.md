@@ -86,3 +86,22 @@ To update a translation, open the translation file and start updating the string
 To start writing a new translation, it is recommended to use `english.txt` as your base as this is the most up-to-date translation available. Duplicate this file and start translating the strings. As there are hundreds of strings you don't have to update all of them, but **don't** remove the strings you cannot or have not translated. If you run into this, just leave the string untranslated.
 
 In future, you are always welcome to come back and improve your translation. More and more strings will be added as SteamTinkerLaunch grows, and translations can quickly become outdated. Don't be afraid to keep an eye on the repository and submit PRs to update the translation strings, even if it's only one or two lines each time.
+
+### Using Steam Client Strings
+Some strings in use by SteamTinkerLaunch are taken from other sources, including the Steam Client. SteamDatabase is a useful resource that contains frequently-updated information extracted from the Steam Client itself including [localisation information](https://github.com/SteamDatabase/SteamTracking/tree/master/ClientExtracted/steamui/localization). By checking the `shared_<langname>.json` files you can see the strings in use by the Steam Client.
+
+These JSON files use a different format to what is used by SteamTinkerLaunch's language files, so to bridge the gap, a Python snippet is provided below to convert strings copied and pasted from the SteamDatabase JSON files mentioned above, to the format used by SteamTinkerLaunch's language files. Simply paste the strings into a file called `strings.txt` in the same directory as the Python script file, and it will print out the converted strings. These can then be used to overwrite any existing strings with these keys.
+
+```python
+# Might be more appropriate to rewrite this in Bash at some point, huh?
+with open('strings.txt') as instrings:
+    for s in instrings:
+        keyval_split = s.split(':')
+
+        string_key = keyval_split[0].strip()
+        string_val = keyval_split[1].strip()[:-1]
+
+        formatted_string_key = string_key.replace('"', '').upper()
+
+        print(f'{formatted_string_key}={string_val}')
+```
