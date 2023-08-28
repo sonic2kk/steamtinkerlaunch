@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230827-4"
+PROGVERS="v14.0.20230829-1"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -2780,7 +2780,6 @@ function setDefaultCfgValues {
 		if [ -z "$REGEDIT" ]							; then	REGEDIT="0"; fi
 		if [ -z "$USEGEOELF" ]							; then	USEGEOELF="0"; fi
 		if [ -z "$AUTOGEOELF" ]							; then	AUTOGEOELF="0"; fi
-		if [ -z "$INSTALL_RESHADE" ]					; then	INSTALL_RESHADE="0"; fi
 		if [ -z "$RESHADE_DEPTH3D" ]					; then	RESHADE_DEPTH3D="0"; fi
 		if [ -z "$USERESHADE" ]							; then	USERESHADE="0"; fi
 		if [ -z "$CUSTOMCMDRESHADE" ]					; then	CUSTOMCMDRESHADE="0"; fi
@@ -3362,8 +3361,6 @@ function saveCfg {
 			echo "USEGEOELF=\"$USEGEOELF\""
 			echo "## $DESC_AUTOGEOELF"
 			echo "AUTOGEOELF=\"$AUTOGEOELF\""
-			echo "## $DESC_INSTALL_RESHADE"
-			echo "INSTALL_RESHADE=\"$INSTALL_RESHADE\""
 			echo "## $DESC_RESHADE_DEPTH3D"
 			echo "RESHADE_DEPTH3D=\"$RESHADE_DEPTH3D\""
 			echo "## $DESC_USERESHADE"
@@ -5212,7 +5209,6 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_USERESHADE!$DESC_USERESHADE ('USERESHADE')":CHK "${USERESHADE/#-/ -}" `#CAT_Shader` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_CUSTOMCMDRESHADE!$DESC_CUSTOMCMDRESHADE ('CUSTOMCMDRESHADE')":CHK "${CUSTOMCMDRESHADE/#-/ -}" `#CAT_Shader` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_DOWNLOAD_RESHADE!$DESC_DOWNLOAD_RESHADE ('DOWNLOAD_RESHADE')":CHK "${DOWNLOAD_RESHADE/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#SUB_Checkbox` `#MENU_GLOBAL` \
---field="     $GUI_INSTALL_RESHADE!$DESC_INSTALL_RESHADE ('INSTALL_RESHADE')":CHK "${INSTALL_RESHADE/#-/ -}" `#CAT_Shader` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_RESHADEUPDATE!$DESC_RESHADEUPDATE ('RESHADEUPDATE')":CHK "${RESHADEUPDATE/#-/ -}" `#CAT_Shader` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_RESHADEOVERRIDETOGGLE!$DESC_RESHADEOVERRIDETOGGLE ('RSOVRD')":CHK "${RSOVRD/#-/ -}" `#CAT_Shader` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_RSVERS!$DESC_RSVERS ('RSVERS')" "${RSVERS/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#MENU_GLOBAL` \
@@ -6414,6 +6410,18 @@ function migrateCfgOption {
 			touch "$FUPDATE"
 			writelog "INFO" "${FUNCNAME[0]} - Automatically updating variable CHECKCOLLECTIONS from old variable CHECKCATEGORIES"
 			updateConfigEntry "CHECKCOLLECTIONS" "$CHECKCOLLECTIONS" "$STLGAMECFG"	
+		fi
+
+		# ReShade changes -- Combine USERESHADE and RESHADE_INSTALL into one option (ensure USERESHADE matches whatever value INSTALL_RESHADE had now that they are equivalent)
+		if [ -n "$INSTALL_RESHADE" ] && [ "$INSTALL_RESHADE" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Found legacy 'INSTALL_RESHADE' with value '$INSTALL_RESHADE' -- disabling as this is no longer used"
+			INSTALL_RESHADE=0
+			USERESHADE=1
+
+			# If INSTALL_RESHADE was ever on, disable it and force USERESHADE to 1 as these options are equivalent now
+			touch "$FUPDATE"
+			updateConfigEntry "INSTALL_RESHADE" "$INSTALL_RESHADE" "$STLGAMECFG"
+			updateConfigEntry "USERESHADE" "$USERESHADE" "$STLGAMECFG"
 		fi
 
 #486
@@ -8639,8 +8647,7 @@ function installRSdll {
 
 # install reshade:
 function installReshade {
-	if [ "$INSTALL_RESHADE" -eq 1 ]; then
-
+	if [ "$USERESHADE" -eq 1 ]; then
 		prepareReshadeFiles
 		setShadDestDir
 
@@ -8847,12 +8854,12 @@ function checkReshade {
 
 			if [ ! -f "$SHADDESTDIR/$D3D47" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - USERESHADE is '$USERESHADE' - looks like ${RESH} is not yet installed in '$SHADDESTDIR' - installing because USERESHADE is enabled"
-				INSTALL_RESHADE=1 installReshade
+				installReshade
 			fi
 
 			if [ -f "$FRSINI" ] && [ ! -f "$RSLIST" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Looks like ${RESH} was installed previously using '${PROGNAME,,}' without creating '$RSLIST' - recreating it now"
-				INSTALL_RESHADE=1 installReshade F
+				installReshade F
 			fi
 
 			writelog "INFO" "${FUNCNAME[0]} - Setting WINEDLLOVERRIDES for ${RESH}: dxgi=n,b;d3d9=n,b;${D3D47//.dll}=n,b;opengl32=n,b"
@@ -17012,7 +17019,6 @@ function setLinGameVals {
 		REGEDIT="0"
 		VIRTUALDESKTOP="0"
 		USERESHADE="0"
-		INSTALL_RESHADE="0"
 		UUUSEIGCS="0"
 		IGCSDST="0"
 		USESPECIALK="0"
@@ -17145,7 +17151,6 @@ function prepareProton {
 		elif [ "$SBSVRRS" -eq 1 ]; then
 			writelog "INFO" "${FUNCNAME[0]} - $PROGNAME - SBSVRRS enabled - starting game in SBS-VR using ${RESH}"
 			export RUNSBSVR=1
-			export INSTALL_RESHADE=1
 			export RESHADE_DEPTH3D=1
 			export USERESHADE=1
 			export ENABLE_VKBASALT=0
@@ -17153,7 +17158,6 @@ function prepareProton {
 
 		if [ "$SBSRS" -eq 1 ]; then
 			writelog "INFO" "${FUNCNAME[0]} - $PROGNAME - SBSRS enabled - starting game in SBS using ${RESH}"
-			export INSTALL_RESHADE=1
 			export RESHADE_DEPTH3D=1
 			export USERESHADE=1
 			export ENABLE_VKBASALT=0
@@ -17574,7 +17578,7 @@ function prepareLaunch {
 	StateSteamWebHelper pause
 
 	if [ "$ISGAME" -eq 2 ]; then
-		# install ${RESH} if INSTALL_RESHADE is 1
+		# install ${RESH} if USERESHADE is 1
 		writelog "INFO" "${FUNCNAME[0]} - InstallReshade:"
 		installReshade
 
