@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230903-1"
+PROGVERS="v14.0.20230906-1 (reenable-reshade-specialk)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -5754,13 +5754,13 @@ function setShadDestDir {
 		writelog "INFO" "${FUNCNAME[0]} - Both '$SPEK' and '$RESH' are enabled." "E"
 		writelog "INFO" "${FUNCNAME[0]} - Unfortunately the game currently crashes using Proton when both are enabled"
 		writelog "INFO" "${FUNCNAME[0]} - therefore $RESH path redirect to the $SPEK directory is disabled" "E"
-#		SPEKRESHDIR="My Mods/${SPEK}/Plugins/ThirdParty/${RESH}"
-#		SHADDESTDIR="$GPFX/$DRCU/$STUS/$DOCS/$SPEKRESHDIR"
-#	else
+		SPEKRESHDIR="My Mods/${SPEK}/Plugins/ThirdParty/${RESH}"
+		SHADDESTDIR="$GPFX/$DRCU/$STUS/$DOCS/$SPEKRESHDIR"
+	else
+	# fi
+		setFullGameExePath "SHADDESTDIR"
 	fi
-		# setFullGameExePath "SHADDESTDIR"
-#	fi
-	setFullGameExePath "SHADDESTDIR"
+	# setFullGameExePath "SHADDESTDIR"
 }
 
 function refreshProtList {
@@ -8817,29 +8817,33 @@ function checkReshade {
 			fi
 		fi
 
-#XXXXXXXXXXXXX
+		# EXPERIMENTALLY RE-ENABLED
+		# NOTE that this has no ReShade updating or version override checks, so it is missing many features that regular ReShade has!
 		if [ "$USESPECIALK" -eq 1 ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Both '$SPEK' and '$RESH' are enabled." "E"
-			#writelog "INFO" "${FUNCNAME[0]} - Unfortunately the game currently crashes using Proton when both are enabled"
+			writelog "INFO" "${FUNCNAME[0]} - This has historically caused crashes, but has been experimentally re-enabled!"
 			writelog "INFO" "${FUNCNAME[0]} - During the last test long ago this crashed the game" "E"
 			writelog "INFO" "${FUNCNAME[0]} - therefore the $RESH install to the $SPEK directory redirect is disabled" "E"
 			writelog "INFO" "${FUNCNAME[0]} - Might work meanwhile, you're welcome to re-animate the functions" "E"
+
 			# see also function prepareSpecialKReshade
-
-#			writelog "INFO" "${FUNCNAME[0]} - Using ${RESH} and $SPEK together"
-#			mkProjDir "$SHADDESTDIR"
-#			if [ ! -f "$SHADDESTDIR/$RS_64" ]; then
-#				writelog "INFO" "${FUNCNAME[0]} - Copying '$RESHADESRCDIR/$RS_64' and friends to '$SHADDESTDIR'"
-#				cp "$RESHADESRCDIR/$RS_64" "$SHADDESTDIR"
-#				cp "$RESHADESRCDIR/$RS_32" "$SHADDESTDIR"
-#				cp "$RESHADESRCDIR/${RS_64//.dll/.json}" "$SHADDESTDIR"
-#				cp "$RESHADESRCDIR/${RS_32//.dll/.json}" "$SHADDESTDIR"
-#			else
-#				writelog "SKIP" "${FUNCNAME[0]} - Already have '$RS_64' in '$SHADDESTDIR'"
-#			fi
-		fi
-
-#		else
+			# This code should copy the raw ReShade DLLs into the game folder, though it does not seem to copy d3dcompiler_17
+			# This is probably because d3dcompiler_47 should be installed as part of SpecialK installation
+			#
+			# using installRSdll would be overkill here, so we won't use it and will instead copy the raw files
+			writelog "INFO" "${FUNCNAME[0]} - Using ${RESH} and $SPEK together"
+			mkProjDir "$SHADDESTDIR"
+			if [ ! -f "$SHADDESTDIR/$RS_64" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Copying '$RESHADESRCDIR/$RS_64' and friends to '$SHADDESTDIR'"
+				cp "$RESHADESRCDIR/$RS_64" "$SHADDESTDIR"
+				cp "$RESHADESRCDIR/$RS_32" "$SHADDESTDIR"
+				cp "$RESHADESRCDIR/${RS_64//.dll/.json}" "$SHADDESTDIR"
+				cp "$RESHADESRCDIR/${RS_32//.dll/.json}" "$SHADDESTDIR"
+			else
+				writelog "SKIP" "${FUNCNAME[0]} - Already have '$RS_64' in '$SHADDESTDIR'"
+			fi
+		# fi
+		else
 			if [ -f "$RSOLIST" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - ${RESH} has been disabled previously using '${PROGNAME,,}' - enabling it now"
 				while read -r rsdll; do
@@ -8864,7 +8868,7 @@ function checkReshade {
 
 			writelog "INFO" "${FUNCNAME[0]} - Setting WINEDLLOVERRIDES for ${RESH}: dxgi=n,b;d3d9=n,b;${D3D47//.dll}=n,b;opengl32=n,b"
 			export WINEDLLOVERRIDES="$WINEDLLOVERRIDES;dxgi=n,b;d3d9=n,b;${D3D47//.dll}=n,b;opengl32=n,b"
-#		fi
+		fi
 	else	
 		if [ -f "$FRSINI" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - ${RESH} has been disabled by the user, so renaming '$FRSINI' to '$FRSOINI'"
@@ -8996,8 +9000,10 @@ function prepareSpecialKReshade {
 		writelog "INFO" "${FUNCNAME[0]} - Both '$SPEK' and '$RESH' are enabled." "E"
 		#writelog "INFO" "${FUNCNAME[0]} - Unfortunately the game currently crashes using Proton when both are enabled"
 		writelog "INFO" "${FUNCNAME[0]} - During the last test long ago this crashed the game" "E"
-		writelog "INFO" "${FUNCNAME[0]} - therefore the $RESH install to the $SPEK directory redirect is disabled" "E"
-		writelog "INFO" "${FUNCNAME[0]} - Might work meanwhile, you're welcome to re-animate the functions" "E"
+		writelog "WARN" "${FUNCNAME[0]} - This has been experimentally re-enabled, here be dragons!"
+		# writelog "INFO" "${FUNCNAME[0]} - therefore the $RESH install to the $SPEK directory redirect is disabled" "E"
+		# writelog "INFO" "${FUNCNAME[0]} - Might work meanwhile, you're welcome to re-animate the functions" "E"
+		writelog "WARN" "${FUNCNAME[0]} - This function call CURRENTLY DOES NOTHING and has unused code for specifying the location for the ReShade DLL"
 		# see also function checkReshade
 			
 		# XXXXXXXXXXXXX
