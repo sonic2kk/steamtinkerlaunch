@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230906-1 (reenable-reshade-specialk)"
+PROGVERS="v14.0.20230907-1 (reenable-reshade-specialk)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -2739,6 +2739,7 @@ function setDefaultCfgValues {
 		if [ -z "$HARDARGS" ]							; then	HARDARGS="$NOPE"; fi
 		if [ -z "$USEGAMEMODERUN" ]						; then	USEGAMEMODERUN="0";	fi
 		if [ -z "$USEGAMESCOPE" ]						; then	USEGAMESCOPE="0"; fi
+		if [ -z "$USEGAMESCOPEWSI" ]					; then  USEGAMESCOPEWSI="0"; fi
 		if [ -z "$GAMESCOPE_ARGS" ]						; then	GAMESCOPE_ARGS="--"; fi
 		if [ -z "$USEOBSCAP" ]							; then	USEOBSCAP="0"; fi
 		if [ -z "$USEZINK" ]							; then	USEZINK="0"; fi
@@ -9098,7 +9099,8 @@ function useSpecialK {
 			fi
 		fi
 
-		IPAK="vcrun2019-$3"
+		# TODO this does not appear to be working!
+		IPAK="vcrun2022-$3"
 		if [ -f "$GPFX/${IPAK}_installed.txt" ]; then
 			writelog "SKIP" "${FUNCNAME[0]} - Skipping '$IPAK' - already installed" "E"
 		else
@@ -9129,51 +9131,45 @@ function useSpecialK {
 	SPEKENA="$SPEKDDIR/${SPEK}_enabled.txt"
 
 	if [ "$USESPECIALK" -eq 1 ]; then
-		REQDLL="api-ms-win-crt-string-l1-1-0.dll"
-		if [ -d "$GPFX/$DRCW" ] && [ ! -f "$GPFX/$DRCW/system32/$REQDLL" ]; then # the directory check exists for skipping the warning if the pfx does not exist yet _(not nice, but )_ - PR if you care
-			writelog "SKIP" "${FUNCNAME[0]} - '$SPEK' requires '$REQDLL', which is not available in the WINEPREFIX currently running with '$USEPROTON'" "E"
-			notiShow "$(strFix "$NOTY_MISSDLL" "$SPEK" "$REQDLL" "$USEPROTON")"
-		else
-			prepareSpecialKReshade
-			prepareSpecialKIni
+		prepareSpecialKReshade
+		prepareSpecialKIni
+		UPSPEK=1
+		
+		if [ "$AUTOSPEK" -eq 1 ] && { [ "$SPEKVERS" == "default" ] || [ "$SPEKVERS" == "latest" ];}; then
+			writelog "INFO" "${FUNCNAME[0]} - Updating $SPEK in the gamedir because AUTOSPEK is enabled"
 			UPSPEK=1
+		elif [ -f "$SPEKENA" ]; then
+			writelog "SKIP" "${FUNCNAME[0]} - ${SPEK} is already configured - nothing to do"
+			UPSPEK=0
+		fi
+		
+		if [ "$UPSPEK" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - ${SPEK} is enabled - Installing dlls if required"
+			dlSpecialK
+
+			getSpecialKGameRenderApi
 			
-			if [ "$AUTOSPEK" -eq 1 ] && { [ "$SPEKVERS" == "default" ] || [ "$SPEKVERS" == "latest" ];}; then
-				writelog "INFO" "${FUNCNAME[0]} - Updating $SPEK in the gamedir because AUTOSPEK is enabled"
-				UPSPEK=1
-			elif [ -f "$SPEKENA" ]; then
-				writelog "SKIP" "${FUNCNAME[0]} - ${SPEK} is already configured - nothing to do"
-				UPSPEK=0
+			writelog "INFO" "${FUNCNAME[0]} - Using '$SPEKDST' as $SPEK destination dll"
+
+			if [ -f "$GPFX/$DRCW/DirectX.log" ]; then
+				writelog "SKIP" "${FUNCNAME[0]} - Skipping 'dxsetup' - already installed" "E"
+			else
+				notiShow "$(strFix "$NOTY_INSTSTART" "dxsetup")"
+				installSteWoShPak "dxsetup" "$GPFX" "$RUNWINE"
+				notiShow "$(strFix "$NOTY_INSTSTOP" "dxsetup")"
 			fi
-			
-			if [ "$UPSPEK" -eq 1 ]; then
-				writelog "INFO" "${FUNCNAME[0]} - ${SPEK} is enabled - Installing dlls if required"
-				dlSpecialK
 
-				getSpecialKGameRenderApi
-				
-				writelog "INFO" "${FUNCNAME[0]} - Using '$SPEKDST' as $SPEK destination dll"
+			echo "$SPEKDST" > "$SPEKENA"
 
-				if [ -f "$GPFX/$DRCW/DirectX.log" ]; then
-					writelog "SKIP" "${FUNCNAME[0]} - Skipping 'dxsetup' - already installed" "E"
-				else
-					notiShow "$(strFix "$NOTY_INSTSTART" "dxsetup")"
-					installSteWoShPak "dxsetup" "$GPFX" "$RUNWINE"
-					notiShow "$(strFix "$NOTY_INSTSTOP" "dxsetup")"
-				fi
-
-				echo "$SPEKDST" > "$SPEKENA"
-
-				if [ -f "$SPEKDST" ]; then
-					if [ "$AUTOSPEK" -eq 1 ] && { [ "$SPEKVERS" == "default" ] || [ "$SPEKVERS" == "latest" ];}; then
-						writelog "INFO" "${FUNCNAME[0]} - Updating $SPEK dlls because AUTOSPEK is enabled"
-						installSpekArchDll
-					else
-						writelog "SKIP" "${FUNCNAME[0]} - Already have a '${SPEKDST##*/}' in '$SPEKDDIR' - not installing '$SPEK'" "E"
-					fi
-				else
+			if [ -f "$SPEKDST" ]; then
+				if [ "$AUTOSPEK" -eq 1 ] && { [ "$SPEKVERS" == "default" ] || [ "$SPEKVERS" == "latest" ];}; then
+					writelog "INFO" "${FUNCNAME[0]} - Updating $SPEK dlls because AUTOSPEK is enabled"
 					installSpekArchDll
+				else
+					writelog "SKIP" "${FUNCNAME[0]} - Already have a '${SPEKDST##*/}' in '$SPEKDDIR' - not installing '$SPEK'" "E"
 				fi
+			else
+				installSpekArchDll
 			fi
 		fi
 	else
@@ -10335,6 +10331,7 @@ function GameScopeGui {
 			--field="$GUI_GSWAYLAND!$DESC_GSWAYLAND ('GSWAYLAND')":CHK "$GSWAYLAND" \
 			--field="$GUI_GSRT!$DESC_GSRT ('GSRT')":CHK "$GSRT" \
 			--field="$GUI_GSHDLS!$DESC_GSHDLS ('GSHDLS')":CHK "$GSHDLS" \
+			--field="$GUI_USEGAMESCOPEWSI!$DESC_USEGAMESCOPEWSI ('USEGAMESCOPEWSI')":CHK "$USEGAMESCOPEWSI" \
 			--button="$BUT_CAN:0" --button="$BUT_DGM:2" --button="$BUT_DONE:4" "$GEOM"
 			)"
 			case $? in
@@ -10411,6 +10408,7 @@ function GameScopeGui {
 						GSWAYLAND="${GSARR[55]}"
 						GSRT="${GSARR[56]}"
 						GSHDLS="${GSARR[57]}"
+						USEGAMESCOPEWSI="${GSARR[58]}"
 
 						# Build the GameScope arguments string
 						unset GAMESCOPE_ARGS
@@ -10564,7 +10562,9 @@ function GameScopeGui {
 						touch "$FUPDATE"
 						updateConfigEntry "GAMESCOPE_ARGS" "$GAMESCOPE_ARGS" "$STLGAMECFG"						
 						touch "$FUPDATE"
-						updateConfigEntry "USEGAMESCOPE" "$USEGAMESCOPE" "$STLGAMECFG"						
+						updateConfigEntry "USEGAMESCOPE" "$USEGAMESCOPE" "$STLGAMECFG"
+						touch "$FUPDATE"
+						updateConfigEntry "USEGAMESCOPEWSI" "$USEGAMESCOPEWSI" "$STLGAMECFG"  # GAMESCOPE_WSI_ENABLE=1 option, since its an env var and not a gamescope flag we save it to game config
 					}
 				;;	
 			esac
@@ -11231,6 +11231,11 @@ function setCommandLaunchVars {
 				USEGAMESCOPE=0
 			fi
 		else
+			# Enable the ENABLE_GAMESCOPE_WSI environment variable if checkbox is enabled on GameScopeGui
+			if [ "$USEGAMESCOPEWSI" -eq 1 ]; then
+				export ENABLE_GAMESCOPE_WSI=1
+			fi
+
 			GSC="$(command -v "$GAMESCOPE")"
 			
 			gameScopeArgs "$GAMESCOPE_ARGS"  # Create GameScope args array - Is called twice because we call `setCommandLaunchVars` above and in `buildCustomCmdLaunch` it seems
