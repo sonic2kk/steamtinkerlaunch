@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230906-2"
+PROGVERS="v14.0.20230907-1 (specialk-remove-steamworks-install)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -237,7 +237,7 @@ TIGEMETA="$METADIR/title/general"
 TICUMETA="$METADIR/title/custom"
 DRC="drive_c"
 DRCU="$DRC/users"
-DRCW="$DRC/windows"
+# DRCW="$DRC/windows"
 STUS="steamuser"
 PUBUS="Public"
 SUBADIR="$STLBACKDIR/$STUS"
@@ -8966,6 +8966,7 @@ function dlSpecialK {
 	fi
 }
 
+# TODO does this need updated for when a game has multiple APIs? See #580
 function getSpecialKGameRenderApi {
 	SPEKCOMP="$SPEKDLDIR/${SPEK}_compat.html"
 	MAXAGE=1440
@@ -9083,6 +9084,7 @@ function useSpecialK {
 			writelog "SKIP" "${FUNCNAME[0]} - Nothing to update - '$SPEKDST' corresponds to '$SPEKSRC'" "E"
 		else
 			writelog "INFO" "${FUNCNAME[0]} - Installing '${SPEKSRC##*/}' as '$GP' is $2-bit" "E"
+			notiShow "Installing SpecialK..."  # TODO create language string
 			cp "$SPEKSRC" "$SPEKDST"
 			if [ -f "${SPEKSRC//dll/pdb}" ]; then
 				SPEKPDB="${SPEKSRC##*/}"
@@ -9093,15 +9095,17 @@ function useSpecialK {
 			fi
 		fi
 
-		# TODO this does not appear to be working!
-		IPAK="vcrun2022-$3"
-		if [ -f "$GPFX/${IPAK}_installed.txt" ]; then
-			writelog "SKIP" "${FUNCNAME[0]} - Skipping '$IPAK' - already installed" "E"
-		else
-			installSteWoShPak "$IPAK" "$GPFX" "$RUNWINE"
-			echo "$IPAK" > "$GPFX/${IPAK}_installed.txt"
-		fi
-		installd3d47dll "$4" "$SPEKDDIR"
+		# TODO this does not appear to be working! It may also no longer be required, commenting this out fixes SpecialK with NieR:Automata
+		# IPAK="vcrun2022-$3"
+		# if [ -f "$GPFX/${IPAK}_installed.txt" ]; then
+		# 	writelog "SKIP" "${FUNCNAME[0]} - Skipping '$IPAK' - already installed" "E"
+		# else
+		# 	installSteWoShPak "$IPAK" "$GPFX" "$RUNWINE"
+		# 	echo "$IPAK" > "$GPFX/${IPAK}_installed.txt"
+		# fi
+
+		# This no longer seems to be needed for SpecialK, but may be needed to use ReShade and SpecialK -- However, our ReShade code should install this for us, so... /shrug
+		# installd3d47dll "$4" "$SPEKDDIR"
 	}
 
 	function installSpekArchDll {
@@ -9142,16 +9146,17 @@ function useSpecialK {
 			dlSpecialK
 
 			getSpecialKGameRenderApi
-			
+
 			writelog "INFO" "${FUNCNAME[0]} - Using '$SPEKDST' as $SPEK destination dll"
 
-			if [ -f "$GPFX/$DRCW/DirectX.log" ]; then
-				writelog "SKIP" "${FUNCNAME[0]} - Skipping 'dxsetup' - already installed" "E"
-			else
-				notiShow "$(strFix "$NOTY_INSTSTART" "dxsetup")"
-				installSteWoShPak "dxsetup" "$GPFX" "$RUNWINE"
-				notiShow "$(strFix "$NOTY_INSTSTOP" "dxsetup")"
-			fi
+			# This may no longer be necessary!
+			# if [ -f "$GPFX/$DRCW/DirectX.log" ]; then
+			# 	writelog "SKIP" "${FUNCNAME[0]} - Skipping 'dxsetup' - already installed" "E"
+			# else
+			# 	notiShow "$(strFix "$NOTY_INSTSTART" "dxsetup")"
+			# 	installSteWoShPak "dxsetup" "$GPFX" "$RUNWINE"
+			# 	notiShow "$(strFix "$NOTY_INSTSTOP" "dxsetup")"
+			# fi
 
 			echo "$SPEKDST" > "$SPEKENA"
 
@@ -13383,6 +13388,7 @@ function runExe {
 	fi
 }
 
+# Install Steamworks Shared Package (package name mapping can be found at eval/packages/<name>)
 function installSteWoShPak {
 	AIDORPFX="$2"
 	if [ -n "$3" ]; then
