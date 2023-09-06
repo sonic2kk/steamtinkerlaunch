@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230906-1"
+PROGVERS="v14.0.20230906-2"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -9093,7 +9093,8 @@ function useSpecialK {
 			fi
 		fi
 
-		IPAK="vcrun2019-$3"
+		# TODO this does not appear to be working!
+		IPAK="vcrun2022-$3"
 		if [ -f "$GPFX/${IPAK}_installed.txt" ]; then
 			writelog "SKIP" "${FUNCNAME[0]} - Skipping '$IPAK' - already installed" "E"
 		else
@@ -9124,51 +9125,45 @@ function useSpecialK {
 	SPEKENA="$SPEKDDIR/${SPEK}_enabled.txt"
 
 	if [ "$USESPECIALK" -eq 1 ]; then
-		REQDLL="api-ms-win-crt-string-l1-1-0.dll"
-		if [ -d "$GPFX/$DRCW" ] && [ ! -f "$GPFX/$DRCW/system32/$REQDLL" ]; then # the directory check exists for skipping the warning if the pfx does not exist yet _(not nice, but )_ - PR if you care
-			writelog "SKIP" "${FUNCNAME[0]} - '$SPEK' requires '$REQDLL', which is not available in the WINEPREFIX currently running with '$USEPROTON'" "E"
-			notiShow "$(strFix "$NOTY_MISSDLL" "$SPEK" "$REQDLL" "$USEPROTON")"
-		else
-			prepareSpecialKReshade
-			prepareSpecialKIni
+		prepareSpecialKReshade
+		prepareSpecialKIni
+		UPSPEK=1
+		
+		if [ "$AUTOSPEK" -eq 1 ] && { [ "$SPEKVERS" == "default" ] || [ "$SPEKVERS" == "latest" ];}; then
+			writelog "INFO" "${FUNCNAME[0]} - Updating $SPEK in the gamedir because AUTOSPEK is enabled"
 			UPSPEK=1
+		elif [ -f "$SPEKENA" ]; then
+			writelog "SKIP" "${FUNCNAME[0]} - ${SPEK} is already configured - nothing to do"
+			UPSPEK=0
+		fi
+		
+		if [ "$UPSPEK" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - ${SPEK} is enabled - Installing dlls if required"
+			dlSpecialK
+
+			getSpecialKGameRenderApi
 			
-			if [ "$AUTOSPEK" -eq 1 ] && { [ "$SPEKVERS" == "default" ] || [ "$SPEKVERS" == "latest" ];}; then
-				writelog "INFO" "${FUNCNAME[0]} - Updating $SPEK in the gamedir because AUTOSPEK is enabled"
-				UPSPEK=1
-			elif [ -f "$SPEKENA" ]; then
-				writelog "SKIP" "${FUNCNAME[0]} - ${SPEK} is already configured - nothing to do"
-				UPSPEK=0
+			writelog "INFO" "${FUNCNAME[0]} - Using '$SPEKDST' as $SPEK destination dll"
+
+			if [ -f "$GPFX/$DRCW/DirectX.log" ]; then
+				writelog "SKIP" "${FUNCNAME[0]} - Skipping 'dxsetup' - already installed" "E"
+			else
+				notiShow "$(strFix "$NOTY_INSTSTART" "dxsetup")"
+				installSteWoShPak "dxsetup" "$GPFX" "$RUNWINE"
+				notiShow "$(strFix "$NOTY_INSTSTOP" "dxsetup")"
 			fi
-			
-			if [ "$UPSPEK" -eq 1 ]; then
-				writelog "INFO" "${FUNCNAME[0]} - ${SPEK} is enabled - Installing dlls if required"
-				dlSpecialK
 
-				getSpecialKGameRenderApi
-				
-				writelog "INFO" "${FUNCNAME[0]} - Using '$SPEKDST' as $SPEK destination dll"
+			echo "$SPEKDST" > "$SPEKENA"
 
-				if [ -f "$GPFX/$DRCW/DirectX.log" ]; then
-					writelog "SKIP" "${FUNCNAME[0]} - Skipping 'dxsetup' - already installed" "E"
-				else
-					notiShow "$(strFix "$NOTY_INSTSTART" "dxsetup")"
-					installSteWoShPak "dxsetup" "$GPFX" "$RUNWINE"
-					notiShow "$(strFix "$NOTY_INSTSTOP" "dxsetup")"
-				fi
-
-				echo "$SPEKDST" > "$SPEKENA"
-
-				if [ -f "$SPEKDST" ]; then
-					if [ "$AUTOSPEK" -eq 1 ] && { [ "$SPEKVERS" == "default" ] || [ "$SPEKVERS" == "latest" ];}; then
-						writelog "INFO" "${FUNCNAME[0]} - Updating $SPEK dlls because AUTOSPEK is enabled"
-						installSpekArchDll
-					else
-						writelog "SKIP" "${FUNCNAME[0]} - Already have a '${SPEKDST##*/}' in '$SPEKDDIR' - not installing '$SPEK'" "E"
-					fi
-				else
+			if [ -f "$SPEKDST" ]; then
+				if [ "$AUTOSPEK" -eq 1 ] && { [ "$SPEKVERS" == "default" ] || [ "$SPEKVERS" == "latest" ];}; then
+					writelog "INFO" "${FUNCNAME[0]} - Updating $SPEK dlls because AUTOSPEK is enabled"
 					installSpekArchDll
+				else
+					writelog "SKIP" "${FUNCNAME[0]} - Already have a '${SPEKDST##*/}' in '$SPEKDDIR' - not installing '$SPEK'" "E"
 				fi
+			else
+				installSpekArchDll
 			fi
 		fi
 	else
