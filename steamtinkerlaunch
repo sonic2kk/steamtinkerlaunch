@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230907-1 (reenable-reshade-specialk)"
+PROGVERS="v14.0.20230909-1 (reenable-reshade-specialk)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -5748,20 +5748,22 @@ function fixShow {
 	echo "${1//&/+}"
 }
 
+## This function exists because previously, ReShade and ReShade+SpecialK were thought to need separate directories
+## This is not the case; ReShade DLLs still go into the game folder with SpecialK, but are unnnamed, so both have the same SHADDESTDIR
 function setShadDestDir {
 	autoCollectionSettings
 	
-	if [ "$USESPECIALK" -eq 1 ] && [ "$USERESHADE" -eq 1 ]; then
-		writelog "INFO" "${FUNCNAME[0]} - Both '$SPEK' and '$RESH' are enabled." "E"
-		writelog "INFO" "${FUNCNAME[0]} - Unfortunately the game currently crashes using Proton when both are enabled"
-		writelog "INFO" "${FUNCNAME[0]} - therefore $RESH path redirect to the $SPEK directory is disabled" "E"
-		SPEKRESHDIR="My Mods/${SPEK}/Plugins/ThirdParty/${RESH}"
-		SHADDESTDIR="$GPFX/$DRCU/$STUS/$DOCS/$SPEKRESHDIR"
-	else
+	# if [ "$USESPECIALK" -eq 1 ] && [ "$USERESHADE" -eq 1 ]; then
+		# writelog "INFO" "${FUNCNAME[0]} - Both '$SPEK' and '$RESH' are enabled." "E"
+		# writelog "INFO" "${FUNCNAME[0]} - Unfortunately the game currently crashes using Proton when both are enabled"
+		# writelog "INFO" "${FUNCNAME[0]} - therefore $RESH path redirect to the $SPEK directory is disabled" "E"
+		# SPEKRESHDIR="My Mods/${SPEK}/Plugins/ThirdParty/${RESH}"
+		# SHADDESTDIR="$GPFX/$DRCU/$STUS/$DOCS/$SPEKRESHDIR"
+	# else
 	# fi
-		setFullGameExePath "SHADDESTDIR"
-	fi
-	# setFullGameExePath "SHADDESTDIR"
+		# setFullGameExePath "SHADDESTDIR"
+	# fi
+	setFullGameExePath "SHADDESTDIR"
 }
 
 function refreshProtList {
@@ -8716,7 +8718,8 @@ function installReshade {
 			fi
 
 			# Common conditional to install either 32bit/64bit ReShade DLLs, since process is same, just different DLL names
-			if [ "$USERESHADE" -eq 1 ]; then
+			# USESPECIALK check needed because we can't use custom DLL names when using SpecialK -- It expects the raw ReShade32/ReShade64 DLL names
+			if [ "$USERESHADE" -eq 1 ] && [ "$USESPECIALK" -eq 0 ]; then
 				#d3d47 - Required for ReShade
 				# NOTE 25/08/23: *Is* it still required?
 				installd3d47dll "$D3D47_32" "$RSD3D47DLL"
@@ -8760,6 +8763,29 @@ function installDepth3DReshade {
 		setShadDestDir
 		enableThisGameShaderRepo "$SHADERPOOL"
 	fi
+}
+
+# Install steps for ReShade and SpecialK are a bit different 
+function installReshadeForSpecialK {
+
+	writelog "INFO" "${FUNCNAME[0]} - Installing ReShade DLLs for use with SpecialK (DLLs will not be renamed so SpecialK can read them)"
+	
+	# Raw copy ReShade DLLs using installRSdll -- Should make integrating things like ReShade update easier
+	# TODO how does the RSDLLNAMECONFLICTFOUND logic work for ReShade+SpecialK? Do we even have the ReShade.txt file or does it use SpecialK_Enabled.txt?
+	installRSdll "$RS_32" "0" "$RS_32"
+	installRSdll "$RS_64" "0" "$RS_64"
+	installRSdll "${RS_32//.dll/.json}" "0" "${RS_32//.dll/.json}"
+	installRSdll "${RS_64//.dll/.json}" "0" "${RS_64//.dll/.json}"
+
+	# if [ ! -f "$SHADDESTDIR/$RS_64" ]; then
+	# 	writelog "INFO" "${FUNCNAME[0]} - Copying '$RESHADESRCDIR/$RS_64' and friends to '$SHADDESTDIR'"
+	# 	cp "$RESHADESRCDIR/$RS_64" "$SHADDESTDIR"
+	# 	cp "$RESHADESRCDIR/$RS_32" "$SHADDESTDIR"
+	# 	cp "$RESHADESRCDIR/${RS_64//.dll/.json}" "$SHADDESTDIR"
+	# 	cp "$RESHADESRCDIR/${RS_32//.dll/.json}" "$SHADDESTDIR"
+	# else
+	# 	writelog "SKIP" "${FUNCNAME[0]} - Already have '$RS_64' in '$SHADDESTDIR'"
+	# fi
 }
 
 function checkReshade {
@@ -8828,21 +8854,22 @@ function checkReshade {
 			writelog "INFO" "${FUNCNAME[0]} - Might work meanwhile, you're welcome to re-animate the functions" "E"
 
 			# see also function prepareSpecialKReshade
-			# This code should copy the raw ReShade DLLs into the game folder, though it does not seem to copy d3dcompiler_17
-			# This is probably because d3dcompiler_47 should be installed as part of SpecialK installation
+			# This code should copy the raw ReShade DLLs into the game folder, not not d3dcompiler_47
+			# d3dcompiler_47 should be installed as part of ReShade installation, and this is the only time d3dcompiler_47 should be used as SpecialK itself doesn't require it
 			#
 			# using installRSdll would be overkill here, so we won't use it and will instead copy the raw files
 			writelog "INFO" "${FUNCNAME[0]} - Using ${RESH} and $SPEK together"
 			mkProjDir "$SHADDESTDIR"
-			if [ ! -f "$SHADDESTDIR/$RS_64" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Copying '$RESHADESRCDIR/$RS_64' and friends to '$SHADDESTDIR'"
-				cp "$RESHADESRCDIR/$RS_64" "$SHADDESTDIR"
-				cp "$RESHADESRCDIR/$RS_32" "$SHADDESTDIR"
-				cp "$RESHADESRCDIR/${RS_64//.dll/.json}" "$SHADDESTDIR"
-				cp "$RESHADESRCDIR/${RS_32//.dll/.json}" "$SHADDESTDIR"
-			else
-				writelog "SKIP" "${FUNCNAME[0]} - Already have '$RS_64' in '$SHADDESTDIR'"
-			fi
+			installReshadeForSpecialK
+			# if [ ! -f "$SHADDESTDIR/$RS_64" ]; then
+			# 	writelog "INFO" "${FUNCNAME[0]} - Copying '$RESHADESRCDIR/$RS_64' and friends to '$SHADDESTDIR'"
+			# 	cp "$RESHADESRCDIR/$RS_64" "$SHADDESTDIR"
+			# 	cp "$RESHADESRCDIR/$RS_32" "$SHADDESTDIR"
+			# 	cp "$RESHADESRCDIR/${RS_64//.dll/.json}" "$SHADDESTDIR"
+			# 	cp "$RESHADESRCDIR/${RS_32//.dll/.json}" "$SHADDESTDIR"
+			# else
+			# 	writelog "SKIP" "${FUNCNAME[0]} - Already have '$RS_64' in '$SHADDESTDIR'"
+			# fi
 		# fi
 		else
 			if [ -f "$RSOLIST" ]; then
@@ -9099,15 +9126,7 @@ function useSpecialK {
 			fi
 		fi
 
-		# TODO this does not appear to be working!
-		IPAK="vcrun2022-$3"
-		if [ -f "$GPFX/${IPAK}_installed.txt" ]; then
-			writelog "SKIP" "${FUNCNAME[0]} - Skipping '$IPAK' - already installed" "E"
-		else
-			installSteWoShPak "$IPAK" "$GPFX" "$RUNWINE"
-			echo "$IPAK" > "$GPFX/${IPAK}_installed.txt"
-		fi
-		installd3d47dll "$4" "$SPEKDDIR"
+		# installd3d47dll "$4" "$SPEKDDIR"
 	}
 
 	function installSpekArchDll {
@@ -9150,14 +9169,6 @@ function useSpecialK {
 			getSpecialKGameRenderApi
 			
 			writelog "INFO" "${FUNCNAME[0]} - Using '$SPEKDST' as $SPEK destination dll"
-
-			if [ -f "$GPFX/$DRCW/DirectX.log" ]; then
-				writelog "SKIP" "${FUNCNAME[0]} - Skipping 'dxsetup' - already installed" "E"
-			else
-				notiShow "$(strFix "$NOTY_INSTSTART" "dxsetup")"
-				installSteWoShPak "dxsetup" "$GPFX" "$RUNWINE"
-				notiShow "$(strFix "$NOTY_INSTSTOP" "dxsetup")"
-			fi
 
 			echo "$SPEKDST" > "$SPEKENA"
 
