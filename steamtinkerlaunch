@@ -5752,17 +5752,7 @@ function fixShow {
 ## This is not the case; ReShade DLLs still go into the game folder with SpecialK, but are unnnamed, so both have the same SHADDESTDIR
 function setShadDestDir {
 	autoCollectionSettings
-	
-	# if [ "$USESPECIALK" -eq 1 ] && [ "$USERESHADE" -eq 1 ]; then
-		# writelog "INFO" "${FUNCNAME[0]} - Both '$SPEK' and '$RESH' are enabled." "E"
-		# writelog "INFO" "${FUNCNAME[0]} - Unfortunately the game currently crashes using Proton when both are enabled"
-		# writelog "INFO" "${FUNCNAME[0]} - therefore $RESH path redirect to the $SPEK directory is disabled" "E"
-		# SPEKRESHDIR="My Mods/${SPEK}/Plugins/ThirdParty/${RESH}"
-		# SHADDESTDIR="$GPFX/$DRCU/$STUS/$DOCS/$SPEKRESHDIR"
-	# else
-	# fi
-		# setFullGameExePath "SHADDESTDIR"
-	# fi
+
 	setFullGameExePath "SHADDESTDIR"
 }
 
@@ -8771,21 +8761,11 @@ function installReshadeForSpecialK {
 	writelog "INFO" "${FUNCNAME[0]} - Installing ReShade DLLs for use with SpecialK (DLLs will not be renamed so SpecialK can read them)"
 	
 	# Raw copy ReShade DLLs using installRSdll -- Should make integrating things like ReShade update easier
-	# TODO how does the RSDLLNAMECONFLICTFOUND logic work for ReShade+SpecialK? Do we even have the ReShade.txt file or does it use SpecialK_Enabled.txt?
-	installRSdll "$RS_32" "0" "$RS_32"
+	# These DLLSs are not tracked, we should be tracking them in ReShade.txt so toggling ReShade off correctly removes them
+	# When turning ReShade off we should also check the DLL names and if SpecialK is no longer in use, to clean up a SpecialK+ReShade install (i.e. if using ReShade64.dll but SpecialK is off, just remove instead of renaming to .dll_off)	installRSdll "$RS_32" "0" "$RS_32"
 	installRSdll "$RS_64" "0" "$RS_64"
 	installRSdll "${RS_32//.dll/.json}" "0" "${RS_32//.dll/.json}"
 	installRSdll "${RS_64//.dll/.json}" "0" "${RS_64//.dll/.json}"
-
-	# if [ ! -f "$SHADDESTDIR/$RS_64" ]; then
-	# 	writelog "INFO" "${FUNCNAME[0]} - Copying '$RESHADESRCDIR/$RS_64' and friends to '$SHADDESTDIR'"
-	# 	cp "$RESHADESRCDIR/$RS_64" "$SHADDESTDIR"
-	# 	cp "$RESHADESRCDIR/$RS_32" "$SHADDESTDIR"
-	# 	cp "$RESHADESRCDIR/${RS_64//.dll/.json}" "$SHADDESTDIR"
-	# 	cp "$RESHADESRCDIR/${RS_32//.dll/.json}" "$SHADDESTDIR"
-	# else
-	# 	writelog "SKIP" "${FUNCNAME[0]} - Already have '$RS_64' in '$SHADDESTDIR'"
-	# fi
 }
 
 function checkReshade {
@@ -8847,30 +8827,14 @@ function checkReshade {
 		# EXPERIMENTALLY RE-ENABLED
 		# NOTE that this has no ReShade updating or version override checks, so it is missing many features that regular ReShade has!
 		if [ "$USESPECIALK" -eq 1 ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Both '$SPEK' and '$RESH' are enabled." "E"
-			writelog "INFO" "${FUNCNAME[0]} - This has historically caused crashes, but has been experimentally re-enabled!"
-			writelog "INFO" "${FUNCNAME[0]} - During the last test long ago this crashed the game" "E"
-			writelog "INFO" "${FUNCNAME[0]} - therefore the $RESH install to the $SPEK directory redirect is disabled" "E"
-			writelog "INFO" "${FUNCNAME[0]} - Might work meanwhile, you're welcome to re-animate the functions" "E"
-
-			# see also function prepareSpecialKReshade
-			# This code should copy the raw ReShade DLLs into the game folder, not not d3dcompiler_47
-			# d3dcompiler_47 should be installed as part of ReShade installation, and this is the only time d3dcompiler_47 should be used as SpecialK itself doesn't require it
-			#
-			# using installRSdll would be overkill here, so we won't use it and will instead copy the raw files
+			writelog "WARN" "${FUNCNAME[0]} - Both '$SPEK' and '$RESH' are enabled." "E"
+			writelog "WARN" "${FUNCNAME[0]} - This has historically caused crashes, but has been experimentally re-enabled!"
+			writelog "WARN" "${FUNCNAME[0]} - Manual intervention may be required to fix crashes, such as renaming the SpecialK DLL to fix the SpecialK UI, or running dos2unix on INI files to fix crashes"
+			writelog "WARN" "${FUNCNAME[0]} - For more information, see: https://github.com/sonic2kk/steamtinkerlaunch/issues/894"
+			
 			writelog "INFO" "${FUNCNAME[0]} - Using ${RESH} and $SPEK together"
 			mkProjDir "$SHADDESTDIR"
 			installReshadeForSpecialK
-			# if [ ! -f "$SHADDESTDIR/$RS_64" ]; then
-			# 	writelog "INFO" "${FUNCNAME[0]} - Copying '$RESHADESRCDIR/$RS_64' and friends to '$SHADDESTDIR'"
-			# 	cp "$RESHADESRCDIR/$RS_64" "$SHADDESTDIR"
-			# 	cp "$RESHADESRCDIR/$RS_32" "$SHADDESTDIR"
-			# 	cp "$RESHADESRCDIR/${RS_64//.dll/.json}" "$SHADDESTDIR"
-			# 	cp "$RESHADESRCDIR/${RS_32//.dll/.json}" "$SHADDESTDIR"
-			# else
-			# 	writelog "SKIP" "${FUNCNAME[0]} - Already have '$RS_64' in '$SHADDESTDIR'"
-			# fi
-		# fi
 		else
 			if [ -f "$RSOLIST" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - ${RESH} has been disabled previously using '${PROGNAME,,}' - enabling it now"
@@ -9024,28 +8988,6 @@ function getSpecialKGameRenderApi {
 	fi	
 }
 
-function prepareSpecialKReshade {
-	if [ "$USERESHADE" -eq 1 ]; then
-		writelog "INFO" "${FUNCNAME[0]} - Both '$SPEK' and '$RESH' are enabled." "E"
-		#writelog "INFO" "${FUNCNAME[0]} - Unfortunately the game currently crashes using Proton when both are enabled"
-		writelog "INFO" "${FUNCNAME[0]} - During the last test long ago this crashed the game" "E"
-		writelog "WARN" "${FUNCNAME[0]} - This has been experimentally re-enabled, here be dragons!"
-		# writelog "INFO" "${FUNCNAME[0]} - therefore the $RESH install to the $SPEK directory redirect is disabled" "E"
-		# writelog "INFO" "${FUNCNAME[0]} - Might work meanwhile, you're welcome to re-animate the functions" "E"
-		writelog "WARN" "${FUNCNAME[0]} - This function call CURRENTLY DOES NOTHING and has unused code for specifying the location for the ReShade DLL"
-		# see also function checkReshade
-			
-		# XXXXXXXXXXXXX
-		# maybe later:
-		# "[Import.ReShade64]"
-		# "Architecture=x64"
-		# "Role=ThirdParty"
-		# "When=PlugIn"
-		# "When=Early"
-		# "Filename=C:\users\steamuser\Documents\My Mods\SpecialK\PlugIns\ThirdParty\ReShade\ReShade64.dll"
-	fi
-}
-
 function prepareSpecialKIni {
 	UWI="UsingWINE"
 	UWIT="$UWI=true"
@@ -9152,7 +9094,6 @@ function useSpecialK {
 	SPEKENA="$SPEKDDIR/${SPEK}_enabled.txt"
 
 	if [ "$USESPECIALK" -eq 1 ]; then
-		prepareSpecialKReshade
 		prepareSpecialKIni
 		UPSPEK=1
 		
