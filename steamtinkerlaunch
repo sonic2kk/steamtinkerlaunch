@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230909-3 (reenable-reshade-specialk)"
+PROGVERS="v14.0.20230909-4 (reenable-reshade-specialk)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -8673,11 +8673,7 @@ function installReshade {
 			writelog "INFO" "${FUNCNAME[0]} - No conflict found in old logfiles"
 		fi
 
-		if [ -n "$ARCHALTEXE" ] && [[ ! "$ARCHALTEXE" =~ ${DUMMYBIN}$ ]]; then
-			CHARCH="$ARCHALTEXE"
-		else
-			CHARCH="$GP"
-		fi
+		getReShadeExeArch
 
 		if [ -d "$INSTDESTDIR" ]; then
 			# Get ReShade DLL names from comma separated list -- User will probably mostly only pass one, but this will handle cases where they might want multiple (ex: d3d9, opengl32)
@@ -8730,6 +8726,10 @@ function installReshade {
 					writelog "INFO" "${FUNCNAME[0]} - Writing '$CUSTRSDLL' to '$RSTXT'"
 					appendToRSTXT "$CUSTRSDLL"
 				done
+			else
+				if [ "$USESPECIALK" -eq 1 ]; then
+					writelog "SKIP" "${FUNCNAME[0]} - USERESHADE and USESPECIALK are enabled together, skipping custom ReShade DLL name as SpecialK needs specific ReShade DLL names"
+				fi
 			fi
 
 			# This makes sure if we updated any DLL names in RSDLLNAMEARR to end with '.dll' that these are written out to the game config file
@@ -8755,17 +8755,39 @@ function installDepth3DReshade {
 	fi
 }
 
+# Get archiecture of executable that ReShade is being used for, so we know which DLL to copy (32bit/64bit)
+function getReShadeExeArch {
+	if [ -n "$ARCHALTEXE" ] && [[ ! "$ARCHALTEXE" =~ ${DUMMYBIN}$ ]]; then
+		CHARCH="$ARCHALTEXE"
+	else
+		CHARCH="$GP"
+	fi
+}
+
 # Install steps for ReShade and SpecialK are a bit different 
 function installReshadeForSpecialK {
-
 	writelog "INFO" "${FUNCNAME[0]} - Installing ReShade DLLs for use with SpecialK (DLLs will not be renamed so SpecialK can read them)"
 	
 	# Raw copy ReShade DLLs using installRSdll -- Should make integrating things like ReShade update easier
 	# These DLLSs are not tracked, we should be tracking them in ReShade.txt so toggling ReShade off correctly removes them
 	# When turning ReShade off we should also check the DLL names and if SpecialK is no longer in use, to clean up a SpecialK+ReShade install (i.e. if using ReShade64.dll but SpecialK is off, just remove instead of renaming to .dll_off)	installRSdll "$RS_32" "0" "$RS_32"
-	installRSdll "$RS_64" "0" "$RS_64"
-	installRSdll "${RS_32//.dll/.json}" "0" "${RS_32//.dll/.json}"
-	installRSdll "${RS_64//.dll/.json}" "0" "${RS_64//.dll/.json}"
+	getReShadeExeArch
+	
+	# Very similar logic used for installReshade
+	if [ "$(getArch "$CHARCH")" == "32" ]; then
+		#32bit
+		writelog "INFO" "${FUNCNAME[0]} - Installing 32bit ${RESH} for ${SPEK} as '$CHARCH' is 32bit" 
+		installRSdll "$RS_32" "0" "$RS_32"
+		installRSdll "${RS_32//.dll/.json}" "0" "${RS_32//.dll/.json}"
+	elif [ "$(getArch "$CHARCH")" == "64" ]; then
+		#64bit
+		writelog "INFO" "${FUNCNAME[0]} - Installing 64bit ${RESH} for ${SPEK} as '$CHARCH' is 64bit" 
+		installRSdll "$RS_64" "0" "$RS_64"
+		installRSdll "${RS_64//.dll/.json}" "0" "${RS_64//.dll/.json}"
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - ERROR in ${RESH}+${SPEK} installation - no file information detected for '$CHARCH' or any 'neighbor file' - setting USERESHADE=0 for this session"
+		export USERESHADE=0
+	fi
 }
 
 function checkReshade {
