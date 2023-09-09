@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230908-1"
+PROGVERS="v14.0.20230909-1"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -5748,19 +5748,11 @@ function fixShow {
 	echo "${1//&/+}"
 }
 
+## This function exists because previously, ReShade and ReShade+SpecialK were thought to need separate directories
+## This is not the case; ReShade DLLs still go into the game folder with SpecialK, but are unnnamed, so both have the same SHADDESTDIR
 function setShadDestDir {
 	autoCollectionSettings
-	
-	if [ "$USESPECIALK" -eq 1 ] && [ "$USERESHADE" -eq 1 ]; then
-		writelog "INFO" "${FUNCNAME[0]} - Both '$SPEK' and '$RESH' are enabled." "E"
-		writelog "INFO" "${FUNCNAME[0]} - Unfortunately the game currently crashes using Proton when both are enabled"
-		writelog "INFO" "${FUNCNAME[0]} - therefore $RESH path redirect to the $SPEK directory is disabled" "E"
-#		SPEKRESHDIR="My Mods/${SPEK}/Plugins/ThirdParty/${RESH}"
-#		SHADDESTDIR="$GPFX/$DRCU/$STUS/$DOCS/$SPEKRESHDIR"
-#	else
-	fi
-		# setFullGameExePath "SHADDESTDIR"
-#	fi
+
 	setFullGameExePath "SHADDESTDIR"
 }
 
@@ -8681,11 +8673,7 @@ function installReshade {
 			writelog "INFO" "${FUNCNAME[0]} - No conflict found in old logfiles"
 		fi
 
-		if [ -n "$ARCHALTEXE" ] && [[ ! "$ARCHALTEXE" =~ ${DUMMYBIN}$ ]]; then
-			CHARCH="$ARCHALTEXE"
-		else
-			CHARCH="$GP"
-		fi
+		getReShadeExeArch
 
 		if [ -d "$INSTDESTDIR" ]; then
 			# Get ReShade DLL names from comma separated list -- User will probably mostly only pass one, but this will handle cases where they might want multiple (ex: d3d9, opengl32)
@@ -8716,7 +8704,8 @@ function installReshade {
 			fi
 
 			# Common conditional to install either 32bit/64bit ReShade DLLs, since process is same, just different DLL names
-			if [ "$USERESHADE" -eq 1 ]; then
+			# USESPECIALK check needed because we can't use custom DLL names when using SpecialK -- It expects the raw ReShade32/ReShade64 DLL names
+			if [ "$USERESHADE" -eq 1 ] && [ "$USESPECIALK" -eq 0 ]; then
 				#d3d47 - Required for ReShade
 				# NOTE 25/08/23: *Is* it still required?
 				installd3d47dll "$D3D47_32" "$RSD3D47DLL"
@@ -8737,6 +8726,10 @@ function installReshade {
 					writelog "INFO" "${FUNCNAME[0]} - Writing '$CUSTRSDLL' to '$RSTXT'"
 					appendToRSTXT "$CUSTRSDLL"
 				done
+			else
+				if [ "$USESPECIALK" -eq 1 ]; then
+					writelog "SKIP" "${FUNCNAME[0]} - USERESHADE and USESPECIALK are enabled together, skipping custom ReShade DLL name as SpecialK needs specific ReShade DLL names"
+				fi
 			fi
 
 			# This makes sure if we updated any DLL names in RSDLLNAMEARR to end with '.dll' that these are written out to the game config file
@@ -8759,6 +8752,41 @@ function installDepth3DReshade {
 		StatusWindow "$GUI_DLSHADER" "dlShaders $SHADERPOOL" "DownloadCustomProtonStatus"
 		setShadDestDir
 		enableThisGameShaderRepo "$SHADERPOOL"
+	fi
+}
+
+# Get archiecture of executable that ReShade is being used for, so we know which DLL to copy (32bit/64bit)
+function getReShadeExeArch {
+	if [ -n "$ARCHALTEXE" ] && [[ ! "$ARCHALTEXE" =~ ${DUMMYBIN}$ ]]; then
+		CHARCH="$ARCHALTEXE"
+	else
+		CHARCH="$GP"
+	fi
+}
+
+# Install steps for ReShade and SpecialK are a bit different 
+function installReshadeForSpecialK {
+	writelog "INFO" "${FUNCNAME[0]} - Installing ReShade DLLs for use with SpecialK (DLLs will not be renamed so SpecialK can read them)"
+	
+	# Raw copy ReShade DLLs using installRSdll -- Should make integrating things like ReShade update easier
+	# These DLLSs are not tracked, we should be tracking them in ReShade.txt so toggling ReShade off correctly removes them
+	# When turning ReShade off we should also check the DLL names and if SpecialK is no longer in use, to clean up a SpecialK+ReShade install (i.e. if using ReShade64.dll but SpecialK is off, just remove instead of renaming to .dll_off)	installRSdll "$RS_32" "0" "$RS_32"
+	getReShadeExeArch
+	
+	# Very similar logic used for installReshade
+	if [ "$(getArch "$CHARCH")" == "32" ]; then
+		#32bit
+		writelog "INFO" "${FUNCNAME[0]} - Installing 32bit ${RESH} for ${SPEK} as '$CHARCH' is 32bit" 
+		installRSdll "$RS_32" "0" "$RS_32"
+		installRSdll "${RS_32//.dll/.json}" "0" "${RS_32//.dll/.json}"
+	elif [ "$(getArch "$CHARCH")" == "64" ]; then
+		#64bit
+		writelog "INFO" "${FUNCNAME[0]} - Installing 64bit ${RESH} for ${SPEK} as '$CHARCH' is 64bit" 
+		installRSdll "$RS_64" "0" "$RS_64"
+		installRSdll "${RS_64//.dll/.json}" "0" "${RS_64//.dll/.json}"
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - ERROR in ${RESH}+${SPEK} installation - no file information detected for '$CHARCH' or any 'neighbor file' - setting USERESHADE=0 for this session"
+		export USERESHADE=0
 	fi
 }
 
@@ -8818,29 +8846,18 @@ function checkReshade {
 			fi
 		fi
 
-#XXXXXXXXXXXXX
+		# EXPERIMENTALLY RE-ENABLED
+		# NOTE that this has no ReShade updating or version override checks, so it is missing many features that regular ReShade has!
 		if [ "$USESPECIALK" -eq 1 ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Both '$SPEK' and '$RESH' are enabled." "E"
-			#writelog "INFO" "${FUNCNAME[0]} - Unfortunately the game currently crashes using Proton when both are enabled"
-			writelog "INFO" "${FUNCNAME[0]} - During the last test long ago this crashed the game" "E"
-			writelog "INFO" "${FUNCNAME[0]} - therefore the $RESH install to the $SPEK directory redirect is disabled" "E"
-			writelog "INFO" "${FUNCNAME[0]} - Might work meanwhile, you're welcome to re-animate the functions" "E"
-			# see also function prepareSpecialKReshade
-
-#			writelog "INFO" "${FUNCNAME[0]} - Using ${RESH} and $SPEK together"
-#			mkProjDir "$SHADDESTDIR"
-#			if [ ! -f "$SHADDESTDIR/$RS_64" ]; then
-#				writelog "INFO" "${FUNCNAME[0]} - Copying '$RESHADESRCDIR/$RS_64' and friends to '$SHADDESTDIR'"
-#				cp "$RESHADESRCDIR/$RS_64" "$SHADDESTDIR"
-#				cp "$RESHADESRCDIR/$RS_32" "$SHADDESTDIR"
-#				cp "$RESHADESRCDIR/${RS_64//.dll/.json}" "$SHADDESTDIR"
-#				cp "$RESHADESRCDIR/${RS_32//.dll/.json}" "$SHADDESTDIR"
-#			else
-#				writelog "SKIP" "${FUNCNAME[0]} - Already have '$RS_64' in '$SHADDESTDIR'"
-#			fi
-		fi
-
-#		else
+			writelog "WARN" "${FUNCNAME[0]} - Both '$SPEK' and '$RESH' are enabled." "E"
+			writelog "WARN" "${FUNCNAME[0]} - This has historically caused crashes, but has been experimentally re-enabled!"
+			writelog "WARN" "${FUNCNAME[0]} - Manual intervention may be required to fix crashes, such as renaming the SpecialK DLL to fix the SpecialK UI, or running dos2unix on INI files to fix crashes"
+			writelog "WARN" "${FUNCNAME[0]} - For more information, see: https://github.com/sonic2kk/steamtinkerlaunch/issues/894"
+			
+			writelog "INFO" "${FUNCNAME[0]} - Using ${RESH} and $SPEK together"
+			mkProjDir "$SHADDESTDIR"
+			installReshadeForSpecialK
+		else
 			if [ -f "$RSOLIST" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - ${RESH} has been disabled previously using '${PROGNAME,,}' - enabling it now"
 				while read -r rsdll; do
@@ -8865,7 +8882,7 @@ function checkReshade {
 
 			writelog "INFO" "${FUNCNAME[0]} - Setting WINEDLLOVERRIDES for ${RESH}: dxgi=n,b;d3d9=n,b;${D3D47//.dll}=n,b;opengl32=n,b"
 			export WINEDLLOVERRIDES="$WINEDLLOVERRIDES;dxgi=n,b;d3d9=n,b;${D3D47//.dll}=n,b;opengl32=n,b"
-#		fi
+		fi
 	else	
 		if [ -f "$FRSINI" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - ${RESH} has been disabled by the user, so renaming '$FRSINI' to '$FRSOINI'"
@@ -8966,7 +8983,17 @@ function dlSpecialK {
 	fi
 }
 
-# TODO does this need updated for when a game has multiple APIs? See #580
+## Get rendering API from PCGamingWiki compatibility list
+## This is missing some supported games (such as NieR:Replicant and Monster Hunter World) but is generally a good reference point
+##
+## For compatibility reasons we use d3d11.dll as the SpecialK DLL name for Direct3D 11 games, as this seems to be more compatible than dxgi.dll on Linux -- Mainly when it comes to using ReShade and SpecialK
+## ReShade and SpecialK work better together for Direct3D 11 games if we use d3d11.dll as the name
+##
+## Behaviour is this:
+## - If we find Direct3D 11 as the rendering API for our game, use d3d11.dll as the SpecialK DLL name
+## - If we find an unknown rendering API for our game, use dxgi.dll as a fallback
+## - If we cannot find our game in the list, assume D3D11 and fall back to d3d11.dll
+##    - TODO this point is not ideal, we should add an API override at some point
 function getSpecialKGameRenderApi {
 	SPEKCOMP="$SPEKDLDIR/${SPEK}_compat.html"
 	MAXAGE=1440
@@ -8977,8 +9004,10 @@ function getSpecialKGameRenderApi {
 	RAPI="$(sed -n "/id=\"Compatibility_list\"/,$ p" "$SPEKCOMP" | grep -A1 "${GN// /\*.\*}" | tail -n1 | cut -d '>' -f2 | cut -d '<' -f1)"
 	if [ -n "$RAPI" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Found Render Api '$RAPI'"
-		if [ "$RAPI" == "Direct3D 11" ]; then
-			SPEKDST="$SPEKDDIR/$DXGI"
+		if [ "$RAPI" == "Direct3D 12" ]; then
+			SPEKDST="$SPEKDDIR/$DXGI"  # Is this correct for DX12? 
+		elif [ "$RAPI" == "Direct3D 11" ]; then
+			SPEKDST="$SPEKDDIR/$D3D11"
 		elif [ "$RAPI" == "Direct3D 9" ]; then
 			SPEKDST="$SPEKDDIR/$D3D9"
 		elif [ "$RAPI" == "OpenGL" ]; then
@@ -8989,28 +9018,8 @@ function getSpecialKGameRenderApi {
 		fi
 	else
 		writelog "INFO" "${FUNCNAME[0]} - Could not find Render Api - assuming 'Direct3D 11'"
-		SPEKDST="$SPEKDDIR/$DXGI"
+		SPEKDST="$SPEKDDIR/$D3D11"
 	fi	
-}
-
-function prepareSpecialKReshade {
-	if [ "$USERESHADE" -eq 1 ]; then
-		writelog "INFO" "${FUNCNAME[0]} - Both '$SPEK' and '$RESH' are enabled." "E"
-		#writelog "INFO" "${FUNCNAME[0]} - Unfortunately the game currently crashes using Proton when both are enabled"
-		writelog "INFO" "${FUNCNAME[0]} - During the last test long ago this crashed the game" "E"
-		writelog "INFO" "${FUNCNAME[0]} - therefore the $RESH install to the $SPEK directory redirect is disabled" "E"
-		writelog "INFO" "${FUNCNAME[0]} - Might work meanwhile, you're welcome to re-animate the functions" "E"
-		# see also function checkReshade
-			
-		# XXXXXXXXXXXXX
-		# maybe later:
-		# "[Import.ReShade64]"
-		# "Architecture=x64"
-		# "Role=ThirdParty"
-		# "When=PlugIn"
-		# "When=Early"
-		# "Filename=C:\users\steamuser\Documents\My Mods\SpecialK\PlugIns\ThirdParty\ReShade\ReShade64.dll"
-	fi
 }
 
 function prepareSpecialKIni {
@@ -9094,6 +9103,8 @@ function useSpecialK {
 				echo "$SPEKDDIR/$SPEKPDB" >> "$SPEKENA"
 			fi
 		fi
+
+		# installd3d47dll "$4" "$SPEKDDIR"
 	}
 
 	function installSpekArchDll {
@@ -9117,7 +9128,6 @@ function useSpecialK {
 	SPEKENA="$SPEKDDIR/${SPEK}_enabled.txt"
 
 	if [ "$USESPECIALK" -eq 1 ]; then
-		prepareSpecialKReshade
 		prepareSpecialKIni
 		UPSPEK=1
 		
@@ -9134,7 +9144,7 @@ function useSpecialK {
 			dlSpecialK
 
 			getSpecialKGameRenderApi
-
+      
 			writelog "INFO" "${FUNCNAME[0]} - Using '$SPEKDST' as $SPEK destination dll"
 
 			echo "$SPEKDST" > "$SPEKENA"
