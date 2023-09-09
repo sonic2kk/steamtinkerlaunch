@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230909-2 (reenable-reshade-specialk)"
+PROGVERS="v14.0.20230909-3 (reenable-reshade-specialk)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -8961,7 +8961,17 @@ function dlSpecialK {
 	fi
 }
 
-# TODO does this need updated for when a game has multiple APIs? See #580
+## Get rendering API from PCGamingWiki compatibility list
+## This is missing some supported games (such as NieR:Replicant and Monster Hunter World) but is generally a good reference point
+##
+## For compatibility reasons we use d3d11.dll as the SpecialK DLL name for Direct3D 11 games, as this seems to be more compatible than dxgi.dll on Linux -- Mainly when it comes to using ReShade and SpecialK
+## ReShade and SpecialK work better together for Direct3D 11 games if we use d3d11.dll as the name
+##
+## Behaviour is this:
+## - If we find Direct3D 11 as the rendering API for our game, use d3d11.dll as the SpecialK DLL name
+## - If we find an unknown rendering API for our game, use dxgi.dll as a fallback
+## - If we cannot find our game in the list, assume D3D11 and fall back to d3d11.dll
+##    - TODO this point is not ideal, we should add an API override at some point
 function getSpecialKGameRenderApi {
 	SPEKCOMP="$SPEKDLDIR/${SPEK}_compat.html"
 	MAXAGE=1440
@@ -8972,7 +8982,9 @@ function getSpecialKGameRenderApi {
 	RAPI="$(sed -n "/id=\"Compatibility_list\"/,$ p" "$SPEKCOMP" | grep -A1 "${GN// /\*.\*}" | tail -n1 | cut -d '>' -f2 | cut -d '<' -f1)"
 	if [ -n "$RAPI" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Found Render Api '$RAPI'"
-		if [ "$RAPI" == "Direct3D 11" ]; then
+		if [ "$RAPI" == "Direct3D 12" ]; then
+			SPEKDST="$SPEKDDIR/$DXGI"  # Is this correct for DX12? 
+		elif [ "$RAPI" == "Direct3D 11" ]; then
 			SPEKDST="$SPEKDDIR/$D3D11"
 		elif [ "$RAPI" == "Direct3D 9" ]; then
 			SPEKDST="$SPEKDDIR/$D3D9"
@@ -8984,7 +8996,7 @@ function getSpecialKGameRenderApi {
 		fi
 	else
 		writelog "INFO" "${FUNCNAME[0]} - Could not find Render Api - assuming 'Direct3D 11'"
-		SPEKDST="$SPEKDDIR/$DXGI"
+		SPEKDST="$SPEKDDIR/$D3D11"
 	fi	
 }
 
