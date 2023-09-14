@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230912-1"
+PROGVERS="v14.0.20230915-1"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -22189,13 +22189,60 @@ function addNonSteamGame {
 		echo -n "$1" | gzip -c | tail -c 8 | od -An -N 4 -tx4
 	}
 
-	function dec2hex {
-		 printf '%x\n' "$1"
-	}
+
 
 	function hex2dec {
 		printf "%d\n" "0x${1#0x}"
 	}
+
+
+	## Notes on how Non-Steam AppIDs work, because it took me almost a year to figure this out
+	## ----------------------
+	## Steam stores shortcuts in a binary file called 'shortcuts.vdf', stored in SROOT/userdata/<id>/config
+	## This file stores information about Steam shortcuts, with many values being written out in hex, such as the Steam AppID and boolean values
+	##
+	## Non-Steam Game AppIDs are 32bit little-endian (reverse byte order) signed integers, stores as hexidecimal
+	## This AppID is probably generated using some combination of the AppName and Exe with a crc32 generated from them, but it can actually be anything
+	## Steam likely does things this way in an attempt to ensure "uniqueness" among entries. Projects like Steam-ROM-Manager do the same thing likely for similar reasons
+	##
+	## In our case, for simplicity, we're just going to generate a random 32bit signed integer, which we'll then convert to hex to store in the AppID file
+	## We can also convert this to an unsigned 32bit integer to get the AppID used for grids and other things, the unsigned int is just what Steam stores
+	##
+	## Though we can write any AppID we want, invalid ones (i.e. big endian hex) will be rejected by Steam and it will overwrite the generated AppID!
+	##
+	## We can later re-use these functions to do several things:
+	## - Check for and remove stray STL configs for no longer stored Non-Steam Game AppIDs (if we had Non-Steam Games we previously used with STL that we no longer use, we can remove these configs in case there is a conflict in future) 
+	## ----------------------
+
+
+	### BEGIN MAGIC APPID FUNCTIONS
+	## ----------
+	# Generate random signed 32bit integer which can be converted into hex, using the first argument (AppName and Exe fields) as seed (in an attempt to reduce the chances of the same AppID being generated twice)
+	function generateShortcutVDFAppId {
+		echo "-$( shuf -i 99999999-999999999 -n 1 --random-source=<(echo -n "$1") )"
+	}
+
+	function dec2hex {
+		printf '%x\n' "$1" | cut -c 9-  # This cut removes the 'ffffffff' from the string (represents the sign for the signed int) and starts from the 9th character onward 
+	}
+
+	# Takes a big-endian ("normal") hexidecimal number and converts it to little-endian (reverse byte order)
+	function bigToLittleEndian {
+		echo -n "$1" | tac -rs .. | tr -d '\n'
+	}
+
+	# Takes an signed 32bit integer and converts it to a 4byte little-endian hex number
+	function generateShortcutVDFHexAppId {
+		bigToLittleEndian "$( dec2hex "$1" )"
+	}
+
+	# Takes an signed 32bit integer and converts it to an unsigned 32bit integer 
+	function generateShortcutGridAppId {
+		echo $(( $1 & 0xFFFFFFFF ))
+	}
+	## ----------
+	### END MAGIC APPID FUNCTIONS
+
 
 	function splitTags {
 		mapfile -d "," -t -O "${#TAGARR[@]}" TAGARR < <(printf '%s' "$1")
@@ -22206,7 +22253,7 @@ function addNonSteamGame {
 		done
 	}
 
-	NOSTHIDE=0
+	NOSTHIDE=0  # Does hide still work? Didn't seem to in my tests
 	NOSTADC=1
 	NOSTAO=1
 	NOSTVR=0
@@ -22264,15 +22311,21 @@ function addNonSteamGame {
 			NOSTGICONPATH="$STLICON"
 		fi
 
-		# AppID for Non-Steam Games in shortcuts.vdf is stored as 4-byte little endian integer by Steam
-		# No idea how to extract it using Bash, but there are various working Python implementations
-
-		NOSTAIDRHX="$(printf "%03x%03x%02x\n" $((RANDOM%4096)) $((RANDOM%4096)) $((RANDOM%256)))"
-		NOSTAID="$(hex2dec "$NOSTAIDRHX")"
-		NOSTAIDHX="\x$(awk '{$1=$1}1' FPAT='.{2}' OFS="\\\x" <<< "$NOSTAIDRHX")"
+		## ----
+		## These AppIDs are not necessarily guaranteed to be unique, such as if the user tries to add the same game twice or something
+		## Therefore, perhaps in future we could do a stricter check by attempting to parse the shortcuts.vdf file and re-generating the AppID if it already exists
+		## This could be expensive if the file is long, but a potential future enhancement all the same!
+		## ----
+		NOSTAIDVDF="$( generateShortcutVDFAppId "${NOSTAPPNAME}${NOSTEXEPATH}" )"  # This is the signed integer AppID that will be stored in the VDF as hexidecimal - ex: -598031679
+		NOSTAIDVDFHEX="$( generateShortcutVDFHexAppId "$NOSTAIDVDF" )"  # This is the 4byte little-endian hexidecimal of the above 32bit signed integer, which we write out to the binary VDF - ex: c1c25adc
+		NOSTAIDVDFHEXFMT="\x$(awk '{$1=$1}1' FPAT='.{2}' OFS="\\\x" <<< "$NOSTAIDVDFHEX")"  # This is the binary-formatted string hex of the above which we actually write out - ex: \xc1\xc2\x5a\xdc
+		NOSTAIDGRID="$( generateShortcutGridAppId "$NOSTAIDVDF" )"  # This is the unsigned 32bit ingeger version of "$NOSTAIDVDF", which is used as the AppID for Steam artwork ("grids"), as well as for our shortcuts
 
 		writelog "INFO" "${FUNCNAME[0]} - === Adding new $NSGA ==="
-		writelog "INFO" "${FUNCNAME[0]} - AppID: '${NOSTAID}'"
+		writelog "INFO" "${FUNCNAME[0]} - Signed Integer Shortcut AppID: '${NOSTAIDVDF}'"
+		writelog "INFO" "${FUNCNAME[0]} - 4byte Little-Endian Hex AppID: '${NOSTAIDVDFHEX}'"
+		writelog "INFO" "${FUNCNAME[0]} - Binary-formatted 4byte Little-Endian AppID: '${NOSTAIDVDFHEXFMT}'"
+		writelog "INFO" "${FUNCNAME[0]} - Unsigned Integer Shortcut AppID (used for artwork): '${NOSTAIDGRID}'"
 		writelog "INFO" "${FUNCNAME[0]} - App Name: '${NOSTAPPNAME}'"
 		writelog "INFO" "${FUNCNAME[0]} - Exe Path: '${NOSTEXEPATH}'"
 		writelog "INFO" "${FUNCNAME[0]} - Start Dir: '${NOSTSTDIR}'"
@@ -22301,7 +22354,7 @@ function addNonSteamGame {
 
 		{
 		printf '\x00%s\x00' "$NEWSET"
-		printf '\x02%s\x00%b' "appid" "$NOSTAIDHX"
+		printf '\x02%s\x00%b' "appid" "$NOSTAIDVDFHEXFMT"
 		printf '\x01%s\x00%s\x00' "appname" "$NOSTAPPNAME"
 		printf '\x01%s\x00%s\x00' "Exe" "$NOSTEXEPATH"
 		printf '\x01%s\x00%s\x00' "StartDir" "$NOSTSTDIR"
