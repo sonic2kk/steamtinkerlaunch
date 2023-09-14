@@ -22214,6 +22214,7 @@ function addNonSteamGame {
 	## - Check for and remove stray STL configs for no longer stored Non-Steam Game AppIDs (if we had Non-Steam Games we previously used with STL that we no longer use, we can remove these configs in case there is a conflict in future) 
 	## ----------------------
 
+
 	### BEGIN MAGIC APPID FUNCTIONS
 	## ----------
 	# Generate random signed 32bit integer which can be converted into hex, using the first argument (AppName and Exe fields) as seed (in an attempt to reduce the chances of the same AppID being generated twice)
@@ -22228,7 +22229,6 @@ function addNonSteamGame {
 	# Takes a big-endian ("normal") hexidecimal number and converts it to little-endian (reverse byte order)
 	function bigToLittleEndian {
 		echo -n "$1" | tac -rs .. | tr -d '\n'
-		# echo -n "$1" | tac -rs .. | echo "$(tr -d '\n')"
 	}
 
 	# Takes an signed 32bit integer and converts it to a 4byte little-endian hex number
@@ -22317,9 +22317,9 @@ function addNonSteamGame {
 		## This could be expensive if the file is long, but a potential future enhancement all the same!
 		## ----
 		NOSTAIDVDF="$( generateShortcutVDFAppId "${NOSTAPPNAME}${NOSTEXEPATH}" )"  # This is the signed integer AppID that will be stored in the VDF as hexidecimal - ex: -598031679
-		NOSTAIDVDFHEX="$( generateShortcutVDFHexAppId "$NSGAID_S2KK" )"  # This is the 4byte little-endian hexidecimal of the above 32bit signed integer, which we write out to the binary VDF - ex: c1c25adc
+		NOSTAIDVDFHEX="$( generateShortcutVDFHexAppId "$NOSTAIDVDF" )"  # This is the 4byte little-endian hexidecimal of the above 32bit signed integer, which we write out to the binary VDF - ex: c1c25adc
 		NOSTAIDVDFHEXFMT="\x$(awk '{$1=$1}1' FPAT='.{2}' OFS="\\\x" <<< "$NOSTAIDVDFHEX")"  # This is the binary-formatted string hex of the above which we actually write out - ex: \xc1\xc2\x5a\xdc
-		NOSTAIDGRID="$( generateShortcutGridAppId "$NSGAID_S2KK" )"  # This is the unsigned 32bit ingeger version of "$NOSTAIDVDF", which is used as the AppID for Steam artwork ("grids"), as well as for our shortcuts
+		NOSTAIDGRID="$( generateShortcutGridAppId "$NOSTAIDVDF" )"  # This is the unsigned 32bit ingeger version of "$NOSTAIDVDF", which is used as the AppID for Steam artwork ("grids"), as well as for our shortcuts
 
 		writelog "INFO" "${FUNCNAME[0]} - === Adding new $NSGA ==="
 		writelog "INFO" "${FUNCNAME[0]} - Signed Integer Shortcut AppID: '${NOSTAIDVDF}'"
@@ -22352,14 +22352,9 @@ function addNonSteamGame {
 
 		writelog "INFO" "${FUNCNAME[0]} - Adding new set '$NEWSET'"
 
-		# DEBUGNSGAID="bd05f6fe"
-		# DEBUGNSGAIDESC="\x$(awk '{$1=$1}1' FPAT='.{2}' OFS="\\\x" <<< "$DEBUGNSGAID")"
-
 		{
 		printf '\x00%s\x00' "$NEWSET"
-		printf '\x02%s\x00%b' "appid" "$NSGAIDHX_S2KK_FMT"
-		# printf '\x02%s\x00%b' "appid" "$NOSTAIDHX"
-		# printf '\x02%s\x00%b' "appid" "$DEBUGNSGAIDESC"
+		printf '\x02%s\x00%b' "appid" "$NOSTAIDVDFHEXFMT"
 		printf '\x01%s\x00%s\x00' "appname" "$NOSTAPPNAME"
 		printf '\x01%s\x00%s\x00' "Exe" "$NOSTEXEPATH"
 		printf '\x01%s\x00%s\x00' "StartDir" "$NOSTSTDIR"
