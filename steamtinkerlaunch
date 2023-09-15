@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230915-1"
+PROGVERS="v14.0.20230916-1 (gui-nonsteamgame-artwork)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -22137,20 +22137,32 @@ function addNonSteamGameGui {
 	TITLE="${PROGNAME}-$NSGA"
 	pollWinRes "$TITLE"
 
+	## TODO add command-line options to addNonSteamGame to accept game artwork
+	## TODO pass this game artwork and relevant AppID to `setGameArt`
+	## TODO add GUI fields for selecting game artwork
+
 	NSGSET="$("$YAD" --f1-action="$F1ACTION" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
 	--title="$TITLE" --separator="|" \
 	--text="$(spanFont "$GUI_ADDNSG" "H")\n<i>$(strFix "$GUI_WARNNSG1" "$STERECO")\n\n$(strFix "$GUI_WARNNSG2" "$STERECO"))</i>" \
 	--field=" ":LBL " " \
+	--field="$(spanFont "$GUI_NOSTGPATHS" "H")":LBL " " \
 	--field="     $GUI_NOSTGAPPNAME!$DESC_NOSTGAPPNAME ('NOSTGAPPNAME')" "${NOSTGAPPNAME/#-/ -}" \
 	--field="     $GUI_NOSTGEXEPATH!$DESC_NOSTGEXEPATH ('NOSTGEXEPATH')":FL "${NOSTGEXEPATH/#-/ -}" \
 	--field="     $GUI_NOSTGSTDIR!$DESC_NOSTGSTDIR ('NOSTGSTDIR')":DIR "${NOSTGSTDIR/#-/ -}" \
+	--field="$(spanFont "$GUI_NOSTGGAMEART" "H")":LBL " " \
 	--field="     $GUI_NOSTGICONPATH!$DESC_NOSTGICONPATH ('NOSTGICONPATH')":FL "${NOSTGICONPATH/#-/ -}" \
+	--field="     $GUI_NOSTGBACKGROUND!$DESC_NOSTGBACKGROUND ('NOSTGBACKGROUND')":FL "${NOSTGBACKGROUND/#-/ -}" \
+	--field="     $GUI_NOSTGLOGO!$DESC_NOSTGLOGO ('NOSTGLOGO')":FL "${NOSTGLOGO/#-/ -}" \
+	--field="     $GUI_NOSTGARTWORK!$DESC_NOSTGARTWORK ('NOSTGARTWORK')":FL "${NOSTGARTWORK/#-/ -}" \
+	--field="     $GUI_NOSTGSMLART!$DESC_NOSTGSMLART ('NOSTGSMLART')":FL "${NOSTGSMLART/#-/ -}" \
+	--field="$(spanFont "$GUI_NOSTGPROPS" "H")":LBL " " \
+	--field="     $GUI_NOSTGLAOP!$DESC_NOSTGLAOP ('NOSTGLAOP')" "${NOSTGLAOP/#-/ -}" \
+	--field="     $GUI_NOSTTAGS!$DESC_NOSTTAGS ('NOSTTAGS')":CBE "$(cleanDropDown "${NOSTTAGS/#-/ -}" "$VALIDTAGS")" \
 	--field="     $GUI_NOSTGLAOP!$DESC_NOSTGLAOP ('NOSTGLAOP')" "${NOSTGLAOP/#-/ -}" \
 	--field="     $GUI_NOSTGHIDE!$DESC_NOSTGHIDE ('NOSTGHIDE')":CHK "${NOSTGHIDE/#-/ -}" \
 	--field="     $GUI_NOSTGADC!$DESC_NOSTGADC ('NOSTGADC')":CHK "${NOSTGADC/#-/ -}" \
 	--field="     $GUI_NOSTGAO!$DESC_NOSTGAO ('NOSTGAO')":CHK "${NOSTGAO/#-/ -}" \
 	--field="     $GUI_NOSTGVR!$DESC_NOSTGVR ('NOSTGVR')":CHK "${NOSTGVR/#-/ -}" \
-	--field="     $GUI_NOSTTAGS!$DESC_NOSTTAGS ('NOSTTAGS')":CBE "$(cleanDropDown "${NOSTTAGS/#-/ -}" "$VALIDTAGS")" \
 	--button="$BUT_CAN":0 --button="$BUT_TAGS":2 --button="$BUT_CREATE":4 "$GEOM")"
 
 	case $? in
@@ -22162,16 +22174,32 @@ function addNonSteamGameGui {
 		4)  writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_CREATE'"
 			if [ -n "$NSGSET" ]; then
 				mapfile -d "|" -t -O "${#NSGSETARR[@]}" NSGSETARR < <(printf '%s' "$NSGSET")
+				## TODO rework this, because the UI has changed, the order of arguments has changed!
+				## The current rework here was taken from #576, but needs testing
+				# NSGSETARR[0] is Paths heading
+				writelog "INFO" "${FUNCNAME[0]} - The Non-Steam Game args are ${NSGSETARR[*]}"
 				NOSTGAPPNAME="${NSGSETARR[1]}"
 				NOSTGEXEPATH="${NSGSETARR[2]}"
 				NOSTGSTDIR="${NSGSETARR[3]}"
-				NOSTGICONPATH="${NSGSETARR[4]}"
-				NOSTGLAOP="${NSGSETARR[5]}"
-				NOSTGHIDE="$(retBool "${NSGSETARR[6]}")"
-				NOSTGADC="$(retBool "${NSGSETARR[7]}")"
-				NOSTGAO="$(retBool "${NSGSETARR[8]}")"
-				NOSTGVR="$(retBool "${NSGSETARR[9]}")"
-				NOSTTAGS="${NSGSETARR[10]}"
+				# NSGSETARR[4] is Artwork heading
+				NOSTGICONPATH="${NSGSETARR[5]}"
+				NOSTGBACKGROUND="${NSGSETARR[6]}"
+				NOSTGLOGO="${NSGSETARR[7]}"
+				NOSTGARTWORK="${NSGSETARR[8]}"
+				NOSTGSMLART="${NSGSETARR[9]}"
+				# NSGSETARR[10] is Properties heading
+				NOSTGLAOP="${NSGSETARR[11]}"
+				NOSTTAGS="${NSGSETARR[12]}"
+				NOSTGHIDE="${NSGSETARR[13]}"
+				NOSTGADC="${NSGSETARR[14]}"
+				NOSTGAO="${NSGSETARR[15]}"
+				NOSTGVR="${NSGSETARR[16]}"
+
+				## The current rework here was taken from #576, but needs testing - We also have an opportunity to change some flag names here
+				## We also need to rework addNonSteamGame to parse and accept these extra parameters, too, could probably also be taken from #576  
+				# writelog "INFO" "${FUNCNAME[0]} - Launching command: addNonSteamGame -an=\"$NOSTGAPPNAME\" -ep=\"$NOSTGEXEPATH\" -sd=\"$NOSTGSTDIR\" -ip=\"$NOSTGICONPATH\" -lo=\"$NOSTGLAOP\" -hd=\"$NOSTGHIDE\" -adc=\"$NOSTGADC\" -ao=\"$NOSTGAO\" -vr=\"$NOSTGVR\" -t=\"$NOSTTAGS\" -bg=\"$NOSTGBACKGROUND\" -lg=\"$NOSTGLOGO\" -art=\"$NOSTGARTWORK\" -sma=\"$NOSTGSMLART\""
+				# addNonSteamGame	-an="$NOSTGAPPNAME" -ep="$NOSTGEXEPATH" -sd="$NOSTGSTDIR" -ip="$NOSTGICONPATH" -lo="$NOSTGLAOP" -hd="$NOSTGHIDE" -adc="$NOSTGADC" -ao="$NOSTGAO" -vr="$NOSTGVR" -t="$NOSTTAGS" -bg="$NOSTGBACKGROUND" -lg="$NOSTGLOGO" -art="$NOSTGARTWORK" -sma="$NOSTGSMLART"
+
 				writelog "INFO" "${FUNCNAME[0]} - Launching command: addNonSteamGame -an=\"$NOSTGAPPNAME\" -ep=\"$NOSTGEXEPATH\" -sd=\"$NOSTGSTDIR\" -ip=\"$NOSTGICONPATH\" -lo=\"$NOSTGLAOP\" -hd=\"$NOSTGHIDE\" -adc=\"$NOSTGADC\" -ao=\"$NOSTGAO\" -vr=\"$NOSTGVR\" -t=\"$NOSTTAGS\""
 				addNonSteamGame	-an="$NOSTGAPPNAME" -ep="$NOSTGEXEPATH" -sd="$NOSTGSTDIR" -ip="$NOSTGICONPATH" -lo="$NOSTGLAOP" -hd="$NOSTGHIDE" -adc="$NOSTGADC" -ao="$NOSTGAO" -vr="$NOSTGVR" -t="$NOSTTAGS"
 			fi
