@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230916-1 (gui-nonsteamgame-artwork)"
+PROGVERS="v14.0.20230916-3 (gui-nonsteamgame-artwork)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -4060,6 +4060,7 @@ function setGameArtGui {
 			SGATENFOOT="${SGASETARR[4]}"
 			SGACOPYMETHOD="${SGASETARR[5]}"
 
+			## TODO can we refactor this to take a string parameter? e.g. "--link" -- It looks like that might work from testing
 			if [ "$SGACOPYMETHOD" = "link" ]; then
 				setGameArt "$1" --hero="$SGAHERO" --logo="$SGALOGO" --boxart="$SGABOXART" --tenfoot="$SGATENFOOT" --link
 			elif [ "$SGACOPYMETHOD" = "move" ]; then
@@ -22100,21 +22101,22 @@ function addNonSteamGameGui {
 	writelog "INFO" "${FUNCNAME[0]} - Starting the Gui for adding a $NSGA to Steam"
 
 	# defaults
+	# exe default
 	if [ -n "$1" ]; then
-		for i in "$@"
-		do
-		case $i in
-			-ep=*|--exepath=*)
-			NOSTGEXEPATH="${i#*=}";
-			shift
-			;;
-		esac
+		for i in "$@"; do
+			case $i in
+				-ep=*|--exepath=*)
+				NOSTGEXEPATH="${i#*=}";
+				shift
+				;;
+			esac
 		done
 
 		NOSTGAPPNAME="${NOSTGEXEPATH##*/}"
 		NOSTGSTDIR="${NOSTGEXEPATH%/*}"
 	fi
 	
+	# icon default
 	if grep -q "^NOSTEAMSTLDEF=\"1\"" "$STLDEFGLOBALCFG"; then
 		NOSTGICONPATH="$STLICON"
 	else
@@ -22127,6 +22129,7 @@ function addNonSteamGameGui {
 	unset VALTAGS
 	mapfile -d "\n" -t -O "${#VALTAGS[@]}" VALTAGS <<< "$(getActiveSteamCollections | sed '/^$/d')"
 	VALIDTAGS="$(filterUnwantedSteamCategories "${VALTAGS[@]}")"
+	SGASETACTIONS="copy!link!move"
 
 	AutoMarkSCat
 
@@ -22137,10 +22140,9 @@ function addNonSteamGameGui {
 	TITLE="${PROGNAME}-$NSGA"
 	pollWinRes "$TITLE"
 
-	## TODO add command-line options to addNonSteamGame to accept game artwork
-	## TODO pass this game artwork and relevant AppID to `setGameArt`
-	## TODO add GUI fields for selecting game artwork
-
+	## TODO add dropdown for how to manage game artwork files (copy/move/link) -- addNonSteamGame already has logic to handle this with a default to copy, so we need to map and pass the flag on the UI
+	##
+	## Language strings for artwork section were re-used from setGameArt
 	NSGSET="$("$YAD" --f1-action="$F1ACTION" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
 	--title="$TITLE" --separator="|" \
 	--text="$(spanFont "$GUI_ADDNSG" "H")\n<i>$(strFix "$GUI_WARNNSG1" "$STERECO")\n\n$(strFix "$GUI_WARNNSG2" "$STERECO"))</i>" \
@@ -22151,10 +22153,11 @@ function addNonSteamGameGui {
 	--field="     $GUI_NOSTGSTDIR!$DESC_NOSTGSTDIR ('NOSTGSTDIR')":DIR "${NOSTGSTDIR/#-/ -}" \
 	--field="$(spanFont "$GUI_NOSTGGAMEART" "H")":LBL " " \
 	--field="     $GUI_NOSTGICONPATH!$DESC_NOSTGICONPATH ('NOSTGICONPATH')":FL "${NOSTGICONPATH/#-/ -}" \
-	--field="     $GUI_NOSTGBACKGROUND!$DESC_NOSTGBACKGROUND ('NOSTGBACKGROUND')":FL "${NOSTGBACKGROUND/#-/ -}" \
-	--field="     $GUI_NOSTGLOGO!$DESC_NOSTGLOGO ('NOSTGLOGO')":FL "${NOSTGLOGO/#-/ -}" \
-	--field="     $GUI_NOSTGARTWORK!$DESC_NOSTGARTWORK ('NOSTGARTWORK')":FL "${NOSTGARTWORK/#-/ -}" \
-	--field="     $GUI_NOSTGSMLART!$DESC_NOSTGSMLART ('NOSTGSMLART')":FL "${NOSTGSMLART/#-/ -}" \
+	--field="     $GUI_SGAHERO!$DESC_SGAHERO ('NOSTGHERO')":FL "${NOSTGHERO/#-/ -}" \
+	--field="     $GUI_SGALOGO!$DESC_SGALOGO ('NOSTGLOGO')":FL "${NOSTGLOGO/#-/ -}" \
+	--field="     $GUI_SGABOXART!$DESC_SGABOXART ('NOSTGBOXART')":FL "${NOSTGBOXART/#-/ -}" \
+	--field="     $GUI_SGATENFOOT!$DESC_SGATENFOOT ('NOSTGTENFOOT')":FL "${NOSTGTENFOOT/#-/ -}" \
+	--field="$GUI_SGASETACTION!$DESC_SGASETACTION ('NOSTGSETACTION')":CB "$( cleanDropDown "copy" "$SGASETACTIONS" )" \
 	--field="$(spanFont "$GUI_NOSTGPROPS" "H")":LBL " " \
 	--field="     $GUI_NOSTGLAOP!$DESC_NOSTGLAOP ('NOSTGLAOP')" "${NOSTGLAOP/#-/ -}" \
 	--field="     $GUI_NOSTTAGS!$DESC_NOSTTAGS ('NOSTTAGS')":CBE "$(cleanDropDown "${NOSTTAGS/#-/ -}" "$VALIDTAGS")" \
@@ -22174,7 +22177,7 @@ function addNonSteamGameGui {
 		4)  writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_CREATE'"
 			if [ -n "$NSGSET" ]; then
 				mapfile -d "|" -t -O "${#NSGSETARR[@]}" NSGSETARR < <(printf '%s' "$NSGSET")
-				## TODO rework this, because the UI has changed, the order of arguments has changed!
+				## TODO test this rework, because the UI has changed, the order of arguments has changed!
 				## The current rework here was taken from #576, but needs testing
 				# NSGSETARR[0] is Paths heading
 				writelog "INFO" "${FUNCNAME[0]} - The Non-Steam Game args are ${NSGSETARR[*]}"
@@ -22183,25 +22186,22 @@ function addNonSteamGameGui {
 				NOSTGSTDIR="${NSGSETARR[3]}"
 				# NSGSETARR[4] is Artwork heading
 				NOSTGICONPATH="${NSGSETARR[5]}"
-				NOSTGBACKGROUND="${NSGSETARR[6]}"
+				NOSTGHERO="${NSGSETARR[6]}"
 				NOSTGLOGO="${NSGSETARR[7]}"
-				NOSTGARTWORK="${NSGSETARR[8]}"
-				NOSTGSMLART="${NSGSETARR[9]}"
-				# NSGSETARR[10] is Properties heading
-				NOSTGLAOP="${NSGSETARR[11]}"
-				NOSTTAGS="${NSGSETARR[12]}"
-				NOSTGHIDE="${NSGSETARR[13]}"
-				NOSTGADC="${NSGSETARR[14]}"
-				NOSTGAO="${NSGSETARR[15]}"
-				NOSTGVR="${NSGSETARR[16]}"
+				NOSTGBOXART="${NSGSETARR[8]}"
+				NOSTGTENFOOT="${NSGSETARR[9]}"
+				NOSTGSETACTION="${NSGSETARR[10]}"
+				# NSGSETARR[11] is Properties heading
+				NOSTGLAOP="${NSGSETARR[12]}"
+				NOSTTAGS="${NSGSETARR[13]}"
+				NOSTGHIDE="${NSGSETARR[14]}"
+				NOSTGADC="${NSGSETARR[15]}"
+				NOSTGAO="${NSGSETARR[16]}"
+				NOSTGVR="${NSGSETARR[17]}"
 
-				## The current rework here was taken from #576, but needs testing - We also have an opportunity to change some flag names here
-				## We also need to rework addNonSteamGame to parse and accept these extra parameters, too, could probably also be taken from #576  
-				# writelog "INFO" "${FUNCNAME[0]} - Launching command: addNonSteamGame -an=\"$NOSTGAPPNAME\" -ep=\"$NOSTGEXEPATH\" -sd=\"$NOSTGSTDIR\" -ip=\"$NOSTGICONPATH\" -lo=\"$NOSTGLAOP\" -hd=\"$NOSTGHIDE\" -adc=\"$NOSTGADC\" -ao=\"$NOSTGAO\" -vr=\"$NOSTGVR\" -t=\"$NOSTTAGS\" -bg=\"$NOSTGBACKGROUND\" -lg=\"$NOSTGLOGO\" -art=\"$NOSTGARTWORK\" -sma=\"$NOSTGSMLART\""
-				# addNonSteamGame	-an="$NOSTGAPPNAME" -ep="$NOSTGEXEPATH" -sd="$NOSTGSTDIR" -ip="$NOSTGICONPATH" -lo="$NOSTGLAOP" -hd="$NOSTGHIDE" -adc="$NOSTGADC" -ao="$NOSTGAO" -vr="$NOSTGVR" -t="$NOSTTAGS" -bg="$NOSTGBACKGROUND" -lg="$NOSTGLOGO" -art="$NOSTGARTWORK" -sma="$NOSTGSMLART"
-
-				writelog "INFO" "${FUNCNAME[0]} - Launching command: addNonSteamGame -an=\"$NOSTGAPPNAME\" -ep=\"$NOSTGEXEPATH\" -sd=\"$NOSTGSTDIR\" -ip=\"$NOSTGICONPATH\" -lo=\"$NOSTGLAOP\" -hd=\"$NOSTGHIDE\" -adc=\"$NOSTGADC\" -ao=\"$NOSTGAO\" -vr=\"$NOSTGVR\" -t=\"$NOSTTAGS\""
-				addNonSteamGame	-an="$NOSTGAPPNAME" -ep="$NOSTGEXEPATH" -sd="$NOSTGSTDIR" -ip="$NOSTGICONPATH" -lo="$NOSTGLAOP" -hd="$NOSTGHIDE" -adc="$NOSTGADC" -ao="$NOSTGAO" -vr="$NOSTGVR" -t="$NOSTTAGS"
+				## Arguments here like -hr, -lg, etc are made to match setGameArt
+				writelog "INFO" "${FUNCNAME[0]} - addNonSteamGame -an=\"$NOSTGAPPNAME\" -ep=\"$NOSTGEXEPATH\" -sd=\"$NOSTGSTDIR\" -ip=\"$NOSTGICONPATH\" -lo=\"$NOSTGLAOP\" -hd=\"$NOSTGHIDE\" -adc=\"$NOSTGADC\" -ao=\"$NOSTGAO\" -vr=\"$NOSTGVR\" -t=\"$NOSTTAGS\" -hr=\"$NOSTGHERO\" -lg=\"$NOSTGLOGO\" -ba=\"$NOSTGBOXART\" -tf=\"$NOSTGTENFOOT\" \"--${NOSTGSETACTION}\""
+				addNonSteamGame -an="$NOSTGAPPNAME" -ep="$NOSTGEXEPATH" -sd="$NOSTGSTDIR" -ip="$NOSTGICONPATH" -lo="$NOSTGLAOP" -hd="$NOSTGHIDE" -adc="$NOSTGADC" -ao="$NOSTGAO" -vr="$NOSTGVR" -t="$NOSTTAGS" -hr="$NOSTGHERO" -lg="$NOSTGLOGO" -ba="$NOSTGBOXART" -tf="$NOSTGTENFOOT" "--${NOSTGSETACTION}"
 			fi
 		;;
 	esac
@@ -22217,12 +22217,9 @@ function addNonSteamGame {
 		echo -n "$1" | gzip -c | tail -c 8 | od -An -N 4 -tx4
 	}
 
-
-
 	function hex2dec {
 		printf "%d\n" "0x${1#0x}"
 	}
-
 
 	## Notes on how Non-Steam AppIDs work, because it took me almost a year to figure this out
 	## ----------------------
@@ -22241,7 +22238,6 @@ function addNonSteamGame {
 	## We can later re-use these functions to do several things:
 	## - Check for and remove stray STL configs for no longer stored Non-Steam Game AppIDs (if we had Non-Steam Games we previously used with STL that we no longer use, we can remove these configs in case there is a conflict in future) 
 	## ----------------------
-
 
 	### BEGIN MAGIC APPID FUNCTIONS
 	## ----------
@@ -22271,7 +22267,6 @@ function addNonSteamGame {
 	## ----------
 	### END MAGIC APPID FUNCTIONS
 
-
 	function splitTags {
 		mapfile -d "," -t -O "${#TAGARR[@]}" TAGARR < <(printf '%s' "$1")
 		for i in "${!TAGARR[@]}"; do
@@ -22289,6 +22284,7 @@ function addNonSteamGame {
 
 	for i in "$@"; do
 		case $i in
+			## General Non-Steam Game properties
 			-an=*|--appname=*)
 				NOSTAPPNAME="${i#*=}"
 				shift ;;
@@ -22322,6 +22318,29 @@ function addNonSteamGame {
 			-stllo=*|--stllaunchoption=*)
 				NOSTSTLLO="${i#*=}"
 				shift ;;
+			## Mostly lifted+shifted from setGameArt
+			-hr=*|--hero=*)
+				NOSTGHERO="${i#*=}"  # <appid>_hero.png -- Banner used on game screen, logo goes on top of this 
+				shift ;;
+			-lg=*|--logo=*)
+				NOSTGLOGO="${i#*=}"  # <appid>_logo.png -- Logo used e.g. on game screen
+				shift ;;
+			-ba=*|--boxart=*)
+				NOSTGBOXART="${i#*=}"  # <appid>p.png -- Used in library
+				shift ;;
+			-tf=*|--tenfoot=*)
+				NOSTGTENFOOT="${i#*=}"  # <appid>.png -- Used as small boxart for e.g. most recently played banner
+				shift ;;
+			## Used to pass to setGameArt to define how we want to set game artwork (essentially giving a Non-Steam Game UI the functionality of setGameArt since we call it here anyway)
+			--copy)
+				SGACOPYMETHOD="--copy"  # Copy file to grid folder -- Default
+				shift ;;
+			--link)
+				SGACOPYMETHOD="--link"  # Symlink file to grid folder
+				shift ;;
+			--move)
+				SGACOPYMETHOD="--move"  # Move file to grid folder
+				shift ;;
 			*) ;;
 		esac
 	done
@@ -22337,6 +22356,12 @@ function addNonSteamGame {
 
 		if [ "$NOSTSTLLO" -eq 1 ]; then
 			NOSTGICONPATH="$STLICON"
+		fi
+
+		# This is formatted as a flag because we cna pass "$SGACOPYMETHOD" as an argument to setGameArt,
+		# and it will be interpreted as --copy
+		if [ -z "$SGACOPYMETHOD" ]; then
+			SGACOPYMETHOD="--copy"
 		fi
 
 		## ----
@@ -22364,6 +22389,12 @@ function addNonSteamGame {
 		writelog "INFO" "${FUNCNAME[0]} - Allow Overlay: '${NOSTAO}'"
 		writelog "INFO" "${FUNCNAME[0]} - OpenVR: '${NOSTVR}'"
 		writelog "INFO" "${FUNCNAME[0]} - Tags: '${NOSTTAGS}'"
+		## Artwork logging -- These will be blank if no artwork is passed, that's OK
+		writelog "INFO" "${FUNCNAME[0]} - Hero Artwork: '${NOSTGHERO}'"
+		writelog "INFO" "${FUNCNAME[0]} - Logo Artwork: '${NOSTGLOGO}'"
+		writelog "INFO" "${FUNCNAME[0]} - Boxart Artwork: '${NOSTGBOXART}'"
+		writelog "INFO" "${FUNCNAME[0]} - Tenfoot Artwork: '${NOSTGTENFOOT}'"
+		writelog "INFO" "${FUNCNAME[0]} - Copy Method for Artwork: '${SGACOPYMETHOD}'"
 
 		if [ -f "$SCPATH" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - The file '$SCPATH' already exists, creating a backup, then removing the 2 closing backslashes at the end"
@@ -22380,6 +22411,10 @@ function addNonSteamGame {
 
 		writelog "INFO" "${FUNCNAME[0]} - Adding new set '$NEWSET'"
 
+		## TODO refactor to use a function for generating each line to write out, it would be a bit cleaner than this
+		## This uses printf to write out the binary format, but we could make it clearer and more extendable with a method
+		## that just takes the field name, the value, and whether to follow it with a termination \x00
+		## That's for a future refactor though
 		{
 		printf '\x00%s\x00' "$NEWSET"
 		printf '\x02%s\x00%b' "appid" "$NOSTAIDVDFHEXFMT"
@@ -22439,8 +22474,16 @@ function addNonSteamGame {
 		printf '\x08'
 		} >> "$SCPATH"
 		
+		writelog "INFO" "${FUNCNAME[0]} - Finished writing out new Non-Steam Game Shortcut"
+		writelog "INFO" "${FUNCNAME[0]} - Adding any chosen Non-Steam game artwork"
+
+		# TODO test this (no logging needed, setGameArt has its own logging)
+		setGameArt "$NOSTAIDGRID" --hero="$NOSTGHERO" --logo="$NOSTGLOGO" --boxart="$NOSTGBOXART" --tenfoot="$NOSTGTENFOOT" "$SGACOPYMETHOD"
+
 		writelog "INFO" "${FUNCNAME[0]} - Finished adding new $NSGA"
 	fi
+
+	unset "$SGACOPYMETHOD"
 }
 
 function setCloseVars {
