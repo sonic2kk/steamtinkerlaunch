@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230917-1"
+PROGVERS="v14.0.20230917-2 (nonsteam-setcompattool)"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -22024,6 +22024,8 @@ function injectGdb {
 ## The code is pretty much the same but with variable names adapted to the SteamTinkerLaunch "convention"
 ## The code on Blush exists so this code can be used by others outside of SteamTinkerLaunch more easily
 
+## TODO !!we need more logging for these functions!!
+
 ## Generate string of [[:space:]] to represent indentation in VDF file, useful for searching
 function generateVdfIndentString {
 	SPACETYPE="${2:-\t}"  # Type of space, expected values could be '\t' (for writing) or '[[:space:]]' (for searching)
@@ -22337,6 +22339,11 @@ function addNonSteamGameGui {
 				## We will need to pass "pretty" proton names matching the other Proton dropdowns
 				## We'll then need a way to map this to the internal compatibility tool names
 
+				## Makes sure we ignore none compatibility tool
+				if [[ "$NOSTCOMPATTOOL" = "$NON" ]]; then
+					NOSTCOMPATTOOL=""
+				fi
+
 				## Arguments here like -hr, -lg, etc are made to match setGameArt
 				writelog "INFO" "${FUNCNAME[0]} - addNonSteamGame -an=\"$NOSTGAPPNAME\" -ep=\"$NOSTGEXEPATH\" -sd=\"$NOSTGSTDIR\" -ip=\"$NOSTGICONPATH\" -lo=\"$NOSTGLAOP\" -hd=\"$NOSTGHIDE\" -adc=\"$NOSTGADC\" -ao=\"$NOSTGAO\" -vr=\"$NOSTGVR\" -t=\"$NOSTTAGS\" -ct=\"$NOSTCOMPATTOOL\" -hr=\"$NOSTGHERO\" -lg=\"$NOSTGLOGO\" -ba=\"$NOSTGBOXART\" -tf=\"$NOSTGTENFOOT\" \"--${NOSTGSETACTION}\""
 				addNonSteamGame -an="$NOSTGAPPNAME" -ep="$NOSTGEXEPATH" -sd="$NOSTGSTDIR" -ip="$NOSTGICONPATH" -lo="$NOSTGLAOP" -hd="$NOSTGHIDE" -adc="$NOSTGADC" -ao="$NOSTGAO" -vr="$NOSTGVR" -t="$NOSTTAGS" -ct="$NOSTCOMPATTOOL" -hr="$NOSTGHERO" -lg="$NOSTGLOGO" -ba="$NOSTGBOXART" -tf="$NOSTGTENFOOT" "--${NOSTGSETACTION}"
@@ -22457,6 +22464,9 @@ function addNonSteamGame {
 				NOSTSTLLO="${i#*=}"
 				shift ;;
 			-ct=*|--compatibilitytool=*)
+				## TODO stricter logic here about which compatibility tools we accept?
+				## Maybe we need a dedicated method to check/map NOSTCOMPATTOOL?
+				## Since this part is called from the commandline we should be careful about what we write out, and do some parsing+mapping
 				NOSTCOMPATTOOL="${i#*=}"
 				shift ;;
 			## Mostly lifted+shifted from setGameArt
@@ -22622,9 +22632,14 @@ function addNonSteamGame {
 		setGameArt "$NOSTAIDGRID" --hero="$NOSTGHERO" --logo="$NOSTGLOGO" --boxart="$NOSTGBOXART" --tenfoot="$NOSTGTENFOOT" "$SGACOPYMETHOD"
 
 		if [ -n "$NOSTCOMPATTOOL" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Adding selected compatibility tool '$NOSTCOMPATTOOL' for Non-Stteam Game..."
-			NSGVDFVALS=( "name!${NOSTCOMPATTOOL}" "config!" "priority!250" )
-			createVdfEntry "$CFGVDF" "CompatToolMapping" "$NOSTAIDGRID" "bottom" "${NSGVDFVALS[@]}"
+			if [ ! -f "$CFGVDF" ]; then
+				writelog "SKIP" "${FUNCNAME[0]} - No Config VDF found at '$CFGVDF' -- Unable to set compatibility tool for Non-Steam Game, skipping"
+			else
+				writelog "INFO" "${FUNCNAME[0]} - Adding selected compatibility tool '$NOSTCOMPATTOOL' for Non-Stteam Game"
+				NSGVDFVALS=( "name!${NOSTCOMPATTOOL}" "config!" "priority!250" )
+				createVdfEntry "$CFGVDF" "CompatToolMapping" "$NOSTAIDGRID" "" "${NSGVDFVALS[@]}"
+				writelog "INFO" "${FUNCNAME[0]} - Finished adding Non-Steam Game compatibility tool to '$CFGVDF'"
+			fi
 		fi
 
 		writelog "INFO" "${FUNCNAME[0]} - Finished adding new $NSGA"
