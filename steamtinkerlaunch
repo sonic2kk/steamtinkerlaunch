@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230916-2"
+PROGVERS="v14.0.20230917-1"
 PROGCMD="${0##*/}"
 SHOSTL="stl"
 GHURL="https://github.com"
@@ -22017,6 +22017,140 @@ function injectGdb {
 		"$USETERM" "$TERMARGS" "bash -c \"$GDBRUN\""
 	fi
 }
+
+### BEGIN TEXT-BASED VDF INTERACTION FUNCTIONS
+##
+## This was written for Blush (https://github.com/sonic2kk/blush/) as part of the research on how to implement #905
+## The code is pretty much the same but with variable names adapted to the SteamTinkerLaunch "convention"
+## The code on Blush exists so this code can be used by others outside of SteamTinkerLaunch more easily
+
+## Generate string of [[:space:]] to represent indentation in VDF file, useful for searching
+function generateVdfIndentString {
+	SPACETYPE="${2:-\t}"  # Type of space, expected values could be '\t' (for writing) or '[[:space:]]' (for searching)
+
+    printf "%.0s${SPACETYPE}" $(seq 1 "$1")
+}
+
+## Attempt to get the indentation level of the first occurance of a given VDF block
+function guessVdfIndent {
+    BLOCKNAME="$( safequoteVdfBlockName "$1" )"  # Block to check the indentation level on
+    VDF="$2"
+
+    grep -i "${BLOCKNAME}" "$VDF" | awk '{print gsub(/\t/,"")}'
+}
+
+## Surround a VDF block name with quotes if it doesn't have any
+function safequoteVdfBlockName {
+    QUOTEDBLOCKNAME="$1"
+    if ! [[ $QUOTEDBLOCKNAME == \"* ]]; then
+        QUOTEDBLOCKNAME="\"$QUOTEDBLOCKNAME\""
+    fi
+
+    echo "$QUOTEDBLOCKNAME"
+}
+
+## Use sed to grab a section of a given VDF file based on its indentation level
+function getVdfSection {
+    STARTPATTERN="$( safequoteVdfBlockName "$1" )"
+    ENDPATTERN="${2:-\}}"  # Default end pattern to end of block
+    INDENT="$3"
+    VDF="$4"
+
+    if [ -z "$INDENT" ]; then
+        INDENT="$(( $( guessVdfIndent "$STARTPATTERN" "$VDF" ) ))"
+    fi
+
+    INDENTSTR="$( generateVdfIndentString "$INDENT" "[[:space:]]" )"
+    INDENTEDSTARTPATTERN="${INDENTSTR}${STARTPATTERN}"
+    INDENTEDENDPATTERN="${INDENTSTR}${ENDPATTERN}"
+
+    sed -n "/${INDENTEDSTARTPATTERN}/I,/^${INDENTEDENDPATTERN}/I p" "$VDF"
+}
+
+## Check if a VDF block (block_name) already exists inside a parent block (search_block)
+## Ex: search_block "CompatToolMapping" for a specific block_name "22320"
+function checkVdfSectionAlreadyExists {
+    SEARCHBLOCK="$( safequoteVdfBlockName "${1:-\"}" )"  # Default to the first quotation, should be the start VDF file
+    BLOCKNAME="$( safequoteVdfBlockName "$2" )"  # Block name to  search for
+    VDF="$3"
+
+    if [ -z "$BLOCKNAME" ]; then
+		writelog "ERROR" "${FUNCNAME[0]} - BLOCKNAME was not provided, skipping..."
+        return
+    fi
+
+    SEARCHBLOCKVDFSECTION="$( getVdfSection "$SEARCHBLOCK" "" "" "$VDF" )"
+    if [ -z "$SEARCHBLOCKVDFSECTION" ]; then
+        return 0
+    fi
+
+    printf "%s" "$SEARCHBLOCKVDFSECTION" > "/tmp/tmp.vdf"
+    getVdfSection "$BLOCKNAME" "" "" "/tmp/tmp.vdf" | grep -iq "$BLOCKNAME"
+}
+
+## Create entry in given VDF block with matching indentation (Case-INsensitive)
+## Appends to bottom of target block by default, but can optionally append to the top instead
+##
+## This doesn't support adding nested entries, at least not very easily
+function createVdfEntry {
+    VDF="$1"  # Absolute path to VDF to insert into
+    PARENTBLOCKNAME="$( safequoteVdfBlockName "$2" )"  # Block to start from, e.g. "CompatToolMapping"
+    NEWBLOCKNAME="$( safequoteVdfBlockName "$3" )"  # Name of new block, e.g. "<AppID>"
+    POSITION="${4:-bottom}"  # POSITION to insert into, can be either top/bottom -- Bottom by default
+
+    ## Ensure no duplicates are written out
+    if checkVdfSectionAlreadyExists "$PARENTBLOCKNAME" "$NEWBLOCKNAME" "$VDF"; then
+        # echo "Block already exists, skipping..."
+		writelog "SKIP" "${FUNCNAME[0]} - Block '$NEWBLOCKNAME' already exists in parent block '$PARENTBLOCKNAME' - Skipping"
+        return
+    fi
+
+    ## Create array from args, skip first four to get array of key/value pairs for VDF block
+    NEWBLOCKVALUES=("${@:5}")
+    NEWBLOCKVALUESDELIM="!"
+
+    ## Calculate indents for new block (one more than PARENTBLOCKNAME indent)
+    BASETABAMOUNT="$(( $( guessVdfIndent "${PARENTBLOCKNAME}" "$VDF" ) + 1 ))"
+    BLOCKTABAMOUNT="$(( BASETABAMOUNT + 1 ))"
+
+    ## Tab amounts represented as string
+    BASETABSTR="$( generateVdfIndentString "$BASETABAMOUNT" )"
+    BLOCKTABSTR="$( generateVdfIndentString "$BLOCKTABAMOUNT" )"
+
+    ## Calculations for line numbers
+    PARENTBLOCKLENGTH="$( getVdfSection "$PARENTBLOCKNAME" "" "" "$VDF" | wc -l )"
+    BLOCKLINESTART="$( grep -in "${PARENTBLOCKNAME}" "$VDF" | cut -d ':' -f1 | xargs )"
+
+    TOPOFBLOCK="$(( BLOCKLINESTART + 1 ))"
+    BOTTOMOFBLOCK="$(( BLOCKLINESTART + PARENTBLOCKLENGTH - 2 ))"
+
+    ## Decide which line to insert new block into
+    INSERTLINE="${BOTTOMOFBLOCK}"
+    if [[ "${POSITION,,}" == "top" ]]; then
+        INSERTLINE="${TOPOFBLOCK}"
+    fi
+
+    ## Build new VDF entry string
+    ## Maybe this could be a separate function at some point, that generates a VDF string from the input array?
+    NEWBLOCKSTR="${BASETABSTR}${NEWBLOCKNAME}\n"  # Add tab + block name
+    NEWBLOCKSTR+="${BASETABSTR}{\n"  # Add tab + opening brace
+    for i in "${NEWBLOCKVALUES[@]}"; do
+        ## Cut string in array at delimiter and store them as key/val
+        NEWBLOCKDATA_KEY="$( echo "$i" | cut -d "${NEWBLOCKVALUESDELIM}" -f1 )"
+        NEWBLOCKDATA_VAL="$( echo "$i" | cut -d "${NEWBLOCKVALUESDELIM}" -f2 )"
+
+        NEWBLOCKDATA_KEY="$( safequoteVdfBlockName "$NEWBLOCKDATA_KEY" )"
+        NEWBLOCKDATA_VAL="$( safequoteVdfBlockName "$NEWBLOCKDATA_VAL" )"
+
+        NEWBLOCKSTR+="${BLOCKTABSTR}${NEWBLOCKDATA_KEY}"  # Add tab +  key
+        NEWBLOCKSTR+="\t\t${NEWBLOCKDATA_VAL}\n"  # Add tab + val + newline
+    done
+    NEWBLOCKSTR+="${BASETABSTR}}"  # Add tab + closing brace
+
+    ## Write out new string to calculated line in VDF file
+    sed -i "${INSERTLINE}a\\${NEWBLOCKSTR}" "$VDF"
+}
+### END TEXT-BASED VDF INTERACTION FUNCTIONS
 
 function startSettings {
 	FUSEID "$1"
