@@ -22291,7 +22291,7 @@ function addNonSteamGameGui {
 	--field="     $GUI_SGATENFOOT!$DESC_SGATENFOOT ('NOSTGTENFOOT')":FL "${NOSTGTENFOOT/#-/ -}" \
 	--field="     $GUI_SGASETACTION!$DESC_SGASETACTION ('NOSTGSETACTION')":CB "$( cleanDropDown "copy" "$SGASETACTIONS" )" \
 	--field="$(spanFont "$GUI_NOSTGPROPS" "H")":LBL " " \
-	--field="     $GUI_NOSTGCOMPATTOOL!$DESC_NOSTGCOMPATTOOL ('NOSTCOMPATTOOL')":CB "$( cleanDropDown "Proton-stl" "Proton-stl!proton_8!proton_7" )" \
+	--field="     $GUI_NOSTGCOMPATTOOL!$DESC_NOSTGCOMPATTOOL ('NOSTCOMPATTOOL')":CB "$( cleanDropDown "$NON" "$NON!Proton-stl!proton_8!proton_7" )" \
 	--field="     $GUI_NOSTGLAOP!$DESC_NOSTGLAOP ('NOSTGLAOP')" "${NOSTGLAOP/#-/ -}" \
 	--field="     $GUI_NOSTTAGS!$DESC_NOSTTAGS ('NOSTTAGS')":CBE "$(cleanDropDown "${NOSTTAGS/#-/ -}" "$VALIDTAGS")" \
 	--field="     $GUI_NOSTGHIDE!$DESC_NOSTGHIDE ('NOSTGHIDE')":CHK "${NOSTGHIDE/#-/ -}" \
@@ -22333,9 +22333,13 @@ function addNonSteamGameGui {
 				NOSTGAO="$( retBool "${NSGSETARR[18]}" )"
 				NOSTGVR="$( retBool "${NSGSETARR[19]}" )"
 
+				## TODO the Non-Steam compatibility tool option will need reworked 
+				## We will need to pass "pretty" proton names matching the other Proton dropdowns
+				## We'll then need a way to map this to the internal compatibility tool names
+
 				## Arguments here like -hr, -lg, etc are made to match setGameArt
-				writelog "INFO" "${FUNCNAME[0]} - addNonSteamGame -an=\"$NOSTGAPPNAME\" -ep=\"$NOSTGEXEPATH\" -sd=\"$NOSTGSTDIR\" -ip=\"$NOSTGICONPATH\" -lo=\"$NOSTGLAOP\" -hd=\"$NOSTGHIDE\" -adc=\"$NOSTGADC\" -ao=\"$NOSTGAO\" -vr=\"$NOSTGVR\" -t=\"$NOSTTAGS\" -hr=\"$NOSTGHERO\" -lg=\"$NOSTGLOGO\" -ba=\"$NOSTGBOXART\" -tf=\"$NOSTGTENFOOT\" \"--${NOSTGSETACTION}\""
-				addNonSteamGame -an="$NOSTGAPPNAME" -ep="$NOSTGEXEPATH" -sd="$NOSTGSTDIR" -ip="$NOSTGICONPATH" -lo="$NOSTGLAOP" -hd="$NOSTGHIDE" -adc="$NOSTGADC" -ao="$NOSTGAO" -vr="$NOSTGVR" -t="$NOSTTAGS" -hr="$NOSTGHERO" -lg="$NOSTGLOGO" -ba="$NOSTGBOXART" -tf="$NOSTGTENFOOT" "--${NOSTGSETACTION}"
+				writelog "INFO" "${FUNCNAME[0]} - addNonSteamGame -an=\"$NOSTGAPPNAME\" -ep=\"$NOSTGEXEPATH\" -sd=\"$NOSTGSTDIR\" -ip=\"$NOSTGICONPATH\" -lo=\"$NOSTGLAOP\" -hd=\"$NOSTGHIDE\" -adc=\"$NOSTGADC\" -ao=\"$NOSTGAO\" -vr=\"$NOSTGVR\" -t=\"$NOSTTAGS\" -ct=\"$NOSTCOMPATTOOL\" -hr=\"$NOSTGHERO\" -lg=\"$NOSTGLOGO\" -ba=\"$NOSTGBOXART\" -tf=\"$NOSTGTENFOOT\" \"--${NOSTGSETACTION}\""
+				addNonSteamGame -an="$NOSTGAPPNAME" -ep="$NOSTGEXEPATH" -sd="$NOSTGSTDIR" -ip="$NOSTGICONPATH" -lo="$NOSTGLAOP" -hd="$NOSTGHIDE" -adc="$NOSTGADC" -ao="$NOSTGAO" -vr="$NOSTGVR" -t="$NOSTTAGS" -ct="$NOSTCOMPATTOOL" -hr="$NOSTGHERO" -lg="$NOSTGLOGO" -ba="$NOSTGBOXART" -tf="$NOSTGTENFOOT" "--${NOSTGSETACTION}"
 			fi
 		;;
 	esac
@@ -22452,6 +22456,8 @@ function addNonSteamGame {
 			-stllo=*|--stllaunchoption=*)
 				NOSTSTLLO="${i#*=}"
 				shift ;;
+			-ct=*|--compatibilitytool=*)
+				NOSTCOMPATTOOL="${i#*=}"
 			## Mostly lifted+shifted from setGameArt
 			-hr=*|--hero=*)
 				NOSTGHERO="${i#*=}"  # <appid>_hero.png -- Banner used on game screen, logo goes on top of this 
@@ -22523,6 +22529,7 @@ function addNonSteamGame {
 		writelog "INFO" "${FUNCNAME[0]} - Allow Overlay: '${NOSTAO}'"
 		writelog "INFO" "${FUNCNAME[0]} - OpenVR: '${NOSTVR}'"
 		writelog "INFO" "${FUNCNAME[0]} - Tags: '${NOSTTAGS}'"
+		writelog "INFO" "${FUNCNAME[0]} - Compatibility Tool: '${NOSTCOMPATTOOL}'"
 		## Artwork logging -- These will be blank if no artwork is passed, that's OK
 		writelog "INFO" "${FUNCNAME[0]} - Hero Artwork: '${NOSTGHERO}'"
 		writelog "INFO" "${FUNCNAME[0]} - Logo Artwork: '${NOSTGLOGO}'"
@@ -22612,6 +22619,11 @@ function addNonSteamGame {
 		writelog "INFO" "${FUNCNAME[0]} - Adding any chosen Non-Steam game artwork"
 
 		setGameArt "$NOSTAIDGRID" --hero="$NOSTGHERO" --logo="$NOSTGLOGO" --boxart="$NOSTGBOXART" --tenfoot="$NOSTGTENFOOT" "$SGACOPYMETHOD"
+
+		if [ -n "$NOSTCOMPATTOOL" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Adding selected compatibility tool '$NOSTCOMPATTOOL' for Non-Stteam Game..."
+			# TODO call function to write out to config VDF
+		fi
 
 		writelog "INFO" "${FUNCNAME[0]} - Finished adding new $NSGA"
 	fi
