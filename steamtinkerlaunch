@@ -22025,8 +22025,6 @@ function injectGdb {
 ## The code is pretty much the same but with variable names adapted to the SteamTinkerLaunch "convention"
 ## The code on Blush exists so this code can be used by others outside of SteamTinkerLaunch more easily
 
-## TODO !!we need more logging for these functions!!
-
 ## Generate string of [[:space:]] to represent indentation in VDF file, useful for searching
 function generateVdfIndentString {
 	SPACETYPE="${2:-\t}"  # Type of space, expected values could be '\t' (for writing) or '[[:space:]]' (for searching)
@@ -22067,6 +22065,8 @@ function getVdfSection {
     INDENTEDSTARTPATTERN="${INDENTSTR}${STARTPATTERN}"
     INDENTEDENDPATTERN="${INDENTSTR}${ENDPATTERN}"
 
+	writelog "INFO" "${FUNCNAME[0]} - Searching for VDF block with name '$STARTPATTERN' in VDF file '$VDF'"
+
     sed -n "/${INDENTEDSTARTPATTERN}/I,/^${INDENTEDENDPATTERN}/I p" "$VDF"
 }
 
@@ -22084,6 +22084,7 @@ function checkVdfSectionAlreadyExists {
 
     SEARCHBLOCKVDFSECTION="$( getVdfSection "$SEARCHBLOCK" "" "" "$VDF" )"
     if [ -z "$SEARCHBLOCKVDFSECTION" ]; then
+		writelog "WARN" "${FUNCNAME[0]} - Could not find VDF section with name '$SEARCHBLOCK' in VDF file '$VDF' -- Skipping"
         return 0
     fi
 
@@ -22108,6 +22109,8 @@ function createVdfEntry {
         return
     fi
 
+	writelog "INFO" "${FUNCNAME[0]} - Creating VDF data block to append to '$PARENTBLOCKNAME'"
+
     ## Create array from args, skip first four to get array of key/value pairs for VDF block
     NEWBLOCKVALUES=("${@:5}")
     NEWBLOCKVALUESDELIM="!"
@@ -22127,10 +22130,13 @@ function createVdfEntry {
     TOPOFBLOCK="$(( BLOCKLINESTART + 1 ))"
     BOTTOMOFBLOCK="$(( BLOCKLINESTART + PARENTBLOCKLENGTH - 2 ))"
 
-    ## Decide which line to insert new block into
-    INSERTLINE="${BOTTOMOFBLOCK}"
+    ## Decide which line to insert new block into (uses if/else for ease of logging)
     if [[ "${POSITION,,}" == "top" ]]; then
         INSERTLINE="${TOPOFBLOCK}"
+		writelog "INFO" "${FUNCNAME[0]} - Will insert new block into top of '$PARENTBLOCKNAME' VDF section"
+	else
+		INSERTLINE="${BOTTOMOFBLOCK}"
+		writelog "INFO" "${FUNCNAME[0]} - Will insert new block into bottom of '$PARENTBLOCKNAME' VDF section"
     fi
 
     ## Build new VDF entry string
@@ -22149,6 +22155,9 @@ function createVdfEntry {
         NEWBLOCKSTR+="\t\t${NEWBLOCKDATA_VAL}\n"  # Add tab + val + newline
     done
     NEWBLOCKSTR+="${BASETABSTR}}"  # Add tab + closing brace
+
+	writelog "INFO" "${FUNCNAME[0]} - Generated VDF block string '$NEWBLOCKSTR'"
+	writelog "INFO" "${FUNCNAME[0]} - Writing out VDF block string to VDF file at '$VDF'"
 
     ## Write out new string to calculated line in VDF file
     sed -i "${INSERTLINE}a\\${NEWBLOCKSTR}" "$VDF"
