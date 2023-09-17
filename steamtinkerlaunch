@@ -22130,6 +22130,39 @@ function injectGdb {
 ## The code is pretty much the same but with variable names adapted to the SteamTinkerLaunch "convention"
 ## The code on Blush exists so this code can be used by others outside of SteamTinkerLaunch more easily
 
+function backupVdfFile {
+	ORGVDFNAME="$1"
+
+	VDFBASENAME="$(basename "$ORGVDFNAME")"
+	VDFDIRNAME="$(dirname "$ORGVDFNAME")"
+
+	VDFNAME="${VDFBASENAME%%.*}"
+	VDFEXT="${VDFBASENAME##*.}"
+	BACKUPVDFNAME="${VDFDIRNAME}/${VDFNAME}_steamtinkerlaunch.${VDFEXT}"
+	if [ -f "$ORGVDFNAME" ]; then
+		SHOULDBACKUPVDF=1
+		if [ -f "$BACKUPVDFNAME" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Found existing VDF backup file '$BACKUPVDFNAME'"
+			if [ "$(( $(date +"%s") - $(stat -c "%Y" "$BACKUPVDFNAME") ))" -gt "86400" ]; then  # file age > 1 day
+				writelog "INFO" "${FUNCNAME[0]} - Existing VDF backup file is older than 1 day, overwriting"
+				rm "$BACKUPVDFNAME"
+			else
+				writelog "SKIP" "${FUNCNAME[0]} - Existing VDF backup file is not older than 1 day, not overwriting"
+				SHOULDBACKUPVDF=0
+			fi
+		fi
+
+		if [ "$SHOULDBACKUPVDF" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Backing up VDF file '$VDFBASENAME' to '$( basename "$BACKUPVDFNAME" )'"
+			cp "$ORGVDFNAME" "$BACKUPVDFNAME"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Not backing up VDF file '$VDFBASENAME'"
+		fi
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - VDF file to back up '$ORGVDFNAME' does not exist -- Nothing to back up"
+	fi
+}
+
 ## Generate string of [[:space:]] to represent indentation in VDF file, useful for searching
 function generateVdfIndentString {
 	SPACETYPE="${2:-\t}"  # Type of space, expected values could be '\t' (for writing) or '[[:space:]]' (for searching)
@@ -22263,6 +22296,8 @@ function createVdfEntry {
 
 	writelog "INFO" "${FUNCNAME[0]} - Generated VDF block string '$NEWBLOCKSTR'"
 	writelog "INFO" "${FUNCNAME[0]} - Writing out VDF block string to VDF file at '$VDF'"
+
+	backupVdfFile "$VDF"
 
     ## Write out new string to calculated line in VDF file
     sed -i "${INSERTLINE}a\\${NEWBLOCKSTR}" "$VDF"
@@ -24427,7 +24462,7 @@ function getSteamDeckCompatInfo {
 			if ! "$JQ" -e '.success' "$COMPATFILE" 1>/dev/null; then
 				writelog "INFO" "${FUNCNAME[0]} - File '$COMPATFILE' containing Steam Deck compatibility information already exists, however it looks like it failed last time - Removing it so we can attempt to redownload it"
 				rm "$COMPATFILE"
-			elif [ "$(( $(date +"%s") - $(stat -c "%Y" "$COMPATFILE") ))" -gt "86400" ]; then  # Todo maybe let the user define this in the Global Menu
+			elif [ "$(( $(date +"%s") - $(stat -c "%Y" "$COMPATFILE") ))" -gt "86400" ]; then  # Todo maybe let the user define this in the Global Menu (default right now is >  1 day old)
 				writelog "INFO" "${FUNCNAME[0]} - File '$COMPATFILE' is older than 1 day - Removing it so we can update in case the compatibility rating has changed"
 				rm "$COMPATFILE"
 			fi
