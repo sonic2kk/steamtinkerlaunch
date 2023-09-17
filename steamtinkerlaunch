@@ -6,8 +6,9 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230917-3 (nonsteam-setcompattool)"
+PROGVERS="v14.0.20230918-1 (nonsteam-setcompattool)"
 PROGCMD="${0##*/}"
+PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
 GHURL="https://github.com"
 AGHURL="https://api.github.com"
@@ -2380,6 +2381,110 @@ function fillProtonCSV {
 			mapfile -t -O "${#ProtonCSV[@]}" ProtonCSV <<< "$PCSV"
 		else
 			writelog "SKIP" "${FUNCNAME[0]} - '$PCSV' is already in the Proton array"
+		fi
+	fi
+}
+
+## Get internal name for a Proton version, first by checking for a 'compatibilitytool.vdf' file in its root directory, then for a Proton version file
+## Right now this is only used by addNonSteamGame
+## TODO at some point maybe we should store this in the ProtonCSV as well? Then the format would be 'versionfilename;protonpath;internalname'
+function getProtonInternalName {
+	## Tools are not necessarily guaranteed to have this comment, but I checked several and they all had it:
+	## - SteamTinkerLaunch (naturally)
+	## - All GE-Proton8 releases
+	## - Standard Proton-tkg releases
+	## - Luxtorpeda
+	##
+	## Steam Linux Runtime 1.0 (scout) / Native Linux Steam Linux Runtime is identified as 'steamlinuxruntime'
+	## No idea where the Steam Client gets this from, maybe it's just hardcoded, I couldn't find a string anywhere in the SteamLinuxRuntime installation folder or the 'appmanifest_1070560.acf'
+	function getProtonInternalNameVdf {
+		CTVPATH="$1"
+		if [ -f "$CTVPATH" ]; then
+			grep -i "// internal" "$CTVPATH" | sed 's-// Internal name of this tool--' | xargs
+		else
+			writelog "WARN" "${FUNCNAME[0]} - Could not find compatibilitytool.vdf file for Proton version at '$CTVPATH'"
+			echo ""
+		fi
+	}
+
+	## Get the Proton version version text file
+	function getProtonInternalNameVersionFile {
+		PPVPATH="$1"
+		if [ -f "$PPV" ]; then
+			awk '{print $2}' < "$PPV"
+		else
+			writelog "WARN" "${FUNCNAME[0]} - Could not find Proton version file at '$PPVPATH'"
+		fi
+	}
+
+	## Check if the path provided is for a Valve Proton version, by making some assumptions around the directory structure
+	function checkIsValveProton {
+		VPP="$1"  # Valve Proton Path
+
+		writelog "INFO" "${FUNCNAME[0]} - Checking if Proton version at '$VPP' is a Valve Proton version"
+		if [ -d "$VPP/dist" ] && [ ! -f "$VPP/$CTVDF" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Looks like we have a Valve Proton release here"
+			return 0
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Doesn't look like a Valve Proton release, no 'dist' folder in the Proton path and we have a '$CTVDF'"
+			return 1
+		fi
+	}
+
+	## Build the Valve Proton internal name based on its version + some hardcoding for Experimental and Hotfix
+	function getValveProtonInternalName {
+		BASEPRTNAM="$1"
+		INTPROTNAM="proton_"
+		FINALINTPROTNAM=""
+
+		writelog "INFO" "${FUNCNAME[0]} - Building Proton version internal name using version information"
+		PRTVERS="$( echo "${BASEPRTNAM%-*}" | cut -d '-' -f2 )"  # Turn proton-8.0-3c into proton-8.0, then into 8.0
+
+		PRTMAJORVERS="$( echo "$PRTVERS" | cut -d '.' -f1 )"  # Get minor version e.g. '8' from '8.0', '4' from '4.11'
+		PRTMINORVERS="$( echo "$PRTVERS" | cut -d '.' -f2 )"  # Get minor version e.g. '0' from '8.0', '11' from '4.11'
+
+		## If minor vers > 0, we need to include it in the internal name -- Defaults to just major version
+		INTPROTVERSUFFIX="${PRTMAJORVERS}"
+		if [ "$PRTMINORVERS" -gt 0 ]; then
+			INTPROTVERSUFFIX+="${PRTMINORVERS}"
+		fi
+
+		FINALINTPROTNAM="${INTPROTNAM}${INTPROTVERSUFFIX}"
+
+		writelog "INFO" "${FUNCNAME[0]} - Final Internal Proton name for given Proton name '$BASEPRTNAM' string is '$FINALINTPROTNAM'"
+		echo "$FINALINTPROTNAM"
+	}
+
+	PROTCSVSTR="$1"
+
+	PRTVERS="$( echo "$PROTCSVSTR" | cut -d ';' -f1 )"
+	PRTPATH="$( echo "$PROTCSVSTR" | cut -d ';' -f2 )"
+	PRTPATHDIR="$( dirname "$PRTPATH" )"
+
+	CTVDFPA="$PRTPATHDIR/$CTVDF"
+	PPV="$PRTPATHDIR/version"
+
+	INTPROTNAME="$( getProtonInternalNameVdf "$CTVDFPA" )"  # First attempt to get the internal name from compatibilitytool.vdf
+	if [ -n "$INTPROTNAME" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Got Proton Internal name '$INTPROTNAME' from '$CTVDFPA'"
+		echo "$INTPROTNAME"
+	elif [[ $PRTVERS == experimental* ]]; then  # Experimental hardcode
+		writelog "INFO" "${FUNCNAME[0]} - Looks like we have Proton Experimental -- Hardcoding internal name 'proton_experimental'"
+		echo "proton_experimental"
+	elif [[ $PRTVERS == hotfix* ]]; then  # Hotfix hardcode
+		writelog "INFO" "${FUNCNAME[0]} - Looks like we have Proton Hotfix here -- Hardcoding internal name to 'proton_hotfix'"
+		echo "proton_hotfix"
+	else
+		writelog "INFO" "${FUNCNAME[0]} - Could not get internal Proton name for '$PRTVERS' from '$CTVDF' - Maybe it didn't have this file"
+		writelog "INFO" "${FUNCNAME[0]} - Checking if we have a Valve Proton version here to build the internal name from"
+
+		if checkIsValveProton "$PRTPATHDIR"; then
+			writelog "INFO" "${FUNCNAME[0]} - Seems we have a Valve Proton version, building internal name manually"
+			getValveProtonInternalName "$PRTVERS"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Doesn't seem like we have a Valve Proton version"
+			writelog "INFO" "${FUNCNAME[0]} - Still could not find Proton internal name from '$CTVDF' - Giving up and falling back to the Proton version, some tools use this as their internal name"
+			echo "$PRTVERS"
 		fi
 	fi
 }
@@ -22262,6 +22367,20 @@ function addNonSteamGameGui {
 		NOSTGSTDIR="${NOSTGEXEPATH%/*}"
 	fi
 	
+	## Generate list of internal Proton names
+	## TODO in future, store this in ProtonCSV?
+	INTPROTNAMSARR=("$NON")
+	for PROTVERNAM in "${ProtonCSV[@]}"; do
+		INTPROTNAMSARR+=("$( getProtonInternalName "$PROTVERNAM" )")
+	done
+
+	# These two have to be hardcoded
+	INTPROTNAMSARR+=("steamlinuxruntime")  # Native Steam Linux Runtime
+	INTPROTNAMSARR+=("$PROGINTERNALPROTNAME")  # SteamTinkerLaunch as compat tool
+
+	# Create '!' delimited string
+	INTPROTNAMS="$(printf "!%s\n" "${INTPROTNAMSARR[@]//\"/}" | sort -u | cut -d ';' -f1 | tr -d '\n' | sed "s:^!::" | sed "s:!$::")"
+
 	# icon default
 	if grep -q "^NOSTEAMSTLDEF=\"1\"" "$STLDEFGLOBALCFG"; then
 		NOSTGICONPATH="$STLICON"
@@ -22303,7 +22422,7 @@ function addNonSteamGameGui {
 	--field="     $GUI_SGATENFOOT!$DESC_SGATENFOOT ('NOSTGTENFOOT')":FL "${NOSTGTENFOOT/#-/ -}" \
 	--field="     $GUI_SGASETACTION!$DESC_SGASETACTION ('NOSTGSETACTION')":CB "$( cleanDropDown "copy" "$SGASETACTIONS" )" \
 	--field="$(spanFont "$GUI_NOSTGPROPS" "H")":LBL " " \
-	--field="     $GUI_NOSTGCOMPATTOOL!$DESC_NOSTGCOMPATTOOL ('NOSTCOMPATTOOL')":CB "$( cleanDropDown "$NON" "$NON!Proton-stl!proton_8!proton_7" )" \
+	--field="     $GUI_NOSTGCOMPATTOOL!$DESC_NOSTGCOMPATTOOL ('NOSTCOMPATTOOL')":CB "$( cleanDropDown "$NON" "$INTPROTNAMS" )" \
 	--field="     $GUI_NOSTGLAOP!$DESC_NOSTGLAOP ('NOSTGLAOP')" "${NOSTGLAOP/#-/ -}" \
 	--field="     $GUI_NOSTTAGS!$DESC_NOSTTAGS ('NOSTTAGS')":CBE "$(cleanDropDown "${NOSTTAGS/#-/ -}" "$VALIDTAGS")" \
 	--field="     $GUI_NOSTGHIDE!$DESC_NOSTGHIDE ('NOSTGHIDE')":CHK "${NOSTGHIDE/#-/ -}" \
