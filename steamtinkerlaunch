@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230918-1 (nonsteam-setcompattool)"
+PROGVERS="v14.0.20230918-3 (nonsteam-setcompattool)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -2426,7 +2426,7 @@ function getProtonInternalName {
 			writelog "INFO" "${FUNCNAME[0]} - Looks like we have a Valve Proton release here"
 			return 0
 		else
-			writelog "INFO" "${FUNCNAME[0]} - Doesn't look like a Valve Proton release, no 'dist' folder in the Proton path and we have a '$CTVDF'"
+			writelog "INFO" "${FUNCNAME[0]} - Doesn't look like a Valve Proton release, directory structure doesn't match"
 			return 1
 		fi
 	}
@@ -22366,20 +22366,6 @@ function addNonSteamGameGui {
 		NOSTGAPPNAME="${NOSTGEXEPATH##*/}"
 		NOSTGSTDIR="${NOSTGEXEPATH%/*}"
 	fi
-	
-	## Generate list of internal Proton names
-	## TODO in future, store this in ProtonCSV?
-	INTPROTNAMSARR=("$NON")
-	for PROTVERNAM in "${ProtonCSV[@]}"; do
-		INTPROTNAMSARR+=("$( getProtonInternalName "$PROTVERNAM" )")
-	done
-
-	# These two have to be hardcoded
-	INTPROTNAMSARR+=("steamlinuxruntime")  # Native Steam Linux Runtime
-	INTPROTNAMSARR+=("$PROGINTERNALPROTNAME")  # SteamTinkerLaunch as compat tool
-
-	# Create '!' delimited string
-	INTPROTNAMS="$(printf "!%s\n" "${INTPROTNAMSARR[@]//\"/}" | sort -u | cut -d ';' -f1 | tr -d '\n' | sed "s:^!::" | sed "s:!$::")"
 
 	# icon default
 	if grep -q "^NOSTEAMSTLDEF=\"1\"" "$STLDEFGLOBALCFG"; then
@@ -22405,6 +22391,28 @@ function addNonSteamGameGui {
 	TITLE="${PROGNAME}-$NSGA"
 	pollWinRes "$TITLE"
 
+	# Generate list of Proton versions excluding Proton versions only available to SteamTinkerLaunch
+	# May cause problems with symlinked Proton versions, unsure, unusual case anyway
+	NSGPROTLIST=("$NON")
+	for STLKNOWNPROT in "${ProtonCSV[@]}"; do
+		STLKNOWNPROTNAM="$( echo "$STLKNOWNPROT" | cut -d ';' -f1 )"
+		STLKNOWNPROTPATH="$( echo "$STLKNOWNPROT" | cut -d ';' -f2 )"
+
+		STLKNOWNPROTDIR="$( dirname "$STLKNOWNPROTPATH" )"
+		if [[ $STLKNOWNPROTDIR = $STLCFGDIR* ]]; then
+			writelog "SKIP" "${FUNCNAME[0]} - Proton version '$STLKNOWNPROTNAM' is in SteamTinkerLaunch config directory at '$STLKNOWNPROTPATH' -- This is not known by Steam, so skipping"
+		elif [[ $STLKNOWNPROTDIR = $CUSTPROTEXTDIR* ]] && [[ $CUSTPROTEXTDIR != $STEAMCOMPATOOLS ]]; then
+			writelog "INFO" "${FUNCNAME[0]} - Proton version '$STLKNOWNPROTNAM' is in SteamTinkerLaunch Custom Proton dir '$CUSTPROTEXTDIR' on path '$STLKNOWNPROTPATH' -- This path is not the Steam Compatibility Tool directory and so is not known by Steam, so skipping"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Proton version '$STLKNOWNPROTNAM' looks like it should be known by Steam as it is not in any SteamTinkerLaunch-specific folders on path '$STLKNOWNPROTPATH'"
+			NSGPROTLIST+=("$STLKNOWNPROTNAM")
+		fi
+	done
+	NSGPROTLIST+=("steamlinuxruntime")
+	NSGPROTLIST+=("$PROGINTERNALPROTNAME")
+
+	NSGPROTYADLIST="$(printf "!%s\n" "${NSGPROTLIST[@]//\"/}" | sort -u | cut -d ';' -f1 | tr -d '\n' | sed "s:^!::" | sed "s:!$::")"
+
 	## Language strings for artwork section were re-used from setGameArt
 	NSGSET="$("$YAD" --f1-action="$F1ACTION" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
 	--title="$TITLE" --separator="|" \
@@ -22422,7 +22430,7 @@ function addNonSteamGameGui {
 	--field="     $GUI_SGATENFOOT!$DESC_SGATENFOOT ('NOSTGTENFOOT')":FL "${NOSTGTENFOOT/#-/ -}" \
 	--field="     $GUI_SGASETACTION!$DESC_SGASETACTION ('NOSTGSETACTION')":CB "$( cleanDropDown "copy" "$SGASETACTIONS" )" \
 	--field="$(spanFont "$GUI_NOSTGPROPS" "H")":LBL " " \
-	--field="     $GUI_NOSTGCOMPATTOOL!$DESC_NOSTGCOMPATTOOL ('NOSTCOMPATTOOL')":CB "$( cleanDropDown "$NON" "$INTPROTNAMS" )" \
+	--field="     $GUI_NOSTGCOMPATTOOL!$DESC_NOSTGCOMPATTOOL ('NOSTCOMPATTOOL')":CB "$( cleanDropDown "$NON" "$NSGPROTYADLIST" )" \
 	--field="     $GUI_NOSTGLAOP!$DESC_NOSTGLAOP ('NOSTGLAOP')" "${NOSTGLAOP/#-/ -}" \
 	--field="     $GUI_NOSTTAGS!$DESC_NOSTTAGS ('NOSTTAGS')":CBE "$(cleanDropDown "${NOSTTAGS/#-/ -}" "$VALIDTAGS")" \
 	--field="     $GUI_NOSTGHIDE!$DESC_NOSTGHIDE ('NOSTGHIDE')":CHK "${NOSTGHIDE/#-/ -}" \
@@ -22463,10 +22471,6 @@ function addNonSteamGameGui {
 				NOSTGADC="$( retBool "${NSGSETARR[17]}" )"
 				NOSTGAO="$( retBool "${NSGSETARR[18]}" )"
 				NOSTGVR="$( retBool "${NSGSETARR[19]}" )"
-
-				## TODO the Non-Steam compatibility tool option will need reworked 
-				## We will need to pass "pretty" proton names matching the other Proton dropdowns
-				## We'll then need a way to map this to the internal compatibility tool names
 
 				## Makes sure we ignore none compatibility tool
 				if [[ "$NOSTCOMPATTOOL" = "$NON" ]]; then
@@ -22593,10 +22597,20 @@ function addNonSteamGame {
 				NOSTSTLLO="${i#*=}"
 				shift ;;
 			-ct=*|--compatibilitytool=*)
-				## TODO stricter logic here about which compatibility tools we accept?
-				## Maybe we need a dedicated method to check/map NOSTCOMPATTOOL?
-				## Since this part is called from the commandline we should be careful about what we write out, and do some parsing+mapping
-				NOSTCOMPATTOOL="${i#*=}"
+				## Get path based on passed name from ProtonCSV, then build argument needed for getProtonInternalName
+				NOSTCOMPATTOOL=""
+				NOSTCOMPATTOOLNAME="${i#*=}"
+				if [ -n "$NOSTCOMPATTOOLNAME" ]; then
+					NOSTCOMPATTOOLPATH="$( getProtPathFromCSV "$NOSTCOMPATTOOLNAME" )"
+
+					if [ -n "$NOSTCOMPATTOOLPATH" ]; then
+						NOSTCOMPATTOOL="$( getProtonInternalName "${NOSTCOMPATTOOLNAME};${NOSTCOMPATTOOLPATH}" )"
+					else
+						writelog "SKIP" "${FUNCNAME[0]} - Could not get Proton path for given Compatibility Tool '$NOSTCOMPATTOOLNAME' from ProtonCSV -- Skipping"
+					fi
+				else
+					writelog "SKIP" "${FUNCNAME[0]} - Compatibility Tool name argument was passed, but was empty '$NOSTCOMPATTOOLNAME' -- Skipping"
+				fi
 				shift ;;
 			## Mostly lifted+shifted from setGameArt
 			-hr=*|--hero=*)
