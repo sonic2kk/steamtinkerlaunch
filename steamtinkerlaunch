@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230918-6 (nonsteam-setcompattool)"
+PROGVERS="v14.0.20230918-7 (nonsteam-setcompattool)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -22302,6 +22302,29 @@ function createVdfEntry {
     ## Write out new string to calculated line in VDF file
     sed -i "${INSERTLINE}a\\${NEWBLOCKSTR}" "$VDF"
 }
+
+## Get the internal name of the compatibility tool selected for all titles from the Steam Client Compatibility settings
+## ex: Proton 8.0-3 would return 'proton_8'
+##
+## Compatibility Tools, even ones that are Windows EXEs, are not given a compatibility tool by default, so this function can be used
+## to select the one used by default for Windows games.
+##
+## This compatibility tool doesn't even have to be Proton.
+function getGlobalSteamCompatToolInternalName {
+	STEAMCOMPATTOOLSECTION="$( getVdfSection "CompatToolMapping" "" "" "$CFGVDF" )"  # Get CompatToolMapping section
+	if [ -n "$STEAMCOMPATTOOLSECTION" ]; then
+		printf "%s" "$STEAMCOMPATTOOLSECTION" > "/tmp/tmp.vdf"
+    	GLOBALSTEAMCOMPATTOOLSECTION="$( getVdfSection "0" "" "" "/tmp/tmp.vdf" )"
+
+		if [ -n "$GLOBALSTEAMCOMPATTOOLSECTION" ]; then
+			echo "$GLOBALSTEAMCOMPATTOOLSECTION" | grep -i "name" | sed "s-\t- -g;s-\"name\"--g;s-\"--g" | xargs
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - Could not find Global Compatibility Tool in CompatToolMapping in '$CFGVDF' - Giving up"
+		fi
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - Could not find CompatToolMapping section in '$CFGVDF' - Giving up"
+	fi
+}
 ### END TEXT-BASED VDF INTERACTION FUNCTIONS
 
 function startSettings {
@@ -22428,7 +22451,7 @@ function addNonSteamGameGui {
 
 	# Generate list of Proton versions excluding Proton versions only available to SteamTinkerLaunch
 	# May cause problems with symlinked Proton versions, unsure, unusual case anyway
-	NSGPROTLIST=("$NON")
+	NSGPROTLIST=( "$NON" "default" )
 	for STLKNOWNPROT in "${ProtonCSV[@]}"; do
 		STLKNOWNPROTNAM="$( echo "$STLKNOWNPROT" | cut -d ';' -f1 )"
 		STLKNOWNPROTPATH="$( echo "$STLKNOWNPROT" | cut -d ';' -f2 )"
@@ -22443,8 +22466,7 @@ function addNonSteamGameGui {
 			NSGPROTLIST+=("$STLKNOWNPROTNAM")
 		fi
 	done
-	NSGPROTLIST+=("steamlinuxruntime")
-	NSGPROTLIST+=("$PROGINTERNALPROTNAME")
+	NSGPROTLIST+=( "$PROGINTERNALPROTNAME" "steamlinuxruntime" )
 
 	NSGPROTYADLIST="$(printf "!%s\n" "${NSGPROTLIST[@]//\"/}" | sort -u | cut -d ';' -f1 | tr -d '\n' | sed "s:^!::" | sed "s:!$::")"
 
@@ -22636,18 +22658,28 @@ function addNonSteamGame {
 				NOSTCOMPATTOOL=""
 				NOSTCOMPATTOOLNAME="${i#*=}"
 				if [ -n "$NOSTCOMPATTOOLNAME" ]; then
-					NOSTCOMPATTOOLPATH="$( getProtPathFromCSV "$NOSTCOMPATTOOLNAME" )"
-
-					if [ -n "$NOSTCOMPATTOOLPATH" ]; then
-						NOSTCOMPATTOOL="$( getProtonInternalName "${NOSTCOMPATTOOLNAME};${NOSTCOMPATTOOLPATH}" )"
+					if [[ "$NOSTCOMPATTOOLNAME" == "default" ]]; then  # Default fetches the global Steam compat tool
+						GLOBALSTEAMCOMPATTOOL="$( getGlobalSteamCompatToolInternalName )"
+						if [ -n "$GLOBALSTEAMCOMPATTOOL" ]; then
+							NOSTCOMPATTOOL="$GLOBALSTEAMCOMPATTOOL"
+						else
+							writelog "INFO" "${FUNCNAME[0]} - Selected 'default' compatibility tool but could not find one in '$CFGVDF' -- Not writing compatibility tool for Non-Steam Game"
+						fi
 					else
-						# i.e. if 'luxtorpeda' was passed, we don't have a path for this, so simply trust the user
-						writelog "SKIP" "${FUNCNAME[0]} - Could not get Proton path for given Compatibility Tool '$NOSTCOMPATTOOLNAME' from ProtonCSV -- Simply assuming this internal name is valid and not known to SteamTinkerLaunch"
-						NOSTCOMPATTOOL="$NOSTCOMPATTOOLNAME"
+						NOSTCOMPATTOOLPATH="$( getProtPathFromCSV "$NOSTCOMPATTOOLNAME" )"
+
+						if [ -n "$NOSTCOMPATTOOLPATH" ]; then
+							NOSTCOMPATTOOL="$( getProtonInternalName "${NOSTCOMPATTOOLNAME};${NOSTCOMPATTOOLPATH}" )"
+						else
+							# i.e. if 'luxtorpeda' was passed, we don't have a path for this, so simply trust the user
+							writelog "SKIP" "${FUNCNAME[0]} - Could not get Proton path for given Compatibility Tool '$NOSTCOMPATTOOLNAME' from ProtonCSV -- Simply assuming this internal name is valid and not known to SteamTinkerLaunch"
+							NOSTCOMPATTOOL="$NOSTCOMPATTOOLNAME"
+						fi
 					fi
 				else
 					writelog "SKIP" "${FUNCNAME[0]} - Compatibility Tool name argument was passed, but was empty '$NOSTCOMPATTOOLNAME' -- Skipping"
 				fi
+
 				shift ;;
 			## Mostly lifted+shifted from setGameArt
 			-hr=*|--hero=*)
