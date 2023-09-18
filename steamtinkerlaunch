@@ -6,8 +6,9 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230916-2"
+PROGVERS="v14.0.20230919-1"
 PROGCMD="${0##*/}"
+PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
 GHURL="https://github.com"
 AGHURL="https://api.github.com"
@@ -2380,6 +2381,110 @@ function fillProtonCSV {
 			mapfile -t -O "${#ProtonCSV[@]}" ProtonCSV <<< "$PCSV"
 		else
 			writelog "SKIP" "${FUNCNAME[0]} - '$PCSV' is already in the Proton array"
+		fi
+	fi
+}
+
+## Get internal name for a Proton version, first by checking for a 'compatibilitytool.vdf' file in its root directory, then for a Proton version file
+## Right now this is only used by addNonSteamGame
+## TODO at some point maybe we should store this in the ProtonCSV as well? Then the format would be 'versionfilename;protonpath;internalname'
+function getProtonInternalName {
+	## Tools are not necessarily guaranteed to have this comment, but I checked several and they all had it:
+	## - SteamTinkerLaunch (naturally)
+	## - All GE-Proton8 releases
+	## - Standard Proton-tkg releases
+	## - Luxtorpeda
+	##
+	## Steam Linux Runtime 1.0 (scout) / Native Linux Steam Linux Runtime is identified as 'steamlinuxruntime'
+	## No idea where the Steam Client gets this from, maybe it's just hardcoded, I couldn't find a string anywhere in the SteamLinuxRuntime installation folder or the 'appmanifest_1070560.acf'
+	function getProtonInternalNameVdf {
+		CTVPATH="$1"
+		if [ -f "$CTVPATH" ]; then
+			grep -i "// internal" "$CTVPATH" | sed 's-// Internal name of this tool--' | xargs
+		else
+			writelog "WARN" "${FUNCNAME[0]} - Could not find compatibilitytool.vdf file for Proton version at '$CTVPATH'"
+			echo ""
+		fi
+	}
+
+	## Get the Proton version version text file
+	function getProtonInternalNameVersionFile {
+		PPVPATH="$1"
+		if [ -f "$PPV" ]; then
+			awk '{print $2}' < "$PPV"
+		else
+			writelog "WARN" "${FUNCNAME[0]} - Could not find Proton version file at '$PPVPATH'"
+		fi
+	}
+
+	## Check if the path provided is for a Valve Proton version, by making some assumptions around the directory structure
+	function checkIsValveProton {
+		VPP="$1"  # Valve Proton Path
+
+		writelog "INFO" "${FUNCNAME[0]} - Checking if Proton version at '$VPP' is a Valve Proton version"
+		if [ -d "$VPP/dist" ] && [ ! -f "$VPP/$CTVDF" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Looks like we have a Valve Proton release here"
+			return 0
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Doesn't look like a Valve Proton release, directory structure doesn't match"
+			return 1
+		fi
+	}
+
+	## Build the Valve Proton internal name based on its version + some hardcoding for Experimental and Hotfix
+	function getValveProtonInternalName {
+		BASEPRTNAM="$1"
+		INTPROTNAM="proton_"
+		FINALINTPROTNAM=""
+
+		writelog "INFO" "${FUNCNAME[0]} - Building Proton version internal name using version information"
+		PRTVERS="$( echo "${BASEPRTNAM%-*}" | cut -d '-' -f2 )"  # Turn proton-8.0-3c into proton-8.0, then into 8.0
+
+		PRTMAJORVERS="$( echo "$PRTVERS" | cut -d '.' -f1 )"  # Get minor version e.g. '8' from '8.0', '4' from '4.11'
+		PRTMINORVERS="$( echo "$PRTVERS" | cut -d '.' -f2 )"  # Get minor version e.g. '0' from '8.0', '11' from '4.11'
+
+		## If minor vers > 0, we need to include it in the internal name -- Defaults to just major version
+		INTPROTVERSUFFIX="${PRTMAJORVERS}"
+		if [ "$PRTMINORVERS" -gt 0 ]; then
+			INTPROTVERSUFFIX+="${PRTMINORVERS}"
+		fi
+
+		FINALINTPROTNAM="${INTPROTNAM}${INTPROTVERSUFFIX}"
+
+		writelog "INFO" "${FUNCNAME[0]} - Final Internal Proton name for given Proton name '$BASEPRTNAM' string is '$FINALINTPROTNAM'"
+		echo "$FINALINTPROTNAM"
+	}
+
+	PROTCSVSTR="$1"
+
+	PRTVERS="$( echo "$PROTCSVSTR" | cut -d ';' -f1 )"
+	PRTPATH="$( echo "$PROTCSVSTR" | cut -d ';' -f2 )"
+	PRTPATHDIR="$( dirname "$PRTPATH" )"
+
+	CTVDFPA="$PRTPATHDIR/$CTVDF"
+	PPV="$PRTPATHDIR/version"
+
+	INTPROTNAME="$( getProtonInternalNameVdf "$CTVDFPA" )"  # First attempt to get the internal name from compatibilitytool.vdf
+	if [ -n "$INTPROTNAME" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Got Proton Internal name '$INTPROTNAME' from '$CTVDFPA'"
+		echo "$INTPROTNAME"
+	elif [[ $PRTVERS == experimental* ]]; then  # Experimental hardcode
+		writelog "INFO" "${FUNCNAME[0]} - Looks like we have Proton Experimental -- Hardcoding internal name 'proton_experimental'"
+		echo "proton_experimental"
+	elif [[ $PRTVERS == hotfix* ]]; then  # Hotfix hardcode
+		writelog "INFO" "${FUNCNAME[0]} - Looks like we have Proton Hotfix here -- Hardcoding internal name to 'proton_hotfix'"
+		echo "proton_hotfix"
+	else
+		writelog "INFO" "${FUNCNAME[0]} - Could not get internal Proton name for '$PRTVERS' from '$CTVDF' - Maybe it didn't have this file"
+		writelog "INFO" "${FUNCNAME[0]} - Checking if we have a Valve Proton version here to build the internal name from"
+
+		if checkIsValveProton "$PRTPATHDIR"; then
+			writelog "INFO" "${FUNCNAME[0]} - Seems we have a Valve Proton version, building internal name manually"
+			getValveProtonInternalName "$PRTVERS"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Doesn't seem like we have a Valve Proton version"
+			writelog "INFO" "${FUNCNAME[0]} - Still could not find Proton internal name from '$CTVDF' - Giving up and falling back to the Proton version, some tools use this as their internal name"
+			echo "$PRTVERS"
 		fi
 	fi
 }
@@ -20593,15 +20698,17 @@ function howto {
 	echo "      -adc=|--allowdesktopconf=        Allow Desktop Conf - optional"
 	echo "      -ao=|--allowoverlay=             Allow Overlay - optional"
 	echo "      -vr=|--openvr=                   OpenVR - optional*"
-	echo "      -t=|--tags=                      Tags - quoted, comma-separated"
-	echo "      -stllo|--stllaunchoption         Use '${PROGCMD} %command%' as Launch Option"
-	echo "      -hr=|--hero=                     Hero Art path    - Banner used on the Game Screen (3840x1240 recommended)"
-	echo "      -lg=|--logo=                     Logo Art path    - Logo that gets displayed on Game Screen (16:9 recommended)"
-	echo "      -ba=|--boxart=                   Box Art path     - Cover art used in the library (600x900 recommended)"
-	echo "      -tf=|--tenfoot=                  Tenfoot Art path - Small banner used for recently played game in library (600x350 recommended)"
-	echo "      --copy                            Copy art files to Steam Grid folder"
-	echo "      --link                            Symlink art files to Steam Grid folder"
-	echo "      --move                            Move art files to Steam Grid folder"
+	echo "      -t=|--tags=                      Tags - quoted, comma-separated - optional"
+	echo "      -stllo|--stllaunchoption         Use '${PROGCMD} %command%' as Launch Option - optional"
+	echo "      -ct=|--compatibilitytool=        Specify the name of the compatibility tool to use - optional"
+	echo "                                        Can specify 'default' to use the global Steam Compatibility Tool"
+	echo "      -hr=|--hero=                     Hero Art path    - Banner used on the Game Screen (3840x1240 recommended) - optional"
+	echo "      -lg=|--logo=                     Logo Art path    - Logo that gets displayed on Game Screen (16:9 recommended) - optional"
+	echo "      -ba=|--boxart=                   Box Art path     - Cover art used in the library (600x900 recommended) - optional"
+	echo "      -tf=|--tenfoot=                  Tenfoot Art path - Small banner used for recently played game in library (600x350 recommended) - optional"
+	echo "      --copy                            Copy art files to Steam Grid folder (default) - optional"
+	echo "      --link                            Symlink art files to Steam Grid folder - optional"
+	echo "      --move                            Move art files to Steam Grid folder - optional"
 	echo "    backup <value>                   Backup found '$STUS' files"
 	echo "                                       (for 'SteamAppID' or 'all')"
 	echo "    block                            Opens the category Block selection menu"
@@ -22018,6 +22125,209 @@ function injectGdb {
 	fi
 }
 
+### BEGIN TEXT-BASED VDF INTERACTION FUNCTIONS
+##
+## This was written for Blush (https://github.com/sonic2kk/blush/) as part of the research on how to implement #905
+## The code is pretty much the same but with variable names adapted to the SteamTinkerLaunch "convention"
+## The code on Blush exists so this code can be used by others outside of SteamTinkerLaunch more easily
+
+function backupVdfFile {
+	ORGVDFNAME="$1"
+
+	VDFBASENAME="$(basename "$ORGVDFNAME")"
+	VDFDIRNAME="$(dirname "$ORGVDFNAME")"
+
+	VDFNAME="${VDFBASENAME%%.*}"
+	VDFEXT="${VDFBASENAME##*.}"
+	BACKUPVDFNAME="${VDFDIRNAME}/${VDFNAME}_steamtinkerlaunch.${VDFEXT}"
+	if [ -f "$ORGVDFNAME" ]; then
+		SHOULDBACKUPVDF=1
+		if [ -f "$BACKUPVDFNAME" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Found existing VDF backup file '$BACKUPVDFNAME'"
+			if [ "$(( $(date +"%s") - $(stat -c "%Y" "$BACKUPVDFNAME") ))" -gt "86400" ]; then  # file age > 1 day
+				writelog "INFO" "${FUNCNAME[0]} - Existing VDF backup file is older than 1 day, overwriting"
+				rm "$BACKUPVDFNAME"
+			else
+				writelog "SKIP" "${FUNCNAME[0]} - Existing VDF backup file is not older than 1 day, not overwriting"
+				SHOULDBACKUPVDF=0
+			fi
+		fi
+
+		if [ "$SHOULDBACKUPVDF" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Backing up VDF file '$VDFBASENAME' to '$( basename "$BACKUPVDFNAME" )'"
+			cp "$ORGVDFNAME" "$BACKUPVDFNAME"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Not backing up VDF file '$VDFBASENAME'"
+		fi
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - VDF file to back up '$ORGVDFNAME' does not exist -- Nothing to back up"
+	fi
+}
+
+## Generate string of [[:space:]] to represent indentation in VDF file, useful for searching
+function generateVdfIndentString {
+	SPACETYPE="${2:-\t}"  # Type of space, expected values could be '\t' (for writing) or '[[:space:]]' (for searching)
+
+    printf "%.0s${SPACETYPE}" $(seq 1 "$1")
+}
+
+## Attempt to get the indentation level of the first occurance of a given VDF block
+function guessVdfIndent {
+    BLOCKNAME="$( safequoteVdfBlockName "$1" )"  # Block to check the indentation level on
+    VDF="$2"
+
+    grep -i "${BLOCKNAME}" "$VDF" | awk '{print gsub(/\t/,"")}'
+}
+
+## Surround a VDF block name with quotes if it doesn't have any
+function safequoteVdfBlockName {
+    QUOTEDBLOCKNAME="$1"
+    if ! [[ $QUOTEDBLOCKNAME == \"* ]]; then
+        QUOTEDBLOCKNAME="\"$QUOTEDBLOCKNAME\""
+    fi
+
+    echo "$QUOTEDBLOCKNAME"
+}
+
+## Use sed to grab a section of a given VDF file based on its indentation level
+function getVdfSection {
+    STARTPATTERN="$( safequoteVdfBlockName "$1" )"
+    ENDPATTERN="${2:-\}}"  # Default end pattern to end of block
+    INDENT="$3"
+    VDF="$4"
+
+    if [ -z "$INDENT" ]; then
+        INDENT="$(( $( guessVdfIndent "$STARTPATTERN" "$VDF" ) ))"
+    fi
+
+    INDENTSTR="$( generateVdfIndentString "$INDENT" "[[:space:]]" )"
+    INDENTEDSTARTPATTERN="${INDENTSTR}${STARTPATTERN}"
+    INDENTEDENDPATTERN="${INDENTSTR}${ENDPATTERN}"
+
+	writelog "INFO" "${FUNCNAME[0]} - Searching for VDF block with name '$STARTPATTERN' in VDF file '$VDF'"
+
+    sed -n "/${INDENTEDSTARTPATTERN}/I,/^${INDENTEDENDPATTERN}/I p" "$VDF"
+}
+
+## Check if a VDF block (block_name) already exists inside a parent block (search_block)
+## Ex: search_block "CompatToolMapping" for a specific block_name "22320"
+function checkVdfSectionAlreadyExists {
+    SEARCHBLOCK="$( safequoteVdfBlockName "${1:-\"}" )"  # Default to the first quotation, should be the start VDF file
+    BLOCKNAME="$( safequoteVdfBlockName "$2" )"  # Block name to  search for
+    VDF="$3"
+
+    if [ -z "$BLOCKNAME" ]; then
+		writelog "ERROR" "${FUNCNAME[0]} - BLOCKNAME was not provided, skipping..."
+        return
+    fi
+
+    SEARCHBLOCKVDFSECTION="$( getVdfSection "$SEARCHBLOCK" "" "" "$VDF" )"
+    if [ -z "$SEARCHBLOCKVDFSECTION" ]; then
+		writelog "WARN" "${FUNCNAME[0]} - Could not find VDF section with name '$SEARCHBLOCK' in VDF file '$VDF' -- Skipping"
+        return 0
+    fi
+
+    printf "%s" "$SEARCHBLOCKVDFSECTION" > "/tmp/tmp.vdf"
+    getVdfSection "$BLOCKNAME" "" "" "/tmp/tmp.vdf" | grep -iq "$BLOCKNAME"
+}
+
+## Create entry in given VDF block with matching indentation (Case-INsensitive)
+## Appends to bottom of target block by default, but can optionally append to the top instead
+##
+## This doesn't support adding nested entries, at least not very easily
+function createVdfEntry {
+    VDF="$1"  # Absolute path to VDF to insert into
+    PARENTBLOCKNAME="$( safequoteVdfBlockName "$2" )"  # Block to start from, e.g. "CompatToolMapping"
+    NEWBLOCKNAME="$( safequoteVdfBlockName "$3" )"  # Name of new block, e.g. "<AppID>"
+    POSITION="${4:-bottom}"  # POSITION to insert into, can be either top/bottom -- Bottom by default
+
+    ## Ensure no duplicates are written out
+    if checkVdfSectionAlreadyExists "$PARENTBLOCKNAME" "$NEWBLOCKNAME" "$VDF"; then
+        # echo "Block already exists, skipping..."
+		writelog "SKIP" "${FUNCNAME[0]} - Block '$NEWBLOCKNAME' already exists in parent block '$PARENTBLOCKNAME' - Skipping"
+        return
+    fi
+
+	writelog "INFO" "${FUNCNAME[0]} - Creating VDF data block to append to '$PARENTBLOCKNAME'"
+
+    ## Create array from args, skip first four to get array of key/value pairs for VDF block
+    NEWBLOCKVALUES=("${@:5}")
+    NEWBLOCKVALUESDELIM="!"
+
+    ## Calculate indents for new block (one more than PARENTBLOCKNAME indent)
+    BASETABAMOUNT="$(( $( guessVdfIndent "${PARENTBLOCKNAME}" "$VDF" ) + 1 ))"
+    BLOCKTABAMOUNT="$(( BASETABAMOUNT + 1 ))"
+
+    ## Tab amounts represented as string
+    BASETABSTR="$( generateVdfIndentString "$BASETABAMOUNT" )"
+    BLOCKTABSTR="$( generateVdfIndentString "$BLOCKTABAMOUNT" )"
+
+    ## Calculations for line numbers
+    PARENTBLOCKLENGTH="$( getVdfSection "$PARENTBLOCKNAME" "" "" "$VDF" | wc -l )"
+    BLOCKLINESTART="$( grep -in "${PARENTBLOCKNAME}" "$VDF" | cut -d ':' -f1 | xargs )"
+
+    TOPOFBLOCK="$(( BLOCKLINESTART + 1 ))"
+    BOTTOMOFBLOCK="$(( BLOCKLINESTART + PARENTBLOCKLENGTH - 2 ))"
+
+    ## Decide which line to insert new block into (uses if/else for ease of logging)
+    if [[ "${POSITION,,}" == "top" ]]; then
+        INSERTLINE="${TOPOFBLOCK}"
+		writelog "INFO" "${FUNCNAME[0]} - Will insert new block into top of '$PARENTBLOCKNAME' VDF section"
+	else
+		INSERTLINE="${BOTTOMOFBLOCK}"
+		writelog "INFO" "${FUNCNAME[0]} - Will insert new block into bottom of '$PARENTBLOCKNAME' VDF section"
+    fi
+
+    ## Build new VDF entry string
+    ## Maybe this could be a separate function at some point, that generates a VDF string from the input array?
+    NEWBLOCKSTR="${BASETABSTR}${NEWBLOCKNAME}\n"  # Add tab + block name
+    NEWBLOCKSTR+="${BASETABSTR}{\n"  # Add tab + opening brace
+    for i in "${NEWBLOCKVALUES[@]}"; do
+        ## Cut string in array at delimiter and store them as key/val
+        NEWBLOCKDATA_KEY="$( echo "$i" | cut -d "${NEWBLOCKVALUESDELIM}" -f1 )"
+        NEWBLOCKDATA_VAL="$( echo "$i" | cut -d "${NEWBLOCKVALUESDELIM}" -f2 )"
+
+        NEWBLOCKDATA_KEY="$( safequoteVdfBlockName "$NEWBLOCKDATA_KEY" )"
+        NEWBLOCKDATA_VAL="$( safequoteVdfBlockName "$NEWBLOCKDATA_VAL" )"
+
+        NEWBLOCKSTR+="${BLOCKTABSTR}${NEWBLOCKDATA_KEY}"  # Add tab +  key
+        NEWBLOCKSTR+="\t\t${NEWBLOCKDATA_VAL}\n"  # Add tab + val + newline
+    done
+    NEWBLOCKSTR+="${BASETABSTR}}"  # Add tab + closing brace
+
+	writelog "INFO" "${FUNCNAME[0]} - Generated VDF block string '$NEWBLOCKSTR'"
+	writelog "INFO" "${FUNCNAME[0]} - Writing out VDF block string to VDF file at '$VDF'"
+
+	backupVdfFile "$VDF"
+
+    ## Write out new string to calculated line in VDF file
+    sed -i "${INSERTLINE}a\\${NEWBLOCKSTR}" "$VDF"
+}
+
+## Get the internal name of the compatibility tool selected for all titles from the Steam Client Compatibility settings
+## ex: Proton 8.0-3 would return 'proton_8'
+##
+## Compatibility Tools, even ones that are Windows EXEs, are not given a compatibility tool by default, so this function can be used
+## to select the one used by default for Windows games.
+##
+## This compatibility tool doesn't even have to be Proton.
+function getGlobalSteamCompatToolInternalName {
+	STEAMCOMPATTOOLSECTION="$( getVdfSection "CompatToolMapping" "" "" "$CFGVDF" )"  # Get CompatToolMapping section
+	if [ -n "$STEAMCOMPATTOOLSECTION" ]; then
+		printf "%s" "$STEAMCOMPATTOOLSECTION" > "/tmp/tmp.vdf"
+    	GLOBALSTEAMCOMPATTOOLSECTION="$( getVdfSection "0" "" "" "/tmp/tmp.vdf" )"
+
+		if [ -n "$GLOBALSTEAMCOMPATTOOLSECTION" ]; then
+			echo "$GLOBALSTEAMCOMPATTOOLSECTION" | grep -i "name" | sed "s-\t- -g;s-\"name\"--g;s-\"--g" | xargs
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - Could not find Global Compatibility Tool in CompatToolMapping in '$CFGVDF' - Giving up"
+		fi
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - Could not find CompatToolMapping section in '$CFGVDF' - Giving up"
+	fi
+}
+### END TEXT-BASED VDF INTERACTION FUNCTIONS
+
 function startSettings {
 	FUSEID "$1"
 
@@ -22115,7 +22425,7 @@ function addNonSteamGameGui {
 		NOSTGAPPNAME="${NOSTGEXEPATH##*/}"
 		NOSTGSTDIR="${NOSTGEXEPATH%/*}"
 	fi
-	
+
 	# icon default
 	if grep -q "^NOSTEAMSTLDEF=\"1\"" "$STLDEFGLOBALCFG"; then
 		NOSTGICONPATH="$STLICON"
@@ -22140,10 +22450,31 @@ function addNonSteamGameGui {
 	TITLE="${PROGNAME}-$NSGA"
 	pollWinRes "$TITLE"
 
+	# Generate list of Proton versions excluding Proton versions only available to SteamTinkerLaunch
+	# May cause problems with symlinked Proton versions, unsure, unusual case anyway
+	NSGPROTLIST=( "$NON" "default" )
+	for STLKNOWNPROT in "${ProtonCSV[@]}"; do
+		STLKNOWNPROTNAM="$( echo "$STLKNOWNPROT" | cut -d ';' -f1 )"
+		STLKNOWNPROTPATH="$( echo "$STLKNOWNPROT" | cut -d ';' -f2 )"
+
+		STLKNOWNPROTDIR="$( dirname "$STLKNOWNPROTPATH" )"
+		if [[ $STLKNOWNPROTDIR = $STLCFGDIR* ]]; then
+			writelog "SKIP" "${FUNCNAME[0]} - Proton version '$STLKNOWNPROTNAM' is in SteamTinkerLaunch config directory at '$STLKNOWNPROTPATH' -- This is not known by Steam, so skipping"
+		elif [[ $STLKNOWNPROTDIR = $CUSTPROTEXTDIR* ]] && [[ $CUSTPROTEXTDIR != "$STEAMCOMPATOOLS" ]]; then
+			writelog "INFO" "${FUNCNAME[0]} - Proton version '$STLKNOWNPROTNAM' is in SteamTinkerLaunch Custom Proton dir '$CUSTPROTEXTDIR' on path '$STLKNOWNPROTPATH' -- This path is not the Steam Compatibility Tool directory and so is not known by Steam, so skipping"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Proton version '$STLKNOWNPROTNAM' looks like it should be known by Steam as it is not in any SteamTinkerLaunch-specific folders on path '$STLKNOWNPROTPATH'"
+			NSGPROTLIST+=("$STLKNOWNPROTNAM")
+		fi
+	done
+	NSGPROTLIST+=( "$PROGINTERNALPROTNAME" "steamlinuxruntime" )
+
+	NSGPROTYADLIST="$(printf "!%s\n" "${NSGPROTLIST[@]//\"/}" | sort -u | cut -d ';' -f1 | tr -d '\n' | sed "s:^!::" | sed "s:!$::")"
+
 	## Language strings for artwork section were re-used from setGameArt
 	NSGSET="$("$YAD" --f1-action="$F1ACTION" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
 	--title="$TITLE" --separator="|" \
-	--text="$(spanFont "$GUI_ADDNSG" "H")\n<i>$(strFix "$GUI_WARNNSG1" "$STERECO").</i>" \
+	--text="$(spanFont "$GUI_ADDNSG" "H")\n<i>$(strFix "$GUI_WARNNSG1" "$STERECO")</i>" \
 	--field=" ":LBL " " \
 	--field="$(spanFont "$GUI_NOSTGPATHS" "H")":LBL " " \
 	--field="     $GUI_NOSTGAPPNAME!$DESC_NOSTGAPPNAME ('NOSTGAPPNAME')" "${NOSTGAPPNAME/#-/ -}" \
@@ -22157,6 +22488,7 @@ function addNonSteamGameGui {
 	--field="     $GUI_SGATENFOOT!$DESC_SGATENFOOT ('NOSTGTENFOOT')":FL "${NOSTGTENFOOT/#-/ -}" \
 	--field="     $GUI_SGASETACTION!$DESC_SGASETACTION ('NOSTGSETACTION')":CB "$( cleanDropDown "copy" "$SGASETACTIONS" )" \
 	--field="$(spanFont "$GUI_NOSTGPROPS" "H")":LBL " " \
+	--field="     $GUI_NOSTGCOMPATTOOL!$DESC_NOSTGCOMPATTOOL ('NOSTCOMPATTOOL')":CBE "$( cleanDropDown "$NON" "$NSGPROTYADLIST" )" \
 	--field="     $GUI_NOSTGLAOP!$DESC_NOSTGLAOP ('NOSTGLAOP')" "${NOSTGLAOP/#-/ -}" \
 	--field="     $GUI_NOSTTAGS!$DESC_NOSTTAGS ('NOSTTAGS')":CBE "$(cleanDropDown "${NOSTTAGS/#-/ -}" "$VALIDTAGS")" \
 	--field="     $GUI_NOSTGHIDE!$DESC_NOSTGHIDE ('NOSTGHIDE')":CHK "${NOSTGHIDE/#-/ -}" \
@@ -22190,16 +22522,22 @@ function addNonSteamGameGui {
 				NOSTGTENFOOT="${NSGSETARR[10]}"
 				NOSTGSETACTION="${NSGSETARR[11]}"
 				# NSGSETARR[12] is Properties heading
-				NOSTGLAOP="${NSGSETARR[13]}"
-				NOSTTAGS="${NSGSETARR[14]}"
-				NOSTGHIDE="$( retBool "${NSGSETARR[15]}" )"
-				NOSTGADC="$( retBool "${NSGSETARR[16]}" )"
-				NOSTGAO="$( retBool "${NSGSETARR[17]}" )"
-				NOSTGVR="$( retBool "${NSGSETARR[18]}" )"
+				NOSTCOMPATTOOL="${NSGSETARR[13]}"
+				NOSTGLAOP="${NSGSETARR[14]}"
+				NOSTTAGS="${NSGSETARR[15]}"
+				NOSTGHIDE="$( retBool "${NSGSETARR[16]}" )"
+				NOSTGADC="$( retBool "${NSGSETARR[17]}" )"
+				NOSTGAO="$( retBool "${NSGSETARR[18]}" )"
+				NOSTGVR="$( retBool "${NSGSETARR[19]}" )"
+
+				## Makes sure we ignore none compatibility tool
+				if [[ "$NOSTCOMPATTOOL" = "$NON" ]]; then
+					NOSTCOMPATTOOL=""
+				fi
 
 				## Arguments here like -hr, -lg, etc are made to match setGameArt
-				writelog "INFO" "${FUNCNAME[0]} - addNonSteamGame -an=\"$NOSTGAPPNAME\" -ep=\"$NOSTGEXEPATH\" -sd=\"$NOSTGSTDIR\" -ip=\"$NOSTGICONPATH\" -lo=\"$NOSTGLAOP\" -hd=\"$NOSTGHIDE\" -adc=\"$NOSTGADC\" -ao=\"$NOSTGAO\" -vr=\"$NOSTGVR\" -t=\"$NOSTTAGS\" -hr=\"$NOSTGHERO\" -lg=\"$NOSTGLOGO\" -ba=\"$NOSTGBOXART\" -tf=\"$NOSTGTENFOOT\" \"--${NOSTGSETACTION}\""
-				addNonSteamGame -an="$NOSTGAPPNAME" -ep="$NOSTGEXEPATH" -sd="$NOSTGSTDIR" -ip="$NOSTGICONPATH" -lo="$NOSTGLAOP" -hd="$NOSTGHIDE" -adc="$NOSTGADC" -ao="$NOSTGAO" -vr="$NOSTGVR" -t="$NOSTTAGS" -hr="$NOSTGHERO" -lg="$NOSTGLOGO" -ba="$NOSTGBOXART" -tf="$NOSTGTENFOOT" "--${NOSTGSETACTION}"
+				writelog "INFO" "${FUNCNAME[0]} - addNonSteamGame -an=\"$NOSTGAPPNAME\" -ep=\"$NOSTGEXEPATH\" -sd=\"$NOSTGSTDIR\" -ip=\"$NOSTGICONPATH\" -lo=\"$NOSTGLAOP\" -hd=\"$NOSTGHIDE\" -adc=\"$NOSTGADC\" -ao=\"$NOSTGAO\" -vr=\"$NOSTGVR\" -t=\"$NOSTTAGS\" -ct=\"$NOSTCOMPATTOOL\" -hr=\"$NOSTGHERO\" -lg=\"$NOSTGLOGO\" -ba=\"$NOSTGBOXART\" -tf=\"$NOSTGTENFOOT\" \"--${NOSTGSETACTION}\""
+				addNonSteamGame -an="$NOSTGAPPNAME" -ep="$NOSTGEXEPATH" -sd="$NOSTGSTDIR" -ip="$NOSTGICONPATH" -lo="$NOSTGLAOP" -hd="$NOSTGHIDE" -adc="$NOSTGADC" -ao="$NOSTGAO" -vr="$NOSTGVR" -t="$NOSTTAGS" -ct="$NOSTCOMPATTOOL" -hr="$NOSTGHERO" -lg="$NOSTGLOGO" -ba="$NOSTGBOXART" -tf="$NOSTGTENFOOT" "--${NOSTGSETACTION}"
 			fi
 		;;
 	esac
@@ -22316,6 +22654,34 @@ function addNonSteamGame {
 			-stllo=*|--stllaunchoption=*)
 				NOSTSTLLO="${i#*=}"
 				shift ;;
+			-ct=*|--compatibilitytool=*)
+				## Get path based on passed name from ProtonCSV, then build argument needed for getProtonInternalName
+				NOSTCOMPATTOOL=""
+				NOSTCOMPATTOOLNAME="${i#*=}"
+				if [ -n "$NOSTCOMPATTOOLNAME" ]; then
+					if [[ "$NOSTCOMPATTOOLNAME" == "default" ]]; then  # Default fetches the global Steam compat tool
+						GLOBALSTEAMCOMPATTOOL="$( getGlobalSteamCompatToolInternalName )"
+						if [ -n "$GLOBALSTEAMCOMPATTOOL" ]; then
+							NOSTCOMPATTOOL="$GLOBALSTEAMCOMPATTOOL"
+						else
+							writelog "INFO" "${FUNCNAME[0]} - Selected 'default' compatibility tool but could not find one in '$CFGVDF' -- Not writing compatibility tool for Non-Steam Game"
+						fi
+					else
+						NOSTCOMPATTOOLPATH="$( getProtPathFromCSV "$NOSTCOMPATTOOLNAME" )"
+
+						if [ -n "$NOSTCOMPATTOOLPATH" ]; then
+							NOSTCOMPATTOOL="$( getProtonInternalName "${NOSTCOMPATTOOLNAME};${NOSTCOMPATTOOLPATH}" )"
+						else
+							# i.e. if 'luxtorpeda' was passed, we don't have a path for this, so simply trust the user
+							writelog "SKIP" "${FUNCNAME[0]} - Could not get Proton path for given Compatibility Tool '$NOSTCOMPATTOOLNAME' from ProtonCSV -- Simply assuming this internal name is valid and not known to SteamTinkerLaunch"
+							NOSTCOMPATTOOL="$NOSTCOMPATTOOLNAME"
+						fi
+					fi
+				else
+					writelog "SKIP" "${FUNCNAME[0]} - Compatibility Tool name argument was passed, but was empty '$NOSTCOMPATTOOLNAME' -- Skipping"
+				fi
+
+				shift ;;
 			## Mostly lifted+shifted from setGameArt
 			-hr=*|--hero=*)
 				NOSTGHERO="${i#*=}"  # <appid>_hero.png -- Banner used on game screen, logo goes on top of this 
@@ -22387,6 +22753,7 @@ function addNonSteamGame {
 		writelog "INFO" "${FUNCNAME[0]} - Allow Overlay: '${NOSTAO}'"
 		writelog "INFO" "${FUNCNAME[0]} - OpenVR: '${NOSTVR}'"
 		writelog "INFO" "${FUNCNAME[0]} - Tags: '${NOSTTAGS}'"
+		writelog "INFO" "${FUNCNAME[0]} - Compatibility Tool: '${NOSTCOMPATTOOL}'"
 		## Artwork logging -- These will be blank if no artwork is passed, that's OK
 		writelog "INFO" "${FUNCNAME[0]} - Hero Artwork: '${NOSTGHERO}'"
 		writelog "INFO" "${FUNCNAME[0]} - Logo Artwork: '${NOSTGLOGO}'"
@@ -22476,6 +22843,17 @@ function addNonSteamGame {
 		writelog "INFO" "${FUNCNAME[0]} - Adding any chosen Non-Steam game artwork"
 
 		setGameArt "$NOSTAIDGRID" --hero="$NOSTGHERO" --logo="$NOSTGLOGO" --boxart="$NOSTGBOXART" --tenfoot="$NOSTGTENFOOT" "$SGACOPYMETHOD"
+
+		if [ -n "$NOSTCOMPATTOOL" ]; then
+			if [ ! -f "$CFGVDF" ]; then
+				writelog "SKIP" "${FUNCNAME[0]} - No Config VDF found at '$CFGVDF' -- Unable to set compatibility tool for Non-Steam Game, skipping"
+			else
+				writelog "INFO" "${FUNCNAME[0]} - Adding selected compatibility tool '$NOSTCOMPATTOOL' for Non-Stteam Game"
+				NSGVDFVALS=( "name!${NOSTCOMPATTOOL}" "config!" "priority!250" )
+				createVdfEntry "$CFGVDF" "CompatToolMapping" "$NOSTAIDGRID" "" "${NSGVDFVALS[@]}"
+				writelog "INFO" "${FUNCNAME[0]} - Finished adding Non-Steam Game compatibility tool to '$CFGVDF'"
+			fi
+		fi
 
 		writelog "INFO" "${FUNCNAME[0]} - Finished adding new $NSGA"
 	fi
@@ -24117,7 +24495,7 @@ function getSteamDeckCompatInfo {
 			if ! "$JQ" -e '.success' "$COMPATFILE" 1>/dev/null; then
 				writelog "INFO" "${FUNCNAME[0]} - File '$COMPATFILE' containing Steam Deck compatibility information already exists, however it looks like it failed last time - Removing it so we can attempt to redownload it"
 				rm "$COMPATFILE"
-			elif [ "$(( $(date +"%s") - $(stat -c "%Y" "$COMPATFILE") ))" -gt "86400" ]; then  # Todo maybe let the user define this in the Global Menu
+			elif [ "$(( $(date +"%s") - $(stat -c "%Y" "$COMPATFILE") ))" -gt "86400" ]; then  # Todo maybe let the user define this in the Global Menu (default right now is >  1 day old)
 				writelog "INFO" "${FUNCNAME[0]} - File '$COMPATFILE' is older than 1 day - Removing it so we can update in case the compatibility rating has changed"
 				rm "$COMPATFILE"
 			fi
