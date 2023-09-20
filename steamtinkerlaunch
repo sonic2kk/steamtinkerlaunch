@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230919-2"
+PROGVERS="v14.0.20230921-1 (vulkan-postprocessing)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -2858,7 +2858,7 @@ function setDefaultCfgValues {
 		if [ -z "$LDPMAHU" ]							; then	LDPMAHU="0"; fi
 		if [ -z "$MAHUVAR" ]							; then	MAHUVAR="0"; fi
 		if [ -z "$USEMANGOHUDSTLCFG" ]					; then	USEMANGOHUDSTLCFG="0";	fi
-		if [ -z "$ENABLE_VKBASALT" ]					; then	ENABLE_VKBASALT="0"; fi
+		if [ -z "$VULKANPOSTPROCESSOR" ]				; then  VULKANPOSTPROCESSOR="$NON"; fi
 		if [ -z "$RUN_NYRNA" ]							; then	RUN_NYRNA="0"; fi
 		if [ -z "$RUN_REPLAY" ]							; then	RUN_REPLAY="0";	fi
 		if [ -z "$RUN_X64DBG" ]							; then	RUN_X64DBG="0";	fi
@@ -3411,8 +3411,8 @@ function saveCfg {
 			echo "MAHUVAR=\"$MAHUVAR\""
 			echo "## $DESC_USEMANGOHUDSTLCFG"
 			echo "USEMANGOHUDSTLCFG=\"$USEMANGOHUDSTLCFG\""
-			echo "## $DESC_ENABLE_VKBASALT"
-			echo "ENABLE_VKBASALT=\"$ENABLE_VKBASALT\""
+			echo "## $DESC_VULKANPOSTPROCESSOR"
+			echo "VULKANPOSTPROCESSOR=\"$VULKANPOSTPROCESSOR\""
 			echo "## $DESC_RUN_NYRNA"
 			echo "RUN_NYRNA=\"$RUN_NYRNA\""
 			echo "## $DESC_RUN_REPLAY"
@@ -5327,7 +5327,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_RESHADE_DEPTH3D!$DESC_RESHADE_DEPTH3D ('RESHADE_DEPTH3D')":CHK "${RESHADE_DEPTH3D/#-/ -}" `#CAT_Shader` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_DLSHADER!$DESC_DLSHADER ('DLSHADER')":CHK "${DLSHADER/#-/ -}" `#CAT_Shader` `#SUB_Checkbox` `#MENU_GLOBAL`  \
 --field="     $GUI_CHOOSESHADERS!$DESC_CHOOSESHADERS ('CHOOSESHADERS')":CHK "${CHOOSESHADERS/#-/ -}" `#CAT_Shader` `#SUB_Checkbox` `#MENU_GAME` \
---field="     $GUI_ENABLE_VKBASALT!$DESC_ENABLE_VKBASALT ('ENABLE_VKBASALT')":CHK "${ENABLE_VKBASALT/#-/ -}" `#CAT_Shader` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_VULKANPOSTPROCESSOR!$DESC_VULKANPOSTPROCESSOR ('VULKANPOSTPROCESSOR')":CB "$( cleanDropDown "${VULKANPOSTPROCESSOR/#-/ -}" "$NON!vkBasalt" )" `#CAT_Shader` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_SBSRS!$DESC_SBSRS ('SBSRS')":CHK "${SBSRS/#-/ -}" `#CAT_Shader` `#SUB_Checkbox` `#SUB_ReShade` `#MENU_GAME` \
 --field="$(spanFont "$PROGNAME $GUI_PATHS" "H")":LBL "SKIP" `#CAT_Paths` `#HEAD_Stl` `#MENU_GLOBAL`  \
 --field="     $GUI_GLOBALCOLLECTIONDIR!$DESC_GLOBALCOLLECTIONDIR ('GLOBALCOLLECTIONDIR')":DIR "${GLOBALCOLLECTIONDIR/#-/ -}" `#CAT_Paths` `#SUB_Directories` `#MENU_GLOBAL` \
@@ -11287,6 +11287,14 @@ function setOPCustPath {
 	fi
 }
 
+# Build a string like 'export ENABLE_VKBASALT=1' and evaluate that string as code
+# Allows us to more flexibly enable vkBasalt forks in future like vkShade
+function setVulkanPostProcessor {
+	if [ ! "$VULKANPOSTPROCESSOR" = "$NON" ]; then
+		eval "export ENABLE_${VULKANPOSTPROCESSOR^^}=1"
+	fi
+}
+
 function setCommandLaunchVars {
 	if [ "$USEGAMEMODERUN" -eq 1 ]; then
 		GMR="$(command -v "$GAMEMODERUN")"
@@ -11349,6 +11357,8 @@ function setCommandLaunchVars {
 		writelog "INFO" "${FUNCNAME[0]} - STLRADV_PFTST is not empty or none - Exporting RADV_PERFTEST=$STLRAD_PFTST"
 		export RADV_PERFTEST=$STLRAD_PFTST
 	fi
+
+	setVulkanPostProcessor
 }
 
 # Used to create the launch command for games and custom commands so they can use various program functions i.e. GameScope
@@ -17245,14 +17255,16 @@ function prepareProton {
 			export RUNSBSVR=1
 			export RESHADE_DEPTH3D=1
 			export USERESHADE=1
-			export ENABLE_VKBASALT=0
+
+			setVulkanPostProcessor
 		fi
 
 		if [ "$SBSRS" -eq 1 ]; then
 			writelog "INFO" "${FUNCNAME[0]} - $PROGNAME - SBSRS enabled - starting game in SBS using ${RESH}"
 			export RESHADE_DEPTH3D=1
 			export USERESHADE=1
-			export ENABLE_VKBASALT=0
+
+			setVulkanPostProcessor
 		fi
 	else
 		writelog "SKIP" "${FUNCNAME[0]} - No Proton game"
