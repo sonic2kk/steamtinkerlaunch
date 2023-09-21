@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230922-2 (specialk-choose-dllname)"
+PROGVERS="v14.0.20230922-3 (specialk-choose-dllname)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -9106,7 +9106,8 @@ function getSpecialKGameRenderApi {
 		dlCheck "$SPEKCOMPURL" "$SPEKCOMP" "X" "Downloading '$SPEKCOMP'"
 	fi
 
-	if [[ "$SPEKDLLNAME" != "$AUTO" ]]; then
+	if [[ -n "$SPEKDLLNAME" ]] && [[ "$SPEKDLLNAME" != "$AUTO" ]]; then
+		# Use custom SpecialK DLL name if we're not using 'auto' OR if the DLL name field is blank
 		writelog "INFO" "${FUNCNAME[0]} - User selected SpecialK DLL override name '$SPEKDLLNAME' - Will attempt to use this as the SpecialK DLL name"
 		FOUNDSPEKDLLNAME="$SPEKDLLNAME"
 	else
@@ -9248,6 +9249,15 @@ function useSpecialK {
 	SPEKDDIR="$EFD"
 	setFullGameExePath "SPEKDDIR"	
 	SPEKENA="$SPEKDDIR/${SPEK}_enabled.txt"
+
+	# Ensure SpecialK DLL name ends with '.dll', even if we're not using SpecialK
+	if [ -n "$SPEKDLLNAME" ] && ! [[ $SPEKDLLNAME == *.* ]]; then
+		writelog "INFO" "${FUNCNAME[0]} - Renaming SPEKDLLNAME to '${SPEKDLLNAME}.dll'"
+		SPEKDLLNAME="${SPEKDLLNAME}.dll"
+
+		touch "$FUPDATE"
+		updateConfigEntry "SPEKDLLNAME" "$SPEKDLLNAME" "$STLGAMECFG"
+	fi
 
 	if [ "$USESPECIALK" -eq 1 ]; then
 		prepareSpecialKIni
