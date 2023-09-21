@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230921-1"
+PROGVERS="v14.0.20230922-2 (specialk-choose-dllname)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -545,7 +545,9 @@ D3D9="d3d9.dll"
 D3D11="d3d11.dll"
 D3D47="d3dcompiler_47.dll"
 OGL32="opengl32.dll"
+AUTO="auto"
 D3D47DLDIR="$STLDLDIR/${D3D47%.*}"
+SPEKDLLNAMELIST="$AUTO!$D3D11!$DXGI!$D3D9!$D3D11!$OGL32"
 RESHADEDLLNAMELIST="$DXGI!$D3D9!$D3D11!$OGL32!$DXGI,$D3D9"
 SOMEWINEDLLOVERRIDES="dinput8=n,b!dxgi=n,b!d3d9=n,b!${D3D47//.dll}=n,b!xaudio2_7=n,b"
 RS_DX_DEST="$DXGI"
@@ -2980,6 +2982,7 @@ function setDefaultCfgValues {
 		if [ -z "$MO2MODE" ]							; then	MO2MODE="disabled"; fi
 		if [ -z "$WAITMO2" ]							; then	WAITMO2="2"; fi
 		if [ -z "$USESPECIALK" ]						; then	USESPECIALK="0"; fi
+		if [ -z "$SPEKDLLNAME" ]						; then  SPEKDLLNAME="$AUTO"; fi
 		if [ -z "$SDLUSEWAYLAND" ]						; then  SDLUSEWAYLAND="0"; fi
 		if [ -z "$STLRAD_PFTST" ]                       ; then  STLRAD_PFTST="none"; fi
 		if [ -z "$SPEKVERS" ]							; then	SPEKVERS="default"; fi
@@ -3623,6 +3626,8 @@ function saveCfg {
 			echo "MO2MODE=\"$MO2MODE\""
 			echo "## $DESC_USESPECIALK"
 			echo "USESPECIALK=\"$USESPECIALK\""
+			echo "## $DESC_SPEKDLLNAME"
+			echo "SPEKDLLNAME=\"$SPEKDLLNAME\""
 			echo "## $DESC_SDLUSEWAYLAND"
 			echo "SDLUSEWAYLAND=\"$SDLUSEWAYLAND\""
 			echo "## $DESC_STLRAD_PFTST"
@@ -5253,6 +5258,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_AUTOBUMPPROTON!$DESC_AUTOBUMPPROTON ('AUTOBUMPPROTON')":CHK "${AUTOBUMPPROTON/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_USESPECIALK!$DESC_USESPECIALK ('USESPECIALK')":CHK "${USESPECIALK/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_SPEKVERS!$DESC_SPEKVERS ('SPEKVERS')":CB "$(cleanDropDown "${SPEKVERS/#-/ -}" "default!$SPEKYADLIST")" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_SPEKDLLNAME!$DESC_SPEKDLLNAME ('SPEKDLLNAME')":CBE "$( cleanDropDown "${SPEKDLLNAME/#-/ -}" "$SPEKDLLNAMELIST" )" `#CAT_Proton` `#MENU_GAME` \
 --field="     $GUI_AUTOSPEK!$DESC_AUTOSPEK ('AUTOSPEK')":CHK "${AUTOSPEK/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_PROTON_LOG!$DESC_PROTON_LOG $HOME/steam-$AID.log ('PROTON_LOG')":CHK "${PROTON_LOG/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_PROTON_LOG_DIR!$DESC_PROTON_LOG_DIR ('PROTON_LOG_DIR')":DIR "${PROTON_LOG_DIR/#-/ -}" `#CAT_Proton` `#SUB_Directories` `#MENU_GAME` \
@@ -9099,32 +9105,48 @@ function getSpecialKGameRenderApi {
 	if [ ! -f "$SPEKCOMP" ] || test "$(find "$SPEKCOMP" -mmin +"$MAXAGE")"; then
 		dlCheck "$SPEKCOMPURL" "$SPEKCOMP" "X" "Downloading '$SPEKCOMP'"
 	fi
-	writelog "INFO" "${FUNCNAME[0]} - Searching Render Api for '$GN' in '$SPEKCOMP'"
-	RAPI="$(sed -n "/id=\"Compatibility_list\"/,$ p" "$SPEKCOMP" | grep -A1 "${GN// /\*.\*}" | tail -n1 | cut -d '>' -f2 | cut -d '<' -f1)"
-	if [ -n "$RAPI" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - Found Render Api '$RAPI'"
-		if [ "$RAPI" == "Direct3D 12" ]; then
-			SPEKDST="$SPEKDDIR/$DXGI"  # Is this correct for DX12? 
-		elif [ "$RAPI" == "Direct3D 11" ]; then
-			SPEKDST="$SPEKDDIR/$D3D11"
-		elif [ "$RAPI" == "Direct3D 9" ]; then
-			SPEKDST="$SPEKDDIR/$D3D9"
-		elif [ "$RAPI" == "OpenGL" ]; then
-			SPEKDST="$SPEKDDIR/$OGL32"
-		else
-			writelog "INFO" "${FUNCNAME[0]} - Unknown Render Api '$RAPI' - assuming 'Direct3D 11'"
-			SPEKDST="$SPEKDDIR/$DXGI"
-		fi
+
+	if [[ "$SPEKDLLNAME" != "$AUTO" ]]; then
+		writelog "INFO" "${FUNCNAME[0]} - User selected SpecialK DLL override name '$SPEKDLLNAME' - Will attempt to use this as the SpecialK DLL name"
+		FOUNDSPEKDLLNAME="$SPEKDLLNAME"
 	else
-		writelog "INFO" "${FUNCNAME[0]} - Could not find Render Api - assuming 'Direct3D 11'"
-		SPEKDST="$SPEKDDIR/$D3D11"
-	fi	
+		writelog "INFO" "${FUNCNAME[0]} - Searching Render Api for '$GN' in '$SPEKCOMP'"
+		RAPI="$(sed -n "/id=\"Compatibility_list\"/,$ p" "$SPEKCOMP" | grep -A1 "${GN// /\*.\*}" | tail -n1 | cut -d '>' -f2 | cut -d '<' -f1)"
+		if [ -n "$RAPI" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Found Render Api '$RAPI'"
+			if [ "$RAPI" == "Direct3D 12" ]; then
+				FOUNDSPEKDLLNAME="$DXGI"
+				# SPEKDST="$SPEKDDIR/$DXGI"
+			elif [ "$RAPI" == "Direct3D 11" ]; then
+				FOUNDSPEKDLLNAME="$D3D11"
+				# SPEKDST="$SPEKDDIR/$D3D11"
+			elif [ "$RAPI" == "Direct3D 9" ]; then
+				FOUNDSPEKDLLNAME="$D3D9"
+				# SPEKDST="$SPEKDDIR/$D3D9"
+			elif [ "$RAPI" == "OpenGL" ]; then
+				FOUNDSPEKDLLNAME="$OGL32"
+				# SPEKDST="$SPEKDDIR/$OGL32"
+			else
+				writelog "INFO" "${FUNCNAME[0]} - Unknown Render Api '$RAPI' - assuming 'Direct3D 11'"
+				FOUNDSPEKDLLNAME="$DXGI"
+				# SPEKDST="$SPEKDDIR/$DXGI"
+			fi
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Could not find Render Api - assuming 'Direct3D 11'"
+			FOUNDSPEKDLLNAME="$DXGI"
+			# SPEKDST="$SPEKDDIR/$D3D11"
+		fi
+	fi
+
+	SPEKDST="$SPEKDDIR/$FOUNDSPEKDLLNAME"
+	writelog "INFO" "${FUNCNAME[0]} - SpecialK DLL install path is '$SPEKDST'"
 }
 
 function prepareSpecialKIni {
 	UWI="UsingWINE"
 	UWIT="$UWI=true"
 
+	# Not sure how this works with choosing specific DLL name -- May still work?
 	if [ -f "$SPEKDDIR/$DXGI" ]; then
 		FOUNDRAPI="$SPEKDDIR/$DXGI"
 	elif [ -f "$SPEKDDIR/$D3D9" ]; then
@@ -9191,6 +9213,7 @@ function useSpecialK {
 		if [ -f "$SPEKDST" ] && [ "$(stat -c %s "$SPEKSRC")" -eq "$(stat -c %s "$SPEKDST")" ]; then
 			writelog "SKIP" "${FUNCNAME[0]} - Nothing to update - '$SPEKDST' corresponds to '$SPEKSRC'" "E"
 		else
+			# TODO logic to clean up overridden DLL name
 			writelog "INFO" "${FUNCNAME[0]} - Installing '${SPEKSRC##*/}' as '$GP' is $2-bit" "E"
 			notiShow "$NOTY_SPECIALKINSTALLING"
 			cp "$SPEKSRC" "$SPEKDST"
