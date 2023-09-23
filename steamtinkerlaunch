@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230925-3 (specialk-choose-dllname)"
+PROGVERS="v14.0.20230925-4 (specialk-choose-dllname)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -8706,15 +8706,20 @@ function installRSdll {
 	# Manage creating backup if untracked DLL with our selected ReShade DLL name already exists at location
 	# This function could be changed in future to take the path as a parameter as well, but that was not important at time of writing
 	function manageDuplicateRSDLL {
-		writelog "WARN" "${FUNCNAME[0]} - DLL with name '$1' found in game dir '$INSTDESTDIR' but is not tracked by us - This is possibly a game/mod DLL"
-		writelog "WARN" "${FUNCNAME[0]} - Backing up DLL at '$INSTDESTDIR/$1' to '$INSTDESTDIR/${1}.bak' and moving our ReShade DLL anyway"
+		if [ "$USESPECIALK" -eq 1 ] && [[ "$SPEKDLLNAME" == "$1" ]]; then
+			# If we call this function we assume there's a DLL conflict, and if SpecialK is enabled and its DLL name matches the conflicting DLL name, skip this DLL
+			writelog "WARN" "${FUNCNAME[0]} - SpecialK is enabled and its DLL name '$SPEKDLLNAME' appears to conflict with the selected ReShade DLL name '$1' -- Not overwriting SpecialK DLL with ReShade!"
+		else
+			writelog "WARN" "${FUNCNAME[0]} - DLL with name '$1' found in game dir '$INSTDESTDIR' but is not tracked by us - This is possibly a game/mod DLL"
+			writelog "WARN" "${FUNCNAME[0]} - Backing up DLL at '$INSTDESTDIR/$1' to '$INSTDESTDIR/${1}.bak' and moving our ReShade DLL anyway"
 
-		if [ -f "$INSTDESTDIR/${1}.bak" ]; then
-			writelog "ERROR" "${FUNCNAME[0]} - ERROR: Back-up DLL name '${1}.bak' already exists -- This is probably a very bad thing!"
+			if [ -f "$INSTDESTDIR/${1}.bak" ]; then
+				writelog "ERROR" "${FUNCNAME[0]} - ERROR: Back-up DLL name '${1}.bak' already exists -- This is probably a very bad thing!"
+			fi
+
+			mv "$INSTDESTDIR/$1" "$INSTDESTDIR/${1}.bak" 2>/dev/null
+			cp "$RESHADESRCDIR/$RSVERS/$2" "$INSTDESTDIR/$1" >/dev/null 2>/dev/null
 		fi
-
-		mv "$INSTDESTDIR/$1" "$INSTDESTDIR/${1}.bak" 2>/dev/null
-		cp "$RESHADESRCDIR/$RSVERS/$2" "$INSTDESTDIR/$1" >/dev/null 2>/dev/null
 	}
 
 	if [ ! -f "$INSTDESTDIR/$1" ] || [ "$1" == "F" ]; then
