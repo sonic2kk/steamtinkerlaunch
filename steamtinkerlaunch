@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230925-4 (specialk-choose-dllname)"
+PROGVERS="v14.0.20230925-7 (specialk-choose-dllname)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -549,7 +549,7 @@ D3D47="d3dcompiler_47.dll"
 OGL32="opengl32.dll"
 AUTO="auto"
 D3D47DLDIR="$STLDLDIR/${D3D47%.*}"
-SPEKDLLNAMELIST="$AUTO!$D3D11!$DXGI!$D3D9!$D3D11!$OGL32"
+SPEKDLLNAMELIST="$AUTO!$DXGI!$D3D9!$D3D11!$OGL32"
 RESHADEDLLNAMELIST="$DXGI!$D3D9!$D3D11!$OGL32!$DXGI,$D3D9"
 SOMEWINEDLLOVERRIDES="dinput8=n,b!dxgi=n,b!d3d9=n,b!${D3D47//.dll}=n,b!xaudio2_7=n,b"
 RS_DX_DEST="$DXGI"
@@ -9235,68 +9235,75 @@ function useSpecialK {
 	function installSpekDll {
 		SPEKSRC="$1"
 		SPEKDLLCONFLICTFOUND=0
-		if [ -f "$SPEKDST" ] && [ "$(stat -c %s "$SPEKSRC")" -eq "$(stat -c %s "$SPEKDST")" ]; then
-			writelog "SKIP" "${FUNCNAME[0]} - Nothing to update - '$SPEKDST' corresponds to '$SPEKSRC'" "E"
+		SHOULDINSTALLSPEK=1
+
+		# TODO this is a freaking mess... PR to simplify welcome!
+		if [ "$USERESHADE" -eq 1 ] && [ -f "$SPEKDDIR/$RSTXT" ]; then
+			## ReShade is already installed and in use, and ReShade+SpecialK have selected DLL names conflict
+
+			## Check each entered ReShade DLL name and see if any conflict with the entered SpecialK DLL name
+			mapfile -d "," -t -O "${#SPEKRSDLLNAMECHECKARR[@]}" RSDLLNAMEARR < <(printf '%s' "$RESHADEDLLNAME")
+			for SPEKRSCHECKDLL in "${SPEKRSDLLNAMECHECKARR[@]}"; do
+				if [[ "$SPEKRSCHECKDLL" == "$SPEKDLLNAME" ]]; then
+					writelog "ERROR" "${FUNCNAME[0]} - ReShade is enabled and the chosen ReShade DLL name conflicts with the SpecialK DLL name -- Not installing"
+					notiShow "$( strFix "$NOTY_SPEKRESHDLLCONFLICT" "$RESH" "$SPEK" )"
+					SPEKDLLCONFLICTFOUND=1
+					break
+				fi
+			done
 		else
-			# TODO logic to clean up overridden DLL name
+			# Not sure if this works yet -- Same as ReShade check to see if DLL exists and is not tracked by us
+			# There's probably scope to make installRSdll generic so it applies for both ReShade+SpecialK
+			if [ ! -f "$SPEKDST" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - No SpecialK DLL installation found, installing as normal"
+			elif [ -f "$SPEKDST" ] && ! grep -qw "$SPEKDST" "$SPEKENA"; then
+				writelog "WARN" "${FUNCNAME[0]} - The chosen SpecialK DLL name already exists at '$SPEKDST' but is not tracked by us -- This may cause issues!"
+				writelog "WARN" "${FUNCNAME[0]} - Attempting to back up existing found DLL with name '$SPEKDST' so that we can install SpecialK"
 
-			# TODO more checks here in future probably
-			if [ "$USERESHADE" -eq 1 ] && [ -f "$SPEKDDIR/$RSTXT" ]; then
-				## ReShade is already installed and in use, and ReShade+SpecialK have selected DLL names conflict
-				
-				## Check each entered ReShade DLL name and see if any conflict with the entered SpecialK DLL name
-				mapfile -d "," -t -O "${#SPEKRSDLLNAMECHECKARR[@]}" RSDLLNAMEARR < <(printf '%s' "$RESHADEDLLNAME")
-				for SPEKRSCHECKDLL in "${SPEKRSDLLNAMECHECKARR[@]}"; do
-					if [[ "$SPEKRSCHECKDLL" == "$SPEKDLLNAME" ]]; then
-						writelog "ERROR" "${FUNCNAME[0]} - ReShade is enabled and the chosen ReShade DLL name conflicts with the SpecialK DLL name -- Not installing"
-						notiShow "$( strFix "$NOTY_SPEKRESHDLLCONFLICT" "$RESH" "$SPEK" )"
-						SPEKDLLCONFLICTFOUND=1
-						break
-					fi
-				done
-			else
-				# Not sure if this works yet -- Same as ReShade check to see if DLL exists and is not tracked by us
-				# There's probably scope to make installRSdll generic so it applies for both ReShade+SpecialK
-				if [ -f "$SPEKDST/$1" ] && [ -f "$SPEKENA" ] && ! grep -qw "$1" "$SPEKENA"; then
-					writelog "WARN" "${FUNCNAME[0]} - The chosen SpecialK DLL name already exists at '$SPEKDST/$1' but is not tracked by us -- This may cause issues!"
-					writelog "WARN" "${FUNCNAME[0]} - Attempting to back up existing found DLL with name '$1' so that we can install SpecialK"
-
-					SPEKDLLBAKNAM="$1.bak"
-					if [ -f "$SPEKDLLBAKNAM" ]; then
-						writelog "ERROR" "${FUNCNAME[0]} - Backup DLL name already exists at '$SPEKDST/$SPEKDLLBAKNAM', cannot move this DLL to allow SpecialK to install -- Not installing SpecialK"
-						notiShow "$NOTY_SPEKDLLCONFLICT" "X"
-						SPEKDLLCONFLICTFOUND=1
-					else
-						writelog "INFO" "${FUNCNAME[0]} - Moving existing DLL '$1' to '$SPEKDLLBAKNAM' so we can install SpecialK without conflicts"
-						mv "$SPEKDST/$1" "$SPEKDST/$SPEKDLLBAKNAM"
-					fi
+				SPEKDLLBAKNAM="$SPEKDST.bak"
+				if [ -f "$SPEKDLLBAKNAM" ]; then
+					writelog "ERROR" "${FUNCNAME[0]} - Backup DLL name already exists at '$SPEKDST/$SPEKDLLBAKNAM', cannot move this DLL to allow SpecialK to install -- Not installing SpecialK"
+					notiShow "$NOTY_SPEKDLLCONFLICT" "X"
+					SPEKDLLCONFLICTFOUND=1
+				else
+					writelog "INFO" "${FUNCNAME[0]} - Moving existing DLL '$SPEKDST' to '$SPEKDLLBAKNAM' so we can install SpecialK without conflicts"
+					mv "$SPEKDST" "$SPEKDLLBAKNAM"
 				fi
-			fi
-
-			# Make sure we don't track DLL renames
-			if [ -f "$SPEKENA" ]; then
-				rm -rf "$SPEKENA"
-			fi
-
-			if [ "$SPEKDLLCONFLICTFOUND" -eq 0 ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Installing '${SPEKSRC##*/}' as '$GP' is $2-bit" "E"
-				notiShow "$NOTY_SPECIALKINSTALLING"
-				cp "$SPEKSRC" "$SPEKDST"
-				if [ -f "${SPEKSRC//dll/pdb}" ]; then
-					SPEKPDB="${SPEKSRC##*/}"
-					SPEKPDB="${SPEKPDB//dll/pdb}"
-					writelog "INFO" "${FUNCNAME[0]} - Also installing debugging '$SPEKPDB'" "E"
-					cp "${SPEKSRC//dll/pdb}" "$SPEKDDIR"
-					echo "$SPEKDDIR/$SPEKPDB" >> "$SPEKENA"
+			elif [ -f "$SPEKDST" ] && [ -f "$SPEKENA" ] && grep -qw "$SPEKDST" "$SPEKENA"; then
+				if [ "$AUTOSPEK" -eq 1 ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Updating existing tracked SpecialK DLLs"
+					removeSpekDlls  # Remove existing SpecialK DLLs so we can update them, if auto-update SpecialK is enabled
+				else
+					writelog "INFO" "${FUNCNAME[0]} - SpecialK is installed, tracked, and up-to-date -- Nothing to do"
+					SHOULDINSTALLSPEK=0
 				fi
-			else
-				writelog "ERROR" "${FUNCNAME[0]} - Could not install SpecialK -- DLL naming conflict was found"
 			fi
 		fi
 
-		# installd3d47dll "$4" "$SPEKDDIR"
+		# Make sure we don't track DLL renames
+		if [ -f "$SPEKENA" ]; then
+			rm -rf "$SPEKENA"
+			touch "$SPEKENA"
+		fi
+
+		if [ "$SPEKDLLCONFLICTFOUND" -eq 0 ] && [ "$SHOULDINSTALLSPEK" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Installing '${SPEKSRC##*/}' as '$GP' is $2-bit" "E"
+			notiShow "$NOTY_SPECIALKINSTALLING"
+			cp "$SPEKSRC" "$SPEKDST"
+			echo "$SPEKDST" >> "$SPEKENA"
+			if [ -f "${SPEKSRC//dll/pdb}" ]; then
+				SPEKPDB="${SPEKSRC##*/}"
+				SPEKPDB="${SPEKPDB//dll/pdb}"
+				writelog "INFO" "${FUNCNAME[0]} - Also installing debugging '$SPEKPDB'" "E"
+				cp "${SPEKSRC//dll/pdb}" "$SPEKDDIR"
+				echo "$SPEKDDIR/$SPEKPDB" >> "$SPEKENA"
+			fi
+		elif [ "$SPEKDLLCONFLICTFOUND" -eq 1 ]; then
+			writelog "ERROR" "${FUNCNAME[0]} - Could not install SpecialK -- DLL naming conflict was found"
+		fi
 	}
 
+	# Manage installing 32bit/64bit SpecialK DLL
 	function installSpekArchDll {
 		if [ "$USECUSTOMCMD" -eq 1 ] && [ -f "$CUSTOMCMD" ]; then
 			ARCHEXE="$CUSTOMCMD"
@@ -9328,46 +9335,32 @@ function useSpecialK {
 
 	if [ "$USESPECIALK" -eq 1 ]; then
 		prepareSpecialKIni
-		UPSPEK=1
 		
 		if [ "$AUTOSPEK" -eq 1 ] && { [ "$SPEKVERS" == "default" ] || [ "$SPEKVERS" == "latest" ];}; then
 			writelog "INFO" "${FUNCNAME[0]} - Updating $SPEK in the gamedir because AUTOSPEK is enabled"
-			UPSPEK=1
-		elif [ -f "$SPEKENA" ]; then
-			writelog "SKIP" "${FUNCNAME[0]} - ${SPEK} is already configured - nothing to do"
-			UPSPEK=0
 		fi
-		
-		if [ "$UPSPEK" -eq 1 ]; then
-			writelog "INFO" "${FUNCNAME[0]} - ${SPEK} is enabled - Installing dlls if required"
-			dlSpecialK
 
-			getSpecialKGameRenderApi
-      
-			writelog "INFO" "${FUNCNAME[0]} - Using '$SPEKDST' as $SPEK destination dll"
+		writelog "INFO" "${FUNCNAME[0]} - ${SPEK} is enabled - Installing dlls if required"
+		dlSpecialK
 
-			echo "$SPEKDST" > "$SPEKENA"
+		getSpecialKGameRenderApi
+	
+		writelog "INFO" "${FUNCNAME[0]} - Using '$SPEKDST' as $SPEK destination dll"
 
-			if [ -f "$SPEKDST" ]; then
-				if [ "$AUTOSPEK" -eq 1 ] && { [ "$SPEKVERS" == "default" ] || [ "$SPEKVERS" == "latest" ];}; then
-					writelog "INFO" "${FUNCNAME[0]} - Updating $SPEK dlls because AUTOSPEK is enabled"
-					installSpekArchDll
-				else
-					writelog "SKIP" "${FUNCNAME[0]} - Already have a '${SPEKDST##*/}' in '$SPEKDDIR' - not installing '$SPEK'" "E"
-				fi
-			else
-				installSpekArchDll
-			fi
-		fi
+		installSpekArchDll
 	else
 		if [ -f "$SPEKENA" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - ${SPEK} was enabled before, removing existing $SPEK dlls"
-			while read -r spekdll; do
-				rm "$spekdll" 2>/dev/null
-			done < "$SPEKENA"
-			rm "$SPEKENA" 2>/dev/null
+			removeSpekDlls
 		fi
 	fi
+}
+
+function removeSpekDlls {
+	while read -r spekdll; do
+		rm "$spekdll" 2>/dev/null
+	done < "$SPEKENA"
+	rm "$SPEKENA" 2>/dev/null
 }
 
 function getUsedVars {
