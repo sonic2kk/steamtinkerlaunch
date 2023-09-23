@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230925-2 (specialk-choose-dllname)"
+PROGVERS="v14.0.20230925-3 (specialk-choose-dllname)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -9229,7 +9229,7 @@ function createDLSpekList {
 function useSpecialK {
 	function installSpekDll {
 		SPEKSRC="$1"
-		# SPEKDLLCONFLICTFOUND=0
+		SPEKDLLCONFLICTFOUND=0
 		if [ -f "$SPEKDST" ] && [ "$(stat -c %s "$SPEKSRC")" -eq "$(stat -c %s "$SPEKDST")" ]; then
 			writelog "SKIP" "${FUNCNAME[0]} - Nothing to update - '$SPEKDST' corresponds to '$SPEKSRC'" "E"
 		else
@@ -9238,16 +9238,33 @@ function useSpecialK {
 			# TODO more checks here in future probably
 			if [ "$USERESHADE" -eq 1 ] && [ -f "$SPEKDDIR/$RSTXT" ]; then
 				## ReShade is already installed and in use, and ReShade+SpecialK have selected DLL names conflict
-				if [[ "$RESHADEDLLNAME" == "$SPEKDLLNAME" ]]; then
-					writelog "ERROR" "${FUNCNAME[0]} - ReShade is enabled and the chosen ReShade DLL name conflicts with the SpecialK DLL name -- Not installing"
-					notiShow "$( strFix "$NOTY_SPEKRESHDLLCONFLICT" "$RESH" "$SPEK" )"
-				fi
+				
+				## Check each entered ReShade DLL name and see if any conflict with the entered SpecialK DLL name
+				mapfile -d "," -t -O "${#SPEKRSDLLNAMECHECKARR[@]}" RSDLLNAMEARR < <(printf '%s' "$RESHADEDLLNAME")
+				for SPEKRSCHECKDLL in "${SPEKRSDLLNAMECHECKARR[@]}"; do
+					if [[ "$SPEKRSCHECKDLL" == "$SPEKDLLNAME" ]]; then
+						writelog "ERROR" "${FUNCNAME[0]} - ReShade is enabled and the chosen ReShade DLL name conflicts with the SpecialK DLL name -- Not installing"
+						notiShow "$( strFix "$NOTY_SPEKRESHDLLCONFLICT" "$RESH" "$SPEK" )"
+						SPEKDLLCONFLICTFOUND=1
+						break
+					fi
+				done
 			else
 				# Not sure if this works yet -- Same as ReShade check to see if DLL exists and is not tracked by us
 				# There's probably scope to make installRSdll generic so it applies for both ReShade+SpecialK
 				if [ -f "$SPEKDST/$1" ] && [ -f "$SPEKENA" ] && ! grep -qw "$1" "$SPEKENA"; then
-					# SPEKDLLCONFLICTFOUND=1
 					writelog "WARN" "${FUNCNAME[0]} - The chosen SpecialK DLL name already exists at '$SPEKDST/$1' but is not tracked by us -- This may cause issues!"
+					writelog "WARN" "${FUNCNAME[0]} - Attempting to back up existing found DLL with name '$1' so that we can install SpecialK"
+
+					SPEKDLLBAKNAM="$1.bak"
+					if [ -f "$SPEKDLLBAKNAM" ]; then
+						writelog "ERROR" "${FUNCNAME[0]} - Backup DLL name already exists at '$SPEKDST/$SPEKDLLBAKNAM', cannot move this DLL to allow SpecialK to install -- Not installing SpecialK"
+						notiShow "$NOTY_SPEKDLLCONFLICT" "X"
+						SPEKDLLCONFLICTFOUND=1
+					else
+						writelog "INFO" "${FUNCNAME[0]} - Moving existing DLL '$1' to '$SPEKDLLBAKNAM' so we can install SpecialK without conflicts"
+						mv "$SPEKDST/$1" "$SPEKDST/$SPEKDLLBAKNAM"
+					fi
 				fi
 			fi
 
@@ -9256,15 +9273,19 @@ function useSpecialK {
 				rm -rf "$SPEKENA"
 			fi
 
-			writelog "INFO" "${FUNCNAME[0]} - Installing '${SPEKSRC##*/}' as '$GP' is $2-bit" "E"
-			notiShow "$NOTY_SPECIALKINSTALLING"
-			cp "$SPEKSRC" "$SPEKDST"
-			if [ -f "${SPEKSRC//dll/pdb}" ]; then
-				SPEKPDB="${SPEKSRC##*/}"
-				SPEKPDB="${SPEKPDB//dll/pdb}"
-				writelog "INFO" "${FUNCNAME[0]} - Also installing debugging '$SPEKPDB'" "E"
-				cp "${SPEKSRC//dll/pdb}" "$SPEKDDIR"
-				echo "$SPEKDDIR/$SPEKPDB" >> "$SPEKENA"
+			if [ "$SPEKDLLCONFLICTFOUND" -eq 0 ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Installing '${SPEKSRC##*/}' as '$GP' is $2-bit" "E"
+				notiShow "$NOTY_SPECIALKINSTALLING"
+				cp "$SPEKSRC" "$SPEKDST"
+				if [ -f "${SPEKSRC//dll/pdb}" ]; then
+					SPEKPDB="${SPEKSRC##*/}"
+					SPEKPDB="${SPEKPDB//dll/pdb}"
+					writelog "INFO" "${FUNCNAME[0]} - Also installing debugging '$SPEKPDB'" "E"
+					cp "${SPEKSRC//dll/pdb}" "$SPEKDDIR"
+					echo "$SPEKDDIR/$SPEKPDB" >> "$SPEKENA"
+				fi
+			else
+				writelog "ERROR" "${FUNCNAME[0]} - Could not install SpecialK -- DLL naming conflict was found"
 			fi
 		fi
 
@@ -21248,6 +21269,8 @@ function commandline {
 		commandlineFetchGameSLR "$2" "$FETCHNATIVESLR"
 	elif [ "$1" == "getslrbtn" ]; then  # Internal use only for the Main Menu button
 		fetchGameSLRGui "$2"
+	elif [ "$1" == "debug" ]; then
+		notiShow "$NOTY_SPEKDLLCONFLICT" "X"
 	elif [ "$1" == "mo2" ]; then
 		if [ -n "$2" ]; then
 			if [ "$2" == "download" ] || [ "$2" == "d" ]; then
