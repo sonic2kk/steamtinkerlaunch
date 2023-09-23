@@ -158,6 +158,8 @@ SMALLDESK=0
 VTX_DOTNET_ROOT="c:\\Program Files\\dotnet\\\\"
 STLQUIET=0
 SLRAID="1070560"  # Hardcoded SLR AppID for native games -- See `setSLRReap`
+DEFWINEDPI="96"
+WINEDPIVALUES="${DEFWINEDPI}!120!150!240"
 
 ### default vars ###
 
@@ -2812,6 +2814,8 @@ function setDefaultCfgValues {
 		if [ -z "$USEHMMPROTON" ]                       ; then  USEHMMPROTON="$NON"; fi
 		if [ -z "$USETERM" ]							; then	USETERM="$(command -v "xterm")"; fi
 		if [ -z "$TERMARGS" ]							; then	TERMARGS="-e"; fi
+		if [ -z "$USEGLOBALWINEDPI" ]					; then  USEGLOBALWINEDPI="0"; fi
+		if [ -z "$GLOBALWINEDPI" ]						; then  GLOBALWINEDPI="$DEFWINEDPI"; fi
 	}
 
 	function setDefaultCfgValuesdefault_template {
@@ -2965,6 +2969,8 @@ function setDefaultCfgValues {
 		if [ -z "$WINE_FULLSCREEN_FSR_STRENGTH" ]		; then	WINE_FULLSCREEN_FSR_STRENGTH="2"; fi
 		if [ -z "$WINE_FULLSCREEN_FSR_MODE" ]			; then  WINE_FULLSCREEN_FSR_MODE="none"; fi
 		if [ -z "$WINE_FULLSCREEN_FSR_CUSTOM_MODE" ]	; then  WINE_FULLSCREEN_FSR_CUSTOM_MODE="none"; fi
+		if [ -z "$USEPERGAMEWINEDPI" ]					; then  USEPERGAMEWINEDPI="0"; fi
+		if [ -z "$PERGAMEWINEDPI" ]						; then  PERGAMEWINEDPI="$DEFWINEDPI"; fi
 		if [ -z "$STLWINEDEBUG" ]						; then	STLWINEDEBUG="-all"; fi
 		if [ -z "$STLWINEDLLOVERRIDES" ]				; then	STLWINEDLLOVERRIDES="$NON"; fi
 		if [ -z "$USERSTART" ]							; then	USERSTART="$DUMMYBIN"; fi
@@ -3129,7 +3135,11 @@ function saveCfg {
 			echo "## $DESC_WINEDLDIR"
 			echo "WINEDLDIR=\"$WINEDLDIR\""
 			echo "## $DESC_WINEEXTDIR"
-			echo "WINEEXTDIR=\"$WINEEXTDIR\""			
+			echo "WINEEXTDIR=\"$WINEEXTDIR\""
+			echo "## $DESC_USEGLOBALWINEDPI"
+			echo "USEGLOBALWINEDPI=\"$USEGLOBALWINEDPI\""
+			echo "## $DESC_GLOBALWINEDPI"
+			echo "GLOBALWINEDPI=\"$GLOBALWINEDPI\""
 			echo "## $DESC_AUTOLASTPROTON"
 			echo "AUTOLASTPROTON=\"$AUTOLASTPROTON\""
 			echo "## $DESC_STRACEDIR"
@@ -3584,6 +3594,10 @@ function saveCfg {
 			echo "WINE_FULLSCREEN_FSR=\"$WINE_FULLSCREEN_FSR\""
 			echo "## $DESC_WINE_FULLSCREEN_FSR_STRENGTH"
 			echo "WINE_FULLSCREEN_FSR_STRENGTH=\"$WINE_FULLSCREEN_FSR_STRENGTH\""
+			echo "## $DESC_USEPERGAMEWINEDPI"
+			echo "USEPERGAMEWINEDPI=\"$USEPERGAMEWINEDPI\""
+			echo "## $DESC_PERGAMEWINEDPI"
+			echo "PERGAMEWINEDPI=\"$PERGAMEWINEDPI\""
 			echo "## $DESC_CLEANPROTONTEMP"
 			echo "CLEANPROTONTEMP=\"$CLEANPROTONTEMP\""
 			echo "## $DESC_STLWINEDEBUG"
@@ -5474,6 +5488,10 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_WINEEXTDIR!$DESC_WINEEXTDIR ('WINEEXTDIR')":DIR "${WINEEXTDIR/#-/ -}" `#CAT_Wine` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_WINE_LOG_DIR!$DESC_WINE_LOG_DIR ('WINE_LOG_DIR')":DIR "${WINE_LOG_DIR/#-/ -}" `#CAT_Wine` `#SUB_Directories` `#MENU_GAME` \
 --field="     $GUI_ONLYWICO!$DESC_ONLYWICO ('ONLYWICO')":CHK "${ONLYWICO/#-/ -}" `#CAT_Wine` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_USEGLOBALWINEDPI!$DESC_USEGLOBALWINEDPI ('USEGLOBALWINEDPI')":CHK "${USEGLOBALWINEDPI/#-/ -}" `#CAT_Wine` `#SUB_Checkbox` `#MENU_GLOBAL` \
+--field="     $GUI_GLOBALWINEDPI!$DESC_GLOBALWINEDPI ('GLOBALWINEDPI')":CBE "$( cleanDropDown "${GLOBALWINEDPI/#-/ -}" "$WINEDPIVALUES" )" `#CAT_Wine` `#MENU_GLOBAL` \
+--field="     $GUI_USEPERGAMEWINEDPI!$DESC_USEPERGAMEWINEDPI ('USEPERGAMEWINEDPI')":CHK "${USEPERGAMEWINEDPI/#-/ -}" `#CAT_Wine` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_PERGAMEWINEDPI!$DESC_PERGAMEWINEDPI ('PERGAMEWINEDPI')":CBE "$( cleanDropDown "${PERGAMEWINEDPI/#-/ -}" "$WINEDPIVALUES" )" `#CAT_Wine` `#MENU_GAME` \
 --field="$(spanFont "$GUI_OPTSMO2" "H")":LBL "SKIP" `#CAT_MO2` `#HEAD_Vortex` `#MENU_GAME` `#MENU_GLOBAL` \
 --field="     $GUI_MO2COMPDATA!$DESC_MO2COMPDATA ('MO2COMPDATA')":DIR "${MO2COMPDATA/#-/ -}" `#CAT_MO2` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_USEMO2PROTON!$DESC_USEMO2PROTON ('USEMO2PROTON')":CB "$(cleanDropDown "${USEMO2PROTON/#-/ -}" "$PROTYADLIST")" `#CAT_MO2` `#MENU_GLOBAL` \
@@ -11394,7 +11412,8 @@ function setCommandLaunchVars {
 		export RADV_PERFTEST=$STLRAD_PFTST
 	fi
 
-	setVulkanPostProcessor
+	setVulkanPostProcessor  # i.e. vkShade
+	setWineDpiScaling
 }
 
 # Used to create the launch command for games and custom commands so they can use various program functions i.e. GameScope
@@ -12877,6 +12896,45 @@ function chooseWinetricks {
 				writelog "INFO" "${FUNCNAME[0]} - Using systemwide winetricks with version '$($SYSWINETRICKS -V | cut -d ' ' -f1)'"
 			fi	
 		fi
+	fi
+}
+
+## Manage setting the Wine DPI scale factor in the registry
+function setWineDpiScaling {
+	WINEDPIREGPATH="HKEY_CURRENT_USER\\Control Panel\\Desktop"
+	WINEDPIREGKEY="LogPixels"
+	WINEDPIUSEVAL=""
+
+	## Didn't reuse updateWineRegistryKey because it can't handle the DWORD stuff we need to do here
+	## Room for a potential refactor in future
+
+	# If no Wine DPI option is enabled, skip
+	if [ "$USEPERGAMEWINEDPI" -eq 0 ] && [ "$USEGLOBALWINEDPI" -eq 0 ]; then
+		return
+	fi
+
+	WINEDPISCALEREGWINECMD="$( getWineBinFromProtPath "$( getProtPathFromCSV "$USEPROTON" )" )"  # Get the Wine binary to run regedit with
+	# Per-Game Wine DPI takes priority over Global, so Global goes in elseif
+	if [ "$USEPERGAMEWINEDPI" -eq 1 ]; then  # Per-Game
+		if [ -z "$PERGAMEWINEDPI" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Per-Game Wine DPI was enabled, but its value was blank -- Overwriting it as '$DEFWINEDPI'"
+			PERGAMEWINEDPI="$DEFWINEDPI"
+		fi
+		writelog "INFO" "${FUNCNAME[0]} - Setting Per-Game Wine DPI to '$PERGAMEWINEDPI' into prefix '$GPFX'"
+		WINEDPIUSEVAL="$PERGAMEWINEDPI"
+	elif [ "$USEGLOBALWINEDPI" -eq 1 ]; then  # Global
+		if [ -z "$GLOBALWINEDPI" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Global Wine DPI was enabled, but its value was blank -- Overwriting it as '$DEFWINEDPI'"
+			GLOBALWINEDPI="$DEFWINEDPI"
+		fi
+		writelog "INFO" "${FUNCNAME[0]} - Setting Global Wine DPI to '$GLOBALWINEDPI' into prefix '$GPFX'"
+		WINEDPIUSEVAL="$GLOBALWINEDPI"
+	fi
+
+	# Make extra sure we only set the DPI scaling when we should
+	if [ -n "$WINEDPIUSEVAL" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Updating '$WINEDPIREGKEY' with DPI value '$WINEDPIUSEVAL'"
+		WINEPREFIX="$GPFX" "$WINEDPISCALEREGWINECMD" reg "add" "$WINEDPIREGPATH" "/v" "$WINEDPIREGKEY" "/t" "REG_DWORD" "/d" "${WINEDPIUSEVAL}" "/f"
 	fi
 }
 
