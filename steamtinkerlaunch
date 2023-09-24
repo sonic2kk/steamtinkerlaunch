@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230925-5 (spek-reshade-vers)"
+PROGVERS="v14.0.20230925-6 (spek-reshade-vers)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -10285,6 +10285,12 @@ function setGameScopeVars {
 
 		# Max Scale Factor -- No idea how this option actually works, the documentation is a bit sparce but Steam Deck seems to default it to 2 (https://github.com/Plagman/gamescope/issues/588#issue-1338038588)
 		GSMSF="$( getGameScopeArg "$GAMESCOPE_ARGS" "-m" "$GSMSF" "" "0" "num" )"
+
+		# ReShade Effect File Path (--reshade-effect) -- File picker
+		GSRSEP="$( getGameScopeArg "$GAMESCOPE_ARGS" "--reshade-effect" "$GSRSEP" "" "" "path" )"
+
+		# ReShade Technique IDX (index?) (--reshade-technique-idx) -- Spinner
+		GSRSTI="$( getGameScopeArg "$GAMESCOPE_ARGS" "--reshade-technique-idx" "$GSRSTI" "" "0" "num" )"
 	}
 
 	function getGameScopeHDROpts {
@@ -10499,6 +10505,8 @@ function GameScopeGui {
 			--field="$GUI_GSSCALE!$DESC_GSSCALE ('GSSCALE')":CBE "$(cleanDropDown "${GSSCALE}" "${GSSCALEOPTS}")" \
 			--field="$GUI_GSFSRS!$DESC_GSFSRS ('GSFSRS')":NUM "${GSFSRS/#-/ -}:!0..20" \
 			--field="$GUI_GSMSF!$DESC_GSMSF ('GSMSF')":NUM "$GSMSF" \
+			--field="$GUI_GSRSEP!$DESC_GSRSEP ('GSRSEP')":FL "${GSRSEP//\"}" \
+			--field="$GUI_GSRSTI!$DESC_GSRSTI ('GSRSTI')":NUM "${GSRSTI/#-/ -}" \
 			--field="$(spanFont "$GUI_GSHDRSET" "H")":LBL "SKIP" \
 			--field="$GUI_GSHDR!$DESC_GSHDR ('GSHDR')":CHK "$GSHDR" \
 			--field="$GUI_GSHDRWGFS!$DESC_GSHDRWGFS ('GSHDRWGFS')":CHK "$GSHDRWGFS" \
@@ -10576,45 +10584,47 @@ function GameScopeGui {
 						GSSCALE="${GSARR[17]}"
 						GSFSRS="${GSARR[18]}"
 						GSMSF="${GSARR[19]}"
-						# GSARR[20] is the HDR heading
-						GSHDR="${GSARR[21]}"
-						GSHDRWGFS="${GSARR[22]}"
-						GSHDRSCNITS="${GSARR[23]}"
-						GSHDRITM="${GSARR[24]}"
-						GSHDRITMSDRNITS="${GSARR[25]}"
-						GSHDRITMTGTNITS="${GSARR[26]}"
-						# GSARR[27] is the VR heading
-						GSVR="${GSARR[28]}"
-						GSVREXNA="${GSARR[29]}"
-						GSVRDEFNAM="${GSARR[30]}"
-						GSVROVERLAYKEY="${GSARR[31]}"
-						GSVRICONENABLE="${GSARR[32]}"
-						GSVRICON="${GSARR[33]}"
-						GSVRSHOIMM="${GSARR[34]}"
-						GSVRCONTROLBAR="${GSARR[35]}"
-						GSVRCONTROLBARKEYBOARD="${GSARR[36]}"
-						GSVRCONTROLBARCLOSE="${GSARR[37]}"
-						GSVRSCROLLSSPEED="${GSARR[38]}"
-						GSVRMODAL="${GSARR[39]}"
-						# GSARR[40] is the Embedded heading
-						GSDEFTOUCHMODE="${GSARR[41]}"
-						GSIMMEDIATEFLIPS="${GSARR[42]}"
-						GSADAPTIVESYNC="${GSARR[43]}"
-						GSPREFOUT="${GSARR[44]}"
-						GSDRMMODE="${GSARR[45]}"
-						# GSARR[46] is the Advanced heading
-						GSSTATSPATHENABLE="${GSARR[47]}"
-						GSSTATSPATH="${GSARR[48]}"
-						GSHIDECURSORDELAY="${GSARR[49]}"
-						GSFORCECOMP="${GSARR[50]}"
-						GSDEBUGHUD="${GSARR[51]}"
-						GSFORCEHDRSUPPORT="${GSARR[52]}"
-						GSFORCEHDROUTPUT="${GSARR[53]}"
-						GSPREFERVKDEVICE="${GSARR[54]}"
-						GSWAYLAND="${GSARR[55]}"
-						GSRT="${GSARR[56]}"
-						GSHDLS="${GSARR[57]}"
-						USEGAMESCOPEWSI="${GSARR[58]}"
+						GSRSEP="${GSARR[20]}"
+						GSRSTI="${GSARR[21]}"
+						# GSARR[22] is the HDR heading
+						GSHDR="${GSARR[23]}"
+						GSHDRWGFS="${GSARR[24]}"
+						GSHDRSCNITS="${GSARR[25]}"
+						GSHDRITM="${GSARR[26]}"
+						GSHDRITMSDRNITS="${GSARR[27]}"
+						GSHDRITMTGTNITS="${GSARR[28]}"
+						# GSARR[29] is the VR heading
+						GSVR="${GSARR[30]}"
+						GSVREXNA="${GSARR[31]}"
+						GSVRDEFNAM="${GSARR[32]}"
+						GSVROVERLAYKEY="${GSARR[33]}"
+						GSVRICONENABLE="${GSARR[34]}"
+						GSVRICON="${GSARR[35]}"
+						GSVRSHOIMM="${GSARR[36]}"
+						GSVRCONTROLBAR="${GSARR[37]}"
+						GSVRCONTROLBARKEYBOARD="${GSARR[38]}"
+						GSVRCONTROLBARCLOSE="${GSARR[39]}"
+						GSVRSCROLLSSPEED="${GSARR[40]}"
+						GSVRMODAL="${GSARR[41]}"
+						# GSARR[42] is the Embedded heading
+						GSDEFTOUCHMODE="${GSARR[43]}"
+						GSIMMEDIATEFLIPS="${GSARR[44]}"
+						GSADAPTIVESYNC="${GSARR[45]}"
+						GSPREFOUT="${GSARR[46]}"
+						GSDRMMODE="${GSARR[47]}"
+						# GSARR[48] is the Advanced heading
+						GSSTATSPATHENABLE="${GSARR[49]}"
+						GSSTATSPATH="${GSARR[50]}"
+						GSHIDECURSORDELAY="${GSARR[51]}"
+						GSFORCECOMP="${GSARR[52]}"
+						GSDEBUGHUD="${GSARR[53]}"
+						GSFORCEHDRSUPPORT="${GSARR[54]}"
+						GSFORCEHDROUTPUT="${GSARR[55]}"
+						GSPREFERVKDEVICE="${GSARR[56]}"
+						GSWAYLAND="${GSARR[57]}"
+						GSRT="${GSARR[58]}"
+						GSHDLS="${GSARR[59]}"
+						USEGAMESCOPEWSI="${GSARR[60]}"
 
 						# Build the GameScope arguments string
 						unset GAMESCOPE_ARGS
@@ -10695,6 +10705,9 @@ function GameScopeGui {
 								GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --sharpness ${GSFSRS}"
 							fi
 						fi
+
+						if [ -f "$GSRSEP" ]                                        		; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --reshade-effect '${GSRSEP}'"; fi
+						if [ ! "$GSRSTI" == "0" ]                              			; then  GAMESCOPE_ARGS="${GAMESCOPE_ARGS} --reshade-technique-idx ${GSRSTI}"; fi
 						## FILTERING OPTIONS END ###
 
 						### HDR OPTIONS ###
