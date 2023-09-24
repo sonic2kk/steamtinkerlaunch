@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230925-3"
+PROGVERS="v14.0.20230925-4"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -2747,6 +2747,8 @@ function setDefaultCfgValues {
 		if [ -z "$LUXTORPEDACMD" ]						; then	LUXTORPEDACMD="$STEAMCOMPATOOLS/luxtorpeda/luxtorpeda"; fi
 		if [ -z "$LUXTORPEDAARGS" ]						; then	LUXTORPEDAARGS="wait-before-run"; fi
 		if [ -z "$RSVERS" ]								; then	RSVERS="5.9.1"; fi
+		if [ -z "$USERSSPEKVERS" ]						; then  USERSSPEKVERS="1"; fi
+		if [ -z "$RSSPEKVERS" ]							; then  RSSPEKVERS="5.4.2"; fi
 		if [ -z "$AUTOBUMPRESHADE" ]					; then	AUTOBUMPRESHADE="0"; fi
 		if [ -z "$DOWNLOAD_RESHADE" ]					; then	DOWNLOAD_RESHADE="1"; fi
 		if [ -z "$RESHADESRCDIR" ]						; then	RESHADESRCDIR="$STLDLDIR/reshade"; fi
@@ -3226,6 +3228,10 @@ function saveCfg {
 			echo "HEADLINEFONT=\"$HEADLINEFONT\""
 			echo "## $DESC_YADFORCEXWAYLAND"
 			echo "YADFORCEXWAYLAND=\"$YADFORCEXWAYLAND\""
+			echo "## DESC_USERSSPEKVERS"
+			echo "USERSSPEKVERS=\"$USERSSPEKVERS\""
+			echo "## $DESC_RSSPEKVERS"
+			echo "RSSPEKVERS=\"$RSSPEKVERS\""
 			echo "## $DESC_USEWINDECO"
 			echo "USEWINDECO=\"$USEWINDECO\""
 			echo "## $DESC_USETRAYICON"
@@ -5332,6 +5338,8 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_RESHADEUPDATE!$DESC_RESHADEUPDATE ('RESHADEUPDATE')":CHK "${RESHADEUPDATE/#-/ -}" `#CAT_Shader` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_RESHADEOVERRIDETOGGLE!$DESC_RESHADEOVERRIDETOGGLE ('RSOVRD')":CHK "${RSOVRD/#-/ -}" `#CAT_Shader` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_RSVERS!$DESC_RSVERS ('RSVERS')" "${RSVERS/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#MENU_GLOBAL` \
+--field="     $GUI_USERSSPEKVERS!$DESC_USERSSPEKVERS":CHK "${USERSSPEKVERS/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#MENU_GLOBAL` \
+--field="     $GUI_RSSPEKVERS!$DESC_RSSPEKVERS ('RSSPEKVERS')" "${RSSPEKVERS/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#MENU_GLOBAL` \
 --field="     $GUI_AUTOBUMPRESHADE!$DESC_AUTOBUMPRESHADE ('AUTOBUMPRESHADE')":CHK "${AUTOBUMPRESHADE/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#MENU_GLOBAL` \
 --field="     $GUI_RS_32!$DESC_RS_32 ('RS_32')" "${RS_32/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#MENU_GLOBAL` \
 --field="     $GUI_RS_64!$DESC_RS_64 ('RS_64')" "${RS_64/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#MENU_GLOBAL` \
@@ -8112,13 +8120,21 @@ function dlReShade {
 }
 
 function overrideReShadeVersion {
-	if [ "$RSOVRD" -eq 1 ]; then  # This is meant to be the checkbox var
+	## ReShade version priority is as follows:
+	## 1. Game Menu Override version ('RSOVRVERS') -- Only applies if 'RSOVRD' checkbox is toggled on 
+	## 2. SpecialK ReShade Override version ('RSSPEKVERS') -- Only applies if ReShade+SpecialK are used together, and if '$USERSSPEKVERS' checkbox is toggled on
+	## 3. Global Menu ReShade version ('RSVERS')
+
+	if [ "$RSOVRD" -eq 1 ]; then  # Game Menu ReShade Override version -- Takes priority over Global ReShade version AND SpecialK ReShade version
 		if [[ ! "$RSOVRVERS" = "$RSVERS" ]]; then
 			writelog "INFO" "${FUNCNAME[0]} - Overriding global '$RESH' version '$RSVERS' with '$RSOVRVERS'"
        		RSVERS="$RSOVRVERS"
    		else
        		writelog "SKIP" "${FUNCNAME[0]} - '$RESH' Override version and '$RESH' global version match - Not overriding"
-   	fi
+   		fi
+	elif [ "$USESPECIALK" -eq 1 ] && [ "$USERESHADE" -eq 1 ] && [ "$USERSSPEKVERS" -eq 1 ]; then  # Global Menu ReShade version to load when ReShade is loaded via SpecialK
+		writelog "INFO" "${FUNCNAME[0]} - Overriding global '$RESH' version '$RSVERS' with SpecialK ReShade version override '$RSSPEKVERS' as it is enabled and ReShade+SpecialK are enabled together"
+		RSVERS="$RSSPEKVERS"
 	else
     	writelog "SKIP" "${FUNCNAME[0]} - '$RESH' override is disabled - Skipping"
 	fi
@@ -9298,6 +9314,11 @@ function useSpecialK {
 				cp "${SPEKSRC//dll/pdb}" "$SPEKDDIR"
 				echo "$SPEKDDIR/$SPEKPDB" >> "$SPEKENA"
 			fi
+		elif [ "$SPEKDLLCONFLICTFOUND" -eq 0 ] && [ "$SHOULDINSTALLSPEK" -eq 0 ]; then
+			# In this scenario, SpecialK is already installed so we don't need to install it
+			# So write out the DLL name to the SPEKENA file to ensure we don't end up with a blank file
+			# We can't always write out to the file unconditionally as SPEKDLLCONFLICTFOUND means SpecialK wasn't installed
+			echo "$SPEKDST" >> "$SPEKENA"
 		elif [ "$SPEKDLLCONFLICTFOUND" -eq 1 ]; then
 			writelog "ERROR" "${FUNCNAME[0]} - Could not install SpecialK -- DLL naming conflict was found"
 		fi
