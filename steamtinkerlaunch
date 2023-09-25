@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230925-8 (toggle-reshade-spek-plugin)"
+PROGVERS="v14.0.20230926-1 (toggle-reshade-spek-plugin)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -8708,14 +8708,18 @@ function appendToRSTXT {
 		touch "$INSTDESTDIR/$RSTXT"
 	fi
 
-	if ! grep -qw "$1" "$INSTDESTDIR/$RSTXT"; then
+	if ! grep -qw "$1" "$INSTDESTDIR/$RSTXT" && [ ! -f "$INSTDESTDIR/$SPEKENA" ]; then
 		echo "$1" >> "$INSTDESTDIR/$RSTXT"
 		writelog "INFO" "${FUNCNAME[0]} - Added '$1' to list of tracked ReShade DLLs at to '$INSTDESTDIR/$RSTXT'"
+	elif [ -f "$INSTDESTDIR/$SPEKENA" ]; then  # Don't create/write to ReShade.txt if SpecialK is installed
+		writelog "INFO" "${FUNCNAME[0]} - SpecialK seems to be installed, not writing anything to '$RSTXT'"
 	else
 		writelog "INFO" "${FUNCNAME[0]} - ReShade DLL '$1' already on list of tracked ReShade DLLs at '$INSTDESTDIR/$RSTXT' - Nothing to do."
 	fi
 
-	sort "$INSTDESTDIR/$RSTXT" -u -o "$INSTDESTDIR/$RSTXT"
+	if [ -f "$INSTDESTDIR/$RSTXT" ]; then
+		sort "$INSTDESTDIR/$RSTXT" -u -o "$INSTDESTDIR/$RSTXT"
+	fi
 }
 
 # $2 used to specify NOD3D9 wehn we copied both DXGI and D3D9 DLLs, but we no longer do that, so $2 is unused 
@@ -8726,9 +8730,10 @@ function installRSdll {
 	# Manage creating backup if untracked DLL with our selected ReShade DLL name already exists at location
 	# This function could be changed in future to take the path as a parameter as well, but that was not important at time of writing
 	function manageDuplicateRSDLL {
-		if [ "$USESPECIALK" -eq 1 ] && [[ "$SPEKDLLNAME" == "$1" ]]; then
-			# If we call this function we assume there's a DLL conflict, and if SpecialK is enabled and its DLL name matches the conflicting DLL name, skip this DLL
-			writelog "WARN" "${FUNCNAME[0]} - SpecialK is enabled and its DLL name '$SPEKDLLNAME' appears to conflict with the selected ReShade DLL name '$1' -- Not overwriting SpecialK DLL with ReShade!"
+		writelog "INFO" "${FUNCNAME[0]} - SPEKENA is '$SPEKENA'"
+		if [ "$USESPECIALK" -eq 1 ] && [ "$USERESHSPEKPLUGIN" -eq 0 ]; then
+			# If we call this function we assume there's a DLL conflict, and if SpecialK is enabled, installed, and its DLL name matches the conflicting DLL name, skip this DLL
+			writelog "WARN" "${FUNCNAME[0]} - SpecialK is installed and its DLL name '$SPEKDLLNAME' appears to conflict with the selected ReShade DLL name '$1' -- Not overwriting SpecialK DLL with ReShade!"
 		else
 			writelog "WARN" "${FUNCNAME[0]} - DLL with name '$1' found in game dir '$INSTDESTDIR' but is not tracked by us - This is possibly a game/mod DLL"
 			writelog "WARN" "${FUNCNAME[0]} - Backing up DLL at '$INSTDESTDIR/$1' to '$INSTDESTDIR/${1}.bak' and moving our ReShade DLL anyway"
@@ -8754,7 +8759,7 @@ function installRSdll {
 		# Check for ReShade DLL name conflicts
 		if [ -f "$INSTDESTDIR/$1" ] && [ -f "$INSTDESTDIR/$RSTXT" ] && ! grep -qw "$1" "$INSTDESTDIR/$RSTXT"; then
 			RSDLLNAMECONFLICTFOUND=1
-		elif [ -f "$INSTDESTDIR/$1" ] && [ -f "$INSTDESTDIR/$RSTXT" ] && [ "$USESPECIALK" -eq 1 ] && [ "$USERESHSPEKPLUGIN" -eq 0 ]; then
+		elif [ -f "$INSTDESTDIR/$1" ] && [ -f "$INSTDESTDIR/$RSTXT" ] && [ "$USESPECIALK" -eq 1 ] && [ "$USERESHSPEKPLUGIN" -eq 0 ] && [ -f "$INSTDESTDIR/$SPEKENA" ]; then
 			RSDLLNAMECONFLICTFOUND=1
 		fi
 
@@ -8762,7 +8767,7 @@ function installRSdll {
 			if [ "$RSDLLNAMECONFLICTFOUND" -eq 1 ]; then
 				# DLL with name matching our ReShade DLL name exists, but was not installed by us (missing from ReShade.txt) - Backing up existing DLL and installing ReShade DLL anyway
 				writelog "INFO" "${FUNCNAME[0]} - ReShade update is DISABLED"
-				writelog "INFO" "${FUNCNAME[0]} - Specified ReShade DLL name conflict detected!"
+				writelog "WARN" "${FUNCNAME[0]} - Specified ReShade DLL name conflict detected!"
 
 				manageDuplicateRSDLL "$1" "$3"  # 1 = target ReShade DLL name, 3 = ReShade DLL name from STL downloads folder to copy with the name specified in $1
 			else
@@ -8856,8 +8861,9 @@ function installReshade {
 
 			# Common conditional to install either 32bit/64bit ReShade DLLs, since process is same, just different DLL names
 			# USESPECIALK check needed because we can't use custom DLL names when using SpecialK -- It expects the raw ReShade32/ReShade64 DLL names
-			# if [ "$USERESHADE" -eq 1 ] && [ "$USESPECIALK" -eq 0 ] && [ "$USERESHSPEKPLUGIN" -eq 0 ]; then
-			if [[ "$USERESHADE" -eq 1 && ( "$USESPECIALK" -eq 0 && "$USERESHSPEKPLUGIN" -eq 0 ) ]]; then
+			#
+			# Only install ReShade "normally" if (ReShade is on) or (if ReShade+SpecialK are on and ReShade SpecialK Plugin is disabled)
+			if [[ "$USERESHADE" -eq 1 || ( "$USERESHADE" -eq 1 && "$USESPECIALK" -eq 1 && "$USERESHSPEKPLUGIN" -eq 0 ) ]]; then
 				#d3d47 - Required for ReShade
 				# NOTE 25/08/23: *Is* it still required?
 				installd3d47dll "$D3D47_32" "$RSD3D47DLL"
@@ -8879,7 +8885,7 @@ function installReshade {
 					appendToRSTXT "$CUSTRSDLL"
 				done
 			else
-				if [ "$USESPECIALK" -eq 1 ]; then
+				if [ "$USERESHADE" -eq 1 ] && [ "$USESPECIALK" -eq 1 ] && [  ]; then
 					writelog "SKIP" "${FUNCNAME[0]} - USERESHADE and USESPECIALK are enabled together, and ReShade is being used as a Plugin, skipping custom ReShade DLL name as SpecialK needs specific ReShade DLL names"
 				fi
 			fi
@@ -9260,15 +9266,18 @@ function useSpecialK {
 		SPEKSRC="$1"
 		SPEKDLLCONFLICTFOUND=0
 		SHOULDINSTALLSPEK=1
+		SPEKDSTDIR="$( dirname "$SPEKDST" )"
 
-		# TODO this is a freaking mess... PR to simplify welcome!
-		if [ "$USERESHADE" -eq 1 ] && [ -f "$SPEKDDIR/$RSTXT" ]; then
+		if [ "$USERESHADE" -eq 1 ] && [ -f "$SPEKDDIR/$RSTXT" ] && [ "$USERESHSPEKPLUGIN" -eq 0 ]; then
 			## ReShade is already installed and in use, and ReShade+SpecialK have selected DLL names conflict
 
 			## Check each entered ReShade DLL name and see if any conflict with the entered SpecialK DLL name
-			mapfile -d "," -t -O "${#SPEKRSDLLNAMECHECKARR[@]}" RSDLLNAMEARR < <(printf '%s' "$RESHADEDLLNAME")
+			writelog "INFO" "${FUNCNAME[0]} - ReShade is installed and not loaded as SpecialK plugin -- Checking for DLL naming conflicts"
+			mapfile -d "," -t -O "${#SPEKRSDLLNAMECHECKARR[@]}" SPEKRSDLLNAMECHECKARR < <(printf '%s' "$RESHADEDLLNAME")
+			
+			SPEKREALDLLNAME="$( basename "$SPEKDST" )"  # Makes sure we don't compare against 'auto'
 			for SPEKRSCHECKDLL in "${SPEKRSDLLNAMECHECKARR[@]}"; do
-				if [[ "$SPEKRSCHECKDLL" == "$SPEKDLLNAME" ]]; then
+				if [[ "$SPEKRSCHECKDLL" == "$SPEKREALDLLNAME" ]]; then
 					writelog "ERROR" "${FUNCNAME[0]} - ReShade is enabled and the chosen ReShade DLL name conflicts with the SpecialK DLL name -- Not installing"
 					notiShow "$( strFix "$NOTY_SPEKRESHDLLCONFLICT" "$RESH" "$SPEK" )"
 					SPEKDLLCONFLICTFOUND=1
@@ -9276,7 +9285,8 @@ function useSpecialK {
 				fi
 			done
 		else
-			# Not sure if this works yet -- Same as ReShade check to see if DLL exists and is not tracked by us
+			writelog "INFO" "${FUNCNAME[0]} - SpecialK loading normally"
+			# Check to see if SpecialK DLL already exists and is not tracked by us
 			# There's probably scope to make installRSdll generic so it applies for both ReShade+SpecialK
 			if [ ! -f "$SPEKDST" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - No SpecialK DLL installation found, installing as normal"
@@ -9322,6 +9332,7 @@ function useSpecialK {
 				cp "${SPEKSRC//dll/pdb}" "$SPEKDDIR"
 				echo "$SPEKDDIR/$SPEKPDB" >> "$SPEKENA"
 			fi
+			prepareSpecialKIni  # Moved here so this is created only once we confirm SpecialK can be installed
 		elif [ "$SPEKDLLCONFLICTFOUND" -eq 0 ] && [ "$SHOULDINSTALLSPEK" -eq 0 ]; then
 			# In this scenario, SpecialK is already installed so we don't need to install it
 			# So write out the DLL name to the SPEKENA file to ensure we don't end up with a blank file
@@ -9368,8 +9379,6 @@ function useSpecialK {
 	fi
 
 	if [ "$USESPECIALK" -eq 1 ]; then
-		prepareSpecialKIni
-		
 		if [ "$AUTOSPEK" -eq 1 ] && { [ "$SPEKVERS" == "default" ] || [ "$SPEKVERS" == "latest" ];}; then
 			writelog "INFO" "${FUNCNAME[0]} - Updating $SPEK in the gamedir because AUTOSPEK is enabled"
 		fi
@@ -9378,7 +9387,7 @@ function useSpecialK {
 		dlSpecialK
 
 		getSpecialKGameRenderApi
-	
+
 		writelog "INFO" "${FUNCNAME[0]} - Using '$SPEKDST' as $SPEK destination dll"
 
 		installSpekArchDll
@@ -17877,7 +17886,7 @@ function prepareLaunch {
 		writelog "INFO" "${FUNCNAME[0]} - checkReshade:"
 		checkReshade
 
-		# start game with ${RESH} if USERESHADE is 1
+		# start game with ${SPEK} if USESPECIALK is 1
 		writelog "INFO" "${FUNCNAME[0]} - useSpecialK:"
 		useSpecialK
 
