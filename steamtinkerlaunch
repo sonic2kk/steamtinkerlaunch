@@ -9008,6 +9008,27 @@ function checkReshade {
 	fi
 
 	if [ "$USERESHADE" -eq 1 ]; then
+		if [ -f "$FRSINI" ]; then
+			if grep -q "EffectSearchPaths=.\$RSSUB\Shaders" "$FRSINI"; then
+				writelog "SKIP" "${FUNCNAME[0]} - Already have '$FRSINI' with default paths pointing to '$RSSUB'"
+			else
+				writelog "SKIP" "${FUNCNAME[0]} - Found a '$FRSINI' without default paths pointing to '$RSSUB' - not touching it"
+			fi
+		else
+			if [ -f "$FRSOINI" ] && grep -q "EffectSearchPaths=.*$RSSUB.*Shaders" "$FRSOINI"; then
+				writelog "INFO" "${FUNCNAME[0]} - Re-enabling previously disabled '$FRSOINI'"
+				mv "$FRSOINI" "$FRSINI"
+			else
+				writelog "INFO" "${FUNCNAME[0]} - Creating initial '$FRSINI' with default paths pointing to '$RSSUB'"
+				{
+					echo "[GENERAL]"
+					echo "EffectSearchPaths=.\\$RSSUB\Shaders"
+					echo "TextureSearchPaths=.\\$RSSUB\Textures"
+					echo "PreprocessorDefinitions=RESHADE_DEPTH_LINEARIZATION_FAR_PLANE=1000.0,RESHADE_DEPTH_INPUT_IS_UPSIDE_DOWN=0,RESHADE_DEPTH_INPUT_IS_REVERSED=1,RESHADE_DEPTH_INPUT_IS_LOGARITHMIC=0"
+				} > "$FRSINI"
+			fi
+		fi
+
 		# EXPERIMENTALLY RE-ENABLED
 		# NOTE that this has no ReShade updating or version override checks, so it is missing many features that regular ReShade has!
 		if [ "$USESPECIALK" -eq 1 ] && [ "$USERESHSPEKPLUGIN" -eq 1 ]; then
