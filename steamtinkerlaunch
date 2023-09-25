@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230926-1 (toggle-reshade-spek-plugin)"
+PROGVERS="v14.0.20230926-2 (toggle-reshade-spek-plugin)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -8726,8 +8726,6 @@ function installRSdll {
 	# Manage creating backup if untracked DLL with our selected ReShade DLL name already exists at location
 	# This function could be changed in future to take the path as a parameter as well, but that was not important at time of writing
 	function manageDuplicateRSDLL {
-		writelog "INFO" "${FUNCNAME[0]} - SPEKENA is '$SPEKENA'"
-
 		writelog "WARN" "${FUNCNAME[0]} - DLL with name '$1' found in game dir '$INSTDESTDIR' but is not tracked by us - This is possibly a game/mod DLL"
 		writelog "WARN" "${FUNCNAME[0]} - Backing up DLL at '$INSTDESTDIR/$1' to '$INSTDESTDIR/${1}.bak' and moving our ReShade DLL anyway"
 
@@ -8856,15 +8854,12 @@ function installReshade {
 			if [[ "$USERESHADE" -eq 1 || ( "$USERESHADE" -eq 1 && "$USESPECIALK" -eq 1 && "$USERESHSPEKPLUGIN" -eq 0 ) ]]; then
 				# Check to make sure none of our ReShade names conflict with SpecialK -- This will abort install, and is the only place we need to abort install
 				if [ "$USESPECIALK" -eq 1 ] && [ "$USERESHSPEKPLUGIN" -eq 0 ]; then 
+					getSpecialKGameRenderApi
+					SPEKREALDLLNAME="$( basename "$SPEKDST" )"
 					for CUSTRSDLL in "${RSDLLNAMEARR[@]}"; do
-						if [[ "$SPEKRSCHECKDLL" == "$SPEKREALDLLNAME" ]]; then
+						if [[ "$CUSTRSDLL" = "$SPEKREALDLLNAME" ]]; then
 							writelog "ERROR" "${FUNCNAME[0]} - ReShade is enabled and the chosen ReShade DLL name conflicts with the SpecialK DLL name -- Not installing"
 							notiShow "$( strFix "$NOTY_SPEKRESHDLLCONFLICT" "$RESH" "$SPEK" )"
-
-							# Remove ReShade INI
-							if [ -f "$INSTDESTDIR/$RSINI" ]; then
-								rm "$INSTDESTDIR/$RSINI"
-							fi
 
 							return
 						fi
@@ -8878,7 +8873,7 @@ function installReshade {
 
 				#d3d47 - Required for ReShade
 				# NOTE 25/08/23: *Is* it still required?
-				installd3d47dll "$D3D47_32" "$RSD3D47DLL"
+				# installd3d47dll "$D3D47_32" "$RSD3D47DLL"
 
 				# Rewrite the ReShade TXT file to ensure it only has our installed ReShade DLLs
 				if [ -f "$RSTXT" ]; then
@@ -8886,7 +8881,7 @@ function installReshade {
 				fi
 
 				# Add d3dcompiler_47 and custom ReShade DLL names, removing any non-ReShade DLLs (ensures previously entered DLL names get removed and not incorrectly tracked as ReShade DLLs)
-				appendToRSTXT "$D3D47"
+				# appendToRSTXT "$D3D47"
 				for CUSTRSDLL in "${RSDLLNAMEARR[@]}"; do
 					writelog "INFO" "${FUNCNAME[0]} - Writing '$CUSTRSDLL' to '$RSTXT'"
 					appendToRSTXT "$CUSTRSDLL"
@@ -8908,6 +8903,25 @@ function installReshade {
 		else
 			writelog "SKIP" "${FUNCNAME[0]} - INSTDESTDIR '$INSTDESTDIR' not found" 
 		fi
+	fi
+}
+
+# Remove ReShade files (i.e. to replace with SpecialK)
+# Use later
+function removeReShadeInstallation {
+	while read -r RSDLLREMOVEFILE; do
+		RSDLLREMOVEPATH="${INSTDESTDIR}/$RSDLLREMOVEFILE"
+		if [ -f "$RSDLLREMOVEPATH" ]; then
+			rm "$RSDLLREMOVEPATH"
+		fi
+	done < "$INSTDESTDIR/$RSTXT"
+
+	if [ -f "$INSTDESTDIR/$RSINI" ]; then
+		rm "$INSTDESTDIR/$RSINI"
+	fi
+
+	if [ -f "$INSTDESTDIR/$RSTXT" ]; then
+		rm "$INSTDESTDIR/$RSTXT"
 	fi
 }
 
@@ -9025,8 +9039,8 @@ function checkReshade {
 				installReshade F
 			fi
 
-			writelog "INFO" "${FUNCNAME[0]} - Setting WINEDLLOVERRIDES for ${RESH}: dxgi=n,b;d3d9=n,b;${D3D47//.dll}=n,b;opengl32=n,b"
-			export WINEDLLOVERRIDES="$WINEDLLOVERRIDES;dxgi=n,b;d3d9=n,b;${D3D47//.dll}=n,b;opengl32=n,b"
+			writelog "INFO" "${FUNCNAME[0]} - Setting WINEDLLOVERRIDES for ${RESH}: dxgi=n,b;d3d9=n,b;${D3D47//.dll}=n,b;d3d11=n,b;opengl32=n,b"
+			export WINEDLLOVERRIDES="$WINEDLLOVERRIDES;dxgi=n,b;d3d9=n,b;${D3D47//.dll}=n,b;d3d11=n,b;opengl32=n,b"
 		fi
 	else	
 		if [ -f "$FRSINI" ]; then
