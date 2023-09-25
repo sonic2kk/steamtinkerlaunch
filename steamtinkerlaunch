@@ -8708,18 +8708,14 @@ function appendToRSTXT {
 		touch "$INSTDESTDIR/$RSTXT"
 	fi
 
-	if ! grep -qw "$1" "$INSTDESTDIR/$RSTXT" && [ ! -f "$INSTDESTDIR/$SPEKENA" ]; then
+	if ! grep -qw "$1" "$INSTDESTDIR/$RSTXT"; then
 		echo "$1" >> "$INSTDESTDIR/$RSTXT"
 		writelog "INFO" "${FUNCNAME[0]} - Added '$1' to list of tracked ReShade DLLs at to '$INSTDESTDIR/$RSTXT'"
-	elif [ -f "$INSTDESTDIR/$SPEKENA" ]; then  # Don't create/write to ReShade.txt if SpecialK is installed
-		writelog "INFO" "${FUNCNAME[0]} - SpecialK seems to be installed, not writing anything to '$RSTXT'"
 	else
 		writelog "INFO" "${FUNCNAME[0]} - ReShade DLL '$1' already on list of tracked ReShade DLLs at '$INSTDESTDIR/$RSTXT' - Nothing to do."
 	fi
 
-	if [ -f "$INSTDESTDIR/$RSTXT" ]; then
-		sort "$INSTDESTDIR/$RSTXT" -u -o "$INSTDESTDIR/$RSTXT"
-	fi
+	sort "$INSTDESTDIR/$RSTXT" -u -o "$INSTDESTDIR/$RSTXT"
 }
 
 # $2 used to specify NOD3D9 wehn we copied both DXGI and D3D9 DLLs, but we no longer do that, so $2 is unused 
@@ -8731,20 +8727,16 @@ function installRSdll {
 	# This function could be changed in future to take the path as a parameter as well, but that was not important at time of writing
 	function manageDuplicateRSDLL {
 		writelog "INFO" "${FUNCNAME[0]} - SPEKENA is '$SPEKENA'"
-		if [ "$USESPECIALK" -eq 1 ] && [ "$USERESHSPEKPLUGIN" -eq 0 ]; then
-			# If we call this function we assume there's a DLL conflict, and if SpecialK is enabled, installed, and its DLL name matches the conflicting DLL name, skip this DLL
-			writelog "WARN" "${FUNCNAME[0]} - SpecialK is installed and its DLL name '$SPEKDLLNAME' appears to conflict with the selected ReShade DLL name '$1' -- Not overwriting SpecialK DLL with ReShade!"
-		else
-			writelog "WARN" "${FUNCNAME[0]} - DLL with name '$1' found in game dir '$INSTDESTDIR' but is not tracked by us - This is possibly a game/mod DLL"
-			writelog "WARN" "${FUNCNAME[0]} - Backing up DLL at '$INSTDESTDIR/$1' to '$INSTDESTDIR/${1}.bak' and moving our ReShade DLL anyway"
 
-			if [ -f "$INSTDESTDIR/${1}.bak" ]; then
-				writelog "ERROR" "${FUNCNAME[0]} - ERROR: Back-up DLL name '${1}.bak' already exists -- This is probably a very bad thing!"
-			fi
+		writelog "WARN" "${FUNCNAME[0]} - DLL with name '$1' found in game dir '$INSTDESTDIR' but is not tracked by us - This is possibly a game/mod DLL"
+		writelog "WARN" "${FUNCNAME[0]} - Backing up DLL at '$INSTDESTDIR/$1' to '$INSTDESTDIR/${1}.bak' and moving our ReShade DLL anyway"
 
-			mv "$INSTDESTDIR/$1" "$INSTDESTDIR/${1}.bak" 2>/dev/null
-			cp "$RESHADESRCDIR/$RSVERS/$2" "$INSTDESTDIR/$1" >/dev/null 2>/dev/null
+		if [ -f "$INSTDESTDIR/${1}.bak" ]; then
+			writelog "ERROR" "${FUNCNAME[0]} - ERROR: Back-up DLL name '${1}.bak' already exists -- This is probably a very bad thing!"
 		fi
+
+		mv "$INSTDESTDIR/$1" "$INSTDESTDIR/${1}.bak" 2>/dev/null
+		cp "$RESHADESRCDIR/$RSVERS/$2" "$INSTDESTDIR/$1" >/dev/null 2>/dev/null
 	}
 
 	if [ ! -f "$INSTDESTDIR/$1" ] || [ "$1" == "F" ]; then
@@ -8758,8 +8750,6 @@ function installRSdll {
 	else
 		# Check for ReShade DLL name conflicts
 		if [ -f "$INSTDESTDIR/$1" ] && [ -f "$INSTDESTDIR/$RSTXT" ] && ! grep -qw "$1" "$INSTDESTDIR/$RSTXT"; then
-			RSDLLNAMECONFLICTFOUND=1
-		elif [ -f "$INSTDESTDIR/$1" ] && [ -f "$INSTDESTDIR/$RSTXT" ] && [ "$USESPECIALK" -eq 1 ] && [ "$USERESHSPEKPLUGIN" -eq 0 ] && [ -f "$INSTDESTDIR/$SPEKENA" ]; then
 			RSDLLNAMECONFLICTFOUND=1
 		fi
 
@@ -8864,14 +8854,31 @@ function installReshade {
 			#
 			# Only install ReShade "normally" if (ReShade is on) or (if ReShade+SpecialK are on and ReShade SpecialK Plugin is disabled)
 			if [[ "$USERESHADE" -eq 1 || ( "$USERESHADE" -eq 1 && "$USESPECIALK" -eq 1 && "$USERESHSPEKPLUGIN" -eq 0 ) ]]; then
-				#d3d47 - Required for ReShade
-				# NOTE 25/08/23: *Is* it still required?
-				installd3d47dll "$D3D47_32" "$RSD3D47DLL"
+				# Check to make sure none of our ReShade names conflict with SpecialK -- This will abort install, and is the only place we need to abort install
+				if [ "$USESPECIALK" -eq 1 ] && [ "$USERESHSPEKPLUGIN" -eq 0 ]; then 
+					for CUSTRSDLL in "${RSDLLNAMEARR[@]}"; do
+						if [[ "$SPEKRSCHECKDLL" == "$SPEKREALDLLNAME" ]]; then
+							writelog "ERROR" "${FUNCNAME[0]} - ReShade is enabled and the chosen ReShade DLL name conflicts with the SpecialK DLL name -- Not installing"
+							notiShow "$( strFix "$NOTY_SPEKRESHDLLCONFLICT" "$RESH" "$SPEK" )"
+
+							# Remove ReShade INI
+							if [ -f "$INSTDESTDIR/$RSINI" ]; then
+								rm "$INSTDESTDIR/$RSINI"
+							fi
+
+							return
+						fi
+					done
+				fi
 
 				# actual ReShade DLL name (either d3d9/d3d11/dxgi, or a custom user selected name)
 				for CUSTRSDLL in "${RSDLLNAMEARR[@]}"; do
 					installRSdll "$CUSTRSDLL" "0" "$RSARCHDLL"
 				done
+
+				#d3d47 - Required for ReShade
+				# NOTE 25/08/23: *Is* it still required?
+				installd3d47dll "$D3D47_32" "$RSD3D47DLL"
 
 				# Rewrite the ReShade TXT file to ensure it only has our installed ReShade DLLs
 				if [ -f "$RSTXT" ]; then
@@ -8885,7 +8892,8 @@ function installReshade {
 					appendToRSTXT "$CUSTRSDLL"
 				done
 			else
-				if [ "$USERESHADE" -eq 1 ] && [ "$USESPECIALK" -eq 1 ] && [  ]; then
+				if [ "$USERESHADE" -eq 1 ] && [ "$USESPECIALK" -eq 1 ]; then
+					# End here, as ReShade Installation code will be handled by SpecialK
 					writelog "SKIP" "${FUNCNAME[0]} - USERESHADE and USESPECIALK are enabled together, and ReShade is being used as a Plugin, skipping custom ReShade DLL name as SpecialK needs specific ReShade DLL names"
 				fi
 			fi
@@ -8983,27 +8991,6 @@ function checkReshade {
 	fi
 
 	if [ "$USERESHADE" -eq 1 ]; then
-		if [ -f "$FRSINI" ]; then
-			if grep -q "EffectSearchPaths=.\$RSSUB\Shaders" "$FRSINI"; then
-				writelog "SKIP" "${FUNCNAME[0]} - Already have '$FRSINI' with default paths pointing to '$RSSUB'"
-			else
-				writelog "SKIP" "${FUNCNAME[0]} - Found a '$FRSINI' without default paths pointing to '$RSSUB' - not touching it"
-			fi
-		else
-			if [ -f "$FRSOINI" ] && grep -q "EffectSearchPaths=.*$RSSUB.*Shaders" "$FRSOINI"; then
-				writelog "INFO" "${FUNCNAME[0]} - Re-enabling previously disabled '$FRSOINI'"
-				mv "$FRSOINI" "$FRSINI"
-			else
-				writelog "INFO" "${FUNCNAME[0]} - Creating initial '$FRSINI' with default paths pointing to '$RSSUB'"
-				{
-					echo "[GENERAL]"
-					echo "EffectSearchPaths=.\\$RSSUB\Shaders"
-					echo "TextureSearchPaths=.\\$RSSUB\Textures"
-					echo "PreprocessorDefinitions=RESHADE_DEPTH_LINEARIZATION_FAR_PLANE=1000.0,RESHADE_DEPTH_INPUT_IS_UPSIDE_DOWN=0,RESHADE_DEPTH_INPUT_IS_REVERSED=1,RESHADE_DEPTH_INPUT_IS_LOGARITHMIC=0"
-				} > "$FRSINI"
-			fi
-		fi
-
 		# EXPERIMENTALLY RE-ENABLED
 		# NOTE that this has no ReShade updating or version override checks, so it is missing many features that regular ReShade has!
 		if [ "$USESPECIALK" -eq 1 ] && [ "$USERESHSPEKPLUGIN" -eq 1 ]; then
@@ -9266,7 +9253,6 @@ function useSpecialK {
 		SPEKSRC="$1"
 		SPEKDLLCONFLICTFOUND=0
 		SHOULDINSTALLSPEK=1
-		SPEKDSTDIR="$( dirname "$SPEKDST" )"
 
 		if [ "$USERESHADE" -eq 1 ] && [ -f "$SPEKDDIR/$RSTXT" ] && [ "$USERESHSPEKPLUGIN" -eq 0 ]; then
 			## ReShade is already installed and in use, and ReShade+SpecialK have selected DLL names conflict
