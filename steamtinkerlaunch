@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230926-7 (toggle-reshade-spek-plugin)"
+PROGVERS="v14.0.20230926-9 (toggle-reshade-spek-plugin)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -8857,9 +8857,12 @@ function installReshade {
 					getSpecialKGameRenderApi
 					SPEKREALDLLNAME="$( basename "$SPEKDST" )"
 					for CUSTRSDLL in "${RSDLLNAMEARR[@]}"; do
-						if [[ "$CUSTRSDLL" = "$SPEKREALDLLNAME" ]] && [ -f "$CUSTRSDLL" ]; then
-							writelog "ERROR" "${FUNCNAME[0]} - ReShade is enabled and the chosen ReShade DLL name conflicts with the SpecialK DLL name -- Not installing"
-							notiShow "$( strFix "$NOTY_SPEKRESHDLLCONFLICT" "$RESH" "$SPEK" )"
+						if [[ "$CUSTRSDLL" = "$SPEKREALDLLNAME" ]] && [ -f "$SPEKREALDLLNAME" ] && [ ! -f "$INSTDESTDIR/$RSTXT" ]; then
+							# If our ReShade DLL matches the chosen SpecialK DLL name, if the SpecialK DLL is already in the game files, and if it's not a ReShade DLL (i.e. RSTXT doesn't exist), assume we have a SpecialK conflict
+							# If ReShade+SpecialK are installed fresh at the same time, ReShade is installed early, and this logic prevents logging that ReShade won't be installed because it conflicts with SpecialK
+							# Which is incorrect because it's detecting our installed ReShade DLLs as SpecialK DLLs
+							writelog "ERROR" "${FUNCNAME[0]} - SpecialK is enabled and the chosen ReShade DLL name conflicts with the SpecialK DLL name -- Not installing ReShade"
+							notiShow "$( strFix "$NOTY_SPEKRESHDLLCONFLICT" "$SPEK" "$RESH" )"
 
 							return
 						fi
@@ -9301,8 +9304,8 @@ function useSpecialK {
 			
 			SPEKREALDLLNAME="$( basename "$SPEKDST" )"  # Makes sure we don't compare against 'auto'
 			for SPEKRSCHECKDLL in "${SPEKRSDLLNAMECHECKARR[@]}"; do
-				if [[ "$SPEKRSCHECKDLL" == "$SPEKREALDLLNAME" ]] && [ -f "$SPEKREALDLLNAME" ]; then
-					writelog "ERROR" "${FUNCNAME[0]} - ReShade is enabled and the chosen ReShade DLL name conflicts with the SpecialK DLL name -- Not installing"
+				if [[ "$SPEKRSCHECKDLL" == "$SPEKREALDLLNAME" ]] && [ -f "$SPEKRSCHECKDLL" ]; then
+					writelog "ERROR" "${FUNCNAME[0]} - ReShade is enabled and the chosen SpecialK DLL name conflicts with the ReShade DLL name -- Not installing SpecialK"
 					notiShow "$( strFix "$NOTY_SPEKRESHDLLCONFLICT" "$RESH" "$SPEK" )"
 					SPEKDLLCONFLICTFOUND=1
 					break
