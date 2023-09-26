@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230926-2"
+PROGVERS="v14.0.20230927-1"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -8852,6 +8852,8 @@ function installReshade {
 			#
 			# Only install ReShade "normally" if (ReShade is on and SpecialK is off) or (if ReShade+SpecialK are on and ReShade SpecialK Plugin is disabled)
 			if [[ ( "$USERESHADE" -eq 1 && "$USESPECIALK" -eq 0 ) || ( "$USERESHADE" -eq 1 && "$USESPECIALK" -eq 1 && "$USERESHSPEKPLUGIN" -eq 0 ) ]]; then
+				removeReShadeSpecialKInstallation "1"  # Remove any existing ReShade SpecialK Plugin installation so we can replace it with a 'regular' ReShade install 
+
 				# Check to make sure none of our ReShade names conflict with SpecialK -- This will abort install, and is the only place we need to abort install
 				if [ "$USESPECIALK" -eq 1 ] && [ "$USERESHSPEKPLUGIN" -eq 0 ]; then 
 					getSpecialKGameRenderApi
@@ -8913,21 +8915,52 @@ function installReshade {
 }
 
 # Remove ReShade files (i.e. to replace with SpecialK)
-# Use later
 function removeReShadeInstallation {
+	KEEPRESHADEINI="${1:-0}"
+
+	writelog "INFO" "${FUNCNAME[0]} - INSTDESTDIR is '$INSTDESTDIR'"
+
 	while read -r RSDLLREMOVEFILE; do
 		RSDLLREMOVEPATH="${INSTDESTDIR}/$RSDLLREMOVEFILE"
 		if [ -f "$RSDLLREMOVEPATH" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Removing non-SpecialK ReShade DLL from '$RSDLLREMOVEPATH'"
 			rm "$RSDLLREMOVEPATH"
 		fi
 	done < "$INSTDESTDIR/$RSTXT"
 
-	if [ -f "$INSTDESTDIR/$RSINI" ]; then
+	if [ -f "$INSTDESTDIR/$RSINI" ] && [ "$KEEPRESHADEINI" -eq 0 ]; then
 		rm "$INSTDESTDIR/$RSINI"
 	fi
 
 	if [ -f "$INSTDESTDIR/$RSTXT" ]; then
 		rm "$INSTDESTDIR/$RSTXT"
+	fi
+}
+
+# Remove ReShade SpecialK Plugin installation (i.e. to replace it with non-plugin installation)
+function removeReShadeSpecialKInstallation {
+	KEEPRESHADEINI="${1:-0}"
+
+	# DLLs and JSON files
+	if [ -f "$INSTDESTDIR/$RS_32" ]; then
+		rm "$INSTDESTDIR/$RS_32"
+	fi
+
+	if [ -f "$INSTDESTDIR/${RS_32//.dll/.json}" ]; then
+		rm "$INSTDESTDIR/${RS_32//.dll/.json}"
+	fi
+
+	if [ -f "$INSTDESTDIR/$RS_64" ]; then
+		rm "$INSTDESTDIR/$RS_64"
+	fi
+
+	if [ -f "$INSTDESTDIR/${RS_64//.dll/.json}" ]; then
+		rm "$INSTDESTDIR/${RS_64//.dll/.json}"
+	fi
+
+	# INI file
+	if [ -f "$INSTDESTDIR/$RSINI" ] && [ "$KEEPRESHADEINI" -eq 0 ]; then
+		rm "$INSTDESTDIR/$RSINI"
 	fi
 }
 
@@ -8958,14 +8991,20 @@ function installReshadeForSpecialK {
 	# These DLLSs are not tracked, we should be tracking them in ReShade.txt so toggling ReShade off correctly removes them
 	# When turning ReShade off we should also check the DLL names and if SpecialK is no longer in use, to clean up a SpecialK+ReShade install (i.e. if using ReShade64.dll but SpecialK is off, just remove instead of renaming to .dll_off)	installRSdll "$RS_32" "0" "$RS_32"
 	getReShadeExeArch
-	
+
 	# Very similar logic used for installReshade
 	if [ "$(getArch "$CHARCH")" == "32" ]; then
+		# Remove any existing ReShade DLLs so they can be replaced with SpecialK ones
+		# TODO check if INI needs renamed someway
+		removeReShadeInstallation "1"  # Remove any existing ReShade installation
+
 		#32bit
 		writelog "INFO" "${FUNCNAME[0]} - Installing 32bit ${RESH} for ${SPEK} as '$CHARCH' is 32bit" 
 		installRSdll "$RS_32" "0" "$RS_32"
 		installRSdll "${RS_32//.dll/.json}" "0" "${RS_32//.dll/.json}"
 	elif [ "$(getArch "$CHARCH")" == "64" ]; then
+		removeReShadeInstallation "1"  # Remove any existing ReShade installation
+
 		#64bit
 		writelog "INFO" "${FUNCNAME[0]} - Installing 64bit ${RESH} for ${SPEK} as '$CHARCH' is 64bit" 
 		installRSdll "$RS_64" "0" "$RS_64"
@@ -9426,6 +9465,9 @@ function useSpecialK {
 		if [ -f "$SPEKENA" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - ${SPEK} was enabled before, removing existing $SPEK dlls"
 			removeSpekDlls
+			if [ "$USERESHADE" -eq 1 ]; then
+				removeReShadeSpecialKInstallation "1"
+			fi
 		fi
 	fi
 }
