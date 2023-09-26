@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230927-2"
+PROGVERS="v14.0.20230927-3"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -9263,46 +9263,49 @@ function getSpecialKGameRenderApi {
 	writelog "INFO" "${FUNCNAME[0]} - SpecialK DLL install path is '$SPEKDST'"
 }
 
+## Example to get key UsingWine under section [Compatibility.General] in dxgi.ini and change it from False toTrue 
+## writeValueToIni "Compatibility.General" "UsingWINE" "false" "true" "dxgi.ini"
+function writeValueToIni {
+	INISECTION="$1"  # i.e Compatibility.General
+	INIKEY="$2"  # i.e. UsingWINE
+	INIFROMVAL="$3"  # value to change from, i.e. false
+	INITOVAL="$4"  # value to change to i.e. true
+	INIFILE="$5"  # i.e. dxgi.ini
+
+	ININEWSTR="${INIKEY}=${INITOVAL}"
+
+	if [ -f "$INIFILE" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Found the ini file '$INIFILE' - setting '$ININEWSTR' under '$INISECTION'" "E"
+		if grep -q "$INIKEY=$INIFROMVAL" "$INIFILE"; then
+			writelog "INFO" "${FUNCNAME[0]} - Setting '$INIKEY' in the config to '$INITOVAL'" "E"
+			sed "s:$INIKEY=$INIFROMVAL:$ININEWSTR:" -i "$INIFILE"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Adding a new entry '$INIKEY' in the ini, because it is missing" "E"
+			if grep -q "$INISECTION" "$INIFILE"; then
+				sed "/\[$INISECTION\]/a $ININEWSTR" -i "$INIFILE"
+			else
+				sed "1 i $ININEWSTR" -i "$INIFILE"
+				sed "1 i \[$INISECTION\]" -i "$INIFILE"
+			fi
+		fi
+	else
+		writelog "INFO" "${FUNCNAME[0]} - Could not find INI file at '$INIFILE'"
+	fi
+}
+
 function prepareSpecialKIni {
 	UWI="UsingWINE"
 	UWIT="$UWI=true"
 
-	# Not sure how this works with choosing specific DLL name -- May still work?
-	if [ -f "$SPEKDDIR/$DXGI" ]; then
-		FOUNDRAPI="$SPEKDDIR/$DXGI"
-	elif [ -f "$SPEKDDIR/$D3D9" ]; then
-		FOUNDRAPI="$SPEKDDIR/$D3D9"
-	elif [ -f "$SPEKDDIR/$OGL32" ]; then
-		FOUNDRAPI="$SPEKDDIR/$D3D9"
-	else
-		getSpecialKGameRenderApi
-		FOUNDRAPI="$SPEKDST"
-	fi
+	SPEKDLLNAMEFORINI="$( basename "$SPEKDST" )"
+	SPEKINI="${SPEKDLLNAMEFORINI//.dll/.ini}"  # Name INI after chosen SpecialK DLL name
 
-	if [ -z "$SPEKINI" ]; then
-		SPEKINI="${FOUNDRAPI//.dll/.ini}"
-	fi
-	
 	COGE="Compatibility.General"
 
 	if [ -n "$SPEKINI" ]; then
 		if [ -f "$SPEKINI" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Found the ini file '$SPEKINI' - enabling '$UWI' function" "E"
-			if grep -q "$UWIT" "$SPEKINI"; then
-				writelog "SKIP" "${FUNCNAME[0]} - nothing to do - '$UWI' is already enabled" "E"
-			elif grep -q "$UWI=false" "$SPEKINI"; then
-				writelog "INFO" "${FUNCNAME[0]} - Enabling '$UWI' in the config" "E"
-				sed "s:$UWI=false:$UWIT:" -i "$SPEKINI"
-			else
-				writelog "INFO" "${FUNCNAME[0]} - Adding a new entry '$UWI' in the ini, because it is missing" "E"
-				if grep -q "$COGE" "$SPEKINI"; then
-					sed "/\[$COGE\]/a $UWIT" -i "$SPEKINI"
-				else
-					sed "1 i $UWIT" -i "$SPEKINI"
-					sed "1 i \[$COGE\]" -i "$SPEKINI"
-				fi
-			fi
-
+			writeValueToIni "Compatibility.General" "UsingWINE" "false" "true" "$SPEKINI"
+			writeValueToIni "Render.OSD" "ShowInVideoCapture" "true" "false" "$SPEKINI"  # Seems to be needed to prevent crashing sometimes
 		else
 			writelog "INFO" "${FUNCNAME[0]} - Creating a minimal ini file '$SPEKINI' with enabled '$UWI' function" "E"
 			{
@@ -9408,6 +9411,8 @@ function useSpecialK {
 			# So write out the DLL name to the SPEKENA file to ensure we don't end up with a blank file
 			# We can't always write out to the file unconditionally as SPEKDLLCONFLICTFOUND means SpecialK wasn't installed
 			echo "$SPEKDST" >> "$SPEKENA"
+
+			prepareSpecialKIni  # Needed here to update some values that may only exist after first launch
 		elif [ "$SPEKDLLCONFLICTFOUND" -eq 1 ]; then
 			writelog "ERROR" "${FUNCNAME[0]} - Could not install SpecialK -- DLL naming conflict was found"
 		fi
