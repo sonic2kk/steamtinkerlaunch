@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230927-3"
+PROGVERS="v14.0.20230927-4"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -8834,12 +8834,12 @@ function installReshade {
 			if [ "$(getArch "$CHARCH")" == "32" ]; then
 				#32bit:
 				writelog "INFO" "${FUNCNAME[0]} - Installing 32bit ${RESH} as '$CHARCH' is 32bit" 
-				# RSD3D47DLL="$D3D47_32"
+				RSD3D47DLL="$D3D47_32"
 				RSARCHDLL="$RS_32"
 			elif [ "$(getArch "$CHARCH")" == "64" ]; then
 				#64bit:
 				writelog "INFO" "${FUNCNAME[0]} - Installing 64bit ${RESH} as '$CHARCH' is 64bit" 
-				# RSD3D47DLL="$D3D47_64"
+				RSD3D47DLL="$D3D47_64"
 				RSARCHDLL="$RS_64"
 			else
 				#feelsbad.jpg:
@@ -8872,7 +8872,7 @@ function installReshade {
 				fi
 
 				# actual ReShade DLL name (either d3d9/d3d11/dxgi, or a custom user selected name)
-				notiShow "$NOTY_RESHADEINSTALLING"
+				# notiShow "$NOTY_RESHADEINSTALLING"
 				for CUSTRSDLL in "${RSDLLNAMEARR[@]}"; do
 					installRSdll "$CUSTRSDLL" "0" "$RSARCHDLL"
 				done
@@ -8881,7 +8881,7 @@ function installReshade {
 
 				#d3d47 - Required for ReShade
 				# NOTE 25/08/23: *Is* it still required?
-				# installd3d47dll "$D3D47_32" "$RSD3D47DLL"
+				installd3d47dll "$RSD3D47DLL" "$INSTDESTDIR"
 
 				# Rewrite the ReShade TXT file to ensure it only has our installed ReShade DLLs
 				if [ -f "$RSTXT" ]; then
@@ -8999,7 +8999,8 @@ function installReshadeForSpecialK {
 		removeReShadeInstallation "1"  # Remove any existing ReShade installation
 
 		#32bit
-		writelog "INFO" "${FUNCNAME[0]} - Installing 32bit ${RESH} for ${SPEK} as '$CHARCH' is 32bit" 
+		writelog "INFO" "${FUNCNAME[0]} - Installing 32bit ${RESH} for ${SPEK} as '$CHARCH' is 32bit"
+		installd3d47dll "$D3D47_32" "$INSTDESTDIR"
 		installRSdll "$RS_32" "0" "$RS_32"
 		installRSdll "${RS_32//.dll/.json}" "0" "${RS_32//.dll/.json}"
 	elif [ "$(getArch "$CHARCH")" == "64" ]; then
@@ -9007,6 +9008,7 @@ function installReshadeForSpecialK {
 
 		#64bit
 		writelog "INFO" "${FUNCNAME[0]} - Installing 64bit ${RESH} for ${SPEK} as '$CHARCH' is 64bit" 
+		installd3d47dll "$D3D47_64" "$INSTDESTDIR"
 		installRSdll "$RS_64" "0" "$RS_64"
 		installRSdll "${RS_64//.dll/.json}" "0" "${RS_64//.dll/.json}"
 	else
@@ -9353,6 +9355,16 @@ function useSpecialK {
 					break
 				fi
 			done
+
+			if [ -f "$SPEKDST" ] && [ -f "$SPEKENA" ] && grep -qw "$SPEKDST" "$SPEKENA"; then
+				if [ "$AUTOSPEK" -eq 1 ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Updating existing tracked SpecialK DLLs"
+					removeSpekDlls  # Remove existing SpecialK DLLs so we can update them, if auto-update SpecialK is enabled
+				else
+					writelog "INFO" "${FUNCNAME[0]} - SpecialK is installed, tracked, and up-to-date -- Nothing to do"
+					SHOULDINSTALLSPEK=0
+				fi
+			fi
 		else
 			writelog "INFO" "${FUNCNAME[0]} - SpecialK loading normally"
 			# Check to see if SpecialK DLL already exists and is not tracked by us
