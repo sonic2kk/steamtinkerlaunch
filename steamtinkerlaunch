@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230927-4"
+PROGVERS="v14.0.20230928-1"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -9284,10 +9284,17 @@ function writeValueToIni {
 		else
 			writelog "INFO" "${FUNCNAME[0]} - Adding a new entry '$INIKEY' in the ini, because it is missing" "E"
 			if grep -q "$INISECTION" "$INIFILE"; then
+				# Just key=val is missing
 				sed "/\[$INISECTION\]/a $ININEWSTR" -i "$INIFILE"
 			else
-				sed "1 i $ININEWSTR" -i "$INIFILE"
-				sed "1 i \[$INISECTION\]" -i "$INIFILE"
+				# Heading and key=val missing
+				writelog "INFO" "${FUNCNAME[0]} - Creating new section '$INISECTION' with '$ININEWSTR' in '$INIFILE'"
+
+				{
+					echo "[$INISECTION]"
+					echo "$ININEWSTR"
+					echo ""
+				} >> "$SPEKINI"
 			fi
 		fi
 	else
@@ -9296,25 +9303,23 @@ function writeValueToIni {
 }
 
 function prepareSpecialKIni {
-	UWI="UsingWINE"
-	UWIT="$UWI=true"
-
 	SPEKDLLNAMEFORINI="$( basename "$SPEKDST" )"
 	SPEKINI="${SPEKDLLNAMEFORINI//.dll/.ini}"  # Name INI after chosen SpecialK DLL name
 
 	COGE="Compatibility.General"
+	UWI="UsingWINE"
+
+	ROSD="Render.OSD"
+	SIVC="ShowInVideoCapture"
 
 	if [ -n "$SPEKINI" ]; then
-		if [ -f "$SPEKINI" ]; then
-			writeValueToIni "Compatibility.General" "UsingWINE" "false" "true" "$SPEKINI"
-			writeValueToIni "Render.OSD" "ShowInVideoCapture" "true" "false" "$SPEKINI"  # Seems to be needed to prevent crashing sometimes
-		else
-			writelog "INFO" "${FUNCNAME[0]} - Creating a minimal ini file '$SPEKINI' with enabled '$UWI' function" "E"
-			{
-				echo "[$COGE]"
-				echo "$UWIT"
-			} >> "$SPEKINI"
+		if [ ! -f "$SPEKINI" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - SpecialK INI '$SPEKINI' does not exist, creating initial blank INI"
+			touch "$SPEKINI"
 		fi
+
+		writeValueToIni "$COGE" "$UWI" "false" "true" "$SPEKINI"  # SpecialK may already detect and set this appropriately now
+		writeValueToIni "$ROSD" "$SIVC" "true" "false" "$SPEKINI"  # Seems to be needed to prevent crashing sometimes
 	fi
 }
 
