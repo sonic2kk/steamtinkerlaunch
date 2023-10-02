@@ -22840,9 +22840,14 @@ function addNonSteamGameGui {
 					NOSTCOMPATTOOL=""
 				fi
 
+				NOSTARTEXECMD=""  # This dummy command does nothing
+				if [ "$NOSTGEXEARTWORKFALLBACK" -eq 1 ]; then
+					NOSTARTEXECMD="--auto-artwork"
+				fi
+
 				## Arguments here like -hr, -lg, etc are made to match setGameArt
-				writelog "INFO" "${FUNCNAME[0]} - addNonSteamGame -an=\"$NOSTGAPPNAME\" -ep=\"$NOSTGEXEPATH\" -sd=\"$NOSTGSTDIR\" -ip=\"$NOSTGICONPATH\" -lo=\"$NOSTGLAOP\" -hd=\"$NOSTGHIDE\" -adc=\"$NOSTGADC\" -ao=\"$NOSTGAO\" -vr=\"$NOSTGVR\" -t=\"$NOSTTAGS\" -ct=\"$NOSTCOMPATTOOL\" -hr=\"$NOSTGHERO\" -lg=\"$NOSTGLOGO\" -ba=\"$NOSTGBOXART\" -tf=\"$NOSTGTENFOOT\" \"--${NOSTGSETACTION}\""
-				addNonSteamGame -an="$NOSTGAPPNAME" -ep="$NOSTGEXEPATH" -sd="$NOSTGSTDIR" -ip="$NOSTGICONPATH" -lo="$NOSTGLAOP" -hd="$NOSTGHIDE" -adc="$NOSTGADC" -ao="$NOSTGAO" -vr="$NOSTGVR" -t="$NOSTTAGS" -ct="$NOSTCOMPATTOOL" -hr="$NOSTGHERO" -lg="$NOSTGLOGO" -ba="$NOSTGBOXART" -tf="$NOSTGTENFOOT" "--${NOSTGSETACTION}"
+				writelog "INFO" "${FUNCNAME[0]} - addNonSteamGame -an=\"$NOSTGAPPNAME\" -ep=\"$NOSTGEXEPATH\" -sd=\"$NOSTGSTDIR\" -ip=\"$NOSTGICONPATH\" -lo=\"$NOSTGLAOP\" -hd=\"$NOSTGHIDE\" -adc=\"$NOSTGADC\" -ao=\"$NOSTGAO\" -vr=\"$NOSTGVR\" -t=\"$NOSTTAGS\" -ct=\"$NOSTCOMPATTOOL\" -hr=\"$NOSTGHERO\" -lg=\"$NOSTGLOGO\" -ba=\"$NOSTGBOXART\" -tf=\"$NOSTGTENFOOT\" \"--${NOSTGSETACTION}\" \"$NOSTARTEXECMD\""
+				addNonSteamGame -an="$NOSTGAPPNAME" -ep="$NOSTGEXEPATH" -sd="$NOSTGSTDIR" -ip="$NOSTGICONPATH" -lo="$NOSTGLAOP" -hd="$NOSTGHIDE" -adc="$NOSTGADC" -ao="$NOSTGAO" -vr="$NOSTGVR" -t="$NOSTTAGS" -ct="$NOSTCOMPATTOOL" -hr="$NOSTGHERO" -lg="$NOSTGLOGO" -ba="$NOSTGBOXART" -tf="$NOSTGTENFOOT" "--${NOSTGSETACTION}" "$NOSTARTEXECMD"
 			fi
 		;;
 	esac
@@ -23099,6 +23104,19 @@ function addNonSteamGame {
 			NEWSET=0
 		fi
 
+		# Match any image file in same folder as EXE name hero, logo, boxart, tenfoot
+		# If not found it will fall back to the selected value (such as the actual file path provided), meaning
+		# only artwork that exists will be used
+		if [ "$NOSTAUTOARTWORK" -eq 1 ]; then
+			NOSTEXEBASEDIR="$( dirname "$NOSTEXEPATH" | cut -d '"' -f2 )"
+
+			NOSTGHERO="$( findGameArtInExeDir "$NOSTEXEBASEDIR" "hero" "$NOSTGHERO" )"
+			NOSTGLOGO="$( findGameArtInExeDir "$NOSTEXEBASEDIR" "logo" "$NOSTGLOGO" )"
+			NOSTGBOXART="$( findGameArtInExeDir "$NOSTEXEBASEDIR" "boxart" "$NOSTGBOXART" )"
+			NOSTGTENFOOT="$( findGameArtInExeDir "$NOSTEXEBASEDIR" "tenfoot" "$NOSTGTENFOOT" )"
+			NOSTICONPATH="$( findGameArtInExeDir "$NOSTEXEBASEDIR" "icon" "$NOSTICONPATH" )"
+		fi
+
 		writelog "INFO" "${FUNCNAME[0]} - Adding new set '$NEWSET'"
 
 		## TODO refactor to use a function for generating each line to write out, it would be a bit cleaner than this
@@ -23167,14 +23185,6 @@ function addNonSteamGame {
 		writelog "INFO" "${FUNCNAME[0]} - Finished writing out new Non-Steam Game Shortcut"
 		writelog "INFO" "${FUNCNAME[0]} - Adding any chosen Non-Steam game artwork"
 
-		if [ "$NOSTAUTOARTWORK" -eq 1 ]; then
-			NOSTEXEBASEDIR="$( dirname "$NOSTEXEPATH" )"
-
-			NOSTGHERO="$( findGameArtInExeDir "$NOSTEXEBASEDIR" "hero" "$NOSTGHERO" )"
-			NOSTGLOGO="$( findGameArtInExeDir "$NOSTEXEBASEDIR" "logo" "$NOSTGLOGO" )"
-			NOSTGBOXART="$( findGameArtInExeDir "$NOSTEXEBASEDIR" "boxart" "$NOSTGBOXART" )"
-			NOSTGTENFOOT="$( findGameArtInExeDir "$NOSTEXEBASEDIR" "tenfoot" "$NOSTGTENFOOT" )"
-		fi
 		setGameArt "$NOSTAIDGRID" --hero="$NOSTGHERO" --logo="$NOSTGLOGO" --boxart="$NOSTGBOXART" --tenfoot="$NOSTGTENFOOT" "$SGACOPYMETHOD"
 
 		if [ -n "$NOSTCOMPATTOOL" ]; then
