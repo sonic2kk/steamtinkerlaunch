@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20231006-3 (non-staeam-grid-fun)"
+PROGVERS="v14.0.20231006-4 (non-staeam-grid-fun)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -1493,6 +1493,8 @@ function getGridsForInstalledGames {
 	fi
 }
 
+# TODO implement this for general use on the commandline if not already supported!
+# Right now it can only be used when adding a Non-Steam Game and not retroactively
 function getGridsForNonSteamGame {
 	STEAMGRIDDBGAMEID="$1"
 	NONSTEAMAPPID="$2"
@@ -22875,8 +22877,8 @@ function addNonSteamGameGui {
 				fi
 
 				## Arguments here like -hr, -lg, etc are made to match setGameArt
-				writelog "INFO" "${FUNCNAME[0]} - addNonSteamGame -an=\"$NOSTGAPPNAME\" -ep=\"$NOSTGEXEPATH\" -sd=\"$NOSTGSTDIR\" -ip=\"$NOSTGICONPATH\" -lo=\"$NOSTGLAOP\" -hd=\"$NOSTGHIDE\" -adc=\"$NOSTGADC\" -ao=\"$NOSTGAO\" -vr=\"$NOSTGVR\" -t=\"$NOSTTAGS\" -ct=\"$NOSTCOMPATTOOL\" -hr=\"$NOSTGHERO\" -lg=\"$NOSTGLOGO\" -ba=\"$NOSTGBOXART\" -tf=\"$NOSTGTENFOOT\" \"--${NOSTGSETACTION}\" \"$NOSTARTEXECMD\""
-				addNonSteamGame -an="$NOSTGAPPNAME" -ep="$NOSTGEXEPATH" -sd="$NOSTGSTDIR" -ip="$NOSTGICONPATH" -lo="$NOSTGLAOP" -hd="$NOSTGHIDE" -adc="$NOSTGADC" -ao="$NOSTGAO" -vr="$NOSTGVR" -t="$NOSTTAGS" -ct="$NOSTCOMPATTOOL" -hr="$NOSTGHERO" -lg="$NOSTGLOGO" -ba="$NOSTGBOXART" -tf="$NOSTGTENFOOT" "--${NOSTGSETACTION}" "$NOSTARTEXECMD"
+				writelog "INFO" "${FUNCNAME[0]} - addNonSteamGame -an=\"$NOSTGAPPNAME\" -ep=\"$NOSTGEXEPATH\" -sd=\"$NOSTGSTDIR\" -ip=\"$NOSTGICONPATH\" -lo=\"$NOSTGLAOP\" -hd=\"$NOSTGHIDE\" -adc=\"$NOSTGADC\" -ao=\"$NOSTGAO\" -vr=\"$NOSTGVR\" -t=\"$NOSTTAGS\" -ct=\"$NOSTCOMPATTOOL\" -hr=\"$NOSTGHERO\" -lg=\"$NOSTGLOGO\" -ba=\"$NOSTGBOXART\" -tf=\"$NOSTGTENFOOT\" \"--${NOSTGSETACTION}\" \"$NOSTARTEXECMD\" -sgid=\"$NOSTSGDBAID\""
+				addNonSteamGame -an="$NOSTGAPPNAME" -ep="$NOSTGEXEPATH" -sd="$NOSTGSTDIR" -ip="$NOSTGICONPATH" -lo="$NOSTGLAOP" -hd="$NOSTGHIDE" -adc="$NOSTGADC" -ao="$NOSTGAO" -vr="$NOSTGVR" -t="$NOSTTAGS" -ct="$NOSTCOMPATTOOL" -hr="$NOSTGHERO" -lg="$NOSTGLOGO" -ba="$NOSTGBOXART" -tf="$NOSTGTENFOOT" "--${NOSTGSETACTION}" "$NOSTARTEXECMD" -sgid="$NOSTSGDBAID"
 			fi
 		;;
 	esac
@@ -22972,6 +22974,7 @@ function addNonSteamGame {
 	NOSTVR=0
 	NOSTSTLLO=0
 	NOSTAUTOARTWORK=0
+	NOSTUSESGDB=0
 
 	for i in "$@"; do
 		case $i in
@@ -23053,6 +23056,13 @@ function addNonSteamGame {
 			--auto-artwork)
 				NOSTAUTOARTWORK=1  # Look for artwork with matching names from game EXE folder (hero/logo/boxart/tenfoot.png/jpg/jpeg/gif)
 				shift ;;
+			--steamgriddb-game-id|-sgid=*)
+				NOSTSGDBGAMEID="${i#*=}"  # SteamGridDB Game ID to search for grids on (optional)
+				# This is off by default but always passed from addNonSteamGame, so if we actually get a value, enable it
+				if [ -n "$NOSTSGDBGAMEID" ]; then
+					NOSTUSESGDB=1
+				fi
+				shift ;;
 			## Used to pass to setGameArt to define how we want to set game artwork (essentially giving a Non-Steam Game UI the functionality of setGameArt since we call it here anyway)
 			--copy)
 				SGACOPYMETHOD="--copy"  # Copy file to grid folder -- Default
@@ -23119,6 +23129,7 @@ function addNonSteamGame {
 		writelog "INFO" "${FUNCNAME[0]} - Tenfoot Artwork: '${NOSTGTENFOOT}'"
 		writelog "INFO" "${FUNCNAME[0]} - Copy Method for Artwork: '${SGACOPYMETHOD}'"
 		writelog "INFO" "${FUNCNAME[0]} - EXE Dir Fallback Artwork: '${NOSTGEXEARTWORKFALLBACK}'"
+		writelog "INFO" "${FUNCNAME[0]} - SteamGridDB Game ID: '${NOSTSGDBGAMEID}'"
 
 		if [ -f "$SCPATH" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - The file '$SCPATH' already exists, creating a backup, then removing the 2 closing backslashes at the end"
@@ -23145,6 +23156,11 @@ function addNonSteamGame {
 			NOSTGBOXART="$( findGameArtInExeDir "$NOSTEXEBASEDIR" "boxart" "$NOSTGBOXART" )"
 			NOSTGTENFOOT="$( findGameArtInExeDir "$NOSTEXEBASEDIR" "tenfoot" "$NOSTGTENFOOT" )"
 			NOSTICONPATH="$( findGameArtInExeDir "$NOSTEXEBASEDIR" "icon" "$NOSTICONPATH" )"
+		fi
+
+		if [ "$NOSTUSESGDB" -eq 1 ]; then
+			# SteamGridDB ID and Non-Steam Game AppID, respectively
+			getGridsForNonSteamGame "$NOSTSGDBGAMEID" "$NOSTAIDGRID"
 		fi
 
 		writelog "INFO" "${FUNCNAME[0]} - Adding new set '$NEWSET'"
@@ -23215,6 +23231,7 @@ function addNonSteamGame {
 		writelog "INFO" "${FUNCNAME[0]} - Finished writing out new Non-Steam Game Shortcut"
 		writelog "INFO" "${FUNCNAME[0]} - Adding any chosen Non-Steam game artwork"
 
+		# TODO this will probably overwrite any artwork found by SteamGridDB, investigate 
 		setGameArt "$NOSTAIDGRID" --hero="$NOSTGHERO" --logo="$NOSTGLOGO" --boxart="$NOSTGBOXART" --tenfoot="$NOSTGTENFOOT" "$SGACOPYMETHOD"
 
 		if [ -n "$NOSTCOMPATTOOL" ]; then
