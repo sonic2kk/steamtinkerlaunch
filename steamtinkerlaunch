@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20231006-1 (non-staeam-grid-fun)"
+PROGVERS="v14.0.20231006-2 (non-staeam-grid-fun)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -1383,7 +1383,9 @@ function checkSGDbApi {
 # Takes a list of appids separated by newlines
 function getGrids {
 	if checkSGDbApi && [ "$STLPLAY" -eq 0 ]; then
-		CHOSENAPI="${2:-STEAMGRIDDBAPI}"
+		CHOSENAPI="${2:-STEAMGRIDDBAPI}"  # Endpoint (i.e. different one for different grids)
+		FORCESGDBDLTOSTEAM="$3"  # Force Non-Steam games to always download to SteamGrid dir
+		GRIDNAMEAPPIDOVERRIDE="$4"  # Override the AppID used for the grid, useful if the ID searched on is not the Steam AppID
 
 		# Split into batches of 100 games - too many and cloudflare blocks requests because of a too big header file
 		while mapfile -t -n 100 ary && ((${#ary[@]})); do
@@ -1413,7 +1415,12 @@ function getGrids {
 			for i in $(seq 0 $(("$RESPONSE_LENGTH" - 1))); do
 				# match the current json array member against the appid list
 				# this assumes we get the same order back we put in before
-				APPID=$(sed "$((i + 1))q;d" <<< "$PART")
+				if [ -n "$GRIDNAMEAPPIDOVERRIDE" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Overriding SteamGridDB AppID as '$GRIDNAMEAPPIDOVERRIDE'"
+					APPID="$GRIDNAMEAPPIDOVERRIDE"
+				else
+					APPID=$(sed "$((i + 1))q;d" <<< "$PART")
+				fi
 
 				if ! "$JQ" -e ".data[$i].success" 1> /dev/null <<< "$RESPONSE"; then
 					writelog "INFO" "${FUNCNAME[0]} - The server response for '$APPID' wasn't 'success'"
@@ -1428,7 +1435,7 @@ function getGrids {
 				if grep -q "^https" <<< "$GRIDDLURL"; then
 					DLSRC="${GRIDDLURL//\"}"
 
-					if [ "$SGDBDLTOSTEAM" -eq 1 ]; then
+					if [ "$SGDBDLTOSTEAM" -eq 1 ] || [ "$FORCESGDBDLTOSTEAM" -eq 1 ]; then
 						if [ -z "$SUSDA" ]; then
 							setSteamPaths
 						fi
@@ -1488,10 +1495,13 @@ function getGridsForInstalledGames {
 
 function getGridsForNonSteamGame {
 	STEAMGRIDDBGAMEID="$1"
+	NONSTEAMAPPID="$2"
+
+	# "1" "3963591317"
 	if checkSGDbApi; then
 		if [ -n "$STEAMGRIDDBGAMEID" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Getting grids for Non-Steam Game from SteamGridDB for SteamGridDB Ghttps://www.steamgriddb.com/grid/74151ame ID of '${STEAMGRIDDBGAMEID}'"
-			getGrids "$1" "$STEAMGRIDDBNOSTAPI"
+			getGrids "$STEAMGRIDDBGAMEID" "$STEAMGRIDDBNOSTAPI" "1" "$NONSTEAMAPPID"
 		else
 			writelog "SKIP" "${FUNCNAME[0]} - No SteamGridDB Game ID provided -- skipping"
 		fi
@@ -21435,7 +21445,9 @@ function commandline {
 		fetchGameSLRGui "$2"
 	elif [ "$1" == "debug" ]; then
 		# Why are you looking here? :-)
-		getGridsForNonSteamGame "5265668"
+
+		## SteamGridDB ID and Non-Steam Game AppID, respectively
+		getGridsForNonSteamGame "5265668" "3963591317"
 	elif [ "$1" == "mo2" ]; then
 		if [ -n "$2" ]; then
 			if [ "$2" == "download" ] || [ "$2" == "d" ]; then
