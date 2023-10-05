@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20231003-1"
+PROGVERS="v14.0.20231006-1 (non-staeam-grid-fun)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -1383,11 +1383,13 @@ function checkSGDbApi {
 # Takes a list of appids separated by newlines
 function getGrids {
 	if checkSGDbApi && [ "$STLPLAY" -eq 0 ]; then
+		CHOSENAPI="${2:-STEAMGRIDDBAPI}"
+
 		# Split into batches of 100 games - too many and cloudflare blocks requests because of a too big header file
 		while mapfile -t -n 100 ary && ((${#ary[@]})); do
 			PART=$(printf '%s\n' "${ary[@]}")
 			# If the whole batch has no grids we get a 404 and wget gives an error. --content-on-error ensures we still get the response json and the following logic still works
-			RESPONSE="$("$WGET" --content-on-error --header="Authorization: Bearer $SGDBAPIKEY" -q "${STEAMGRIDDBAPI}/$(echo "$PART" | awk '{print $1}' | paste -s -d, -)?styles=${SGDBSTYLES}&dimensions=${SGDBDIMS}&types=${SGDBTYPES}&nsfw=${SGDBNSFW}&humor=${SGDBHUMOR}" -O - 2> >(grep -v "SSL_INIT"))"
+			RESPONSE="$("$WGET" --content-on-error --header="Authorization: Bearer $SGDBAPIKEY" -q "${CHOSENAPI}/$(echo "$PART" | awk '{print $1}' | paste -s -d, -)?styles=${SGDBSTYLES}&dimensions=${SGDBDIMS}&types=${SGDBTYPES}&nsfw=${SGDBNSFW}&humor=${SGDBHUMOR}" -O - 2> >(grep -v "SSL_INIT"))"
 
 			if ! "$JQ" -e '.success' 1> /dev/null <<< "$RESPONSE"; then
 				writelog "INFO" "${FUNCNAME[0]} - The server response wasn't 'success' for this batch of requested games."
@@ -1438,7 +1440,7 @@ function getGrids {
 					fi
 
 					mkProjDir "$GRIDDLDIR"
-			
+
 					DLDST="$GRIDDLDIR/${APPID}p.${GRIDDLURL##*.}"
 					STARTDL=1
 					
@@ -1480,6 +1482,18 @@ function getGridsForInstalledGames {
 			writelog "SKIP" "${FUNCNAME[0]} - No installed games found!"
 		else
 			getGrids "$(listInstalledGameIDs)"
+		fi
+	fi
+}
+
+function getGridsForNonSteamGame {
+	STEAMGRIDDBGAMEID="$1"
+	if checkSGDbApi; then
+		if [ -n "$STEAMGRIDDBGAMEID" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Getting grids for Non-Steam Game from SteamGridDB for SteamGridDB Ghttps://www.steamgriddb.com/grid/74151ame ID of '${STEAMGRIDDBGAMEID}'"
+			getGrids "$1" "$STEAMGRIDDBNOSTAPI"
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - No SteamGridDB Game ID provided -- skipping"
 		fi
 	fi
 }
@@ -2695,6 +2709,7 @@ function setDefaultCfgValues {
 		if [ -z "$WINETRICKSURL" ]						; then	WINETRICKSURL="$GHURL/Winetricks/winetricks"; fi
 		if [ -z "$X64DBGURL" ]							; then	X64DBGURL="$GHURL/x64dbg/x64dbg/releases/tag/snapshot";fi
 		if [ -z "$STEAMGRIDDBAPI" ]						; then	STEAMGRIDDBAPI="https://www.steamgriddb.com/api/v2/grids/steam";fi
+		if [ -z "$STEAMGRIDDBNOSTAPI" ]					; then	STEAMGRIDDBNOSTAPI="https://www.steamgriddb.com/api/v2/grids/game";fi
 		if [ -z "$CONTYRELURL" ]						; then	CONTYRELURL="$GHURL/Kron4ek/Conty/releases"; fi
 		if [ -z "$MO2PROJURL" ]							; then  MO2PROJURL="$GHURL/ModOrganizer2/modorganizer"; fi
 		if [ -z "$HMMPROJURL" ]                         ; then  HMMPROJURL="$GHURL/thesupersonic16/HedgeModManager"; fi
@@ -21419,7 +21434,8 @@ function commandline {
 	elif [ "$1" == "getslrbtn" ]; then  # Internal use only for the Main Menu button
 		fetchGameSLRGui "$2"
 	elif [ "$1" == "debug" ]; then
-		notiShow "$NOTY_SPEKDLLCONFLICT" "X"
+		# Why are you looking here? :-)
+		getGridsForNonSteamGame "5265668"
 	elif [ "$1" == "mo2" ]; then
 		if [ -n "$2" ]; then
 			if [ "$2" == "download" ] || [ "$2" == "d" ]; then
