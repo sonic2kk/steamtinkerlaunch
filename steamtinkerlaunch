@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20231003-1"
+PROGVERS="v14.0.20231007-1"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -1372,7 +1372,7 @@ function getGameDataForInstalledGames {
 
 function checkSGDbApi {
 	if [ -z "$SGDBAPIKEY" ] || [ "$SGDBAPIKEY" == "$NON" ]; then
-		writelog "SKIP" "${FUNCNAME[0]} - No SteamGrid Api Key found - Get one at '${STEAMGRIDDBAPI}'"
+		writelog "SKIP" "${FUNCNAME[0]} - No SteamGrid Api Key found - Get one at 'https://www.steamgriddb.com/profile/preferences/api/' (requires a SteamGridDB account) and see the SteamGridDB wiki page for guidance on how to supply the API key."
 		writelog "SKIP" "${FUNCNAME[0]} - and save it in the Global Config ('SGDBAPIKEY')"
 		return 1
 	else
@@ -1383,11 +1383,15 @@ function checkSGDbApi {
 # Takes a list of appids separated by newlines
 function getGrids {
 	if checkSGDbApi && [ "$STLPLAY" -eq 0 ]; then
+		CHOSENAPI="${2:-STEAMGRIDDBAPI}"  # Endpoint (i.e. different one for different grids)
+		FORCESGDBDLTOSTEAM="${3:-0}"  # Force Non-Steam games to always download to SteamGrid dir
+		GRIDNAMEAPPIDOVERRIDE="$4"  # Override the AppID used for the grid, useful if the ID searched on is not the Steam AppID
+
 		# Split into batches of 100 games - too many and cloudflare blocks requests because of a too big header file
 		while mapfile -t -n 100 ary && ((${#ary[@]})); do
 			PART=$(printf '%s\n' "${ary[@]}")
 			# If the whole batch has no grids we get a 404 and wget gives an error. --content-on-error ensures we still get the response json and the following logic still works
-			RESPONSE="$("$WGET" --content-on-error --header="Authorization: Bearer $SGDBAPIKEY" -q "${STEAMGRIDDBAPI}/$(echo "$PART" | awk '{print $1}' | paste -s -d, -)?styles=${SGDBSTYLES}&dimensions=${SGDBDIMS}&types=${SGDBTYPES}&nsfw=${SGDBNSFW}&humor=${SGDBHUMOR}" -O - 2> >(grep -v "SSL_INIT"))"
+			RESPONSE="$("$WGET" --content-on-error --header="Authorization: Bearer $SGDBAPIKEY" -q "${CHOSENAPI}/$(echo "$PART" | awk '{print $1}' | paste -s -d, -)?styles=${SGDBSTYLES}&dimensions=${SGDBDIMS}&types=${SGDBTYPES}&nsfw=${SGDBNSFW}&humor=${SGDBHUMOR}" -O - 2> >(grep -v "SSL_INIT"))"
 
 			if ! "$JQ" -e '.success' 1> /dev/null <<< "$RESPONSE"; then
 				writelog "INFO" "${FUNCNAME[0]} - The server response wasn't 'success' for this batch of requested games."
@@ -1411,7 +1415,12 @@ function getGrids {
 			for i in $(seq 0 $(("$RESPONSE_LENGTH" - 1))); do
 				# match the current json array member against the appid list
 				# this assumes we get the same order back we put in before
-				APPID=$(sed "$((i + 1))q;d" <<< "$PART")
+				if [ -n "$GRIDNAMEAPPIDOVERRIDE" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Overriding SteamGridDB AppID as '$GRIDNAMEAPPIDOVERRIDE'"
+					APPID="$GRIDNAMEAPPIDOVERRIDE"
+				else
+					APPID=$(sed "$((i + 1))q;d" <<< "$PART")
+				fi
 
 				if ! "$JQ" -e ".data[$i].success" 1> /dev/null <<< "$RESPONSE"; then
 					writelog "INFO" "${FUNCNAME[0]} - The server response for '$APPID' wasn't 'success'"
@@ -1426,7 +1435,7 @@ function getGrids {
 				if grep -q "^https" <<< "$GRIDDLURL"; then
 					DLSRC="${GRIDDLURL//\"}"
 
-					if [ "$SGDBDLTOSTEAM" -eq 1 ]; then
+					if [ "$SGDBDLTOSTEAM" -eq 1 ] || [ "$FORCESGDBDLTOSTEAM" -eq 1 ]; then
 						if [ -z "$SUSDA" ]; then
 							setSteamPaths
 						fi
@@ -1438,7 +1447,7 @@ function getGrids {
 					fi
 
 					mkProjDir "$GRIDDLDIR"
-			
+
 					DLDST="$GRIDDLDIR/${APPID}p.${GRIDDLURL##*.}"
 					STARTDL=1
 					
@@ -1480,6 +1489,23 @@ function getGridsForInstalledGames {
 			writelog "SKIP" "${FUNCNAME[0]} - No installed games found!"
 		else
 			getGrids "$(listInstalledGameIDs)"
+		fi
+	fi
+}
+
+# TODO implement this for general use on the commandline if not already supported!
+# Right now it can only be used when adding a Non-Steam Game and not retroactively
+function getGridsForNonSteamGame {
+	STEAMGRIDDBGAMEID="$1"
+	NONSTEAMAPPID="$2"
+
+	# "1" "3963591317"
+	if checkSGDbApi; then
+		if [ -n "$STEAMGRIDDBGAMEID" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Getting grids for Non-Steam Game from SteamGridDB for SteamGridDB Ghttps://www.steamgriddb.com/grid/74151ame ID of '${STEAMGRIDDBGAMEID}'"
+			getGrids "$STEAMGRIDDBGAMEID" "$STEAMGRIDDBNOSTAPI" "1" "$NONSTEAMAPPID"
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - No SteamGridDB Game ID provided -- skipping"
 		fi
 	fi
 }
@@ -2695,6 +2721,7 @@ function setDefaultCfgValues {
 		if [ -z "$WINETRICKSURL" ]						; then	WINETRICKSURL="$GHURL/Winetricks/winetricks"; fi
 		if [ -z "$X64DBGURL" ]							; then	X64DBGURL="$GHURL/x64dbg/x64dbg/releases/tag/snapshot";fi
 		if [ -z "$STEAMGRIDDBAPI" ]						; then	STEAMGRIDDBAPI="https://www.steamgriddb.com/api/v2/grids/steam";fi
+		if [ -z "$STEAMGRIDDBNOSTAPI" ]					; then	STEAMGRIDDBNOSTAPI="https://www.steamgriddb.com/api/v2/grids/game";fi
 		if [ -z "$CONTYRELURL" ]						; then	CONTYRELURL="$GHURL/Kron4ek/Conty/releases"; fi
 		if [ -z "$MO2PROJURL" ]							; then  MO2PROJURL="$GHURL/ModOrganizer2/modorganizer"; fi
 		if [ -z "$HMMPROJURL" ]                         ; then  HMMPROJURL="$GHURL/thesupersonic16/HedgeModManager"; fi
@@ -21010,6 +21037,11 @@ function howto {
 	echo "      --copy                            Copy art files to Steam Grid folder (default) - optional"
 	echo "      --link                            Symlink art files to Steam Grid folder - optional"
 	echo "      --move                            Move art files to Steam Grid folder - optional"
+	echo "      --auto-artwork                  Use image files in the game EXE directory with names 'hero', 'logo', 'boxart', 'tenfoot' - optional"
+	echo "                                        This will respect the copy method flags above."
+	echo "                                        Note also that this will return for any files assumed to be images, even if Steam doesn't support the image format."
+	echo "      -sgid=|--steamgriddb-game-id=   Game ID from SteamGridDB to search and download grid artwork on - optional"
+	echo "                                        This requires a SteamGridDB API key. See the SteamGridDB wiki page for guidance on how to generate and supply it."
 	echo "    backup <value>                   Backup found '$STUS' files"
 	echo "                                       (for 'SteamAppID' or 'all')"
 	echo "    block                            Opens the category Block selection menu"
@@ -21419,7 +21451,10 @@ function commandline {
 	elif [ "$1" == "getslrbtn" ]; then  # Internal use only for the Main Menu button
 		fetchGameSLRGui "$2"
 	elif [ "$1" == "debug" ]; then
-		notiShow "$NOTY_SPEKDLLCONFLICT" "X"
+		# Why are you looking here? :-)
+
+		## SteamGridDB ID and Non-Steam Game AppID, respectively
+		getGridsForNonSteamGame "5265668" "3963591317"
 	elif [ "$1" == "mo2" ]; then
 		if [ -n "$2" ]; then
 			if [ "$2" == "download" ] || [ "$2" == "d" ]; then
@@ -22791,6 +22826,7 @@ function addNonSteamGameGui {
 	--field="     $GUI_SGATENFOOT!$DESC_SGATENFOOT ('NOSTGTENFOOT')":FL "${NOSTGTENFOOT/#-/ -}" \
 	--field="     $GUI_SGASETACTION!$DESC_SGASETACTION ('NOSTGSETACTION')":CB "$( cleanDropDown "copy" "$SGASETACTIONS" )" \
 	--field="     $GUI_NOSTGEXEARTWORKFALLBACK!$DESC_NOSTGEXEARTWORKFALLBACK ('NOSTGEXEARTWORKFALLBACK')":CHK "${NOSTGEXEARTWORKFALLBACK/#-/ -}" \
+	--field="     $GUI_NOSTSGDBAID!$DESC_NOSTSGDBAID ('NOSTSGDBAID')" "${NOSTSGDBAID/#-/ -}" \
 	--field="$(spanFont "$GUI_NOSTGPROPS" "H")":LBL " " \
 	--field="     $GUI_NOSTGCOMPATTOOL!$DESC_NOSTGCOMPATTOOL ('NOSTCOMPATTOOL')":CBE "$( cleanDropDown "$NON" "$NSGPROTYADLIST" )" \
 	--field="     $GUI_NOSTGLAOP!$DESC_NOSTGLAOP ('NOSTGLAOP')" "${NOSTGLAOP/#-/ -}" \
@@ -22810,8 +22846,7 @@ function addNonSteamGameGui {
 		4)  writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_CREATE'"
 			if [ -n "$NSGSET" ]; then
 				mapfile -d "|" -t -O "${#NSGSETARR[@]}" NSGSETARR < <(printf '%s' "$NSGSET")
-				## TODO test this rework, because the UI has changed, the order of arguments has changed!
-				## The current rework here was taken from #576, but needs testing
+
 				writelog "INFO" "${FUNCNAME[0]} - The Non-Steam Game args are ${NSGSETARR[*]}"
 				# NSGSETARR[0] is blank space
 				# NSGSETARR[1] is Paths heading
@@ -22826,14 +22861,15 @@ function addNonSteamGameGui {
 				NOSTGTENFOOT="${NSGSETARR[10]}"
 				NOSTGSETACTION="${NSGSETARR[11]}"
 				NOSTGEXEARTWORKFALLBACK="$( retBool "${NSGSETARR[12]}" )"
-				# NSGSETARR[13] is Properties heading
-				NOSTCOMPATTOOL="${NSGSETARR[14]}"
-				NOSTGLAOP="${NSGSETARR[15]}"
-				NOSTTAGS="${NSGSETARR[16]}"
-				NOSTGHIDE="$( retBool "${NSGSETARR[17]}" )"
-				NOSTGADC="$( retBool "${NSGSETARR[18]}" )"
-				NOSTGAO="$( retBool "${NSGSETARR[19]}" )"
-				NOSTGVR="$( retBool "${NSGSETARR[20]}" )"
+				NOSTSGDBAID="${NSGSETARR[13]}"
+				# NSGSETARR[14] is Properties heading
+				NOSTCOMPATTOOL="${NSGSETARR[15]}"
+				NOSTGLAOP="${NSGSETARR[16]}"
+				NOSTTAGS="${NSGSETARR[17]}"
+				NOSTGHIDE="$( retBool "${NSGSETARR[18]}" )"
+				NOSTGADC="$( retBool "${NSGSETARR[10]}" )"
+				NOSTGAO="$( retBool "${NSGSETARR[20]}" )"
+				NOSTGVR="$( retBool "${NSGSETARR[21]}" )"
 
 				## Makes sure we ignore none compatibility tool
 				if [[ "$NOSTCOMPATTOOL" = "$NON" ]]; then
@@ -22846,8 +22882,8 @@ function addNonSteamGameGui {
 				fi
 
 				## Arguments here like -hr, -lg, etc are made to match setGameArt
-				writelog "INFO" "${FUNCNAME[0]} - addNonSteamGame -an=\"$NOSTGAPPNAME\" -ep=\"$NOSTGEXEPATH\" -sd=\"$NOSTGSTDIR\" -ip=\"$NOSTGICONPATH\" -lo=\"$NOSTGLAOP\" -hd=\"$NOSTGHIDE\" -adc=\"$NOSTGADC\" -ao=\"$NOSTGAO\" -vr=\"$NOSTGVR\" -t=\"$NOSTTAGS\" -ct=\"$NOSTCOMPATTOOL\" -hr=\"$NOSTGHERO\" -lg=\"$NOSTGLOGO\" -ba=\"$NOSTGBOXART\" -tf=\"$NOSTGTENFOOT\" \"--${NOSTGSETACTION}\" \"$NOSTARTEXECMD\""
-				addNonSteamGame -an="$NOSTGAPPNAME" -ep="$NOSTGEXEPATH" -sd="$NOSTGSTDIR" -ip="$NOSTGICONPATH" -lo="$NOSTGLAOP" -hd="$NOSTGHIDE" -adc="$NOSTGADC" -ao="$NOSTGAO" -vr="$NOSTGVR" -t="$NOSTTAGS" -ct="$NOSTCOMPATTOOL" -hr="$NOSTGHERO" -lg="$NOSTGLOGO" -ba="$NOSTGBOXART" -tf="$NOSTGTENFOOT" "--${NOSTGSETACTION}" "$NOSTARTEXECMD"
+				writelog "INFO" "${FUNCNAME[0]} - addNonSteamGame -an=\"$NOSTGAPPNAME\" -ep=\"$NOSTGEXEPATH\" -sd=\"$NOSTGSTDIR\" -ip=\"$NOSTGICONPATH\" -lo=\"$NOSTGLAOP\" -hd=\"$NOSTGHIDE\" -adc=\"$NOSTGADC\" -ao=\"$NOSTGAO\" -vr=\"$NOSTGVR\" -t=\"$NOSTTAGS\" -ct=\"$NOSTCOMPATTOOL\" -hr=\"$NOSTGHERO\" -lg=\"$NOSTGLOGO\" -ba=\"$NOSTGBOXART\" -tf=\"$NOSTGTENFOOT\" \"--${NOSTGSETACTION}\" \"$NOSTARTEXECMD\" -sgid=\"$NOSTSGDBAID\""
+				addNonSteamGame -an="$NOSTGAPPNAME" -ep="$NOSTGEXEPATH" -sd="$NOSTGSTDIR" -ip="$NOSTGICONPATH" -lo="$NOSTGLAOP" -hd="$NOSTGHIDE" -adc="$NOSTGADC" -ao="$NOSTGAO" -vr="$NOSTGVR" -t="$NOSTTAGS" -ct="$NOSTCOMPATTOOL" -hr="$NOSTGHERO" -lg="$NOSTGLOGO" -ba="$NOSTGBOXART" -tf="$NOSTGTENFOOT" "--${NOSTGSETACTION}" "$NOSTARTEXECMD" -sgid="$NOSTSGDBAID"
 			fi
 		;;
 	esac
@@ -22943,6 +22979,7 @@ function addNonSteamGame {
 	NOSTVR=0
 	NOSTSTLLO=0
 	NOSTAUTOARTWORK=0
+	NOSTUSESGDB=0
 
 	for i in "$@"; do
 		case $i in
@@ -23024,6 +23061,13 @@ function addNonSteamGame {
 			--auto-artwork)
 				NOSTAUTOARTWORK=1  # Look for artwork with matching names from game EXE folder (hero/logo/boxart/tenfoot.png/jpg/jpeg/gif)
 				shift ;;
+			--steamgriddb-game-id|-sgid=*)
+				NOSTSGDBGAMEID="${i#*=}"  # SteamGridDB Game ID to search for grids on (optional)
+				# This is off by default but always passed from addNonSteamGame, so if we actually get a value, enable it
+				if [ -n "$NOSTSGDBGAMEID" ]; then
+					NOSTUSESGDB=1
+				fi
+				shift ;;
 			## Used to pass to setGameArt to define how we want to set game artwork (essentially giving a Non-Steam Game UI the functionality of setGameArt since we call it here anyway)
 			--copy)
 				SGACOPYMETHOD="--copy"  # Copy file to grid folder -- Default
@@ -23090,6 +23134,7 @@ function addNonSteamGame {
 		writelog "INFO" "${FUNCNAME[0]} - Tenfoot Artwork: '${NOSTGTENFOOT}'"
 		writelog "INFO" "${FUNCNAME[0]} - Copy Method for Artwork: '${SGACOPYMETHOD}'"
 		writelog "INFO" "${FUNCNAME[0]} - EXE Dir Fallback Artwork: '${NOSTGEXEARTWORKFALLBACK}'"
+		writelog "INFO" "${FUNCNAME[0]} - SteamGridDB Game ID: '${NOSTSGDBGAMEID}'"
 
 		if [ -f "$SCPATH" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - The file '$SCPATH' already exists, creating a backup, then removing the 2 closing backslashes at the end"
@@ -23116,6 +23161,11 @@ function addNonSteamGame {
 			NOSTGBOXART="$( findGameArtInExeDir "$NOSTEXEBASEDIR" "boxart" "$NOSTGBOXART" )"
 			NOSTGTENFOOT="$( findGameArtInExeDir "$NOSTEXEBASEDIR" "tenfoot" "$NOSTGTENFOOT" )"
 			NOSTICONPATH="$( findGameArtInExeDir "$NOSTEXEBASEDIR" "icon" "$NOSTICONPATH" )"
+		fi
+
+		if [ "$NOSTUSESGDB" -eq 1 ]; then
+			# SteamGridDB ID and Non-Steam Game AppID, respectively
+			getGridsForNonSteamGame "$NOSTSGDBGAMEID" "$NOSTAIDGRID"
 		fi
 
 		writelog "INFO" "${FUNCNAME[0]} - Adding new set '$NEWSET'"
