@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20231008-1"
+PROGVERS="v14.0.20231008-1 (spek-d3dcompiler-toggle)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -3019,6 +3019,7 @@ function setDefaultCfgValues {
 		if [ -z "$USESPECIALK" ]						; then	USESPECIALK="0"; fi
 		if [ -z "$SPEKDLLNAME" ]						; then  SPEKDLLNAME="$AUTO"; fi
 		if [ -z "$USERESHSPEKPLUGIN" ]					; then  USERESHSPEKPLUGIN="1"; fi
+		if [ -z "$USESPEKD3D47" ]						; then  USESPEKD3D47="1"; fi
 		if [ -z "$SDLUSEWAYLAND" ]						; then  SDLUSEWAYLAND="0"; fi
 		if [ -z "$STLRAD_PFTST" ]                       ; then  STLRAD_PFTST="none"; fi
 		if [ -z "$SPEKVERS" ]							; then	SPEKVERS="default"; fi
@@ -3678,6 +3679,8 @@ function saveCfg {
 			echo "SPEKDLLNAME=\"$SPEKDLLNAME\""
 			echo "## $DESC_USERESHSPEKPLUGIN"
 			echo "USERESHSPEKPLUGIN=\"$USERESHSPEKPLUGIN\""
+			echo "## $DESC_USESPEKD3D47"
+			echo "USESPEKD3D47=\"$DESC_USESPEKD3D47\""
 			echo "## $DESC_SDLUSEWAYLAND"
 			echo "SDLUSEWAYLAND=\"$SDLUSEWAYLAND\""
 			echo "## $DESC_STLRAD_PFTST"
@@ -5310,6 +5313,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_SPEKVERS!$DESC_SPEKVERS ('SPEKVERS')":CB "$(cleanDropDown "${SPEKVERS/#-/ -}" "default!$SPEKYADLIST")" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_SPEKDLLNAME!$DESC_SPEKDLLNAME ('SPEKDLLNAME')":CBE "$( cleanDropDown "${SPEKDLLNAME/#-/ -}" "$SPEKDLLNAMELIST" )" `#CAT_Proton` `#MENU_GAME` \
 --field="     $GUI_USERESHSPEKPLUGIN!$DESC_USERESHSPEKPLUGIN ('USERESHSPEKPLUGIN')":CHK "${USERESHSPEKPLUGIN/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_USESPEKD3D47!$DESC_USESPEKD3D47 ('USESPEKD3D47')":CHK "${USESPEKD3D47/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_AUTOSPEK!$DESC_AUTOSPEK ('AUTOSPEK')":CHK "${AUTOSPEK/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_PROTON_LOG!$DESC_PROTON_LOG $HOME/steam-$AID.log ('PROTON_LOG')":CHK "${PROTON_LOG/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_PROTON_LOG_DIR!$DESC_PROTON_LOG_DIR ('PROTON_LOG_DIR')":DIR "${PROTON_LOG_DIR/#-/ -}" `#CAT_Proton` `#SUB_Directories` `#MENU_GAME` \
@@ -8076,7 +8080,21 @@ function dld3d47 {
 }
 
 function installd3d47dll {
-	if [ ! -f "$2/$D3D47" ]; then
+	D3D47DESTPATH="$2/$D3D47"
+
+	if [ "$USESPEKD3D47" -eq 0 ] && [ "$USESPECIALK" -eq 1 ]; then  # We need to check if SpecialK is enabled so we don't end up removing this if it's installed for ReShade
+		# User has disabled d3dcompiler_47 for use with SpecialK -- Check if it's installed and tracked by us, and if so, remove it!
+		writelog "INFO" "${FUNCNAME[0]} - USESPEKD3D47 is '$USESPEKD3D47'"
+		if [ -f "$D3D47DESTPATH" ] && [ -f "$SPEKENA" ]; then
+			# DLL exists in game files and SpecialK tracked file is present
+			if grep -qw "$D3D47DESTPATH" "$SPEKENA"; then
+				# DLL exists and is present in SpecialK tracking file, assume this is ours and remove it!
+				writelog "INFO" "${FUNCNAME[0]} - Found tracked '$D3D47' DLL at '$D3D47DESTPATH' -- Assuming this is ours and removing it!"
+				rm "$D3D47DESTPATH"  # Remove DLL file
+				sed -i "/${D3D47DESTPATH}/d" "$SPEKENA"  # Remove tracked D3D47 DLL
+			fi
+		fi
+	elif [ ! -f "$2/$D3D47" ]; then
 		if [ ! -f "$D3D47DLDIR/$1" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Sourcefile '$D3D47DLDIR/$1' missing - trying to download" 
 			dld3d47 "32"
@@ -8089,14 +8107,16 @@ function installd3d47dll {
 			cp "$D3D47DLDIR/$1" "$2/$D3D47" >/dev/null 2>/dev/null
 			writelog "INFO" "${FUNCNAME[0]} - Copied '$D3D47DLDIR/$1' to '$2/$D3D47'"
 			if [ "$USESPECIALK" -eq 1 ]; then
-				echo "$2/$D3D47" >> "$SPEKENA"
-			else
+				echo "$D3D47DESTPATH" >> "$SPEKENA"
+			elif [ "$USERESHADE" -eq 1 ]; then
 				echo "$D3D47" >> "$2/$RSTXT"
 				sort "$2/$RSTXT" -u -o "$2/$RSTXT"
+			else
+				writelog "WARN" "${FUNCNAME[0]} - Function was called but neither ReShade nor SpecialK was specified -- No need to write out to a file that we're tracking this DLL"
 			fi
 		fi
 	else
-		writelog "SKIP" "${FUNCNAME[0]} - Destfile '$2/$D3D47' already exists - skipping this file"
+		writelog "SKIP" "${FUNCNAME[0]} - Destfile '$D3D47DESTPATH' already exists - skipping"
 	fi
 }
 
