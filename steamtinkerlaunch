@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20231008-1"
+PROGVERS="v14.0.20231010-1"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -3019,6 +3019,7 @@ function setDefaultCfgValues {
 		if [ -z "$USESPECIALK" ]						; then	USESPECIALK="0"; fi
 		if [ -z "$SPEKDLLNAME" ]						; then  SPEKDLLNAME="$AUTO"; fi
 		if [ -z "$USERESHSPEKPLUGIN" ]					; then  USERESHSPEKPLUGIN="1"; fi
+		if [ -z "$USESPEKD3D47" ]						; then  USESPEKD3D47="1"; fi
 		if [ -z "$SDLUSEWAYLAND" ]						; then  SDLUSEWAYLAND="0"; fi
 		if [ -z "$STLRAD_PFTST" ]                       ; then  STLRAD_PFTST="none"; fi
 		if [ -z "$SPEKVERS" ]							; then	SPEKVERS="default"; fi
@@ -3678,6 +3679,8 @@ function saveCfg {
 			echo "SPEKDLLNAME=\"$SPEKDLLNAME\""
 			echo "## $DESC_USERESHSPEKPLUGIN"
 			echo "USERESHSPEKPLUGIN=\"$USERESHSPEKPLUGIN\""
+			echo "## $DESC_USESPEKD3D47"
+			echo "USESPEKD3D47=\"$USESPEKD3D47\""
 			echo "## $DESC_SDLUSEWAYLAND"
 			echo "SDLUSEWAYLAND=\"$SDLUSEWAYLAND\""
 			echo "## $DESC_STLRAD_PFTST"
@@ -5310,6 +5313,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_SPEKVERS!$DESC_SPEKVERS ('SPEKVERS')":CB "$(cleanDropDown "${SPEKVERS/#-/ -}" "default!$SPEKYADLIST")" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_SPEKDLLNAME!$DESC_SPEKDLLNAME ('SPEKDLLNAME')":CBE "$( cleanDropDown "${SPEKDLLNAME/#-/ -}" "$SPEKDLLNAMELIST" )" `#CAT_Proton` `#MENU_GAME` \
 --field="     $GUI_USERESHSPEKPLUGIN!$DESC_USERESHSPEKPLUGIN ('USERESHSPEKPLUGIN')":CHK "${USERESHSPEKPLUGIN/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_USESPEKD3D47!$DESC_USESPEKD3D47 ('USESPEKD3D47')":CHK "${USESPEKD3D47/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_AUTOSPEK!$DESC_AUTOSPEK ('AUTOSPEK')":CHK "${AUTOSPEK/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_PROTON_LOG!$DESC_PROTON_LOG $HOME/steam-$AID.log ('PROTON_LOG')":CHK "${PROTON_LOG/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_PROTON_LOG_DIR!$DESC_PROTON_LOG_DIR ('PROTON_LOG_DIR')":DIR "${PROTON_LOG_DIR/#-/ -}" `#CAT_Proton` `#SUB_Directories` `#MENU_GAME` \
@@ -8076,7 +8080,22 @@ function dld3d47 {
 }
 
 function installd3d47dll {
-	if [ ! -f "$2/$D3D47" ]; then
+	D3D47DESTPATH="$2/$D3D47"
+
+	if [ "$USESPEKD3D47" -eq 0 ] && [ "$USESPECIALK" -eq 1 ]; then  # We need to check if SpecialK is enabled so we don't end up removing this if it's installed for ReShade
+		# User has disabled d3dcompiler_47 for use with SpecialK -- Check if it's installed and tracked by us, and if so, remove it!
+		writelog "INFO" "${FUNCNAME[0]} - USESPEKD3D47 is '$USESPEKD3D47'"
+		writelog "INFO" "${FUNCNAME[0]} - D3D47DESTPATH is '$D3D47DESTPATH'"
+		if [ -f "$SPEKENA" ]; then
+			# DLL exists in game files and SpecialK tracked file is present
+			if grep -qw "$D3D47DESTPATH" "$SPEKENA"; then
+				# DLL exists and is present in SpecialK tracking file, assume this is ours and remove it!
+				writelog "INFO" "${FUNCNAME[0]} - Found tracked '$D3D47' DLL at '$D3D47DESTPATH' -- Assuming this is ours and removing it!"
+				rm "$D3D47DESTPATH"  # Remove DLL file
+				sed -i "s#${D3D47DESTPATH}##g" "$SPEKENA"  # Remove tracked D3D47 DLL (apparently sed doesn't like using delete with paths, so we use substituion)
+			fi
+		fi
+	elif [ ! -f "$D3D47DESTPATH" ]; then
 		if [ ! -f "$D3D47DLDIR/$1" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Sourcefile '$D3D47DLDIR/$1' missing - trying to download" 
 			dld3d47 "32"
@@ -8086,17 +8105,22 @@ function installd3d47dll {
 		if [ ! -f "$D3D47DLDIR/$1" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Sourcefile '$D3D47DLDIR/$1' still missing - skipping this file" 	
 		else
-			cp "$D3D47DLDIR/$1" "$2/$D3D47" >/dev/null 2>/dev/null
+			# We should only copy the DLL and write to the DLL tracking file if the DLL is not already in the destination folder
+			cp "$D3D47DLDIR/$1" "$D3D47DESTPATH" >/dev/null 2>/dev/null
 			writelog "INFO" "${FUNCNAME[0]} - Copied '$D3D47DLDIR/$1' to '$2/$D3D47'"
 			if [ "$USESPECIALK" -eq 1 ]; then
-				echo "$2/$D3D47" >> "$SPEKENA"
-			else
+				writelog "INFO" "${FUNCNAME[0]} - Writing '$D3D47DESTPATH' to '$SPEKENA'"
+				echo "$D3D47DESTPATH" >> "$SPEKENA"
+			elif [ "$USERESHADE" -eq 1 ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Writing '$D3D47' to '$2/$RSTXT'"
 				echo "$D3D47" >> "$2/$RSTXT"
 				sort "$2/$RSTXT" -u -o "$2/$RSTXT"
+			else
+				writelog "WARN" "${FUNCNAME[0]} - Function was called but neither ReShade nor SpecialK was specified -- No need to write out to a file that we're tracking this DLL"
 			fi
 		fi
 	else
-		writelog "SKIP" "${FUNCNAME[0]} - Destfile '$2/$D3D47' already exists - skipping this file"
+		writelog "SKIP" "${FUNCNAME[0]} - Destfile '$D3D47DESTPATH' already exists - skipping"
 	fi
 }
 
@@ -9135,7 +9159,12 @@ function checkReshade {
 			fi
 
 			writelog "INFO" "${FUNCNAME[0]} - Setting WINEDLLOVERRIDES for ${RESH}: dxgi=n,b;d3d9=n,b;${D3D47//.dll}=n,b;d3d11=n,b;opengl32=n,b;${RESHADEDLLNAME//.dll}=n,b"
-			export WINEDLLOVERRIDES="$WINEDLLOVERRIDES;dxgi=n,b;d3d9=n,b;${D3D47//.dll}=n,b;d3d11=n,b;opengl32=n,b;${RESHADEDLLNAME//.dll}=n,b"
+			WINEDLLOVERRIDES="$WINEDLLOVERRIDES;dxgi=n,b;d3d9=n,b;${D3D47//.dll}=n,b;d3d11=n,b;opengl32=n,b;${RESHADEDLLNAME//.dll}=n,b"
+			if [ "$USESPECIALK" -eq 1 ] && [ "$USERESHSPEKPLUGIN" -eq 1 ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Adding SpecialK DLL name to WINEDLLOVERRIDES because it is enabled and 'USERESHSPEKPLUGIN' is also enabled"
+				WINEDLLOVERRIDES+=";$( basename "$SPEKDST" )=n,b"
+			fi
+			export WINEDLLOVERRIDES="$WINEDLLOVERRIDES"
 		fi
 	else	
 		if [ -f "$FRSINI" ]; then
@@ -9370,6 +9399,9 @@ function useSpecialK {
 		SPEKSRC="$1"
 		SPEKDLLCONFLICTFOUND=0
 		SHOULDINSTALLSPEK=1
+		SPEKD3D47DLL="$4"
+		SPEKD3D47DLLPATH="${SPEKDDIR}/${D3D47}"  # this will always be named /path/to/d3dcompiler_47, because we name the DLL differently on move, we don't need to keep the architecture in the DLL name
+		SPEKDLLEXPORTNAME="$( basename "$SPEKDST" )"  # Make sure we use an actual name and not 'auto'
 
 		if [ "$USERESHADE" -eq 1 ] && [ -f "$SPEKDDIR/$RSTXT" ] && [ "$USERESHSPEKPLUGIN" -eq 0 ]; then
 			## ReShade is already installed and in use, and ReShade+SpecialK have selected DLL names conflict
@@ -9434,6 +9466,8 @@ function useSpecialK {
 		fi
 
 		if [ "$SPEKDLLCONFLICTFOUND" -eq 0 ] && [ "$SHOULDINSTALLSPEK" -eq 1 ]; then
+			installd3d47dll "$SPEKD3D47DLL" "$SPEKDDIR"
+
 			writelog "INFO" "${FUNCNAME[0]} - Installing '${SPEKSRC##*/}' as '$GP' is $2-bit" "E"
 			notiShow "$NOTY_SPECIALKINSTALLING"
 			cp "$SPEKSRC" "$SPEKDST"
@@ -9446,19 +9480,23 @@ function useSpecialK {
 				echo "$SPEKDDIR/$SPEKPDB" >> "$SPEKENA"
 			fi
 			prepareSpecialKIni  # Moved here so this is created only once we confirm SpecialK can be installed
-
-			SPEKDLLEXPORTNAME="$( basename "$SPEKDST" )"  # Make sure we use an actual name and not 'autp'
-			writelog "INFO" "${FUNCNAME[0]} - Setting WINEDLLOVERRIDES for ${SPEK}: dxgi=n,b;d3d9=n,b;${D3D47//.dll}=n,b;d3d11=n,b;opengl32=n,b;${SPEKDLLEXPORTNAME//.dll}=n,b"
-			export WINEDLLOVERRIDES="$WINEDLLOVERRIDES;dxgi=n,b;d3d9=n,b;${D3D47//.dll}=n,b;d3d11=n,b;opengl32=n,b;${SPEKDLLEXPORTNAME//.dll}=n,b"
 		elif [ "$SPEKDLLCONFLICTFOUND" -eq 0 ] && [ "$SHOULDINSTALLSPEK" -eq 0 ]; then
 			# In this scenario, SpecialK is already installed so we don't need to install it
 			# So write out the DLL name to the SPEKENA file to ensure we don't end up with a blank file
 			# We can't always write out to the file unconditionally as SPEKDLLCONFLICTFOUND means SpecialK wasn't installed
-			echo "$SPEKDST" >> "$SPEKENA"
+			echo "$SPEKDST" >> "$SPEKENA"  # SpecialK DLL
+			echo "$SPEKD3D47DLLPATH" >> "$SPEKENA"  # d3d47 DLL
+
+			installd3d47dll "$SPEKD3D47DLL" "$SPEKDDIR"
 
 			prepareSpecialKIni  # Needed here to update some values that may only exist after first launch
 		elif [ "$SPEKDLLCONFLICTFOUND" -eq 1 ]; then
 			writelog "ERROR" "${FUNCNAME[0]} - Could not install SpecialK -- DLL naming conflict was found"
+		fi
+
+		if [ "$SPEKDLLCONFLICTFOUND" -eq 0 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Setting WINEDLLOVERRIDES for ${SPEK}: dxgi=n,b;d3d9=n,b;${D3D47//.dll}=n,b;d3d11=n,b;opengl32=n,b;${SPEKDLLEXPORTNAME//.dll}=n,b"
+			export WINEDLLOVERRIDES="$WINEDLLOVERRIDES;dxgi=n,b;d3d9=n,b;${D3D47//.dll}=n,b;d3d11=n,b;opengl32=n,b;${SPEKDLLEXPORTNAME//.dll}=n,b"
 		fi
 	}
 
