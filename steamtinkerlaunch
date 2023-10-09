@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20231008-7 (spek-d3dcompiler-toggle)"
+PROGVERS="v14.0.20231008-10 (spek-d3dcompiler-toggle)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -9159,7 +9159,12 @@ function checkReshade {
 			fi
 
 			writelog "INFO" "${FUNCNAME[0]} - Setting WINEDLLOVERRIDES for ${RESH}: dxgi=n,b;d3d9=n,b;${D3D47//.dll}=n,b;d3d11=n,b;opengl32=n,b;${RESHADEDLLNAME//.dll}=n,b"
-			export WINEDLLOVERRIDES="$WINEDLLOVERRIDES;dxgi=n,b;d3d9=n,b;${D3D47//.dll}=n,b;d3d11=n,b;opengl32=n,b;${RESHADEDLLNAME//.dll}=n,b"
+			WINEDLLOVERRIDES="$WINEDLLOVERRIDES;dxgi=n,b;d3d9=n,b;${D3D47//.dll}=n,b;d3d11=n,b;opengl32=n,b;${RESHADEDLLNAME//.dll}=n,b"
+			if [ "$USESPECIALK" -eq 1 ] && [ "$USERESHSPEKPLUGIN" -eq 1 ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Adding SpecialK DLL name to WINEDLLOVERRIDES because it is enabled and 'USERESHSPEKPLUGIN' is also enabled"
+				WINEDLLOVERRIDES+=";$( basename "$SPEKDST" )=n,b"
+			fi
+			export WINEDLLOVERRIDES="$WINEDLLOVERRIDES"
 		fi
 	else	
 		if [ -f "$FRSINI" ]; then
@@ -9396,6 +9401,7 @@ function useSpecialK {
 		SHOULDINSTALLSPEK=1
 		SPEKD3D47DLL="$4"
 		SPEKD3D47DLLPATH="${SPEKDDIR}/${D3D47}"  # this will always be named /path/to/d3dcompiler_47, because we name the DLL differently on move, we don't need to keep the architecture in the DLL name
+		SPEKDLLEXPORTNAME="$( basename "$SPEKDST" )"  # Make sure we use an actual name and not 'auto'
 
 		if [ "$USERESHADE" -eq 1 ] && [ -f "$SPEKDDIR/$RSTXT" ] && [ "$USERESHSPEKPLUGIN" -eq 0 ]; then
 			## ReShade is already installed and in use, and ReShade+SpecialK have selected DLL names conflict
@@ -9474,10 +9480,6 @@ function useSpecialK {
 				echo "$SPEKDDIR/$SPEKPDB" >> "$SPEKENA"
 			fi
 			prepareSpecialKIni  # Moved here so this is created only once we confirm SpecialK can be installed
-
-			SPEKDLLEXPORTNAME="$( basename "$SPEKDST" )"  # Make sure we use an actual name and not 'autp'
-			writelog "INFO" "${FUNCNAME[0]} - Setting WINEDLLOVERRIDES for ${SPEK}: dxgi=n,b;d3d9=n,b;${D3D47//.dll}=n,b;d3d11=n,b;opengl32=n,b;${SPEKDLLEXPORTNAME//.dll}=n,b"
-			export WINEDLLOVERRIDES="$WINEDLLOVERRIDES;dxgi=n,b;d3d9=n,b;${D3D47//.dll}=n,b;d3d11=n,b;opengl32=n,b;${SPEKDLLEXPORTNAME//.dll}=n,b"
 		elif [ "$SPEKDLLCONFLICTFOUND" -eq 0 ] && [ "$SHOULDINSTALLSPEK" -eq 0 ]; then
 			# In this scenario, SpecialK is already installed so we don't need to install it
 			# So write out the DLL name to the SPEKENA file to ensure we don't end up with a blank file
@@ -9490,6 +9492,11 @@ function useSpecialK {
 			prepareSpecialKIni  # Needed here to update some values that may only exist after first launch
 		elif [ "$SPEKDLLCONFLICTFOUND" -eq 1 ]; then
 			writelog "ERROR" "${FUNCNAME[0]} - Could not install SpecialK -- DLL naming conflict was found"
+		fi
+
+		if [ "$SPEKDLLCONFLICTFOUND" -eq 0 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Setting WINEDLLOVERRIDES for ${SPEK}: dxgi=n,b;d3d9=n,b;${D3D47//.dll}=n,b;d3d11=n,b;opengl32=n,b;${SPEKDLLEXPORTNAME//.dll}=n,b"
+			export WINEDLLOVERRIDES="$WINEDLLOVERRIDES;dxgi=n,b;d3d9=n,b;${D3D47//.dll}=n,b;d3d11=n,b;opengl32=n,b;${SPEKDLLEXPORTNAME//.dll}=n,b"
 		fi
 	}
 
