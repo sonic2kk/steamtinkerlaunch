@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20231008-2 (spek-d3dcompiler-toggle)"
+PROGVERS="v14.0.20231008-6 (spek-d3dcompiler-toggle)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -8085,13 +8085,14 @@ function installd3d47dll {
 	if [ "$USESPEKD3D47" -eq 0 ] && [ "$USESPECIALK" -eq 1 ]; then  # We need to check if SpecialK is enabled so we don't end up removing this if it's installed for ReShade
 		# User has disabled d3dcompiler_47 for use with SpecialK -- Check if it's installed and tracked by us, and if so, remove it!
 		writelog "INFO" "${FUNCNAME[0]} - USESPEKD3D47 is '$USESPEKD3D47'"
-		if [ -f "$D3D47DESTPATH" ] && [ -f "$SPEKENA" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - D3D47DESTPATH is '$D3D47DESTPATH'"
+		if [ -f "$SPEKENA" ]; then
 			# DLL exists in game files and SpecialK tracked file is present
 			if grep -qw "$D3D47DESTPATH" "$SPEKENA"; then
 				# DLL exists and is present in SpecialK tracking file, assume this is ours and remove it!
 				writelog "INFO" "${FUNCNAME[0]} - Found tracked '$D3D47' DLL at '$D3D47DESTPATH' -- Assuming this is ours and removing it!"
 				rm "$D3D47DESTPATH"  # Remove DLL file
-				sed -i "/${D3D47DESTPATH}/d" "$SPEKENA"  # Remove tracked D3D47 DLL
+				sed -i "s#${D3D47DESTPATH}##g" "$SPEKENA"  # Remove tracked D3D47 DLL (apparently sed doesn't like using delete with paths, so we use substituion)
 			fi
 		fi
 	elif [ ! -f "$2/$D3D47" ]; then
@@ -8104,11 +8105,14 @@ function installd3d47dll {
 		if [ ! -f "$D3D47DLDIR/$1" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Sourcefile '$D3D47DLDIR/$1' still missing - skipping this file" 	
 		else
+			# We should only copy the DLL and write to the DLL tracking file if the DLL is not already in the destination folder
 			cp "$D3D47DLDIR/$1" "$2/$D3D47" >/dev/null 2>/dev/null
 			writelog "INFO" "${FUNCNAME[0]} - Copied '$D3D47DLDIR/$1' to '$2/$D3D47'"
 			if [ "$USESPECIALK" -eq 1 ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Writing '$D3D47DESTPATH' to '$SPEKENA'"
 				echo "$D3D47DESTPATH" >> "$SPEKENA"
 			elif [ "$USERESHADE" -eq 1 ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Writing '$D3D47' to '$2/$RSTXT'"
 				echo "$D3D47" >> "$2/$RSTXT"
 				sort "$2/$RSTXT" -u -o "$2/$RSTXT"
 			else
@@ -9390,6 +9394,8 @@ function useSpecialK {
 		SPEKSRC="$1"
 		SPEKDLLCONFLICTFOUND=0
 		SHOULDINSTALLSPEK=1
+		SPEKD3D47DLL="$4"
+		SPEKD3D47DLLPATH="${SPEKDDIR}/${D3D47}"  # this will always be named /path/to/d3dcompiler_47, because we name the DLL differently on move, we don't need to keep the architecture in the DLL name
 
 		if [ "$USERESHADE" -eq 1 ] && [ -f "$SPEKDDIR/$RSTXT" ] && [ "$USERESHSPEKPLUGIN" -eq 0 ]; then
 			## ReShade is already installed and in use, and ReShade+SpecialK have selected DLL names conflict
@@ -9454,6 +9460,8 @@ function useSpecialK {
 		fi
 
 		if [ "$SPEKDLLCONFLICTFOUND" -eq 0 ] && [ "$SHOULDINSTALLSPEK" -eq 1 ]; then
+			installd3d47dll "$SPEKD3D47DLL" "$SPEKDDIR"
+
 			writelog "INFO" "${FUNCNAME[0]} - Installing '${SPEKSRC##*/}' as '$GP' is $2-bit" "E"
 			notiShow "$NOTY_SPECIALKINSTALLING"
 			cp "$SPEKSRC" "$SPEKDST"
@@ -9474,7 +9482,10 @@ function useSpecialK {
 			# In this scenario, SpecialK is already installed so we don't need to install it
 			# So write out the DLL name to the SPEKENA file to ensure we don't end up with a blank file
 			# We can't always write out to the file unconditionally as SPEKDLLCONFLICTFOUND means SpecialK wasn't installed
-			echo "$SPEKDST" >> "$SPEKENA"
+			echo "$SPEKDST" >> "$SPEKENA"  # SpecialK DLL
+			echo "$SPEKD3D47DLLPATH" >> "$SPEKENA"  # d3d47 DLL
+
+			installd3d47dll "$SPEKD3D47DLL" "$SPEKDDIR"
 
 			prepareSpecialKIni  # Needed here to update some values that may only exist after first launch
 		elif [ "$SPEKDLLCONFLICTFOUND" -eq 1 ]; then
