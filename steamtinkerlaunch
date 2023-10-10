@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20231011-1 (steamgriddb-overhaul)"
+PROGVERS="v14.0.20231011-2 (steamgriddb-overhaul)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -1400,6 +1400,8 @@ function getArtFromSteamGridDB {
 
 		SGDBHASFILE="${9:-SGDBHASFILE}"  # Option to override action to take when file already exists 
 
+		FORCESGDBDLTOSTEAM="${10}"  # Option to force downloading artwork to Steam Grid folder
+
 		SGDB_ENDPOINT_STR="${SEARCHENDPOINT}/$(echo "$SEARCHID" | awk '{print $1}' | paste -s -d, -)"
 		# Only include query params if provided
 		# e.g.: "?styles=${SEARCHSTYLES}&dimensions=${SEARCHDIMS}&types=${SGDBTYPES}&nsfw=${SEARCHNSFW}&humor=${SEARCHHUMOR}"
@@ -1505,7 +1507,7 @@ function getSteamGridDBArtwork {
 	while mapfile -t -n 100 ary && ((${#ary[@]})); do
 		SGDBSEARCHAID=$(printf '%s\n' "${ary[@]}")
 
-		commandlineGetSteamGridDBArtwork -id="$SGDBSEARCHAID" --steam
+		commandlineGetSteamGridDBArtwork --search-id="$SGDBSEARCHAID" --steam
 	done <<< "${1}"
 }
 
@@ -1517,9 +1519,10 @@ function getSteamGridDBArtwork {
 function commandlineGetSteamGridDBArtwork {
 	SGDBENDPOINTTYPE="game"
 	GSGDBA_HASFILE="$SGDBHASFILE"  # Optional override for how to handle if file already exists (getArtFromSteamGridDB defaults to '$SGDBHASFILE')
+	GSGDBA_APPLYARTWORK="0"
 	for i in "${@}"; do
 		case $i in
-			-id=*)
+			--search-id=*)  # ID to hit the SteamGridDB API endpoint with (for Steam games this is the AppID which we will also use as filename) 
 				GSGDBA_APPID="${i#*=}"
 				GSGDBA_FILENAME="${GSGDBA_APPID}"  # By default, file will be named <appid> with a suffix for each grid type (only non-steam games need this overridden since they search on Game ID and not Steam AppID)
 				shift ;;
@@ -1545,6 +1548,9 @@ function commandlineGetSteamGridDBArtwork {
 			--skip-existing)
 				GSGDBA_HASFILE="skip"
 				shift ;;
+			## OPTIONAL: Flag to force downloading to SteamGridDB folder (used for addNonSteamGame internally)
+			--apply)
+				GSGDBA_APPLYARTWORK="1"
 		esac
 	done
 
@@ -1554,9 +1560,9 @@ function commandlineGetSteamGridDBArtwork {
 
 	# Download Hero, Logo, Boxart from SteamGridDB from given endpoint using given AppID
 	# TODO pass values for style,dimension,etc from Global Menu once we have these options (Steam+Non-Steam share same settings)
-	getArtFromSteamGridDB "$GSGDBA_APPID" "$SGDBSEARCHENDPOINT_HERO" "${GSGDBA_FILENAME}_hero" "" "" "" "" "" "$GSGDBA_HASFILE"
-	getArtFromSteamGridDB "$GSGDBA_APPID" "$SGDBSEARCHENDPOINT_LOGO" "${GSGDBA_FILENAME}_logo" "" "" "" "" "" "$GSGDBA_HASFILE"
-	getArtFromSteamGridDB "$GSGDBA_APPID" "$SGDBSEARCHENDPOINT_BOXART" "${GSGDBA_FILENAME}p" "" "" "" "" "" "$GSGDBA_HASFILE"
+	getArtFromSteamGridDB "$GSGDBA_APPID" "$SGDBSEARCHENDPOINT_HERO" "${GSGDBA_FILENAME}_hero" "" "" "" "" "" "$GSGDBA_HASFILE" "$GSGDBA_APPLYARTWORK"
+	getArtFromSteamGridDB "$GSGDBA_APPID" "$SGDBSEARCHENDPOINT_LOGO" "${GSGDBA_FILENAME}_logo" "" "" "" "" "" "$GSGDBA_HASFILE" "$GSGDBA_APPLYARTWORK"
+	getArtFromSteamGridDB "$GSGDBA_APPID" "$SGDBSEARCHENDPOINT_BOXART" "${GSGDBA_FILENAME}p" "" "" "" "" "" "$GSGDBA_HASFILE" "$GSGDBA_APPLYARTWORK"
 }
 
 
@@ -23378,10 +23384,12 @@ function addNonSteamGame {
 		fi
 
 		# TODO support icons from SteamGridDB (these have to be written to the VDF file, how can we save and set these?)
+		# We could do this by making a separate "getArtFromSteamGridDB" call and saving the icon to the grids folder, then copying that path and using it when we're writing out the icon (i.e set the value of "NOSTICONPATH" if the icon file was successfully found on SteamGridDB)
+		# Maybe we could make a dedicated function for getting icons?
 		if [ "$NOSTUSESGDB" -eq 1 ]; then
 			# SteamGridDB ID and Non-Steam Game AppID, respectively
 			# getGridsForNonSteamGame "$NOSTSGDBGAMEID" "$NOSTAIDGRID"
-			commandlineGetSteamGridDBArtwork -id="$NOSTSGDBGAMEID" --filename-appid="$NOSTAIDGRID" --nonsteam
+			commandlineGetSteamGridDBArtwork --search-id="$NOSTSGDBGAMEID" --filename-appid="$NOSTAIDGRID" --nonsteam
 		fi
 
 		writelog "INFO" "${FUNCNAME[0]} - Adding new set '$NEWSET'"
