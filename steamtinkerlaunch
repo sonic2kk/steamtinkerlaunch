@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20231010-1"
+PROGVERS="v14.0.20231012-1 (mo2-vortex-custom-installer)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -2840,6 +2840,8 @@ function setDefaultCfgValues {
 		if [ -z "$HMMCOMPDATA" ]                        ; then  HMMCOMPDATA="$STLHMMDIR/$CODA"; fi
 		if [ -z "$HMMDLVER" ]                           ; then  HMMDLVER="$HMMSTABLE"; fi
 		if [ -z "$USEMO2PROTON" ]						; then	USEMO2PROTON="$NON"; fi
+		if [ -z "$USEMO2CUSTOMINSTALLER" ]				; then  USEMO2CUSTOMINSTALLER="0"; fi
+		if [ -z "$MO2CUSTOMINSTALLER" ]					; then  MO2CUSTOMINSTALLER="$NON"; fi
 		if [ -z "$USEHMMPROTON" ]                       ; then  USEHMMPROTON="$NON"; fi
 		if [ -z "$USETERM" ]							; then	USETERM="$(command -v "xterm")"; fi
 		if [ -z "$TERMARGS" ]							; then	TERMARGS="-e"; fi
@@ -3343,6 +3345,10 @@ function saveCfg {
 			echo "MO2COMPDATA=\"$MO2COMPDATA\""
 			echo "## $DESC_USEMO2PROTON"
 			echo "USEMO2PROTON=\"$USEMO2PROTON\""
+			echo "## $DESC_USEMO2CUSTOMINSTALLER"
+			echo "USEMO2CUSTOMINSTALLER=\"$USEMO2CUSTOMINSTALLER\""
+			echo "## $DESC_MO2CUSTOMINSTALLER"
+			echo "MO2CUSTOMINSTALLER=\"$MO2CUSTOMINSTALLER\""
 			echo "## $DESC_HMMCOMPDATA"
 			echo "HMMCOMPDATA=\"$HMMCOMPDATA\""
 			echo "## $DESC_USEHMMPROTON"
@@ -5538,6 +5544,8 @@ function AllSettingsEntriesDummyFunction {
 --field="$(spanFont "$GUI_OPTSMO2" "H")":LBL "SKIP" `#CAT_MO2` `#HEAD_Vortex` `#MENU_GAME` `#MENU_GLOBAL` \
 --field="     $GUI_MO2COMPDATA!$DESC_MO2COMPDATA ('MO2COMPDATA')":DIR "${MO2COMPDATA/#-/ -}" `#CAT_MO2` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_USEMO2PROTON!$DESC_USEMO2PROTON ('USEMO2PROTON')":CB "$(cleanDropDown "${USEMO2PROTON/#-/ -}" "$PROTYADLIST")" `#CAT_MO2` `#MENU_GLOBAL` \
+--field="     $GUI_USEMO2CUSTOMINSTALLER!$DESC_USEMO2CUSTOMINSTALLER ('USEMO2CUSTOMINSTALLER')":CHK "${USEMO2CUSTOMINSTALLER/#- -}" `#CAT_MO2` `#SUB_Checkbox` `#MENU_GLOBAL` \
+--field="     $GUI_MO2CUSTOMINSTALLER!$DESC_MO2CUSTOMINSTALLER ('MO2CUSTOMINSTALLER')":DIR "${MO2CUSTOMINSTALLER/#-/ -}" `#CAT_MO2` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_MO2MODE!$DESC_MO2MODE ('MO2MODE')":CB "$(cleanDropDown "${MO2MODE/#-/ -}" "disabled!gui")" `#CAT_MO2` `#MENU_GAME` \
 --field="     $GUI_WAITMO2!$DESC_WAITMO2 ('WAITMO2')":NUM "${WAITMO2/#-/ -}" `#CAT_MO2` `#MENU_GAME` \
 #ENDSETENTRIES
@@ -16354,7 +16362,14 @@ function setMO2Vars {
 }
 
 function installMO2 {
-	dlLatestMO2 "S"
+	# Only download MO2 if MO2CUSTOMINSTALLER is disabled, AND if a custom installer is not valid (if undefined, or $NON, or doesn't exist)
+	if [ "$MO2CUSTOMINSTALLER" -eq 1 ] && [ -n "$MO2CUSTOMINSTALLER" ] && [ "$MO2CUSTOMINSTALLER" != "$NON" ] && [ -f "$MO2CUSTOMINSTALLER" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - MO2CUSTOMINSTALLER is '$MO2CUSTOMINSTALLER' and valid ModOrganizer 2 custom installer executable found -- Using this to install MO2 instead of downloading from GitHub"
+		MO2EXE="$( realpath "$MO2CUSTOMINSTALLER" )"  # Use selected path
+	else
+		dlLatestMO2 "S"
+	fi
+
 
 	if [ -f "$MO2SPATH" ]; then
 		setMO2Vars
