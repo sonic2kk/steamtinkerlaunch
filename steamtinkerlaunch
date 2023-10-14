@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20231015-1 (mo2-vortex-custom-installer)"
+PROGVERS="v14.0.20231015-2 (mo2-vortex-custom-installer)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -16361,6 +16361,30 @@ function setMO2Vars {
 	fi
 }
 
+# Intended for commandline primarily, not installMO2/etc directly
+# Could probably be re-used for Vortex
+function checkCustomModToolInstaller {
+	if [ -z "$1" ]; then
+		writelog "WARN" "${FUNCNAME[0]} - Did not pass tool name"
+	fi
+
+	if [ -n "$2" ] && [ "$2" != "$NON" ]; then
+		if [ -f "$1" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Got valid $1 executable '$2' is a valid file -- Will use this to install MO2"
+			echo "Got valid $1 executable '$2' is a valid file -- Will use this to install"
+			return 1
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Custom $1 executable '$2' is not a valid file -- Skipping"
+			echo "Custom $1 executable '$2' is not a valid file -- Skipping"
+			return 0
+		fi
+	else
+		writelog "INFO" "${FUNCNAME[0]} - Custom executable ('$2') is not defined -- Skipping"
+		echo "Custom executable ('$2') is not defined -- Skipping"
+		return 0
+	fi
+}
+
 function installMO2 {
 	# Only download MO2 if MO2CUSTOMINSTALLER is disabled, AND if a custom installer is not valid (if undefined, or $NON, or doesn't exist)
 	if [ "$USEMO2CUSTOMINSTALLER" -eq 1 ] && [ -n "$MO2CUSTOMINSTALLER" ] && [ "$MO2CUSTOMINSTALLER" != "$NON" ] && [ -f "$MO2CUSTOMINSTALLER" ]; then
@@ -21513,10 +21537,16 @@ function commandline {
 			if [ "$2" == "download" ] || [ "$2" == "d" ]; then
 				dlLatestMO2
 			elif [ "$2" == "install" ] || [ "$2" == "i" ]; then
-				# TODO set custom installer here before calling installMO2 (should come from "3" as valid path, check and pass)
+				# Untested for now
+				if [ -n "$3" ]; then
+					if checkCustomModToolInstaller "ModOrganizer 2" "$3"; then
+						USEMO2CUSTOMINSTALLER=1
+						MO2CUSTOMINSTALLER="$3"
+					fi
+				fi
+
 				StatusWindow "$(strFix "$NOTY_INSTSTART" "$MO")" "installMO2" "InstallMO2Status"
 			elif [ "$2" == "start" ] || [ "$2" == "s" ]; then
-				# Add support for passing custom installer here too? Probably only possible if we can temporarily force USEMO2CUSTOMINSTALLER=1 and set MO2CUSTOMINSTALLER
 				startMO2
 			elif [ "$2" == "list-supported" ] || [ "$2" == "ls" ]; then
 				listMO2Games
