@@ -1579,8 +1579,6 @@ function commandlineGetSteamGridDBArtwork {
 	# Download Hero, Logo, Boxart, Tenfoot from SteamGridDB from given endpoint using given AppID
 	# On SteamGridDB, tenfoot is grouped with grids, but as a horizontal Steam grid, so we fetch it by passing specific dimensions matching this
 	# Users are free to override this, but the default is what SteamGridDB expects for the tenfoot sizes
-	# 
-	# TODO pass values for style,dimension,etc from Global Menu once we have these options (Steam+Non-Steam share same settings)
 	if [ "$SGDBDLHERO" -eq 1 ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Downloading Hero artwork, because SGDBDLHERO is '$SGDBDLHERO'"
 		downloadArtFromSteamGridDB "$GSGDBA_APPID" "$SGDBSEARCHENDPOINT_HERO" "${GSGDBA_FILENAME}_hero" "$SGDBHEROSTYLES" "$SGDBHERODIMS" "$SGDBHEROTYPES" "$SGDBHERONSFW" "$SGDBHEROHUMOR" "$SGDBHEROEPILEPSY" "$GSGDBA_HASFILE" "$GSGDBA_APPLYARTWORK"
@@ -1599,115 +1597,6 @@ function commandlineGetSteamGridDBArtwork {
 		downloadArtFromSteamGridDB "$GSGDBA_APPID" "$SGDBSEARCHENDPOINT_BOXART" "${GSGDBA_FILENAME}" "$SGDBTENFOOTSTYLES" "$SGDBTENFOOTDIMS" "$SGDBTENFOOTTYPES" "$SGDBTENFOOTNSFW" "$SGDBTENFOOTHUMOR" "$SGDBTENFOOTEPILEPSY" "$GSGDBA_HASFILE" "$GSGDBA_APPLYARTWORK"
 	fi
 }
-
-
-#############################################
-
-
-# Takes a list of appids separated by newlines
-# LEGACY: REPLACE WITH "downloadArtFromSteamGridDB" WHICH IS A GENERIC VERSION OF THIS FOR DOWNLOADING ARTWORK FROM STEAMGRIDDB
-function getGrids {
-	if checkSGDbApi && [ "$STLPLAY" -eq 0 ]; then
-		LEGACYENDPOINT="$BASESTEAMGRIDDBAPI/grids/steam"
-
-		FORCESGDBDLTOSTEAM="${3:-0}"  # Force Non-Steam games to always download to SteamGrid dir
-		GRIDNAMEAPPIDOVERRIDE="$4"  # Override the AppID used for the grid, useful if the ID searched on is not the Steam AppID
-
-		SGDBHASFILE="${5:-SGDBHASFILE}"  # Option to override action to take when file already exists 
-
-		# Split into batches of 100 games - too many and cloudflare blocks requests because of a too big header file
-		while mapfile -t -n 100 ary && ((${#ary[@]})); do
-			PART=$(printf '%s\n' "${ary[@]}")
-			# If the whole batch has no grids we get a 404 and wget gives an error. --content-on-error ensures we still get the response json and the following logic still works
-			RESPONSE="$("$WGET" --content-on-error --header="Authorization: Bearer $SGDBAPIKEY" -q "${LEGACYENDPOINT}/$(echo "$PART" | awk '{print $1}' | paste -s -d, -)?styles=${SGDBSTYLES}&dimensions=${SGDBDIMS}&types=${SGDBTYPES}&nsfw=${SGDBNSFW}&humor=${SGDBHUMOR}" -O - 2> >(grep -v "SSL_INIT"))"
-
-			if ! "$JQ" -e '.success' 1> /dev/null <<< "$RESPONSE"; then
-				writelog "INFO" "${FUNCNAME[0]} - The server response wasn't 'success' for this batch of requested games."
-				continue
-			fi
-
-			# catch single grid without downloads
-			RESPONSE_LENGTH=$("$JQ" '.data | length' <<< "$RESPONSE")
-			if [ "$RESPONSE_LENGTH" = 0 ]; then
-				writelog "INFO" "${FUNCNAME[0]} - No grid found to download - maybe loosen filters?"
-				continue
-			fi
-
-			# TODO: This could be handled by the http return value - 200 is single-part - 207 is multi-part
-			# Rewrite response object to fit the following loop if the response isn't multi-part
-			if "$JQ" -e ".data[0].url" 1> /dev/null <<< "$RESPONSE"; then
-				RESPONSE="{\"success\":true,\"data\":[$RESPONSE]}"
-				RESPONSE_LENGTH=1
-			fi
-
-			for i in $(seq 0 $(("$RESPONSE_LENGTH" - 1))); do
-				# match the current json array member against the appid list
-				# this assumes we get the same order back we put in before
-				if [ -n "$GRIDNAMEAPPIDOVERRIDE" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - Overriding SteamGridDB AppID as '$GRIDNAMEAPPIDOVERRIDE'"
-					APPID="$GRIDNAMEAPPIDOVERRIDE"
-				else
-					APPID=$(sed "$((i + 1))q;d" <<< "$PART")
-				fi
-
-				if ! "$JQ" -e ".data[$i].success" 1> /dev/null <<< "$RESPONSE"; then
-					writelog "INFO" "${FUNCNAME[0]} - The server response for '$APPID' wasn't 'success'"
-					continue
-				fi
-				if ! URLSTR=$("$JQ" -e -r ".data[$i].data[0].url" <<< "$RESPONSE"); then
-					writelog "INFO" "${FUNCNAME[0]} - No grid found to download for '$APPID' - maybe loosen filters?"
-					continue
-				fi
-
-				GRIDDLURL="${URLSTR//\"}"
-				if grep -q "^https" <<< "$GRIDDLURL"; then
-					DLSRC="${GRIDDLURL//\"}"
-
-					if [ "$SGDBDLTOSTEAM" -eq 1 ] || [ "$FORCESGDBDLTOSTEAM" -eq 1 ]; then
-						if [ -z "$SUSDA" ]; then
-							setSteamPaths
-						fi
-						if [ -d "$SUIC" ]; then
-							GRIDDLDIR="${SUIC}/grid"
-						fi
-					else
-						GRIDDLDIR="$STLDLDIR/steamgriddb"
-					fi
-
-					mkProjDir "$GRIDDLDIR"
-
-					DLDST="$GRIDDLDIR/${APPID}p.${GRIDDLURL##*.}"
-					STARTDL=1
-					
-					if [ -f "$DLDST" ]; then
-						if [ "$SGDBHASFILE" == "skip" ]; then
-							writelog "INFO" "${FUNCNAME[0]} - Download of existing file is set to '$SGDBHASFILE' - doing nothing"
-							STARTDL=0
-						elif [ "$SGDBHASFILE" == "backup" ]; then
-							BACKDIR="${GRIDDLDIR}/backup"
-							mkProjDir "$BACKDIR"
-							writelog "INFO" "${FUNCNAME[0]} - Backup existing file into '$BACKDIR', because SGDBHASFILE is set to '$SGDBHASFILE'"
-							mv "$DLDST" "$BACKDIR"
-						elif [ "$SGDBHASFILE" == "replace" ]; then
-							writelog "INFO" "${FUNCNAME[0]} - Replacing existing file '$DLDST', because SGDBHASFILE is set to '$SGDBHASFILE'"
-							rm "$DLDST" 2>/dev/null
-						fi
-					fi
-					
-					if [ "$STARTDL" -eq 1 ]; then
-						dlCheck "$DLSRC" "$DLDST" "X" "Downloading '$DLSRC' to '$DLDST'"
-					fi
-				else
-					writelog "INFO" "${FUNCNAME[0]} - No grid found to download for '$APPID' - maybe loosen filters?"
-				fi
-			done
-		done <<< "${1}"
-	fi
-}
-
-
-#############################################
-
 
 function getGridsForOwnedGames {
 	if checkSGDbApi; then
@@ -18462,7 +18351,6 @@ function prepareLaunch {
 	# Automatic Grid Update Check before_game
 	if [ "$SGDBAUTODL" == "before_game" ] && [ "$STLPLAY" -eq 0 ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Automatic Grid Update Check '$SGDBAUTODL'"
-		# TODO replace with commandlineGetSteamGridDBArtwork
 		# getGrids "$AID" &
 		commandlineGetSteamGridDBArtwork --search-id="$AID" --steam
 	fi
@@ -23709,7 +23597,6 @@ function closeSTL {
 
 	if [ "$SGDBAUTODL" == "after_game" ] ; then
 		writelog "INFO" "${FUNCNAME[0]} - Automatic Grid Update Check '$SGDBAUTODL'"
-		# TODO replace with commandlineGetSteamGridDBArtwork
 		# getGrids "$AID"
 		commandlineGetSteamGridDBArtwork --search-id="$AID" --steam
 	fi
