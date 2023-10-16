@@ -23331,6 +23331,26 @@ function addNonSteamGame {
 		fi
 	}
 
+	# Download icon for Non-Steam Game using SteamGridDB Game ID
+	# We can't set icons for Steam games, and right now we can't edit the `shortcuts.vdf` file to edit the path to the icon,
+	# so this function is only for Non-Steam Games and only when they're being added to Steam
+	#
+	# In future, if we have a function to add SteamGridDB art for all Non-Steam Games, we could break this out and use it to set icons at that time too
+	function getSteamGridDBNonSteamIcon {
+		NOSTICONAID="$1"  # Non-Steam AppID
+		NOSTSGDBID="$2"  # SteamGridDB Game ID
+		SGDBSEARCHENDPOINT_ICONS="${BASESTEAMGRIDDBAPI}/icons/game"
+
+		# Download icon and put it in Steam grids folder, which should be a safe and intuitive location 
+		# We don't have any way to set search settings for icons and it would be confusing to have this in the Global Menu for now, so just leave blank
+		# In future if we have Non-Steam Game global settings, we could include icon settings there too
+		downloadArtFromSteamGridDB "$NOSTSGDBID" "$SGDBSEARCHENDPOINT_ICONS" "${NOSTICONAID}_icon" "" "" "" "" "" "" "replace" "1"
+
+		# Return icon path
+		# note that if we add an option to choose the Steam user to add the shortcut for, this will be impacted
+		echo "$STUIDPATH/config/grid/${NOSTICONAID}_icon"
+	}
+
 	NOSTHIDE=0  # Does hide still work? Didn't seem to in my tests
 	NOSTADC=1
 	NOSTAO=1
@@ -23521,13 +23541,16 @@ function addNonSteamGame {
 			NOSTICONPATH="$( findGameArtInExeDir "$NOSTEXEBASEDIR" "icon" "$NOSTICONPATH" )"
 		fi
 
-		# TODO support icons from SteamGridDB (these have to be written to the VDF file, how can we save and set these?)
-		# We could do this by making a separate "downloadArtFromSteamGridDB" call and saving the icon to the grids folder, then copying that path and using it when we're writing out the icon (i.e set the value of "NOSTICONPATH" if the icon file was successfully found on SteamGridDB)
-		# Maybe we could make a dedicated function for getting icons?
+		## Fetch artwork from SteamGridDB
 		if [ "$NOSTUSESGDB" -eq 1 ]; then
-			# SteamGridDB ID and Non-Steam Game AppID, respectively
-			# getGridsForNonSteamGame "$NOSTSGDBGAMEID" "$NOSTAIDGRID"
+			# Regular artwork
 			commandlineGetSteamGridDBArtwork --search-id="$NOSTSGDBGAMEID" --filename-appid="$NOSTAIDGRID" --nonsteam
+
+			# Icon -- Only set if we successfully download an icon from SteamGridDB
+			NOSTSGDBICON="$( getSteamGridDBNonSteamIcon "$NOSTAIDGRID" "$NOSTSGDBGAMEID" )"
+			if [ -f "$NOSTSGDBICON" ]; then
+				NOSTICONPATH="$NOSTSGDBICON"
+			fi
 		fi
 
 		writelog "INFO" "${FUNCNAME[0]} - Adding new set '$NEWSET'"
