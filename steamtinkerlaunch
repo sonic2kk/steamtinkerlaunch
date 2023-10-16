@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20231017-11 (steamgriddb-overhaul)"
+PROGVERS="v14.0.20231017-12 (steamgriddb-overhaul)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -1445,6 +1445,7 @@ function downloadArtFromSteamGridDB {
 		RESPONSE_LENGTH=$("$JQ" '.data | length' <<< "$RESPONSE")
 		if [ "$RESPONSE_LENGTH" = 0 ]; then
 			writelog "INFO" "${FUNCNAME[0]} - No grid found to download - maybe loosen filters?"
+			echo "Could not find artwork on SteamGridDB to save with filename '$SGDBFILENAME' -- Check the log for details"
 		fi
 
 		# TODO: This could be handled by the http return value - 200 is single-part - 207 is multi-part
@@ -23346,11 +23347,6 @@ function addNonSteamGame {
 		# We don't have any way to set search settings for icons and it would be confusing to have this in the Global Menu for now, so just leave blank
 		# In future if we have Non-Steam Game global settings, we could include icon settings there too
 		downloadArtFromSteamGridDB "$NOSTSGDBID" "$SGDBSEARCHENDPOINT_ICONS" "${NOSTICONNAME}" "" "" "" "" "" "" "replace" "1"
-
-		# Return icon path
-		# note that if we add an option to choose the Steam user to add the shortcut for, this will be impacted
-		# NOSTICONPATH="$STUIDPATH/config/grid/"
-		# find "$NOSTICONPATH" -name "${NOSTICONNAME}.*" | head -n1 2>/dev/null
 	}
 
 	NOSTHIDE=0  # Does hide still work? Didn't seem to in my tests
@@ -23544,9 +23540,10 @@ function addNonSteamGame {
 		fi
 
 		## Fetch artwork from SteamGridDB
-		# TODO notifier
 		if [ "$NOSTUSESGDB" -eq 1 ]; then
 			# Regular artwork
+			notiShow "$NOTY_SGDBDL"
+
 			commandlineGetSteamGridDBArtwork --search-id="$NOSTSGDBGAMEID" --filename-appid="$NOSTAIDGRID" --nonsteam --apply --replace-existing
 
 			# Icon -- Only set if we successfully download an icon from SteamGridDB
@@ -23558,6 +23555,8 @@ function addNonSteamGame {
 			else
 				writelog "INFO" "${FUNCNAME[0]} - Icon path does not exist at '$NOSTSGDBICON' - Maybe download failed?"
 			fi
+
+			notiShow "$NOTY_SGDBDLDONE"
 		fi
 
 		writelog "INFO" "${FUNCNAME[0]} - Adding new set '$NEWSET'"
