@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20231017-10 (steamgriddb-overhaul)"
+PROGVERS="v14.0.20231017-11 (steamgriddb-overhaul)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -23339,16 +23339,18 @@ function addNonSteamGame {
 	function getSteamGridDBNonSteamIcon {
 		NOSTICONAID="$1"  # Non-Steam AppID
 		NOSTSGDBID="$2"  # SteamGridDB Game ID
+		NOSTICONNAME="${NOSTICONAID}_icon"
 		SGDBSEARCHENDPOINT_ICONS="${BASESTEAMGRIDDBAPI}/icons/game"
 
 		# Download icon and put it in Steam grids folder, which should be a safe and intuitive location 
 		# We don't have any way to set search settings for icons and it would be confusing to have this in the Global Menu for now, so just leave blank
 		# In future if we have Non-Steam Game global settings, we could include icon settings there too
-		downloadArtFromSteamGridDB "$NOSTSGDBID" "$SGDBSEARCHENDPOINT_ICONS" "${NOSTICONAID}_icon" "" "" "" "" "" "" "replace" "1"
+		downloadArtFromSteamGridDB "$NOSTSGDBID" "$SGDBSEARCHENDPOINT_ICONS" "${NOSTICONNAME}" "" "" "" "" "" "" "replace" "1"
 
 		# Return icon path
 		# note that if we add an option to choose the Steam user to add the shortcut for, this will be impacted
-		echo "$STUIDPATH/config/grid/${NOSTICONAID}_icon"
+		# NOSTICONPATH="$STUIDPATH/config/grid/"
+		# find "$NOSTICONPATH" -name "${NOSTICONNAME}.*" | head -n1 2>/dev/null
 	}
 
 	NOSTHIDE=0  # Does hide still work? Didn't seem to in my tests
@@ -23542,14 +23544,19 @@ function addNonSteamGame {
 		fi
 
 		## Fetch artwork from SteamGridDB
+		# TODO notifier
 		if [ "$NOSTUSESGDB" -eq 1 ]; then
 			# Regular artwork
-			commandlineGetSteamGridDBArtwork --search-id="$NOSTSGDBGAMEID" --filename-appid="$NOSTAIDGRID" --nonsteam
+			commandlineGetSteamGridDBArtwork --search-id="$NOSTSGDBGAMEID" --filename-appid="$NOSTAIDGRID" --nonsteam --apply --replace-existing
 
 			# Icon -- Only set if we successfully download an icon from SteamGridDB
-			NOSTSGDBICON="$( getSteamGridDBNonSteamIcon "$NOSTAIDGRID" "$NOSTSGDBGAMEID" )"
+			getSteamGridDBNonSteamIcon "$NOSTAIDGRID" "$NOSTSGDBGAMEID"
+			NOSTSGDBICON="$( find "${STUIDPATH}/config/grid/" -name "${NOSTAIDGRID}_icon.*" | head -n1 2>/dev/null )"
 			if [ -f "$NOSTSGDBICON" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Found SteamGridDB icon path to '$NOSTSGDBICON' -- Using this as Non-Steam Game Icon"
 				NOSTICONPATH="$NOSTSGDBICON"
+			else
+				writelog "INFO" "${FUNCNAME[0]} - Icon path does not exist at '$NOSTSGDBICON' - Maybe download failed?"
 			fi
 		fi
 
