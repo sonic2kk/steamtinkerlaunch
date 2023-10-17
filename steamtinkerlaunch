@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20231018-1"
+PROGVERS="v14.0.20231019-1 (sgdb-name-search)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -1433,9 +1433,9 @@ function downloadArtFromSteamGridDB {
 
 		writelog "INFO" "${FUNCNAME[0]} - Outgoing SteamGridDB endpoint is: $SGDB_ENDPOINT_STR"
 
+		# TODO break into reusable function for both this and `getSGDBGameIDFromTitle`?
 		# If the whole batch has no grids we get a 404 and wget gives an error. --content-on-error ensures we still get the response json and the following logic still works
 		RESPONSE="$("$WGET" --content-on-error --header="Authorization: Bearer $SGDBAPIKEY" -q "$SGDB_ENDPOINT_STR" -O - 2> >(grep -v "SSL_INIT"))"
-
 		if ! "$JQ" -e '.success' 1> /dev/null <<< "$RESPONSE"; then
 			writelog "INFO" "${FUNCNAME[0]} - The server response wasn't 'success' for this batch of requested games."
 		fi
@@ -1609,6 +1609,35 @@ function getGridsForInstalledGames {
 		else
 			getSteamGridDBArtwork "$(getInstalledGameIDs)"
 		fi
+	fi
+}
+
+# Search SteamGridDB endpoint using game title and return the first (best match) Game ID
+function getSGDBGameIDFromTitle {
+	SGDBSEARCHNAME="$1"
+	
+	if [ -n "$SGDBSEARCHNAME" ]; then
+		SGDBSEARCHENDPOINT="${BASESTEAMGRIDDBAPI}/search/autocomplete/${SGDBSEARCHNAME}"
+		if checkSGDbApi; then
+			SGDBSEARCHNAMERESP="$( "$WGET" --content-on-error --header="Authorization: Bearer $SGDBAPIKEY" -q "$SGDBSEARCHENDPOINT" -O - 2>  >(grep -v "SSL_INIT") )"
+			if "$JQ" -e '.success' 1> /dev/null <<< "$SGDBSEARCHNAMERESP"; then
+				if [ "$( "$JQ" '.data | length' <<< "$SGDBSEARCHNAMERESP" )" -gt 0 ]; then
+					SGDBSEARCH_FOUNDNAME="$( "$JQ" '.data[0].name' <<< "$SGDBSEARCHNAMERESP" )"
+					SGDBSEARCH_FOUNDGAID="$( "$JQ" '.data[0].id' <<< "$SGDBSEARCHNAMERESP" )"
+
+					writelog "INFO" "${FUNCNAME[0]} - Searched SteamGridDB for name '$SGDBSEARCHNAME'"
+					writelog "INFO" "${FUNCNAME[0]} - SteamGridDB return Game ID '$SGDBSEARCH_FOUNDGAID' and name '$SGDBSEARCH_FOUNDNAME'."
+					echo "$SGDBSEARCH_FOUNDGAID"
+				else
+					writelog "WARN" "${FUNCNAME[0]} - No game name was returned for this request -- Check if this game name works on SteamGridDB's website search"
+				fi
+			else
+				writelog "WARN" "${FUNCNAME[0]} - The server response wasn't 'success' for this request."
+			fi
+		fi
+	else
+		writelog "INFO" "${FUNCNAME[0]} - No game name given."
+		echo "No game name given."
 	fi
 }
 
@@ -21311,9 +21340,10 @@ function howto {
 	echo "    getgamedir|gg <gameid/title>     Print the Game install directory with game name and AppID"
 	echo "                  only                 Only display install directory"
 	echo "    getid|gi|gid <gametitle>         Print the SteamAppId for <gametitle>"
-	echo "    gettitle|gt <gameid>             Print the Game Title for <gameid>"
+	echo "    getsteamgriddbid|sgdbid <title>  Get SteamGridDB Game ID for <title>"
 	echo "    getslr <gameid>                  Fetch the required Steam Linux Runtime for <gameid>'s SteamTinkerLaunch Proton version"
 	echo "               native                  (optional) get the native Steam Linux Runtime"
+	echo "    gettitle|gt <gameid>             Print the Game Title for <gameid>"
 	echo "    hedgemodmanager|hmm              HedgeModManager"
 	echo "            install|i                  install latest stable HedgeModManager"
 	echo "            download|d <channel>       download latest HedgeModManager release (stable or nightly)"
@@ -21689,7 +21719,7 @@ function commandline {
 		# Why are you looking here? :-)
 
 		## SteamGridDB ID and Non-Steam Game AppID, respectively
-		getGridsForNonSteamGame "5265668" "3963591317"
+		getSGDBGameIDFromTitle "Sonic Adventure 2"
 	elif [ "$1" == "mo2" ]; then
 		if [ -n "$2" ]; then
 			if [ "$2" == "download" ] || [ "$2" == "d" ]; then
@@ -21952,6 +21982,8 @@ function commandline {
 	elif [ "$1" == "steamgriddb" ] || [ "$1" == "sgdb" ]; then
 		# This is the new SteamGridDB commandline usage, we just expose direct function to commandline
 		commandlineGetSteamGridDBArtwork "$@"
+	elif [ "$1" == "getsteamgriddbid" ] || [ "$1" == "sgdbid" ]; then
+		getSGDBGameIDFromTitle "$2"
 	elif [ "$1" == "update" ]; then
 		if [ -n "$2" ]; then
 			if [ "$2" == "gamedata" ]; then
