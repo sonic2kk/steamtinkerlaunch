@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20231018-2"
+PROGVERS="v14.0.20231019-1 (sgdb-cmd-namesearch)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -1533,11 +1533,16 @@ function commandlineGetSteamGridDBArtwork {
 	SGDBENDPOINTTYPE="steam" # assume Steam game by default (i.e. search Steam AppID endpoint)
 	GSGDBA_HASFILE="$SGDBHASFILE"  # Optional override for how to handle if file already exists (downloadArtFromSteamGridDB defaults to '$SGDBHASFILE')
 	GSGDBA_APPLYARTWORK="$SGDBDLTOSTEAM"
+	GSGDBA_SEARCHNAME=""
+	GSGDBA_FOUNDGAMEID=""  # ID found from SteamGridDB endpoint using GSGDBA_SEARCHNAME 
 	for i in "${@}"; do
 		case $i in
 			--search-id=*)  # ID to hit the SteamGridDB API endpoint with (for Steam games this is the AppID which we will also use as filename) 
 				GSGDBA_APPID="${i#*=}"
 				GSGDBA_FILENAME="${GSGDBA_APPID}"  # By default, file will be named <appid> with a suffix for each grid type (only non-steam games need this overridden since they search on Game ID and not Steam AppID)
+				shift ;;
+			--search-name=*)
+				GSGDBA_SEARCHNAME="${i#*=}"  # Optional SteamGridDB Game Name -- Will use this to try and find matching SteamGridDB Game Art
 				shift ;;
 			--steam)
 				SGDBENDPOINTTYPE="steam"  # used to generate the correct endpoint to hit, defaults to /heroes/game but this will make it heroes/steam
@@ -1570,6 +1575,23 @@ function commandlineGetSteamGridDBArtwork {
 				shift ;;
 		esac
 	done
+
+	# If we pass a name to search on and we get a Game ID back from SteamGridDB, set this as the ID to search for artwork on
+	if [ -n "$GSGDBA_SEARCHNAME" ]; then
+		if [ -n "$GSGDBA_FILENAME" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Searching SteamGridDB for game name matching '$GSGDBA_SEARCHNAME'"
+			GSGDBA_FOUNDGAMEID="$( getSGDBGameIDFromTitle "$GSGDBA_SEARCHNAME" )"
+			if [ -n "$GSGDBA_FOUNDGAMEID" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Found game name matching '$GSGDBA_SEARCHNAME' with Game ID '$GSGDBA_FOUNDGAMEID' -- Using this Game ID to search for SteamGridDB Game Art"
+				GSGDBA_APPID="$GSGDBA_FOUNDGAMEID"
+				writelog "INFO" "${FUNCNAME[0]} - Forcing endpoint type as --nonsteam since we're searching with a found SteamGridDB Game ID"
+				SGDBENDPOINTTYPE="game"
+			fi
+		else
+			writelog "ERROR" "${FUNCNAME[0]} - You must provide a filename AppID when searching with SteamGridDB Game Name"
+			echo "You must provide a filename AppID when searching with SteamGridDB Game Name"
+		fi
+	fi
 
 	SGDBSEARCHENDPOINT_HERO="${BASESTEAMGRIDDBAPI}/heroes/${SGDBENDPOINTTYPE}"
 	SGDBSEARCHENDPOINT_LOGO="${BASESTEAMGRIDDBAPI}/logos/${SGDBENDPOINTTYPE}"
