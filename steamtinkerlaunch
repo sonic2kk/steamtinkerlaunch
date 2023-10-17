@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20231019-4 (steamgriddb-overhaul)"
+PROGVERS="v14.0.20231018-1"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -1530,9 +1530,9 @@ function getSteamGridDBArtwork {
 #
 # This function can be used on the commandline or just when we want to search for a game by Game ID
 function commandlineGetSteamGridDBArtwork {
-	SGDBENDPOINTTYPE="steam"
+	SGDBENDPOINTTYPE="steam" # assume Steam game by default (i.e. search Steam AppID endpoint)
 	GSGDBA_HASFILE="$SGDBHASFILE"  # Optional override for how to handle if file already exists (downloadArtFromSteamGridDB defaults to '$SGDBHASFILE')
-	GSGDBA_APPLYARTWORK="0"
+	GSGDBA_APPLYARTWORK="$SGDBDLTOSTEAM"
 	for i in "${@}"; do
 		case $i in
 			--search-id=*)  # ID to hit the SteamGridDB API endpoint with (for Steam games this is the AppID which we will also use as filename) 
@@ -1564,15 +1564,16 @@ function commandlineGetSteamGridDBArtwork {
 			## OPTIONAL: Flag to force downloading to SteamGridDB folder (used for addNonSteamGame internally)
 			--apply)
 				GSGDBA_APPLYARTWORK="1"
+				shift ;;
+			--no-apply)
+				GSGDBA_APPLYARTWORK="0"
+				shift ;;
 		esac
 	done
 
 	SGDBSEARCHENDPOINT_HERO="${BASESTEAMGRIDDBAPI}/heroes/${SGDBENDPOINTTYPE}"
 	SGDBSEARCHENDPOINT_LOGO="${BASESTEAMGRIDDBAPI}/logos/${SGDBENDPOINTTYPE}"
 	SGDBSEARCHENDPOINT_BOXART="${BASESTEAMGRIDDBAPI}/grids/${SGDBENDPOINTTYPE}"	 # Grid endpoint is used for Boxart and Tenfoot, which SteamGridDB counts as vertical/horizontal grids respectively
-
-	# TODO
-	# - Consider making --steam the default
 
 	# Download Hero, Logo, Boxart, Tenfoot from SteamGridDB from given endpoint using given AppID
 	# On SteamGridDB, tenfoot is grouped with grids, but as a horizontal Steam grid, so we fetch it by passing specific dimensions matching this
@@ -21414,6 +21415,7 @@ function howto {
 	echo "      --steam                          The Search ID passed is for a Steam AppID (default)"
 	echo "      --nonsteam                       The Search ID passed is for a SteamGridDB Game ID"
 	echo "      --apply                          Apply the downloaded game artwork to the Steam game (if not set, artwork will be downloaded to SteamTinkerLaunch Grid directory only)"
+	echo "      --no-apply                       Don't apply the downloaded game artwork (artwork will be downloaded to SteamTinkerLaunch Grid directory only)"
 	echo "      --skip-existing                  Skip setting artwork for this game if it already has custom artwork"
 	echo "      --replace-existing               Replace existing artwork files for this game -- they cannot be recovered later"
 	echo "      --backup-existing                Backup existing artwork files for this game before replacing them, so they can be restored"
