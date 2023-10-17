@@ -324,8 +324,15 @@ APIN="appinfo"
 SLO="Steam Launch Option"
 SOMEPOPULARWINEPAKS="dotnet4 quartz xact"
 SOMEWINEDEBUGOPTIONS="-all,+steam,+vrclient,+vulkan"
-SGDBDIMOPTS="600x900,342x482,660x930"
-SGDBSTYOPTS="alternate,blurred,white_logo,material,no_logo"
+DEFSGDBHERODIMS="3840x1240,1920x620"
+DEFSGDBBOXARTDIMS="600x900"
+DEFSGDBTENFOOTDIMS="920x430,460x215"
+SGDBTYPEOPTS="static!animated!static,animated!animated,static"
+SGDBTAGOPTS="any!true!false"
+SGDBHEROSTYLEOPTS="alternate,blurred,material"
+SGDBLOGOSTYLEOPTS="official,white,black,custom"
+SGDBGRIDSTYLEOPTS="alternate,blurred,white_logo,material,no_logo"
+SGDBTNFTSTYLEOPTS="alternate,blurred,white_logo,material"
 GETSTAID="99[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]99"
 
 STLGAMES="$STLCFGDIR/games"
@@ -1380,133 +1387,279 @@ function checkSGDbApi {
 	fi	
 }
 
-# Takes a list of appids separated by newlines
-function getGrids {
+## Generic function to fetch some artwork from SteamGridDB based on an endpoint
+## TODO: Steam only officially supports PNGs, test to see if WebP works when manually copied, and if it doesn't, we should try to only download PNG files
+## TODO: Add max filesize option? Some artworks are really big, we should skip ones that are too large (though this may mean many animated APNG artworks will get skipped, because APNG can be huge)
+function downloadArtFromSteamGridDB {
 	if checkSGDbApi && [ "$STLPLAY" -eq 0 ]; then
-		CHOSENAPI="${2:-STEAMGRIDDBAPI}"  # Endpoint (i.e. different one for different grids)
-		FORCESGDBDLTOSTEAM="${3:-0}"  # Force Non-Steam games to always download to SteamGrid dir
-		GRIDNAMEAPPIDOVERRIDE="$4"  # Override the AppID used for the grid, useful if the ID searched on is not the Steam AppID
+		# Required
+		SEARCHID="$1"  # ID to search on (should be either Steam AppID or Game ID, but we just pass it to the endpoint given)
+		SEARCHENDPOINT="$2"  # Endpoint which should either be an endpoint for Steam games (Steam AppID endpoint) or Non-Steam Games (SGDB Game ID Endpoint)
+		SGDBFILENAME="${3:-SEARCHID}"  # Name to give to file i.e. "124123p.png" (can't use ${SEARCHID}${SUFFIX} because SearchID may not be the AppID) -- Defaults to just using passed AppID
 
-		# Split into batches of 100 games - too many and cloudflare blocks requests because of a too big header file
-		while mapfile -t -n 100 ary && ((${#ary[@]})); do
-			PART=$(printf '%s\n' "${ary[@]}")
-			# If the whole batch has no grids we get a 404 and wget gives an error. --content-on-error ensures we still get the response json and the following logic still works
-			RESPONSE="$("$WGET" --content-on-error --header="Authorization: Bearer $SGDBAPIKEY" -q "${CHOSENAPI}/$(echo "$PART" | awk '{print $1}' | paste -s -d, -)?styles=${SGDBSTYLES}&dimensions=${SGDBDIMS}&types=${SGDBTYPES}&nsfw=${SGDBNSFW}&humor=${SGDBHUMOR}" -O - 2> >(grep -v "SSL_INIT"))"
+		# Optional
+		SEARCHSTYLES="$4"
+		SEARCHDIMS="$5"
+		SEARCHTYPES="$6"
+		SEARCHNSFW="$7"
+		SEARCHHUMOR="$8"
+		SEARCHEPILEPSY="$9"
 
-			if ! "$JQ" -e '.success' 1> /dev/null <<< "$RESPONSE"; then
-				writelog "INFO" "${FUNCNAME[0]} - The server response wasn't 'success' for this batch of requested games."
-				continue
+		SGDBHASFILE="${10:-SGDBHASFILE}"  # Option to override action to take when file already exists 
+
+		FORCESGDBDLTOSTEAM="${11}"  # Option to force downloading artwork to Steam Grid folder
+
+		SGDB_ENDPOINT_STR="${SEARCHENDPOINT}/$(echo "$SEARCHID" | awk '{print $1}' | paste -s -d, -)?"
+		# Only include query params if provided
+		# e.g.: "?styles=${SEARCHSTYLES}&dimensions=${SEARCHDIMS}&types=${SGDBTYPES}&nsfw=${SEARCHNSFW}&humor=${SEARCHHUMOR}"
+		if [ -n "$SEARCHSTYLES" ]; then
+			SGDB_ENDPOINT_STR+="&styles=${SEARCHSTYLES}"
+		fi
+		if [ -n "$SEARCHDIMS" ]; then
+			SGDB_ENDPOINT_STR+="&dimensions=${SEARCHDIMS}"
+		fi
+		if [ -n "$SEARCHTYPES" ]; then
+			SGDB_ENDPOINT_STR+="&types=${SEARCHTYPES}"
+		fi
+		if [ -n "$SEARCHNSFW" ]; then
+			SGDB_ENDPOINT_STR+="&nsfw=${SEARCHNSFW}"
+		fi
+		if [ -n "$SEARCHHUMOR" ]; then
+			SGDB_ENDPOINT_STR+="&humor=${SEARCHHUMOR}"
+		fi
+		if [ -n "$SEARCHEPILEPSY" ]; then
+			SGDB_ENDPOINT_STR+="&epilepsy=${SEARCHEPILEPSY}"
+		fi
+
+		writelog "INFO" "${FUNCNAME[0]} - Outgoing SteamGridDB endpoint is: $SGDB_ENDPOINT_STR"
+
+		# TODO break into reusable function for both this and `getSGDBGameIDFromTitle`?
+		# If the whole batch has no grids we get a 404 and wget gives an error. --content-on-error ensures we still get the response json and the following logic still works
+		RESPONSE="$("$WGET" --content-on-error --header="Authorization: Bearer $SGDBAPIKEY" -q "$SGDB_ENDPOINT_STR" -O - 2> >(grep -v "SSL_INIT"))"
+		if ! "$JQ" -e '.success' 1> /dev/null <<< "$RESPONSE"; then
+			writelog "INFO" "${FUNCNAME[0]} - The server response wasn't 'success' for this batch of requested games."
+		fi
+
+		# catch single grid without downloads
+		RESPONSE_LENGTH=$("$JQ" '.data | length' <<< "$RESPONSE")
+		if [ "$RESPONSE_LENGTH" = 0 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - No grid found to download - maybe loosen filters?"
+			echo "Could not find artwork on SteamGridDB to save with filename '$SGDBFILENAME' -- Check the log for details"
+		fi
+
+		# TODO: This could be handled by the http return value - 200 is single-part - 207 is multi-part
+		# Rewrite response object to fit the following loop if the response isn't multi-part
+		if "$JQ" -e ".data[0].url" 1> /dev/null <<< "$RESPONSE"; then
+			RESPONSE="{\"success\":true,\"data\":[$RESPONSE]}"
+			RESPONSE_LENGTH=1
+		fi
+
+		for i in $(seq 0 $(("$RESPONSE_LENGTH" - 1))); do
+			# match the current json array member against the appid list
+			# this assumes we get the same order back we put in before
+			if ! "$JQ" -e ".data[$i].success" 1> /dev/null <<< "$RESPONSE"; then
+				writelog "INFO" "${FUNCNAME[0]} - The server response for '$SEARCHID' wasn't 'success'"
+			fi
+			if ! URLSTR=$("$JQ" -e -r ".data[$i].data[0].url" <<< "$RESPONSE"); then
+				writelog "INFO" "${FUNCNAME[0]} - No grid found to download for '$SEARCHID' - maybe loosen filters?"
 			fi
 
-			# catch single grid without downloads
-			RESPONSE_LENGTH=$("$JQ" '.data | length' <<< "$RESPONSE")
-			if [ "$RESPONSE_LENGTH" = 0 ]; then
-				writelog "INFO" "${FUNCNAME[0]} - No grid found to download - maybe loosen filters?"
-				continue
-			fi
+			GRIDDLURL="${URLSTR//\"}"
+			if grep -q "^https" <<< "$GRIDDLURL"; then
+				DLSRC="${GRIDDLURL//\"}"
 
-			# TODO: This could be handled by the http return value - 200 is single-part - 207 is multi-part
-			# Rewrite response object to fit the following loop if the response isn't multi-part
-			if "$JQ" -e ".data[0].url" 1> /dev/null <<< "$RESPONSE"; then
-				RESPONSE="{\"success\":true,\"data\":[$RESPONSE]}"
-				RESPONSE_LENGTH=1
-			fi
-
-			for i in $(seq 0 $(("$RESPONSE_LENGTH" - 1))); do
-				# match the current json array member against the appid list
-				# this assumes we get the same order back we put in before
-				if [ -n "$GRIDNAMEAPPIDOVERRIDE" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - Overriding SteamGridDB AppID as '$GRIDNAMEAPPIDOVERRIDE'"
-					APPID="$GRIDNAMEAPPIDOVERRIDE"
-				else
-					APPID=$(sed "$((i + 1))q;d" <<< "$PART")
-				fi
-
-				if ! "$JQ" -e ".data[$i].success" 1> /dev/null <<< "$RESPONSE"; then
-					writelog "INFO" "${FUNCNAME[0]} - The server response for '$APPID' wasn't 'success'"
-					continue
-				fi
-				if ! URLSTR=$("$JQ" -e -r ".data[$i].data[0].url" <<< "$RESPONSE"); then
-					writelog "INFO" "${FUNCNAME[0]} - No grid found to download for '$APPID' - maybe loosen filters?"
-					continue
-				fi
-
-				GRIDDLURL="${URLSTR//\"}"
-				if grep -q "^https" <<< "$GRIDDLURL"; then
-					DLSRC="${GRIDDLURL//\"}"
-
-					if [ "$SGDBDLTOSTEAM" -eq 1 ] || [ "$FORCESGDBDLTOSTEAM" -eq 1 ]; then
-						if [ -z "$SUSDA" ]; then
-							setSteamPaths
-						fi
-						if [ -d "$SUIC" ]; then
-							GRIDDLDIR="${SUIC}/grid"
-						fi
-					else
-						GRIDDLDIR="$STLDLDIR/steamgriddb"
+				if [ "$SGDBDLTOSTEAM" -eq 1 ] || [ "$FORCESGDBDLTOSTEAM" -eq 1 ]; then
+					if [ -z "$SUSDA" ]; then
+						setSteamPaths
 					fi
-
-					mkProjDir "$GRIDDLDIR"
-
-					DLDST="$GRIDDLDIR/${APPID}p.${GRIDDLURL##*.}"
-					STARTDL=1
-					
-					if [ -f "$DLDST" ]; then
-						if [ "$SGDBHASFILE" == "skip" ]; then
-							writelog "INFO" "${FUNCNAME[0]} - Download of existing file is set to '$SGDBHASFILE' - doing nothing"
-							STARTDL=0
-						elif [ "$SGDBHASFILE" == "backup" ]; then
-							BACKDIR="${GRIDDLDIR}/backup"
-							mkProjDir "$BACKDIR"
-							writelog "INFO" "${FUNCNAME[0]} - Backup existing file into '$BACKDIR', because SGDBHASFILE is set to '$SGDBHASFILE'"
-							mv "$DLDST" "$BACKDIR"
-						elif [ "$SGDBHASFILE" == "replace" ]; then
-							writelog "INFO" "${FUNCNAME[0]} - Replacing existing file '$DLDST', because SGDBHASFILE is set to '$SGDBHASFILE'"
-							rm "$DLDST" 2>/dev/null
-						fi
-					fi
-					
-					if [ "$STARTDL" -eq 1 ]; then
-						dlCheck "$DLSRC" "$DLDST" "X" "Downloading '$DLSRC' to '$DLDST'"
+					if [ -d "$SUIC" ]; then
+						GRIDDLDIR="${SUIC}/grid"
 					fi
 				else
-					writelog "INFO" "${FUNCNAME[0]} - No grid found to download for '$APPID' - maybe loosen filters?"
+					GRIDDLDIR="$STLDLDIR/steamgriddb"
 				fi
-			done
-		done <<< "${1}"
+
+				mkProjDir "$GRIDDLDIR"
+
+				DLDST="${GRIDDLDIR}/${SGDBFILENAME}.${GRIDDLURL##*.}"  # Makes filename like <appid>.<org_extension>, which could be something like "70_logo.png" (with full path preceding this, so something like "~/Games/Grids/Half-Life/70_logo.png")
+				STARTDL=1
+				
+				if [ -f "$DLDST" ]; then
+					if [ "$SGDBHASFILE" == "skip" ]; then
+						writelog "INFO" "${FUNCNAME[0]} - Download of existing file is set to '$SGDBHASFILE' - doing nothing"
+						STARTDL=0
+					elif [ "$SGDBHASFILE" == "backup" ]; then
+						BACKDIR="${GRIDDLDIR}/backup"
+						mkProjDir "$BACKDIR"
+						writelog "INFO" "${FUNCNAME[0]} - Backup existing file into '$BACKDIR', because SGDBHASFILE is set to '$SGDBHASFILE'"
+						mv "$DLDST" "$BACKDIR"
+					elif [ "$SGDBHASFILE" == "replace" ]; then
+						writelog "INFO" "${FUNCNAME[0]} - Replacing existing file '$DLDST', because SGDBHASFILE is set to '$SGDBHASFILE'"
+						rm "$DLDST" 2>/dev/null
+					fi
+				fi
+				
+				if [ "$STARTDL" -eq 1 ]; then
+					dlCheck "$DLSRC" "$DLDST" "X" "Downloading '$DLSRC' to '$DLDST'"
+				fi
+			else
+				writelog "INFO" "${FUNCNAME[0]} - No grid found to download for '$SEARCHID' - maybe loosen filters?"
+			fi
+		done
+	fi
+}
+
+# Takes in an Steam AppID or list of Steam AppIDs and downloads (hero, logo boxart) for each one
+#
+# This function can only support Steam AppIDs because we can't easily map SteamGridDB Game IDs and Non-Steam Game AppIDs
+# For Steam games, the AppID is the ID we search on; for Non-Steam Games, we search on a specific Game ID
+# In future, we could make a separate function for this
+function getSteamGridDBArtwork {
+	# Download artwork with given parameters for each ID passed in
+	# Split into batches of 100 games - too many and cloudflare blocks requests because of a too big header file
+	while mapfile -t -n 100 ary && ((${#ary[@]})); do
+		SGDBSEARCHAID=$(printf '%s\n' "${ary[@]}")
+
+		commandlineGetSteamGridDBArtwork --search-id="$SGDBSEARCHAID" --steam
+	done <<< "${1}"
+}
+
+# We will use this to get either Steam or Non-Steam artwork depending on a flag
+# This flag will never be passed by the user, internally we will automatically handle passing the --steam or --nonsteam flag
+# When called from the commandline we will have two separate commands, one for Steam and one for Non-Steam, but both will call this function and pass the relevant flag
+#
+# This function can be used on the commandline or just when we want to search for a game by Game ID
+function commandlineGetSteamGridDBArtwork {
+	SGDBENDPOINTTYPE="steam" # assume Steam game by default (i.e. search Steam AppID endpoint)
+	GSGDBA_HASFILE="$SGDBHASFILE"  # Optional override for how to handle if file already exists (downloadArtFromSteamGridDB defaults to '$SGDBHASFILE')
+	GSGDBA_APPLYARTWORK="$SGDBDLTOSTEAM"
+	GSGDBA_SEARCHNAME=""
+	GSGDBA_FOUNDGAMEID=""  # ID found from SteamGridDB endpoint using GSGDBA_SEARCHNAME 
+	for i in "${@}"; do
+		case $i in
+			--search-id=*)  # ID to hit the SteamGridDB API endpoint with (for Steam games this is the AppID which we will also use as filename) 
+				GSGDBA_APPID="${i#*=}"
+				GSGDBA_FILENAME="${GSGDBA_APPID}"  # By default, file will be named <appid> with a suffix for each grid type (only non-steam games need this overridden since they search on Game ID and not Steam AppID)
+				shift ;;
+			--search-name=*)
+				GSGDBA_SEARCHNAME="${i#*=}"  # Optional SteamGridDB Game Name -- Will use this to try and find matching SteamGridDB Game Art
+				shift ;;
+			--steam)
+				SGDBENDPOINTTYPE="steam"  # used to generate the correct endpoint to hit, defaults to /heroes/game but this will make it heroes/steam
+				shift ;;
+			--nonsteam)
+				SGDBENDPOINTTYPE="game"
+				shift ;;
+			--filename-appid=*)
+				GSGDBA_FILENAME="${i#*=}"  # AppID to use in filename (Non-Steam Games need a different AppID)
+				shift ;;
+			## OPTIONAL: Override Global Menu setting for how to handle existing artwork
+			##
+			## (in case user wants to replace all existing artwork, default STL setting is 'skip' and will only copy files over to grid dir if they don't exist, so user can easily
+			## fill in missing artwork only)
+			--replace-existing)
+				GSGDBA_HASFILE="replace"
+				shift ;;
+			--backup-existing)
+				GSGDBA_HASFILE="backup"
+				shift ;;
+			--skip-existing)
+				GSGDBA_HASFILE="skip"
+				shift ;;
+			## OPTIONAL: Flag to force downloading to SteamGridDB folder (used for addNonSteamGame internally)
+			--apply)
+				GSGDBA_APPLYARTWORK="1"
+				shift ;;
+			--no-apply)
+				GSGDBA_APPLYARTWORK="0"
+				shift ;;
+		esac
+	done
+
+	# If we pass a name to search on and we get a Game ID back from SteamGridDB, set this as the ID to search for artwork on
+	if [ -n "$GSGDBA_SEARCHNAME" ]; then
+		if [ -n "$GSGDBA_FILENAME" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Searching SteamGridDB for game name matching '$GSGDBA_SEARCHNAME'"
+			GSGDBA_FOUNDGAMEID="$( getSGDBGameIDFromTitle "$GSGDBA_SEARCHNAME" )"
+			if [ -n "$GSGDBA_FOUNDGAMEID" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Found game name matching '$GSGDBA_SEARCHNAME' with Game ID '$GSGDBA_FOUNDGAMEID' -- Using this Game ID to search for SteamGridDB Game Art"
+				GSGDBA_APPID="$GSGDBA_FOUNDGAMEID"
+				writelog "INFO" "${FUNCNAME[0]} - Forcing endpoint type as --nonsteam since we're searching with a found SteamGridDB Game ID"
+				SGDBENDPOINTTYPE="game"
+			fi
+		else
+			writelog "ERROR" "${FUNCNAME[0]} - You must provide a filename AppID when searching with SteamGridDB Game Name"
+			echo "You must provide a filename AppID when searching with SteamGridDB Game Name"
+		fi
+	fi
+
+	SGDBSEARCHENDPOINT_HERO="${BASESTEAMGRIDDBAPI}/heroes/${SGDBENDPOINTTYPE}"
+	SGDBSEARCHENDPOINT_LOGO="${BASESTEAMGRIDDBAPI}/logos/${SGDBENDPOINTTYPE}"
+	SGDBSEARCHENDPOINT_BOXART="${BASESTEAMGRIDDBAPI}/grids/${SGDBENDPOINTTYPE}"	 # Grid endpoint is used for Boxart and Tenfoot, which SteamGridDB counts as vertical/horizontal grids respectively
+
+	# Download Hero, Logo, Boxart, Tenfoot from SteamGridDB from given endpoint using given AppID
+	# On SteamGridDB, tenfoot is grouped with grids, but as a horizontal Steam grid, so we fetch it by passing specific dimensions matching this
+	# Users are free to override this, but the default is what SteamGridDB expects for the tenfoot sizes
+	if [ "$SGDBDLHERO" -eq 1 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Downloading Hero artwork, because SGDBDLHERO is '$SGDBDLHERO'"
+		downloadArtFromSteamGridDB "$GSGDBA_APPID" "$SGDBSEARCHENDPOINT_HERO" "${GSGDBA_FILENAME}_hero" "$SGDBHEROSTYLES" "$SGDBHERODIMS" "$SGDBHEROTYPES" "$SGDBHERONSFW" "$SGDBHEROHUMOR" "$SGDBHEROEPILEPSY" "$GSGDBA_HASFILE" "$GSGDBA_APPLYARTWORK"
+	fi
+	if [ "$SGDBDLLOGO" -eq 1 ]; then
+		# Logo doesn't have dimensions, so it's left intentionally blank
+		writelog "INFO" "${FUNCNAME[0]} - Downloading Logo artwork, because SGDBDLLOGO is '$SGDBDLLOGO'"
+		downloadArtFromSteamGridDB "$GSGDBA_APPID" "$SGDBSEARCHENDPOINT_LOGO" "${GSGDBA_FILENAME}_logo" "$SGDBLOGOSTYLES" "" "$SGDBLOGOTYPES" "$SGDBLOGONSFW" "$SGDBLOGOHUMOR" "$SGDBLOGOEPILEPSY" "$GSGDBA_HASFILE" "$GSGDBA_APPLYARTWORK"
+	fi
+	if [ "$SGDBDLBOXART" -eq 1 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Downloading Boxart (Steam Vertical Grid) artwork, because SGDBDLBOXART is '$SGDBDLBOXART'"
+		downloadArtFromSteamGridDB "$GSGDBA_APPID" "$SGDBSEARCHENDPOINT_BOXART" "${GSGDBA_FILENAME}p" "$SGDBBOXARTSTYLES" "$SGDBBOXARTDIMS" "$SGDBBOXARTTYPES" "$SGDBBOXARTNSFW" "$SGDBBOXARTHUMOR" "$SGDBBOXARTEPILEPSY" "$GSGDBA_HASFILE" "$GSGDBA_APPLYARTWORK"
+	fi
+	if [ "$SGDBDLTENFOOT" -eq 1 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Downloading Tenfoot (Steam Horizontal Grid) artwork, because SGDBDLTENFOOT is '$SGDBDLTENFOOT'"
+		downloadArtFromSteamGridDB "$GSGDBA_APPID" "$SGDBSEARCHENDPOINT_BOXART" "${GSGDBA_FILENAME}" "$SGDBTENFOOTSTYLES" "$SGDBTENFOOTDIMS" "$SGDBTENFOOTTYPES" "$SGDBTENFOOTNSFW" "$SGDBTENFOOTHUMOR" "$SGDBTENFOOTEPILEPSY" "$GSGDBA_HASFILE" "$GSGDBA_APPLYARTWORK"
 	fi
 }
 
 function getGridsForOwnedGames {
 	if checkSGDbApi; then
-		getGrids "$(getOwnedAids)"
+		getSteamGridDBArtwork "$(getOwnedAids)"
 	fi
 }
-
 function getGridsForInstalledGames {
 	if checkSGDbApi; then
 		if [ "$(listInstalledGameIDs | wc -l)" -eq 0 ]; then
 			writelog "SKIP" "${FUNCNAME[0]} - No installed games found!"
 		else
-			getGrids "$(listInstalledGameIDs)"
+			getSteamGridDBArtwork "$(getInstalledGameIDs)"
 		fi
 	fi
 }
 
-# TODO implement this for general use on the commandline if not already supported!
-# Right now it can only be used when adding a Non-Steam Game and not retroactively
-function getGridsForNonSteamGame {
-	STEAMGRIDDBGAMEID="$1"
-	NONSTEAMAPPID="$2"
+# Search SteamGridDB endpoint using game title and return the first (best match) Game ID
+function getSGDBGameIDFromTitle {
+	SGDBSEARCHNAME="$1"
+	
+	if [ -n "$SGDBSEARCHNAME" ]; then
+		SGDBSEARCHENDPOINT="${BASESTEAMGRIDDBAPI}/search/autocomplete/${SGDBSEARCHNAME}"
+		if checkSGDbApi; then
+			SGDBSEARCHNAMERESP="$( "$WGET" --content-on-error --header="Authorization: Bearer $SGDBAPIKEY" -q "$SGDBSEARCHENDPOINT" -O - 2>  >(grep -v "SSL_INIT") )"
+			if "$JQ" -e '.success' 1> /dev/null <<< "$SGDBSEARCHNAMERESP"; then
+				if [ "$( "$JQ" '.data | length' <<< "$SGDBSEARCHNAMERESP" )" -gt 0 ]; then
+					SGDBSEARCH_FOUNDNAME="$( "$JQ" '.data[0].name' <<< "$SGDBSEARCHNAMERESP" )"
+					SGDBSEARCH_FOUNDGAID="$( "$JQ" '.data[0].id' <<< "$SGDBSEARCHNAMERESP" )"
 
-	# "1" "3963591317"
-	if checkSGDbApi; then
-		if [ -n "$STEAMGRIDDBGAMEID" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Getting grids for Non-Steam Game from SteamGridDB for SteamGridDB Ghttps://www.steamgriddb.com/grid/74151ame ID of '${STEAMGRIDDBGAMEID}'"
-			getGrids "$STEAMGRIDDBGAMEID" "$STEAMGRIDDBNOSTAPI" "1" "$NONSTEAMAPPID"
-		else
-			writelog "SKIP" "${FUNCNAME[0]} - No SteamGridDB Game ID provided -- skipping"
+					writelog "INFO" "${FUNCNAME[0]} - Searched SteamGridDB for name '$SGDBSEARCHNAME'"
+					writelog "INFO" "${FUNCNAME[0]} - SteamGridDB return Game ID '$SGDBSEARCH_FOUNDGAID' and name '$SGDBSEARCH_FOUNDNAME'."
+					echo "$SGDBSEARCH_FOUNDGAID"
+				else
+					writelog "WARN" "${FUNCNAME[0]} - No game name was returned for this request -- Check if this game name works on SteamGridDB's website search"
+				fi
+			else
+				writelog "WARN" "${FUNCNAME[0]} - The server response wasn't 'success' for this request."
+			fi
 		fi
+	else
+		writelog "INFO" "${FUNCNAME[0]} - No game name given."
+		echo "No game name given."
 	fi
 }
 
@@ -2720,8 +2873,7 @@ function setDefaultCfgValues {
 		if [ -z "$STASSURL" ]							; then	STASSURL="https://steamcdn-a.akamaihd.net/steam/apps"; fi
 		if [ -z "$WINETRICKSURL" ]						; then	WINETRICKSURL="$GHURL/Winetricks/winetricks"; fi
 		if [ -z "$X64DBGURL" ]							; then	X64DBGURL="$GHURL/x64dbg/x64dbg/releases/tag/snapshot";fi
-		if [ -z "$STEAMGRIDDBAPI" ]						; then	STEAMGRIDDBAPI="https://www.steamgriddb.com/api/v2/grids/steam";fi
-		if [ -z "$STEAMGRIDDBNOSTAPI" ]					; then	STEAMGRIDDBNOSTAPI="https://www.steamgriddb.com/api/v2/grids/game";fi
+		if [ -z "$BASESTEAMGRIDDBAPI" ]					; then	BASESTEAMGRIDDBAPI="https://www.steamgriddb.com/api/v2";fi
 		if [ -z "$CONTYRELURL" ]						; then	CONTYRELURL="$GHURL/Kron4ek/Conty/releases"; fi
 		if [ -z "$MO2PROJURL" ]							; then  MO2PROJURL="$GHURL/ModOrganizer2/modorganizer"; fi
 		if [ -z "$HMMPROJURL" ]                         ; then  HMMPROJURL="$GHURL/thesupersonic16/HedgeModManager"; fi
@@ -2818,14 +2970,36 @@ function setDefaultCfgValues {
 		if [ -z "$DISABLE_AUTOSTAGES" ]					; then	DISABLE_AUTOSTAGES="0"; fi
 		if [ -z "$NOSTEAMSTLDEF" ]						; then	NOSTEAMSTLDEF="0"; fi
 		if [ -z "$SGDBAPIKEY" ]							; then	SGDBAPIKEY="$NON"; fi
-		if [ -z "$SGDBSTYLES" ]							; then	SGDBSTYLES="$SGDBSTYOPTS"; fi
-		if [ -z "$SGDBDIMS" ]							; then	SGDBDIMS="$SGDBDIMOPTS"; fi
-		if [ -z "$SGDBTYPES" ]							; then	SGDBTYPES="animated,static"; fi
-		if [ -z "$SGDBNSFW" ]							; then	SGDBNSFW="any"; fi
-		if [ -z "$SGDBHUMOR" ]							; then	SGDBHUMOR="any"; fi
 		if [ -z "$SGDBDLTOSTEAM" ]						; then	SGDBDLTOSTEAM="0"; fi
 		if [ -z "$SGDBHASFILE" ]						; then	SGDBHASFILE="skip"; fi
 		if [ -z "$SGDBAUTODL" ]							; then	SGDBAUTODL="$NON"; fi
+		if [ -z "$SGDBDLHERO" ]							; then  SGDBDLHERO="1"; fi
+		if [ -z "$SGDBDLLOGO" ]							; then  SGDBDLLOGO="1"; fi
+		if [ -z "$SGDBDLBOXART" ]						; then  SGDBDLBOXART="1"; fi
+		if [ -z "$SGDBDLTENFOOT" ]						; then  SGDBDLTENFOOT="1"; fi
+		if [ -z "$SGDBHERODIMS" ]						; then  SGDBHERODIMS="$DEFSGDBHERODIMS"; fi
+		if [ -z "$SGDBHEROTYPES" ]						; then  SGDBHEROTYPES="static"; fi
+		if [ -z "$SGDBHEROSTYLES" ]						; then  SGDBHEROSTYLES="$SGDBHEROSTYLEOPTS"; fi
+		if [ -z "$SGDBHERONSFW" ]						; then  SGDBHERONSFW="any"; fi
+		if [ -z "$SGDBHEROHUMOR" ]						; then  SGDBHEROHUMOR="any"; fi
+		if [ -z "$SGDBHEROEPILEPSY" ]					; then  SGDBHEROEPILEPSY="false"; fi
+		if [ -z "$SGDBLOGOTYPES" ]						; then  SGDBLOGOTYPES="static"; fi
+		if [ -z "$SGDBLOGOSTYLES" ]						; then  SGDBLOGOSTYLES="$SGDBLOGOSTYLEOPTS"; fi
+		if [ -z "$SGDBLOGONSFW" ]						; then  SGDBLOGONSFW="any"; fi
+		if [ -z "$SGDBLOGOHUMOR" ]						; then  SGDBLOGOHUMOR="any"; fi
+		if [ -z "$SGDBLOGOEPILEPSY" ]					; then  SGDBLOGOEPILEPSY="false"; fi
+		if [ -z "$SGDBBOXARTDIMS" ]						; then  SGDBBOXARTDIMS="$DEFSGDBBOXARTDIMS"; fi
+		if [ -z "$SGDBBOXARTTYPES" ]					; then  SGDBBOXARTTYPES="static"; fi
+		if [ -z "$SGDBBOXARTSTYLES" ]					; then  SGDBBOXARTSTYLES="$SGDBGRIDSTYLEOPTS"; fi
+		if [ -z "$SGDBBOXARTNSFW" ]						; then  SGDBBOXARTNSFW="any"; fi
+		if [ -z "$SGDBBOXARTHUMOR" ]					; then  SGDBBOXARTHUMOR="any"; fi
+		if [ -z "$SGDBBOXARTEPILEPSY" ]					; then  SGDBBOXARTEPILEPSY="false"; fi
+		if [ -z "$SGDBTENFOOTDIMS" ]					; then  SGDBTENFOOTDIMS="$DEFSGDBTENFOOTDIMS"; fi
+		if [ -z "$SGDBTENFOOTTYPES" ]					; then  SGDBTENFOOTTYPES="static"; fi
+		if [ -z "$SGDBTENFOOTSTYLES" ]					; then  SGDBTENFOOTSTYLES="$SGDBTNFTSTYLEOPTS"; fi
+		if [ -z "$SGDBTENFOOTNSFW" ]					; then  SGDBTENFOOTNSFW="any"; fi
+		if [ -z "$SGDBTENFOOTHUMOR" ]					; then  SGDBTENFOOTHUMOR="any"; fi
+		if [ -z "$SGDBTENFOOTEPILEPSY" ]				; then  SGDBTENFOOTEPILEPSY="false"; fi
 		if [ -z "$STORECOMPDATTITLE" ]					; then	STORECOMPDATTITLE="1"; fi
 		if [ -z "$CUSTCONTY" ]							; then	CUSTCONTY="$NON"; fi
 		if [ -z "$UPDATECONTY" ]						; then	UPDATECONTY="1"; fi
@@ -3089,7 +3263,7 @@ function saveCfg {
 			echo "## x64dbg URL"
 			echo "X64DBGURL=\"$X64DBGURL\""
 			echo "## SteamGridDB Api URL"
-			echo "STEAMGRIDDBAPI=\"$STEAMGRIDDBAPI\""
+			echo "BASESTEAMGRIDDBAPI=\"$BASESTEAMGRIDDBAPI\""
 			echo "## Conty DL URL"
 			echo "CONTYRELURL=\"$CONTYRELURL\""
 			echo "## Mod Organizer 2 Project URL"
@@ -3307,16 +3481,60 @@ function saveCfg {
 			echo "NOSTEAMSTLDEF=\"$NOSTEAMSTLDEF\""
 			echo "## $DESC_SGDBAPIKEY"
 			echo "SGDBAPIKEY=\"$SGDBAPIKEY\""
-			echo "## $DESC_SGDBSTYLES"
-			echo "SGDBSTYLES=\"$SGDBSTYLES\""
-			echo "## $DESC_SGDBDIMS"
-			echo "SGDBDIMS=\"$SGDBDIMS\""
-			echo "## $DESC_SGDBTYPES"
-			echo "SGDBTYPES=\"$SGDBTYPES\""
-			echo "## $DESC_SGDBNSFW"
-			echo "SGDBNSFW=\"$SGDBNSFW\""
-			echo "## $DESC_SGDBHUMOR"
-			echo "SGDBHUMOR=\"$SGDBHUMOR\""
+			echo "## Hero $DESC_SGDBDLHERO"
+			echo "SGDBDLHERO=\"$SGDBDLHERO\""
+			echo "## Hero $DESC_SGDBDIMS"
+			echo "SGDBHERODIMS=\"$SGDBHERODIMS\""
+			echo "## Hero $DESC_SGDBTYPES"
+			echo "SGDBHEROTYPES=\"$SGDBHEROTYPES\""
+			echo "## Hero $DESC_SGDBSTYLES"
+			echo "SGDBHEROSTYLES=\"$SGDBHEROSTYLES\""
+			echo "## Hero $DESC_SGDBNSFW"
+			echo "SGDBHERONSFW=\"$SGDBHERONSFW\""
+			echo "## Hero $DESC_SGDBHUMOR"
+			echo "SGDBHEROHUMOR=\"$SGDBHEROHUMOR\""
+			echo "## Hero $DESC_SGDBEPILEPSY"
+			echo "SGDBHEROEPILEPSY=\"$SGDBHEROEPILEPSY\""
+			echo "## Logo $DESC_SGDBDLLOGO"
+			echo "SGDBDLLOGO=\"$SGDBDLLOGO\""
+			echo "## Logo $DESC_SGDBTYPES"
+			echo "SGDBLOGOTYPES=\"$SGDBLOGOTYPES\""
+			echo "## Logo $DESC_SGDBSTYLES"
+			echo "SGDBLOGOSTYLES=\"$SGDBLOGOSTYLES\""
+			echo "## Logo $DESC_SGDBNSFW"
+			echo "SGDBLOGONSFW=\"$SGDBLOGONSFW\""
+			echo "## Logo $DESC_SGDBHUMOR"
+			echo "SGDBLOGOHUMOR=\"$SGDBLOGOHUMOR\""
+			echo "## Logo $DESC_SGDBEPILEPSY"
+			echo "SGDBLOGOEPILEPSY=\"$SGDBLOGOEPILEPSY\""
+			echo "## Boxart $DESC_SGDBDLBOXART"
+			echo "SGDBDLBOXART=\"$SGDBDLBOXART\""
+			echo "## Boxart $DESC_SGDBDIMS"
+			echo "SGDBBOXARTDIMS=\"$SGDBBOXARTDIMS\""
+			echo "## Boxart $DESC_SGDBTYPES"
+			echo "SGDBBOXARTTYPES=\"$SGDBBOXARTTYPES\""
+			echo "## Boxart $DESC_SGDBSTYLES"
+			echo "SGDBBOXARTSTYLES=\"$SGDBBOXARTSTYLES\""
+			echo "## Boxart $DESC_SGDBNSFW"
+			echo "SGDBBOXARTNSFW=\"$SGDBBOXARTNSFW\""
+			echo "## Boxart $DESC_SGDBHUMOR"
+			echo "SGDBBOXARTHUMOR=\"$SGDBBOXARTHUMOR\""
+			echo "## Boxart $DESC_SGDBEPILEPSY"
+			echo "SGDBBOXARTEPILEPSY=\"$SGDBBOXARTEPILEPSY\""
+			echo "## Tenfoot $DESC_SGDBDLTENFOOT"
+			echo "SGDBDLTENFOOT=\"$SGDBDLTENFOOT\""
+			echo "## Tenfoot $DESC_SGDBDIMS"
+			echo "SGDBTENFOOTDIMS=\"$SGDBTENFOOTDIMS\""
+			echo "## Tenfoot $DESC_SGDBTYPES"
+			echo "SGDBTENFOOTTYPES=\"$SGDBTENFOOTTYPES\""
+			echo "## Tenfoot $DESC_SGDBSTYLES"
+			echo "SGDBTENFOOTSTYLES=\"$SGDBTENFOOTSTYLES\""
+			echo "## Tenfoot $DESC_SGDBNSFW"
+			echo "SGDBTENFOOTNSFW=\"$SGDBTENFOOTNSFW\""
+			echo "## Tenfoot $DESC_SGDBHUMOR"
+			echo "SGDBTENFOOTHUMOR=\"$SGDBTENFOOTHUMOR\""
+			echo "## Tenfoot $DESC_SGDBEPILEPSY"
+			echo "SGDBTENFOOTEPILEPSY=\"$SGDBTENFOOTEPILEPSY\""
 			echo "## $DESC_SGDBDLTOSTEAM"
 			echo "SGDBDLTOSTEAM=\"$SGDBDLTOSTEAM\""
 			echo "## $DESC_SGDBHASFILE"
@@ -4258,12 +4476,6 @@ function setShowPic {
 
 	if [ "$STLPLAY" -eq 1 ] && [ -f "$STLGPNG/${AID}.png" ]; then
 		SHOWPIC="$STLGPNG/${AID}.png"
-	elif [ -n "$GRIDBANNER" ]; then
-		# Find custom image in grid folder and store resized image at '$STLGHEADD/<org_image_name_with_extension>'
-		writelog "INFO" "${FUNCNAME[0]} - Using hero image found in Steam Grid folder - '$GRIDBANNER'"
-		CUSTPIC="$GRIDBANNER"
-		"$CONVERT" "$CUSTPIC" -resize "460x215!" "$STLGHEADD/${AID}.png"
-		SHOWPIC="$STLGHEADD/${AID}.png"
 	elif [ "$USEGAMEPICS" -eq 1 ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Determining game picture"
 		if [ -s "$STLGHEADD/$AID.jpg" ]; then
@@ -4275,17 +4487,6 @@ function setShowPic {
 
 			if [ ! -f "$STLGHEADD/$AID.jpg" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Using '$SHOWPIC' as fallback picture, because '$STLGHEADD/$AID.jpg' doesn't exist"
-			elif [ -f "$STLGHEADD/$AID.jpg" ] && [ ! -s "$STLGHEADD/$AID.jpg" ]; then
-				# Attempt to redownload header picture if we failed last time (e.g., if we were offline)
-				writelog "INFO" "${FUNCNAME[0]} - Game header picture exists at '$STLGHEADD/$AID.jpg' but has zero bytes. Attempting one redownload"
-				getGameData "$AID"
-
-				if [ -s "$STLGHEADD/$AID.jpg" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - Successfully redownloaded header picture for '$AID' to '$STLGHEADD/$AID.jpg', using that."
-					SHOWPIC="$STLGHEADD/$AID.jpg"  # Actually use the new picture
-				else
-					writelog "INFO" "${FUNCNAME[0]} - Could not redownload header picture, defaulting '$SHOWPIC' to STL icon '$STLICON' (Maybe we're offline?)"
-				fi
 			elif [ ! -s "$STLGHEADD/$AID.jpg" ]; then
 				if [ -z "$SUSDA" ] || [ -z "$STUIDPATH" ]; then
 					setSteamPaths
@@ -4305,6 +4506,13 @@ function setShowPic {
 					writelog "INFO" "${FUNCNAME[0]} - Leaving '$STLGHEADD/$AID.jpg' as is to avoid another download attempt"
 					writelog "INFO" "${FUNCNAME[0]} - Feel free to replace it with a custom picture"
 				fi
+			elif [[ ( ! -f "$STLGHEADD/$AID.jpg" || ! -s "$STLGHEADD/$AID.jpg" ) && -n "$GRIDBANNER" ]]; then
+				# If banner image still doesn't exist, use grid folder one (i.e. non-steam games)
+				# Find custom image in grid folder and store resized image at '$STLGHEADD/<org_image_name_with_extension>'
+				writelog "INFO" "${FUNCNAME[0]} - Using hero image found in Steam Grid folder - '$GRIDBANNER'"
+				CUSTPIC="$GRIDBANNER"
+				"$CONVERT" "$CUSTPIC" -resize "460x215!" "$STLGHEADD/${AID}.jpg"
+				SHOWPIC="$STLGHEADD/${AID}.jpg"
 			fi
 		fi
 	else
@@ -5249,11 +5457,33 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_SGDBAPIKEY!$DESC_SGDBAPIKEY ('SGDBAPIKEY')":CBE "${SGDBAPIKEY/#-/ -}" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
 --field="     $GUI_SGDBHASFILE!$DESC_SGDBHASFILE ('SGDBHASFILE')":CB "$(cleanDropDown "${SGDBHASFILE/#-/ -}" "skip!backup!replace")" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
 --field="     $GUI_SGDBAUTODL!$DESC_SGDBAUTODL ('SGDBAUTODL')":CB "$(cleanDropDown  "${SGDBAUTODL/#-/ -}" "$NON!after_game!before_game!no_meta")" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
---field="     $GUI_SGDBSTYLES!$DESC_SGDBSTYLES ('SGDBSTYLES')":CBE "$(cleanDropDown "${SGDBSTYLES/#-/ -}" "${SGDBSTYOPTS//,/\!}")" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
---field="     $GUI_SGDBDIMS!$DESC_SGDBDIMS ('SGDBDIMS')":CBE "$(cleanDropDown "${SGDBDIMS/#-/ -}" "${SGDBDIMOPTS//,/\!}")" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
---field="     $GUI_SGDBTYPES!$DESC_SGDBTYPES ('SGDBTYPES')":CBE "$(cleanDropDown "${SGDBTYPES/#-/ -}" "animated!static!animated,static!static,animated")" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
---field="     $GUI_SGDBNSFW!$DESC_SGDBNSFW ('SGDBNSFW')":CBE "$(cleanDropDown "${SGDBNSFW/#-/ -}" "any!false!true")" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
---field="     $GUI_SGDBHUMOR!$DESC_SGDBHUMOR ('SGDBHUMOR')":CBE "$(cleanDropDown "${SGDBHUMOR/#-/ -}" "any!false!true")" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
+--field="     $GUI_SGDBDLHERO!$DESC_SGDBDLHERO ('SGDBDLHERO')":CHK "${SGDBDLHERO/#-/ -}" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
+--field="     $GUI_SGDBDIMS!$DESC_SGDBDIMS ('SGDBHERODIMS')":CBE "$(cleanDropDown "${SGDBHERODIMS/#-/ -}" "${DEFSGDBHERODIMS//,/\!}")" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
+--field="     $GUI_SGDBTYPES!$DESC_SGDBTYPES ('SGDBHEROTYPES')":CBE "$(cleanDropDown "${SGDBHEROTYPES/#-/ -}" "${SGDBTYPEOPTS}")" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
+--field="     $GUI_SGDBSTYLES!$DESC_SGDBSTYLES ('SGDBHEROSTYLES')":CBE "$(cleanDropDown "${SGDBHEROSTYLES/#-/ -}" "${SGDBHEROSTYLEOPTS//,/\!}")" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
+--field="     $GUI_SGDBNSFW!$DESC_SGDBNSFW ('SGDBHERONSFW')":CBE "$(cleanDropDown "${SGDBHERONSFW/#-/ -}" "${SGDBTAGOPTS}")" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
+--field="     $GUI_SGDBHUMOR!$DESC_SGDBHUMOR ('SGDBHEROHUMOR')":CBE "$(cleanDropDown "${SGDBHEROHUMOR/#-/ -}" "${SGDBTAGOPTS}")" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
+--field="     $GUI_SGDBEPILEPSY!$DESC_SGDBEPILEPSY ('SGDBHEROEPILEPSY')":CBE "$(cleanDropDown ${SGDBHEROEPILEPSY/#-/ -} "$SGDBTAGOPTS")" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
+--field="     $GUI_SGDBDLLOGO!$DESC_SGDBDLLOGO ('SGDBDLLOGO')":CHK "${SGDBDLLOGO/#-/ -}" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
+--field="     $GUI_SGDBTYPES!$DESC_SGDBTYPES ('SGDBLOGOTYPES')":CBE "$(cleanDropDown "${SGDBLOGOTYPES/#-/ -}" "${SGDBTYPEOPTS}")" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
+--field="     $GUI_SGDBSTYLES!$DESC_SGDBSTYLES ('SGDBLOGOSTYLES')":CBE "$(cleanDropDown "${SGDBLOGOSTYLES/#-/ -}" "${SGDBLOGOSTYLEOPTS//,/\!}")" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
+--field="     $GUI_SGDBNSFW!$DESC_SGDBNSFW ('SGDBLOGONSFW')":CBE "$(cleanDropDown "${SGDBLOGONSFW/#-/ -}" "${SGDBTAGOPTS}")" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
+--field="     $GUI_SGDBHUMOR!$DESC_SGDBHUMOR ('SGDBLOGOHUMOR')":CBE "$(cleanDropDown "${SGDBLOGOHUMOR/#-/ -}" "${SGDBTAGOPTS}")" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
+--field="     $GUI_SGDBEPILEPSY!$DESC_SGDBEPILEPSY ('SGDBLOGOEPILEPSY')":CBE "$(cleanDropDown ${SGDBLOGOEPILEPSY/#-/ -} "$SGDBTAGOPTS")" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
+--field="     $GUI_SGDBDLBOXART!$DESC_SGDBDLBOXART ('SGDBDLBOXART')":CHK "${SGDBDLBOXART/#-/ -}" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
+--field="     $GUI_SGDBDIMS!$DESC_SGDBDIMS ('SGDBBOXARTDIMS')":CBE "$(cleanDropDown "${SGDBBOXARTDIMS/#-/ -}" "${DEFSGDBBOXARTDIMS//,/\!}")" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
+--field="     $GUI_SGDBTYPES!$DESC_SGDBTYPES ('SGDBBOXARTTYPES')":CBE "$(cleanDropDown "${SGDBBOXARTTYPES/#-/ -}" "${SGDBTYPEOPTS}")" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
+--field="     $GUI_SGDBSTYLES!$DESC_SGDBSTYLES ('SGDBBOXARTSTYLES')":CBE "$(cleanDropDown "${SGDBBOXARTSTYLES/#-/ -}" "${SGDBGRIDSTYLEOPTS//,/\!}")" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
+--field="     $GUI_SGDBNSFW!$DESC_SGDBNSFW ('SGDBBOXARTNSFW')":CBE "$(cleanDropDown "${SGDBBOXARTNSFW/#-/ -}" "${SGDBTAGOPTS}")" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
+--field="     $GUI_SGDBHUMOR!$DESC_SGDBHUMOR ('SGDBBOXARTHUMOR')":CBE "$(cleanDropDown "${SGDBBOXARTHUMOR/#-/ -}" "${SGDBTAGOPTS}")" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
+--field="     $GUI_SGDBEPILEPSY!$DESC_SGDBEPILEPSY ('SGDBBOXARTEPILEPSY')":CBE "$(cleanDropDown ${SGDBBOXARTEPILEPSY/#-/ -} "$SGDBTAGOPTS")" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
+--field="     $GUI_SGDBDLTENFOOT!$DESC_SGDBDLTENFOOT ('SGDBDLTENFOOT')":CHK "${SGDBDLTENFOOT/#-/ -}" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
+--field="     $GUI_SGDBDIMS!$DESC_SGDBDIMS ('SGDBTENFOOTDIMS')":CBE "$(cleanDropDown "${SGDBTENFOOTDIMS/#-/ -}" "${DEFSGDBTENFOOTDIMS//,/\!}")" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
+--field="     $GUI_SGDBTYPES!$DESC_SGDBTYPES ('SGDBTENFOOTTYPES')":CBE "$(cleanDropDown "${SGDBTENFOOTTYPES/#-/ -}" "${SGDBTYPEOPTS}")" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
+--field="     $GUI_SGDBSTYLES!$DESC_SGDBSTYLES ('SGDBTENFOOTSTYLES')":CBE "$(cleanDropDown "${SGDBTENFOOTSTYLES/#-/ -}" "${SGDBTNFTSTYLEOPTS//,/\!}")" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
+--field="     $GUI_SGDBNSFW!$DESC_SGDBNSFW ('SGDBTENFOOTNSFW')":CBE "$(cleanDropDown "${SGDBTENFOOTNSFW/#-/ -}" "${SGDBTAGOPTS}")" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
+--field="     $GUI_SGDBHUMOR!$DESC_SGDBHUMOR ('SGDBTENFOOTHUMOR')":CBE "$(cleanDropDown "${SGDBTENFOOTHUMOR/#-/ -}" "${SGDBTAGOPTS}")" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
+--field="     $GUI_SGDBEPILEPSY!$DESC_SGDBEPILEPSY ('SGDBTENFOOTEPILEPSY')":CBE "$(cleanDropDown ${SGDBTENFOOTEPILEPSY/#-/ -} "$SGDBTAGOPTS")" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
 --field="$(spanFont "$GUI_OPTSHMM" "H")":LBL "SKIP" `#CAT_HMM` `#HEAD_HMM` `#MENU_GLOBAL` \
 --field="     $GUI_HMMDLVER!$DESC_HMMDLVER ('HMMDLVER')":CB "$(cleanDropDown "${HMMDLVER/#-/ -}" "$HMMSTABLE!$HMMDEV")" `#CAT_HMM` `#MENU_GLOBAL` \
 --field="     $GUI_HMMCOMPDATA!$DESC_HMMCOMPDATA ('HMMCOMPDATA')":DIR "${HMMCOMPDATA/#-/ -}" `#CAT_HMM` `#SUB_Directories` `#MENU_GLOBAL` \
@@ -5482,7 +5712,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_STASSURL!$DESC_STASSURL ('STASSURL')" "${STASSURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="     $GUI_WINETRICKSURL!$DESC_WINETRICKSURL ('WINETRICKSURL')" "${WINETRICKSURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="     $GUI_X64DBGURL!$DESC_X64DBGURL ('X64DBGURL')" "${X64DBGURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
---field="     $GUI_STEAMGRIDDBAPI!$DESC_STEAMGRIDDBAPI ('STEAMGRIDDBAPI')" "${STEAMGRIDDBAPI/#-/ -}" `#CAT_Urls` `#MENU_URL` \
+--field="     $GUI_STEAMGRIDDBAPI!$DESC_STEAMGRIDDBAPI ('BASESTEAMGRIDDBAPI')" "${BASESTEAMGRIDDBAPI/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="     $GUI_CONTYRELURL!$DESC_CONTYRELURL ('CONTYRELURL')" "${CONTYRELURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="     $GUI_MO2DLURL!$DESC_MO2DLURL ('MO2PROJURL')" "${MO2PROJURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="     $GUI_HMMDLURL!$DESC_HMMDLURL ('HMMPROJURL')" "${HMMPROJURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
@@ -6651,7 +6881,6 @@ function extWine64Run {
 	fi
 }
 
-# NOTE: This needs an update to support launch commands set with `buildCustomCmdLaunch` - e.g. ONLY_CUSTOMCMD
 function extProtonRun {
 	MODE="$1"
 	PROGRAM="$2"
@@ -18200,7 +18429,8 @@ function prepareLaunch {
 	# Automatic Grid Update Check before_game
 	if [ "$SGDBAUTODL" == "before_game" ] && [ "$STLPLAY" -eq 0 ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Automatic Grid Update Check '$SGDBAUTODL'"
-		getGrids "$AID" &
+		# getGrids "$AID" &
+		commandlineGetSteamGridDBArtwork --search-id="$AID" --steam
 	fi
 
 	if [ "$ISGAME" -eq 2 ]; then
@@ -21171,9 +21401,10 @@ function howto {
 	echo "    getgamedir|gg <gameid/title>     Print the Game install directory with game name and AppID"
 	echo "                  only                 Only display install directory"
 	echo "    getid|gi|gid <gametitle>         Print the SteamAppId for <gametitle>"
-	echo "    gettitle|gt <gameid>             Print the Game Title for <gameid>"
+	echo "    getsteamgriddbid|sgdbid <title>  Get SteamGridDB Game ID for <title>"
 	echo "    getslr <gameid>                  Fetch the required Steam Linux Runtime for <gameid>'s SteamTinkerLaunch Proton version"
 	echo "               native                  (optional) get the native Steam Linux Runtime"
+	echo "    gettitle|gt <gameid>             Print the Game Title for <gameid>"
 	echo "    hedgemodmanager|hmm              HedgeModManager"
 	echo "            install|i                  install latest stable HedgeModManager"
 	echo "            download|d <channel>       download latest HedgeModManager release (stable or nightly)"
@@ -21263,6 +21494,26 @@ function howto {
 	echo "    steamdeckcompat <gameid>         Get information about Steam Deck compatibility for <gameid>"
 	echo "                                       Will work offline if the information has been fetched before"
 	echo "                                       (for 'SteamAppID' or 'last')"
+	echo "    steamgriddb|sgdb <args>          Download most relevant artwork from SteamGridDB based on Steam AppID or SteamGridDB Game ID"
+	echo "                                      Attempts to search for and download hero, logo, and boxart from SteamGridDB, and can optionally"
+	echo "                                      apply this artwork to the game in your Steam library, by giving it the AppID of the game to use"
+	echo "                                      in the filename."
+	echo "                                       This setting uses preferences specified on Global Menu under SteamGridDB options, such as"
+	echo "                                       dimensions, and how to manage existing files (though an override can be specified for how"
+	echo "                                       to manage existing artwork files)."
+	echo "      <args>:"
+	echo "      --search-id=                     Steam AppID or SteamGridDB Game ID to search for (ex: AppID 22330 or Game ID 5258102)"
+	echo "      --search-name=                   Search SteamGridDB with a name and return the best-match Game ID, and use --nonsteam automatically."
+	echo "                                        You must pass '--filename-appid' when using this option, otherwise artwork will use the wrong ID"
+	echo "      --filename-appid=                Steam AppID to use when naming the file, only required when searching on Game ID or Game Name so the artwork is applied to the correct Shortcut"
+	echo "      --steam                          The Search ID passed is for a Steam AppID (default)"
+	echo "      --nonsteam                       The Search ID passed is for a SteamGridDB Game ID"
+	echo "      --apply                          Apply the downloaded game artwork to the Steam game (if not set, artwork will be downloaded to SteamTinkerLaunch Grid directory only)"
+	echo "      --no-apply                       Don't apply the downloaded game artwork (artwork will be downloaded to SteamTinkerLaunch Grid directory only)"
+	echo "      --skip-existing                  Skip setting artwork for this game if it already has custom artwork"
+	echo "      --replace-existing               Replace existing artwork files for this game -- they cannot be recovered later"
+	echo "      --backup-existing                Backup existing artwork files for this game before replacing them, so they can be restored"
+	echo ""
 	echo "    steamworksshared|sws <opts>      Steamworks Shared:"
 	echo "      <opts>:                          Options:"
 	echo "      <l>                              List packages - or"
@@ -21532,7 +21783,7 @@ function commandline {
 		# Why are you looking here? :-)
 
 		## SteamGridDB ID and Non-Steam Game AppID, respectively
-		getGridsForNonSteamGame "5265668" "3963591317"
+		getSGDBGameIDFromTitle "Sonic Adventure 2"
 	elif [ "$1" == "mo2" ]; then
 		if [ -n "$2" ]; then
 			if [ "$2" == "download" ] || [ "$2" == "d" ]; then
@@ -21800,6 +22051,11 @@ function commandline {
 		else
 			howto
 		fi
+	elif [ "$1" == "steamgriddb" ] || [ "$1" == "sgdb" ]; then
+		# This is the new SteamGridDB commandline usage, we just expose direct function to commandline
+		commandlineGetSteamGridDBArtwork "$@"
+	elif [ "$1" == "getsteamgriddbid" ] || [ "$1" == "sgdbid" ]; then
+		getSGDBGameIDFromTitle "$2"
 	elif [ "$1" == "update" ]; then
 		if [ -n "$2" ]; then
 			if [ "$2" == "gamedata" ]; then
@@ -21816,8 +22072,6 @@ function commandline {
 					getGridsForOwnedGames
 				elif [ "$3" == "installed" ]; then
 					getGridsForInstalledGames				
-				else
-					getGrids "$3"
 				fi
 			elif [ "$2" == "allgamedata" ]; then
 				getDataForAllGamesinSharedConfig
@@ -22093,7 +22347,8 @@ function storeMetaData {
 	if [ ! -f "$GEMETA/$MAID.conf" ]; then
 		if [ "$SGDBAUTODL" == "no_meta" ] ; then
 			writelog "INFO" "${FUNCNAME[0]} - Automatic Grid Update Check '$SGDBAUTODL'"
-			getGrids "$MAID"
+			# getGrids "$MAID"
+			commandlineGetSteamGridDBArtwork --search-id="$MAID" --steam
 		fi
 		touch "$GEMETA/$MAID.conf"
 	fi
@@ -23059,6 +23314,23 @@ function addNonSteamGame {
 		fi
 	}
 
+	# Download icon for Non-Steam Game using SteamGridDB Game ID
+	# We can't set icons for Steam games, and right now we can't edit the `shortcuts.vdf` file to edit the path to the icon,
+	# so this function is only for Non-Steam Games and only when they're being added to Steam
+	#
+	# In future, if we have a function to add SteamGridDB art for all Non-Steam Games, we could break this out and use it to set icons at that time too
+	function getSteamGridDBNonSteamIcon {
+		NOSTICONAID="$1"  # Non-Steam AppID
+		NOSTSGDBID="$2"  # SteamGridDB Game ID
+		NOSTICONNAME="${NOSTICONAID}_icon"
+		SGDBSEARCHENDPOINT_ICONS="${BASESTEAMGRIDDBAPI}/icons/game"
+
+		# Download icon and put it in Steam grids folder, which should be a safe and intuitive location 
+		# We don't have any way to set search settings for icons and it would be confusing to have this in the Global Menu for now, so just leave blank
+		# In future if we have Non-Steam Game global settings, we could include icon settings there too
+		downloadArtFromSteamGridDB "$NOSTSGDBID" "$SGDBSEARCHENDPOINT_ICONS" "${NOSTICONNAME}" "" "" "" "" "" "" "replace" "1"
+	}
+
 	NOSTHIDE=0  # Does hide still work? Didn't seem to in my tests
 	NOSTADC=1
 	NOSTAO=1
@@ -23249,9 +23521,24 @@ function addNonSteamGame {
 			NOSTICONPATH="$( findGameArtInExeDir "$NOSTEXEBASEDIR" "icon" "$NOSTICONPATH" )"
 		fi
 
+		## Fetch artwork from SteamGridDB
 		if [ "$NOSTUSESGDB" -eq 1 ]; then
-			# SteamGridDB ID and Non-Steam Game AppID, respectively
-			getGridsForNonSteamGame "$NOSTSGDBGAMEID" "$NOSTAIDGRID"
+			# Regular artwork
+			notiShow "$NOTY_SGDBDL"
+
+			commandlineGetSteamGridDBArtwork --search-id="$NOSTSGDBGAMEID" --filename-appid="$NOSTAIDGRID" --nonsteam --apply --replace-existing
+
+			# Icon -- Only set if we successfully download an icon from SteamGridDB
+			getSteamGridDBNonSteamIcon "$NOSTAIDGRID" "$NOSTSGDBGAMEID"
+			NOSTSGDBICON="$( find "${STUIDPATH}/config/grid/" -name "${NOSTAIDGRID}_icon.*" | head -n1 2>/dev/null )"
+			if [ -f "$NOSTSGDBICON" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Found SteamGridDB icon path to '$NOSTSGDBICON' -- Using this as Non-Steam Game Icon"
+				NOSTICONPATH="$NOSTSGDBICON"
+			else
+				writelog "INFO" "${FUNCNAME[0]} - Icon path does not exist at '$NOSTSGDBICON' - Maybe download failed?"
+			fi
+
+			notiShow "$NOTY_SGDBDLDONE"
 		fi
 
 		writelog "INFO" "${FUNCNAME[0]} - Adding new set '$NEWSET'"
@@ -23403,7 +23690,8 @@ function closeSTL {
 
 	if [ "$SGDBAUTODL" == "after_game" ] ; then
 		writelog "INFO" "${FUNCNAME[0]} - Automatic Grid Update Check '$SGDBAUTODL'"
-		getGrids "$AID"
+		# getGrids "$AID"
+		commandlineGetSteamGridDBArtwork --search-id="$AID" --steam
 	fi
 
 	if [ "$ISGAME" -eq 2 ] && [ "$PROTON_LOG" -eq 1 ]; then
