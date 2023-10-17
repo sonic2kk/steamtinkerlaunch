@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20231019-1 (steamgriddb-overhaul)"
+PROGVERS="v14.0.20231019-3 (steamgriddb-overhaul)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -1530,7 +1530,7 @@ function getSteamGridDBArtwork {
 #
 # This function can be used on the commandline or just when we want to search for a game by Game ID
 function commandlineGetSteamGridDBArtwork {
-	SGDBENDPOINTTYPE="game"
+	SGDBENDPOINTTYPE="steam"
 	GSGDBA_HASFILE="$SGDBHASFILE"  # Optional override for how to handle if file already exists (downloadArtFromSteamGridDB defaults to '$SGDBHASFILE')
 	GSGDBA_APPLYARTWORK="0"
 	for i in "${@}"; do
@@ -1573,7 +1573,6 @@ function commandlineGetSteamGridDBArtwork {
 
 	# TODO
 	# - Consider making --steam the default
-	# - Consider making --apply the default, and having --no-apply as the explicit option
 
 	# Download Hero, Logo, Boxart, Tenfoot from SteamGridDB from given endpoint using given AppID
 	# On SteamGridDB, tenfoot is grouped with grids, but as a horizontal Steam grid, so we fetch it by passing specific dimensions matching this
@@ -4419,12 +4418,6 @@ function setShowPic {
 
 	if [ "$STLPLAY" -eq 1 ] && [ -f "$STLGPNG/${AID}.png" ]; then
 		SHOWPIC="$STLGPNG/${AID}.png"
-	elif [ -n "$GRIDBANNER" ]; then
-		# Find custom image in grid folder and store resized image at '$STLGHEADD/<org_image_name_with_extension>'
-		writelog "INFO" "${FUNCNAME[0]} - Using hero image found in Steam Grid folder - '$GRIDBANNER'"
-		CUSTPIC="$GRIDBANNER"
-		"$CONVERT" "$CUSTPIC" -resize "460x215!" "$STLGHEADD/${AID}.png"
-		SHOWPIC="$STLGHEADD/${AID}.png"
 	elif [ "$USEGAMEPICS" -eq 1 ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Determining game picture"
 		if [ -s "$STLGHEADD/$AID.jpg" ]; then
@@ -4436,17 +4429,6 @@ function setShowPic {
 
 			if [ ! -f "$STLGHEADD/$AID.jpg" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Using '$SHOWPIC' as fallback picture, because '$STLGHEADD/$AID.jpg' doesn't exist"
-			elif [ -f "$STLGHEADD/$AID.jpg" ] && [ ! -s "$STLGHEADD/$AID.jpg" ]; then
-				# Attempt to redownload header picture if we failed last time (e.g., if we were offline)
-				writelog "INFO" "${FUNCNAME[0]} - Game header picture exists at '$STLGHEADD/$AID.jpg' but has zero bytes. Attempting one redownload"
-				getGameData "$AID"
-
-				if [ -s "$STLGHEADD/$AID.jpg" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - Successfully redownloaded header picture for '$AID' to '$STLGHEADD/$AID.jpg', using that."
-					SHOWPIC="$STLGHEADD/$AID.jpg"  # Actually use the new picture
-				else
-					writelog "INFO" "${FUNCNAME[0]} - Could not redownload header picture, defaulting '$SHOWPIC' to STL icon '$STLICON' (Maybe we're offline?)"
-				fi
 			elif [ ! -s "$STLGHEADD/$AID.jpg" ]; then
 				if [ -z "$SUSDA" ] || [ -z "$STUIDPATH" ]; then
 					setSteamPaths
@@ -4466,6 +4448,13 @@ function setShowPic {
 					writelog "INFO" "${FUNCNAME[0]} - Leaving '$STLGHEADD/$AID.jpg' as is to avoid another download attempt"
 					writelog "INFO" "${FUNCNAME[0]} - Feel free to replace it with a custom picture"
 				fi
+			elif [[ ( ! -f "$STLGHEADD/$AID.jpg" || ! -s "$STLGHEADD/$AID.jpg" ) && -n "$GRIDBANNER" ]]; then
+				# If banner image still doesn't exist, use grid folder one (i.e. non-steam games)
+				# Find custom image in grid folder and store resized image at '$STLGHEADD/<org_image_name_with_extension>'
+				writelog "INFO" "${FUNCNAME[0]} - Using hero image found in Steam Grid folder - '$GRIDBANNER'"
+				CUSTPIC="$GRIDBANNER"
+				"$CONVERT" "$CUSTPIC" -resize "460x215!" "$STLGHEADD/${AID}.jpg"
+				SHOWPIC="$STLGHEADD/${AID}.jpg"
 			fi
 		fi
 	else
@@ -6832,7 +6821,6 @@ function extWine64Run {
 	fi
 }
 
-# NOTE: This needs an update to support launch commands set with `buildCustomCmdLaunch` - e.g. ONLY_CUSTOMCMD
 function extProtonRun {
 	MODE="$1"
 	PROGRAM="$2"
@@ -21423,7 +21411,7 @@ function howto {
 	echo "      <args>:"
 	echo "      --search-id=                     Steam AppID or SteamGridDB Game ID to search for (ex: AppID 22330 or Game ID 5258102)"
 	echo "      --filename-appid=                Steam AppID to use when naming the file, only required when searching on Game ID so the artwork is applied to the correct Shortcut"
-	echo "      --steam                          The Search ID passed is for a Steam AppID"
+	echo "      --steam                          The Search ID passed is for a Steam AppID (default)"
 	echo "      --nonsteam                       The Search ID passed is for a SteamGridDB Game ID"
 	echo "      --apply                          Apply the downloaded game artwork to the Steam game (if not set, artwork will be downloaded to SteamTinkerLaunch Grid directory only)"
 	echo "      --skip-existing                  Skip setting artwork for this game if it already has custom artwork"
