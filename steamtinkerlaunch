@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20231020-4 (ansg-sgdb-steam-appid)"
+PROGVERS="v14.0.20231020-5 (ansg-sgdb-steam-appid)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -23541,18 +23541,20 @@ function addNonSteamGame {
 			# If no values are provided we will simply search on Non-Steam Game name
 			NOSTSEARCHNAME=""  # Name to search for SteamGridDB Game ID on (either custom name or app name)
 			NOSTSEARCHID=""  # ID to search for the SteamGridDB artwork on (either Steam AppID or SteamGridDB Game ID)
-			NOSTSEARCHFLAG="--nonsteam"  # Whether to search using a Steam AppID or SteamGridDB Game ID (will be set to --steam if we get an AppID)
+			NOSTSEARCHFLAG="--nonsteam"  # Whether to search using a Steam AppID or SteamGridDB Game ID (will be set to --steam if we get an AppID)			
 			if [ -n "$NOSTSGDBSTAID" ]; then
 				NOSTSEARCHID="$NOSTSGDBSTAID"
 				NOSTSEARCHFLAG="--steam"  # If a match is found on game name above, commandlineGetSteamGridDBArtwork will manage falling back to searching with SteamGridDB Game ID, so this is safe
 			elif [ -n "$NOSTSGDBGAMEID" ]; then
 				NOSTSEARCHID="$NOSTSGDBGAMEID"
-			else
-				if [ -n "$NOSTSGDBNAM" ]; then
-					NOSTSEARCHNAME="$NOSTSGDBNAM"
-				else
-					NOSTSEARCHNAME="$NOSTAPPNAME"
-				fi
+			fi
+
+			# Only add NOSTAPPNAME as fallback if we don't have an ID to search on, because commandlineGetSteamGridDBArtwork will prefer name over ID, so if we have to
+			# fall back to Non-Steam Name (i.e. no entered custom name) then only do so if we don't have an ID given
+			if [ -n "$NOSTSGDBNAM" ]; then
+				NOSTSEARCHNAME="$NOSTSGDBNAM"
+			elif [ -n "$NOSTAPPNAME" ] && [ -z "$NOSTSEARCHID" ]; then
+				NOSTSEARCHNAME="$NOSTAPPNAME"
 			fi
 
 			# Store the ID we searched with, so getSteamGridDBNonSteamIcon doesn't have to hit the endpoint again and we save an API call
