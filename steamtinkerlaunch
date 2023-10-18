@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20231020-1 (ansg-sgdb-steam-appid)"
+PROGVERS="v14.0.20231020-2 (ansg-sgdb-steam-appid)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -23122,7 +23122,11 @@ function addNonSteamGameGui {
 	--field="     $GUI_SGATENFOOT!$DESC_SGATENFOOT ('NOSTGTENFOOT')":FL "${NOSTGTENFOOT/#-/ -}" \
 	--field="     $GUI_SGASETACTION!$DESC_SGASETACTION ('NOSTGSETACTION')":CB "$( cleanDropDown "copy" "$SGASETACTIONS" )" \
 	--field="     $GUI_NOSTGEXEARTWORKFALLBACK!$DESC_NOSTGEXEARTWORKFALLBACK ('NOSTGEXEARTWORKFALLBACK')":CHK "${NOSTGEXEARTWORKFALLBACK/#-/ -}" \
+	--field="$(spanFont "$GUI_NOSTSGDB" "H")":LBL " " \
+	--field="     $GUI_NOSTUSESGDB!$DESC_NOSTUSESGDB ('NOSTUSESGDB')":CHK "${NOSTUSESGDB/#-/ -}" \
+	--field="     $GUI_NOSTSGDBSAID!$DESC_NOSTSGDBSAID ('NOSTSGDBSAID')" "${NOSTSGDBSAID/#-/ -}" \
 	--field="     $GUI_NOSTSGDBAID!$DESC_NOSTSGDBAID ('NOSTSGDBAID')" "${NOSTSGDBAID/#-/ -}" \
+	--field="     $GUI_NOSTSGDBSNAME!$DESC_NOSTSGDBSNAME ('NOSTSGDBSNAME')" "${NOSTSGDBSNAME/#-/ -}" \
 	--field="$(spanFont "$GUI_NOSTGPROPS" "H")":LBL " " \
 	--field="     $GUI_NOSTGCOMPATTOOL!$DESC_NOSTGCOMPATTOOL ('NOSTCOMPATTOOL')":CBE "$( cleanDropDown "$NON" "$NSGPROTYADLIST" )" \
 	--field="     $GUI_NOSTGLAOP!$DESC_NOSTGLAOP ('NOSTGLAOP')" "${NOSTGLAOP/#-/ -}" \
@@ -23143,6 +23147,7 @@ function addNonSteamGameGui {
 			if [ -n "$NSGSET" ]; then
 				mapfile -d "|" -t -O "${#NSGSETARR[@]}" NSGSETARR < <(printf '%s' "$NSGSET")
 
+				# TODO check to make sure these all still work correctly (i.e. order is still correct) after SteamGridDB settings went in
 				writelog "INFO" "${FUNCNAME[0]} - The Non-Steam Game args are ${NSGSETARR[*]}"
 				# NSGSETARR[0] is blank space
 				# NSGSETARR[1] is Paths heading
@@ -23157,15 +23162,19 @@ function addNonSteamGameGui {
 				NOSTGTENFOOT="${NSGSETARR[10]}"
 				NOSTGSETACTION="${NSGSETARR[11]}"
 				NOSTGEXEARTWORKFALLBACK="$( retBool "${NSGSETARR[12]}" )"
-				NOSTSGDBAID="${NSGSETARR[13]}"
-				# NSGSETARR[14] is Properties heading
-				NOSTCOMPATTOOL="${NSGSETARR[15]}"
-				NOSTGLAOP="${NSGSETARR[16]}"
-				NOSTTAGS="${NSGSETARR[17]}"
-				NOSTGHIDE="$( retBool "${NSGSETARR[18]}" )"
-				NOSTGADC="$( retBool "${NSGSETARR[10]}" )"
-				NOSTGAO="$( retBool "${NSGSETARR[20]}" )"
-				NOSTGVR="$( retBool "${NSGSETARR[21]}" )"
+				# NSGSETARR[13] is the SteamGridDB heading
+				NOSTUSESGDB="$( retBool "${NSGSETARR[14]}" )"
+				NOSTSGDBAID="${NSGSETARR[15]}"
+				NOSTSGDBSAID="${NSGSETARR[16]}"
+				NOSTSGDBSNAME="${NSGSETARR[17]}"
+				# NSGSETARR[18] is Properties heading
+				NOSTCOMPATTOOL="${NSGSETARR[19]}"
+				NOSTGLAOP="${NSGSETARR[20]}"
+				NOSTTAGS="${NSGSETARR[21]}"
+				NOSTGHIDE="$( retBool "${NSGSETARR[22]}" )"
+				NOSTGADC="$( retBool "${NSGSETARR[23]}" )"
+				NOSTGAO="$( retBool "${NSGSETARR[24]}" )"
+				NOSTGVR="$( retBool "${NSGSETARR[25]}" )"
 
 				## Makes sure we ignore none compatibility tool
 				if [[ "$NOSTCOMPATTOOL" = "$NON" ]]; then
@@ -23177,9 +23186,16 @@ function addNonSteamGameGui {
 					NOSTARTEXECMD="--auto-artwork"
 				fi
 
+				# If we enabled SteamGridDB but did NOT pass any values, then enable SteamGridDB which will allow us to search on Game Name
+				# This is some UI-specific logic that doesn't apply to commandline usage, since on commandline a user would manually pass this flag
+				# We only need to pass this flag if the other search options are not set, because if one of these is set, we automatically enable SteamGridDB search anyway
+				if [[ ( -z "$NOSTSGDBAID" && -z "$NOSTSGDBSAID" && -z "$NOSTSGDBSNAME" ) && "$NOSTUSESGDB" -eq 1 ]]; then
+					NOSTGUIUSESGDB="--use-steamgriddb"
+				fi
+
 				## Arguments here like -hr, -lg, etc are made to match setGameArt
-				writelog "INFO" "${FUNCNAME[0]} - addNonSteamGame -an=\"$NOSTGAPPNAME\" -ep=\"$NOSTGEXEPATH\" -sd=\"$NOSTGSTDIR\" -ip=\"$NOSTGICONPATH\" -lo=\"$NOSTGLAOP\" -hd=\"$NOSTGHIDE\" -adc=\"$NOSTGADC\" -ao=\"$NOSTGAO\" -vr=\"$NOSTGVR\" -t=\"$NOSTTAGS\" -ct=\"$NOSTCOMPATTOOL\" -hr=\"$NOSTGHERO\" -lg=\"$NOSTGLOGO\" -ba=\"$NOSTGBOXART\" -tf=\"$NOSTGTENFOOT\" \"--${NOSTGSETACTION}\" \"$NOSTARTEXECMD\" -sgid=\"$NOSTSGDBAID\""
-				addNonSteamGame -an="$NOSTGAPPNAME" -ep="$NOSTGEXEPATH" -sd="$NOSTGSTDIR" -ip="$NOSTGICONPATH" -lo="$NOSTGLAOP" -hd="$NOSTGHIDE" -adc="$NOSTGADC" -ao="$NOSTGAO" -vr="$NOSTGVR" -t="$NOSTTAGS" -ct="$NOSTCOMPATTOOL" -hr="$NOSTGHERO" -lg="$NOSTGLOGO" -ba="$NOSTGBOXART" -tf="$NOSTGTENFOOT" "--${NOSTGSETACTION}" "$NOSTARTEXECMD" -sgid="$NOSTSGDBAID"
+				writelog "INFO" "${FUNCNAME[0]} - addNonSteamGame -an=\"$NOSTGAPPNAME\" -ep=\"$NOSTGEXEPATH\" -sd=\"$NOSTGSTDIR\" -ip=\"$NOSTGICONPATH\" -lo=\"$NOSTGLAOP\" -hd=\"$NOSTGHIDE\" -adc=\"$NOSTGADC\" -ao=\"$NOSTGAO\" -vr=\"$NOSTGVR\" -t=\"$NOSTTAGS\" -ct=\"$NOSTCOMPATTOOL\" -hr=\"$NOSTGHERO\" -lg=\"$NOSTGLOGO\" -ba=\"$NOSTGBOXART\" -tf=\"$NOSTGTENFOOT\" \"--${NOSTGSETACTION}\" \"$NOSTARTEXECMD\" -sgai=\"$NOSTSGDBSAID\" -sgid=\"$NOSTSGDBAID\" -sgnm=\"$NOSTSGDBSNAME\" \"$NOSTGUIUSESGDB\""
+				addNonSteamGame -an="$NOSTGAPPNAME" -ep="$NOSTGEXEPATH" -sd="$NOSTGSTDIR" -ip="$NOSTGICONPATH" -lo="$NOSTGLAOP" -hd="$NOSTGHIDE" -adc="$NOSTGADC" -ao="$NOSTGAO" -vr="$NOSTGVR" -t="$NOSTTAGS" -ct="$NOSTCOMPATTOOL" -hr="$NOSTGHERO" -lg="$NOSTGLOGO" -ba="$NOSTGBOXART" -tf="$NOSTGTENFOOT" "--${NOSTGSETACTION}" "$NOSTARTEXECMD" -sgai="$NOSTSGDBSAID" -sgid="$NOSTSGDBAID" -sgnm="$NOSTSGDBSNAME" "$NOSTGUIUSESGDB"
 			fi
 		;;
 	esac
@@ -23465,7 +23481,11 @@ function addNonSteamGame {
 		writelog "INFO" "${FUNCNAME[0]} - Tenfoot Artwork: '${NOSTGTENFOOT}'"
 		writelog "INFO" "${FUNCNAME[0]} - Copy Method for Artwork: '${SGACOPYMETHOD}'"
 		writelog "INFO" "${FUNCNAME[0]} - EXE Dir Fallback Artwork: '${NOSTGEXEARTWORKFALLBACK}'"
+		## SteamGridDB logging -- Also might be blank and that's fine
+		writelog "INFO" "${FUNCNAME[0]} - Use SteamGridDB: '${NOSTUSESGDB}'"
 		writelog "INFO" "${FUNCNAME[0]} - SteamGridDB Game ID: '${NOSTSGDBGAMEID}'"
+		writelog "INFO" "${FUNCNAME[0]} - SteamGridDB Steam AppID: '${NOSTSGDBAID}'"
+		writelog "INFO" "${FUNCNAME[0]} - SteamGridDB Search Name: '${NOSTSGDBNAM}'"
 
 		if [ -f "$SCPATH" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - The file '$SCPATH' already exists, creating a backup, then removing the 2 closing backslashes at the end"
