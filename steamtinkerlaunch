@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20231019-3"
+PROGVERS="v14.0.20231020-1 (ansg-sgdb-steam-appid)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -117,6 +117,7 @@ PROTONCSV="$STLSHM/ProtonCSV.txt"
 SWRF="$STLSHM/SWR.txt"
 UWRF="$STLSHM/UWR.txt"
 EWRF="$STLSHM/EWR.txt"
+NOSTSGDBID="$STLSHM/NOSTSGDBID.txt"
 NON="none"
 NOPE="nope"
 TMPL="template"
@@ -1617,6 +1618,8 @@ function commandlineGetSteamGridDBArtwork {
 		writelog "INFO" "${FUNCNAME[0]} - Downloading Tenfoot (Steam Horizontal Grid) artwork, because SGDBDLTENFOOT is '$SGDBDLTENFOOT'"
 		downloadArtFromSteamGridDB "$GSGDBA_APPID" "$SGDBSEARCHENDPOINT_BOXART" "${GSGDBA_FILENAME}" "$SGDBTENFOOTSTYLES" "$SGDBTENFOOTDIMS" "$SGDBTENFOOTTYPES" "$SGDBTENFOOTNSFW" "$SGDBTENFOOTHUMOR" "$SGDBTENFOOTEPILEPSY" "$GSGDBA_HASFILE" "$GSGDBA_APPLYARTWORK"
 	fi
+
+	echo "$GSGDBA_APPID" > "$NOSTSGDBID"  # Store ID in case other functions need it (i.e. addNonSteamGame) -- Little hacky, would rather return this somehow...
 }
 
 function getGridsForOwnedGames {
@@ -23377,12 +23380,18 @@ function addNonSteamGame {
 			--auto-artwork)
 				NOSTAUTOARTWORK=1  # Look for artwork with matching names from game EXE folder (hero/logo/boxart/tenfoot.png/jpg/jpeg/gif)
 				shift ;;
+			## SteamGridDB artwork options
+			--use-steamgriddb)
+				NOSTUSESGDB=1  # Commandline usage option so a user can tell us to search SteamGridDB using 'NOSTAPPNAME' -- If they pass any other values this will be enabled anyway
+				shift ;;
 			--steamgriddb-game-id|-sgid=*)
 				NOSTSGDBGAMEID="${i#*=}"  # SteamGridDB Game ID to search for grids on (optional)
-				# This is off by default but always passed from addNonSteamGame, so if we actually get a value, enable it
-				if [ -n "$NOSTSGDBGAMEID" ]; then
-					NOSTUSESGDB=1
-				fi
+				shift ;;
+			--steamgriddb-steam-appid|-sgai=*)
+				NOSTSGDBSTAID="${i#*=}"  # Steam Game AppID to search for grids on (optional)
+				shift ;;
+			--steamgriddb-game-name|-sgnm=*)
+				NOSTSGDBNAM="${i#*=}"  # Game Name to Search SteamGridDB on (will look for name on SteamGridDB, return the SteamGridDB Game ID, aand search on that) (optional)
 				shift ;;
 			## Used to pass to setGameArt to define how we want to set game artwork (essentially giving a Non-Steam Game UI the functionality of setGameArt since we call it here anyway)
 			--copy)
@@ -23415,6 +23424,12 @@ function addNonSteamGame {
 		# and it will be interpreted as --copy
 		if [ -z "$SGACOPYMETHOD" ]; then
 			SGACOPYMETHOD="--copy"
+		fi
+
+		# This is off by default but always passed from addNonSteamGame, so if we actually get a value for any of these fields, enable it
+		# The NOSTUSESGDB=1 flag setting is for user commandline usage, when they simply want to search SteamGridDB for artwork using the game name, but don't want to pass other values
+		if [ -n "$NOSTSGDBGAMEID" ] || [ -n "$NOSTSGDBGAMEID" ] || [ -n "$NOSTSGDBNAM" ]; then
+			NOSTUSESGDB=1
 		fi
 
 		## ----
@@ -23484,10 +23499,44 @@ function addNonSteamGame {
 			# Regular artwork
 			notiShow "$NOTY_SGDBDL"
 
-			commandlineGetSteamGridDBArtwork --search-id="$NOSTSGDBGAMEID" --filename-appid="$NOSTAIDGRID" --nonsteam --apply --replace-existing
+			# The entered name to search on will take priority over the actual game EXE name, only one will be used and we will always prefer the entered custom name
+			# For example if a user naames their Non-Steam Game "The Elder Scrolls IV: Oblivion" but they enter a custom search name because they want artwork for "The Elder Scrolls IV: Oblivion Game of the Year Edition"
+			# If art is not found for the custom name, users should enter either the Steam AppID or the SteamGridDB Game ID to use as a fallback (Steam AppID will always be preferred because it will always be exact)
+			#
+			# Therefore, the order of priority for artwork searching is:
+			# 1. Name search (only ONE of the below will be used)
+			#     a. If the user enters a custom search name with --steamgriddb-game-name, search on that
+			#     b. Otherwise, use the Non-Steam Game name
+			# 2. Fallback to ID search if no SteamGridDB ID is found on the name search
+			#    a. If the user enters a Steam AppID with --steamgriddb-steam-appid, search on that
+			#    b. Otherwise, fall back to searching on an entered SteamGridDB Game ID
+			# In short, search on ONE of the names, and if a Game ID is not found on either of these, fall back to searching on ONE of the passed IDs
+			# If no IDs are found after all of this, we can't get artwork. We will not fall back to EXE name if no ID is found on custom name, and we will not fall back to SteamGridDB Game ID if no art is found for Steam AppID
+			# If no values are provided we will simply search on Non-Steam Game name
+			NOSTSEARCHNAME=""  # Name to search for SteamGridDB Game ID on (either custom name or app name)
+			NOSTSEARCHID=""  # ID to search for the SteamGridDB artwork on (either Steam AppID or SteamGridDB Game ID)
+			NOSTSEARCHFLAG="--nonsteam"  # Whether to search using a Steam AppID or SteamGridDB Game ID (will be set to --steam if we get an AppID)
+			if [ -n "$NOSTSGDBNAM" ]; then
+				NOSTSEARCHNAME="$NOSTSGDBNAM"
+			else
+				NOSTSEARCHNAME="$NOSTAPPNAME"
+			fi
+
+			if [ -n "$NOSTSGDBSTAID" ]; then
+				NOSTSEARCHID="$NOSTSGDBSTAID"
+				NOSTSEARCHFLAG="--steam"  # If a match is found on game name above, commandlineGetSteamGridDBArtwork will manage falling back to searching with SteamGridDB Game ID, so this is safe
+			else
+				NOSTSEARCHID="$NOSTSGDBGAMEID"
+			fi
+
+			# Store the ID we searched with, so getSteamGridDBNonSteamIcon doesn't have to hit the endpoint again and we save an API call
+			commandlineGetSteamGridDBArtwork --search-name="$NOSTSEARCHNAME" --search-id="$NOSTSEARCHID" --filename-appid="$NOSTAIDGRID" "$NOSTSEARCHFLAG" --apply --replace-existing
+
+			# Get ID that commandlineGetSteamGridDBArtwork searched on above and use that to search for the icon
+			NOSTSGDBAPIGAMEID="$( cat "$NOSTSGDBID" )"
 
 			# Icon -- Only set if we successfully download an icon from SteamGridDB
-			getSteamGridDBNonSteamIcon "$NOSTAIDGRID" "$NOSTSGDBGAMEID"
+			getSteamGridDBNonSteamIcon "$NOSTAIDGRID" "$NOSTSGDBAPIGAMEID"
 			NOSTSGDBICON="$( find "${STUIDPATH}/config/grid/" -name "${NOSTAIDGRID}_icon.*" | head -n1 2>/dev/null )"
 			if [ -f "$NOSTSGDBICON" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Found SteamGridDB icon path to '$NOSTSGDBICON' -- Using this as Non-Steam Game Icon"
