@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20231020-3 (ansg-sgdb-steam-appid)"
+PROGVERS="v14.0.20231020-4 (ansg-sgdb-steam-appid)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -23186,10 +23186,16 @@ function addNonSteamGameGui {
 					NOSTARTEXECMD="--auto-artwork"
 				fi
 
-				# If we enabled SteamGridDB but did NOT pass any values, then enable SteamGridDB which will allow us to search on Game Name
-				# This is some UI-specific logic that doesn't apply to commandline usage, since on commandline a user would manually pass this flag
-				# We only need to pass this flag if the other search options are not set, because if one of these is set, we automatically enable SteamGridDB search anyway
-				if [[ ( -z "$NOSTSGDBAID" && -z "$NOSTSGDBSAID" && -z "$NOSTSGDBSNAME" ) && "$NOSTUSESGDB" -eq 1 ]]; then
+				if [ "$NOSTUSESGDB" -eq 0 ]; then
+					# If SteamGridDB is not enabled on the UI, ignore any passed values -- Blank values means that function will ignore SteamGridDB entirely
+					# We still need the checkbox so we can tell the addNonSteamGame function whether we want to fall back on Non-Steam Game Name
+					NOSTSGDBAID=""
+					NOSTSGDBSAID=""
+					NOSTSGDBSNAME=""
+				elif [[ ( -z "$NOSTSGDBAID" && -z "$NOSTSGDBSAID" && -z "$NOSTSGDBSNAME" ) && "$NOSTUSESGDB" -eq 1 ]]; then
+					# If we enabled SteamGridDB but did NOT pass any values, then enable SteamGridDB which will allow us to search on Game Name
+					# This is some UI-specific logic that doesn't apply to commandline usage, since on commandline a user would manually pass this flag
+					# We only need to pass this flag if the other search options are not set, because if one of these is set, we automatically enable SteamGridDB search anywau
 					NOSTGUIUSESGDB="--use-steamgriddb"
 				fi
 
@@ -23536,17 +23542,17 @@ function addNonSteamGame {
 			NOSTSEARCHNAME=""  # Name to search for SteamGridDB Game ID on (either custom name or app name)
 			NOSTSEARCHID=""  # ID to search for the SteamGridDB artwork on (either Steam AppID or SteamGridDB Game ID)
 			NOSTSEARCHFLAG="--nonsteam"  # Whether to search using a Steam AppID or SteamGridDB Game ID (will be set to --steam if we get an AppID)
-			if [ -n "$NOSTSGDBNAM" ]; then
-				NOSTSEARCHNAME="$NOSTSGDBNAM"
-			else
-				NOSTSEARCHNAME="$NOSTAPPNAME"
-			fi
-
 			if [ -n "$NOSTSGDBSTAID" ]; then
 				NOSTSEARCHID="$NOSTSGDBSTAID"
 				NOSTSEARCHFLAG="--steam"  # If a match is found on game name above, commandlineGetSteamGridDBArtwork will manage falling back to searching with SteamGridDB Game ID, so this is safe
-			else
+			elif [ -n "$NOSTSGDBGAMEID" ]; then
 				NOSTSEARCHID="$NOSTSGDBGAMEID"
+			else
+				if [ -n "$NOSTSGDBNAM" ]; then
+					NOSTSEARCHNAME="$NOSTSGDBNAM"
+				else
+					NOSTSEARCHNAME="$NOSTAPPNAME"
+				fi
 			fi
 
 			# Store the ID we searched with, so getSteamGridDBNonSteamIcon doesn't have to hit the endpoint again and we save an API call
