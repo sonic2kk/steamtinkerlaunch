@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20231019-3"
+PROGVERS="v14.0.20231020-1"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -117,6 +117,7 @@ PROTONCSV="$STLSHM/ProtonCSV.txt"
 SWRF="$STLSHM/SWR.txt"
 UWRF="$STLSHM/UWR.txt"
 EWRF="$STLSHM/EWR.txt"
+NOSTSGDBID="$STLSHM/NOSTSGDBID.txt"
 NON="none"
 NOPE="nope"
 TMPL="template"
@@ -1617,6 +1618,8 @@ function commandlineGetSteamGridDBArtwork {
 		writelog "INFO" "${FUNCNAME[0]} - Downloading Tenfoot (Steam Horizontal Grid) artwork, because SGDBDLTENFOOT is '$SGDBDLTENFOOT'"
 		downloadArtFromSteamGridDB "$GSGDBA_APPID" "$SGDBSEARCHENDPOINT_BOXART" "${GSGDBA_FILENAME}" "$SGDBTENFOOTSTYLES" "$SGDBTENFOOTDIMS" "$SGDBTENFOOTTYPES" "$SGDBTENFOOTNSFW" "$SGDBTENFOOTHUMOR" "$SGDBTENFOOTEPILEPSY" "$GSGDBA_HASFILE" "$GSGDBA_APPLYARTWORK"
 	fi
+
+	echo "$GSGDBA_APPID" > "$NOSTSGDBID"  # Store ID in case other functions need it (i.e. addNonSteamGame) -- Little hacky, would rather return this somehow...
 }
 
 function getGridsForOwnedGames {
@@ -21284,31 +21287,37 @@ function howto {
 	echo "                                       or directly from <path>"
 	echo "    addnonsteamgame|ansg <args>      Add a $NSGA to Steam"
 	echo "                                       opens gui without args"
-	echo "      <args>:                          for cli min arg is'-ep'"
-	echo "      -an=|--appname=	                 App Name - optional"
-	echo "      -ep=|--exepath=                  Full gamepath required"
-	echo "      -sd=|--startdir=                 Start Dir - optional"
-	echo "      -ip=|--iconpath=                 Icon Path - optional"
-	echo "      -lo=|--launchoptions             Game Launch Options - optional"
-	echo "      -hd=|--hide=                     Hide Game - optional*"
-	echo "      -adc=|--allowdesktopconf=        Allow Desktop Conf - optional"
-	echo "      -ao=|--allowoverlay=             Allow Overlay - optional"
-	echo "      -vr=|--openvr=                   OpenVR - optional*"
-	echo "      -t=|--tags=                      Tags - quoted, comma-separated - optional"
-	echo "      -stllo|--stllaunchoption         Use '${PROGCMD} %command%' as Launch Option - optional"
-	echo "      -ct=|--compatibilitytool=        Specify the name of the compatibility tool to use - optional"
-	echo "                                        Can specify 'default' to use the global Steam Compatibility Tool"
-	echo "      -hr=|--hero=                     Hero Art path    - Banner used on the Game Screen (3840x1240 recommended) - optional"
-	echo "      -lg=|--logo=                     Logo Art path    - Logo that gets displayed on Game Screen (16:9 recommended) - optional"
-	echo "      -ba=|--boxart=                   Box Art path     - Cover art used in the library (600x900 recommended) - optional"
-	echo "      -tf=|--tenfoot=                  Tenfoot Art path - Small banner used for recently played game in library (600x350 recommended) - optional"
-	echo "      --copy                            Copy art files to Steam Grid folder (default) - optional"
-	echo "      --link                            Symlink art files to Steam Grid folder - optional"
-	echo "      --move                            Move art files to Steam Grid folder - optional"
-	echo "      --auto-artwork                  Use image files in the game EXE directory with names 'hero', 'logo', 'boxart', 'tenfoot' - optional"
-	echo "                                        This will respect the copy method flags above."
-	echo "                                        Note also that this will return for any files assumed to be images, even if Steam doesn't support the image format."
-	echo "      -sgid=|--steamgriddb-game-id=   Game ID from SteamGridDB to search and download grid artwork on - optional"
+	echo "     <args>:                          for cli min arg is'-ep'"
+	echo "     -an=|--appname=	                 App Name - optional"
+	echo "     -ep=|--exepath=                  Full gamepath required"
+	echo "     -sd=|--startdir=                 Start Dir - optional"
+	echo "     -ip=|--iconpath=                 Icon Path - optional"
+	echo "     -lo=|--launchoptions             Game Launch Options - optional"
+	echo "     -hd=|--hide=                     Hide Game - optional*"
+	echo "     -adc=|--allowdesktopconf=        Allow Desktop Conf - optional"
+	echo "     -ao=|--allowoverlay=             Allow Overlay - optional"
+	echo "     -vr=|--openvr=                   OpenVR - optional*"
+	echo "     -t=|--tags=                      Tags - quoted, comma-separated - optional"
+	echo "     -stllo|--stllaunchoption         Use '${PROGCMD} %command%' as Launch Option - optional"
+	echo "     -ct=|--compatibilitytool=        Specify the name of the compatibility tool to use - optional"
+	echo "                                       Can specify 'default' to use the global Steam Compatibility Tool"
+	echo "     -hr=|--hero=                     Hero Art path    - Banner used on the Game Screen (3840x1240 recommended) - optional"
+	echo "     -lg=|--logo=                     Logo Art path    - Logo that gets displayed on Game Screen (16:9 recommended) - optional"
+	echo "     -ba=|--boxart=                   Box Art path     - Cover art used in the library (600x900 recommended) - optional"
+	echo "     -tf=|--tenfoot=                  Tenfoot Art path - Small banner used for recently played game in library (600x350 recommended) - optional"
+	echo "     --copy                            Copy art files to Steam Grid folder (default) - optional"
+	echo "     --link                            Symlink art files to Steam Grid folder - optional"
+	echo "     --move                            Move art files to Steam Grid folder - optional"
+	echo "     --auto-artwork                  Use image files in the game EXE directory with names 'hero', 'logo', 'boxart', 'tenfoot' - optional"
+	echo "                                       This will respect the copy method flags above."
+	echo "                                       Note also that this will return for any files assumed to be images, even if Steam doesn't support the image format."
+	echo "     --use-steamgriddb               Enable searching SteamGridDB for game artwork"
+	echo "                                      By default, if no other options are provided, it will search SteamGridDB using --appname"
+	echo "                                      If -sgid, -sgai, or -sgnm are passed, this option will automatically be enabled"
+	echo "     --steamgriddb-game-name=       Custom name to search and download grid artwork on, if no ID is found it will fall back to Steam AppID OR SteamGridDB Game ID"
+	echo "                                      If no IDs are provided and no match is found on the given name, no artwork will be downloaded"
+	echo "     --steamgriddb-steam-appid=     Steam AppID to search and download grid artwork on, this will be used instead of SteamGridDB Game ID if both are passed"
+	echo "     --steamgriddb-game-id=         Game ID from SteamGridDB to search and download grid artwork on"
 	echo "                                        This requires a SteamGridDB API key. See the SteamGridDB wiki page for guidance on how to generate and supply it."
 	echo "    backup <value>                   Backup found '$STUS' files"
 	echo "                                       (for 'SteamAppID' or 'all')"
@@ -23103,7 +23112,7 @@ function addNonSteamGameGui {
 	NSGPROTYADLIST="$(printf "!%s\n" "${NSGPROTLIST[@]//\"/}" | sort -u | cut -d ';' -f1 | tr -d '\n' | sed "s:^!::" | sed "s:!$::")"
 
 	## Language strings for artwork section were re-used from setGameArt
-	NSGSET="$("$YAD" --f1-action="$F1ACTION" --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
+	NSGSET="$("$YAD" --f1-action="$F1ACTION" --window-icon="$STLICON" --form --scroll --center --on-top "$WINDECO" \
 	--title="$TITLE" --separator="|" \
 	--text="$(spanFont "$GUI_ADDNSG" "H")\n<i>$(strFix "$GUI_WARNNSG1" "$STERECO")</i>" \
 	--field=" ":LBL " " \
@@ -23119,7 +23128,11 @@ function addNonSteamGameGui {
 	--field="     $GUI_SGATENFOOT!$DESC_SGATENFOOT ('NOSTGTENFOOT')":FL "${NOSTGTENFOOT/#-/ -}" \
 	--field="     $GUI_SGASETACTION!$DESC_SGASETACTION ('NOSTGSETACTION')":CB "$( cleanDropDown "copy" "$SGASETACTIONS" )" \
 	--field="     $GUI_NOSTGEXEARTWORKFALLBACK!$DESC_NOSTGEXEARTWORKFALLBACK ('NOSTGEXEARTWORKFALLBACK')":CHK "${NOSTGEXEARTWORKFALLBACK/#-/ -}" \
+	--field="$(spanFont "$GUI_NOSTSGDB" "H")":LBL " " \
+	--field="     $GUI_NOSTUSESGDB!$DESC_NOSTUSESGDB ('NOSTUSESGDB')":CHK "${NOSTUSESGDB/#-/ -}" \
+	--field="     $GUI_NOSTSGDBSAID!$DESC_NOSTSGDBSAID ('NOSTSGDBSAID')" "${NOSTSGDBSAID/#-/ -}" \
 	--field="     $GUI_NOSTSGDBAID!$DESC_NOSTSGDBAID ('NOSTSGDBAID')" "${NOSTSGDBAID/#-/ -}" \
+	--field="     $GUI_NOSTSGDBSNAME!$DESC_NOSTSGDBSNAME ('NOSTSGDBSNAME')" "${NOSTSGDBSNAME/#-/ -}" \
 	--field="$(spanFont "$GUI_NOSTGPROPS" "H")":LBL " " \
 	--field="     $GUI_NOSTGCOMPATTOOL!$DESC_NOSTGCOMPATTOOL ('NOSTCOMPATTOOL')":CBE "$( cleanDropDown "$NON" "$NSGPROTYADLIST" )" \
 	--field="     $GUI_NOSTGLAOP!$DESC_NOSTGLAOP ('NOSTGLAOP')" "${NOSTGLAOP/#-/ -}" \
@@ -23140,6 +23153,7 @@ function addNonSteamGameGui {
 			if [ -n "$NSGSET" ]; then
 				mapfile -d "|" -t -O "${#NSGSETARR[@]}" NSGSETARR < <(printf '%s' "$NSGSET")
 
+				# TODO check to make sure these all still work correctly (i.e. order is still correct) after SteamGridDB settings went in
 				writelog "INFO" "${FUNCNAME[0]} - The Non-Steam Game args are ${NSGSETARR[*]}"
 				# NSGSETARR[0] is blank space
 				# NSGSETARR[1] is Paths heading
@@ -23154,15 +23168,19 @@ function addNonSteamGameGui {
 				NOSTGTENFOOT="${NSGSETARR[10]}"
 				NOSTGSETACTION="${NSGSETARR[11]}"
 				NOSTGEXEARTWORKFALLBACK="$( retBool "${NSGSETARR[12]}" )"
-				NOSTSGDBAID="${NSGSETARR[13]}"
-				# NSGSETARR[14] is Properties heading
-				NOSTCOMPATTOOL="${NSGSETARR[15]}"
-				NOSTGLAOP="${NSGSETARR[16]}"
-				NOSTTAGS="${NSGSETARR[17]}"
-				NOSTGHIDE="$( retBool "${NSGSETARR[18]}" )"
-				NOSTGADC="$( retBool "${NSGSETARR[10]}" )"
-				NOSTGAO="$( retBool "${NSGSETARR[20]}" )"
-				NOSTGVR="$( retBool "${NSGSETARR[21]}" )"
+				# NSGSETARR[13] is the SteamGridDB heading
+				NOSTUSESGDB="$( retBool "${NSGSETARR[14]}" )"
+				NOSTSGDBSAID="${NSGSETARR[15]}"
+				NOSTSGDBAID="${NSGSETARR[16]}"
+				NOSTSGDBSNAME="${NSGSETARR[17]}"
+				# NSGSETARR[18] is Properties heading
+				NOSTCOMPATTOOL="${NSGSETARR[19]}"
+				NOSTGLAOP="${NSGSETARR[20]}"
+				NOSTTAGS="${NSGSETARR[21]}"
+				NOSTGHIDE="$( retBool "${NSGSETARR[22]}" )"
+				NOSTGADC="$( retBool "${NSGSETARR[23]}" )"
+				NOSTGAO="$( retBool "${NSGSETARR[24]}" )"
+				NOSTGVR="$( retBool "${NSGSETARR[25]}" )"
 
 				## Makes sure we ignore none compatibility tool
 				if [[ "$NOSTCOMPATTOOL" = "$NON" ]]; then
@@ -23174,9 +23192,22 @@ function addNonSteamGameGui {
 					NOSTARTEXECMD="--auto-artwork"
 				fi
 
+				if [ "$NOSTUSESGDB" -eq 0 ]; then
+					# If SteamGridDB is not enabled on the UI, ignore any passed values -- Blank values means that function will ignore SteamGridDB entirely
+					# We still need the checkbox so we can tell the addNonSteamGame function whether we want to fall back on Non-Steam Game Name
+					NOSTSGDBAID=""
+					NOSTSGDBSAID=""
+					NOSTSGDBSNAME=""
+				elif [[ ( -z "$NOSTSGDBAID" && -z "$NOSTSGDBSAID" && -z "$NOSTSGDBSNAME" ) && "$NOSTUSESGDB" -eq 1 ]]; then
+					# If we enabled SteamGridDB but did NOT pass any values, then enable SteamGridDB which will allow us to search on Game Name
+					# This is some UI-specific logic that doesn't apply to commandline usage, since on commandline a user would manually pass this flag
+					# We only need to pass this flag if the other search options are not set, because if one of these is set, we automatically enable SteamGridDB search anywau
+					NOSTGUIUSESGDB="--use-steamgriddb"
+				fi
+
 				## Arguments here like -hr, -lg, etc are made to match setGameArt
-				writelog "INFO" "${FUNCNAME[0]} - addNonSteamGame -an=\"$NOSTGAPPNAME\" -ep=\"$NOSTGEXEPATH\" -sd=\"$NOSTGSTDIR\" -ip=\"$NOSTGICONPATH\" -lo=\"$NOSTGLAOP\" -hd=\"$NOSTGHIDE\" -adc=\"$NOSTGADC\" -ao=\"$NOSTGAO\" -vr=\"$NOSTGVR\" -t=\"$NOSTTAGS\" -ct=\"$NOSTCOMPATTOOL\" -hr=\"$NOSTGHERO\" -lg=\"$NOSTGLOGO\" -ba=\"$NOSTGBOXART\" -tf=\"$NOSTGTENFOOT\" \"--${NOSTGSETACTION}\" \"$NOSTARTEXECMD\" -sgid=\"$NOSTSGDBAID\""
-				addNonSteamGame -an="$NOSTGAPPNAME" -ep="$NOSTGEXEPATH" -sd="$NOSTGSTDIR" -ip="$NOSTGICONPATH" -lo="$NOSTGLAOP" -hd="$NOSTGHIDE" -adc="$NOSTGADC" -ao="$NOSTGAO" -vr="$NOSTGVR" -t="$NOSTTAGS" -ct="$NOSTCOMPATTOOL" -hr="$NOSTGHERO" -lg="$NOSTGLOGO" -ba="$NOSTGBOXART" -tf="$NOSTGTENFOOT" "--${NOSTGSETACTION}" "$NOSTARTEXECMD" -sgid="$NOSTSGDBAID"
+				writelog "INFO" "${FUNCNAME[0]} - addNonSteamGame -an=\"$NOSTGAPPNAME\" -ep=\"$NOSTGEXEPATH\" -sd=\"$NOSTGSTDIR\" -ip=\"$NOSTGICONPATH\" -lo=\"$NOSTGLAOP\" -hd=\"$NOSTGHIDE\" -adc=\"$NOSTGADC\" -ao=\"$NOSTGAO\" -vr=\"$NOSTGVR\" -t=\"$NOSTTAGS\" -ct=\"$NOSTCOMPATTOOL\" -hr=\"$NOSTGHERO\" -lg=\"$NOSTGLOGO\" -ba=\"$NOSTGBOXART\" -tf=\"$NOSTGTENFOOT\" \"--${NOSTGSETACTION}\" \"$NOSTARTEXECMD\" -sgai=\"$NOSTSGDBSAID\" -sgid=\"$NOSTSGDBAID\" -sgnm=\"$NOSTSGDBSNAME\" \"$NOSTGUIUSESGDB\""
+				addNonSteamGame -an="$NOSTGAPPNAME" -ep="$NOSTGEXEPATH" -sd="$NOSTGSTDIR" -ip="$NOSTGICONPATH" -lo="$NOSTGLAOP" -hd="$NOSTGHIDE" -adc="$NOSTGADC" -ao="$NOSTGAO" -vr="$NOSTGVR" -t="$NOSTTAGS" -ct="$NOSTCOMPATTOOL" -hr="$NOSTGHERO" -lg="$NOSTGLOGO" -ba="$NOSTGBOXART" -tf="$NOSTGTENFOOT" "--${NOSTGSETACTION}" "$NOSTARTEXECMD" -sgai="$NOSTSGDBSAID" -sgid="$NOSTSGDBAID" -sgnm="$NOSTSGDBSNAME" "$NOSTGUIUSESGDB"
 			fi
 		;;
 	esac
@@ -23377,12 +23408,18 @@ function addNonSteamGame {
 			--auto-artwork)
 				NOSTAUTOARTWORK=1  # Look for artwork with matching names from game EXE folder (hero/logo/boxart/tenfoot.png/jpg/jpeg/gif)
 				shift ;;
-			--steamgriddb-game-id|-sgid=*)
+			## SteamGridDB artwork options
+			--use-steamgriddb)
+				NOSTUSESGDB=1  # Commandline usage option so a user can tell us to search SteamGridDB using 'NOSTAPPNAME' -- If they pass any other values this will be enabled anyway
+				shift ;;
+			--steamgriddb-game-id=*|-sgid=*)
 				NOSTSGDBGAMEID="${i#*=}"  # SteamGridDB Game ID to search for grids on (optional)
-				# This is off by default but always passed from addNonSteamGame, so if we actually get a value, enable it
-				if [ -n "$NOSTSGDBGAMEID" ]; then
-					NOSTUSESGDB=1
-				fi
+				shift ;;
+			--steamgriddb-steam-appid=*|-sgai=*)
+				NOSTSGDBSTAID="${i#*=}"  # Steam Game AppID to search for grids on (optional)
+				shift ;;
+			--steamgriddb-game-name=*|-sgnm=*)
+				NOSTSGDBNAM="${i#*=}"  # Game Name to Search SteamGridDB on (will look for name on SteamGridDB, return the SteamGridDB Game ID, aand search on that) (optional)
 				shift ;;
 			## Used to pass to setGameArt to define how we want to set game artwork (essentially giving a Non-Steam Game UI the functionality of setGameArt since we call it here anyway)
 			--copy)
@@ -23415,6 +23452,12 @@ function addNonSteamGame {
 		# and it will be interpreted as --copy
 		if [ -z "$SGACOPYMETHOD" ]; then
 			SGACOPYMETHOD="--copy"
+		fi
+
+		# This is off by default but always passed from addNonSteamGame, so if we actually get a value for any of these fields, enable it
+		# The NOSTUSESGDB=1 flag setting is for user commandline usage, when they simply want to search SteamGridDB for artwork using the game name, but don't want to pass other values
+		if [ -n "$NOSTSGDBSTAID" ] || [ -n "$NOSTSGDBGAMEID" ] || [ -n "$NOSTSGDBNAM" ]; then
+			NOSTUSESGDB=1
 		fi
 
 		## ----
@@ -23450,7 +23493,11 @@ function addNonSteamGame {
 		writelog "INFO" "${FUNCNAME[0]} - Tenfoot Artwork: '${NOSTGTENFOOT}'"
 		writelog "INFO" "${FUNCNAME[0]} - Copy Method for Artwork: '${SGACOPYMETHOD}'"
 		writelog "INFO" "${FUNCNAME[0]} - EXE Dir Fallback Artwork: '${NOSTGEXEARTWORKFALLBACK}'"
+		## SteamGridDB logging -- Also might be blank and that's fine
+		writelog "INFO" "${FUNCNAME[0]} - Use SteamGridDB: '${NOSTUSESGDB}'"
 		writelog "INFO" "${FUNCNAME[0]} - SteamGridDB Game ID: '${NOSTSGDBGAMEID}'"
+		writelog "INFO" "${FUNCNAME[0]} - SteamGridDB Steam AppID: '${NOSTSGDBAID}'"
+		writelog "INFO" "${FUNCNAME[0]} - SteamGridDB Search Name: '${NOSTSGDBNAM}'"
 
 		if [ -f "$SCPATH" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - The file '$SCPATH' already exists, creating a backup, then removing the 2 closing backslashes at the end"
@@ -23484,10 +23531,46 @@ function addNonSteamGame {
 			# Regular artwork
 			notiShow "$NOTY_SGDBDL"
 
-			commandlineGetSteamGridDBArtwork --search-id="$NOSTSGDBGAMEID" --filename-appid="$NOSTAIDGRID" --nonsteam --apply --replace-existing
+			# The entered name to search on will take priority over the actual game EXE name, only one will be used and we will always prefer the entered custom name
+			# For example if a user naames their Non-Steam Game "The Elder Scrolls IV: Oblivion" but they enter a custom search name because they want artwork for "The Elder Scrolls IV: Oblivion Game of the Year Edition"
+			# If art is not found for the custom name, users should enter either the Steam AppID or the SteamGridDB Game ID to use as a fallback (Steam AppID will always be preferred because it will always be exact)
+			#
+			# Therefore, the order of priority for artwork searching is:
+			# 1. Name search (only ONE of the below will be used)
+			#     a. If the user enters a custom search name with --steamgriddb-game-name, search on that
+			#     b. Otherwise, use the Non-Steam Game name
+			# 2. Fallback to ID search if no SteamGridDB ID is found on the name search
+			#    a. If the user enters a Steam AppID with --steamgriddb-steam-appid, search on that
+			#    b. Otherwise, fall back to searching on an entered SteamGridDB Game ID
+			# In short, search on ONE of the names, and if a Game ID is not found on either of these, fall back to searching on ONE of the passed IDs
+			# If no IDs are found after all of this, we can't get artwork. We will not fall back to EXE name if no ID is found on custom name, and we will not fall back to SteamGridDB Game ID if no art is found for Steam AppID
+			# If no values are provided we will simply search on Non-Steam Game name
+			NOSTSEARCHNAME=""  # Name to search for SteamGridDB Game ID on (either custom name or app name)
+			NOSTSEARCHID=""  # ID to search for the SteamGridDB artwork on (either Steam AppID or SteamGridDB Game ID)
+			NOSTSEARCHFLAG="--nonsteam"  # Whether to search using a Steam AppID or SteamGridDB Game ID (will be set to --steam if we get an AppID)
+			if [ -n "$NOSTSGDBSTAID" ]; then
+				NOSTSEARCHID="$NOSTSGDBSTAID"
+				NOSTSEARCHFLAG="--steam"  # If a match is found on game name above, commandlineGetSteamGridDBArtwork will manage falling back to searching with SteamGridDB Game ID, so this is safe
+			elif [ -n "$NOSTSGDBGAMEID" ]; then
+				NOSTSEARCHID="$NOSTSGDBGAMEID"
+			fi
+
+			# Only add NOSTAPPNAME as fallback if we don't have an ID to search on, because commandlineGetSteamGridDBArtwork will prefer name over ID, so if we have to
+			# fall back to Non-Steam Name (i.e. no entered custom name) then only do so if we don't have an ID given
+			if [ -n "$NOSTSGDBNAM" ]; then
+				NOSTSEARCHNAME="$NOSTSGDBNAM"
+			elif [ -n "$NOSTAPPNAME" ] && [ -z "$NOSTSEARCHID" ]; then
+				NOSTSEARCHNAME="$NOSTAPPNAME"
+			fi
+
+			# Store the ID we searched with, so getSteamGridDBNonSteamIcon doesn't have to hit the endpoint again and we save an API call
+			commandlineGetSteamGridDBArtwork --search-name="$NOSTSEARCHNAME" --search-id="$NOSTSEARCHID" --filename-appid="$NOSTAIDGRID" "$NOSTSEARCHFLAG" --apply --replace-existing
+
+			# Get ID that commandlineGetSteamGridDBArtwork searched on above and use that to search for the icon
+			NOSTSGDBAPIGAMEID="$( cat "$NOSTSGDBID" )"
 
 			# Icon -- Only set if we successfully download an icon from SteamGridDB
-			getSteamGridDBNonSteamIcon "$NOSTAIDGRID" "$NOSTSGDBGAMEID"
+			getSteamGridDBNonSteamIcon "$NOSTAIDGRID" "$NOSTSGDBAPIGAMEID"
 			NOSTSGDBICON="$( find "${STUIDPATH}/config/grid/" -name "${NOSTAIDGRID}_icon.*" | head -n1 2>/dev/null )"
 			if [ -f "$NOSTSGDBICON" ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Found SteamGridDB icon path to '$NOSTSGDBICON' -- Using this as Non-Steam Game Icon"
