@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20231022-1 (ansg-casing-fixes)"
+PROGVERS="v14.0.20231022-2 (ansg-casing-fixes)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -3074,6 +3074,7 @@ function setDefaultCfgValues {
 		if [ -z "$RUN_NYRNA" ]							; then	RUN_NYRNA="0"; fi
 		if [ -z "$RUN_REPLAY" ]							; then	RUN_REPLAY="0";	fi
 		if [ -z "$RUN_X64DBG" ]							; then	RUN_X64DBG="0";	fi
+		if [ -z "$X64DBG_ATTACHONSTARTUP" ]				; then  X64DBG_ATTACHONSTARTUP="1"; fi
 		if [ -z "$RUN_GDB" ]							; then	RUN_GDB="0";	fi
 		if [ -z "$USE_WDIB" ]							; then	USE_WDIB="0";	fi
 		if [ -z "$USEVORTEX" ]							; then	USEVORTEX="0"; fi
@@ -3688,6 +3689,8 @@ function saveCfg {
 			echo "RUN_REPLAY=\"$RUN_REPLAY\""
 			echo "## $DESC_RUN_X64DBG"
 			echo "RUN_X64DBG=\"$RUN_X64DBG\""
+			echo "## $DESC_X64DBG_ATTACHONSTARTUP"
+			echo "X64DBG_ATTACHONSTARTUP=\"$X64DBG_ATTACHONSTARTUP\""
 			echo "## $DESC_RUN_GDB"
 			echo "RUN_GDB=\"$RUN_GDB\""
 			echo "## $DESC_USE_WDIB"
@@ -5677,6 +5680,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_CUSTCONTY!$DESC_CUSTCONTY ('CUSTCONTY')":FL "${CUSTCONTY/#-/ -}" `#CAT_Tools` `#MENU_GLOBAL` \
 --field="     $GUI_UPDATECONTY!$DESC_UPDATECONTY ('UPDATECONTY')":CHK "${UPDATECONTY/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_RUN_X64DBG!$DESC_RUN_X64DBG ('RUN_X64DBG')":CHK "${RUN_X64DBG/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_X64DBG_ATTACHONSTARTUP!$DESC_X64DBG_ATTACHONSTARTUP ('X64DBG_ATTACHONSTARTUP')":CHK "${X64DBG_ATTACHONSTARTUP/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_RUN_GDB!$DESC_RUN_GDB ('RUN_GDB')":CHK "${RUN_GDB/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_USE_WDIB!$DESC_USE_WDIB ('USE_WDIB')":CHK "${USE_WDIB/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_DPRSCOMPDATA!$DESC_DPRSCOMPDATA ('DPRSCOMPDATA')":DIR "${DPRSCOMPDATA/#-/ -}" `#CAT_Tools` `#SUB_Directories` `#MENU_GLOBAL` \
@@ -20944,6 +20948,12 @@ function launchSteamGame {
 		writelog "SKIP" "${FUNCNAME[0]} - With ISGAME '$ISGAME' the game failed to start"
 	fi
 
+	# X64DBG_ATTACHONSTARTUP controls launching the game if x64dbg and this are enabled together, similar to ONLY_CUSTOMCMD, so don't do Steam game launch and exit function
+	if [ "$RUN_X64DBG" -eq 1 ] && [ "$X64DBG_ATTACHONSTARTUP" -eq 1 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - RUN_X64DBG and X64DBG_ATTACHONSTARTUP were both enabled, this means x64dbg managed running the game process, so we don't have to -- Aborting Steam game launch"
+		return
+	fi
+
 	if [ "$USEWINE" -eq 0 ]; then
 		# concatenate final game start command
 
@@ -22685,9 +22695,20 @@ function checkX64dbgLaunch {
 			writelog "INFO" "${FUNCNAME[0]} - Applying registry '${X64D}.reg'"
 			regEdit "$GLOBALMISCDIR/${X64D}.reg"
 
-			WGP="$(extWine64Run "$RUNWINE" winepath -w "$GP")"
-			writelog "INFO" "${FUNCNAME[0]} - Starting '$XDBFPATH' using extWine64Run for the game '$WGP'"
-			extWine64Run "$RUNWINE" "$XDBFPATH" "$WGP"
+			DISPPROTVER="$( setProtonPathVersion "$RUNPROTON" )"
+			if [ "$X64DBG_ATTACHONSTARTUP" -eq 1 ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Attaching game '$GE' running with '$RUNWINE' to x64dbg"
+				writelog "INFO" "${FUNCNAME[0]} - Game execution will be handled by x64dbg from here"
+				notiShow "$( strFix "$NOTY_X64DBG_ATTACHONSTARTUP" "$DISPPROTVER" "$GE" "$AID" )"
+
+				WGP="$(extWine64Run "$RUNWINE" winepath -w "$GP" | tail -n1)"
+				extWine64Run "$RUNWINE" "$XDBFPATH" "$WGP"  # Start x64dbg with game attached, but do NOT start the game
+			else
+				writelog "INFO" "${FUNCNAME[0]} - Launching x64dbg standalone with no process attached -- Game execution will continue normally"
+				notiShow "$( strFix "$NOTY_RUN_X64DBG" "$DISPPROTVER" "$GE" "$AID" )"
+				# does sleep 5 work on all systems with all games? May need changed/better solution in future!
+				(sleep 5; "$RUNPROTON" run "$XDBFPATH" ) &  # Start x64dbg standalone with no process attached, and then launch game
+			fi
 		fi
 	fi
 }
