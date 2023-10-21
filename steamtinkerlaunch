@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20231021-2"
+PROGVERS="v14.0.20231022-1 (nonsteam-aid-loading-fixes)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -13925,8 +13925,16 @@ function checkSteamAppIDFile {
 
 		if [ "$STEAMAPPIDFILE" -eq 1 ]; then
 			if [ ! -f "$GSAIT" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Creating '$GSAIT' because STEAMAPPIDFILE is enabled"
-				echo "$AID" > "$GSAIT"
+				if ! haveNonSteamGame; then
+					writelog "INFO" "${FUNCNAME[0]} - Creating '$GSAIT' because STEAMAPPIDFILE is enabled"
+					echo "$AID" > "$GSAIT"
+				else
+					# Can't create steam_appid.txt for Non-Steam Games because this causes crashes, see #941
+					writelog "INFO" "${FUNCNAME[0]} - Looks like we have a Non-Steam Game, not creating '$GSAIT' because this would cause crashes, and forcing 'STEAMAPPIDFILE' to '0'"
+					touch "$FUPDATE"
+					STEAMAPPIDFILE=0
+					updateConfigEntry "STEAMAPPIDFILE" "$STEAMAPPIDFILE" "$STLGAMECFG"
+				fi
 			else
 				writelog "INFO" "${FUNCNAME[0]} - STEAMAPPIDFILE is enabled and '$GSAIT' already exists - nothing to do"
 			fi
@@ -13941,8 +13949,9 @@ function checkSteamAppIDFile {
 					loadCfg "$CSAIT" X
 					if [ "$OWNSAIT" -eq 1 ]; then
 						writelog "INFO" "${FUNCNAME[0]} - OWNSAIT is '$OWNSAIT', means the game ships an own '$SAIT'. Leaving untouched and enabling STEAMAPPIDFILE"
-						updateConfigEntry "STEAMAPPIDFILE" "1" "$STLGAMECFG"
+						touch "$FUPDATE"
 						STEAMAPPIDFILE=1
+						updateConfigEntry "STEAMAPPIDFILE" "$STEAMAPPIDFILE" "$STLGAMECFG"
 					else
 						writelog "INFO" "${FUNCNAME[0]} - Removing '$GSAIT' because the game doesn't own it and STEAMAPPIDFILE is disabled"
 						rm "$GSAIT" 2>/dev/null
@@ -25476,9 +25485,30 @@ function removeEmptyFiles {
 	done
 }
 
+# Determine if we have a Non-Steam Game based on some observed behaviour:
+# - All Steam applications pass a SteamAppId and SteamOverlayGameId environment variable 
+# - These two values are equal for Steam games/apps (Native+Proton)
+#   - There is also SteamGameId, which is the same for Steam games/apps (SteamAppId == SteamGameId == SteamOverlayGameId)
+# - For Non-Steam Games, SteamAppId and SteamGameId are equal, but SteamOverlayGameId is different and a very long number compared to regular Non-Steam AppIds
+#   - This option is still passed even if the Steam Overlay is disabled
+# - Therefore if SteamAppId and SteamOverlayGameId don't match, we can assume we have a Non-Steam Game
+#   - There is a chance these values could match if a user somehow manages to accidentally (or purposefully) set the values to be the same, but in 99% of cases this should be sufficient
+# - When launching games with SteamTinkerLaunch from the commandline, SteamOverlayGameId probably won't be set
+function haveNonSteamGame {
+	# shellcheck disable=SC2154		# SteamOverlayGameId comes from Steam
+	if [ -z "$SteamOverlayGameId" ]; then
+		return 1  # No SteamOverlayGameId, prevents false-positive when running from commandline
+	elif [ "$SteamAppId" != "$SteamOverlayGameId" ]; then
+		return 0
+	else
+		return 1
+	fi
+}
+
 ##################
 
 function main {
+
 	initShmStl
 	restoreGtkCss
 	rm "$TEMPLOG" "$WINRESLOG" "$PRELOG" "$APPMALOG" "$GGDLOG" 2>/dev/null
@@ -25521,6 +25551,12 @@ function main {
 	getCurrentCommandline "$@"  # Maybe pass args with removed '-q' flag in the above if block
 	saveOrgVars
 	emptyVars "O"
+
+	if haveNonSteamGame && [ -n "$SteamAppId" ]; then
+		writelog "WARN" "${FUNCNAME[0]} - Looks like we have a Non-Steam Game but we have SteamAppId defined -- This has been observed to cause crashes, please remove it from your game folder!"
+	elif haveNonSteamGame ; then
+		writelog "INFO" "${FUNCNAME[0]} - Looks like we have a Non-Steam Game here, no extra steps but if this is NOT a Non-Steam Game, please report this incorrect detection as a bug"
+	fi
 
     # Notify success on Steam Deck
 	if [ "$ONSTEAMDECK" -eq 1 ] && [ "$STEAMDECKSTEAMRUN" -eq 0 ]; then
