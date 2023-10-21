@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20231022-6"
+PROGVERS="v14.0.20231022-7"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -21771,8 +21771,8 @@ function commandline {
 	elif [ "$1" == "debug" ]; then
 		# Why are you looking here? :-)
 
-		## SteamGridDB ID and Non-Steam Game AppID, respectively
-		getSGDBGameIDFromTitle "Sonic Adventure 2"
+		# writelog "INFO" "${FUNCNAME[0]} - Stub"
+		dlX64Dbg
 	elif [ "$1" == "mo2" ]; then
 		if [ -n "$2" ]; then
 			if [ "$2" == "download" ] || [ "$2" == "d" ]; then
@@ -22640,7 +22640,13 @@ function createMetaData {
 }
 
 function getLatestX64dbgSnap {
-	basename "$("$WGET" -q "$X64DBGURL" -O - 2> >(grep -v "SSL_INIT") | grep -E 'releases.*download.*snapshot.*zip' | cut -d '"' -f2 | head -n1)"
+	# TODO this could be improved, PR welcome!
+
+	# wget the expanded assets page and get the first link contents
+	# could be prettier and more robust but should work for now, despite being a little flimsy
+	NEWX64DBGURL="https://github.com/x64dbg/x64dbg"  # global config one is a bit busted and can't be easily migrated
+	X64DSNAPPATH="$( "$WGET" -q "${NEWX64DBGURL}/releases/expanded_assets/snapshot" -O - 2> >(grep -v "SSL_INIT") | grep -E "releases/download" | grep -oP '".*?"' | head -n1 | cut -d '"' -f2 )"  # doesn't return full path, only /x64dbg/x64dbg/releases/download/snapshot/snapshot_<date>.zip
+	echo "${GHURL}${X64DSNAPPATH}"
 }
 
 function dlX64Dbg {
@@ -22651,25 +22657,27 @@ function dlX64Dbg {
 	else
 		mkProjDir "$DLDST"
 		X64ZIP="$(getLatestX64dbgSnap)"
+		X64ZIPBASE="$( basename "$X64ZIP" )"
 
-		if [ ! -f "$DLDST/$X64ZIP" ]; then
+		if [ ! -f "$DLDST/$X64ZIPBASE" ]; then
 			notiShow "$(strFix "$NOTY_DLCUSTOMPROTON" "$X64ZIP")" "S"
-			dlCheck "${X64DBGURL//tag/download}/$X64ZIP" "$DLDST/$X64ZIP" "X" "Downloading '$X64ZIP'"
+			dlCheck "$X64ZIP"  "$DLDST/$X64ZIPBASE" "X" "Downloading 'test'"
 			notiShow "$(strFix "$NOTY_DLCUSTOMPROTON2" "$X64ZIP")" "S"
 		fi
 
-		if [ ! -s "$DLDST/$X64ZIP" ]; then
-			writelog "SKIP" "${FUNCNAME[0]} - Downloaded file '$DLDST/$X64ZIP' is empty - removing"
-			rm "$DLDST/$X64ZIP" 2>/dev/null
+		DLDST="$X64DBGDLDIR"
+		if [ ! -s "$DLDST" ]; then
+			writelog "SKIP" "${FUNCNAME[0]} - Downloaded file '$DLDST/$X64ZIPBASE' is empty - removing"
+			rm "$DLDST/$X64ZIPBASE" 2>/dev/null
 		else
-			notiShow "$(strFix "$NOTY_DLCUSTOMPROTON3" "$X64ZIP")" "S"
-			writelog "INFO" "${FUNCNAME[0]} - Download of '$X64ZIP' to '$DLDST' was successful"
-			"$UNZIP" -q "$DLDST/$X64ZIP" -d "$DLDST" 2>/dev/null
+			notiShow "$(strFix "$NOTY_DLCUSTOMPROTON3" "$X64ZIPBASE")" "S"
+			writelog "INFO" "${FUNCNAME[0]} - Download of '$X64ZIPBASE' to '$DLDST' was successful"
+			"$UNZIP" -q "$DLDST/$X64ZIPBASE" -d "$DLDST" 2>/dev/null
 			notiShow "$GUI_DONE" "S"
 			if [ -f "$DLCH" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Extracted '$X64ZIP' to '$DLDST'"
+				writelog "INFO" "${FUNCNAME[0]} - Extracted '$X64ZIPBASE' to '$DLDST'"
 			else
-				writelog "SKIP" "${FUNCNAME[0]} - Extracting of file '$DLDST/$X64ZIP' failed"
+				writelog "SKIP" "${FUNCNAME[0]} - Extracting of file '$DLDST/$X64ZIPBASE' failed"
 			fi
 		fi
 	fi
