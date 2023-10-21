@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20231022-1 (ansg-showpic-fixes)"
+PROGVERS="v14.0.20231022-4 (ansg-showpic-fixes)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -2369,7 +2369,6 @@ function setCustomGameVars {
 	GN="$GE"
 
 	# Allows custom programs to use SLR and force it from the toolmanifest -- May not be a good idea but ¯\_(ツ)_/¯
-	# TODO allow SLR for custom programs?
 	USESLR=1
 	HAVESLR=0
 
@@ -3074,6 +3073,7 @@ function setDefaultCfgValues {
 		if [ -z "$RUN_NYRNA" ]							; then	RUN_NYRNA="0"; fi
 		if [ -z "$RUN_REPLAY" ]							; then	RUN_REPLAY="0";	fi
 		if [ -z "$RUN_X64DBG" ]							; then	RUN_X64DBG="0";	fi
+		if [ -z "$X64DBG_ATTACHONSTARTUP" ]				; then  X64DBG_ATTACHONSTARTUP="1"; fi
 		if [ -z "$RUN_GDB" ]							; then	RUN_GDB="0";	fi
 		if [ -z "$USE_WDIB" ]							; then	USE_WDIB="0";	fi
 		if [ -z "$USEVORTEX" ]							; then	USEVORTEX="0"; fi
@@ -3688,6 +3688,8 @@ function saveCfg {
 			echo "RUN_REPLAY=\"$RUN_REPLAY\""
 			echo "## $DESC_RUN_X64DBG"
 			echo "RUN_X64DBG=\"$RUN_X64DBG\""
+			echo "## $DESC_X64DBG_ATTACHONSTARTUP"
+			echo "X64DBG_ATTACHONSTARTUP=\"$X64DBG_ATTACHONSTARTUP\""
 			echo "## $DESC_RUN_GDB"
 			echo "RUN_GDB=\"$RUN_GDB\""
 			echo "## $DESC_USE_WDIB"
@@ -5679,6 +5681,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_CUSTCONTY!$DESC_CUSTCONTY ('CUSTCONTY')":FL "${CUSTCONTY/#-/ -}" `#CAT_Tools` `#MENU_GLOBAL` \
 --field="     $GUI_UPDATECONTY!$DESC_UPDATECONTY ('UPDATECONTY')":CHK "${UPDATECONTY/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_RUN_X64DBG!$DESC_RUN_X64DBG ('RUN_X64DBG')":CHK "${RUN_X64DBG/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_X64DBG_ATTACHONSTARTUP!$DESC_X64DBG_ATTACHONSTARTUP ('X64DBG_ATTACHONSTARTUP')":CHK "${X64DBG_ATTACHONSTARTUP/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_RUN_GDB!$DESC_RUN_GDB ('RUN_GDB')":CHK "${RUN_GDB/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_USE_WDIB!$DESC_USE_WDIB ('USE_WDIB')":CHK "${USE_WDIB/#-/ -}" `#CAT_Tools` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_DPRSCOMPDATA!$DESC_DPRSCOMPDATA ('DPRSCOMPDATA')":DIR "${DPRSCOMPDATA/#-/ -}" `#CAT_Tools` `#SUB_Directories` `#MENU_GLOBAL` \
@@ -9162,8 +9165,6 @@ function installReshade {
 					installRSdll "$CUSTRSDLL" "0" "$RSARCHDLL"
 				done
 
-				## TODO add notifier for ReShade install, like we have for SpecialK
-
 				#d3d47 - Required for ReShade
 				# NOTE 25/08/23: *Is* it still required?
 				installd3d47dll "$RSD3D47DLL" "$INSTDESTDIR"
@@ -11626,7 +11627,7 @@ function commandlineOneTimeRun {
 				if [ "$OTSAVE" == "TRUE" ];then  # Save one-time settings to game config file -- Really only useful for OneTimeRunGUI
 					writelog "INFO" "${FUNCNAME[0]} - Saving One time run settings into '$STLGAMECFG'"
 					# Only save Proton version if we're using a Windows executable, otherwise we don't set a Proton version!
-					# TODO check if this still works?
+
 					if [ "$ISWINDOWSEXE" -eq 1 ]; then
 						touch "$FUPDATE"
 						updateConfigEntry "OTPROTON" "$OTPROTON" "$STLGAMECFG"
@@ -13927,8 +13928,16 @@ function checkSteamAppIDFile {
 
 		if [ "$STEAMAPPIDFILE" -eq 1 ]; then
 			if [ ! -f "$GSAIT" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Creating '$GSAIT' because STEAMAPPIDFILE is enabled"
-				echo "$AID" > "$GSAIT"
+				if ! haveNonSteamGame; then
+					writelog "INFO" "${FUNCNAME[0]} - Creating '$GSAIT' because STEAMAPPIDFILE is enabled"
+					echo "$AID" > "$GSAIT"
+				else
+					# Can't create steam_appid.txt for Non-Steam Games because this causes crashes, see #941
+					writelog "INFO" "${FUNCNAME[0]} - Looks like we have a Non-Steam Game, not creating '$GSAIT' because this would cause crashes, and forcing 'STEAMAPPIDFILE' to '0'"
+					touch "$FUPDATE"
+					STEAMAPPIDFILE=0
+					updateConfigEntry "STEAMAPPIDFILE" "$STEAMAPPIDFILE" "$STLGAMECFG"
+				fi
 			else
 				writelog "INFO" "${FUNCNAME[0]} - STEAMAPPIDFILE is enabled and '$GSAIT' already exists - nothing to do"
 			fi
@@ -13943,8 +13952,9 @@ function checkSteamAppIDFile {
 					loadCfg "$CSAIT" X
 					if [ "$OWNSAIT" -eq 1 ]; then
 						writelog "INFO" "${FUNCNAME[0]} - OWNSAIT is '$OWNSAIT', means the game ships an own '$SAIT'. Leaving untouched and enabling STEAMAPPIDFILE"
-						updateConfigEntry "STEAMAPPIDFILE" "1" "$STLGAMECFG"
+						touch "$FUPDATE"
 						STEAMAPPIDFILE=1
+						updateConfigEntry "STEAMAPPIDFILE" "$STEAMAPPIDFILE" "$STLGAMECFG"
 					else
 						writelog "INFO" "${FUNCNAME[0]} - Removing '$GSAIT' because the game doesn't own it and STEAMAPPIDFILE is disabled"
 						rm "$GSAIT" 2>/dev/null
@@ -20946,6 +20956,12 @@ function launchSteamGame {
 		writelog "SKIP" "${FUNCNAME[0]} - With ISGAME '$ISGAME' the game failed to start"
 	fi
 
+	# X64DBG_ATTACHONSTARTUP controls launching the game if x64dbg and this are enabled together, similar to ONLY_CUSTOMCMD, so don't do Steam game launch and exit function
+	if [ "$RUN_X64DBG" -eq 1 ] && [ "$X64DBG_ATTACHONSTARTUP" -eq 1 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - RUN_X64DBG and X64DBG_ATTACHONSTARTUP were both enabled, this means x64dbg managed running the game process, so we don't have to -- Aborting Steam game launch"
+		return
+	fi
+
 	if [ "$USEWINE" -eq 0 ]; then
 		# concatenate final game start command
 
@@ -22687,9 +22703,20 @@ function checkX64dbgLaunch {
 			writelog "INFO" "${FUNCNAME[0]} - Applying registry '${X64D}.reg'"
 			regEdit "$GLOBALMISCDIR/${X64D}.reg"
 
-			WGP="$(extWine64Run "$RUNWINE" winepath -w "$GP")"
-			writelog "INFO" "${FUNCNAME[0]} - Starting '$XDBFPATH' using extWine64Run for the game '$WGP'"
-			extWine64Run "$RUNWINE" "$XDBFPATH" "$WGP"
+			DISPPROTVER="$( setProtonPathVersion "$RUNPROTON" )"
+			if [ "$X64DBG_ATTACHONSTARTUP" -eq 1 ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Attaching game '$GE' running with '$RUNWINE' to x64dbg"
+				writelog "INFO" "${FUNCNAME[0]} - Game execution will be handled by x64dbg from here"
+				notiShow "$( strFix "$NOTY_X64DBG_ATTACHONSTARTUP" "$DISPPROTVER" "$GE" "$AID" )"
+
+				WGP="$(extWine64Run "$RUNWINE" winepath -w "$GP" | tail -n1)"
+				extWine64Run "$RUNWINE" "$XDBFPATH" "$WGP"  # Start x64dbg with game attached, but do NOT start the game
+			else
+				writelog "INFO" "${FUNCNAME[0]} - Launching x64dbg standalone with no process attached -- Game execution will continue normally"
+				notiShow "$( strFix "$NOTY_RUN_X64DBG" "$DISPPROTVER" "$GE" "$AID" )"
+				# does sleep 5 work on all systems with all games? May need changed/better solution in future!
+				(sleep 5; "$RUNPROTON" run "$XDBFPATH" ) &  # Start x64dbg standalone with no process attached, and then launch game
+			fi
 		fi
 	fi
 }
@@ -23604,7 +23631,7 @@ function addNonSteamGame {
 		{
 		printf '\x00%s\x00' "$NEWSET"
 		printf '\x02%s\x00%b' "appid" "$NOSTAIDVDFHEXFMT"
-		printf '\x01%s\x00%s\x00' "appname" "$NOSTAPPNAME"
+		printf '\x01%s\x00%s\x00' "AppName" "$NOSTAPPNAME"
 		printf '\x01%s\x00%s\x00' "Exe" "$NOSTEXEPATH"
 		printf '\x01%s\x00%s\x00' "StartDir" "$NOSTSTDIR"
 
@@ -23641,15 +23668,17 @@ function addNonSteamGame {
 		fi
 
 		if [ "$NOSTVR" -eq 1 ]; then
-			printf '\x02%s\x00\x01\x00\x00\x00' "openvr"
+			printf '\x02%s\x00\x01\x00\x00\x00' "OpenVR"
 		else
-			printf '\x02%s\x00\x00\x00\x00\x00' "openvr"
+			printf '\x02%s\x00\x00\x00\x00\x00' "OpenVR"
 		fi
 
 		printf '\x02%s\x00\x00\x00\x00\x00' "Devkit"
 		printf '\x01%s\x00\x00' "DevkitGameID"
+		printf '\x02%s\x00\x00\x00\x00\x00' "DevkitOverrideAppID"
 
 		printf '\x02%s\x00\x00\x00\x00\x00' "LastPlayTime"
+		printf '\x01%s\x00\x00' "FlatpakAppID"
 		printf '\x00%s\x00' "tags"
 		splitTags "$NOSTTAGS"
 		printf '\x08'
@@ -25478,9 +25507,30 @@ function removeEmptyFiles {
 	done
 }
 
+# Determine if we have a Non-Steam Game based on some observed behaviour:
+# - All Steam applications pass a SteamAppId and SteamOverlayGameId environment variable 
+# - These two values are equal for Steam games/apps (Native+Proton)
+#   - There is also SteamGameId, which is the same for Steam games/apps (SteamAppId == SteamGameId == SteamOverlayGameId)
+# - For Non-Steam Games, SteamAppId and SteamGameId are equal, but SteamOverlayGameId is different and a very long number compared to regular Non-Steam AppIds
+#   - This option is still passed even if the Steam Overlay is disabled
+# - Therefore if SteamAppId and SteamOverlayGameId don't match, we can assume we have a Non-Steam Game
+#   - There is a chance these values could match if a user somehow manages to accidentally (or purposefully) set the values to be the same, but in 99% of cases this should be sufficient
+# - When launching games with SteamTinkerLaunch from the commandline, SteamOverlayGameId probably won't be set
+function haveNonSteamGame {
+	# shellcheck disable=SC2154		# SteamOverlayGameId comes from Steam
+	if [ -z "$SteamOverlayGameId" ]; then
+		return 1  # No SteamOverlayGameId, prevents false-positive when running from commandline
+	elif [ "$SteamAppId" != "$SteamOverlayGameId" ]; then
+		return 0
+	else
+		return 1
+	fi
+}
+
 ##################
 
 function main {
+
 	initShmStl
 	restoreGtkCss
 	rm "$TEMPLOG" "$WINRESLOG" "$PRELOG" "$APPMALOG" "$GGDLOG" 2>/dev/null
@@ -25523,6 +25573,12 @@ function main {
 	getCurrentCommandline "$@"  # Maybe pass args with removed '-q' flag in the above if block
 	saveOrgVars
 	emptyVars "O"
+
+	if haveNonSteamGame && [ -n "$SteamAppId" ]; then
+		writelog "WARN" "${FUNCNAME[0]} - Looks like we have a Non-Steam Game but we have SteamAppId defined -- This has been observed to cause crashes, please remove it from your game folder!"
+	elif haveNonSteamGame ; then
+		writelog "INFO" "${FUNCNAME[0]} - Looks like we have a Non-Steam Game here, no extra steps but if this is NOT a Non-Steam Game, please report this incorrect detection as a bug"
+	fi
 
     # Notify success on Steam Deck
 	if [ "$ONSTEAMDECK" -eq 1 ] && [ "$STEAMDECKSTEAMRUN" -eq 0 ]; then
