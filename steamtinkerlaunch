@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20231024-1"
+PROGVERS="v14.0.20231024-2 (remove-grids)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -1391,6 +1391,7 @@ function checkSGDbApi {
 ## Generic function to fetch some artwork from SteamGridDB based on an endpoint
 ## TODO: Steam only officially supports PNGs, test to see if WebP works when manually copied, and if it doesn't, we should try to only download PNG files
 ## TODO: Add max filesize option? Some artworks are really big, we should skip ones that are too large (though this may mean many animated APNG artworks will get skipped, because APNG can be huge)
+## TODO: Retry/Timeout when fetching artwork
 function downloadArtFromSteamGridDB {
 	if checkSGDbApi && [ "$STLPLAY" -eq 0 ]; then
 		# Required
@@ -1665,6 +1666,31 @@ function getSGDBGameIDFromTitle {
 	else
 		writelog "INFO" "${FUNCNAME[0]} - No game name given."
 		echo "No game name given."
+	fi
+}
+
+# Remove artwork for single game based on AppID, or all grids
+function removeSteamGrids {
+	RMGAMEGRID="${1,,}"  # Should be Steam AppID or "all"
+	SGGRIDDIR="${STUIDPATH}/config/grid"
+
+	if [ -z "$1" ]; then
+		writelog "ERROR" "${FUNCNAME[0]} - No parameter given, cannot remove artwork, skipping"
+		echo "You must provide either a Steam AppID to remove artwork for, or specify 'all' to remove all game artwork"
+	fi
+
+	if [ "$1" == "all" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Removing grid artwork for all Steam games"
+		rmDirIfExists "${SGGRIDDIR}"
+	else
+		# Find any grid artwork for AppID -- Have to use find and use it on each artwork name because we don't want to match AppIDs which contain other AppIDs
+		# i.e. searching for '140*' would return matches with '1402750' as well
+		writelog "INFO" "${FUNCNAME[0]} - Removing any grid artwork for game with AppID '$1'"
+		find "${SGGRIDDIR}" -name "${RMGAMEGRID}_hero.*" -exec rm {} \;  # Hero
+		find "${SGGRIDDIR}" -name "${RMGAMEGRID}_logo.*" -exec rm {} \;  # Logo
+		find "${SGGRIDDIR}" -name "${RMGAMEGRID}p.*" -exec rm {} \;  # Boxart
+		find "${SGGRIDDIR}" -name "${RMGAMEGRID}.*" -exec rm {} \;  # Tenfoot
+		find "${SGGRIDDIR}" -name "${RMGAMEGRID}_icon.*" -exec rm {} \;  # Icon (custom STL name for Non-Steam Games)
 	fi
 }
 
@@ -21276,6 +21302,20 @@ function getDefaultProton {
 	fi
 }
 
+function rmFileIfExists {
+	if [ -f "$1" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Removing '$1'"
+		rm "$1"
+	fi
+}
+
+function rmDirIfExists {
+	if [ -d "$1" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Removing '$1'"
+		rm -rf "$1"
+	fi
+}
+
 function FUSEID {
 	if [ -n "$1" ]; then
 		USEID="$1"
@@ -21353,6 +21393,9 @@ function howto {
 	echo "                                       (for 'SteamAppID' or 'all')"
 	echo "    block                            Opens the category Block selection menu"
 	echo "    cleardeckdeps                    Remove downloaded Steam Deck dependencies, allowing them to"
+	echo "    cleargamegrids <arg>            Remove downloaded game grids based on <arg>, which should be one of the following"
+	echo "        <appid>                       Remove artwork for game with specific AppID, ex: 787480"
+	echo "        all                           Remove ALL grid artwork by removing entire Steam Grids folder"
 	echo "                                      update on next launch (This option is only applicable to SteamOS 3.X)"
 	echo "    compat <cmd>                     Will (add|del|get) ${PROGNAME,,} as"
 	echo "                                       Steam compatibility tool"
@@ -22121,6 +22164,13 @@ function commandline {
 			fi
 		else
 			howto
+		fi
+	elif [ "$1" == "cleargamegrids" ]; then
+		if [ -z "$2" ]; then
+			writelog "ERROR" "${FUNCNAME[0]} - No parameter given, cannot remove artwork, skipping"
+			echo "You must provide either a Steam AppID to remove artwork for, or specify 'all' to remove all game artwork"
+		else
+			removeSteamGrids "$2"
 		fi
 	elif [ "$1" == "version" ] || [ "$1" == "--version" ] || [ "$1" == "-v" ]; then
 		echo "${PROGNAME,,}-${PROGVERS}"
