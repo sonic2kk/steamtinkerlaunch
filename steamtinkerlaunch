@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20231024-2"
+PROGVERS="v14.0.20231025-1 (ansg-notifier-logging-echos)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -23546,160 +23546,172 @@ function addNonSteamGame {
 		esac
 	done
 
-	if [ -n "${NOSTEXEPATH}" ]; then
-		if [ -z "${NOSTAPPNAME}" ]; then
-			NOSTAPPNAME="${QEP##*/}"
+	# Ensure we don't go any further unless we have a valid EXE path -- This is the only *required* field as all others can be inferred from it
+	# We check against the string with quotes removed, just to be safe for the -z check even though the case above should match it
+	# We have to do this for the -f check though as it doesn't like the quotes
+	NOSTEXEPATHNOQUOTE="$( sed -e 's/^"//' -e 's/"$//' <<< "${NOSTEXEPATH}" )"
+	echo "NOSTEXEPATHNOQUOTE is '$NOSTEXEPATHNOQUOTE'"
+	if [ -z "${NOSTEXEPATHNOQUOTE}" ]; then
+		writelog "ERROR" "${FUNCNAME[0]} - NOSTEXEPATH was blank, could not add Non-Steam Game -- Aborting!"
+		notiShow "${NOTY_NOSTEXEBLANK}"
+		echo "Error: Could not add Non-Steam Game -- Executable path was not provided"
+		return 1
+	elif [ ! -f "${NOSTEXEPATHNOQUOTE}" ]; then
+		writelog "ERROR" "${FUNCNAME[0]} - NOSTEXEPATH is not a valid file, could not add Non-Steam Game -- Aborting!"
+		notiShow "${NOTY_NOSTEXENOTFOUND}"
+		echo "Error: Could not add Non-Steam Game -- Executable is not a valid file!"
+		return 1
+	fi
+
+	if [ -z "${NOSTAPPNAME}" ]; then
+		NOSTAPPNAME="${QEP##*/}"
+	fi
+
+	if [ -z "${NOSTSTDIR}" ] || [ ! -d "${NOSTSTDIR}" ]; then
+		QSD="$(dirname "$QEP")"; NOSTSTDIR="\"$QSD\""
+	fi
+
+	if [ "$NOSTSTLLO" -eq 1 ]; then
+		NOSTGICONPATH="$STLICON"
+	fi
+
+	# This is formatted as a flag because we cna pass "$SGACOPYMETHOD" as an argument to setGameArt,
+	# and it will be interpreted as --copy
+	if [ -z "$SGACOPYMETHOD" ]; then
+		SGACOPYMETHOD="--copy"
+	fi
+
+	# This is off by default but always passed from addNonSteamGame, so if we actually get a value for any of these fields, enable it
+	# The NOSTUSESGDB=1 flag setting is for user commandline usage, when they simply want to search SteamGridDB for artwork using the game name, but don't want to pass other values
+	if [ -n "$NOSTSGDBSTAID" ] || [ -n "$NOSTSGDBGAMEID" ] || [ -n "$NOSTSGDBNAM" ]; then
+		NOSTUSESGDB=1
+	fi
+
+	## ----
+	## These AppIDs are not necessarily guaranteed to be unique, such as if the user tries to add the same game twice or something
+	## Therefore, perhaps in future we could do a stricter check by attempting to parse the shortcuts.vdf file and re-generating the AppID if it already exists
+	## This could be expensive if the file is long, but a potential future enhancement all the same!
+	## ----
+	NOSTAIDVDF="$( generateShortcutVDFAppId "${NOSTAPPNAME}${NOSTEXEPATH}" )"  # This is the signed integer AppID that will be stored in the VDF as hexidecimal - ex: -598031679
+	NOSTAIDVDFHEX="$( generateShortcutVDFHexAppId "$NOSTAIDVDF" )"  # This is the 4byte little-endian hexidecimal of the above 32bit signed integer, which we write out to the binary VDF - ex: c1c25adc
+	NOSTAIDVDFHEXFMT="\x$(awk '{$1=$1}1' FPAT='.{2}' OFS="\\\x" <<< "$NOSTAIDVDFHEX")"  # This is the binary-formatted string hex of the above which we actually write out - ex: \xc1\xc2\x5a\xdc
+	NOSTAIDGRID="$( generateShortcutGridAppId "$NOSTAIDVDF" )"  # This is the unsigned 32bit ingeger version of "$NOSTAIDVDF", which is used as the AppID for Steam artwork ("grids"), as well as for our shortcuts
+
+	writelog "INFO" "${FUNCNAME[0]} - === Adding new $NSGA ==="
+	writelog "INFO" "${FUNCNAME[0]} - Signed Integer Shortcut AppID: '${NOSTAIDVDF}'"
+	writelog "INFO" "${FUNCNAME[0]} - 4byte Little-Endian Hex AppID: '${NOSTAIDVDFHEX}'"
+	writelog "INFO" "${FUNCNAME[0]} - Binary-formatted 4byte Little-Endian AppID: '${NOSTAIDVDFHEXFMT}'"
+	writelog "INFO" "${FUNCNAME[0]} - Unsigned Integer Shortcut AppID (used for artwork): '${NOSTAIDGRID}'"
+	writelog "INFO" "${FUNCNAME[0]} - App Name: '${NOSTAPPNAME}'"
+	writelog "INFO" "${FUNCNAME[0]} - Exe Path: '${NOSTEXEPATH}'"
+	writelog "INFO" "${FUNCNAME[0]} - Start Dir: '${NOSTSTDIR}'"
+	writelog "INFO" "${FUNCNAME[0]} - Icon Path: '${NOSTICONPATH}'"
+	writelog "INFO" "${FUNCNAME[0]} - Launch options: '${NOSTLAOP}'"
+	writelog "INFO" "${FUNCNAME[0]} - Is Hidden: '${NOSTHIDE}'"
+	writelog "INFO" "${FUNCNAME[0]} - Allow Desktop Config: '${NOSTADC}'"
+	writelog "INFO" "${FUNCNAME[0]} - Allow Overlay: '${NOSTAO}'"
+	writelog "INFO" "${FUNCNAME[0]} - OpenVR: '${NOSTVR}'"
+	writelog "INFO" "${FUNCNAME[0]} - Tags: '${NOSTTAGS}'"
+	writelog "INFO" "${FUNCNAME[0]} - Compatibility Tool: '${NOSTCOMPATTOOL}'"
+	## Artwork logging -- These will be blank if no artwork is passed, that's OK
+	writelog "INFO" "${FUNCNAME[0]} - Hero Artwork: '${NOSTGHERO}'"
+	writelog "INFO" "${FUNCNAME[0]} - Logo Artwork: '${NOSTGLOGO}'"
+	writelog "INFO" "${FUNCNAME[0]} - Boxart Artwork: '${NOSTGBOXART}'"
+	writelog "INFO" "${FUNCNAME[0]} - Tenfoot Artwork: '${NOSTGTENFOOT}'"
+	writelog "INFO" "${FUNCNAME[0]} - Copy Method for Artwork: '${SGACOPYMETHOD}'"
+	writelog "INFO" "${FUNCNAME[0]} - EXE Dir Fallback Artwork: '${NOSTGEXEARTWORKFALLBACK}'"
+	## SteamGridDB logging -- Also might be blank and that's fine
+	writelog "INFO" "${FUNCNAME[0]} - Use SteamGridDB: '${NOSTUSESGDB}'"
+	writelog "INFO" "${FUNCNAME[0]} - SteamGridDB Game ID: '${NOSTSGDBGAMEID}'"
+	writelog "INFO" "${FUNCNAME[0]} - SteamGridDB Steam AppID: '${NOSTSGDBAID}'"
+	writelog "INFO" "${FUNCNAME[0]} - SteamGridDB Search Name: '${NOSTSGDBNAM}'"
+
+	if [ -f "$SCPATH" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - The file '$SCPATH' already exists, creating a backup, then removing the 2 closing backslashes at the end"
+		cp "$SCPATH" "${SCPATH//.vdf}_${PROGNAME}_backup.vdf" 2>/dev/null
+		truncate -s-2 "$SCPATH"
+		OLDSET="$(grep -aPo '\x00[0-9]\x00\x02appid' "$SCPATH" | tail -n1 | tr -dc '0-9')"
+		NEWSET=$((OLDSET + 1))
+		writelog "INFO" "${FUNCNAME[0]} - Last set in file has ID '$OLDSET', so continuing with '$OLDSET'"
+	else
+		writelog "INFO" "${FUNCNAME[0]} - Creating new $SCPATH"
+		printf '\x00%s\x00' "shortcuts" > "$SCPATH"
+		NEWSET=0
+	fi
+
+	# Match any image file in same folder as EXE name hero, logo, boxart, tenfoot
+	# Matches will override selected options
+	# If not found it will fall back to the selected value (such as the actual file path provided), meaning
+	# only artwork that exists will be used
+	if [ "$NOSTAUTOARTWORK" -eq 1 ]; then
+		NOSTEXEBASEDIR="$( dirname "$NOSTEXEPATH" | cut -d '"' -f2 )"
+
+		NOSTGHERO="$( findGameArtInExeDir "$NOSTEXEBASEDIR" "hero" "$NOSTGHERO" )"
+		NOSTGLOGO="$( findGameArtInExeDir "$NOSTEXEBASEDIR" "logo" "$NOSTGLOGO" )"
+		NOSTGBOXART="$( findGameArtInExeDir "$NOSTEXEBASEDIR" "boxart" "$NOSTGBOXART" )"
+		NOSTGTENFOOT="$( findGameArtInExeDir "$NOSTEXEBASEDIR" "tenfoot" "$NOSTGTENFOOT" )"
+		NOSTICONPATH="$( findGameArtInExeDir "$NOSTEXEBASEDIR" "icon" "$NOSTICONPATH" )"
+	fi
+
+	## Fetch artwork from SteamGridDB
+	if [ "$NOSTUSESGDB" -eq 1 ]; then
+		# Regular artwork
+		notiShow "$NOTY_SGDBDL"
+
+		# The entered name to search on will take priority over the actual game EXE name, only one will be used and we will always prefer the entered custom name
+		# For example if a user naames their Non-Steam Game "The Elder Scrolls IV: Oblivion" but they enter a custom search name because they want artwork for "The Elder Scrolls IV: Oblivion Game of the Year Edition"
+		# If art is not found for the custom name, users should enter either the Steam AppID or the SteamGridDB Game ID to use as a fallback (Steam AppID will always be preferred because it will always be exact)
+		#
+		# Therefore, the order of priority for artwork searching is:
+		# 1. Name search (only ONE of the below will be used)
+		#     a. If the user enters a custom search name with --steamgriddb-game-name, search on that
+		#     b. Otherwise, use the Non-Steam Game name
+		# 2. Fallback to ID search if no SteamGridDB ID is found on the name search
+		#    a. If the user enters a Steam AppID with --steamgriddb-steam-appid, search on that
+		#    b. Otherwise, fall back to searching on an entered SteamGridDB Game ID
+		# In short, search on ONE of the names, and if a Game ID is not found on either of these, fall back to searching on ONE of the passed IDs
+		# If no IDs are found after all of this, we can't get artwork. We will not fall back to EXE name if no ID is found on custom name, and we will not fall back to SteamGridDB Game ID if no art is found for Steam AppID
+		# If no values are provided we will simply search on Non-Steam Game name
+		NOSTSEARCHNAME=""  # Name to search for SteamGridDB Game ID on (either custom name or app name)
+		NOSTSEARCHID=""  # ID to search for the SteamGridDB artwork on (either Steam AppID or SteamGridDB Game ID)
+		NOSTSEARCHFLAG="--nonsteam"  # Whether to search using a Steam AppID or SteamGridDB Game ID (will be set to --steam if we get an AppID)
+		if [ -n "$NOSTSGDBSTAID" ]; then
+			NOSTSEARCHID="$NOSTSGDBSTAID"
+			NOSTSEARCHFLAG="--steam"  # If a match is found on game name above, commandlineGetSteamGridDBArtwork will manage falling back to searching with SteamGridDB Game ID, so this is safe
+		elif [ -n "$NOSTSGDBGAMEID" ]; then
+			NOSTSEARCHID="$NOSTSGDBGAMEID"
 		fi
 
-		if [ -z "${NOSTSTDIR}" ] || [ ! -d "${NOSTSTDIR}" ]; then
-			QSD="$(dirname "$QEP")"; NOSTSTDIR="\"$QSD\""
+		# Only add NOSTAPPNAME as fallback if we don't have an ID to search on, because commandlineGetSteamGridDBArtwork will prefer name over ID, so if we have to
+		# fall back to Non-Steam Name (i.e. no entered custom name) then only do so if we don't have an ID given
+		if [ -n "$NOSTSGDBNAM" ]; then
+			NOSTSEARCHNAME="$NOSTSGDBNAM"
+		elif [ -n "$NOSTAPPNAME" ] && [ -z "$NOSTSEARCHID" ]; then
+			NOSTSEARCHNAME="$NOSTAPPNAME"
 		fi
 
-		if [ "$NOSTSTLLO" -eq 1 ]; then
-			NOSTGICONPATH="$STLICON"
-		fi
+		# Store the ID we searched with, so getSteamGridDBNonSteamIcon doesn't have to hit the endpoint again and we save an API call
+		commandlineGetSteamGridDBArtwork --search-name="$NOSTSEARCHNAME" --search-id="$NOSTSEARCHID" --filename-appid="$NOSTAIDGRID" "$NOSTSEARCHFLAG" --apply --replace-existing
 
-		# This is formatted as a flag because we cna pass "$SGACOPYMETHOD" as an argument to setGameArt,
-		# and it will be interpreted as --copy
-		if [ -z "$SGACOPYMETHOD" ]; then
-			SGACOPYMETHOD="--copy"
-		fi
+		# Get ID that commandlineGetSteamGridDBArtwork searched on above and use that to search for the icon
+		NOSTSGDBAPIGAMEID="$( cat "$NOSTSGDBID" )"
 
-		# This is off by default but always passed from addNonSteamGame, so if we actually get a value for any of these fields, enable it
-		# The NOSTUSESGDB=1 flag setting is for user commandline usage, when they simply want to search SteamGridDB for artwork using the game name, but don't want to pass other values
-		if [ -n "$NOSTSGDBSTAID" ] || [ -n "$NOSTSGDBGAMEID" ] || [ -n "$NOSTSGDBNAM" ]; then
-			NOSTUSESGDB=1
-		fi
-
-		## ----
-		## These AppIDs are not necessarily guaranteed to be unique, such as if the user tries to add the same game twice or something
-		## Therefore, perhaps in future we could do a stricter check by attempting to parse the shortcuts.vdf file and re-generating the AppID if it already exists
-		## This could be expensive if the file is long, but a potential future enhancement all the same!
-		## ----
-		NOSTAIDVDF="$( generateShortcutVDFAppId "${NOSTAPPNAME}${NOSTEXEPATH}" )"  # This is the signed integer AppID that will be stored in the VDF as hexidecimal - ex: -598031679
-		NOSTAIDVDFHEX="$( generateShortcutVDFHexAppId "$NOSTAIDVDF" )"  # This is the 4byte little-endian hexidecimal of the above 32bit signed integer, which we write out to the binary VDF - ex: c1c25adc
-		NOSTAIDVDFHEXFMT="\x$(awk '{$1=$1}1' FPAT='.{2}' OFS="\\\x" <<< "$NOSTAIDVDFHEX")"  # This is the binary-formatted string hex of the above which we actually write out - ex: \xc1\xc2\x5a\xdc
-		NOSTAIDGRID="$( generateShortcutGridAppId "$NOSTAIDVDF" )"  # This is the unsigned 32bit ingeger version of "$NOSTAIDVDF", which is used as the AppID for Steam artwork ("grids"), as well as for our shortcuts
-
-		writelog "INFO" "${FUNCNAME[0]} - === Adding new $NSGA ==="
-		writelog "INFO" "${FUNCNAME[0]} - Signed Integer Shortcut AppID: '${NOSTAIDVDF}'"
-		writelog "INFO" "${FUNCNAME[0]} - 4byte Little-Endian Hex AppID: '${NOSTAIDVDFHEX}'"
-		writelog "INFO" "${FUNCNAME[0]} - Binary-formatted 4byte Little-Endian AppID: '${NOSTAIDVDFHEXFMT}'"
-		writelog "INFO" "${FUNCNAME[0]} - Unsigned Integer Shortcut AppID (used for artwork): '${NOSTAIDGRID}'"
-		writelog "INFO" "${FUNCNAME[0]} - App Name: '${NOSTAPPNAME}'"
-		writelog "INFO" "${FUNCNAME[0]} - Exe Path: '${NOSTEXEPATH}'"
-		writelog "INFO" "${FUNCNAME[0]} - Start Dir: '${NOSTSTDIR}'"
-		writelog "INFO" "${FUNCNAME[0]} - Icon Path: '${NOSTICONPATH}'"
-		writelog "INFO" "${FUNCNAME[0]} - Launch options: '${NOSTLAOP}'"
-		writelog "INFO" "${FUNCNAME[0]} - Is Hidden: '${NOSTHIDE}'"
-		writelog "INFO" "${FUNCNAME[0]} - Allow Desktop Config: '${NOSTADC}'"
-		writelog "INFO" "${FUNCNAME[0]} - Allow Overlay: '${NOSTAO}'"
-		writelog "INFO" "${FUNCNAME[0]} - OpenVR: '${NOSTVR}'"
-		writelog "INFO" "${FUNCNAME[0]} - Tags: '${NOSTTAGS}'"
-		writelog "INFO" "${FUNCNAME[0]} - Compatibility Tool: '${NOSTCOMPATTOOL}'"
-		## Artwork logging -- These will be blank if no artwork is passed, that's OK
-		writelog "INFO" "${FUNCNAME[0]} - Hero Artwork: '${NOSTGHERO}'"
-		writelog "INFO" "${FUNCNAME[0]} - Logo Artwork: '${NOSTGLOGO}'"
-		writelog "INFO" "${FUNCNAME[0]} - Boxart Artwork: '${NOSTGBOXART}'"
-		writelog "INFO" "${FUNCNAME[0]} - Tenfoot Artwork: '${NOSTGTENFOOT}'"
-		writelog "INFO" "${FUNCNAME[0]} - Copy Method for Artwork: '${SGACOPYMETHOD}'"
-		writelog "INFO" "${FUNCNAME[0]} - EXE Dir Fallback Artwork: '${NOSTGEXEARTWORKFALLBACK}'"
-		## SteamGridDB logging -- Also might be blank and that's fine
-		writelog "INFO" "${FUNCNAME[0]} - Use SteamGridDB: '${NOSTUSESGDB}'"
-		writelog "INFO" "${FUNCNAME[0]} - SteamGridDB Game ID: '${NOSTSGDBGAMEID}'"
-		writelog "INFO" "${FUNCNAME[0]} - SteamGridDB Steam AppID: '${NOSTSGDBAID}'"
-		writelog "INFO" "${FUNCNAME[0]} - SteamGridDB Search Name: '${NOSTSGDBNAM}'"
-
-		if [ -f "$SCPATH" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - The file '$SCPATH' already exists, creating a backup, then removing the 2 closing backslashes at the end"
-			cp "$SCPATH" "${SCPATH//.vdf}_${PROGNAME}_backup.vdf" 2>/dev/null
-			truncate -s-2 "$SCPATH"
-			OLDSET="$(grep -aPo '\x00[0-9]\x00\x02appid' "$SCPATH" | tail -n1 | tr -dc '0-9')"
-			NEWSET=$((OLDSET + 1))
-			writelog "INFO" "${FUNCNAME[0]} - Last set in file has ID '$OLDSET', so continuing with '$OLDSET'"
+		# Icon -- Only set if we successfully download an icon from SteamGridDB
+		getSteamGridDBNonSteamIcon "$NOSTAIDGRID" "$NOSTSGDBAPIGAMEID"
+		NOSTSGDBICON="$( find "${STUIDPATH}/config/grid/" -name "${NOSTAIDGRID}_icon.*" | head -n1 2>/dev/null )"
+		if [ -f "$NOSTSGDBICON" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Found SteamGridDB icon path to '$NOSTSGDBICON' -- Using this as Non-Steam Game Icon"
+			NOSTICONPATH="$NOSTSGDBICON"
 		else
-			writelog "INFO" "${FUNCNAME[0]} - Creating new $SCPATH"
-			printf '\x00%s\x00' "shortcuts" > "$SCPATH"
-			NEWSET=0
+			writelog "INFO" "${FUNCNAME[0]} - Icon path does not exist at '$NOSTSGDBICON' - Maybe download failed?"
 		fi
 
-		# Match any image file in same folder as EXE name hero, logo, boxart, tenfoot
-		# Matches will override selected options
-		# If not found it will fall back to the selected value (such as the actual file path provided), meaning
-		# only artwork that exists will be used
-		if [ "$NOSTAUTOARTWORK" -eq 1 ]; then
-			NOSTEXEBASEDIR="$( dirname "$NOSTEXEPATH" | cut -d '"' -f2 )"
+		notiShow "$NOTY_SGDBDLDONE"
+	fi
 
-			NOSTGHERO="$( findGameArtInExeDir "$NOSTEXEBASEDIR" "hero" "$NOSTGHERO" )"
-			NOSTGLOGO="$( findGameArtInExeDir "$NOSTEXEBASEDIR" "logo" "$NOSTGLOGO" )"
-			NOSTGBOXART="$( findGameArtInExeDir "$NOSTEXEBASEDIR" "boxart" "$NOSTGBOXART" )"
-			NOSTGTENFOOT="$( findGameArtInExeDir "$NOSTEXEBASEDIR" "tenfoot" "$NOSTGTENFOOT" )"
-			NOSTICONPATH="$( findGameArtInExeDir "$NOSTEXEBASEDIR" "icon" "$NOSTICONPATH" )"
-		fi
+	writelog "INFO" "${FUNCNAME[0]} - Adding new set '$NEWSET'"
 
-		## Fetch artwork from SteamGridDB
-		if [ "$NOSTUSESGDB" -eq 1 ]; then
-			# Regular artwork
-			notiShow "$NOTY_SGDBDL"
-
-			# The entered name to search on will take priority over the actual game EXE name, only one will be used and we will always prefer the entered custom name
-			# For example if a user naames their Non-Steam Game "The Elder Scrolls IV: Oblivion" but they enter a custom search name because they want artwork for "The Elder Scrolls IV: Oblivion Game of the Year Edition"
-			# If art is not found for the custom name, users should enter either the Steam AppID or the SteamGridDB Game ID to use as a fallback (Steam AppID will always be preferred because it will always be exact)
-			#
-			# Therefore, the order of priority for artwork searching is:
-			# 1. Name search (only ONE of the below will be used)
-			#     a. If the user enters a custom search name with --steamgriddb-game-name, search on that
-			#     b. Otherwise, use the Non-Steam Game name
-			# 2. Fallback to ID search if no SteamGridDB ID is found on the name search
-			#    a. If the user enters a Steam AppID with --steamgriddb-steam-appid, search on that
-			#    b. Otherwise, fall back to searching on an entered SteamGridDB Game ID
-			# In short, search on ONE of the names, and if a Game ID is not found on either of these, fall back to searching on ONE of the passed IDs
-			# If no IDs are found after all of this, we can't get artwork. We will not fall back to EXE name if no ID is found on custom name, and we will not fall back to SteamGridDB Game ID if no art is found for Steam AppID
-			# If no values are provided we will simply search on Non-Steam Game name
-			NOSTSEARCHNAME=""  # Name to search for SteamGridDB Game ID on (either custom name or app name)
-			NOSTSEARCHID=""  # ID to search for the SteamGridDB artwork on (either Steam AppID or SteamGridDB Game ID)
-			NOSTSEARCHFLAG="--nonsteam"  # Whether to search using a Steam AppID or SteamGridDB Game ID (will be set to --steam if we get an AppID)
-			if [ -n "$NOSTSGDBSTAID" ]; then
-				NOSTSEARCHID="$NOSTSGDBSTAID"
-				NOSTSEARCHFLAG="--steam"  # If a match is found on game name above, commandlineGetSteamGridDBArtwork will manage falling back to searching with SteamGridDB Game ID, so this is safe
-			elif [ -n "$NOSTSGDBGAMEID" ]; then
-				NOSTSEARCHID="$NOSTSGDBGAMEID"
-			fi
-
-			# Only add NOSTAPPNAME as fallback if we don't have an ID to search on, because commandlineGetSteamGridDBArtwork will prefer name over ID, so if we have to
-			# fall back to Non-Steam Name (i.e. no entered custom name) then only do so if we don't have an ID given
-			if [ -n "$NOSTSGDBNAM" ]; then
-				NOSTSEARCHNAME="$NOSTSGDBNAM"
-			elif [ -n "$NOSTAPPNAME" ] && [ -z "$NOSTSEARCHID" ]; then
-				NOSTSEARCHNAME="$NOSTAPPNAME"
-			fi
-
-			# Store the ID we searched with, so getSteamGridDBNonSteamIcon doesn't have to hit the endpoint again and we save an API call
-			commandlineGetSteamGridDBArtwork --search-name="$NOSTSEARCHNAME" --search-id="$NOSTSEARCHID" --filename-appid="$NOSTAIDGRID" "$NOSTSEARCHFLAG" --apply --replace-existing
-
-			# Get ID that commandlineGetSteamGridDBArtwork searched on above and use that to search for the icon
-			NOSTSGDBAPIGAMEID="$( cat "$NOSTSGDBID" )"
-
-			# Icon -- Only set if we successfully download an icon from SteamGridDB
-			getSteamGridDBNonSteamIcon "$NOSTAIDGRID" "$NOSTSGDBAPIGAMEID"
-			NOSTSGDBICON="$( find "${STUIDPATH}/config/grid/" -name "${NOSTAIDGRID}_icon.*" | head -n1 2>/dev/null )"
-			if [ -f "$NOSTSGDBICON" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Found SteamGridDB icon path to '$NOSTSGDBICON' -- Using this as Non-Steam Game Icon"
-				NOSTICONPATH="$NOSTSGDBICON"
-			else
-				writelog "INFO" "${FUNCNAME[0]} - Icon path does not exist at '$NOSTSGDBICON' - Maybe download failed?"
-			fi
-
-			notiShow "$NOTY_SGDBDLDONE"
-		fi
-
-		writelog "INFO" "${FUNCNAME[0]} - Adding new set '$NEWSET'"
-
-		## TODO refactor to use a function for generating each line to write out, it would be a bit cleaner than this
-		## This uses printf to write out the binary format, but we could make it clearer and more extendable with a method
-		## that just takes the field name, the value, and whether to follow it with a termination \x00
-		## That's for a future refactor though
-		{
+	{
 		printf '\x00%s\x00' "$NEWSET"
 		printf '\x02%s\x00%b' "appid" "$NOSTAIDVDFHEXFMT"
 		printf '\x01%s\x00%s\x00' "AppName" "$NOSTAPPNAME"
@@ -23758,26 +23770,25 @@ function addNonSteamGame {
 		#file end:
 		printf '\x08'
 		printf '\x08'
-		} >> "$SCPATH"
+	} >> "$SCPATH"
 
-		writelog "INFO" "${FUNCNAME[0]} - Finished writing out new Non-Steam Game Shortcut"
-		writelog "INFO" "${FUNCNAME[0]} - Adding any chosen Non-Steam game artwork"
+	writelog "INFO" "${FUNCNAME[0]} - Finished writing out new Non-Steam Game Shortcut"
+	writelog "INFO" "${FUNCNAME[0]} - Adding any chosen Non-Steam game artwork"
 
-		setGameArt "$NOSTAIDGRID" --hero="$NOSTGHERO" --logo="$NOSTGLOGO" --boxart="$NOSTGBOXART" --tenfoot="$NOSTGTENFOOT" "$SGACOPYMETHOD"
+	setGameArt "$NOSTAIDGRID" --hero="$NOSTGHERO" --logo="$NOSTGLOGO" --boxart="$NOSTGBOXART" --tenfoot="$NOSTGTENFOOT" "$SGACOPYMETHOD"
 
-		if [ -n "$NOSTCOMPATTOOL" ]; then
-			if [ ! -f "$CFGVDF" ]; then
-				writelog "SKIP" "${FUNCNAME[0]} - No Config VDF found at '$CFGVDF' -- Unable to set compatibility tool for Non-Steam Game, skipping"
-			else
-				writelog "INFO" "${FUNCNAME[0]} - Adding selected compatibility tool '$NOSTCOMPATTOOL' for Non-Stteam Game"
-				NSGVDFVALS=( "name!${NOSTCOMPATTOOL}" "config!" "priority!250" )
-				createVdfEntry "$CFGVDF" "CompatToolMapping" "$NOSTAIDGRID" "" "${NSGVDFVALS[@]}"
-				writelog "INFO" "${FUNCNAME[0]} - Finished adding Non-Steam Game compatibility tool to '$CFGVDF'"
-			fi
+	if [ -n "$NOSTCOMPATTOOL" ]; then
+		if [ ! -f "$CFGVDF" ]; then
+			writelog "SKIP" "${FUNCNAME[0]} - No Config VDF found at '$CFGVDF' -- Unable to set compatibility tool for Non-Steam Game, skipping"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Adding selected compatibility tool '$NOSTCOMPATTOOL' for Non-Stteam Game"
+			NSGVDFVALS=( "name!${NOSTCOMPATTOOL}" "config!" "priority!250" )
+			createVdfEntry "$CFGVDF" "CompatToolMapping" "$NOSTAIDGRID" "" "${NSGVDFVALS[@]}"
+			writelog "INFO" "${FUNCNAME[0]} - Finished adding Non-Steam Game compatibility tool to '$CFGVDF'"
 		fi
-
-		writelog "INFO" "${FUNCNAME[0]} - Finished adding new $NSGA"
 	fi
+
+	writelog "INFO" "${FUNCNAME[0]} - Finished adding new $NSGA"
 
 	SGACOPYMETHOD=""  # Unset doesn't work for some reason with '--flag'
 }
