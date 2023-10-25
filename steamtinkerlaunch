@@ -161,6 +161,8 @@ STLQUIET=0
 SLRAID="1070560"  # Hardcoded SLR AppID for native games -- See `setSLRReap`
 DEFWINEDPI="96"
 WINEDPIVALUES="${DEFWINEDPI}!120!150!240"
+SGDBTIMEOUT="15"
+SGDBRETRIES="5"
 
 ### default vars ###
 
@@ -1437,7 +1439,7 @@ function downloadArtFromSteamGridDB {
 
 		# TODO break into reusable function for both this and `getSGDBGameIDFromTitle`?
 		# If the whole batch has no grids we get a 404 and wget gives an error. --content-on-error ensures we still get the response json and the following logic still works
-		RESPONSE="$("$WGET" --content-on-error --header="Authorization: Bearer $SGDBAPIKEY" -q "$SGDB_ENDPOINT_STR" -O - 2> >(grep -v "SSL_INIT"))"
+		RESPONSE="$("$WGET" --timeout="${SGDBTIMEOUT}" --tries="${SGDBRETRIES}" --content-on-error --header="Authorization: Bearer $SGDBAPIKEY" -q "$SGDB_ENDPOINT_STR" -O - 2> >(grep -v "SSL_INIT"))"
 		if ! "$JQ" -e '.success' 1> /dev/null <<< "$RESPONSE"; then
 			writelog "INFO" "${FUNCNAME[0]} - The server response wasn't 'success' for this batch of requested games."
 		fi
@@ -1647,7 +1649,7 @@ function getSGDBGameIDFromTitle {
 	if [ -n "$SGDBSEARCHNAME" ]; then
 		SGDBSEARCHENDPOINT="${BASESTEAMGRIDDBAPI}/search/autocomplete/${SGDBSEARCHNAME}"
 		if checkSGDbApi; then
-			SGDBSEARCHNAMERESP="$( "$WGET" --content-on-error --header="Authorization: Bearer $SGDBAPIKEY" -q "$SGDBSEARCHENDPOINT" -O - 2>  >(grep -v "SSL_INIT") )"
+			SGDBSEARCHNAMERESP="$( "$WGET" --timeout="${SGDBTIMEOUT}" --tries="${SGDBRETRIES}" --content-on-error --header="Authorization: Bearer $SGDBAPIKEY" -q "$SGDBSEARCHENDPOINT" -O - 2>  >(grep -v "SSL_INIT") )"
 			if "$JQ" -e '.success' 1> /dev/null <<< "$SGDBSEARCHNAMERESP"; then
 				if [ "$( "$JQ" '.data | length' <<< "$SGDBSEARCHNAMERESP" )" -gt 0 ]; then
 					SGDBSEARCH_FOUNDNAME="$( "$JQ" '.data[0].name' <<< "$SGDBSEARCHNAMERESP" )"
