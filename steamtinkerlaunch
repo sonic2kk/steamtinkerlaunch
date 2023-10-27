@@ -1661,12 +1661,25 @@ function getGridsForInstalledGames {
 		fi
 	fi
 }
-
-# NOTE we will also need to fetch icons!
 function getGridsForNonSteamGames {
+	# NOTE we shpuld also need to fetch and set icons eventually
+	# (will require updating shortcuts.vdf entry which we can't do yet, may just be a case of encoding an entry and updating it with sed)
+	if ! haveAnySteamShortcuts ; then
+		writelog "SKIP" "${FUNCNAME[0]} - No Non-Steam Games found, skipping"
+		echo "No Non-Steam Games found, not downloading grids"
+
+		return
+	fi
+
 	if checkSGDbApi; then
 		# Get Non-Steam Game Name + ID
-		writelog "INFO" "${FUNCNAME[0]} - STUB"
+		writelog "INFO" "${FUNCNAME[0]} - Fetching artwork for all Non-Steam Games"
+		while read -r SCVDFE; do
+			SVDFENAME="$( parseSteamShortcutEntryAppName "$SCVDFE" )"
+			SVDFEAID="$( parseSteamShortcutEntryAppID "$SCVDFE" )"
+
+			commandlineGetSteamGridDBArtwork --search-name="$SVDFENAME" --filename-appid="$SVDFEAID" --nonsteam
+		done <<< "$( getSteamShortcutHex )"
 	fi
 }
 
@@ -21689,7 +21702,7 @@ function howto {
 	echo "                                       or only from <SteamAppID>"
 	echo "           grid <SteamAppID>         Update Steam Grid for installed game(s)"
 	echo "                                       optional argument either a SteamAppID,"
-	echo "                                       'owned' or 'installed'"
+	echo "                                       'owned', 'installed', or 'nonsteam|shortcut'"
 	echo "                                       (default is 'installed')"
 	echo "           allgamedata                 The same as above for"
 	echo "                                       all games in $SCV"
@@ -22244,6 +22257,8 @@ function commandline {
 					getGridsForOwnedGames
 				elif [ "$3" == "installed" ]; then
 					getGridsForInstalledGames
+				elif [ "$3" == "nonsteam" ] || [ "$3" == "shortcuts" ]; then
+					getGridsForNonSteamGames
 				fi
 			elif [ "$2" == "allgamedata" ]; then
 				getDataForAllGamesinSharedConfig
