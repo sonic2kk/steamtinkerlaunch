@@ -399,6 +399,16 @@ WINE_FSR_CUSTOM_RESOLUTIONS=(
 #PROTON50="1245040"
 #PROTON513="1420170"
 
+# Hex patterns for various blocks in shortcuts.vdf that we can grep for -- Casing matters!
+SHORTCUTVDFFILESTARTHEXPAT="0073686f7274637574730000300002"  # Bytes denoting the beginning of the shortcuts.vdf file
+SHORTCUTVDFENTRYBEGINHEXPAT="00080800.*?0002"  # Pattern for beginning of shortcut entry in shortcuts.vdf -- Beginning of file has a different pattern, but every other pattern begins like this
+SHORTCUTSVDFENTRYENDHEXPAT="000808"  # Pattern for how shortcuts.vdf blocks end
+SHORTCUTVDFAPPIDHEXPAT="617070696400"  # 'appid'
+SHORTCUTVDFNAMEHEXPAT="(014170704e616d6500|6170706e616d65)"  # 'AppName' and 'appname'
+SHORTCUTVDFEXEHEXPAT="000145786500"  # 'Exe' ('exe' is 6578650a if we ever need it)
+SHORTCUTVDFSTARTDIRHEXPAT="0001537461727444697200"  # 'StartDir'
+SHORTCUTVDFENDPAT="0001"  # Generic end pattern for each shortcut.vdf column
+
 function setGNID {
 	# only keep alphabet chars
 	INGN="$(tr -cd '[:alnum:]' <<< "${1^^}")"
@@ -1632,13 +1642,19 @@ function getGridsForOwnedGames {
 }
 function getGridsForInstalledGames {
 	if checkSGDbApi; then
-		if [ "$(listInstalledGameIDs | wc -l)" -eq 0 ]; then
-			writelog "SKIP" "${FUNCNAME[0]} - No installed games found!"
-		else
+		if [ "$(listInstalledGameIDs | wc -l)" -gt 0 ]; then
 			while read -r INSTGAAID; do
 				getSteamGridDBArtwork "$INSTGAAID"
 			done <<< "$( listInstalledGameIDs )"
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - No installed games found!"
 		fi
+	fi
+}
+function getGridsForNonSteamGames {
+	if checkSGDbApi; then
+		# Get Non-Steam Game Name + ID
+		writelog "INFO" "${FUNCNAME[0]} - STUB"
 	fi
 }
 
@@ -7887,6 +7903,55 @@ function getGameDir {
 			echo "Could not find install directory for '$1'"
 		fi
 	fi
+}
+
+function listSteamShortcuts {
+	writelog "INFO" "${FUNCNAME[0]} - STUB"
+}
+
+# Convert Steam Shortcut AppID from hex to 32bit unsigned integer
+function convertSteamShortcutAppID {
+    SHORTCUTAPPIDHEX="$1"
+    SHORTCUTAPPIDLITTLEENDIAN="$( echo "$SHORTCUTAPPIDHEX" | tac -rs .. | tr -d '\n' )"
+    echo "$((16#${SHORTCUTAPPIDLITTLEENDIAN}))"
+}
+
+# Convert shortcuts.vdf hex to text with nullbyte stripped
+function convertSteamShortcutHex {
+	printf "$1" | xxd -r -p | tr -d '\0'
+}
+
+# Parse a hex shortcuts.vdf entry based on a start pattern and convert to text
+# Unfortunately does not work for appid
+function parseSteamShortcutEntryHex {
+	SHORTCUTSVDFINPUTHEX="$1"  # The hex block representing the shortcut
+	SHORTCUTSVDFMATCHPATTERN="$2"  # The pattern to match against in the block
+
+	convertSteamShortcutHex "$( printf "$SHORTCUTSVDFINPUTHEX" | grep -oP "${SHORTCUTSVDFMATCHPATTERN}\K.*?(?=${SHORTCUTVDFENDPAT})" )"  # Grep for pattern, convert to text
+}
+
+# Get shortcuts.vdf hex and grep each entry using start and end patterns (including a special case for the beginning of shortcuts.vdf) 
+function getSteamShortcutHex {
+	SCPATH="$STUIDPATH/config/$SCVDF"
+	xxd -p -c 0 "$SCPATH" | grep -oP "(${SHORTCUTVDFFILESTARTHEXPAT}|${SHORTCUTVDFENTRYBEGINHEXPAT})\K.*?(?=${SHORTCUTSVDFENTRYENDHEXPAT})"  # Get entire shortcuts.vdf as hex, then grep each entry using the begin and end patterns for each block
+}
+
+# Grep and convert AppID from a given block of hex representing a shortcut entry in shortcuts.vdf by taking the first 8 bytes
+function parseSteamShortcutEntryAppID {
+	convertSteamShortcutAppID "$( printf "$1" | grep -oP "${SHORTCUTVDFAPPIDHEXPAT}\K.{8}" )"
+}
+
+### Functions to get information from specific parts of the shortcuts VDF ###
+function parseSteamShortcutEntryAppName {
+	parseSteamShortcutEntryHex "$1" "${SHORTCUTVDFNAMEHEXPAT}"
+}
+
+function parseSteamShortcutEntryExe {
+	parseSteamShortcutEntryHex "$1" "${SHORTCUTVDFEXEHEXPAT}"
+}
+
+function parseSteamShortcutEntryStartDir {
+	parseSteamShortcutEntryHex "$1" "${SHORTCUTVDFSTARTDIRHEXPAT}"
 }
 
 function getGameWindowName {
@@ -21831,6 +21896,13 @@ function commandline {
 		fetchGameSLRGui "$2"
 	elif [ "$1" == "debug" ]; then
 		# Why are you looking here? :-)
+		while read -r SCVDFE; do
+			SVDFENAME="$( parseSteamShortcutEntryAppName "$SCVDFE" )"
+			SVDFEAID="$( parseSteamShortcutEntryAppID "$SCVDFE" )"
+			SVDFEEXE="$( parseSteamShortcutEntryExe "$SCVDFE" )"
+
+			printf "%s (%s) -> %s\n" "$SVDFENAME" "$SVDFEAID" "$SVDFEEXE"
+		done <<< "$( getSteamShortcutHex )"
 
 		# writelog "INFO" "${FUNCNAME[0]} - Stub"
 		dlX64Dbg
