@@ -1390,6 +1390,16 @@ function getGameDataForInstalledGames {
 	fi
 }
 
+function listSteamShortcutGameIDs {
+	if haveAnySteamShortcuts ; then
+		while read -r SCVDFE; do
+			parseSteamShortcutEntryAppID "$SCVDFE"
+		done <<< "$( getSteamShortcutHex )"
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - No Steam shortcuts found!"
+	fi
+}
+
 function checkSGDbApi {
 	if [ -z "$SGDBAPIKEY" ] || [ "$SGDBAPIKEY" == "$NON" ]; then
 		writelog "SKIP" "${FUNCNAME[0]} - No SteamGrid Api Key found - Get one at 'https://www.steamgriddb.com/profile/preferences/api/' (requires a SteamGridDB account) and see the SteamGridDB wiki page for guidance on how to supply the API key."
@@ -1651,6 +1661,8 @@ function getGridsForInstalledGames {
 		fi
 	fi
 }
+
+# NOTE we will also need to fetch icons!
 function getGridsForNonSteamGames {
 	if checkSGDbApi; then
 		# Get Non-Steam Game Name + ID
@@ -7691,12 +7703,15 @@ function listSteamGames {
 	fi
 }
 
+# TODO do we want a way to specify that this function should only return Steam or Non-Steam AppIDs?
 function getIDFromTitle {
 	if [ -z "$1" ]; then
 		echo "A Game Title (part of it might be enough) is required as argument"
 	else
 		# Check installed game appmanifests for name matches
 		FOUNDMATCHES=()
+
+		# Steam games
 		while read -r APPMA; do
 			APPMATITLE="$( getValueFromAppManifest "name" "$APPMA" )"
 			if [[ ${APPMATITLE,,} == *"${1,,}"* ]]; then
@@ -7705,6 +7720,19 @@ function getIDFromTitle {
 				FOUNDMATCHES+=( "$FOUNDGAMNAM" )
 			fi
 		done <<< "$( listAppManifests )"
+
+		# Steam shortcuts
+		if haveAnySteamShortcuts ; then
+			while read -r SCVDFE; do
+				SVDFENAME="$( parseSteamShortcutEntryAppName "$SCVDFE" )"
+				SVDFEAID="$( parseSteamShortcutEntryAppID "$SCVDFE" )"
+
+				if [[ ${SVDFENAME,,} == *"${1,,}"* ]]; then
+					FOUNDGAMNAM="$( printf "%s\t\t(%s)" "$SVDFEAID" "$SVDFENAME" )"
+					FOUNDMATCHES+=( "$FOUNDGAMNAM" )
+				fi
+			done <<< "$( getSteamShortcutHex )"
+		fi
 		if [ "${#FOUNDMATCHES[@]}" -gt 0 ]; then
 			printf "%s\n" "${FOUNDMATCHES[@]}"
 		else
@@ -7729,6 +7757,17 @@ function getTitleFromID {
 
 			if [ -n "$GAMEMANIFEST" ]; then
 				getValueFromAppManifest "name" "$GAMEMANIFEST"
+			elif haveAnySteamShortcuts ; then
+				# Steam shortcuts
+				while read -r SCVDFE; do
+					SVDFENAME="$( parseSteamShortcutEntryAppName "$SCVDFE" )"
+					SVDFEAID="$( parseSteamShortcutEntryAppID "$SCVDFE" )"
+
+					if [ "$SVDFEAID" -eq "$1" ]; then
+						echo "$SVDFENAME"
+						break
+					fi
+				done <<< "$( getSteamShortcutHex )"
 			else
 				echo "No Title found for '$1'"
 
@@ -7934,6 +7973,14 @@ function parseSteamShortcutEntryHex {
 function getSteamShortcutHex {
 	SCPATH="$STUIDPATH/config/$SCVDF"
 	xxd -p -c 0 "$SCPATH" | grep -oP "(${SHORTCUTVDFFILESTARTHEXPAT}|${SHORTCUTVDFENTRYBEGINHEXPAT})\K.*?(?=${SHORTCUTSVDFENTRYENDHEXPAT})"  # Get entire shortcuts.vdf as hex, then grep each entry using the begin and end patterns for each block
+}
+
+function haveAnySteamShortcuts {
+	if [ $( getSteamShortcutHex | wc -c ) -gt 0 ]; then
+		return 0
+	else
+		return 1
+	fi
 }
 
 # Grep and convert AppID from a given block of hex representing a shortcut entry in shortcuts.vdf by taking the first 8 bytes
