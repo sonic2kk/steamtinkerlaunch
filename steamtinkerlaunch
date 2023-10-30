@@ -9273,25 +9273,14 @@ function removeReShadeSpecialKInstallation {
 	KEEPRESHADEINI="${1:-0}"
 
 	# DLLs and JSON files
-	if [ -f "$INSTDESTDIR/$RS_32" ]; then
-		rm "$INSTDESTDIR/$RS_32"
-	fi
-
-	if [ -f "$INSTDESTDIR/${RS_32//.dll/.json}" ]; then
-		rm "$INSTDESTDIR/${RS_32//.dll/.json}"
-	fi
-
-	if [ -f "$INSTDESTDIR/$RS_64" ]; then
-		rm "$INSTDESTDIR/$RS_64"
-	fi
-
-	if [ -f "$INSTDESTDIR/${RS_64//.dll/.json}" ]; then
-		rm "$INSTDESTDIR/${RS_64//.dll/.json}"
-	fi
+	RESHSPEKREMOVEDLLS=( "$INSTDESTDIR/$RS_32" "$INSTDESTDIR/${RS_32//.dll/.json}" "$INSTDESTDIR/$RS_64" "$INSTDESTDIR/${RS_64//.dll/.json}" )
+	for RESHSPEKREMOVEDLL in "${RESHSPEKREMOVEDLLS[@]}"; do
+		rmFileIfExists "$RESHSPEKREMOVEDLL"
+	done
 
 	# INI file
-	if [ -f "$INSTDESTDIR/$RSINI" ] && [ "$KEEPRESHADEINI" -eq 0 ]; then
-		rm "$INSTDESTDIR/$RSINI"
+	if [ "$KEEPRESHADEINI" -eq 1 ]; then
+		rmFileIfExists ""$INSTDESTDIR/$RSINI""
 	fi
 }
 
@@ -9740,10 +9729,8 @@ function useSpecialK {
 		fi
 
 		# Make sure we don't track DLL renames
-		if [ -f "$SPEKENA" ]; then
-			rm -rf "$SPEKENA"
-			touch "$SPEKENA"
-		fi
+		rmFileIfExists "$SPEKENA"
+		touch "$SPEKENA"
 
 		if [ "$SPEKDLLCONFLICTFOUND" -eq 0 ] && [ "$SHOULDINSTALLSPEK" -eq 1 ]; then
 			installd3d47dll "$SPEKD3D47DLL" "$SPEKDDIR"
@@ -23558,7 +23545,6 @@ function addNonSteamGame {
 	# We check against the string with quotes removed, just to be safe for the -z check even though the case above should match it
 	# We have to do this for the -f check though as it doesn't like the quotes
 	NOSTEXEPATHNOQUOTE="$( sed -e 's/^"//' -e 's/"$//' <<< "${NOSTEXEPATH}" )"
-	echo "NOSTEXEPATHNOQUOTE is '$NOSTEXEPATHNOQUOTE'"
 	if [ -z "${NOSTEXEPATHNOQUOTE}" ]; then
 		writelog "ERROR" "${FUNCNAME[0]} - NOSTEXEPATH was blank, could not add Non-Steam Game -- Aborting!"
 		notiShow "${NOTY_NOSTEXEBLANK}"
@@ -23839,9 +23825,7 @@ function closeSTL {
 	setPrevRes
 	customUserScriptStop	# USERSTOP
 
-	if [ -f "$MO2INSTFAIL" ]; then
-		rm "$MO2INSTFAIL" 2>/dev/null
-	fi
+	rmFileIfExists "$MO2INSTFAIL" 2>/dev/null
 
 	if [ "$USEMANGOAPP" -eq 1 ] && "$PGREP" -f "$MANGOAPP" >/dev/null; then
 		writelog "INFO" "${FUNCNAME[0]} - Killing '$MANGOAPP'"
