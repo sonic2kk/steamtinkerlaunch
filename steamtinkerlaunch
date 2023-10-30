@@ -404,7 +404,7 @@ SHORTCUTVDFFILESTARTHEXPAT="0073686f7274637574730000300002"  # Bytes denoting th
 SHORTCUTVDFENTRYBEGINHEXPAT="00080800.*?0002"  # Pattern for beginning of shortcut entry in shortcuts.vdf -- Beginning of file has a different pattern, but every other pattern begins like this
 SHORTCUTSVDFENTRYENDHEXPAT="000808"  # Pattern for how shortcuts.vdf blocks end
 SHORTCUTVDFAPPIDHEXPAT="617070696400"  # 'appid'
-SHORTCUTVDFNAMEHEXPAT="(014170704e616d6500|6170706e616d65)"  # 'AppName' and 'appname'
+SHORTCUTVDFNAMEHEXPAT="(014170704e616d6500|6170706e616d6500)"  # 'AppName' and 'appname'
 SHORTCUTVDFEXEHEXPAT="000145786500"  # 'Exe' ('exe' is 6578650a if we ever need it)
 SHORTCUTVDFSTARTDIRHEXPAT="0001537461727444697200"  # 'StartDir'
 SHORTCUTVDFENDPAT="0001"  # Generic end pattern for each shortcut.vdf column
@@ -1675,8 +1675,8 @@ function getGridsForNonSteamGames {
 		# Get Non-Steam Game Name + ID
 		writelog "INFO" "${FUNCNAME[0]} - Fetching artwork for all Non-Steam Games"
 		while read -r SCVDFE; do
-			SVDFENAME="$( parseSteamShortcutEntryAppName "$SCVDFE" )"
 			SVDFEAID="$( parseSteamShortcutEntryAppID "$SCVDFE" )"
+			SVDFENAME="$( parseSteamShortcutEntryAppName "$SCVDFE" )"
 
 			commandlineGetSteamGridDBArtwork --search-name="$SVDFENAME" --filename-appid="$SVDFEAID" --nonsteam
 		done <<< "$( getSteamShortcutHex )"
@@ -7957,10 +7957,6 @@ function getGameDir {
 	fi
 }
 
-function listSteamShortcuts {
-	writelog "INFO" "${FUNCNAME[0]} - STUB"
-}
-
 # Convert Steam Shortcut AppID from hex to 32bit unsigned integer
 function convertSteamShortcutAppID {
     SHORTCUTAPPIDHEX="$1"
@@ -7982,7 +7978,50 @@ function parseSteamShortcutEntryHex {
 	convertSteamShortcutHex "$( printf "$SHORTCUTSVDFINPUTHEX" | grep -oP "${SHORTCUTSVDFMATCHPATTERN}\K.*?(?=${SHORTCUTVDFENDPAT})" )"  # Grep for pattern, convert to text
 }
 
-# Get shortcuts.vdf hex and grep each entry using start and end patterns (including a special case for the beginning of shortcuts.vdf) 
+# Find shortcut by AppID and return the hex entry
+function findSteamShortcutByAppID {
+	SHORTCUTENTRYAID="$1"
+
+	writelog "INFO" "${FUNCNAME[0]} - Searching for shortcut entry with AppID '$SHORTCUTENTRYAID'"
+	while read -r SCVDFE; do
+		SVDFEAID="$( parseSteamShortcutEntryAppID "$SCVDFE" )"
+		if [ "$SVDFEAID" -eq "$SHORTCUTENTRYAID" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Found shortcut entry with AppID '$SHORTCUTENTRYAID'"  # Updating it how?
+			echo "$SCVDFE"
+			break
+		fi
+	done <<< "$( getSteamShortcutHex )"
+}
+
+# Edit shortcut entry column with new text value
+# replaces content between start and end pattern and replaces it with the input string converted to hex
+# function editSteamShortcutEntryColumn {
+# 	# Take column including start and end pattern so we get an exact match
+# 	# Edit the value between the start and end pattern
+
+# 	writelog "INFO" "${FUNCNAME[0]} - STUB"
+# }
+
+# Takes a Steam Shortcut AppID, finds the shortcut with that AppID, and then updates a given field i.e. "name"
+# example usage: editSteamShortcutEntry "123456789" "appname" "New Name"
+# function editSteamShortcutEntry {
+	# SHORTCUTENTRYAID="$1"
+	# ORGSHORTCUTENTRYHEX="$( findSteamShortcutByAppID "$SHORTCUTENTRYAID" )"
+	# writelog "INFO" "${FUNCNAME[0]} - STUB"
+# }
+
+
+
+## TODO may be unnecessary
+# Find the icon column of a given Steam shortcut hex entry and update it
+# example usage:  editSteamShortcutEntryIcon "<hexblock>" "/path/to/new_icon.png"
+# function editSteamShortcutEntryIcon {
+# 	writelog "INFO" "${FUNCNAME[0]} - STUB"
+# 	# TODO get icon block including start and end patterns
+# 	# TODO pass this to 'editSteamShortcutEntryColumn'
+# }
+
+# Get shortcuts.vdf hex and grep each entry using start and end patterns (including a special case for the beginning of shortcuts.vdf)
 function getSteamShortcutHex {
 	SCPATH="$STUIDPATH/config/$SCVDF"
 	xxd -p -c 0 "$SCPATH" | grep -oP "(${SHORTCUTVDFFILESTARTHEXPAT}|${SHORTCUTVDFENTRYBEGINHEXPAT})\K.*?(?=${SHORTCUTSVDFENTRYENDHEXPAT})"  # Get entire shortcuts.vdf as hex, then grep each entry using the begin and end patterns for each block
