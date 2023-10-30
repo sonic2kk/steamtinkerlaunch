@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20231030-1"
+PROGVERS="v14.0.20231031-1"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -15028,10 +15028,9 @@ function createHMMDesktopFile {
 		"$WGET" "$HMMICOURL" -O "$HMMICOPATH"
 	fi
 
+	rmFileIfExists "$HMMDFPA"
+
 	# Generate application launch .desktop file - Re-create each time to set correct path
-	if [ -f "$HMMDFPA" ]; then
-		rm "$HMMDFPA"
-	fi
 	writelog "INFO" "${FUNCNAME[0]} - Creating new HedgeModManager desktop file at '$HMMDFPA'"
 	{
 		echo "[Desktop Entry]"
@@ -15122,8 +15121,7 @@ function getLatestGitHubExeVer {
 	getGitHubExeVer "$SETUPNAME" "$PROJURL" "$LATESTVER"
 }
 
-# Get GitHub release information for a given version tag.
-# Used by getLatestGitHubExeVer and can also be used standalone i.e. for downloading a specific Vortex version.
+# Get GitHub release information for a given version tag -- Used by getLatestGitHubExeVer and can also be used standalone i.e. for downloading a specific Vortex version.
 function getGitHubExeVer {
 	SETUPNAME="$1"
 	PROJURL="$2"
@@ -21331,9 +21329,7 @@ function FUSEID {
 		fi
 	fi
 
-	if [ -f "$LOGDIR/$USEID.log" ]; then
-		rm "$LOGDIR/$USEID.log"
-	fi
+	rmFileIfExists "$LOGDIR/$USEID.log"
 	resetAID "$USEID"
 	setGN "$USEID"
 }
@@ -23557,9 +23553,7 @@ function addNonSteamGame {
 		return 1
 	fi
 
-	if [ -z "${NOSTAPPNAME}" ]; then
-		NOSTAPPNAME="${QEP##*/}"
-	fi
+	NOSTAPPNAME="${NOSTAPPNAME:-${QEP##*/}}"
 
 	if [ -z "${NOSTSTDIR}" ] || [ ! -d "${NOSTSTDIR}" ]; then
 		QSD="$(dirname "$QEP")"; NOSTSTDIR="\"$QSD\""
@@ -23569,11 +23563,8 @@ function addNonSteamGame {
 		NOSTGICONPATH="$STLICON"
 	fi
 
-	# This is formatted as a flag because we cna pass "$SGACOPYMETHOD" as an argument to setGameArt,
-	# and it will be interpreted as --copy
-	if [ -z "$SGACOPYMETHOD" ]; then
-		SGACOPYMETHOD="--copy"
-	fi
+	# This is formatted as a flag because we can pass "$SGACOPYMETHOD" as an argument to setGameArt, and it will be interpreted as --copy
+	SGACOPYMETHOD="${SGACOPYMETHOD:---copy}"
 
 	# This is off by default but always passed from addNonSteamGame, so if we actually get a value for any of these fields, enable it
 	# The NOSTUSESGDB=1 flag setting is for user commandline usage, when they simply want to search SteamGridDB for artwork using the game name, but don't want to pass other values
@@ -23581,11 +23572,9 @@ function addNonSteamGame {
 		NOSTUSESGDB=1
 	fi
 
-	## ----
 	## These AppIDs are not necessarily guaranteed to be unique, such as if the user tries to add the same game twice or something
 	## Therefore, perhaps in future we could do a stricter check by attempting to parse the shortcuts.vdf file and re-generating the AppID if it already exists
 	## This could be expensive if the file is long, but a potential future enhancement all the same!
-	## ----
 	NOSTAIDVDF="$( generateShortcutVDFAppId "${NOSTAPPNAME}${NOSTEXEPATH}" )"  # This is the signed integer AppID that will be stored in the VDF as hexidecimal - ex: -598031679
 	NOSTAIDVDFHEX="$( generateShortcutVDFHexAppId "$NOSTAIDVDF" )"  # This is the 4byte little-endian hexidecimal of the above 32bit signed integer, which we write out to the binary VDF - ex: c1c25adc
 	NOSTAIDVDFHEXFMT="\x$(awk '{$1=$1}1' FPAT='.{2}' OFS="\\\x" <<< "$NOSTAIDVDFHEX")"  # This is the binary-formatted string hex of the above which we actually write out - ex: \xc1\xc2\x5a\xdc
@@ -23633,10 +23622,8 @@ function addNonSteamGame {
 		NEWSET=0
 	fi
 
-	# Match any image file in same folder as EXE name hero, logo, boxart, tenfoot
-	# Matches will override selected options
-	# If not found it will fall back to the selected value (such as the actual file path provided), meaning
-	# only artwork that exists will be used
+	# Match any image file in same folder as EXE name hero, logo, boxart, tenfoot -- Matches will override selected options
+	# If not found it will fall back to the selected value (such as the actual file path provided), meaning only artwork that exists will be used
 	if [ "$NOSTAUTOARTWORK" -eq 1 ]; then
 		NOSTEXEBASEDIR="$( dirname "$NOSTEXEPATH" | cut -d '"' -f2 )"
 
@@ -23676,8 +23663,7 @@ function addNonSteamGame {
 			NOSTSEARCHID="$NOSTSGDBGAMEID"
 		fi
 
-		# Only add NOSTAPPNAME as fallback if we don't have an ID to search on, because commandlineGetSteamGridDBArtwork will prefer name over ID, so if we have to
-		# fall back to Non-Steam Name (i.e. no entered custom name) then only do so if we don't have an ID given
+		# Only add NOSTAPPNAME as fallback if we don't have an ID to search on, because commandlineGetSteamGridDBArtwork will prefer name over ID, so if we have to fall back to Non-Steam Name (i.e. no entered custom name) then only do so if we don't have an ID given
 		if [ -n "$NOSTSGDBNAM" ]; then
 			NOSTSEARCHNAME="$NOSTSGDBNAM"
 		elif [ -n "$NOSTAPPNAME" ] && [ -z "$NOSTSEARCHID" ]; then
@@ -25003,11 +24989,9 @@ function fetchAndExtractDependency {
 
 	# Extracting dependencies - If we can't find an exact match for the downloaded file, try to find a fuzzy match based on 'real' package name
 	if ! [ -f "$EXTRACTPATH/$ARCHIVENAME" ]; then
-		# -----
 		# Get list of files and remove version string from it, then check if this name is inside our target archive file
 		# This basically tries to find any archives that have the 'actual' package name e.g. 'innoextract' from 'innoextract-1.1-1.pkg.tar.zst', then tries to search if any files in the directory match
 		# the archive we passed in to try to download but couldn't and try to extract them. This lets us extract dependencies for a potential archive match if the name is not exact
-		# -----
 		local DEPMATCHFOUND=0
 		mapfile -t DEPFILES < <( find "$EXTRACTPATH" -maxdepth 1 -type f -iname \*"*.*"\* -exec basename {} \; )
 		if ! [[ "${#DEPFILES[@]}" -eq 0 ]]; then
