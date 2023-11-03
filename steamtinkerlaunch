@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20231103-1"
+PROGVERS="v14.0.20231103-2"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -392,13 +392,6 @@ WINE_FSR_CUSTOM_RESOLUTIONS=(
 	"3839x1108"
 )
 
-#PROTON37="858280"
-#PROTON316="961940"
-#PROTON42="1054830"
-#PROTON411="1113280"
-#PROTON50="1245040"
-#PROTON513="1420170"
-
 function setGNID {
 	# only keep alphabet chars
 	INGN="$(tr -cd '[:alnum:]' <<< "${1^^}")"
@@ -450,7 +443,6 @@ function initAID {
 
 	if [ -z "$AID" ] || [ "$AID" -eq "0" ]; then
 		# shellcheck disable=SC2154		# SteamAppId comes from Steam
-
 		if [ -z "$SteamAppId" ]; then
 			if grep -q "^play" <<< "$@" && [ -n "$2" ] && [ -z "$3" ] && [ "$2" != "gui" ] && [ "$2" != "ed" ]; then
 				STLPLAY=1
@@ -640,7 +632,8 @@ function setSteamPaths {
 			STUIDPATH="$SUSDA/$STEAMUSERID"
 		else
 			if [ -d "$SUSDA" ]; then
-			# this works for 99% of all users, because most do have 1 steamuser on their system
+				# this works for 99% of all users, because most do have 1 steamuser on their system
+				# could pick most recent user (i.e. the current logged in user) from 'loginusers.vdf'
 				STUIDPATH="$(find "$SUSDA" -maxdepth 1 -type d -name "[1-9]*" | head -n1)"
 				STEAMUSERID="${STUIDPATH##*/}"
 			else
@@ -930,7 +923,6 @@ function writeDesktopFile {
 }
 
 function createDesktopIconFile {
-
 	if [ "$1" -eq "$1" ] 2>/dev/null; then
 		AID="$1"
 	else
@@ -1393,7 +1385,6 @@ function checkSGDbApi {
 ## Generic function to fetch some artwork from SteamGridDB based on an endpoint
 ## TODO: Steam only officially supports PNGs, test to see if WebP works when manually copied, and if it doesn't, we should try to only download PNG files
 ## TODO: Add max filesize option? Some artworks are really big, we should skip ones that are too large (though this may mean many animated APNG artworks will get skipped, because APNG can be huge)
-## TODO: Retry/Timeout when fetching artwork
 function downloadArtFromSteamGridDB {
 	if checkSGDbApi && [ "$STLPLAY" -eq 0 ]; then
 		# Required
@@ -1410,7 +1401,6 @@ function downloadArtFromSteamGridDB {
 		SEARCHEPILEPSY="$9"
 
 		SGDBHASFILE="${10:-SGDBHASFILE}"  # Option to override action to take when file already exists
-
 		FORCESGDBDLTOSTEAM="${11}"  # Option to force downloading artwork to Steam Grid folder
 
 		SGDB_ENDPOINT_STR="${SEARCHENDPOINT}/$(echo "$SEARCHID" | awk '{print $1}' | paste -s -d, -)?"
@@ -1459,8 +1449,7 @@ function downloadArtFromSteamGridDB {
 		fi
 
 		for i in $(seq 0 $(("$RESPONSE_LENGTH" - 1))); do
-			# match the current json array member against the appid list
-			# this assumes we get the same order back we put in before
+			# match the current json array member against the appid list, this assumes we get the same order back we put in before
 			if ! "$JQ" -e ".data[$i].success" 1> /dev/null <<< "$RESPONSE"; then
 				writelog "INFO" "${FUNCNAME[0]} - The server response for '$SEARCHID' wasn't 'success'"
 			fi
@@ -2147,12 +2136,11 @@ function setGameVars {
 	if [ -d "$STEAM_COMPAT_LIBRARY_PATHS" ]; then
 		APPMAFE="${STEAM_COMPAT_LIBRARY_PATHS}/appmanifest_${AID}.acf"
 	else
-	# this should cover it though as well already
+		# this should cover it though as well already
 		APPMAFE="$(listAppManifests | grep -m1 "${1}.acf")"
 	fi
 
 	REAPSESTR="reaper SteamLaunch"
-
 	if grep -q "$REAPSESTR" <<< "$@"; then
 		HAVEREAP=1
 	else
@@ -23254,7 +23242,6 @@ function addNonSteamGameGui {
 			if [ -n "$NSGSET" ]; then
 				mapfile -d "|" -t -O "${#NSGSETARR[@]}" NSGSETARR < <(printf '%s' "$NSGSET")
 
-				# TODO check to make sure these all still work correctly (i.e. order is still correct) after SteamGridDB settings went in
 				writelog "INFO" "${FUNCNAME[0]} - The Non-Steam Game args are ${NSGSETARR[*]}"
 				# NSGSETARR[0] is blank space
 				# NSGSETARR[1] is Paths heading
@@ -23418,14 +23405,13 @@ function addNonSteamGame {
 		downloadArtFromSteamGridDB "$NOSTSGDBID" "$SGDBSEARCHENDPOINT_ICONS" "${NOSTICONNAME}" "" "" "" "" "" "" "replace" "1"
 	}
 
-	NOSTHIDE=0  # Does hide still work? Didn't seem to in my tests
+	NOSTHIDE=0  # Set in localconfig.vdf along with tags and overlay settings
 	NOSTADC=1
 	NOSTAO=1
 	NOSTVR=0
 	NOSTSTLLO=0
 	NOSTAUTOARTWORK=0
 	NOSTUSESGDB=0
-
 	for i in "$@"; do
 		case $i in
 			## General Non-Steam Game properties
@@ -23485,8 +23471,7 @@ function addNonSteamGame {
 
 						if [ -n "$NOSTCOMPATTOOLPATH" ]; then
 							NOSTCOMPATTOOL="$( getProtonInternalName "${NOSTCOMPATTOOLNAME};${NOSTCOMPATTOOLPATH}" )"
-						else
-							# i.e. if 'luxtorpeda' was passed, we don't have a path for this, so simply trust the user
+						else  # i.e. if 'luxtorpeda' was passed, we don't have a path for this, so simply trust the user
 							writelog "SKIP" "${FUNCNAME[0]} - Could not get Proton path for given Compatibility Tool '$NOSTCOMPATTOOLNAME' from ProtonCSV -- Simply assuming this internal name is valid and not known to SteamTinkerLaunch"
 							NOSTCOMPATTOOL="$NOSTCOMPATTOOLNAME"
 						fi
@@ -23702,8 +23687,6 @@ function addNonSteamGame {
 		printf '\x01%s\x00%s\x00' "ShortcutPath" ""
 		printf '\x01%s\x00%s\x00' "LaunchOptions" "$NOSTLAOP"
 
-		# Before we had an ifelse for this, checking if the var -eq 1, but we can just write the value as-is to the VDF
-		# Use either the defined value, which should be 1 or 0, or default to 0
 		printf '\x02%s\x00%b\x00\x00\x00' "IsHidden" "\x0${NOSTHIDE:-0}"
 		printf '\x02%s\x00%b\x00\x00\x00' "AllowDesktopConfig" "\x0${NOSTADC:-0}"
 		printf '\x02%s\x00%b\x00\x00\x00' "AllowOverlay" "\x0${NOSTAO:-0}"
@@ -23715,7 +23698,7 @@ function addNonSteamGame {
 		printf '\x02%s\x00\x00\x00\x00\x00' "LastPlayTime"
 		printf '\x01%s\x00\x00' "FlatpakAppID"
 		printf '\x00%s\x00' "tags"
-		splitTags "$NOSTTAGS"
+		splitTags "$NOSTTAGS"  # TODO tags are now stored in localconfig.vdf, see #949
 		printf '\x08\x08\x08\x08'
 	} >> "$SCPATH"
 
