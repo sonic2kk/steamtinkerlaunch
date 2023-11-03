@@ -21804,7 +21804,27 @@ function commandline {
 		# Why are you looking here? :-)
 
 		# writelog "INFO" "${FUNCNAME[0]} - Stub"
-		dlX64Dbg
+		LCLCFGVDF="$STUIDPATH/config/localconfig bsak.vdf"
+		# getVdfSection "Apps" "" "" "$LCLCFGVDF"
+
+		SHORTCUTLOCALCONFIGVDFSECTION="$( getNestedVdfSection "Apps/-222353304" "1" "$LCLCFGVDF" )"
+		# echo "$SHORTCUTLOCALCONFIGVDFSECTION"
+		editVdfSectionValue "$SHORTCUTLOCALCONFIGVDFSECTION" "OverlayAppEnable" "1" "$LCLCFGVDF"
+
+		# TESTVDF="$HOME/.local/share/Steam/config/config.vdf"
+		
+		# FOUNDSEC="$( getNestedVdfSection "Apps/-222353304" "1" "$LCLCFGVDF" )"
+		# FINDSECPROP="OverlayAppEnable"
+		# ORGSECPROP="$( trimWhitespaces "$( echo "${FOUNDSEC}" | grep "$FINDSECPROP" )" )"
+		# UPDATEDSECPROP="$( printf "\"%s\"\t\t\"%s\"" "$FINDSECPROP" "1" )"
+		# UPDATEDSEC="$( echo "${FOUNDSEC}" | sed "s/${ORGSECPROP}/${UPDATEDSECPROP}/g" )"
+
+		# echo "$ORGSECPROP"
+		# echo "$UPDATEDSECPROP"
+		# echo "$UPDATEDSEC"
+		# getNestedVdfSection "Steam/ShaderCacheManager/App/730" "" "$TESTVDF" 
+
+		# FOUNDVDFSECTION = editVdfSectionValue "$LCLCFGVDF" "Apps" "-222353304" "1" "OverlayAppEnable" "0"
 	elif [ "$1" == "mo2" ]; then
 		if [ -n "$2" ]; then
 			if [ "$2" == "download" ] || [ "$2" == "d" ]; then
@@ -22905,7 +22925,7 @@ function guessVdfIndent {
     BLOCKNAME="$( safequoteVdfBlockName "$1" )"  # Block to check the indentation level on
     VDF="$2"
 
-    grep -i "${BLOCKNAME}" "$VDF" | awk '{print gsub(/\t/,"")}'
+    grep -i "${BLOCKNAME}" "$VDF" | head -n1 | awk '{print gsub(/\t/,"")}'
 }
 
 ## Surround a VDF block name with quotes if it doesn't have any
@@ -22935,7 +22955,9 @@ function getVdfSection {
 
 	writelog "INFO" "${FUNCNAME[0]} - Searching for VDF block with name '$STARTPATTERN' in VDF file '$VDF'"
 
-    sed -n "/${INDENTEDSTARTPATTERN}/I,/^${INDENTEDENDPATTERN}/I p" "$VDF"
+	# TODO: the ^ match was added later on, ensure this doesn't break anything!
+    # TODO the { p; blah } was added later on, ensure this still works!
+	sed -n "/^${INDENTEDSTARTPATTERN}/I,/^${INDENTEDENDPATTERN}/I { p; /${INDENTEDENDPATTERN}/I q }" "$VDF"
 }
 
 ## Check if a VDF block (block_name) already exists inside a parent block (search_block)
@@ -22958,6 +22980,39 @@ function checkVdfSectionAlreadyExists {
 
     printf "%s" "$SEARCHBLOCKVDFSECTION" > "/tmp/tmp.vdf"
     getVdfSection "$BLOCKNAME" "" "" "/tmp/tmp.vdf" | grep -iq "$BLOCKNAME"
+}
+
+function getNestedVdfSection {
+	VDFPATH="$1"  # i.e. "TopLevel/SecondLevel/ThirdLevel"
+	INDENT="$2"  # indent to start searching from
+	VDF="$3"
+	
+	mapfile -t -d '/' VDFPATHARRAY < <(echo -n "$VDFPATH")
+	VDFPATHARRAYLEN="${#VDFPATHARRAY[*]}"
+	if [ "$VDFPATHARRAYLEN" -eq 0 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - VDFPATHARRY is empty, nothing to do"
+		return
+	fi
+	if [ -z "$INDENT" ]; then
+		INDENT="$(( $( guessVdfIndent "${VDFPATHARRAY[0]}" "$VDF" ) ))"
+	fi
+
+	# Use getVdfSection on each section it finds until we run out of 
+	CURRENTSECTION=""
+	for SECIND in "${!VDFPATHARRAY[@]}"; do
+		# echo "'${VDFPATHARRAY[$SECIND]}'"
+		SECTIONNAME="$( safequoteVdfBlockName "${VDFPATHARRAY[$SECIND]}" )"
+		writelog "INFO" "${FUNCNAME[0]} - Searching for section with name '$SECTIONNAME'"
+		NEXTSECTION="$( getVdfSection "$SECTIONNAME" "" "$INDENT" "$VDF" )"
+		if [ -n "$NEXTSECTION" ]; then
+			CURRENTSECTION="$NEXTSECTION"
+			((INDENT+=1))
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Found no matching section with name '$SECTIONNAME', bailing out"
+			break
+		fi
+	done
+	echo "$CURRENTSECTION"
 }
 
 ## Create entry in given VDF block with matching indentation (Case-INsensitive)
@@ -23031,6 +23086,45 @@ function createVdfEntry {
 
     ## Write out new string to calculated line in VDF file
     sed -i "${INSERTLINE}a\\${NEWBLOCKSTR}" "$VDF"
+}
+
+# Example usage
+function editVdfSectionValue {
+	# Replace newline and tab characters with \n and \t to make sed happy
+	function sanitiseVdfBlockForSed {
+		echo "$1" | awk '{gsub("\t", "\\t"); printf "%s\\n", $0}'
+		# echo "$1" | awk '{printf "%s\\n", $0}'
+	}
+
+	VDFSECTION="$1"  # VDF section text i.e. from getNestedVdfSection
+	VDFPROPERTYNAME="$2"  # i.e. 'OverlayAppEnable'
+	VDFPROPERTYVAL="$3"  # i.e. '1'
+	VDF="$4"
+
+	VDFPROPERTYORGVAL="$( echo "${VDFSECTION}" | grep "${VDFPROPERTYNAME}" )"
+	VDFPROPERTYORGVAL="$( trimWhitespaces "$VDFPROPERTYORGVAL" )"
+
+	VDFPROPERTYNEWVAL="$( createVdfPropertyString "${VDFPROPERTYNAME}" "${VDFPROPERTYVAL}" )"
+
+	UPDATEDVDFSECTION="$( echo "${VDFSECTION}" | sed "s/${VDFPROPERTYORGVAL}/${VDFPROPERTYNEWVAL}/g" )"
+	
+	# SANITISEDVDFSECTION="$( sanitiseVdfBlockForSed "${VDFSECTION}" )"
+	# SANITISEDUPDATEDVDFSECTION="$( sanitiseVdfBlockForSed "${UPDATEDVDFSECTION}" )"
+
+	BLOCKSTART="$( echo "$VDFSECTION" | head -n1 )"
+	BLOCKEND="$( echo "$VDFSECTION" | tail -n1 )"
+
+	echo "'$BLOCKSTART'"
+	echo "'$BLOCKEND'"
+
+	# sed -i "${BLOCKSTART}/,/${BLOCKEND}"
+	# sed -i "|${BLOCKSTART}|,|${BLOCKEND}|c\\${UPDATEDVDFSECTION}" "$VDF"
+
+}
+
+# Return a VDF property string
+function createVdfPropertyString {
+	printf "\"%s\"\t\t\"%s\"" "$1" "$2"
 }
 
 ## Get the internal name of the compatibility tool selected for all titles from the Steam Client Compatibility settings
