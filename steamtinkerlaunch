@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20231103-2"
+PROGVERS="v14.0.20231104-1 (updated-vdf-funcs)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -21801,30 +21801,52 @@ function commandline {
 	elif [ "$1" == "getslrbtn" ]; then  # Internal use only for the Main Menu button
 		fetchGameSLRGui "$2"
 	elif [ "$1" == "debug" ]; then
-		# Why are you looking here? :-)
+		## Why are you looking here? :-)
 
-		# writelog "INFO" "${FUNCNAME[0]} - Stub"
-		LCLCFGVDF="$STUIDPATH/config/localconfig bsak.vdf"
-		# getVdfSection "Apps" "" "" "$LCLCFGVDF"
+		DEBUGNOSTAID="-222353304"
 
-		SHORTCUTLOCALCONFIGVDFSECTION="$( getNestedVdfSection "Apps/-222353304" "1" "$LCLCFGVDF" )"
-		# echo "$SHORTCUTLOCALCONFIGVDFSECTION"
-		editVdfSectionValue "$SHORTCUTLOCALCONFIGVDFSECTION" "OverlayAppEnable" "1" "$LCLCFGVDF"
-
-		# TESTVDF="$HOME/.local/share/Steam/config/config.vdf"
+		## -----
 		
-		# FOUNDSEC="$( getNestedVdfSection "Apps/-222353304" "1" "$LCLCFGVDF" )"
-		# FINDSECPROP="OverlayAppEnable"
-		# ORGSECPROP="$( trimWhitespaces "$( echo "${FOUNDSEC}" | grep "$FINDSECPROP" )" )"
-		# UPDATEDSECPROP="$( printf "\"%s\"\t\t\"%s\"" "$FINDSECPROP" "1" )"
-		# UPDATEDSEC="$( echo "${FOUNDSEC}" | sed "s/${ORGSECPROP}/${UPDATEDSECPROP}/g" )"
+		## Parse JSON information about Non-Steam Game categories
+		NOUSCOEXISTS=0
+		DEBUG_LOCOVDF="$STUIDPATH/config/localconfig bsak.vdf"
 
-		# echo "$ORGSECPROP"
-		# echo "$UPDATEDSECPROP"
-		# echo "$UPDATEDSEC"
-		# getNestedVdfSection "Steam/ShaderCacheManager/App/730" "" "$TESTVDF" 
+		LOCOWESTO="$( getVdfSection "WebStorage" "" "" "$DEBUG_LOCOVDF" )"
+		LOCOUSCO="$( getVdfSectionValue "$LOCOWESTO" "user-collections" "1" )"
 
-		# FOUNDVDFSECTION = editVdfSectionValue "$LCLCFGVDF" "Apps" "-222353304" "1" "OverlayAppEnable" "0"
+		if [ -z "$LOCOUSCO" ]; then
+			echo "No user-collections information defined, creating new one"
+			NOUSCOEXISTS=1
+			LOCOUSCO="{}"
+		fi
+
+		LOCOUSCO="$( jq 'fromjson' <<< "$LOCOUSCO" )"
+
+		## -----
+
+		## Insert Non-Steam Game into user-collection 'hidden' category, creating it if it doesn't exist
+		# if ! jq -e '. | try(.hidden)' <<< "$LOCOUSCO" >/dev/null ; then
+		# 	echo "No hidden games, adding blank hidden category"
+		# 	LOCOUSCO="$( jq '. += { hidden: { id: "hidden", added: [], removed: [] } }' <<< "$LOCOUSCO" )"
+		# fi
+
+		# LOCOUSCO="$( jq '.hidden.added += [ 3917765712 ] | tojson' <<< "$LOCOUSCO" )"
+		
+		# if [ "$NOUSCOEXISTS" -eq 1 ]; then
+		# 	addVdfSectionValue "$LOCOWESTO" "user-collections" "$LOCOUSCO" "$VDF"
+		# else
+		#   ## TODO editVdfSectionValue doesn't work yet here because of the special characters in the blovk
+		# 	echo "Editing existing VDF value with '$LOCOUSCO'"
+		# 	editVdfSectionValue "$LOCOWESTO" "user-collections" "$LOCOUSCO" "$VDF"
+		# fi
+
+		## -----
+
+		## Update OverlayAppEnable for given shortcut in localconfig.vdf
+		SHORTCUTLOCALCONFIGVDFSECTION="$( getNestedVdfSection "Apps/${DEBUGNOSTAID}" "1" "$DEBUG_LOCOVDF" )"
+
+		getVdfSectionValue "$SHORTCUTLOCALCONFIGVDFSECTION" "OverlayAppEnable"
+		editVdfSectionValue "$SHORTCUTLOCALCONFIGVDFSECTION" "OverlayAppEnable" "1" "$DEBUG_LOCOVDF"
 	elif [ "$1" == "mo2" ]; then
 		if [ -n "$2" ]; then
 			if [ "$2" == "download" ] || [ "$2" == "d" ]; then
@@ -23088,43 +23110,67 @@ function createVdfEntry {
     sed -i "${INSERTLINE}a\\${NEWBLOCKSTR}" "$VDF"
 }
 
-# Example usage
+## Take in a VDF block and update a property in it, then update the original file with the updated block
+## We can use this to update the compatibility tool for an existing VDF block, or update some Non-Steam Game properties
 function editVdfSectionValue {
-	# Replace newline and tab characters with \n and \t to make sed happy
-	function sanitiseVdfBlockForSed {
-		echo "$1" | awk '{gsub("\t", "\\t"); printf "%s\\n", $0}'
-		# echo "$1" | awk '{printf "%s\\n", $0}'
-	}
-
 	VDFSECTION="$1"  # VDF section text i.e. from getNestedVdfSection
 	VDFPROPERTYNAME="$2"  # i.e. 'OverlayAppEnable'
 	VDFPROPERTYVAL="$3"  # i.e. '1'
 	VDF="$4"
-
-	VDFPROPERTYORGVAL="$( echo "${VDFSECTION}" | grep "${VDFPROPERTYNAME}" )"
-	VDFPROPERTYORGVAL="$( trimWhitespaces "$VDFPROPERTYORGVAL" )"
-
+	
+	VDFPROPERTYORGVAL="$( getVdfSectionValue "$VDFSECTION" "$VDFPROPERTYNAME" )"
 	VDFPROPERTYNEWVAL="$( createVdfPropertyString "${VDFPROPERTYNAME}" "${VDFPROPERTYVAL}" )"
 
-	UPDATEDVDFSECTION="$( echo "${VDFSECTION}" | sed "s/${VDFPROPERTYORGVAL}/${VDFPROPERTYNEWVAL}/g" )"
-	
-	# SANITISEDVDFSECTION="$( sanitiseVdfBlockForSed "${VDFSECTION}" )"
-	# SANITISEDUPDATEDVDFSECTION="$( sanitiseVdfBlockForSed "${UPDATEDVDFSECTION}" )"
+	# TODO this falls apart for sections that have nasty special characters that make sed grumpy, like in localconfig.vdf's 'WebStorage' block
+	# We need some way to address this
+	UPDATEDVDFSECTION="$( echo "${VDFSECTION}"| sed "s|${VDFPROPERTYORGVAL}|${VDFPROPERTYNEWVAL}|g" )"
 
-	BLOCKSTART="$( echo "$VDFSECTION" | head -n1 )"
-	BLOCKEND="$( echo "$VDFSECTION" | tail -n1 )"
+	backupVdfFile "$VDF"
 
-	echo "'$BLOCKSTART'"
-	echo "'$BLOCKEND'"
-
-	# sed -i "${BLOCKSTART}/,/${BLOCKEND}"
-	# sed -i "|${BLOCKSTART}|,|${BLOCKEND}|c\\${UPDATEDVDFSECTION}" "$VDF"
+	# Anything prettier would be preferred... But this seems like the best way without resorting to perl
+	TMPVDF="/tmp/updated.vdf"
+	awk -v RS= -v ORS= -v orgsection="${VDFSECTION}" -v updatedsection="${UPDATEDVDFSECTION}" '{gsub(orgsection, updatedsection)}1' "$VDF" > "$TMPVDF"
+	mv "$TMPVDF" "$VDF"
 
 }
 
-# Return a VDF property string
+## Add a single value to bottom of a given VDF section
+function addVdfSectionValue {
+	VDFSECTION="$1"
+	VDFPROPERTYNAME="$2"
+	VDFPROPERTYVAL="$3"
+	VDF="$4"
+
+	VDFSECTIONEND="$( echo "$VDFSECTION" | tail -n1 )"
+	VDFSECTIONENDLINE="$( echo "$VDFSECTION" | grep -in "$VDFSECTIONEND" | cut -d ':' -f1 )"
+	VDFSECTIONINSERTLINE="$(( VDFSECTIONENDLINE - 1 ))"
+
+	VDFSECTIONENDINDENTAMT="$( echo "$VDFSECTIONEND" | awk '{print gsub(/\t/,"")}' )"
+	VDFPROPERTYINDENT="$( generateVdfIndentString "$(( VDFSECTIONENDINDENTAMT + 1 ))" "" )"
+
+	VDFPROPERTY="${VDFPROPERTYINDENT}$( createVdfPropertyString "$VDFPROPERTYNAME" "$VDFPROPERTYVAL" )"
+
+	sed -i "${VDFSECTIONINSERTLINE}a\\${VDFPROPERTY}" "$VDF"
+}
+
+## Extract value from text-based VDF block
+## ex: "ExampleProperty"		"ex-val"
+function getVdfSectionValue {
+	VDFSECTION="$1"  # VDF section text i.e. from getNestedVdfSection
+	VDFPROPERTYNAME="$2"  # i.e. 'OverlayAppEnable'
+	ONLYVALUE="$3"
+
+	VDFVAL="$( trimWhitespaces "$(echo "${VDFSECTION}" | grep "${VDFPROPERTYNAME}")" )"
+	if [ -n "$ONLYVALUE" ]; then
+		echo "$VDFVAL" | cut -f3
+	else
+		echo "$VDFVAL"
+	fi
+}
+
+## Return a VDF property string
 function createVdfPropertyString {
-	printf "\"%s\"\t\t\"%s\"" "$1" "$2"
+	printf "%s\t\t%s" "$( safequoteVdfBlockName "$1" )" "$( safequoteVdfBlockName "$2" )"
 }
 
 ## Get the internal name of the compatibility tool selected for all titles from the Steam Client Compatibility settings
