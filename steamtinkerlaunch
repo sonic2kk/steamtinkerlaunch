@@ -21830,23 +21830,37 @@ function commandline {
 			LOCOUSCO="$( jq '. += { hidden: { id: "hidden", added: [], removed: [] } }' <<< "$LOCOUSCO" )"
 		fi
 
-		LOCOUSCO="$( jq '.hidden.added += [ 3917765712 ] | tojson' <<< "$LOCOUSCO" )"
+		# return
+
+		LOCOUSCO="$( jq '.hidden.added += [ 3917765712 ]' <<< "$LOCOUSCO" )"
 		
-		# if [ "$NOUSCOEXISTS" -eq 1 ]; then
-			# addVdfSectionValue "$LOCOWESTO" "user-collections" "$LOCOUSCO" "$VDF"
-		# else
-			## TODO editVdfSectionValue doesn't work yet here because of the special characters in the blovk
-			# echo "Editing existing VDF value with '$LOCOUSCO'"
-			# editVdfSectionValue "$LOCOWESTO" "user-collections" "$LOCOUSCO" "$VDF"
-		# fi
+		# prepareJSONVdfProperty "$LOCOUSCO"
+
+		# addVdfSection
+		
+		## These are both close to working now, editVdfSectionValue's awk breaks now
+		# addVdfSectionValue "$LOCOWESTO" "user-collections" "$LOCOUSCO" "$DEBUG_LOCOVDF"
+		# editVdfSectionValue "$LOCOWESTO" "user-collections" "$LOCOUSCO" "$DEBUG_LOCOVDF"
+		
+		# addVdfSectionValue ""
+
+		if [ "$NOUSCOEXISTS" -eq 1 ]; then
+			echo "Adding new section into VDF"
+			addVdfSectionValue "$LOCOWESTO" "user-collections" "$LOCOUSCO" "$VDF"
+		else
+			##TODO editVdfSectionValue doesn't work yet here because of the special characters in the blovk
+			echo "Editing existing VDF value with '$LOCOUSCO'"
+			editVdfSectionValue "$LOCOWESTO" "user-collections" "$LOCOUSCO" "$VDF"
+		fi
 
 		## -----
 
 		## Update OverlayAppEnable for given shortcut in localconfig.vdf
-		SHORTCUTLOCALCONFIGVDFSECTION="$( getNestedVdfSection "Apps/${DEBUGNOSTAID}" "1" "$DEBUG_LOCOVDF" )"
+		# SHORTCUTLOCALCONFIGVDFSECTION="$( getNestedVdfSection "Apps/${DEBUGNOSTAID}" "1" "$DEBUG_LOCOVDF" )"
 
+		## These still work fine
 		# getVdfSectionValue "$SHORTCUTLOCALCONFIGVDFSECTION" "OverlayAppEnable"
-		editVdfSectionValue "$SHORTCUTLOCALCONFIGVDFSECTION" "OverlayAppEnable" "0" "$DEBUG_LOCOVDF"
+		# editVdfSectionValue "$SHORTCUTLOCALCONFIGVDFSECTION" "OverlayAppEnable" "1" "$DEBUG_LOCOVDF"
 	elif [ "$1" == "mo2" ]; then
 		if [ -n "$2" ]; then
 			if [ "$2" == "download" ] || [ "$2" == "d" ]; then
@@ -23117,32 +23131,27 @@ function editVdfSectionValue {
 	VDFPROPERTYNAME="$2"  # i.e. 'OverlayAppEnable'
 	VDFPROPERTYVAL="$3"  # i.e. '1'
 	VDF="$4"
-	
-	# VDFPROPERTYORGVAL="$( getVdfSectionValue "$VDFSECTION" "$VDFPROPERTYNAME" | sed 's/[]\/$*.^[]/\\&/g' )"
-	# VDFPROPERTYORGVAL="$( getVdfSectionValue "$VDFSECTION" "$VDFPROPERTYNAME" )"
-	# VDFPROPERTYNEWVAL="$( createVdfPropertyString "${VDFPROPERTYNAME}" "${VDFPROPERTYVAL}" )"
-	# UPDATEDVDFSECTION="$( echo "${VDFSECTION}" | sed "s@${VDFPROPERTYORGVAL}@${VDFPROPERTYNEWVAL}@g" )"
-	# echo "$UPDATEDVDFSECTION" | awk 'BEGIN{FS=OFS="\""} {$2=gensub(/"/, "\\\\\"", "g", $2); $4=gensub(/"/, "\\\\\"", "g", $4); print}'
-	# echo "$UPDATEDVDFSECTION" | 
 
-	# return
+	VDFPROPERTYORGVAL="$( getVdfSectionValue "$VDFSECTION" "$VDFPROPERTYNAME" | sed 's/[]\/$*.^[]/\\&/g' )"
+	VDFPROPERTYNEWVAL="$( createVdfPropertyString "${VDFPROPERTYNAME}" "${VDFPROPERTYVAL}" )"
+
+	UPDATEDVDFSECTION="$( echo "${VDFSECTION}"| sed "s/${VDFPROPERTYORGVAL}/${VDFPROPERTYNEWVAL}/g" )"
+
 
 	# backupVdfFile "$VDF"
 
-	VDFPROPERTYORGVAL="$( getVdfSectionValue "$VDFSECTION" "$VDFPROPERTYNAME" )"
-	VDFPROPERTYNEWVAL="$( createVdfPropertyString "${VDFPROPERTYNAME}" "${VDFPROPERTYVAL}" )"
-
-	# TODO this falls apart for sections that have nasty special characters that make sed grumpy, like in localconfig.vdf's 'WebStorage' block
-	# We need some way to address this
-	UPDATEDVDFSECTION="$( echo "${VDFSECTION}"| sed "s|${VDFPROPERTYORGVAL}|${VDFPROPERTYNEWVAL}|g" )"
-
-	backupVdfFile "$VDF"
-
-	# Anything prettier would be preferred... But this seems like the best way without resorting to perl
+	# Anything prettier would be preferred (without the tmp file)... But this seems like the best way without resorting to perl
 	TMPVDF="/tmp/updated.vdf"
-	awk -v RS= -v ORS= -v orgsection="${VDFSECTION}" -v updatedsection="${UPDATEDVDFSECTION}" '{gsub(orgsection, updatedsection)}1' "$VDF" > "$TMPVDF"
-	mv "$TMPVDF" "$VDF"
-
+	###
+	## this generally works but breaks when trying to sub in json strings
+	###
+	# awk -v RS= -v ORS= -v orgsection="${VDFSECTION}" -v updatedsection="$UPDATEDVDFSECTION" '{gsub(orgsection, updatedsection)}1' "$VDF" > "$TMPVDF"
+	# mv "$TMPVDF" "$VDF"
+	###
+	# awk -v RS= -v ORS= -v orgsection="${VDFSECTION}" -v updatedsection="$UPDATEDVDFSECTION" '{gsub(orgsection, updatedsection)}1' "$VDF"
+	###
+	VDFSECTIONNAME="$( echo "$UPDATEDVDFSECTION" | head -n1 )"
+	VDFSECTIONEND="$( echo "$UPDATEDVDFSECTION" | tail -n1 )"
 }
 
 ## Add a single value to bottom of a given VDF section
@@ -23160,8 +23169,9 @@ function addVdfSectionValue {
 	VDFPROPERTYINDENT="$( generateVdfIndentString "$(( VDFSECTIONENDINDENTAMT + 1 ))" "" )"
 
 	VDFPROPERTY="${VDFPROPERTYINDENT}$( createVdfPropertyString "$VDFPROPERTYNAME" "$VDFPROPERTYVAL" )"
-
-	sed -i "${VDFSECTIONINSERTLINE}a\\${VDFPROPERTY}" "$VDF"
+	
+	## TODO inserts into wrong line, but it actually writes out the JSON correctly now!!!!
+	sed -i "${VDFSECTIONINSERTLINE}a\\\\${VDFPROPERTY}" "$VDF"
 }
 
 ## Extract value from text-based VDF block
@@ -23181,7 +23191,26 @@ function getVdfSectionValue {
 
 ## Return a VDF property string
 function createVdfPropertyString {
-	printf "%s\t\t%s" "$( safequoteVdfBlockName "$1" )" "$( safequoteVdfBlockName "$2" )"
+	if jq -e '.' 1>/dev/null 2>&1 <<<"$2"; then
+		writelog "INFO" "${FUNCNAME[0]} - Looks like our input string '$2' is JSON -- Creating JSON VDF Property"
+		printf "%s\t\t%s" "$( safequoteVdfBlockName "$1" )" "$( prepareJSONVdfProperty "$2" )"  # Don't use safequote on JSON string
+	else
+		writelog "INFO" "${FUNCNAME[0]} - Generating normal VDF property string for '$1: $2'"
+		printf "%s\t\t%s" "$( safequoteVdfBlockName "$1" )" "$( safequoteVdfBlockName "$2" )"
+	fi
+}
+
+## Format a JSON entry by double-escaping it and removing any surrounding quotes so that it can be written out into the VDF correctly
+## i.e. turn "\"{\\\"foo\\\": \\\"bar\\\"}\"" -> \"{\\\"foo\\\": \\\"bar\\\"}\"
+function prepareJSONVdfProperty {
+	# if ! jq -e '.' 1>/dev/null 2>&1 <<<"$1"; then
+	# 	writelog "SKIP" "${FUNCNAME[0]} - Doesn't look like our input string '$1' is valid JSON -- Skipping"
+	# 	echo "${1}"
+	# fi
+
+	SANITISEDVDFJSON="$( jq '. | tojson | tojson' <<< "$1" )"
+	SANITISEDVDFJSON="${SANITISEDVDFJSON#\"}"  # Remove any plain quote from start
+	echo "${SANITISEDVDFJSON%\"}"  # Remove any plain quote from end
 }
 
 ## Get the internal name of the compatibility tool selected for all titles from the Steam Client Compatibility settings
