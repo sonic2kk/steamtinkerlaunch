@@ -21806,7 +21806,8 @@ function commandline {
 		DEBUGNOSTAID="-222353304"
 
 		## -----
-		## Parse JSON information about Non-Steam Game categories
+		## Mark Non-Steam Game game with given AppID as 'hidden'
+		## Could be extended to add to categories once we can get the category
 		NOUSCOEXISTS=0
 		DEBUG_LOCOVDF="$STUIDPATH/config/localconfig bsak.vdf"
 
@@ -21817,10 +21818,10 @@ function commandline {
 			echo "No user-collections information defined, creating new one"
 			# shellcheck disable=SC2034
 			NOUSCOEXISTS=1  # debug var
-			LOCOUSCO="{}"
+			LOCOUSCO="\"{}\""
 		fi
 
-		LOCOUSCO="$( jq 'fromjson' <<< "$LOCOUSCO" )"
+		LOCOUSCO="$( echo "$LOCOUSCO" | jq 'fromjson' )"
 
 		## -----
 		## Insert Non-Steam Game into user-collection 'hidden' category, creating it if it doesn't exist
@@ -21829,21 +21830,23 @@ function commandline {
 			LOCOUSCO="$( jq '. += { hidden: { id: "hidden", added: [], removed: [] } }' <<< "$LOCOUSCO" )"
 		fi
 
-		LOCOUSCO="$( jq '.hidden.added += [ 4924117535 ]' <<< "$LOCOUSCO" )"
+		LOCOUSCO="$( jq '.hidden.added += [ 9999999999 ]' <<< "$LOCOUSCO" )"
 
-		# if [ "$NOUSCOEXISTS" -eq 1 ]; then
-		# 	echo "Adding new section into VDF"
-		# 	addVdfSectionValue "$LOCOWESTO" "user-collections" "$LOCOUSCO" "$DEBUG_LOCOVDF"
-		# else
-		# 	echo "Editing existing VDF value with '$LOCOUSCO'"
-		# 	editVdfSectionValue "$LOCOWESTO" "user-collections" "$LOCOUSCO" "$DEBUG_LOCOVDF"
-		# fi
+		if [ "$NOUSCOEXISTS" -eq 1 ]; then
+			echo "Adding new section into VDF"
+			addVdfSectionValue "$LOCOWESTO" "user-collections" "$LOCOUSCO" "$DEBUG_LOCOVDF"
+		else
+			echo "Editing existing VDF value with '$LOCOUSCO'"
+			editVdfSectionValue "$LOCOWESTO" "user-collections" "$LOCOUSCO" "$DEBUG_LOCOVDF"
+		fi
+
+		# addVdfSectionValue "$LOCOWESTO" "test-val" "testvall" "$DEBUG_LOCOVDF"
 
 		## -----
 
 		## Update OverlayAppEnable for given shortcut in localconfig.vdf
-		SHORTCUTLOCALCONFIGVDFSECTION="$( getNestedVdfSection "Apps/${DEBUGNOSTAID}" "1" "$DEBUG_LOCOVDF" )"
-		editVdfSectionValue "$SHORTCUTLOCALCONFIGVDFSECTION" "OverlayAppEnable" "0" "$DEBUG_LOCOVDF"
+		# SHORTCUTLOCALCONFIGVDFSECTION="$( getNestedVdfSection "Apps/${DEBUGNOSTAID}" "1" "$DEBUG_LOCOVDF" )"
+		# editVdfSectionValue "$SHORTCUTLOCALCONFIGVDFSECTION" "OverlayAppEnable" "0" "$DEBUG_LOCOVDF"
 		# getVdfSectionValue "$SHORTCUTLOCALCONFIGVDFSECTION" "OverlayAppEnable"
 	elif [ "$1" == "mo2" ]; then
 		if [ -n "$2" ]; then
@@ -23125,11 +23128,7 @@ function editVdfSectionValue {
 
 	backupVdfFile "$VDF"
 
-	## Thanks to StackOverflow for this answer, though as noted, this may break down if the file exceeds 1mb
-	## Probably won't in most cases.
-	VDFCONTENTS="$( cat "$VDF" )"
-	UPDATEDVDFCONTENTS="${VDFCONTENTS//"$VDFSECTION"/"$UPDATEDVDFSECTION"}"
-	printf "%s\n" "$UPDATEDVDFCONTENTS" > "$VDF"
+	substituteVdfSection "$VDFSECTION" "$UPDATEDVDFSECTION" "$VDF"
 }
 
 ## Add a single value to bottom of a given VDF section
@@ -23147,9 +23146,21 @@ function addVdfSectionValue {
 	VDFPROPERTYINDENT="$( generateVdfIndentString "$(( VDFSECTIONENDINDENTAMT + 1 ))" "" )"
 
 	VDFPROPERTY="${VDFPROPERTYINDENT}$( createVdfPropertyString "$VDFPROPERTYNAME" "$VDFPROPERTYVAL" )"
-	
-	## TODO inserts into wrong line, but it actually writes out the JSON correctly now!!!!
-	sed -i "${VDFSECTIONINSERTLINE}a\\\\${VDFPROPERTY}" "$VDF"
+	UPDATEDVDFSECTION="$( echo "$VDFSECTION" | sed "${VDFSECTIONINSERTLINE}a\\${VDFPROPERTY}" )"
+
+	substituteVdfSection "$VDFSECTION" "$UPDATEDVDFSECTION" "$VDF"
+}
+
+## Use parameter expansion to replace old block with new block in VDF file
+## Thanks to StackOverflow for this answer, though was noted this may break down if the file exceeds 1mb -- Should work for us though
+function substituteVdfSection {
+	VDFOLDSECTION="$1"
+	VDFNEWSECTION="$2"
+	VDF="$3"
+
+	VDFCONTENTS="$( cat "$VDF" )"
+	UPDATEDVDFCONTENTS="${VDFCONTENTS//"$VDFOLDSECTION"/"$VDFNEWSECTION"}"
+	printf "%s\n" "$UPDATEDVDFCONTENTS" > "$VDF"
 }
 
 ## Extract value from text-based VDF block
