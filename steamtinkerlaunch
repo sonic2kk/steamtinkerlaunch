@@ -7945,6 +7945,8 @@ function getGameDir {
 	fi
 }
 
+### BEGIN BINARY VDF FUNCTIONS ###
+
 # Convert Steam Shortcut AppID from hex to 32bit unsigned integer
 function convertSteamShortcutAppID {
     SHORTCUTAPPIDHEX="$1"
@@ -7966,7 +7968,7 @@ function parseSteamShortcutEntryHex {
 	convertSteamShortcutHex "$( printf "$SHORTCUTSVDFINPUTHEX" | grep -oP "${SHORTCUTSVDFMATCHPATTERN}\K.*?(?=${SHORTCUTVDFENDPAT})" )"  # Grep for pattern, convert to text
 }
 
-# Find shortcut by AppID and return the hex entry
+# Find shortcut entry by AppID and return the hex
 function findSteamShortcutByAppID {
 	SHORTCUTENTRYAID="$1"
 
@@ -7981,33 +7983,23 @@ function findSteamShortcutByAppID {
 	done <<< "$( getSteamShortcutHex )"
 }
 
-# Edit shortcut entry column with new text value
-# replaces content between start and end pattern and replaces it with the input string converted to hex
-# function editSteamShortcutEntryColumn {
-# 	# Take column including start and end pattern so we get an exact match
-# 	# Edit the value between the start and end pattern
+## Takes a shortcut appid, gets the entry, updates the given column value, replaces the original hex section, writes out new hex string to `shortcuts.vdf`
+function editSteamShortcutEntry {
+	SCPATH="$STUIDPATH/config/$SCVDF"  # TODO make this a globally accessible path instead of hardcoding it everywhere
 
-# 	writelog "INFO" "${FUNCNAME[0]} - STUB"
-# }
+	SHORTCUTENTRYAID="$1"  # i.e. 23435463
+	SHORTCUTCOLUMN="$2"  # i.e. "appname"
+	SHORTCUTNEWVAL="$3"  # i.e. "New Name"
 
-# Takes a Steam Shortcut AppID, finds the shortcut with that AppID, and then updates a given field i.e. "name"
-# example usage: editSteamShortcutEntry "123456789" "appname" "New Name"
-# function editSteamShortcutEntry {
-	# SHORTCUTENTRYAID="$1"
-	# ORGSHORTCUTENTRYHEX="$( findSteamShortcutByAppID "$SHORTCUTENTRYAID" )"
-	# writelog "INFO" "${FUNCNAME[0]} - STUB"
-# }
+	SHORTCUTSCONTENT="$( getSteamShortcutHex )"
+	SHORTCUTSENTRY="$( findSteamShortcutByAppID "$SHORTCUTENTRYAID" )"
 
+	# TODO get column with matching name and replace the hex value with the new value
+	# we will need to encode the new value, then replace the original pattern with the new one
+	# Once we have the update shortcut block, replace it in the SHORTCUTSCONTENT, then write to shortcuts.vdf
 
-
-## TODO may be unnecessary
-# Find the icon column of a given Steam shortcut hex entry and update it
-# example usage:  editSteamShortcutEntryIcon "<hexblock>" "/path/to/new_icon.png"
-# function editSteamShortcutEntryIcon {
-# 	writelog "INFO" "${FUNCNAME[0]} - STUB"
-# 	# TODO get icon block including start and end patterns
-# 	# TODO pass this to 'editSteamShortcutEntryColumn'
-# }
+	# return new shortcut hex
+}
 
 # Get shortcuts.vdf hex and grep each entry using start and end patterns (including a special case for the beginning of shortcuts.vdf)
 function getSteamShortcutHex {
@@ -8040,6 +8032,8 @@ function parseSteamShortcutEntryExe {
 function parseSteamShortcutEntryStartDir {
 	parseSteamShortcutEntryHex "$1" "${SHORTCUTVDFSTARTDIRHEXPAT}"
 }
+
+### END BINARY VDF FUNCTIONS ###
 
 function getGameWindowName {
 	if [ -n "$GAMEWINDOW" ] && [ "$GAMEWINDOW" != "$NON" ]; then
