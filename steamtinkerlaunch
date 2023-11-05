@@ -21805,6 +21805,11 @@ function commandline {
 
 		DEBUGNOSTAID="-222353304"
 
+		# DEBUG_LOCOVDF="$STUIDPATH/config/localconfig bsak.vdf"
+
+		## Get nested VDF section
+		# getNestedVdfSection "Valve/Steam/Apps/7/cloud" "2" "$DEBUG_LOCOVDF"
+
 		## -----
 		## Mark Non-Steam Game game with given AppID as 'hidden'
 		## Could be extended to add to categories once we can get the category
@@ -21823,14 +21828,13 @@ function commandline {
 
 		LOCOUSCO="$( echo "$LOCOUSCO" | jq 'fromjson' )"
 
-		## -----
 		## Insert Non-Steam Game into user-collection 'hidden' category, creating it if it doesn't exist
 		if ! jq -e '. | try(.hidden)' <<< "$LOCOUSCO" >/dev/null ; then
 			echo "No hidden games, adding blank hidden category"
 			LOCOUSCO="$( jq '. += { hidden: { id: "hidden", added: [], removed: [] } }' <<< "$LOCOUSCO" )"
 		fi
 
-		LOCOUSCO="$( jq '.hidden.added += [ 9999999999 ]' <<< "$LOCOUSCO" )"
+		LOCOUSCO="$( jq '.hidden.added += [ 1234567890 ]' <<< "$LOCOUSCO" )"
 
 		if [ "$NOUSCOEXISTS" -eq 1 ]; then
 			echo "Adding new section into VDF"
@@ -21840,13 +21844,13 @@ function commandline {
 			editVdfSectionValue "$LOCOWESTO" "user-collections" "$LOCOUSCO" "$DEBUG_LOCOVDF"
 		fi
 
-		# addVdfSectionValue "$LOCOWESTO" "test-val" "testvall" "$DEBUG_LOCOVDF"
+		addVdfSectionValue "$LOCOWESTO" "test-val" "testvall" "$DEBUG_LOCOVDF"
 
 		## -----
 
 		## Update OverlayAppEnable for given shortcut in localconfig.vdf
-		# SHORTCUTLOCALCONFIGVDFSECTION="$( getNestedVdfSection "Apps/${DEBUGNOSTAID}" "1" "$DEBUG_LOCOVDF" )"
-		# editVdfSectionValue "$SHORTCUTLOCALCONFIGVDFSECTION" "OverlayAppEnable" "0" "$DEBUG_LOCOVDF"
+		SHORTCUTLOCALCONFIGVDFSECTION="$( getNestedVdfSection "Apps/${DEBUGNOSTAID}" "1" "$DEBUG_LOCOVDF" )"
+		editVdfSectionValue "$SHORTCUTLOCALCONFIGVDFSECTION" "OverlayAppEnable" "0" "$DEBUG_LOCOVDF"
 		# getVdfSectionValue "$SHORTCUTLOCALCONFIGVDFSECTION" "OverlayAppEnable"
 	elif [ "$1" == "mo2" ]; then
 		if [ -n "$2" ]; then
@@ -22967,6 +22971,7 @@ function getVdfSection {
     ENDPATTERN="${2:-\}}"  # Default end pattern to end of block
     INDENT="$3"
     VDF="$4"
+	STOPAFTERFIRSTMATCH="$5"
 
     if [ -z "$INDENT" ]; then
         INDENT="$(( $( guessVdfIndent "$STARTPATTERN" "$VDF" ) ))"
@@ -22978,9 +22983,13 @@ function getVdfSection {
 
 	writelog "INFO" "${FUNCNAME[0]} - Searching for VDF block with name '$STARTPATTERN' in VDF file '$VDF'"
 
-	# TODO: the ^ match was added later on, ensure this doesn't break anything!
-    # TODO the { p; blah } was added later on, ensure this still works!
-	sed -n "/^${INDENTEDSTARTPATTERN}/I,/^${INDENTEDENDPATTERN}/I { p; /${INDENTEDENDPATTERN}/I q }" "$VDF"
+	# This is a very hacky solution to allow 'getNestedVdfSection' to use this function
+	# It needs the start pattern exact match but other functions can't use this
+	if [ -n "$STOPAFTERFIRSTMATCH" ]; then
+		sed -n "/${INDENTEDSTARTPATTERN}/I,/^${INDENTEDENDPATTERN}/I { p; /${INDENTEDENDPATTERN}/I q }" "$VDF"
+	else
+		sed -n "/${INDENTEDSTARTPATTERN}/I,/^${INDENTEDENDPATTERN}/I p" "$VDF"
+	fi
 }
 
 ## Check if a VDF block (block_name) already exists inside a parent block (search_block)
@@ -23009,7 +23018,7 @@ function getNestedVdfSection {
 	VDFPATH="$1"  # i.e. "TopLevel/SecondLevel/ThirdLevel"
 	INDENT="$2"  # indent to start searching from
 	VDF="$3"
-	
+
 	mapfile -t -d '/' VDFPATHARRAY < <(echo -n "$VDFPATH")
 	VDFPATHARRAYLEN="${#VDFPATHARRAY[*]}"
 	if [ "$VDFPATHARRAYLEN" -eq 0 ]; then
@@ -23020,13 +23029,14 @@ function getNestedVdfSection {
 		INDENT="$(( $( guessVdfIndent "${VDFPATHARRAY[0]}" "$VDF" ) ))"
 	fi
 
-	# Use getVdfSection on each section it finds until we run out of 
+	# Use getVdfSection on each section it finds until we run out of
 	CURRENTSECTION=""
 	for SECIND in "${!VDFPATHARRAY[@]}"; do
 		# echo "'${VDFPATHARRAY[$SECIND]}'"
 		SECTIONNAME="$( safequoteVdfBlockName "${VDFPATHARRAY[$SECIND]}" )"
 		writelog "INFO" "${FUNCNAME[0]} - Searching for section with name '$SECTIONNAME'"
-		NEXTSECTION="$( getVdfSection "$SECTIONNAME" "" "$INDENT" "$VDF" )"
+		NEXTSECTION="$( getVdfSection "$SECTIONNAME" "" "$INDENT" "$VDF" "X" )"
+		writelog "INFO" "${FUNCNAME[0]} - NEXTSECTION is '$NEXTSECTION'"
 		if [ -n "$NEXTSECTION" ]; then
 			CURRENTSECTION="$NEXTSECTION"
 			((INDENT+=1))
@@ -23121,7 +23131,7 @@ function editVdfSectionValue {
 
 	VDFPROPERTYORGVAL="$( getVdfSectionValue "$VDFSECTION" "$VDFPROPERTYNAME" | sed 's/[]\/$*.^[]/\\&/g' )"
 	VDFPROPERTYNEWVAL="$( createVdfPropertyString "${VDFPROPERTYNAME}" "${VDFPROPERTYVAL}" )"
-	
+
 	# maybe later, PR welcome if you can do this :-)
 	#shellcheck disable=SC2001
 	UPDATEDVDFSECTION="$( echo "${VDFSECTION}"| sed "s/${VDFPROPERTYORGVAL}/${VDFPROPERTYNEWVAL}/g" )"
