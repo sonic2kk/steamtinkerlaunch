@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20231026-1"
+PROGVERS="v14.0.20231105-3"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -392,13 +392,6 @@ WINE_FSR_CUSTOM_RESOLUTIONS=(
 	"3839x1108"
 )
 
-#PROTON37="858280"
-#PROTON316="961940"
-#PROTON42="1054830"
-#PROTON411="1113280"
-#PROTON50="1245040"
-#PROTON513="1420170"
-
 # Hex patterns for various blocks in shortcuts.vdf that we can grep for -- Casing matters!
 SHORTCUTVDFFILESTARTHEXPAT="0073686f7274637574730000300002"  # Bytes denoting the beginning of the shortcuts.vdf file
 SHORTCUTVDFENTRYBEGINHEXPAT="00080800.*?0002"  # Pattern for beginning of shortcut entry in shortcuts.vdf -- Beginning of file has a different pattern, but every other pattern begins like this
@@ -460,7 +453,6 @@ function initAID {
 
 	if [ -z "$AID" ] || [ "$AID" -eq "0" ]; then
 		# shellcheck disable=SC2154		# SteamAppId comes from Steam
-
 		if [ -z "$SteamAppId" ]; then
 			if grep -q "^play" <<< "$@" && [ -n "$2" ] && [ -z "$3" ] && [ "$2" != "gui" ] && [ "$2" != "ed" ]; then
 				STLPLAY=1
@@ -650,7 +642,8 @@ function setSteamPaths {
 			STUIDPATH="$SUSDA/$STEAMUSERID"
 		else
 			if [ -d "$SUSDA" ]; then
-			# this works for 99% of all users, because most do have 1 steamuser on their system
+				# this works for 99% of all users, because most do have 1 steamuser on their system
+				# could pick most recent user (i.e. the current logged in user) from 'loginusers.vdf'
 				STUIDPATH="$(find "$SUSDA" -maxdepth 1 -type d -name "[1-9]*" | head -n1)"
 				STEAMUSERID="${STUIDPATH##*/}"
 			else
@@ -940,7 +933,6 @@ function writeDesktopFile {
 }
 
 function createDesktopIconFile {
-
 	if [ "$1" -eq "$1" ] 2>/dev/null; then
 		AID="$1"
 	else
@@ -1413,7 +1405,6 @@ function checkSGDbApi {
 ## Generic function to fetch some artwork from SteamGridDB based on an endpoint
 ## TODO: Steam only officially supports PNGs, test to see if WebP works when manually copied, and if it doesn't, we should try to only download PNG files
 ## TODO: Add max filesize option? Some artworks are really big, we should skip ones that are too large (though this may mean many animated APNG artworks will get skipped, because APNG can be huge)
-## TODO: Retry/Timeout when fetching artwork
 function downloadArtFromSteamGridDB {
 	if checkSGDbApi && [ "$STLPLAY" -eq 0 ]; then
 		# Required
@@ -1430,7 +1421,6 @@ function downloadArtFromSteamGridDB {
 		SEARCHEPILEPSY="$9"
 
 		SGDBHASFILE="${10:-SGDBHASFILE}"  # Option to override action to take when file already exists
-
 		FORCESGDBDLTOSTEAM="${11}"  # Option to force downloading artwork to Steam Grid folder
 
 		SGDB_ENDPOINT_STR="${SEARCHENDPOINT}/$(echo "$SEARCHID" | awk '{print $1}' | paste -s -d, -)?"
@@ -1479,8 +1469,7 @@ function downloadArtFromSteamGridDB {
 		fi
 
 		for i in $(seq 0 $(("$RESPONSE_LENGTH" - 1))); do
-			# match the current json array member against the appid list
-			# this assumes we get the same order back we put in before
+			# match the current json array member against the appid list, this assumes we get the same order back we put in before
 			if ! "$JQ" -e ".data[$i].success" 1> /dev/null <<< "$RESPONSE"; then
 				writelog "INFO" "${FUNCNAME[0]} - The server response for '$SEARCHID' wasn't 'success'"
 			fi
@@ -2188,12 +2177,11 @@ function setGameVars {
 	if [ -d "$STEAM_COMPAT_LIBRARY_PATHS" ]; then
 		APPMAFE="${STEAM_COMPAT_LIBRARY_PATHS}/appmanifest_${AID}.acf"
 	else
-	# this should cover it though as well already
+		# this should cover it though as well already
 		APPMAFE="$(listAppManifests | grep -m1 "${1}.acf")"
 	fi
 
 	REAPSESTR="reaper SteamLaunch"
-
 	if grep -q "$REAPSESTR" <<< "$@"; then
 		HAVEREAP=1
 	else
@@ -9437,25 +9425,14 @@ function removeReShadeSpecialKInstallation {
 	KEEPRESHADEINI="${1:-0}"
 
 	# DLLs and JSON files
-	if [ -f "$INSTDESTDIR/$RS_32" ]; then
-		rm "$INSTDESTDIR/$RS_32"
-	fi
-
-	if [ -f "$INSTDESTDIR/${RS_32//.dll/.json}" ]; then
-		rm "$INSTDESTDIR/${RS_32//.dll/.json}"
-	fi
-
-	if [ -f "$INSTDESTDIR/$RS_64" ]; then
-		rm "$INSTDESTDIR/$RS_64"
-	fi
-
-	if [ -f "$INSTDESTDIR/${RS_64//.dll/.json}" ]; then
-		rm "$INSTDESTDIR/${RS_64//.dll/.json}"
-	fi
+	RESHSPEKREMOVEDLLS=( "$INSTDESTDIR/$RS_32" "$INSTDESTDIR/${RS_32//.dll/.json}" "$INSTDESTDIR/$RS_64" "$INSTDESTDIR/${RS_64//.dll/.json}" )
+	for RESHSPEKREMOVEDLL in "${RESHSPEKREMOVEDLLS[@]}"; do
+		rmFileIfExists "$RESHSPEKREMOVEDLL"
+	done
 
 	# INI file
-	if [ -f "$INSTDESTDIR/$RSINI" ] && [ "$KEEPRESHADEINI" -eq 0 ]; then
-		rm "$INSTDESTDIR/$RSINI"
+	if [ "$KEEPRESHADEINI" -eq 1 ]; then
+		rmFileIfExists ""$INSTDESTDIR/$RSINI""
 	fi
 }
 
@@ -9904,10 +9881,8 @@ function useSpecialK {
 		fi
 
 		# Make sure we don't track DLL renames
-		if [ -f "$SPEKENA" ]; then
-			rm -rf "$SPEKENA"
-			touch "$SPEKENA"
-		fi
+		rmFileIfExists "$SPEKENA"
+		touch "$SPEKENA"
 
 		if [ "$SPEKDLLCONFLICTFOUND" -eq 0 ] && [ "$SHOULDINSTALLSPEK" -eq 1 ]; then
 			installd3d47dll "$SPEKD3D47DLL" "$SPEKDDIR"
@@ -15205,10 +15180,9 @@ function createHMMDesktopFile {
 		"$WGET" "$HMMICOURL" -O "$HMMICOPATH"
 	fi
 
+	rmFileIfExists "$HMMDFPA"
+
 	# Generate application launch .desktop file - Re-create each time to set correct path
-	if [ -f "$HMMDFPA" ]; then
-		rm "$HMMDFPA"
-	fi
 	writelog "INFO" "${FUNCNAME[0]} - Creating new HedgeModManager desktop file at '$HMMDFPA'"
 	{
 		echo "[Desktop Entry]"
@@ -15299,8 +15273,7 @@ function getLatestGitHubExeVer {
 	getGitHubExeVer "$SETUPNAME" "$PROJURL" "$LATESTVER"
 }
 
-# Get GitHub release information for a given version tag.
-# Used by getLatestGitHubExeVer and can also be used standalone i.e. for downloading a specific Vortex version.
+# Get GitHub release information for a given version tag -- Used by getLatestGitHubExeVer and can also be used standalone i.e. for downloading a specific Vortex version.
 function getGitHubExeVer {
 	SETUPNAME="$1"
 	PROJURL="$2"
@@ -21508,9 +21481,7 @@ function FUSEID {
 		fi
 	fi
 
-	if [ -f "$LOGDIR/$USEID.log" ]; then
-		rm "$LOGDIR/$USEID.log"
-	fi
+	rmFileIfExists "$LOGDIR/$USEID.log"
 	resetAID "$USEID"
 	setGN "$USEID"
 }
@@ -21529,6 +21500,8 @@ function howto {
 	echo "                                       or directly from <path>"
 	echo "    addnonsteamgame|ansg <args>      Add a $NSGA to Steam"
 	echo "                                       opens gui without args"
+	echo ""
+	echo "     Ensure the Steam Client is closed before adding shortcuts."
 	echo "     <args>:                          for cli min arg is'-ep'"
 	echo "     -an=|--appname=	                 App Name - optional"
 	echo "     -ep=|--exepath=                  Full gamepath required"
@@ -21994,17 +21967,57 @@ function commandline {
 	elif [ "$1" == "getslrbtn" ]; then  # Internal use only for the Main Menu button
 		fetchGameSLRGui "$2"
 	elif [ "$1" == "debug" ]; then
-		# Why are you looking here? :-)
-		while read -r SCVDFE; do
-			SVDFENAME="$( parseSteamShortcutEntryAppName "$SCVDFE" )"
-			SVDFEAID="$( parseSteamShortcutEntryAppID "$SCVDFE" )"
-			SVDFEEXE="$( parseSteamShortcutEntryExe "$SCVDFE" )"
+		## Why are you looking here? :-)
 
-			printf "%s (%s) -> %s\n" "$SVDFENAME" "$SVDFEAID" "$SVDFEEXE"
-		done <<< "$( getSteamShortcutHex )"
+		DEBUGNOSTAID="-222353304"
 
-		# writelog "INFO" "${FUNCNAME[0]} - Stub"
-		dlX64Dbg
+		# DEBUG_LOCOVDF="$STUIDPATH/config/localconfig bsak.vdf"
+
+		## Get nested VDF section
+		# getNestedVdfSection "Valve/Steam/Apps/7/cloud" "2" "$DEBUG_LOCOVDF"
+
+		## -----
+		## Mark Non-Steam Game game with given AppID as 'hidden'
+		## Could be extended to add to categories once we can get the category
+		NOUSCOEXISTS=0
+		DEBUG_LOCOVDF="$STUIDPATH/config/localconfig bsak.vdf"
+
+		LOCOWESTO="$( getVdfSection "WebStorage" "" "" "$DEBUG_LOCOVDF" )"
+		LOCOUSCO="$( getVdfSectionValue "$LOCOWESTO" "user-collections" "1" )"
+
+		if [ -z "$LOCOUSCO" ]; then
+			echo "No user-collections information defined, creating new one"
+			# shellcheck disable=SC2034
+			NOUSCOEXISTS=1  # debug var
+			LOCOUSCO="\"{}\""
+		fi
+
+		LOCOUSCO="$( echo "$LOCOUSCO" | jq 'fromjson' )"
+
+		## Insert Non-Steam Game into user-collection 'hidden' category, creating it if it doesn't exist
+		if ! jq -e '. | try(.hidden)' <<< "$LOCOUSCO" >/dev/null ; then
+			echo "No hidden games, adding blank hidden category"
+			LOCOUSCO="$( jq '. += { hidden: { id: "hidden", added: [], removed: [] } }' <<< "$LOCOUSCO" )"
+		fi
+
+		LOCOUSCO="$( jq '.hidden.added += [ 1234567890 ]' <<< "$LOCOUSCO" )"
+
+		if [ "$NOUSCOEXISTS" -eq 1 ]; then
+			echo "Adding new section into VDF"
+			addVdfSectionValue "$LOCOWESTO" "user-collections" "$LOCOUSCO" "$DEBUG_LOCOVDF"
+		else
+			echo "Editing existing VDF value with '$LOCOUSCO'"
+			editVdfSectionValue "$LOCOWESTO" "user-collections" "$LOCOUSCO" "$DEBUG_LOCOVDF"
+		fi
+
+		addVdfSectionValue "$LOCOWESTO" "test-val" "testvall" "$DEBUG_LOCOVDF"
+
+		## -----
+
+		## Update OverlayAppEnable for given shortcut in localconfig.vdf
+		SHORTCUTLOCALCONFIGVDFSECTION="$( getNestedVdfSection "Apps/${DEBUGNOSTAID}" "1" "$DEBUG_LOCOVDF" )"
+		editVdfSectionValue "$SHORTCUTLOCALCONFIGVDFSECTION" "OverlayAppEnable" "0" "$DEBUG_LOCOVDF"
+		# getVdfSectionValue "$SHORTCUTLOCALCONFIGVDFSECTION" "OverlayAppEnable"
 	elif [ "$1" == "mo2" ]; then
 		if [ -n "$2" ]; then
 			if [ "$2" == "download" ] || [ "$2" == "d" ]; then
@@ -22902,7 +22915,7 @@ function dlX64Dbg {
 
 		if [ ! -f "$DLDST/$X64ZIPBASE" ]; then
 			notiShow "$(strFix "$NOTY_DLCUSTOMPROTON" "$X64ZIP")" "S"
-			dlCheck "$X64ZIP"  "$DLDST/$X64ZIPBASE" "X" "Downloading 'test'"
+			dlCheck "$X64ZIP"  "$DLDST/$X64ZIPBASE" "X" "Downloading 'x64dbg'"
 			notiShow "$(strFix "$NOTY_DLCUSTOMPROTON2" "$X64ZIP")" "S"
 		fi
 
@@ -23107,7 +23120,7 @@ function guessVdfIndent {
     BLOCKNAME="$( safequoteVdfBlockName "$1" )"  # Block to check the indentation level on
     VDF="$2"
 
-    grep -i "${BLOCKNAME}" "$VDF" | awk '{print gsub(/\t/,"")}'
+    grep -i "${BLOCKNAME}" "$VDF" | head -n1 | awk '{print gsub(/\t/,"")}'
 }
 
 ## Surround a VDF block name with quotes if it doesn't have any
@@ -23126,6 +23139,7 @@ function getVdfSection {
     ENDPATTERN="${2:-\}}"  # Default end pattern to end of block
     INDENT="$3"
     VDF="$4"
+	STOPAFTERFIRSTMATCH="$5"
 
     if [ -z "$INDENT" ]; then
         INDENT="$(( $( guessVdfIndent "$STARTPATTERN" "$VDF" ) ))"
@@ -23137,7 +23151,13 @@ function getVdfSection {
 
 	writelog "INFO" "${FUNCNAME[0]} - Searching for VDF block with name '$STARTPATTERN' in VDF file '$VDF'"
 
-    sed -n "/${INDENTEDSTARTPATTERN}/I,/^${INDENTEDENDPATTERN}/I p" "$VDF"
+	# This is a very hacky solution to allow 'getNestedVdfSection' to use this function
+	# It needs the start pattern exact match but other functions can't use this
+	if [ -n "$STOPAFTERFIRSTMATCH" ]; then
+		sed -n "/${INDENTEDSTARTPATTERN}/I,/^${INDENTEDENDPATTERN}/I { p; /${INDENTEDENDPATTERN}/I q }" "$VDF"
+	else
+		sed -n "/${INDENTEDSTARTPATTERN}/I,/^${INDENTEDENDPATTERN}/I p" "$VDF"
+	fi
 }
 
 ## Check if a VDF block (block_name) already exists inside a parent block (search_block)
@@ -23160,6 +23180,39 @@ function checkVdfSectionAlreadyExists {
 
     printf "%s" "$SEARCHBLOCKVDFSECTION" > "/tmp/tmp.vdf"
     getVdfSection "$BLOCKNAME" "" "" "/tmp/tmp.vdf" | grep -iq "$BLOCKNAME"
+}
+
+function getNestedVdfSection {
+	VDFPATH="$1"  # i.e. "TopLevel/SecondLevel/ThirdLevel"
+	INDENT="$2"  # indent to start searching from
+	VDF="$3"
+
+	mapfile -t -d '/' VDFPATHARRAY < <(echo -n "$VDFPATH")
+	VDFPATHARRAYLEN="${#VDFPATHARRAY[*]}"
+	if [ "$VDFPATHARRAYLEN" -eq 0 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - VDFPATHARRY is empty, nothing to do"
+		return
+	fi
+	if [ -z "$INDENT" ]; then
+		INDENT="$(( $( guessVdfIndent "${VDFPATHARRAY[0]}" "$VDF" ) ))"
+	fi
+
+	# Use getVdfSection on each section it finds until we run out of
+	CURRENTSECTION=""
+	for SECIND in "${!VDFPATHARRAY[@]}"; do
+		SECTIONNAME="$( safequoteVdfBlockName "${VDFPATHARRAY[$SECIND]}" )"
+		writelog "INFO" "${FUNCNAME[0]} - Searching for section with name '$SECTIONNAME'"
+		NEXTSECTION="$( getVdfSection "$SECTIONNAME" "" "$INDENT" "$VDF" "X" )"
+		writelog "INFO" "${FUNCNAME[0]} - NEXTSECTION is '$NEXTSECTION'"
+		if [ -n "$NEXTSECTION" ]; then
+			CURRENTSECTION="$NEXTSECTION"
+			((INDENT+=1))
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Found no matching section with name '$SECTIONNAME', bailing out"
+			break
+		fi
+	done
+	echo "$CURRENTSECTION"
 }
 
 ## Create entry in given VDF block with matching indentation (Case-INsensitive)
@@ -23233,6 +23286,92 @@ function createVdfEntry {
 
     ## Write out new string to calculated line in VDF file
     sed -i "${INSERTLINE}a\\${NEWBLOCKSTR}" "$VDF"
+}
+
+## Take in a VDF block and update a property in it, then update the original file with the updated block
+## We can use this to update the compatibility tool for an existing VDF block, or update some Non-Steam Game properties
+function editVdfSectionValue {
+	VDFSECTION="$1"  # VDF section text i.e. from getNestedVdfSection
+	VDFPROPERTYNAME="$2"  # i.e. 'OverlayAppEnable'
+	VDFPROPERTYVAL="$3"  # i.e. '1'
+	VDF="$4"
+
+	VDFPROPERTYORGVAL="$( getVdfSectionValue "$VDFSECTION" "$VDFPROPERTYNAME" | sed 's/[]\/$*.^[]/\\&/g' )"
+	VDFPROPERTYNEWVAL="$( createVdfPropertyString "${VDFPROPERTYNAME}" "${VDFPROPERTYVAL}" )"
+
+	# maybe later, PR welcome if you can do this :-)
+	#shellcheck disable=SC2001
+	UPDATEDVDFSECTION="$( echo "${VDFSECTION}"| sed "s/${VDFPROPERTYORGVAL}/${VDFPROPERTYNEWVAL}/g" )"
+
+	backupVdfFile "$VDF"
+
+	substituteVdfSection "$VDFSECTION" "$UPDATEDVDFSECTION" "$VDF"
+}
+
+## Add a single value to bottom of a given VDF section
+function addVdfSectionValue {
+	VDFSECTION="$1"
+	VDFPROPERTYNAME="$2"
+	VDFPROPERTYVAL="$3"
+	VDF="$4"
+
+	VDFSECTIONEND="$( echo "$VDFSECTION" | tail -n1 )"
+	VDFSECTIONENDLINE="$( echo "$VDFSECTION" | grep -in "$VDFSECTIONEND" | cut -d ':' -f1 )"
+	VDFSECTIONINSERTLINE="$(( VDFSECTIONENDLINE - 1 ))"
+
+	VDFSECTIONENDINDENTAMT="$( echo "$VDFSECTIONEND" | awk '{print gsub(/\t/,"")}' )"
+	VDFPROPERTYINDENT="$( generateVdfIndentString "$(( VDFSECTIONENDINDENTAMT + 1 ))" "" )"
+
+	VDFPROPERTY="${VDFPROPERTYINDENT}$( createVdfPropertyString "$VDFPROPERTYNAME" "$VDFPROPERTYVAL" )"
+	UPDATEDVDFSECTION="$( echo "$VDFSECTION" | sed "${VDFSECTIONINSERTLINE}a\\${VDFPROPERTY}" )"
+
+	substituteVdfSection "$VDFSECTION" "$UPDATEDVDFSECTION" "$VDF"
+}
+
+## Use parameter expansion to replace old block with new block in VDF file
+## Thanks to StackOverflow for this answer, though was noted this may break down if the file exceeds 1mb -- Should work for us though
+function substituteVdfSection {
+	VDFOLDSECTION="$1"
+	VDFNEWSECTION="$2"
+	VDF="$3"
+
+	VDFCONTENTS="$( cat "$VDF" )"
+	UPDATEDVDFCONTENTS="${VDFCONTENTS//"$VDFOLDSECTION"/"$VDFNEWSECTION"}"
+	printf "%s\n" "$UPDATEDVDFCONTENTS" > "$VDF"
+}
+
+## Extract value from text-based VDF block
+## ex: "ExampleProperty"		"ex-val"
+function getVdfSectionValue {
+	VDFSECTION="$1"  # VDF section text i.e. from getNestedVdfSection
+	VDFPROPERTYNAME="$2"  # i.e. 'OverlayAppEnable'
+	ONLYVALUE="$3"
+
+	VDFVAL="$( trimWhitespaces "$(echo "${VDFSECTION}" | grep "${VDFPROPERTYNAME}")" )"
+	if [ -n "$ONLYVALUE" ]; then
+		echo "$VDFVAL" | cut -f3
+	else
+		echo "$VDFVAL"
+	fi
+}
+
+## Return a VDF property string
+function createVdfPropertyString {
+	if jq -e '.' 1>/dev/null 2>&1 <<<"$2"; then
+		writelog "INFO" "${FUNCNAME[0]} - Looks like our input string '$2' is JSON -- Creating JSON VDF Property"
+		printf "%s\t\t%s" "$( safequoteVdfBlockName "$1" )" "$( prepareJSONVdfProperty "$2" )"  # Don't use safequote on JSON string
+	else
+		writelog "INFO" "${FUNCNAME[0]} - Generating normal VDF property string for '$1: $2'"
+		printf "%s\t\t%s" "$( safequoteVdfBlockName "$1" )" "$( safequoteVdfBlockName "$2" )"
+	fi
+}
+
+## Format a JSON entry by double-escaping it and removing any surrounding quotes so that it can be written out into the VDF correctly
+## i.e. turn "\"{\\\"foo\\\": \\\"bar\\\"}\"" -> \"{\\\"foo\\\": \\\"bar\\\"}\"
+function prepareJSONVdfProperty {
+	SANITISEDVDFJSON="$( jq '. | tojson | tojson' <<< "$1" )"
+	SANITISEDVDFJSON="${SANITISEDVDFJSON#\"}"  # Remove any plain quote from start
+	echo "${SANITISEDVDFJSON%\"}"  # Remove any plain quote from end
 }
 
 ## Get the internal name of the compatibility tool selected for all titles from the Steam Client Compatibility settings
@@ -23444,7 +23583,6 @@ function addNonSteamGameGui {
 			if [ -n "$NSGSET" ]; then
 				mapfile -d "|" -t -O "${#NSGSETARR[@]}" NSGSETARR < <(printf '%s' "$NSGSET")
 
-				# TODO check to make sure these all still work correctly (i.e. order is still correct) after SteamGridDB settings went in
 				writelog "INFO" "${FUNCNAME[0]} - The Non-Steam Game args are ${NSGSETARR[*]}"
 				# NSGSETARR[0] is blank space
 				# NSGSETARR[1] is Paths heading
@@ -23510,6 +23648,10 @@ function addNonSteamGame {
 	fi
 	SCPATH="$STUIDPATH/config/$SCVDF"
 
+	function checkValidVDFBoolean {
+		[ "$1" -eq 1 ] || [ "$1" -eq 0 ] && echo "$1"
+	}
+
 	function getCRC {
 		echo -n "$1" | gzip -c | tail -c 8 | od -An -N 4 -tx4
 	}
@@ -23521,9 +23663,8 @@ function addNonSteamGame {
 	## Notes on how Non-Steam AppIDs work, because it took me almost a year to figure this out
 	## ----------------------
 	## Steam stores shortcuts in a binary file called 'shortcuts.vdf', stored in SROOT/userdata/<id>/config
-	## This file stores information about Steam shortcuts, with many values being written out in hex, such as the Steam AppID and boolean values
 	##
-	## Non-Steam Game AppIDs are 32bit little-endian (reverse byte order) signed integers, stores as hexidecimal
+	## Non-Steam Game AppIDs are 32bit little-endian (reverse byte order) signed integers, stored as hexidecimal
 	## This AppID is probably generated using some combination of the AppName and Exe with a crc32 generated from them, but it can actually be anything
 	## Steam likely does things this way in an attempt to ensure "uniqueness" among entries. Projects like Steam-ROM-Manager do the same thing likely for similar reasons
 	##
@@ -23534,13 +23675,13 @@ function addNonSteamGame {
 	##
 	## We can later re-use these functions to do several things:
 	## - Check for and remove stray STL configs for no longer stored Non-Steam Game AppIDs (if we had Non-Steam Games we previously used with STL that we no longer use, we can remove these configs in case there is a conflict in future)
-	## ----------------------
 
 	### BEGIN MAGIC APPID FUNCTIONS
 	## ----------
 	# Generate random signed 32bit integer which can be converted into hex, using the first argument (AppName and Exe fields) as seed (in an attempt to reduce the chances of the same AppID being generated twice)
 	function generateShortcutVDFAppId {
-		echo "-$( shuf -i 99999999-999999999 -n 1 --random-source=<(echo -n "$1") )"
+		seed="$( echo -n "$1" | md5sum | cut -c1-8 )"
+		echo "-$(( 16#${seed} % 1000000000 ))"
 	}
 
 	function dec2hex {
@@ -23605,14 +23746,13 @@ function addNonSteamGame {
 		downloadArtFromSteamGridDB "$NOSTSGDBID" "$SGDBSEARCHENDPOINT_ICONS" "${NOSTICONNAME}" "" "" "" "" "" "" "replace" "1"
 	}
 
-	NOSTHIDE=0  # Does hide still work? Didn't seem to in my tests
+	NOSTHIDE=0  # Set in localconfig.vdf along with tags and overlay settings
 	NOSTADC=1
 	NOSTAO=1
 	NOSTVR=0
 	NOSTSTLLO=0
 	NOSTAUTOARTWORK=0
 	NOSTUSESGDB=0
-
 	for i in "$@"; do
 		case $i in
 			## General Non-Steam Game properties
@@ -23638,16 +23778,16 @@ function addNonSteamGame {
 				NOSTLAOP="${i#*=}"
 				shift ;;
 			-hd=*|--hide=*)
-				NOSTHIDE="${i#*=}"
+				NOSTHIDE="$( checkValidVDFBoolean "${i#*=}" )"
 				shift ;;
 			-adc=*|--allowdesktopconf=*)
-				NOSTADC="${i#*=}"
+				NOSTADC="$( checkValidVDFBoolean "${i#*=}" )"
 				shift ;;
 			-ao=*|--allowoverlay=*)
-				NOSTAO="${i#*=}"
+				NOSTAO="$( checkValidVDFBoolean "${i#*=}" )"
 				shift ;;
 			-vr=*|--openvr=*)
-				NOSTVR="${i#*=}"
+				NOSTVR="$( checkValidVDFBoolean "${i#*=}" )"
 				shift ;;
 			-t=*|--tags=*)
 				NOSTTAGS="${i#*=}"
@@ -23672,8 +23812,7 @@ function addNonSteamGame {
 
 						if [ -n "$NOSTCOMPATTOOLPATH" ]; then
 							NOSTCOMPATTOOL="$( getProtonInternalName "${NOSTCOMPATTOOLNAME};${NOSTCOMPATTOOLPATH}" )"
-						else
-							# i.e. if 'luxtorpeda' was passed, we don't have a path for this, so simply trust the user
+						else  # i.e. if 'luxtorpeda' was passed, we don't have a path for this, so simply trust the user
 							writelog "SKIP" "${FUNCNAME[0]} - Could not get Proton path for given Compatibility Tool '$NOSTCOMPATTOOLNAME' from ProtonCSV -- Simply assuming this internal name is valid and not known to SteamTinkerLaunch"
 							NOSTCOMPATTOOL="$NOSTCOMPATTOOLNAME"
 						fi
@@ -23730,7 +23869,6 @@ function addNonSteamGame {
 	# We check against the string with quotes removed, just to be safe for the -z check even though the case above should match it
 	# We have to do this for the -f check though as it doesn't like the quotes
 	NOSTEXEPATHNOQUOTE="$( sed -e 's/^"//' -e 's/"$//' <<< "${NOSTEXEPATH}" )"
-	echo "NOSTEXEPATHNOQUOTE is '$NOSTEXEPATHNOQUOTE'"
 	if [ -z "${NOSTEXEPATHNOQUOTE}" ]; then
 		writelog "ERROR" "${FUNCNAME[0]} - NOSTEXEPATH was blank, could not add Non-Steam Game -- Aborting!"
 		notiShow "${NOTY_NOSTEXEBLANK}"
@@ -23743,9 +23881,7 @@ function addNonSteamGame {
 		return 1
 	fi
 
-	if [ -z "${NOSTAPPNAME}" ]; then
-		NOSTAPPNAME="${QEP##*/}"
-	fi
+	NOSTAPPNAME="${NOSTAPPNAME:-${QEP##*/}}"
 
 	if [ -z "${NOSTSTDIR}" ] || [ ! -d "${NOSTSTDIR}" ]; then
 		QSD="$(dirname "$QEP")"; NOSTSTDIR="\"$QSD\""
@@ -23755,11 +23891,8 @@ function addNonSteamGame {
 		NOSTGICONPATH="$STLICON"
 	fi
 
-	# This is formatted as a flag because we cna pass "$SGACOPYMETHOD" as an argument to setGameArt,
-	# and it will be interpreted as --copy
-	if [ -z "$SGACOPYMETHOD" ]; then
-		SGACOPYMETHOD="--copy"
-	fi
+	# This is formatted as a flag because we can pass "$SGACOPYMETHOD" as an argument to setGameArt, and it will be interpreted as --copy
+	SGACOPYMETHOD="${SGACOPYMETHOD:---copy}"
 
 	# This is off by default but always passed from addNonSteamGame, so if we actually get a value for any of these fields, enable it
 	# The NOSTUSESGDB=1 flag setting is for user commandline usage, when they simply want to search SteamGridDB for artwork using the game name, but don't want to pass other values
@@ -23767,11 +23900,9 @@ function addNonSteamGame {
 		NOSTUSESGDB=1
 	fi
 
-	## ----
 	## These AppIDs are not necessarily guaranteed to be unique, such as if the user tries to add the same game twice or something
 	## Therefore, perhaps in future we could do a stricter check by attempting to parse the shortcuts.vdf file and re-generating the AppID if it already exists
 	## This could be expensive if the file is long, but a potential future enhancement all the same!
-	## ----
 	NOSTAIDVDF="$( generateShortcutVDFAppId "${NOSTAPPNAME}${NOSTEXEPATH}" )"  # This is the signed integer AppID that will be stored in the VDF as hexidecimal - ex: -598031679
 	NOSTAIDVDFHEX="$( generateShortcutVDFHexAppId "$NOSTAIDVDF" )"  # This is the 4byte little-endian hexidecimal of the above 32bit signed integer, which we write out to the binary VDF - ex: c1c25adc
 	NOSTAIDVDFHEXFMT="\x$(awk '{$1=$1}1' FPAT='.{2}' OFS="\\\x" <<< "$NOSTAIDVDFHEX")"  # This is the binary-formatted string hex of the above which we actually write out - ex: \xc1\xc2\x5a\xdc
@@ -23819,10 +23950,8 @@ function addNonSteamGame {
 		NEWSET=0
 	fi
 
-	# Match any image file in same folder as EXE name hero, logo, boxart, tenfoot
-	# Matches will override selected options
-	# If not found it will fall back to the selected value (such as the actual file path provided), meaning
-	# only artwork that exists will be used
+	# Match any image file in same folder as EXE name hero, logo, boxart, tenfoot -- Matches will override selected options
+	# If not found it will fall back to the selected value (such as the actual file path provided), meaning only artwork that exists will be used
 	if [ "$NOSTAUTOARTWORK" -eq 1 ]; then
 		NOSTEXEBASEDIR="$( dirname "$NOSTEXEPATH" | cut -d '"' -f2 )"
 
@@ -23838,9 +23967,9 @@ function addNonSteamGame {
 		# Regular artwork
 		notiShow "$NOTY_SGDBDL"
 
-		# The entered name to search on will take priority over the actual game EXE name, only one will be used and we will always prefer the entered custom name
-		# For example if a user naames their Non-Steam Game "The Elder Scrolls IV: Oblivion" but they enter a custom search name because they want artwork for "The Elder Scrolls IV: Oblivion Game of the Year Edition"
-		# If art is not found for the custom name, users should enter either the Steam AppID or the SteamGridDB Game ID to use as a fallback (Steam AppID will always be preferred because it will always be exact)
+		# The entered search name is prioritised over actual game EXE name, only one will be used and we will always prefer custom name
+		# Ex: user names Non-Steam Game "The Elder Scrolls IV: Oblivion" but they enter a custom search name because they want artwork for "The Elder Scrolls IV: Oblivion Game of the Year Edition"
+		# In case art is not found for the custom name, users should enter either the Steam AppID or the SteamGridDB Game ID to use as a fallback (Steam AppID will always be preferred because it will always be exact)
 		#
 		# Therefore, the order of priority for artwork searching is:
 		# 1. Name search (only ONE of the below will be used)
@@ -23862,8 +23991,7 @@ function addNonSteamGame {
 			NOSTSEARCHID="$NOSTSGDBGAMEID"
 		fi
 
-		# Only add NOSTAPPNAME as fallback if we don't have an ID to search on, because commandlineGetSteamGridDBArtwork will prefer name over ID, so if we have to
-		# fall back to Non-Steam Name (i.e. no entered custom name) then only do so if we don't have an ID given
+		# Only add NOSTAPPNAME as fallback if we don't have an ID to search on, because commandlineGetSteamGridDBArtwork will prefer name over ID, so if we have to fall back to Non-Steam Name (i.e. no entered custom name) then only do so if we don't have an ID given
 		if [ -n "$NOSTSGDBNAM" ]; then
 			NOSTSEARCHNAME="$NOSTSGDBNAM"
 		elif [ -n "$NOSTAPPNAME" ] && [ -z "$NOSTSEARCHID" ]; then
@@ -23890,66 +24018,29 @@ function addNonSteamGame {
 	fi
 
 	writelog "INFO" "${FUNCNAME[0]} - Adding new set '$NEWSET'"
-
 	{
 		printf '\x00%s\x00' "$NEWSET"
 		printf '\x02%s\x00%b' "appid" "$NOSTAIDVDFHEXFMT"
 		printf '\x01%s\x00%s\x00' "AppName" "$NOSTAPPNAME"
 		printf '\x01%s\x00%s\x00' "Exe" "$NOSTEXEPATH"
 		printf '\x01%s\x00%s\x00' "StartDir" "$NOSTSTDIR"
+		printf '\x01%s\x00%s\x00' "icon" "$NOSTICONPATH"
+		printf '\x01%s\x00%s\x00' "ShortcutPath" ""
+		printf '\x01%s\x00%s\x00' "LaunchOptions" "$NOSTLAOP"
 
-		if [ -n "$NOSTICONPATH" ]; then
-			printf '\x01%s\x00%s\x00' "icon" "$NOSTICONPATH"
-		else
-			printf '\x01%s\x00\x00' "icon"
-		fi
-
-		printf '\x01%s\x00\x00' "ShortcutPath"
-
-		if [ -n "$NOSTLAOP" ]; then
-			printf '\x01%s\x00%s\x00' "LaunchOptions" "$NOSTLAOP"
-		else
-			printf '\x01%s\x00\x00' "LaunchOptions"
-		fi
-
-		if [ "$NOSTHIDE" -eq 1 ]; then
-			printf '\x02%s\x00\x01\x00\x00\x00' "IsHidden"
-		else
-			printf '\x02%s\x00\x00\x00\x00\x00' "IsHidden"
-		fi
-
-		if [ "$NOSTADC" -eq 1 ]; then
-			printf '\x02%s\x00\x01\x00\x00\x00' "AllowDesktopConfig"
-		else
-			printf '\x02%s\x00\x00\x00\x00\x00' "AllowDesktopConfig"
-		fi
-
-		if [ "$NOSTAO" -eq 1 ]; then
-			printf '\x02%s\x00\x01\x00\x00\x00' "AllowOverlay"
-		else
-			printf '\x02%s\x00\x00\x00\x00\x00' "AllowOverlay"
-		fi
-
-		if [ "$NOSTVR" -eq 1 ]; then
-			printf '\x02%s\x00\x01\x00\x00\x00' "OpenVR"
-		else
-			printf '\x02%s\x00\x00\x00\x00\x00' "OpenVR"
-		fi
+		printf '\x02%s\x00%b\x00\x00\x00' "IsHidden" "\x0${NOSTHIDE:-0}"
+		printf '\x02%s\x00%b\x00\x00\x00' "AllowDesktopConfig" "\x0${NOSTADC:-0}"
+		printf '\x02%s\x00%b\x00\x00\x00' "AllowOverlay" "\x0${NOSTAO:-0}"
+		printf '\x02%s\x00%b\x00\x00\x00' "OpenVR" "\x0${NOSTVR:-0}"
 
 		printf '\x02%s\x00\x00\x00\x00\x00' "Devkit"
 		printf '\x01%s\x00\x00' "DevkitGameID"
 		printf '\x02%s\x00\x00\x00\x00\x00' "DevkitOverrideAppID"
-
 		printf '\x02%s\x00\x00\x00\x00\x00' "LastPlayTime"
 		printf '\x01%s\x00\x00' "FlatpakAppID"
 		printf '\x00%s\x00' "tags"
-		splitTags "$NOSTTAGS"
-		printf '\x08'
-		printf '\x08'
-
-		#file end:
-		printf '\x08'
-		printf '\x08'
+		splitTags "$NOSTTAGS"  # TODO tags are now stored in localconfig.vdf, see #949
+		printf '\x08\x08\x08\x08'
 	} >> "$SCPATH"
 
 	writelog "INFO" "${FUNCNAME[0]} - Finished writing out new Non-Steam Game Shortcut"
@@ -23961,7 +24052,7 @@ function addNonSteamGame {
 		if [ ! -f "$CFGVDF" ]; then
 			writelog "SKIP" "${FUNCNAME[0]} - No Config VDF found at '$CFGVDF' -- Unable to set compatibility tool for Non-Steam Game, skipping"
 		else
-			writelog "INFO" "${FUNCNAME[0]} - Adding selected compatibility tool '$NOSTCOMPATTOOL' for Non-Stteam Game"
+			writelog "INFO" "${FUNCNAME[0]} - Adding selected compatibility tool '$NOSTCOMPATTOOL' for Non-Steam Game"
 			NSGVDFVALS=( "name!${NOSTCOMPATTOOL}" "config!" "priority!250" )
 			createVdfEntry "$CFGVDF" "CompatToolMapping" "$NOSTAIDGRID" "" "${NSGVDFVALS[@]}"
 			writelog "INFO" "${FUNCNAME[0]} - Finished adding Non-Steam Game compatibility tool to '$CFGVDF'"
@@ -23969,7 +24060,6 @@ function addNonSteamGame {
 	fi
 
 	writelog "INFO" "${FUNCNAME[0]} - Finished adding new $NSGA"
-
 	SGACOPYMETHOD=""  # Unset doesn't work for some reason with '--flag'
 }
 
@@ -24011,9 +24101,7 @@ function closeSTL {
 	setPrevRes
 	customUserScriptStop	# USERSTOP
 
-	if [ -f "$MO2INSTFAIL" ]; then
-		rm "$MO2INSTFAIL" 2>/dev/null
-	fi
+	rmFileIfExists "$MO2INSTFAIL" 2>/dev/null
 
 	if [ "$USEMANGOAPP" -eq 1 ] && "$PGREP" -f "$MANGOAPP" >/dev/null; then
 		writelog "INFO" "${FUNCNAME[0]} - Killing '$MANGOAPP'"
@@ -25191,11 +25279,9 @@ function fetchAndExtractDependency {
 
 	# Extracting dependencies - If we can't find an exact match for the downloaded file, try to find a fuzzy match based on 'real' package name
 	if ! [ -f "$EXTRACTPATH/$ARCHIVENAME" ]; then
-		# -----
 		# Get list of files and remove version string from it, then check if this name is inside our target archive file
 		# This basically tries to find any archives that have the 'actual' package name e.g. 'innoextract' from 'innoextract-1.1-1.pkg.tar.zst', then tries to search if any files in the directory match
 		# the archive we passed in to try to download but couldn't and try to extract them. This lets us extract dependencies for a potential archive match if the name is not exact
-		# -----
 		local DEPMATCHFOUND=0
 		mapfile -t DEPFILES < <( find "$EXTRACTPATH" -maxdepth 1 -type f -iname \*"*.*"\* -exec basename {} \; )
 		if ! [[ "${#DEPFILES[@]}" -eq 0 ]]; then
