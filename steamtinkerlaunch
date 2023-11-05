@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20231105-1"
+PROGVERS="v14.0.20231105-2"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -21803,10 +21803,57 @@ function commandline {
 	elif [ "$1" == "getslrbtn" ]; then  # Internal use only for the Main Menu button
 		fetchGameSLRGui "$2"
 	elif [ "$1" == "debug" ]; then
-		# Why are you looking here? :-)
+		## Why are you looking here? :-)
 
-		# writelog "INFO" "${FUNCNAME[0]} - Stub"
-		dlX64Dbg
+		DEBUGNOSTAID="-222353304"
+
+		# DEBUG_LOCOVDF="$STUIDPATH/config/localconfig bsak.vdf"
+
+		## Get nested VDF section
+		# getNestedVdfSection "Valve/Steam/Apps/7/cloud" "2" "$DEBUG_LOCOVDF"
+
+		## -----
+		## Mark Non-Steam Game game with given AppID as 'hidden'
+		## Could be extended to add to categories once we can get the category
+		NOUSCOEXISTS=0
+		DEBUG_LOCOVDF="$STUIDPATH/config/localconfig bsak.vdf"
+
+		LOCOWESTO="$( getVdfSection "WebStorage" "" "" "$DEBUG_LOCOVDF" )"
+		LOCOUSCO="$( getVdfSectionValue "$LOCOWESTO" "user-collections" "1" )"
+
+		if [ -z "$LOCOUSCO" ]; then
+			echo "No user-collections information defined, creating new one"
+			# shellcheck disable=SC2034
+			NOUSCOEXISTS=1  # debug var
+			LOCOUSCO="\"{}\""
+		fi
+
+		LOCOUSCO="$( echo "$LOCOUSCO" | jq 'fromjson' )"
+
+		## Insert Non-Steam Game into user-collection 'hidden' category, creating it if it doesn't exist
+		if ! jq -e '. | try(.hidden)' <<< "$LOCOUSCO" >/dev/null ; then
+			echo "No hidden games, adding blank hidden category"
+			LOCOUSCO="$( jq '. += { hidden: { id: "hidden", added: [], removed: [] } }' <<< "$LOCOUSCO" )"
+		fi
+
+		LOCOUSCO="$( jq '.hidden.added += [ 1234567890 ]' <<< "$LOCOUSCO" )"
+
+		if [ "$NOUSCOEXISTS" -eq 1 ]; then
+			echo "Adding new section into VDF"
+			addVdfSectionValue "$LOCOWESTO" "user-collections" "$LOCOUSCO" "$DEBUG_LOCOVDF"
+		else
+			echo "Editing existing VDF value with '$LOCOUSCO'"
+			editVdfSectionValue "$LOCOWESTO" "user-collections" "$LOCOUSCO" "$DEBUG_LOCOVDF"
+		fi
+
+		addVdfSectionValue "$LOCOWESTO" "test-val" "testvall" "$DEBUG_LOCOVDF"
+
+		## -----
+
+		## Update OverlayAppEnable for given shortcut in localconfig.vdf
+		SHORTCUTLOCALCONFIGVDFSECTION="$( getNestedVdfSection "Apps/${DEBUGNOSTAID}" "1" "$DEBUG_LOCOVDF" )"
+		editVdfSectionValue "$SHORTCUTLOCALCONFIGVDFSECTION" "OverlayAppEnable" "0" "$DEBUG_LOCOVDF"
+		# getVdfSectionValue "$SHORTCUTLOCALCONFIGVDFSECTION" "OverlayAppEnable"
 	elif [ "$1" == "mo2" ]; then
 		if [ -n "$2" ]; then
 			if [ "$2" == "download" ] || [ "$2" == "d" ]; then
@@ -22907,7 +22954,7 @@ function guessVdfIndent {
     BLOCKNAME="$( safequoteVdfBlockName "$1" )"  # Block to check the indentation level on
     VDF="$2"
 
-    grep -i "${BLOCKNAME}" "$VDF" | awk '{print gsub(/\t/,"")}'
+    grep -i "${BLOCKNAME}" "$VDF" | head -n1 | awk '{print gsub(/\t/,"")}'
 }
 
 ## Surround a VDF block name with quotes if it doesn't have any
@@ -22926,6 +22973,7 @@ function getVdfSection {
     ENDPATTERN="${2:-\}}"  # Default end pattern to end of block
     INDENT="$3"
     VDF="$4"
+	STOPAFTERFIRSTMATCH="$5"
 
     if [ -z "$INDENT" ]; then
         INDENT="$(( $( guessVdfIndent "$STARTPATTERN" "$VDF" ) ))"
@@ -22937,7 +22985,13 @@ function getVdfSection {
 
 	writelog "INFO" "${FUNCNAME[0]} - Searching for VDF block with name '$STARTPATTERN' in VDF file '$VDF'"
 
-    sed -n "/${INDENTEDSTARTPATTERN}/I,/^${INDENTEDENDPATTERN}/I p" "$VDF"
+	# This is a very hacky solution to allow 'getNestedVdfSection' to use this function
+	# It needs the start pattern exact match but other functions can't use this
+	if [ -n "$STOPAFTERFIRSTMATCH" ]; then
+		sed -n "/${INDENTEDSTARTPATTERN}/I,/^${INDENTEDENDPATTERN}/I { p; /${INDENTEDENDPATTERN}/I q }" "$VDF"
+	else
+		sed -n "/${INDENTEDSTARTPATTERN}/I,/^${INDENTEDENDPATTERN}/I p" "$VDF"
+	fi
 }
 
 ## Check if a VDF block (block_name) already exists inside a parent block (search_block)
@@ -22960,6 +23014,40 @@ function checkVdfSectionAlreadyExists {
 
     printf "%s" "$SEARCHBLOCKVDFSECTION" > "/tmp/tmp.vdf"
     getVdfSection "$BLOCKNAME" "" "" "/tmp/tmp.vdf" | grep -iq "$BLOCKNAME"
+}
+
+function getNestedVdfSection {
+	VDFPATH="$1"  # i.e. "TopLevel/SecondLevel/ThirdLevel"
+	INDENT="$2"  # indent to start searching from
+	VDF="$3"
+
+	mapfile -t -d '/' VDFPATHARRAY < <(echo -n "$VDFPATH")
+	VDFPATHARRAYLEN="${#VDFPATHARRAY[*]}"
+	if [ "$VDFPATHARRAYLEN" -eq 0 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - VDFPATHARRY is empty, nothing to do"
+		return
+	fi
+	if [ -z "$INDENT" ]; then
+		INDENT="$(( $( guessVdfIndent "${VDFPATHARRAY[0]}" "$VDF" ) ))"
+	fi
+
+	# Use getVdfSection on each section it finds until we run out of
+	CURRENTSECTION=""
+	for SECIND in "${!VDFPATHARRAY[@]}"; do
+		# echo "'${VDFPATHARRAY[$SECIND]}'"
+		SECTIONNAME="$( safequoteVdfBlockName "${VDFPATHARRAY[$SECIND]}" )"
+		writelog "INFO" "${FUNCNAME[0]} - Searching for section with name '$SECTIONNAME'"
+		NEXTSECTION="$( getVdfSection "$SECTIONNAME" "" "$INDENT" "$VDF" "X" )"
+		writelog "INFO" "${FUNCNAME[0]} - NEXTSECTION is '$NEXTSECTION'"
+		if [ -n "$NEXTSECTION" ]; then
+			CURRENTSECTION="$NEXTSECTION"
+			((INDENT+=1))
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Found no matching section with name '$SECTIONNAME', bailing out"
+			break
+		fi
+	done
+	echo "$CURRENTSECTION"
 }
 
 ## Create entry in given VDF block with matching indentation (Case-INsensitive)
@@ -23033,6 +23121,92 @@ function createVdfEntry {
 
     ## Write out new string to calculated line in VDF file
     sed -i "${INSERTLINE}a\\${NEWBLOCKSTR}" "$VDF"
+}
+
+## Take in a VDF block and update a property in it, then update the original file with the updated block
+## We can use this to update the compatibility tool for an existing VDF block, or update some Non-Steam Game properties
+function editVdfSectionValue {
+	VDFSECTION="$1"  # VDF section text i.e. from getNestedVdfSection
+	VDFPROPERTYNAME="$2"  # i.e. 'OverlayAppEnable'
+	VDFPROPERTYVAL="$3"  # i.e. '1'
+	VDF="$4"
+
+	VDFPROPERTYORGVAL="$( getVdfSectionValue "$VDFSECTION" "$VDFPROPERTYNAME" | sed 's/[]\/$*.^[]/\\&/g' )"
+	VDFPROPERTYNEWVAL="$( createVdfPropertyString "${VDFPROPERTYNAME}" "${VDFPROPERTYVAL}" )"
+
+	# maybe later, PR welcome if you can do this :-)
+	#shellcheck disable=SC2001
+	UPDATEDVDFSECTION="$( echo "${VDFSECTION}"| sed "s/${VDFPROPERTYORGVAL}/${VDFPROPERTYNEWVAL}/g" )"
+
+	backupVdfFile "$VDF"
+
+	substituteVdfSection "$VDFSECTION" "$UPDATEDVDFSECTION" "$VDF"
+}
+
+## Add a single value to bottom of a given VDF section
+function addVdfSectionValue {
+	VDFSECTION="$1"
+	VDFPROPERTYNAME="$2"
+	VDFPROPERTYVAL="$3"
+	VDF="$4"
+
+	VDFSECTIONEND="$( echo "$VDFSECTION" | tail -n1 )"
+	VDFSECTIONENDLINE="$( echo "$VDFSECTION" | grep -in "$VDFSECTIONEND" | cut -d ':' -f1 )"
+	VDFSECTIONINSERTLINE="$(( VDFSECTIONENDLINE - 1 ))"
+
+	VDFSECTIONENDINDENTAMT="$( echo "$VDFSECTIONEND" | awk '{print gsub(/\t/,"")}' )"
+	VDFPROPERTYINDENT="$( generateVdfIndentString "$(( VDFSECTIONENDINDENTAMT + 1 ))" "" )"
+
+	VDFPROPERTY="${VDFPROPERTYINDENT}$( createVdfPropertyString "$VDFPROPERTYNAME" "$VDFPROPERTYVAL" )"
+	UPDATEDVDFSECTION="$( echo "$VDFSECTION" | sed "${VDFSECTIONINSERTLINE}a\\${VDFPROPERTY}" )"
+
+	substituteVdfSection "$VDFSECTION" "$UPDATEDVDFSECTION" "$VDF"
+}
+
+## Use parameter expansion to replace old block with new block in VDF file
+## Thanks to StackOverflow for this answer, though was noted this may break down if the file exceeds 1mb -- Should work for us though
+function substituteVdfSection {
+	VDFOLDSECTION="$1"
+	VDFNEWSECTION="$2"
+	VDF="$3"
+
+	VDFCONTENTS="$( cat "$VDF" )"
+	UPDATEDVDFCONTENTS="${VDFCONTENTS//"$VDFOLDSECTION"/"$VDFNEWSECTION"}"
+	printf "%s\n" "$UPDATEDVDFCONTENTS" > "$VDF"
+}
+
+## Extract value from text-based VDF block
+## ex: "ExampleProperty"		"ex-val"
+function getVdfSectionValue {
+	VDFSECTION="$1"  # VDF section text i.e. from getNestedVdfSection
+	VDFPROPERTYNAME="$2"  # i.e. 'OverlayAppEnable'
+	ONLYVALUE="$3"
+
+	VDFVAL="$( trimWhitespaces "$(echo "${VDFSECTION}" | grep "${VDFPROPERTYNAME}")" )"
+	if [ -n "$ONLYVALUE" ]; then
+		echo "$VDFVAL" | cut -f3
+	else
+		echo "$VDFVAL"
+	fi
+}
+
+## Return a VDF property string
+function createVdfPropertyString {
+	if jq -e '.' 1>/dev/null 2>&1 <<<"$2"; then
+		writelog "INFO" "${FUNCNAME[0]} - Looks like our input string '$2' is JSON -- Creating JSON VDF Property"
+		printf "%s\t\t%s" "$( safequoteVdfBlockName "$1" )" "$( prepareJSONVdfProperty "$2" )"  # Don't use safequote on JSON string
+	else
+		writelog "INFO" "${FUNCNAME[0]} - Generating normal VDF property string for '$1: $2'"
+		printf "%s\t\t%s" "$( safequoteVdfBlockName "$1" )" "$( safequoteVdfBlockName "$2" )"
+	fi
+}
+
+## Format a JSON entry by double-escaping it and removing any surrounding quotes so that it can be written out into the VDF correctly
+## i.e. turn "\"{\\\"foo\\\": \\\"bar\\\"}\"" -> \"{\\\"foo\\\": \\\"bar\\\"}\"
+function prepareJSONVdfProperty {
+	SANITISEDVDFJSON="$( jq '. | tojson | tojson' <<< "$1" )"
+	SANITISEDVDFJSON="${SANITISEDVDFJSON#\"}"  # Remove any plain quote from start
+	echo "${SANITISEDVDFJSON%\"}"  # Remove any plain quote from end
 }
 
 ## Get the internal name of the compatibility tool selected for all titles from the Steam Client Compatibility settings
