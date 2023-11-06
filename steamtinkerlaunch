@@ -400,6 +400,7 @@ SHORTCUTVDFAPPIDHEXPAT="617070696400"  # 'appid'
 SHORTCUTVDFNAMEHEXPAT="(014170704e616d6500|6170706e616d6500)"  # 'AppName' and 'appname'
 SHORTCUTVDFEXEHEXPAT="000145786500"  # 'Exe' ('exe' is 6578650a if we ever need it)
 SHORTCUTVDFSTARTDIRHEXPAT="0001537461727444697200"  # 'StartDir'
+SHORTCUTVDFICONHEXPAT="000169636f6e00"  # 'icon'
 SHORTCUTVDFENDPAT="0001"  # Generic end pattern for each shortcut.vdf column
 
 function setGNID {
@@ -7959,13 +7960,21 @@ function convertSteamShortcutHex {
 	printf "$1" | xxd -r -p | tr -d '\0'
 }
 
+# Get the raw, unparsed hex for an entry from shortcuts.vdf
+function getSteamShortcutEntryHex {
+	SHORTCUTSVDFINPUTHEX="$1"  # The hex block representing the shortcut
+	SHORTCUTSVDFMATCHPATTERN="$2"  # The pattern to match against in the block
+
+	printf "$SHORTCUTSVDFINPUTHEX" | grep -oP "${SHORTCUTSVDFMATCHPATTERN}\K.*?(?=${SHORTCUTVDFENDPAT})"
+}
+
 # Parse a hex shortcuts.vdf entry based on a start pattern and convert to text
 # Unfortunately does not work for appid
 function parseSteamShortcutEntryHex {
 	SHORTCUTSVDFINPUTHEX="$1"  # The hex block representing the shortcut
 	SHORTCUTSVDFMATCHPATTERN="$2"  # The pattern to match against in the block
 
-	convertSteamShortcutHex "$( printf "$SHORTCUTSVDFINPUTHEX" | grep -oP "${SHORTCUTSVDFMATCHPATTERN}\K.*?(?=${SHORTCUTVDFENDPAT})" )"  # Grep for pattern, convert to text
+	convertSteamShortcutHex "$( getSteamShortcutEntryHex "$SHORTCUTSVDFINPUTHEX" "$SHORTCUTSVDFMATCHPATTERN" )"
 }
 
 # Find shortcut entry by AppID and return the hex
@@ -7983,28 +7992,77 @@ function findSteamShortcutByAppID {
 	done <<< "$( getSteamShortcutHex )"
 }
 
-## Takes a shortcut appid, gets the entry, updates the given column value, replaces the original hex section, writes out new hex string to `shortcuts.vdf`
+function replaceSteamShortcutEntryValue {
+	SHORTCUTSVDFENTRY="$1"
+	SHORTCUTSVDFMATCHPATTERN="$2"
+	SHORTCUTSVDFNEWVAL="$3"
+
+	SHORTCUTSVDFOLDVAL="$( getSteamShortcutEntryHex "$SHORTCUTSVDFENTRY" "$SHORTCUTSVDFMATCHPATTERN" | sed -E 's/0a$//g' )"  # Get the value without start and end bytes
+	SHORTCUTSVDFOLDCOL="$( printf "$SHORTCUTSVDFENTRY" | grep -oP "${SHORTCUTSVDFMATCHPATTERN}.*?${SHORTCUTVDFENDPAT}" )"  # Get value with start and end bytes
+
+	SHORTCUTSVDFNEWCOL="${SHORTCUTSVDFOLDCOL//"$SHORTCUTSVDFOLDVAL"/"$SHORTCUTSVDFNEWVAL"}"
+	SHORTCUTNEWENTRY="${SHORTCUTSVDFENTRY//"$SHORTCUTSVDFOLDCOL"/"$SHORTCUTSVDFNEWCOL"}"
+
+	printf "$SHORTCUTNEWENTRY" | tr -d '\0'
+}
+
+## Takes a shortcut appid, finds the shortcut entry, updates the given column value, replaces the hex for that section in the hex for the shortcuts.vdf file, writes out updated hex to new file
+## Note: This writes out an extra '0a' byte after the new entry value, but it seems to come all the way up from "getSteamShortcutsVdfFileHex"
+## Didn't cause any problems during testing but keep in mind in case it causes problems later!
 function editSteamShortcutEntry {
 	SCPATH="$STUIDPATH/config/$SCVDF"  # TODO make this a globally accessible path instead of hardcoding it everywhere
 
 	SHORTCUTENTRYAID="$1"  # i.e. 23435463
 	SHORTCUTCOLUMN="$2"  # i.e. "appname"
-	SHORTCUTNEWVAL="$3"  # i.e. "New Name"
+	SHORTCUTNEWVAL="$( xxd -p -c 0 <<< "$3" )"  # i.e. "New Name" but in hex
 
-	SHORTCUTSCONTENT="$( getSteamShortcutHex )"
+	SHORTCUTSCONTENT="$( getSteamShortcutsVdfFileHex )"
 	SHORTCUTSENTRY="$( findSteamShortcutByAppID "$SHORTCUTENTRYAID" )"
 
-	# TODO get column with matching name and replace the hex value with the new value
-	# we will need to encode the new value, then replace the original pattern with the new one
-	# Once we have the update shortcut block, replace it in the SHORTCUTSCONTENT, then write to shortcuts.vdf
+	DEBUG_SCNAME="$( getSteamShortcutEntryHex "$SHORTCUTSENTRY" "$SHORTCUTVDFNAMEHEXPAT" )"
 
-	# return new shortcut hex
+	## Find bytes that represent the column in shortcuts.vdf
+	SHORTCUTEDITSTARTBYTES=""
+	case $SHORTCUTCOLUMN in
+		"appid")
+			writelog "WARN" "${FUNCNAME[0]} - AppID not supported, skipping"
+			shift ;;
+		"appname")
+			SHORTCUTEDITSTARTBYTES="${SHORTCUTVDFNAMEHEXPAT}"
+			shift ;;
+		"Exe")
+			SHORTCUTEDITSTARTBYTES="${SHORTCUTVDFEXEHEXPAT}"
+			shift;;
+		"StartDir")
+			SHORTCUTEDITSTARTBYTES="${SHORTCUTVDFSTARTDIRHEXPAT}"
+			shift ;;
+		"icon")
+			SHORTCUTEDITSTARTBYTES="${SHORTCUTVDFICONHEXPAT}"
+			shift ;;
+	esac
+
+	if [ -z "$SHORTCUTEDITSTARTBYTES" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Unknown or unsupported column name '$SHORTCUTCOLUMN', skipping"
+		return
+	fi
+
+	# Replace original entry's value bytes with new bytes, then replace the old bytes in the entire shortcuts file with the new bytes and write it out
+	SHORTCUTNEWENTRY="$( replaceSteamShortcutEntryValue "$SHORTCUTSENTRY" "$SHORTCUTEDITSTARTBYTES" "$SHORTCUTNEWVAL" )"
+	SHORTCUTSCONTENT="${SHORTCUTSCONTENT//"$SHORTCUTSENTRY"/"$SHORTCUTNEWENTRY"}"
+
+	echo "$SHORTCUTSCONTENT" | xxd -r -p > "$SCPATH"
 }
 
 # Get shortcuts.vdf hex and grep each entry using start and end patterns (including a special case for the beginning of shortcuts.vdf)
 function getSteamShortcutHex {
 	SCPATH="$STUIDPATH/config/$SCVDF"
-	xxd -p -c 0 "$SCPATH" | grep -oP "(${SHORTCUTVDFFILESTARTHEXPAT}|${SHORTCUTVDFENTRYBEGINHEXPAT})\K.*?(?=${SHORTCUTSVDFENTRYENDHEXPAT})"  # Get entire shortcuts.vdf as hex, then grep each entry using the begin and end patterns for each block
+	getSteamShortcutsVdfFileHex | grep -oP "(${SHORTCUTVDFFILESTARTHEXPAT}|${SHORTCUTVDFENTRYBEGINHEXPAT})\K.*?(?=${SHORTCUTSVDFENTRYENDHEXPAT})"  # Get entire shortcuts.vdf as hex, then grep each entry using the begin and end patterns for each block
+}
+
+# Get full shortcuts.vdf hex including all start and end bytes -- Used for editing shortcuts.vdf
+function getSteamShortcutsVdfFileHex {
+	SCPATH="$STUIDPATH/config/$SCVDF"
+	xxd -p -c 0 "$SCPATH"
 }
 
 function haveAnySteamShortcuts {
@@ -8031,6 +8089,10 @@ function parseSteamShortcutEntryExe {
 
 function parseSteamShortcutEntryStartDir {
 	parseSteamShortcutEntryHex "$1" "${SHORTCUTVDFSTARTDIRHEXPAT}"
+}
+
+function parseSteamShortcutEntryIcon {
+	parseSteamShortcutEntryHex "$1" "${SHORTCUTVDFICONHEXPAT}"
 }
 
 ### END BINARY VDF FUNCTIONS ###
@@ -21964,6 +22026,10 @@ function commandline {
 		## Why are you looking here? :-)
 
 		DEBUGNOSTAID="-222353304"
+
+		editSteamShortcutEntry "3917765712" "appname" "Horny Game"
+
+		return
 
 		# DEBUG_LOCOVDF="$STUIDPATH/config/localconfig bsak.vdf"
 
