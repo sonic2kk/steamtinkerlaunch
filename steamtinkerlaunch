@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20231106-1 (get-sgdb-for-all-nonsteam-aids)"
+PROGVERS="v14.0.20231107-1 (get-sgdb-for-all-nonsteam-aids)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -7997,18 +7997,22 @@ function replaceSteamShortcutEntryValue {
 	SHORTCUTSVDFMATCHPATTERN="$2"
 	SHORTCUTSVDFNEWVAL="$3"
 
-	SHORTCUTSVDFOLDVAL="$( getSteamShortcutEntryHex "$SHORTCUTSVDFENTRY" "$SHORTCUTSVDFMATCHPATTERN" | sed -E 's/0a$//g' )"  # Get the value without start and end bytes
+	SHORTCUTSVDFOLDVAL="$( getSteamShortcutEntryHex "$SHORTCUTSVDFENTRY" "$SHORTCUTSVDFMATCHPATTERN" )"  # Get the value without start and end bytes
 	SHORTCUTSVDFOLDCOL="$( printf "$SHORTCUTSVDFENTRY" | grep -oP "${SHORTCUTSVDFMATCHPATTERN}.*?${SHORTCUTVDFENDPAT}" )"  # Get value with start and end bytes
-
 	SHORTCUTSVDFNEWCOL="${SHORTCUTSVDFOLDCOL//"$SHORTCUTSVDFOLDVAL"/"$SHORTCUTSVDFNEWVAL"}"
+
+	# Handle blank entries by simply hardcoding old entry and building new entry
+	if [ -z "$SHORTCUTSVDFOLDVAL" ]; then
+		SHORTCUTSVDFOLDCOL="${SHORTCUTSVDFMATCHPATTERN}${SHORTCUTVDFENDPAT}"
+		SHORTCUTSVDFNEWCOL="${SHORTCUTSVDFMATCHPATTERN}${SHORTCUTSVDFNEWVAL}${SHORTCUTVDFENDPAT}"
+	fi
+
 	SHORTCUTNEWENTRY="${SHORTCUTSVDFENTRY//"$SHORTCUTSVDFOLDCOL"/"$SHORTCUTSVDFNEWCOL"}"
 
 	printf "$SHORTCUTNEWENTRY" | tr -d '\0'
 }
 
 ## Takes a shortcut appid, finds the shortcut entry, updates the given column value, replaces the hex for that section in the hex for the shortcuts.vdf file, writes out updated hex to new file
-## Note: This writes out an extra '0a' byte after the new entry value, but it seems to come all the way up from "getSteamShortcutsVdfFileHex"
-## Didn't cause any problems during testing but keep in mind in case it causes problems later!
 function editSteamShortcutEntry {
 	SCPATH="$STUIDPATH/config/$SCVDF"  # TODO make this a globally accessible path instead of hardcoding it everywhere
 
@@ -8050,7 +8054,8 @@ function editSteamShortcutEntry {
 	SHORTCUTNEWENTRY="$( replaceSteamShortcutEntryValue "$SHORTCUTSENTRY" "$SHORTCUTEDITSTARTBYTES" "$SHORTCUTNEWVAL" )"
 	SHORTCUTSCONTENT="${SHORTCUTSCONTENT//"$SHORTCUTSENTRY"/"$SHORTCUTNEWENTRY"}"
 
-	echo "$SHORTCUTSCONTENT" | xxd -r -p > "$SCPATH"
+	# Write out new bytes with bad 0a byte removed (causes issues when reading paths etc, so strip it out)
+	echo "$SHORTCUTSCONTENT" | sed 's/0a//g' | xxd -r -p > "$SCPATH"
 }
 
 # Get shortcuts.vdf hex and grep each entry using start and end patterns (including a special case for the beginning of shortcuts.vdf)
@@ -22027,7 +22032,7 @@ function commandline {
 
 		DEBUGNOSTAID="-222353304"
 
-		editSteamShortcutEntry "3917765712" "appname" "Horny Game"
+		editSteamShortcutEntry "3917765712" "appname" "Updated Name"
 
 		return
 
