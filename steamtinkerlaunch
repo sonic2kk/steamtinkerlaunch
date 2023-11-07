@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20231107-1 (get-sgdb-for-all-nonsteam-aids)"
+PROGVERS="v14.0.20231107-2 (get-sgdb-for-all-nonsteam-aids)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -1672,9 +1672,12 @@ function getGridsForNonSteamGames {
 			## - getSteamGridDBNonSteamIcon was broken out from addNonSteamGame -- Ensure functionality still works  there
 			## - write out icon to shortcuts.vdf entry with editSteamShortcutEntry (need to get path for icon)
 			## - strange files with SGDB AID are being generated in STL dir -- Investigate
+			## Initial implementation below, untested for now
 			commandlineGetSteamGridDBArtwork --search-name="$SVDFENAME" --filename-appid="$SVDFEAID" --nonsteam
+
 			CMDLINEGETSGDBARTAID="$( cat "$NOSTSGDBID" )"
-			getSteamGridDBNonSteamIcon "$SVDFEAID" "$CMDLINEGETSGDBARTAID"
+			SVDFEICON="$( getSteamGridDBNonSteamIcon "$SVDFEAID" "$CMDLINEGETSGDBARTAID" )"
+			editSteamShortcutEntry "$SVDFEAID" "icon" "$SVDFEICON"
 		done <<< "$( getSteamShortcutHex )"
 	fi
 }
@@ -23563,6 +23566,7 @@ function getSteamGridDBNonSteamIcon {
 	# We don't have any way to set search settings for icons and it would be confusing to have this in the Global Menu for now, so just leave blank
 	# In future if we have Non-Steam Game global settings, we could include icon settings there too
 	downloadArtFromSteamGridDB "$NOSTSGDBID" "$SGDBSEARCHENDPOINT_ICONS" "${NOSTICONNAME}" "" "" "" "" "" "" "replace" "1"
+	find "${STUIDPATH}/config/grid/" -name "${NOSTSGDBID}_icon.*" | head -n1 2>/dev/null  # Return icon path
 }
 
 function addNonSteamGameGui {
@@ -24093,8 +24097,9 @@ function addNonSteamGame {
 		NOSTSGDBAPIGAMEID="$( cat "$NOSTSGDBID" )"
 
 		# Icon -- Only set if we successfully download an icon from SteamGridDB
-		getSteamGridDBNonSteamIcon "$NOSTAIDGRID" "$NOSTSGDBAPIGAMEID"
-		NOSTSGDBICON="$( find "${STUIDPATH}/config/grid/" -name "${NOSTAIDGRID}_icon.*" | head -n1 2>/dev/null )"
+		## TODO retest after getSteamGridDBNonSteamIcon was broken out, and also now that it returns icon path which it didn't before
+		NOSTSGDBICON="$( getSteamGridDBNonSteamIcon "$NOSTAIDGRID" "$NOSTSGDBAPIGAMEID" )"
+		# NOSTSGDBICON="$( find "${STUIDPATH}/config/grid/" -name "${NOSTAIDGRID}_icon.*" | head -n1 2>/dev/null )"
 		if [ -f "$NOSTSGDBICON" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Found SteamGridDB icon path to '$NOSTSGDBICON' -- Using this as Non-Steam Game Icon"
 			NOSTICONPATH="$NOSTSGDBICON"
