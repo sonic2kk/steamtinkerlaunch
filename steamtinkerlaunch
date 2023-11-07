@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20231105-3"
+PROGVERS="v14.0.20231108-1"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -117,7 +117,7 @@ PROTONCSV="$STLSHM/ProtonCSV.txt"
 SWRF="$STLSHM/SWR.txt"
 UWRF="$STLSHM/UWR.txt"
 EWRF="$STLSHM/EWR.txt"
-NOSTSGDBID="$STLSHM/NOSTSGDBID.txt"
+NOSTSGDBIDSHMFILE="$STLSHM/NOSTSGDBID.txt"
 NON="none"
 NOPE="nope"
 TMPL="template"
@@ -391,6 +391,17 @@ WINE_FSR_CUSTOM_RESOLUTIONS=(
 	"3413x960"
 	"3839x1108"
 )
+
+# Hex patterns for various blocks in shortcuts.vdf that we can grep for -- Casing matters!
+SHORTCUTVDFFILESTARTHEXPAT="0073686f7274637574730000300002"  # Bytes denoting the beginning of the shortcuts.vdf file
+SHORTCUTVDFENTRYBEGINHEXPAT="00080800.*?0002"  # Pattern for beginning of shortcut entry in shortcuts.vdf -- Beginning of file has a different pattern, but every other pattern begins like this
+SHORTCUTSVDFENTRYENDHEXPAT="000808"  # Pattern for how shortcuts.vdf blocks end
+SHORTCUTVDFAPPIDHEXPAT="617070696400"  # 'appid'
+SHORTCUTVDFNAMEHEXPAT="(014170704e616d6500|6170706e616d6500)"  # 'AppName' and 'appname'
+SHORTCUTVDFEXEHEXPAT="000145786500"  # 'Exe' ('exe' is 6578650a if we ever need it)
+SHORTCUTVDFSTARTDIRHEXPAT="0001537461727444697200"  # 'StartDir'
+SHORTCUTVDFICONHEXPAT="000169636f6e00"  # 'icon'
+SHORTCUTVDFENDPAT="0001"  # Generic end pattern for each shortcut.vdf column
 
 function setGNID {
 	# only keep alphabet chars
@@ -1372,6 +1383,16 @@ function getGameDataForInstalledGames {
 	fi
 }
 
+function listSteamShortcutGameIDs {
+	if haveAnySteamShortcuts ; then
+		while read -r SCVDFE; do
+			parseSteamShortcutEntryAppID "$SCVDFE"
+		done <<< "$( getSteamShortcutHex )"
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - No Steam shortcuts found!"
+	fi
+}
+
 function checkSGDbApi {
 	if [ -z "$SGDBAPIKEY" ] || [ "$SGDBAPIKEY" == "$NON" ]; then
 		writelog "SKIP" "${FUNCNAME[0]} - No SteamGrid Api Key found - Get one at 'https://www.steamgriddb.com/profile/preferences/api/' (requires a SteamGridDB account) and see the SteamGridDB wiki page for guidance on how to supply the API key."
@@ -1611,7 +1632,7 @@ function commandlineGetSteamGridDBArtwork {
 		downloadArtFromSteamGridDB "$GSGDBA_APPID" "$SGDBSEARCHENDPOINT_BOXART" "${GSGDBA_FILENAME}" "$SGDBTENFOOTSTYLES" "$SGDBTENFOOTDIMS" "$SGDBTENFOOTTYPES" "$SGDBTENFOOTNSFW" "$SGDBTENFOOTHUMOR" "$SGDBTENFOOTEPILEPSY" "$GSGDBA_HASFILE" "$GSGDBA_APPLYARTWORK"
 	fi
 
-	echo "$GSGDBA_APPID" > "$NOSTSGDBID"  # Store ID in case other functions need it (i.e. addNonSteamGame) -- Little hacky, would rather return this somehow...
+	echo "$GSGDBA_APPID" > "$NOSTSGDBIDSHMFILE"  # Store ID in case other functions need it (i.e. addNonSteamGame) -- Little hacky, would rather return this somehow...
 }
 
 function getGridsForOwnedGames {
@@ -1621,13 +1642,45 @@ function getGridsForOwnedGames {
 }
 function getGridsForInstalledGames {
 	if checkSGDbApi; then
-		if [ "$(listInstalledGameIDs | wc -l)" -eq 0 ]; then
-			writelog "SKIP" "${FUNCNAME[0]} - No installed games found!"
-		else
+		if [ "$(listInstalledGameIDs | wc -l)" -gt 0 ]; then
 			while read -r INSTGAAID; do
 				getSteamGridDBArtwork "$INSTGAAID"
 			done <<< "$( listInstalledGameIDs )"
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - No installed games found!"
 		fi
+	fi
+}
+function getGridsForNonSteamGames {
+	# NOTE we shpuld also need to fetch and set icons eventually
+	# (will require updating shortcuts.vdf entry which we can't do yet, may just be a case of encoding an entry and updating it with sed)
+	if ! haveAnySteamShortcuts ; then
+		writelog "SKIP" "${FUNCNAME[0]} - No Non-Steam Games found, skipping"
+		echo "No Non-Steam Games found, not downloading grids"
+
+		return
+	fi
+
+	if checkSGDbApi; then
+		# Get Non-Steam Game Name + ID
+		writelog "INFO" "${FUNCNAME[0]} - Fetching artwork for all Non-Steam Games"
+		while read -r SCVDFE; do
+			SVDFEAID="$( parseSteamShortcutEntryAppID "$SCVDFE" )"
+			SVDFENAME="$( parseSteamShortcutEntryAppName "$SCVDFE" )"
+
+			writelog "INFO" "${FUNCNAME[0]} - Updating artwork for game '$SVDFENAME ('$SVDFEAID')'"
+			echo "Updating artwork for game '$SVDFENAME ('$SVDFEAID')'"
+
+			commandlineGetSteamGridDBArtwork --search-name="$SVDFENAME" --filename-appid="$SVDFEAID" --nonsteam
+
+			CMDLINEGETSGDBARTAID="$( cat "$NOSTSGDBIDSHMFILE" )"
+			getSteamGridDBNonSteamIcon "$SVDFEAID" "$CMDLINEGETSGDBARTAID"
+			SVDFEICON="$( findNonSteamGameIcon )"  # Return icon path )"
+			if [ -n "$SVDFEICON" ]; then  # Need this check because sometimes we don't get anything back from SGDB i.e. unknown name
+				writelog "INFO" "${FUNCNAME[0]} - Found icon for game '${SVDFENAME} (${SVDFEAID})' at '$SVDFEICON'"
+				editSteamShortcutEntry "$SVDFEAID" "icon" "$SVDFEICON"
+			fi
+		done <<< "$( getSteamShortcutHex )"
 	fi
 }
 
@@ -7663,12 +7716,15 @@ function listSteamGames {
 	fi
 }
 
+# TODO do we want a way to specify that this function should only return Steam or Non-Steam AppIDs?
 function getIDFromTitle {
 	if [ -z "$1" ]; then
 		echo "A Game Title (part of it might be enough) is required as argument"
 	else
 		# Check installed game appmanifests for name matches
 		FOUNDMATCHES=()
+
+		# Steam games
 		while read -r APPMA; do
 			APPMATITLE="$( getValueFromAppManifest "name" "$APPMA" )"
 			if [[ ${APPMATITLE,,} == *"${1,,}"* ]]; then
@@ -7677,6 +7733,19 @@ function getIDFromTitle {
 				FOUNDMATCHES+=( "$FOUNDGAMNAM" )
 			fi
 		done <<< "$( listAppManifests )"
+
+		# Steam shortcuts
+		if haveAnySteamShortcuts ; then
+			while read -r SCVDFE; do
+				SVDFENAME="$( parseSteamShortcutEntryAppName "$SCVDFE" )"
+				SVDFEAID="$( parseSteamShortcutEntryAppID "$SCVDFE" )"
+
+				if [[ ${SVDFENAME,,} == *"${1,,}"* ]]; then
+					FOUNDGAMNAM="$( printf "%s\t\t(%s)" "$SVDFEAID" "$SVDFENAME" )"
+					FOUNDMATCHES+=( "$FOUNDGAMNAM" )
+				fi
+			done <<< "$( getSteamShortcutHex )"
+		fi
 		if [ "${#FOUNDMATCHES[@]}" -gt 0 ]; then
 			printf "%s\n" "${FOUNDMATCHES[@]}"
 		else
@@ -7701,6 +7770,17 @@ function getTitleFromID {
 
 			if [ -n "$GAMEMANIFEST" ]; then
 				getValueFromAppManifest "name" "$GAMEMANIFEST"
+			elif haveAnySteamShortcuts ; then
+				# Steam shortcuts
+				while read -r SCVDFE; do
+					SVDFENAME="$( parseSteamShortcutEntryAppName "$SCVDFE" )"
+					SVDFEAID="$( parseSteamShortcutEntryAppID "$SCVDFE" )"
+
+					if [ "$SVDFEAID" -eq "$1" ]; then
+						echo "$SVDFENAME"
+						break
+					fi
+				done <<< "$( getSteamShortcutHex )"
 			else
 				echo "No Title found for '$1'"
 
@@ -7876,6 +7956,162 @@ function getGameDir {
 		fi
 	fi
 }
+
+### BEGIN BINARY VDF FUNCTIONS ###
+
+# Convert Steam Shortcut AppID from hex to 32bit unsigned integer
+function convertSteamShortcutAppID {
+    SHORTCUTAPPIDHEX="$1"
+    SHORTCUTAPPIDLITTLEENDIAN="$( echo "$SHORTCUTAPPIDHEX" | tac -rs .. | tr -d '\n' )"
+    echo "$((16#${SHORTCUTAPPIDLITTLEENDIAN}))"
+}
+
+# Convert shortcuts.vdf hex to text with nullbyte stripped
+function convertSteamShortcutHex {
+	printf "%s" "$1" | xxd -r -p | tr -d '\0'
+}
+
+# Get the raw, unparsed hex for an entry from shortcuts.vdf
+function getSteamShortcutEntryHex {
+	SHORTCUTSVDFINPUTHEX="$1"  # The hex block representing the shortcut
+	SHORTCUTSVDFMATCHPATTERN="$2"  # The pattern to match against in the block
+
+	printf "%s" "$SHORTCUTSVDFINPUTHEX" | grep -oP "${SHORTCUTSVDFMATCHPATTERN}\K.*?(?=${SHORTCUTVDFENDPAT})"
+}
+
+# Parse a hex shortcuts.vdf entry based on a start pattern and convert to text
+# Unfortunately does not work for appid
+function parseSteamShortcutEntryHex {
+	SHORTCUTSVDFINPUTHEX="$1"  # The hex block representing the shortcut
+	SHORTCUTSVDFMATCHPATTERN="$2"  # The pattern to match against in the block
+
+	convertSteamShortcutHex "$( getSteamShortcutEntryHex "$SHORTCUTSVDFINPUTHEX" "$SHORTCUTSVDFMATCHPATTERN" )"
+}
+
+# Find shortcut entry by AppID and return the hex
+function findSteamShortcutByAppID {
+	SHORTCUTENTRYAID="$1"
+
+	writelog "INFO" "${FUNCNAME[0]} - Searching for shortcut entry with AppID '$SHORTCUTENTRYAID'"
+	while read -r SCVDFE; do
+		SVDFEAID="$( parseSteamShortcutEntryAppID "$SCVDFE" )"
+		if [ "$SVDFEAID" -eq "$SHORTCUTENTRYAID" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Found shortcut entry with AppID '$SHORTCUTENTRYAID'"  # Updating it how?
+			echo "$SCVDFE"
+			break
+		fi
+	done <<< "$( getSteamShortcutHex )"
+}
+
+function replaceSteamShortcutEntryValue {
+	SHORTCUTSVDFENTRY="$1"
+	SHORTCUTSVDFMATCHPATTERN="$2"
+	SHORTCUTSVDFNEWVAL="$3"
+
+	SHORTCUTSVDFOLDVAL="$( getSteamShortcutEntryHex "$SHORTCUTSVDFENTRY" "$SHORTCUTSVDFMATCHPATTERN" )"  # Get the value without start and end bytes
+	SHORTCUTSVDFOLDCOL="$( printf "%s" "$SHORTCUTSVDFENTRY" | grep -oP "${SHORTCUTSVDFMATCHPATTERN}.*?${SHORTCUTVDFENDPAT}" )"  # Get value with start and end bytes
+	SHORTCUTSVDFNEWCOL="${SHORTCUTSVDFOLDCOL//"$SHORTCUTSVDFOLDVAL"/"$SHORTCUTSVDFNEWVAL"}"
+
+	# Handle blank entries by simply hardcoding old entry and building new entry
+	if [ -z "$SHORTCUTSVDFOLDVAL" ]; then
+		SHORTCUTSVDFOLDCOL="${SHORTCUTSVDFMATCHPATTERN}${SHORTCUTVDFENDPAT}"
+		SHORTCUTSVDFNEWCOL="${SHORTCUTSVDFMATCHPATTERN}${SHORTCUTSVDFNEWVAL}${SHORTCUTVDFENDPAT}"
+	fi
+
+	SHORTCUTNEWENTRY="${SHORTCUTSVDFENTRY//"$SHORTCUTSVDFOLDCOL"/"$SHORTCUTSVDFNEWCOL"}"
+
+	printf "%s" "$SHORTCUTNEWENTRY" | tr -d '\0'
+}
+
+## Takes a shortcut appid, finds the shortcut entry, updates the given column value, replaces the hex for that section in the hex for the shortcuts.vdf file, writes out updated hex to new file
+function editSteamShortcutEntry {
+	SCPATH="$STUIDPATH/config/$SCVDF"  # TODO make this a globally accessible path instead of hardcoding it everywhere
+
+	SHORTCUTENTRYAID="$1"  # i.e. 23435463
+	SHORTCUTCOLUMN="$2"  # i.e. "appname"
+	SHORTCUTNEWVAL="$( xxd -p -c 0 <<< "$3" )"  # i.e. "New Name" but in hex
+
+	SHORTCUTSCONTENT="$( getSteamShortcutsVdfFileHex )"
+	SHORTCUTSENTRY="$( findSteamShortcutByAppID "$SHORTCUTENTRYAID" )"
+
+	## Find bytes that represent the column in shortcuts.vdf
+	SHORTCUTEDITSTARTBYTES=""
+	case $SHORTCUTCOLUMN in
+		"appid")
+			writelog "WARN" "${FUNCNAME[0]} - AppID not supported, skipping"
+			shift ;;
+		"appname")
+			SHORTCUTEDITSTARTBYTES="${SHORTCUTVDFNAMEHEXPAT}"
+			shift ;;
+		"Exe")
+			SHORTCUTEDITSTARTBYTES="${SHORTCUTVDFEXEHEXPAT}"
+			shift;;
+		"StartDir")
+			SHORTCUTEDITSTARTBYTES="${SHORTCUTVDFSTARTDIRHEXPAT}"
+			shift ;;
+		"icon")
+			SHORTCUTEDITSTARTBYTES="${SHORTCUTVDFICONHEXPAT}"
+			shift ;;
+	esac
+
+	if [ -z "$SHORTCUTEDITSTARTBYTES" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Unknown or unsupported column name '$SHORTCUTCOLUMN', skipping"
+		return
+	fi
+
+	writelog "INFO" "${FUNCNAME[0]} - Proceeding to edit '$SHORTCUTCOLUMN' field of shortcut '$SHORTCUTENTRYAID'"
+
+	# Replace original entry's value bytes with new bytes, then replace the old bytes in the entire shortcuts file with the new bytes and write it out
+	SHORTCUTNEWENTRY="$( replaceSteamShortcutEntryValue "$SHORTCUTSENTRY" "$SHORTCUTEDITSTARTBYTES" "$SHORTCUTNEWVAL" )"
+	SHORTCUTSCONTENT="${SHORTCUTSCONTENT//"$SHORTCUTSENTRY"/"$SHORTCUTNEWENTRY"}"
+
+	# Write out new bytes with bad 0a byte removed (causes issues when reading paths etc, so strip it out)
+	echo "$SHORTCUTSCONTENT" | sed 's/0a//g' | xxd -r -p > "$SCPATH"
+}
+
+# Get shortcuts.vdf hex and grep each entry using start and end patterns (including a special case for the beginning of shortcuts.vdf)
+function getSteamShortcutHex {
+	SCPATH="$STUIDPATH/config/$SCVDF"
+	getSteamShortcutsVdfFileHex | grep -oP "(${SHORTCUTVDFFILESTARTHEXPAT}|${SHORTCUTVDFENTRYBEGINHEXPAT})\K.*?(?=${SHORTCUTSVDFENTRYENDHEXPAT})"  # Get entire shortcuts.vdf as hex, then grep each entry using the begin and end patterns for each block
+}
+
+# Get full shortcuts.vdf hex including all start and end bytes -- Used for editing shortcuts.vdf
+function getSteamShortcutsVdfFileHex {
+	SCPATH="$STUIDPATH/config/$SCVDF"
+	xxd -p -c 0 "$SCPATH"
+}
+
+function haveAnySteamShortcuts {
+	if [ "$( getSteamShortcutHex | wc -c )" -gt 0 ]; then
+		return 0
+	else
+		return 1
+	fi
+}
+
+# Grep and convert AppID from a given block of hex representing a shortcut entry in shortcuts.vdf by taking the first 8 bytes
+function parseSteamShortcutEntryAppID {
+	convertSteamShortcutAppID "$( printf "%s" "$1" | grep -oP "${SHORTCUTVDFAPPIDHEXPAT}\K.{8}" )"
+}
+
+### Functions to get information from specific parts of the shortcuts VDF ###
+function parseSteamShortcutEntryAppName {
+	parseSteamShortcutEntryHex "$1" "${SHORTCUTVDFNAMEHEXPAT}"
+}
+
+function parseSteamShortcutEntryExe {
+	parseSteamShortcutEntryHex "$1" "${SHORTCUTVDFEXEHEXPAT}"
+}
+
+function parseSteamShortcutEntryStartDir {
+	parseSteamShortcutEntryHex "$1" "${SHORTCUTVDFSTARTDIRHEXPAT}"
+}
+
+function parseSteamShortcutEntryIcon {
+	parseSteamShortcutEntryHex "$1" "${SHORTCUTVDFICONHEXPAT}"
+}
+
+### END BINARY VDF FUNCTIONS ###
 
 function getGameWindowName {
 	if [ -n "$GAMEWINDOW" ] && [ "$GAMEWINDOW" != "$NON" ]; then
@@ -21550,7 +21786,7 @@ function howto {
 	echo "                                       or only from <SteamAppID>"
 	echo "           grid <SteamAppID>         Update Steam Grid for installed game(s)"
 	echo "                                       optional argument either a SteamAppID,"
-	echo "                                       'owned' or 'installed'"
+	echo "                                       'owned', 'installed', or 'nonsteam|shortcut'"
 	echo "                                       (default is 'installed')"
 	echo "           allgamedata                 The same as above for"
 	echo "                                       all games in $SCV"
@@ -21806,6 +22042,10 @@ function commandline {
 		## Why are you looking here? :-)
 
 		DEBUGNOSTAID="-222353304"
+
+		editSteamShortcutEntry "3666773025" "appname" "New Name 2"
+
+		return
 
 		# DEBUG_LOCOVDF="$STUIDPATH/config/localconfig bsak.vdf"
 
@@ -22145,6 +22385,8 @@ function commandline {
 					getGridsForOwnedGames
 				elif [ "$3" == "installed" ]; then
 					getGridsForInstalledGames
+				elif [ "$3" == "nonsteam" ] || [ "$3" == "shortcuts" ]; then
+					getGridsForNonSteamGames
 				fi
 			elif [ "$2" == "allgamedata" ]; then
 				getDataForAllGamesinSharedConfig
@@ -23311,6 +23553,23 @@ function filterUnwantedSteamCategories {
 	printf "%s" "${FILTEREDTAGS[@]}" | tr '\n' '!' | sed 's/\!*$//g'
 }
 
+# Download icon for Non-Steam Game using SteamGridDB Game ID
+# We can't set icons for Steam games, and right now we can't edit the `shortcuts.vdf` file to edit the path to the icon,
+# so this function is only for Non-Steam Games and only when they're being added to Steam
+#
+# In future, if we have a function to add SteamGridDB art for all Non-Steam Games, we could break this out and use it to set icons at that time too
+function getSteamGridDBNonSteamIcon {
+	NOSTICONAID="$1"  # Non-Steam AppID
+	NOSTSGDBID="$2"  # SteamGridDB Game ID
+	NOSTICONNAME="${NOSTICONAID}_icon"
+	SGDBSEARCHENDPOINT_ICONS="${BASESTEAMGRIDDBAPI}/icons/game"
+
+	# Download icon and put it in Steam grids folder, which should be a safe and intuitive location
+	# We don't have any way to set search settings for icons and it would be confusing to have this in the Global Menu for now, so just leave blank
+	# In future if we have Non-Steam Game global settings, we could include icon settings there too
+	downloadArtFromSteamGridDB "$NOSTSGDBID" "$SGDBSEARCHENDPOINT_ICONS" "${NOSTICONNAME}" "" "" "" "" "" "" "replace" "1"
+}
+
 function addNonSteamGameGui {
 	writelog "INFO" "${FUNCNAME[0]} - Starting the Gui for adding a $NSGA to Steam"
 
@@ -23476,6 +23735,10 @@ function addNonSteamGameGui {
 	esac
 }
 
+function findNonSteamGameIcon {
+	find "${STUIDPATH}/config/grid/" -name "${NOSTAIDGRID}_icon.*" | head -n1 2>/dev/null
+}
+
 function addNonSteamGame {
 	if [ -z "$SUSDA" ] || [ -z "$STUIDPATH" ]; then
 		setSteamPaths
@@ -23563,22 +23826,22 @@ function addNonSteamGame {
 		fi
 	}
 
-	# Download icon for Non-Steam Game using SteamGridDB Game ID
-	# We can't set icons for Steam games, and right now we can't edit the `shortcuts.vdf` file to edit the path to the icon,
-	# so this function is only for Non-Steam Games and only when they're being added to Steam
-	#
-	# In future, if we have a function to add SteamGridDB art for all Non-Steam Games, we could break this out and use it to set icons at that time too
-	function getSteamGridDBNonSteamIcon {
-		NOSTICONAID="$1"  # Non-Steam AppID
-		NOSTSGDBID="$2"  # SteamGridDB Game ID
-		NOSTICONNAME="${NOSTICONAID}_icon"
-		SGDBSEARCHENDPOINT_ICONS="${BASESTEAMGRIDDBAPI}/icons/game"
+	# # Download icon for Non-Steam Game using SteamGridDB Game ID
+	# # We can't set icons for Steam games, and right now we can't edit the `shortcuts.vdf` file to edit the path to the icon,
+	# # so this function is only for Non-Steam Games and only when they're being added to Steam
+	# #
+	# # In future, if we have a function to add SteamGridDB art for all Non-Steam Games, we could break this out and use it to set icons at that time too
+	# function getSteamGridDBNonSteamIcon {
+	# 	NOSTICONAID="$1"  # Non-Steam AppID
+	# 	NOSTSGDBID="$2"  # SteamGridDB Game ID
+	# 	NOSTICONNAME="${NOSTICONAID}_icon"
+	# 	SGDBSEARCHENDPOINT_ICONS="${BASESTEAMGRIDDBAPI}/icons/game"
 
-		# Download icon and put it in Steam grids folder, which should be a safe and intuitive location
-		# We don't have any way to set search settings for icons and it would be confusing to have this in the Global Menu for now, so just leave blank
-		# In future if we have Non-Steam Game global settings, we could include icon settings there too
-		downloadArtFromSteamGridDB "$NOSTSGDBID" "$SGDBSEARCHENDPOINT_ICONS" "${NOSTICONNAME}" "" "" "" "" "" "" "replace" "1"
-	}
+	# 	# Download icon and put it in Steam grids folder, which should be a safe and intuitive location
+	# 	# We don't have any way to set search settings for icons and it would be confusing to have this in the Global Menu for now, so just leave blank
+	# 	# In future if we have Non-Steam Game global settings, we could include icon settings there too
+	# 	downloadArtFromSteamGridDB "$NOSTSGDBID" "$SGDBSEARCHENDPOINT_ICONS" "${NOSTICONNAME}" "" "" "" "" "" "" "replace" "1"
+	# }
 
 	NOSTHIDE=0  # Set in localconfig.vdf along with tags and overlay settings
 	NOSTADC=1
@@ -23836,11 +24099,11 @@ function addNonSteamGame {
 		commandlineGetSteamGridDBArtwork --search-name="$NOSTSEARCHNAME" --search-id="$NOSTSEARCHID" --filename-appid="$NOSTAIDGRID" "$NOSTSEARCHFLAG" --apply --replace-existing
 
 		# Get ID that commandlineGetSteamGridDBArtwork searched on above and use that to search for the icon
-		NOSTSGDBAPIGAMEID="$( cat "$NOSTSGDBID" )"
+		NOSTSGDBAPIGAMEID="$( cat "$NOSTSGDBIDSHMFILE" )"
 
 		# Icon -- Only set if we successfully download an icon from SteamGridDB
 		getSteamGridDBNonSteamIcon "$NOSTAIDGRID" "$NOSTSGDBAPIGAMEID"
-		NOSTSGDBICON="$( find "${STUIDPATH}/config/grid/" -name "${NOSTAIDGRID}_icon.*" | head -n1 2>/dev/null )"
+		NOSTSGDBICON="$( findNonSteamGameIcon )"
 		if [ -f "$NOSTSGDBICON" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Found SteamGridDB icon path to '$NOSTSGDBICON' -- Using this as Non-Steam Game Icon"
 			NOSTICONPATH="$NOSTSGDBICON"
