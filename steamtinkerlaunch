@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20231108-1 (get-sgdb-for-all-nonsteam-aids)"
+PROGVERS="v14.0.20231108-2 (get-sgdb-for-all-nonsteam-aids)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -1668,8 +1668,9 @@ function getGridsForNonSteamGames {
 			SVDFEAID="$( parseSteamShortcutEntryAppID "$SCVDFE" )"
 			SVDFENAME="$( parseSteamShortcutEntryAppName "$SCVDFE" )"
 
-			## TODO
-			## - getSteamGridDBNonSteamIcon was broken out from addNonSteamGame -- Ensure functionality still works  there
+			writelog "INFO" "${FUNCNAME[0]} - Updating artwork for game '$SVDFENAME ('$SVDFEAID')'"
+			echo "Updating artwork for game '$SVDFENAME ('$SVDFEAID')'"
+
 			commandlineGetSteamGridDBArtwork --search-name="$SVDFENAME" --filename-appid="$SVDFEAID" --nonsteam
 
 			CMDLINEGETSGDBARTAID="$( cat "$NOSTSGDBIDSHMFILE" )"
@@ -7967,7 +7968,7 @@ function convertSteamShortcutAppID {
 
 # Convert shortcuts.vdf hex to text with nullbyte stripped
 function convertSteamShortcutHex {
-	printf "$1" | xxd -r -p | tr -d '\0'
+	printf "%2" "$1" | xxd -r -p | tr -d '\0'
 }
 
 # Get the raw, unparsed hex for an entry from shortcuts.vdf
@@ -7975,7 +7976,7 @@ function getSteamShortcutEntryHex {
 	SHORTCUTSVDFINPUTHEX="$1"  # The hex block representing the shortcut
 	SHORTCUTSVDFMATCHPATTERN="$2"  # The pattern to match against in the block
 
-	printf "$SHORTCUTSVDFINPUTHEX" | grep -oP "${SHORTCUTSVDFMATCHPATTERN}\K.*?(?=${SHORTCUTVDFENDPAT})"
+	printf "%s" "$SHORTCUTSVDFINPUTHEX" | grep -oP "${SHORTCUTSVDFMATCHPATTERN}\K.*?(?=${SHORTCUTVDFENDPAT})"
 }
 
 # Parse a hex shortcuts.vdf entry based on a start pattern and convert to text
@@ -8008,7 +8009,7 @@ function replaceSteamShortcutEntryValue {
 	SHORTCUTSVDFNEWVAL="$3"
 
 	SHORTCUTSVDFOLDVAL="$( getSteamShortcutEntryHex "$SHORTCUTSVDFENTRY" "$SHORTCUTSVDFMATCHPATTERN" )"  # Get the value without start and end bytes
-	SHORTCUTSVDFOLDCOL="$( printf "$SHORTCUTSVDFENTRY" | grep -oP "${SHORTCUTSVDFMATCHPATTERN}.*?${SHORTCUTVDFENDPAT}" )"  # Get value with start and end bytes
+	SHORTCUTSVDFOLDCOL="$( printf "%s" "$SHORTCUTSVDFENTRY" | grep -oP "${SHORTCUTSVDFMATCHPATTERN}.*?${SHORTCUTVDFENDPAT}" )"  # Get value with start and end bytes
 	SHORTCUTSVDFNEWCOL="${SHORTCUTSVDFOLDCOL//"$SHORTCUTSVDFOLDVAL"/"$SHORTCUTSVDFNEWVAL"}"
 
 	# Handle blank entries by simply hardcoding old entry and building new entry
@@ -8019,7 +8020,7 @@ function replaceSteamShortcutEntryValue {
 
 	SHORTCUTNEWENTRY="${SHORTCUTSVDFENTRY//"$SHORTCUTSVDFOLDCOL"/"$SHORTCUTSVDFNEWCOL"}"
 
-	printf "$SHORTCUTNEWENTRY" | tr -d '\0'
+	printf "%s" "$SHORTCUTNEWENTRY" | tr -d '\0'
 }
 
 ## Takes a shortcut appid, finds the shortcut entry, updates the given column value, replaces the hex for that section in the hex for the shortcuts.vdf file, writes out updated hex to new file
@@ -8032,8 +8033,6 @@ function editSteamShortcutEntry {
 
 	SHORTCUTSCONTENT="$( getSteamShortcutsVdfFileHex )"
 	SHORTCUTSENTRY="$( findSteamShortcutByAppID "$SHORTCUTENTRYAID" )"
-
-	DEBUG_SCNAME="$( getSteamShortcutEntryHex "$SHORTCUTSENTRY" "$SHORTCUTVDFNAMEHEXPAT" )"
 
 	## Find bytes that represent the column in shortcuts.vdf
 	SHORTCUTEDITSTARTBYTES=""
@@ -8081,7 +8080,7 @@ function getSteamShortcutsVdfFileHex {
 }
 
 function haveAnySteamShortcuts {
-	if [ $( getSteamShortcutHex | wc -c ) -gt 0 ]; then
+	if [ "$( getSteamShortcutHex | wc -c )" -gt 0 ]; then
 		return 0
 	else
 		return 1
@@ -8090,7 +8089,7 @@ function haveAnySteamShortcuts {
 
 # Grep and convert AppID from a given block of hex representing a shortcut entry in shortcuts.vdf by taking the first 8 bytes
 function parseSteamShortcutEntryAppID {
-	convertSteamShortcutAppID "$( printf "$1" | grep -oP "${SHORTCUTVDFAPPIDHEXPAT}\K.{8}" )"
+	convertSteamShortcutAppID "$( printf "%s" "$1" | grep -oP "${SHORTCUTVDFAPPIDHEXPAT}\K.{8}" )"
 }
 
 ### Functions to get information from specific parts of the shortcuts VDF ###
