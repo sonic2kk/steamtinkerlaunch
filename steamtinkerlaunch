@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20231107-3 (get-sgdb-for-all-nonsteam-aids)"
+PROGVERS="v14.0.20231108-1 (get-sgdb-for-all-nonsteam-aids)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -1670,17 +1670,12 @@ function getGridsForNonSteamGames {
 
 			## TODO
 			## - getSteamGridDBNonSteamIcon was broken out from addNonSteamGame -- Ensure functionality still works  there
-			## - write out icon to shortcuts.vdf entry with editSteamShortcutEntry (need to get path for icon)
-			## Initial implementation below, untested for now
 			commandlineGetSteamGridDBArtwork --search-name="$SVDFENAME" --filename-appid="$SVDFEAID" --nonsteam
 
-			# TODO make this a reusable function?
-			# ---
 			CMDLINEGETSGDBARTAID="$( cat "$NOSTSGDBIDSHMFILE" )"
 			getSteamGridDBNonSteamIcon "$SVDFEAID" "$CMDLINEGETSGDBARTAID"
-			SVDFEICON="$( find "${STUIDPATH}/config/grid/" -name "${SVDFEAID}_icon.*" | head -n1 2>/dev/null )"  # Return icon path )"
-			# ---
-			if [ -n "$SVDFEICON" ]; then
+			SVDFEICON="$( findNonSteamGameIcon )"  # Return icon path )"
+			if [ -n "$SVDFEICON" ]; then  # Need this check because sometimes we don't get anything back from SGDB i.e. unknown name
 				writelog "INFO" "${FUNCNAME[0]} - Found icon for game '${SVDFENAME} (${SVDFEAID})' at '$SVDFEICON'"
 				editSteamShortcutEntry "$SVDFEAID" "icon" "$SVDFEICON"
 			fi
@@ -23739,6 +23734,10 @@ function addNonSteamGameGui {
 	esac
 }
 
+function findNonSteamGameIcon {
+	find "${STUIDPATH}/config/grid/" -name "${NOSTAIDGRID}_icon.*" | head -n1 2>/dev/null
+}
+
 function addNonSteamGame {
 	if [ -z "$SUSDA" ] || [ -z "$STUIDPATH" ]; then
 		setSteamPaths
@@ -24102,9 +24101,8 @@ function addNonSteamGame {
 		NOSTSGDBAPIGAMEID="$( cat "$NOSTSGDBIDSHMFILE" )"
 
 		# Icon -- Only set if we successfully download an icon from SteamGridDB
-		## TODO retest after getSteamGridDBNonSteamIcon was broken out
 		getSteamGridDBNonSteamIcon "$NOSTAIDGRID" "$NOSTSGDBAPIGAMEID"
-		NOSTSGDBICON="$( find "${STUIDPATH}/config/grid/" -name "${NOSTAIDGRID}_icon.*" | head -n1 2>/dev/null )"
+		NOSTSGDBICON="$( findNonSteamGameIcon )"
 		if [ -f "$NOSTSGDBICON" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Found SteamGridDB icon path to '$NOSTSGDBICON' -- Using this as Non-Steam Game Icon"
 			NOSTICONPATH="$NOSTSGDBICON"
