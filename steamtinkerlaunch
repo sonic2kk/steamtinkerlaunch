@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20231108-3"
+PROGVERS="v14.0.20231108-4"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -7849,6 +7849,8 @@ function getGameExe {
 }
 
 function getCompatData {
+	SEARCHSTEAMSHORTCUTS="${2:-0}"  # Default to not searching Steam shortcuts
+
 	if [ -z "$1" ]; then
 		echo "A Game ID or Game Title is required as argument"
 	else
@@ -7897,6 +7899,25 @@ function getCompatData {
 					if [ -d "$COMPATDATADIR" ]; then
 						COMPATGAMESTR="$COMPATGAMENAME ($COMPATGAMEAID) -> $COMPATDATADIR"
 					fi
+				fi
+
+				# Check Steam Shortcuts for games never launched with STL
+				if [ ! -d "$SEARCHGAMEDIR" ] && [ "$SEARCHSTEAMSHORTCUTS" -eq 1 ] && haveAnySteamShortcuts ; then
+					while read -r SCVDFE; do
+						SCVDFEAID="$( parseSteamShortcutEntryAppID "$SCVDFE" )"
+						SCVDFENAME="$( parseSteamShortcutEntryAppName "$SCVDFE" )"
+
+						## If we have a match, build a hardcoded compatdata pointing at the Steam Root compatdata dir and if it exists, return that
+						## Seems like this is always where Steam generates compatdata for Non-Steam Games
+						## may instead be primary drive which defaults to Steam Root, but for now looks like Steam Root is the main place, so should work most of the time
+						if [ "$SCVDFEAID" -eq "$1" ] 2>/dev/null || [[ ${SCVDFENAME,,} == *"${1,,}"* ]]; then
+							SCVDFECODA="$SROOT/$SA/$CODA/${SCVDFEAID}"
+							if [ -d "$SCVDFECODA" ]; then
+								COMPATGAMESTR="$SCVDFENAME ($SCVDFEAID) -> $SCVDFECODA"
+							fi
+							break
+						fi
+					done <<< "$( getSteamShortcutHex )"
 				fi
 
 				echo "${COMPATGAMESTR:-$NOTFOUNDSTR}"
@@ -22020,7 +22041,7 @@ function commandline {
 	elif [ "$1" == "gettitle" ] || [ "$1" == "gt" ]; then
 		getTitleFromID "$2" "1"
 	elif [ "$1" == "getcompatdata" ] || [ "$1" == "gc" ]; then
-		getCompatData "$2"
+		getCompatData "$2" "1"
 	elif [ "$1" == "getgamedir" ] || [ "$1" == "gg" ]; then
 		if [ "$3" == "only" ]; then
 			getGameDir "$2" "X"
