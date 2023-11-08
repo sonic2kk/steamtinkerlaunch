@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20231108-2"
+PROGVERS="v14.0.20231108-3"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -6347,7 +6347,7 @@ function MainMenu {
 
 		# Fetch game exe from metadata files if not defined yet
 		if [ -z "$GAMEEXE" ]; then
-			GAMEEXE="$( basename "$( getGameExe "$AID" )" )"
+			GAMEEXE="$( basename "$( getGameExe "$AID" "1" )" )"
 		fi
 		if [ -n "$GAMEEXE" ]; then
 			SETHEAD="$SETHEAD \n<b>${GUI_SGE}:</b> $GAMEEXE"
@@ -7723,6 +7723,7 @@ function listSteamGames {
 
 # TODO do we want a way to specify that this function should only return Steam or Non-Steam AppIDs?
 function getIDFromTitle {
+	SEARCHSTEAMSHORTCUTS="${2:-0}"  # Default to not searching Steam shortcuts
 	if [ -z "$1" ]; then
 		echo "A Game Title (part of it might be enough) is required as argument"
 	else
@@ -7740,7 +7741,7 @@ function getIDFromTitle {
 		done <<< "$( listAppManifests )"
 
 		# Steam shortcuts
-		if haveAnySteamShortcuts ; then
+		if [ "$SEARCHSTEAMSHORTCUTS" -eq "1" ] && haveAnySteamShortcuts ; then
 			while read -r SCVDFE; do
 				SVDFENAME="$( parseSteamShortcutEntryAppName "$SCVDFE" )"
 				SVDFEAID="$( parseSteamShortcutEntryAppID "$SCVDFE" )"
@@ -7760,6 +7761,8 @@ function getIDFromTitle {
 }
 
 function getTitleFromID {
+	SEARCHSTEAMSHORTCUTS="${2:-0}"  # Default to not searching Steam shortcuts
+
 	if [ -z "$1" ]; then
 		echo "A Game ID is required as argument"
 	else
@@ -7775,7 +7778,7 @@ function getTitleFromID {
 
 			if [ -n "$GAMEMANIFEST" ]; then
 				getValueFromAppManifest "name" "$GAMEMANIFEST"
-			elif haveAnySteamShortcuts ; then
+			elif [ "$SEARCHSTEAMSHORTCUTS" -eq "1" ] && haveAnySteamShortcuts ; then
 				# Steam shortcuts
 				while read -r SCVDFE; do
 					SVDFENAME="$( parseSteamShortcutEntryAppName "$SCVDFE" )"
@@ -7797,6 +7800,8 @@ function getTitleFromID {
 
 # Relies on game executable existing in STL meta file (i.e. any game launched before with STL)
 function getGameExe {
+	SEARCHSTEAMSHORTCUTS="${2:-0}"  # Default to not searching Steam shortcuts
+
 	if [ -z "$1" ]; then
 		echo "A Game ID is required as argument"
 	else
@@ -7824,13 +7829,19 @@ function getGameExe {
 			fi
 		fi
 
-		# if getGameExe returns nothing still and we have a Non-Steam Game, check on any incoming process
-		# This is only useful for MainMenu
-		if [ -z "$GAMEEXE" ] && [ -n "${ORGGCMD[*]}" ] && haveNonSteamGame ; then
-			EXEORGGCMDBASE="$( basename "${ORGGCMD[*]}" )"
-			writelog "INFO" "${FUNCNAME[0]} - Still no EXE, but we may have a Non-Steam game, so using last-resort fallback to ORGGCMD basename which is '$EXEORGGCMDBASE'"
-			writelog "INFO" "${FUNCNAME[0]} - This may still not be correct!"
-			EXE="$EXEORGGCMDBASE"
+		if [ -z "$EXE" ] && [ "$SEARCHSTEAMSHORTCUTS" -eq 1 ] && haveAnySteamShortcuts ; then
+			# Have to search on all shortcuts because we need to check game name as fallback
+			while read -r SCVDFE; do
+				SCVDFEAID="$( parseSteamShortcutEntryAppID "$SCVDFE" )"
+				SCVDFENAME="$( parseSteamShortcutEntryAppName "$SCVDFE" )"
+				SCVDFEEXE="$( parseSteamShortcutEntryExe "$SCVDFE" )"
+
+				if [ "$SCVDFEAID" -eq "$1" ] 2>/dev/null || [[ ${SCVDFENAME,,} == *"${1,,}"* ]]; then
+					SCVDFEEXE="${SCVDFEEXE#\"}"
+					EXE="$SCVDFENAME ($SCVDFEAID) -> ${SCVDFEEXE%\"}"
+					break
+				fi
+			done <<< "$( getSteamShortcutHex )"
 		fi
 
 		echo "${EXE:-$NOTFOUNDSTR}"
@@ -22003,11 +22014,11 @@ function commandline {
 		FUSEID "$2"
 		GameScopeGui "$USEID" "$3"
 	elif [ "$1" == "getexe" ] || [ "$1" == "ge" ]; then
-		getGameExe "$2"
+		getGameExe "$2" "1"
 	elif [ "$1" == "getid" ] || [ "$1" == "gi" ] || [ "$1" == "gid" ]; then
-		getIDFromTitle "$2"
+		getIDFromTitle "$2" "1"
 	elif [ "$1" == "gettitle" ] || [ "$1" == "gt" ]; then
-		getTitleFromID "$2"
+		getTitleFromID "$2" "1"
 	elif [ "$1" == "getcompatdata" ] || [ "$1" == "gc" ]; then
 		getCompatData "$2"
 	elif [ "$1" == "getgamedir" ] || [ "$1" == "gg" ]; then
@@ -22046,9 +22057,12 @@ function commandline {
 	elif [ "$1" == "debug" ]; then
 		## Why are you looking here? :-)
 
-		DEBUGNOSTAID="-222353304"
+		# DEBUGNOSTAID="-222353304"
 
-		editSteamShortcutEntry "3666773025" "appname" "New Name 2"
+		DEBUGTESTT="$( findSteamShortcutByAppID "3581081989" )"
+		parseSteamShortcutEntryAppID "$DEBUGTESTT"
+
+		# editSteamShortcutEntry "3666773025" "appname" "New Name 2"
 
 		return
 
