@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20231111-1"
+PROGVERS="v14.0.20231112-1 (slr-custcmd)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -3127,6 +3127,7 @@ function setDefaultCfgValues {
 		if [ -z "$WAITFORCUSTOMCMD" ]					; then	WAITFORCUSTOMCMD="0"; fi
 		if [ -z "$INJECT_CUSTOMCMD" ]					; then	INJECT_CUSTOMCMD="0"; fi
 		if [ -z "$INJECTWAIT" ]							; then	INJECTWAIT="0";	fi
+		if [ -z "$USESLRCUSTCMD" ]						; then  USESLRCUSTCMD="1"; fi
 		if [ -z "$USEIGCS" ]							; then	USEIGCS="0"; fi
 		if [ -z "$UUUSEIGCS" ]							; then	UUUSEIGCS="0"; fi
 		if [ -z "$IGCSWAIT" ]							; then	IGCSWAIT="0"; fi
@@ -3716,6 +3717,8 @@ function saveCfg {
 			echo "INJECT_CUSTOMCMD=\"$INJECT_CUSTOMCMD\""
 			echo "## $DESC_INJECTWAIT"
 			echo "INJECTWAIT=\"$INJECTWAIT\""
+			echo "## $DESC_USESLRCUSTCMD"
+			echo "USESLRCUSTCMD=\"$USESLRCUSTCMD\""
 			echo "## $DESC_USEIGCS"
 			echo "USEIGCS=\"$USEIGCS\""
 			echo "## $DESC_UUUSEIGCS"
@@ -5583,6 +5586,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_WAITFORCUSTOMCMD!$DESC_WAITFORCUSTOMCMD ('WAITFORCUSTOMCMD')":NUM "${WAITFORCUSTOMCMD/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_INJECT_CUSTOMCMD!$DESC_INJECT_CUSTOMCMD ('INJECT_CUSTOMCMD')":CHK "${INJECT_CUSTOMCMD/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_INJECTWAIT!$DESC_INJECTWAIT ('INJECTWAIT')":NUM "${INJECTWAIT/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_USESLRCUSTCMD!$DESC_USESLRCUSTCMD ('USESLRCUSTCMD')":CHK "${USESLRCUSTCMD/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_USEIGCS!$DESC_USEIGCS ('USEIGCS')":CHK "${USEIGCS/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_UUUSEIGCS!$DESC_UUUSEIGCS ('UUUSEIGCS')":CHK "${UUUSEIGCS/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_IGCSWAIT!$DESC_IGCSWAIT ('IGCSWAIT')":NUM "${IGCSWAIT/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
@@ -12242,6 +12246,19 @@ function setCommandLaunchVars {
 function buildCustomCmdLaunch {
 	setCommandLaunchVars  # Checks for things like GameMode, GameScope, etc
 	FINALOUTCMD=()
+	EXCLUDESLR="${1:=0}"
+	# BUILDSLRCMD="${1:-1}"  # build SLR into launch command by default, but optionally $1 toggle it
+
+	# Previously was built in launchSteamGame but now built as part of buildCustomCmdLaunch
+	if [ "$USEWINE" -eq 0 ] && [ "$USESLRCUSTCMD" -eq 1 ]; then
+		if [ "$EXCLUDESLR" -eq 1 ]; then
+			writelog "SKIP" "${FUNCNAME[0]} - Requested to exclude Steam Linux Runtime, skipping it"
+		fi
+		setSLRReap
+		if [ -n "${SLRCMD[0]}" ]; then
+			FINALOUTCMD=( "${SLRCMD[@]}" )
+		fi
+	fi
 
 	# Lifted originally from `launchSteamGame`
 	if [ -n "$GMR" ]; then
@@ -12430,7 +12447,8 @@ function launchCustomProg {
 		# Putting logic here means we have FINALOUTCMD for Wine/Proton *and* native games
 		if [ "$EXTPROGS_CUSTOMCMD" -eq 1 ]; then
 			writelog "INFO" "${FUNCNAME[0]} - EXTPROGS_CUSTOMCMD was set to 1, so checking for custom arguments like MangoHUD and GameScope"
-			buildCustomCmdLaunch  # Create FINALOUTCMD
+			writelog "INFO" "${FUNCNAME[0]} - Note: USESLRCUSTCMD is '$USESLRCUSTCMD'"
+			buildCustomCmdLaunch "$USESLRCUSTCMD"  # Create FINALOUTCMD, using USESLRCUSTCMD to handle whether the SLR should be used
 			writelog "INFO" "${FUNCNAME[0]} - Generated arguments for custom command are now '${FINALOUTCMD[*]}'"
 		fi
 
@@ -21296,13 +21314,13 @@ function launchSteamGame {
 
 		FINALSTARTCMD=( "${FINALOUTCMD[@]}" )  # Use FINALOUTCMD from buildCustomCmdLaunch
 
-		if [ -n "${SLRCMD[0]}" ]; then
-			if [ -n "${FINALSTARTCMD[0]}" ]; then
-				FINALSTARTCMD=("${FINALSTARTCMD[@]}" "${SLRCMD[@]}")
-			else
-				FINALSTARTCMD=("${SLRCMD[@]}")
-			fi
-		fi
+		# if [ -n "${SLRCMD[0]}" ]; then
+		# 	if [ -n "${FINALSTARTCMD[0]}" ]; then
+		# 		FINALSTARTCMD=("${FINALSTARTCMD[@]}" "${SLRCMD[@]}")
+		# 	else
+		# 		FINALSTARTCMD=("${SLRCMD[@]}")
+		# 	fi
+		# fi
 
 		if [ -n "${EXTSTARTCMD[0]}" ]; then
 			if [ -n "${FINALSTARTCMD[0]}" ]; then
