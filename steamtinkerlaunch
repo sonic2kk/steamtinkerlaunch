@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20231116-1 (spek-nightly)"
+PROGVERS="v14.0.20231116-2 (spek-nightly)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -9793,9 +9793,12 @@ function extSpek {
 	fi
 }
 
-# Get latest artifact from nightly.link
+# Get latest artifact download link from nightly.link
 function getLatestNightlyLinkArtifactURL {
-	writelog "INFO" "${FUNCNAME[0]} - STUB"
+	NIGHTLYLINKURL="$1"
+	NIGHTLYLINKURLPAT="$2"
+
+	"$WGET" -q "${NIGHTLYLINKURL}" -O - 2> >(grep -v "SSL_INIT") | grep -oP "${NIGHTLYLINKURLPAT}" | head -n1  # Grep all links matching this pattern and pick the first one (should only be one anyway)
 }
 
 function dlSpecialK {
@@ -9818,7 +9821,7 @@ function dlSpecialK {
 		SPEKNIGHTLYURL="https://nightly.link${SPEKAPIURLPATH}/workflows/build-windows/main"
 
 		SPEKNIGHTLYURLPATTERN="${SPEKNIGHTLYURL}.*?${SPEKNIGHTLYHASH}[a-zA-Z0-9].zip(?=\")"  # Hash in archive name is 8 chars, but fetchLatestGitHubActionsBuild only returns 7, so accept one extra alphanumeric character when parsing name
-		SPEKDLURL="$( "$WGET" -q "${SPEKNIGHTLYURL}" -O - 2> >(grep -v "SSL_INIT") | grep -oP "${SPEKNIGHTLYURLPATTERN}" | head -n1  )"  # Grep all links matching this pattern and pick the first one (should only be one anyway)
+		SPEKDLURL="$( getLatestNightlyLinkArtifactURL "$SPEKNIGHTLYURL" "$SPEKNIGHTLYURLPATTERN" )"
 		SPEKARC="$( basename "$SPEKDLURL" )"  # Need to make sure the archive name uses the nightly archive name, which isn't fixed
 	else
 		SPEKDLURL="$SPEKGHURL/download/SK_${SPEKVERS//./_}/$SPEKARC"
