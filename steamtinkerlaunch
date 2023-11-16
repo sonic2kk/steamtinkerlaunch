@@ -9817,8 +9817,6 @@ function extractSpecialKEXE {
 			mv "$SPEKDLDIR/$SPEKVERS/$SPEKEXESPEK32PATH" "$SPEKDLDIR/$SPEKVERS"
 			mv "$SPEKDLDIR/$SPEKVERS/$SPEKEXESPEK64PATH" "$SPEKDLDIR/$SPEKVERS"
 
-			rmDirIfExists "$SPEKDLDIR/$SPEKVERS/app"
-
 			writelog "INFO" "${FUNCNAME[0]} - Successfully extracted '${SPEK}32.dll' and '${SPEK}64.dll' from '$( basename "$POSSIBLESPEKEXE" )'"
 		else
 			writelog "SKIP" "${FUNCNAME[0]} - SpecialK executable did not contain both '$SPEKEXESPEK32PATH' and '$SPEKEXESPEK64PATH' -- Not extracting"
@@ -9837,12 +9835,8 @@ function dlSpecialK {
 
 	mkProjDir "$SPEKDLDIR/$SPEKVERS"
 
-	# if [ "$SPEKVERS" == "default" ]; then
-	# 	SPEKDLURL="$SPEKURL/$SPEKARC"
-	# elif [ "$SPEKVERS" == "latest" ]; then
-	# 	SPEKDLURL="$SPEKGHURL/$SPEKVERS/download/$SPEKARC"
 	if [ "$SPEKVERS" == "stable" ]; then
-		SPEKDLURL="$SPEKURL/$SPEKARC"
+		SPEKDLURL="$SPEKURL$SPEKARC"
 		writelog "INFO" "${FUNCNAME[0]} - Using Stable SpecialK download URL '$SPEKDLURL'"
 	elif [ "$SPEKVERS" == "nightly" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Using SpecialK Nightly release, fetching from nightly.link"
@@ -9864,13 +9858,15 @@ function dlSpecialK {
 		writelog "INFO" "${FUNCNAME[0]} - SpecialK version '$SPEKVERS' selected, not downloading anything"
 	else
 		SPEKDLURL="$SPEKGHURL/download/SK_${SPEKVERS//./_}/$SPEKARC"
-		SPEKDLURL="$NON"
 	fi
 
 	SPEKDL="$SPEKDLDIR/$SPEKVERS/$SPEKARC"
 
 	SPEK32SRC="$SPEKDLDIR/$SPEKVERS/${SPEK}32.dll"
 	SPEK64SRC="$SPEKDLDIR/$SPEKVERS/${SPEK}64.dll"
+
+	SPEK32BASE="${SPEK}32.dll"
+	SPEK64BASE="${SPEK}64.dll"
 
 	## For custom SpecialK, we either use existing placed DLLs or attempt to extract them from a SpecialK EXE
 	## If we have no custom exe and no SpecialK32/64 DLL pair, SpecialK will not be installed
@@ -9902,6 +9898,18 @@ function dlSpecialK {
 		fi
 	fi
 
+	writelog "INFO" "${FUNCNAME[0]} - Cleaning up SpecialK version folder '$SPEKDLDIR/$SPEKVERS'"
+	# Clean up everything that isn't SPEK32SRC and SPEK64SRC
+	for SPEKVERDIRFILE in "$SPEKDLDIR/$SPEKVERS"/*; do
+		SPEKVERDIRFILEBASENAME="$( basename "$SPEKVERDIRFILE" )"
+		SPEKVERDIRFILEREALPATH="$( realpath "$SPEKVERDIRFILE" )"  # Just in case
+		if [ "$SPEKVERDIRFILEBASENAME" != "$SPEK32BASE" ] && [ "$SPEKVERDIRFILEBASENAME" != "$SPEK64BASE" ]; then
+			rmFileIfExists "$SPEKVERDIRFILEREALPATH"
+			rmDirIfExists "$SPEKVERDIRFILEREALPATH"
+		fi
+	done
+
+	# Check to make sure DLLs are still satisfied
 	if [ -f "$SPEK32SRC" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - '$SPEK32SRC' is ready" "E"
 	else
@@ -10183,7 +10191,7 @@ function useSpecialK {
 	fi
 
 	if [ "$USESPECIALK" -eq 1 ]; then
-		if [ "$AUTOSPEK" -eq 1 ] && { [ "$SPEKVERS" == "default" ] || [ "$SPEKVERS" == "latest" ];}; then
+		if [ "$AUTOSPEK" -eq 1 ] && { [ "$SPEKVERS" == "stable" ] || [ "$SPEKVERS" == "nightly" ];}; then
 			writelog "INFO" "${FUNCNAME[0]} - Updating $SPEK in the gamedir because AUTOSPEK is enabled"
 		fi
 
