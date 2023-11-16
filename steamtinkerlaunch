@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20231114-1"
+PROGVERS="v14.0.20231116-1"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -2961,6 +2961,7 @@ function setDefaultCfgValues {
 		if [ -z "$CONTYRELURL" ]						; then	CONTYRELURL="$GHURL/Kron4ek/Conty/releases"; fi
 		if [ -z "$MO2PROJURL" ]							; then  MO2PROJURL="$GHURL/ModOrganizer2/modorganizer"; fi
 		if [ -z "$HMMPROJURL" ]                         ; then  HMMPROJURL="$GHURL/thesupersonic16/HedgeModManager"; fi
+		if [ -z "$SPEKPROJURL" ]						; then  SPEKPROJURL="$GHURL/SpecialKO/SpecialK"; fi
 		if [ -z "$CW_KRON4EK" ]							; then	CW_KRON4EK="$GHURL/Kron4ek/Wine-Builds/releases"; fi
 		if [ -z "$CW_LUTRIS" ]							; then  CW_LUTRIS="$GHURL/lutris/wine/releases"; fi
 		if [ -z "$CW_WINEGE" ]							; then  CW_WINEGE="$GHURL/GloriousEggroll/wine-ge-custom/releases"; fi
@@ -3353,6 +3354,8 @@ function saveCfg {
 			echo "MO2PROJURL=\"$MO2PROJURL\""
 			echo "## HedgeModManager Project URL"
 			echo "HMMPROJURL=\"$HMMPROJURL\""
+			echo "## SpecialK Project URL"
+			echo "SPEKPROJURL=\"$SPEKPROJURL\""
 			echo "## $DPRS DL URL"
 			echo "DPRSRELURL=\"$DPRSRELURL\""
 			echo "## $DEPS URL"
@@ -5629,7 +5632,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_AUTOBUMPGE!$DESC_AUTOBUMPGE ('AUTOBUMPGE')":CHK "${AUTOBUMPGE/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_AUTOBUMPPROTON!$DESC_AUTOBUMPPROTON ('AUTOBUMPPROTON')":CHK "${AUTOBUMPPROTON/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_USESPECIALK!$DESC_USESPECIALK ('USESPECIALK')":CHK "${USESPECIALK/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
---field="     $GUI_SPEKVERS!$DESC_SPEKVERS ('SPEKVERS')":CB "$(cleanDropDown "${SPEKVERS/#-/ -}" "default!$SPEKYADLIST")" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_SPEKVERS!$DESC_SPEKVERS ('SPEKVERS')":CB "$(cleanDropDown "${SPEKVERS/#-/ -}" "default!$SPEKYADLIST!nightly")" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_SPEKDLLNAME!$DESC_SPEKDLLNAME ('SPEKDLLNAME')":CBE "$( cleanDropDown "${SPEKDLLNAME/#-/ -}" "$SPEKDLLNAMELIST" )" `#CAT_Proton` `#MENU_GAME` \
 --field="     $GUI_USERESHSPEKPLUGIN!$DESC_USERESHSPEKPLUGIN ('USERESHSPEKPLUGIN')":CHK "${USERESHSPEKPLUGIN/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_USESPEKD3D47!$DESC_USESPEKD3D47 ('USESPEKD3D47')":CHK "${USESPEKD3D47/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
@@ -5800,6 +5803,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_CONTYRELURL!$DESC_CONTYRELURL ('CONTYRELURL')" "${CONTYRELURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="     $GUI_MO2DLURL!$DESC_MO2DLURL ('MO2PROJURL')" "${MO2PROJURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="     $GUI_HMMDLURL!$DESC_HMMDLURL ('HMMPROJURL')" "${HMMPROJURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
+--field="     $GUI_SPEKPROJURL!$DESC_SPEKPROJURL ('SPEKPROJURL')" "${SPEKPROJURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="     $GUI_DPRSRELURL!$DESC_DPRSRELURL ('DPRSRELURL')" "${DPRSRELURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="     $GUI_DEPURL!$DESC_DEPURL ('DEPURL')" "${DEPURL/#-/ -}" `#CAT_Urls` `#MENU_URL` \
 --field="$(spanFont "$GUI_OPTSVR" "H")":LBL "SKIP" `#CAT_VR` `#HEAD_VR` `#MENU_GAME` `#MENU_GLOBAL`  \
@@ -9765,6 +9769,7 @@ function extSpek {
 	SRCARCH="$1"
 	SPEXT64="$SPEKDLDIR/$SPEKVERS/${SPEK}64.dll"
 
+	# TODO handle extracting ZIPs into SPEKDLDIR/SPEKVERS subfolder! (check extension)
 	if [ -f "$SPEXT64" ]; then
 		writelog "SKIP" "${FUNCNAME[0]} - Already have '$SPEXT64' - skipping extraction" "E"
 	else
@@ -9772,14 +9777,28 @@ function extSpek {
 			SRCARCH="${SRCARCH//lK/l_K}"
 		fi
 		if [ -f "$SRCARCH" ]; then
-			if [ -x "$(command -v "$SEVZA")" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Extracting '$SRCARCH' to '$SPEKDLDIR/$SPEKVERS'" "E"
-				"$SEVZA" x "$SRCARCH" -o"$SPEKDLDIR/$SPEKVERS" 2>/dev/null
-			else
-				writelog "SKIP" "${FUNCNAME[0]} - Can't extract '$SRCARCH', because '$SEVZA' wasn't found!" "E"
+			SRCARCHEXT="${SRCARCH##*.}"
+			if [ "$SRCARCHEXT" = "zip" ]; then  # zip archive from GitHub Actions (downloaded from nightly.link URL)
+				writelog "INFO" "${FUNCNAME[0]} - Extracting '$SRCARCH' into '$SPEKDLDIR/$SPEKVERS' using '$UNZIP'"
+				"$UNZIP" "$SRCARCH" -d "$SPEKDLDIR/$SPEKVERS" 2>/dev/null
+			else  # else assume 7zip
+				if [ -x "$(command -v "$SEVZA")" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Extracting '$SRCARCH' to '$SPEKDLDIR/$SPEKVERS'" "E"
+					"$SEVZA" x "$SRCARCH" -o"$SPEKDLDIR/$SPEKVERS" 2>/dev/null
+				else
+					writelog "SKIP" "${FUNCNAME[0]} - Can't extract '$SRCARCH', because '$SEVZA' wasn't found!" "E"
+				fi
 			fi
 		fi
 	fi
+}
+
+# Get latest artifact download link from nightly.link
+function getLatestNightlyLinkArtifactURL {
+	NIGHTLYLINKURL="$1"
+	NIGHTLYLINKURLPAT="$2"
+
+	"$WGET" -q "${NIGHTLYLINKURL}" -O - 2> >(grep -v "SSL_INIT") | grep -oP "${NIGHTLYLINKURLPAT}" | head -n1  # Grep all links matching this pattern and pick the first one (should only be one anyway)
 }
 
 function dlSpecialK {
@@ -9791,21 +9810,37 @@ function dlSpecialK {
 
 	mkProjDir "$SPEKDLDIR/$SPEKVERS"
 
-	SPEKDL="$SPEKDLDIR/$SPEKVERS/$SPEKARC"
-
 	if [ "$SPEKVERS" == "default" ]; then
 		SPEKDLURL="$SPEKURL/$SPEKARC"
 	elif [ "$SPEKVERS" == "latest" ]; then
 		SPEKDLURL="$SPEKGHURL/$SPEKVERS/download/$SPEKARC"
+	elif [ "$SPEKVERS" == "nightly" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Using SpecialK Nightly release, fetching from nightly.link"
+
+		SPEKAPIURLPATH="${SPEKPROJURL//$GHURL}"
+		SPEKNIGHTLYHASH="$( fetchLatestGitHubActionsBuild "${AGHURL}/repos${SPEKAPIURLPATH}" 1 "Builds" | cut -d ';' -f2 )"
+		SPEKNIGHTLYURL="https://nightly.link${SPEKAPIURLPATH}/workflows/build-windows/main"
+
+		writelog "INFO" "${FUNCNAME[0]} - SpecialK GitHub Actions hash is '$SPEKNIGHTLYHASH'"
+		writelog "INFO" "${FUNCNAME[0]} - SpecialK nightly.link URL is '$SPEKNIGHTLYURL'"
+
+		SPEKNIGHTLYURLPATTERN="${SPEKNIGHTLYURL}.*?${SPEKNIGHTLYHASH}[a-zA-Z0-9].zip(?=\")"  # Hash in archive name is 8 chars, but fetchLatestGitHubActionsBuild only returns 7, so accept one extra alphanumeric character when parsing name
+		SPEKDLURL="$( getLatestNightlyLinkArtifactURL "$SPEKNIGHTLYURL" "$SPEKNIGHTLYURLPATTERN" )"
+		SPEKARC="$( basename "$SPEKDLURL" )"  # Need to make sure the archive name uses the nightly archive name, which isn't fixed
+
+		writelog "INFO" "${FUNCNAME[0]} - SpecialK DL URL is '$SPEKDLURL'"
+		writelog "INFO" "${FUNCNAME[0]} - SpecialK Archive name from DL URL is '$SPEKARC'"
 	else
 		SPEKDLURL="$SPEKGHURL/download/SK_${SPEKVERS//./_}/$SPEKARC"
 	fi
+
+	SPEKDL="$SPEKDLDIR/$SPEKVERS/$SPEKARC"
 
 	if [ ! -f "$SPEKDL" ]; then
 		notiShow "$(strFix "$NOTY_DLCUSTOMPROTON" "$SPEK")"
 		dlCheck "$SPEKDLURL" "$SPEKDL" "X" "Downloading '$SPEKDLURL' to '$SPEKDLDIR'"
 		extSpek "$SPEKDL"
-	elif [ "$AUTOSPEK" -eq 1 ] && { [ "$SPEKVERS" == "default" ] || [ "$SPEKVERS" == "latest" ];}; then
+	elif [ "$AUTOSPEK" -eq 1 ] && { [ "$SPEKVERS" == "default" ] || [ "$SPEKVERS" == "latest" ] || [ "$SPEKVERS" == "nightly" ] ;}; then
 		writelog "INFO" "${FUNCNAME[0]} - AUTOSPEK is enabled and SPEKVERS is '$SPEKVERS' - so looking for $SPEK updates" "E"
 		# XXXXXX todo remove previous download?
 		notiShow "$(strFix "$NOTY_DLCUSTOMPROTON" "$SPEK")"
@@ -14720,15 +14755,21 @@ function updateWineRegistryKey {
 function fetchLatestGitHubActionsBuild {
     PROJAPIURL="$1"
     ARTIFACTNUM=$2
+	WORKFLOWNAME="$3"
 
     # /actions/runs
-    ARTIFACTRUNSRESP="$( curl -s "${PROJAPIURL}/actions/runs" | "$JQ" '.workflow_runs[0]' )"
-    ARTIFACTRUNSUITEID="$( echo "$ARTIFACTRUNSRESP" | "$JQ" '.check_suite_id' )"
+	ARTIFACTRUNSRESPJQ=".workflow_runs[0]"
+	## optionally filter by workflow name if we give one
+	if [ -n "$WORKFLOWNAME" ]; then
+		ARTIFACTRUNSRESPJQ="[.workflow_runs[] | select(.name==\"${WORKFLOWNAME}\")] | first"
+    fi
+	ARTIFACTRUNSRESP="$( curl -s "${PROJAPIURL}/actions/runs" | "$JQ" "${ARTIFACTRUNSRESPJQ}" )"
+	ARTIFACTRUNSUITEID="$( echo "$ARTIFACTRUNSRESP" | "$JQ" '.check_suite_id' )"
     LATESTARTIFACTURL="$( echo "$ARTIFACTRUNSRESP" | "$JQ" '.artifacts_url' | cut -d '"' -f 2 )"
 
     # /actions/runs/<artifact_id>/artifacts
-    LATESTARTIFACTRESP="$( curl -s "${LATESTARTIFACTURL}" | "$JQ" ".artifacts[${ARTIFACTNUM}]" )"
-    LATESTARTIFACTID="$( echo "$LATESTARTIFACTRESP" | "$JQ" ".id" )"
+	LATESTARTIFACTRESP="$( curl -s "${LATESTARTIFACTURL}" | "$JQ" ".artifacts[${ARTIFACTNUM}]" )"
+	LATESTARTIFACTID="$( echo "$LATESTARTIFACTRESP" | "$JQ" ".id" )"
     LATESTARTIFACTSHA="$( echo "$LATESTARTIFACTRESP" | "$JQ" ".workflow_run.head_sha" | cut -d '"' -f 2 )"
 
     ARTIFACTDLURL="suites/${ARTIFACTRUNSUITEID}/artifacts/${LATESTARTIFACTID}"
