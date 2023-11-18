@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20231119-4"
+PROGVERS="v14.0.20231119-5"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -1494,7 +1494,6 @@ function downloadArtFromSteamGridDB {
 				fi
 
 				mkProjDir "$GRIDDLDIR"
-
 				DLDST="${GRIDDLDIR}/${SGDBFILENAME}.${GRIDDLURL##*.}"  # Makes filename like <appid>.<org_extension>, which could be something like "70_logo.png" (with full path preceding this, so something like "~/Games/Grids/Half-Life/70_logo.png")
 				STARTDL=1
 
@@ -1523,9 +1522,7 @@ function downloadArtFromSteamGridDB {
 	fi
 }
 
-# Takes in an Steam AppID or list of Steam AppIDs and downloads (hero, logo boxart) for each one
-#
-# This function can only support Steam AppIDs because we can't easily map SteamGridDB Game IDs and Non-Steam Game AppIDs
+# Takes in an Steam AppID or list of Steam AppIDs and downloads (hero, logo boxart) for each one - only supports Steam AppIDs as we can't easily map SteamGridDB Game IDs and Non-Steam Game AppIDs
 # For Steam games, the AppID is the ID we search on; for Non-Steam Games, we search on a specific Game ID
 # In future, we could make a separate function for this
 function getSteamGridDBArtwork {
@@ -1538,20 +1535,16 @@ function getSteamGridDBArtwork {
 	done <<< "${1}"
 }
 
-# We will use this to get either Steam or Non-Steam artwork depending on a flag
-# This flag will never be passed by the user, internally we will automatically handle passing the --steam or --nonsteam flag
-# When called from the commandline we will have two separate commands, one for Steam and one for Non-Steam, but both will call this function and pass the relevant flag
-#
-# This function can be used on the commandline or just when we want to search for a game by Game ID
+# Used to get either Steam or Non-Steam artwork depending on a flag -- Used internally and for commandline usage
 function commandlineGetSteamGridDBArtwork {
-	SGDBENDPOINTTYPE="steam" # assume Steam game by default (i.e. search Steam AppID endpoint)
-	GSGDBA_HASFILE="$SGDBHASFILE"  # Optional override for how to handle if file already exists (downloadArtFromSteamGridDB defaults to '$SGDBHASFILE')
+	SGDBENDPOINTTYPE="steam" # assume Steam game by default (search Steam AppID endpoint)
+	GSGDBA_HASFILE="$SGDBHASFILE"  # Optional override for how to handle existinf file (downloadArtFromSteamGridDB defaults to '$SGDBHASFILE')
 	GSGDBA_APPLYARTWORK="$SGDBDLTOSTEAM"
 	GSGDBA_SEARCHNAME=""
 	GSGDBA_FOUNDGAMEID=""  # ID found from SteamGridDB endpoint using GSGDBA_SEARCHNAME
 	for i in "${@}"; do
 		case $i in
-			--search-id=*)  # ID to hit the SteamGridDB API endpoint with (for Steam games this is the AppID which we will also use as filename)
+			--search-id=*)  # ID to hit SteamGridDB API endpoint with (for Steam games this is the AppID which we will also use as filename)
 				GSGDBA_APPID="${i#*=}"
 				GSGDBA_FILENAME="${GSGDBA_APPID}"  # By default, file will be named <appid> with a suffix for each grid type (only non-steam games need this overridden since they search on Game ID and not Steam AppID)
 				shift ;;
@@ -1567,10 +1560,8 @@ function commandlineGetSteamGridDBArtwork {
 			--filename-appid=*)
 				GSGDBA_FILENAME="${i#*=}"  # AppID to use in filename (Non-Steam Games need a different AppID)
 				shift ;;
-			## OPTIONAL: Override Global Menu setting for how to handle existing artwork
-			##
-			## (in case user wants to replace all existing artwork, default STL setting is 'skip' and will only copy files over to grid dir if they don't exist, so user can easily
-			## fill in missing artwork only)
+			## Override Global Menu setting for how to handle existing artwork
+			## in case user wants to replace all existing artwork, default STL setting is 'skip' and will only copy files over to grid dir if they don't exist, so user can easily fill in missing artwork only)
 			--replace-existing)
 				GSGDBA_HASFILE="replace"
 				shift ;;
@@ -1580,7 +1571,7 @@ function commandlineGetSteamGridDBArtwork {
 			--skip-existing)
 				GSGDBA_HASFILE="skip"
 				shift ;;
-			## OPTIONAL: Flag to force downloading to SteamGridDB folder (used for addNonSteamGame internally)
+			## Flag to force downloading to SteamGridDB folder (used for addNonSteamGame internally)
 			--apply)
 				GSGDBA_APPLYARTWORK="1"
 				shift ;;
@@ -1612,8 +1603,7 @@ function commandlineGetSteamGridDBArtwork {
 	SGDBSEARCHENDPOINT_BOXART="${BASESTEAMGRIDDBAPI}/grids/${SGDBENDPOINTTYPE}"	 # Grid endpoint is used for Boxart and Tenfoot, which SteamGridDB counts as vertical/horizontal grids respectively
 
 	# Download Hero, Logo, Boxart, Tenfoot from SteamGridDB from given endpoint using given AppID
-	# On SteamGridDB, tenfoot is grouped with grids, but as a horizontal Steam grid, so we fetch it by passing specific dimensions matching this
-	# Users are free to override this, but the default is what SteamGridDB expects for the tenfoot sizes
+	# On SteamGridDB tenfoot called horizontal Steam grid, so fetch it by passing specific dimensions matching this -- Users can override this, but default is what SteamGridDB expects for the tenfoot sizes
 	if [ "$SGDBDLHERO" -eq 1 ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Downloading Hero artwork, because SGDBDLHERO is '$SGDBDLHERO'"
 		downloadArtFromSteamGridDB "$GSGDBA_APPID" "$SGDBSEARCHENDPOINT_HERO" "${GSGDBA_FILENAME}_hero" "$SGDBHEROSTYLES" "$SGDBHERODIMS" "$SGDBHEROTYPES" "$SGDBHERONSFW" "$SGDBHEROHUMOR" "$SGDBHEROEPILEPSY" "$GSGDBA_HASFILE" "$GSGDBA_APPLYARTWORK"
@@ -1652,8 +1642,6 @@ function getGridsForInstalledGames {
 	fi
 }
 function getGridsForNonSteamGames {
-	# NOTE we shpuld also need to fetch and set icons eventually
-	# (will require updating shortcuts.vdf entry which we can't do yet, may just be a case of encoding an entry and updating it with sed)
 	if ! haveAnySteamShortcuts ; then
 		writelog "SKIP" "${FUNCNAME[0]} - No Non-Steam Games found, skipping"
 		echo "No Non-Steam Games found, not downloading grids"
@@ -1828,8 +1816,7 @@ function listSteamLibraries {
 
 function setSteamLibraryPaths {
 	while read -r lpath; do
-		# Ignores library folders if they are not valid directories -- This var comes from Steam but apparently can still have invalid library folders.
-		# Noticed this when I removed a drive that had a Steam library folder, this didn't cause any major issues aside from a 'find' warning from the cmpath while loop - Could be a Steam bug?
+		# Ignores library folders if they are not valid directories -- This var comes from Steam but apparently can still have invalid library folders, maybe Steam bug?
 		if [ ! -d "$lpath" ]; then
 			writelog "WARN" "${FUNCNAME[0]} - Library folder '$lpath' does not seem to be a valid directory, even though this comes from Steam itself - Ignoring, but please report if this is invalid or causes issues"
 			continue
@@ -2194,8 +2181,7 @@ function setGameVars {
 	if [ -d "$STEAM_COMPAT_LIBRARY_PATHS" ]; then
 		APPMAFE="${STEAM_COMPAT_LIBRARY_PATHS}/appmanifest_${AID}.acf"
 	else
-		# this should cover it though as well already
-		APPMAFE="$(listAppManifests | grep -m1 "${1}.acf")"
+		APPMAFE="$(listAppManifests | grep -m1 "${1}.acf")"  # this should cover it though as well already
 	fi
 
 	REAPSESTR="reaper SteamLaunch"
@@ -2285,8 +2271,7 @@ function setGameVars {
 		done <<< "$(printf "%s\n" "${WIPBGCMD[@]}")"
 
 		if [ "${INPROTCMD[-1]}" == "$WFEAR" ]; then
-			# removing last INPROTCMD element as it is '$WFEAR'
-			unset "INPROTCMD[-1]"
+			unset "INPROTCMD[-1]"  # removing last INPROTCMD element as it is '$WFEAR'
 		fi
 
 		INPROTV="$(setProtonPathVersion "${INPROTCMD[*]}")"
@@ -2450,7 +2435,7 @@ function setCustomGameVars {
 	GFD="$EFD"
 	GN="$GE"
 
-	# Allows custom programs to use SLR and force it from the toolmanifest -- May not be a good idea but ¯\_(ツ)_/¯
+	# Allows custom programs to use SLR and force it from the toolmanifest
 	USESLR=1
 	HAVESLR=0
 
@@ -2458,8 +2443,7 @@ function setCustomGameVars {
 		mapfile -t -O "${#ORGGCMD[@]}" ORGGCMD <<< "$ORGARG"
 	done <<< "$(printf "%s\n" "$@")"
 	if [ "${ORGGCMD[0]}" == "$WFEAR" ]; then
-		# removing first ORGGCMD element as it is '$WFEAR'
-		unset "ORGGCMD[0]"
+		unset "ORGGCMD[0]"  # removing first ORGGCMD element as it is '$WFEAR'
 	fi
 }
 
@@ -2592,8 +2576,6 @@ function loadLanguage {
 		touch "$FUPDATE"
 		updateConfigEntry "STLLANG" "$STLLANG" "$STLDEFGLOBALCFG"
 	fi
-
-#		touch "$STLSHM/lola-$AID.txt"
 
 	if [ -z "$DESC_STLLANG" ]; then # example variable, if it is empty it means no language file was loaded above
 		writelog "ERROR" "${FUNCNAME[0]} - ###############################" "E"
