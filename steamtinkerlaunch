@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20231118-1 (spek-custom)"
+PROGVERS="v14.0.20231119-1 (spek-custom)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -9809,6 +9809,7 @@ function extractSpecialKEXE {
 		SPEKEXEFILESLIST="$( "$INNOEXTRACT" "--list" "$POSSIBLESPEKEXE" )"
 
 		if grep -q "$SPEKEXESPEK32PATH" <<< "$SPEKEXEFILESLIST" && grep -q "$SPEKEXESPEK64PATH" <<< "$SPEKEXEFILESLIST"; then
+			notiShow "$( strFix "$NOTY_USESPEKCUSTOMEXE" "$( basename "$POSSIBLESPEKEXE" )" )"
 			writelog "INFO" "${FUNCNAME[0]} - Found valid SpecialK executable to extract"
 			# Extract EXE, select and move DLLs to SPEKVERS folder, remove all innoextract files
 			"$INNOEXTRACT" -m -s -d "$SPEKDLDIR/$SPEKVERS" "$POSSIBLESPEKEXE"
@@ -9833,6 +9834,7 @@ function dlSpecialK {
 	SPEKARC="${SPEK}.7z"
 
 	mkProjDir "$SPEKDLDIR/$SPEKVERS"
+	mkProjDir "$SPEKDLDIR/custom"  # Ensure custom is here, in case user downloads SpecialK and then wants to use custom -- Very minor QoL
 
 	if [ "$SPEKVERS" == "stable" ]; then
 		SPEKDLURL="$SPEKURL$SPEKARC"
@@ -9875,12 +9877,13 @@ function dlSpecialK {
 		POSSIBLECUSTOMSPEKEXE="$( realpath "$POSSIBLECUSTOMSPEKEXE" )"
 
 		if [ -f "$SPEK32SRC" ] && [ -f "$SPEK64SRC" ]; then
+			notiShow "$NOTY_USESPEKCUSTOMDLL"
 			writelog "INFO" "${FUNCNAME[0]} - Found '${SPEK}32.dll' and '${SPEK}64.dll' -- Using this as SpecialK version"
 		elif [ -f "$POSSIBLECUSTOMSPEKEXE" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Found possible SpecialK EXE '$POSSIBLECUSTOMSPEKEXE' -- Attempting to extract SpecialK DLLs from this executable"
 			extractSpecialKEXE "$POSSIBLECUSTOMSPEKEXE"
 		fi
-	else
+	else  # download SpecialK
 		if [ ! -f "$SPEK32SRC" ] && [ ! -f "$SPEK64SRC" ]; then
 			notiShow "$(strFix "$NOTY_DLCUSTOMPROTON" "$SPEK")"
 			dlCheck "$SPEKDLURL" "$SPEKDL" "X" "Downloading '$SPEKDLURL' to '$SPEKDLDIR'"
