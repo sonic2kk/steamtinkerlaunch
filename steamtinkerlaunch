@@ -23713,11 +23713,7 @@ function filterUnwantedSteamCategories {
 	printf "%s" "${FILTEREDTAGS[@]}" | tr '\n' '!' | sed 's/\!*$//g'
 }
 
-# Download icon for Non-Steam Game using SteamGridDB Game ID
-# We can't set icons for Steam games, and right now we can't edit the `shortcuts.vdf` file to edit the path to the icon,
-# so this function is only for Non-Steam Games and only when they're being added to Steam
-#
-# In future, if we have a function to add SteamGridDB art for all Non-Steam Games, we could break this out and use it to set icons at that time too
+# Download icon for Non-Steam Game using SteamGridDB Game ID (can't set icon for Steam Native games)
 function getSteamGridDBNonSteamIcon {
 	NOSTICONAID="$1"  # Non-Steam AppID
 	NOSTSGDBID="$2"  # SteamGridDB Game ID
@@ -23734,7 +23730,6 @@ function addNonSteamGameGui {
 	writelog "INFO" "${FUNCNAME[0]} - Starting the Gui for adding a $NSGA to Steam"
 
 	# defaults
-	# exe default
 	if [ -n "$1" ]; then
 		for i in "$@"; do
 			case $i in
@@ -23749,8 +23744,7 @@ function addNonSteamGameGui {
 		NOSTGSTDIR="${NOSTGEXEPATH%/*}"
 	fi
 
-	# icon default
-	if grep -q "^NOSTEAMSTLDEF=\"1\"" "$STLDEFGLOBALCFG"; then
+	if grep -q "^NOSTEAMSTLDEF=\"1\"" "$STLDEFGLOBALCFG"; then  # icon default
 		NOSTGICONPATH="$STLICON"
 	else
 		NOSTGICONPATH=""
@@ -23864,26 +23858,26 @@ function addNonSteamGameGui {
 				NOSTGAO="$( retBool "${NSGSETARR[24]}" )"
 				NOSTGVR="$( retBool "${NSGSETARR[25]}" )"
 
-				## Makes sure we ignore none compatibility tool
+				## ignore none compatibility tool
 				if [[ "$NOSTCOMPATTOOL" = "$NON" ]]; then
 					NOSTCOMPATTOOL=""
 				fi
 
-				NOSTARTEXECMD=""  # This dummy command does nothing
+				NOSTARTEXECMD=""
 				if [ "$NOSTGEXEARTWORKFALLBACK" -eq 1 ]; then
 					NOSTARTEXECMD="--auto-artwork"
 				fi
 
 				if [ "$NOSTUSESGDB" -eq 0 ]; then
-					# If SteamGridDB is not enabled on the UI, ignore any passed values -- Blank values means that function will ignore SteamGridDB entirely
+					# Ignore SteamGridDB values if SteamGridDB not enabled - Blank values means that function will ignore SteamGridDB entirely
 					# We still need the checkbox so we can tell the addNonSteamGame function whether we want to fall back on Non-Steam Game Name
 					NOSTSGDBAID=""
 					NOSTSGDBSAID=""
 					NOSTSGDBSNAME=""
 				elif [[ ( -z "$NOSTSGDBAID" && -z "$NOSTSGDBSAID" && -z "$NOSTSGDBSNAME" ) && "$NOSTUSESGDB" -eq 1 ]]; then
-					# If we enabled SteamGridDB but did NOT pass any values, then enable SteamGridDB which will allow us to search on Game Name
-					# This is some UI-specific logic that doesn't apply to commandline usage, since on commandline a user would manually pass this flag
-					# We only need to pass this flag if the other search options are not set, because if one of these is set, we automatically enable SteamGridDB search anywau
+					# If enabled SteamGridDB but did NOT pass any values, enable SteamGridDB which will allow us to search on Game Name
+					# UI-specific logic that doesn't apply to commandline usage, since on commandline a user would manually pass this flag
+					# only need to pass this flag if other search options are not set, as if one of these is set, we automatically enable SteamGridDB search
 					NOSTGUIUSESGDB="--use-steamgriddb"
 				fi
 
@@ -23917,18 +23911,17 @@ function addNonSteamGame {
 		printf "%d\n" "0x${1#0x}"
 	}
 
-	## Notes on how Non-Steam AppIDs work, because it took me almost a year to figure this out
+	## How Non-Steam AppIDs work, because it took me almost a year to figure this out
 	## ----------------------
-	## Steam stores shortcuts in a binary file called 'shortcuts.vdf', stored in SROOT/userdata/<id>/config
+	## Steam stores shortcuts in a binary 'shortcuts.vdf', at SROOT/userdata/<id>/config
 	##
-	## Non-Steam Game AppIDs are 32bit little-endian (reverse byte order) signed integers, stored as hexidecimal
-	## This AppID is probably generated using some combination of the AppName and Exe with a crc32 generated from them, but it can actually be anything
-	## Steam likely does things this way in an attempt to ensure "uniqueness" among entries. Projects like Steam-ROM-Manager do the same thing likely for similar reasons
+	## Non-Steam AppIDs are 32bit little-endian (reverse byte order) signed integers, stored as hexidecimal
+	## This is probably generated using a crc32 generated from AppName + Exe, but it can actually be anything
+	## Steam likely does this to ensure "uniqueness" among entries, tools like Steam-ROM-Manager do the same thing likely for similar reasons
 	##
-	## In our case, for simplicity, we're just going to generate a random 32bit signed integer, which we'll then convert to hex to store in the AppID file
+	## For simplicity we generate a random 32bit signed integer using an md5, which we'll then convert to hex to store in the AppID file
+	## Though we can write any AppID we want, Steam will reject invalid ones (i.e. big endian hex) it will overwrite our AppID
 	## We can also convert this to an unsigned 32bit integer to get the AppID used for grids and other things, the unsigned int is just what Steam stores
-	##
-	## Though we can write any AppID we want, invalid ones (i.e. big endian hex) will be rejected by Steam and it will overwrite the generated AppID!
 	##
 	## We can later re-use these functions to do several things:
 	## - Check for and remove stray STL configs for no longer stored Non-Steam Game AppIDs (if we had Non-Steam Games we previously used with STL that we no longer use, we can remove these configs in case there is a conflict in future)
@@ -23942,10 +23935,10 @@ function addNonSteamGame {
 	}
 
 	function dec2hex {
-		printf '%x\n' "$1" | cut -c 9-  # This cut removes the 'ffffffff' from the string (represents the sign for the signed int) and starts from the 9th character onward
+		printf '%x\n' "$1" | cut -c 9-  # cut removes the 'ffffffff' from the string (represents the sign) and starts from the 9th character
 	}
 
-	# Takes a big-endian ("normal") hexidecimal number and converts it to little-endian (reverse byte order)
+	# Takes big-endian ("normal") hexidecimal number and converts to little-endian
 	function bigToLittleEndian {
 		echo -n "$1" | tac -rs .. | tr -d '\n'
 	}
@@ -23971,8 +23964,7 @@ function addNonSteamGame {
 		done
 	}
 
-	## Return first image file matching passed name (i.e "hero") in game EXE dir
-	## Used to find named artwork files in the game EXE folder for Non-Steam Games as a fallback if no artwork is provided
+	## Return first image file matching passed name (i.e "hero") in game EXE dir - Used to find named artwork files in the game EXE folder for Non-Steam Games as a fallback if no artwork is provided
 	function findGameArtInExeDir {
 		NOSTSEARCHDIR="$1"
 		NOSTARTFILENAME="${2%%.*}"  # e.x. "hero", "logo"
@@ -24062,7 +24054,6 @@ function addNonSteamGame {
 				fi
 
 				shift ;;
-			## Mostly lifted+shifted from setGameArt
 			-hr=*|--hero=*)
 				NOSTGHERO="${i#*=}"  # <appid>_hero.png -- Banner used on game screen, logo goes on top of this
 				shift ;;
@@ -24105,9 +24096,8 @@ function addNonSteamGame {
 		esac
 	done
 
-	# Ensure we don't go any further unless we have a valid EXE path -- This is the only *required* field as all others can be inferred from it
-	# We check against the string with quotes removed, just to be safe for the -z check even though the case above should match it
-	# We have to do this for the -f check though as it doesn't like the quotes
+	# Ensure we stop without valid EXE -- EXE is the only *required* field, all others can be inferred from it
+	# We check against the string with quotes removed for the -z check even though the case above should match it - We have to do this to have a valid path for '-f' check 
 	NOSTEXEPATHNOQUOTE="$( sed -e 's/^"//' -e 's/"$//' <<< "${NOSTEXEPATH}" )"
 	if [ -z "${NOSTEXEPATHNOQUOTE}" ]; then
 		writelog "ERROR" "${FUNCNAME[0]} - NOSTEXEPATH was blank, could not add Non-Steam Game -- Aborting!"
@@ -24127,26 +24117,21 @@ function addNonSteamGame {
 		QSD="$(dirname "$QEP")"; NOSTSTDIR="\"$QSD\""
 	fi
 
-	if [ "$NOSTSTLLO" -eq 1 ]; then
-		NOSTGICONPATH="$STLICON"
-	fi
+	if [ "$NOSTSTLLO" -eq 1 ]; then NOSTGICONPATH="$STLICON"; fi
 
 	# This is formatted as a flag because we can pass "$SGACOPYMETHOD" as an argument to setGameArt, and it will be interpreted as --copy
 	SGACOPYMETHOD="${SGACOPYMETHOD:---copy}"
 
-	# This is off by default but always passed from addNonSteamGame, so if we actually get a value for any of these fields, enable it
-	# The NOSTUSESGDB=1 flag setting is for user commandline usage, when they simply want to search SteamGridDB for artwork using the game name, but don't want to pass other values
-	if [ -n "$NOSTSGDBSTAID" ] || [ -n "$NOSTSGDBGAMEID" ] || [ -n "$NOSTSGDBNAM" ]; then
-		NOSTUSESGDB=1
-	fi
+	# off by default but always passed from addNonSteamGame, so if we actually get a value for any of these fields, enable it
+	# NOSTUSESGDB=1 flag is for user commandline usage, when they search SteamGridDB for artwork using game name, but don't want to pass other values
+	if [ -n "$NOSTSGDBSTAID" ] || [ -n "$NOSTSGDBGAMEID" ] || [ -n "$NOSTSGDBNAM" ]; then NOSTUSESGDB=1; fi
 
-	## These AppIDs are not necessarily guaranteed to be unique, such as if the user tries to add the same game twice or something
-	## Therefore, perhaps in future we could do a stricter check by attempting to parse the shortcuts.vdf file and re-generating the AppID if it already exists
-	## This could be expensive if the file is long, but a potential future enhancement all the same!
-	NOSTAIDVDF="$( generateShortcutVDFAppId "${NOSTAPPNAME}${NOSTEXEPATH}" )"  # This is the signed integer AppID that will be stored in the VDF as hexidecimal - ex: -598031679
-	NOSTAIDVDFHEX="$( generateShortcutVDFHexAppId "$NOSTAIDVDF" )"  # This is the 4byte little-endian hexidecimal of the above 32bit signed integer, which we write out to the binary VDF - ex: c1c25adc
-	NOSTAIDVDFHEXFMT="\x$(awk '{$1=$1}1' FPAT='.{2}' OFS="\\\x" <<< "$NOSTAIDVDFHEX")"  # This is the binary-formatted string hex of the above which we actually write out - ex: \xc1\xc2\x5a\xdc
-	NOSTAIDGRID="$( generateShortcutGridAppId "$NOSTAIDVDF" )"  # This is the unsigned 32bit ingeger version of "$NOSTAIDVDF", which is used as the AppID for Steam artwork ("grids"), as well as for our shortcuts
+	## These AppIDs are not necessarily guaranteed to be unique, i.e. if the user tries to add the same game twice or something
+	## In future we could do a stricter check by attempting to parse the shortcuts.vdf file and re-generating the AppID if it already exists - could be expensive though
+	NOSTAIDVDF="$( generateShortcutVDFAppId "${NOSTAPPNAME}${NOSTEXEPATH}" )"  # signed integer AppID, stored in the VDF as hexidecimal - ex: -598031679
+	NOSTAIDVDFHEX="$( generateShortcutVDFHexAppId "$NOSTAIDVDF" )"  # 4byte little-endian hexidecimal of above 32bit signed integer, which we write out to the binary VDF - ex: c1c25adc
+	NOSTAIDVDFHEXFMT="\x$(awk '{$1=$1}1' FPAT='.{2}' OFS="\\\x" <<< "$NOSTAIDVDFHEX")"  # binary-formatted string hex of the above which we actually write out - ex: \xc1\xc2\x5a\xdc
+	NOSTAIDGRID="$( generateShortcutGridAppId "$NOSTAIDVDF" )"  # unsigned 32bit ingeger version of "$NOSTAIDVDF", which is used as the AppID for Steam artwork ("grids"), as well as for our shortcuts
 
 	writelog "INFO" "${FUNCNAME[0]} - === Adding new $NSGA ==="
 	writelog "INFO" "${FUNCNAME[0]} - Signed Integer Shortcut AppID: '${NOSTAIDVDF}'"
@@ -24190,8 +24175,8 @@ function addNonSteamGame {
 		NEWSET=0
 	fi
 
-	# Match any image file in same folder as EXE name hero, logo, boxart, tenfoot -- Matches will override selected options
-	# If not found it will fall back to the selected value (such as the actual file path provided), meaning only artwork that exists will be used
+	## Match any image file in same folder as EXE name hero, logo, boxart, tenfoot -- Matches will override selected options
+	# If not found, fall back to actual file path provided meaning only artwork that exists will be used
 	if [ "$NOSTAUTOARTWORK" -eq 1 ]; then
 		NOSTEXEBASEDIR="$( dirname "$NOSTEXEPATH" | cut -d '"' -f2 )"
 
@@ -24411,22 +24396,17 @@ function closeSTL {
 	fi
 
 	# stop network monitor if running
-
 	if [ "$USENETMON" -eq 1 ]; then
 		if "$PGREP" "$NETMON" >/dev/null; then
 			"$PKILL" -f "$NETMON"
 			writelog "INFO" "${FUNCNAME[0]} - $NETMON killed"
-			# remove duplicate lines to make reading easier
-			rmDupLines "$NETMONDIR/$AID-$NETMON.log"
+			rmDupLines "$NETMONDIR/$AID-$NETMON.log"  # remove duplicate lines to make reading easier
 		fi
 	fi
 
 	togWindows windowraise	# TOGGLEWINDOWS
-
 	getHexAidForAid "$AID" X
-
 	cleanYadLeftOvers
-
 	notiShow "$(strFix "$NOTY_STLSTOP" "$GN" "$AID" "$PROGNAME")"
 
 	sleep 1 # so any while loop still running gets the chance to see it
@@ -24469,7 +24449,6 @@ function saveOrgVars {
 
 function emptyVars {
 	# clear "original" variables
-
 	if [ "$1" == "O" ] ; then
 		LC_ALL=""
 		STLPATH="$(tr ':' '\n' <<< "$PATH" | grep -v "$STERU" | tr '\n' ':')"
@@ -24487,7 +24466,7 @@ function emptyVars {
 			writelog "INFO" "${FUNCNAME[0]} - Emptied some original variables as they slowdown several system calls when started from steam" "P"
 			writelog "INFO" "${FUNCNAME[0]} - Set \$PATH to '$PATH'" "P"
 		fi
-#	# empty "some" internal variables created by ${PROGNAME,,} (before starting the game)
+	# empty "some" internal variables created by ${PROGNAME,,} (before starting the game)
 	elif [ "$1" == "S" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Clearing some '${PROGNAME,,}' internal variables before the game starts"
 
