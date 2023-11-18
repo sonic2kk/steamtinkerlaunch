@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20231118-1"
+PROGVERS="v14.0.20231119-1"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -3282,7 +3282,7 @@ function setDefaultCfgValues {
 		if [ -z "$USESPEKD3D47" ]						; then  USESPEKD3D47="1"; fi
 		if [ -z "$SDLUSEWAYLAND" ]						; then  SDLUSEWAYLAND="0"; fi
 		if [ -z "$STLRAD_PFTST" ]                       ; then  STLRAD_PFTST="none"; fi
-		if [ -z "$SPEKVERS" ]							; then	SPEKVERS="default"; fi
+		if [ -z "$SPEKVERS" ]							; then	SPEKVERS="stable"; fi
 		if [ -z "$AUTOSPEK" ]							; then	AUTOSPEK="0"; fi
 		if [ -z "$USEFWS" ]								; then	USEFWS="0"; fi
 		if [ -z "$USEPEV_PELDD" ]						; then	USEPEV_PELDD="0"; fi
@@ -5632,7 +5632,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_AUTOBUMPGE!$DESC_AUTOBUMPGE ('AUTOBUMPGE')":CHK "${AUTOBUMPGE/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_AUTOBUMPPROTON!$DESC_AUTOBUMPPROTON ('AUTOBUMPPROTON')":CHK "${AUTOBUMPPROTON/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_USESPECIALK!$DESC_USESPECIALK ('USESPECIALK')":CHK "${USESPECIALK/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
---field="     $GUI_SPEKVERS!$DESC_SPEKVERS ('SPEKVERS')":CB "$(cleanDropDown "${SPEKVERS/#-/ -}" "default!$SPEKYADLIST!nightly")" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_SPEKVERS!$DESC_SPEKVERS ('SPEKVERS')":CB "$(cleanDropDown "${SPEKVERS/#-/ -}" "stable!nightly!custom")" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_SPEKDLLNAME!$DESC_SPEKDLLNAME ('SPEKDLLNAME')":CBE "$( cleanDropDown "${SPEKDLLNAME/#-/ -}" "$SPEKDLLNAMELIST" )" `#CAT_Proton` `#MENU_GAME` \
 --field="     $GUI_USERESHSPEKPLUGIN!$DESC_USERESHSPEKPLUGIN ('USERESHSPEKPLUGIN')":CHK "${USERESHSPEKPLUGIN/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_USESPEKD3D47!$DESC_USESPEKD3D47 ('USESPEKD3D47')":CHK "${USESPEKD3D47/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
@@ -6258,7 +6258,6 @@ function refreshProtList {
 function MainMenu {
 	writelog "INFO" "${FUNCNAME[0]} - Preparing to load Main Menu"
 
-	createDLSpekList
 	createDLReShadeList
 	prepareMenu "$@"
 
@@ -6880,8 +6879,8 @@ function migrateCfgOption {
 		fi
 
 		# specialk replace "old" version
-		if [ "$SPEKVERS" == "discord" ] || [ "$SPEKVERS" == "old" ] || [ "$SPEKVERS" == "stable" ] || [ "$SPEKVERS" == "test" ]; then
-			SPEKVERS="default"
+		if [ "$SPEKVERS" == "discord" ] || [ "$SPEKVERS" == "old" ] || [ "$SPEKVERS" == "latest" ] || [ "$SPEKVERS" == "default" ] || [ "$SPEKVERS" == "test" ]; then
+			SPEKVERS="stable"
 			touch "$FUPDATE"
 			writelog "INFO" "${FUNCNAME[0]} - Automatically updating variable SPEKVERS from 'old' to '$SPEKVERS' in '$STLGAMECFG'"
 			updateConfigEntry "SPEKVERS" "$SPEKVERS" "$STLGAMECFG"
@@ -9769,7 +9768,6 @@ function extSpek {
 	SRCARCH="$1"
 	SPEXT64="$SPEKDLDIR/$SPEKVERS/${SPEK}64.dll"
 
-	# TODO handle extracting ZIPs into SPEKDLDIR/SPEKVERS subfolder! (check extension)
 	if [ -f "$SPEXT64" ]; then
 		writelog "SKIP" "${FUNCNAME[0]} - Already have '$SPEXT64' - skipping extraction" "E"
 	else
@@ -9801,6 +9799,33 @@ function getLatestNightlyLinkArtifactURL {
 	"$WGET" -q "${NIGHTLYLINKURL}" -O - 2> >(grep -v "SSL_INIT") | grep -oP "${NIGHTLYLINKURLPAT}" | head -n1  # Grep all links matching this pattern and pick the first one (should only be one anyway)
 }
 
+# Use innoextract to extract SpecialK32/64.dll from executable
+function extractSpecialKEXE {
+	POSSIBLESPEKEXE="$1"
+	if  [ -x "$(command -v "$INNOEXTRACT")" ]; then
+		SPEKEXESPEK32PATH="app/${SPEK}32.dll"
+		SPEKEXESPEK64PATH="app/${SPEK}64.dll"
+
+		SPEKEXEFILESLIST="$( "$INNOEXTRACT" "--list" "$POSSIBLESPEKEXE" )"
+
+		if grep -q "$SPEKEXESPEK32PATH" <<< "$SPEKEXEFILESLIST" && grep -q "$SPEKEXESPEK64PATH" <<< "$SPEKEXEFILESLIST"; then
+			notiShow "$( strFix "$NOTY_USESPEKCUSTOMEXE" "$( basename "$POSSIBLESPEKEXE" )" )"
+			writelog "INFO" "${FUNCNAME[0]} - Found valid SpecialK executable to extract"
+			# Extract EXE, select and move DLLs to SPEKVERS folder, remove all innoextract files
+			"$INNOEXTRACT" -m -s -d "$SPEKDLDIR/$SPEKVERS" "$POSSIBLESPEKEXE"
+
+			mv "$SPEKDLDIR/$SPEKVERS/$SPEKEXESPEK32PATH" "$SPEKDLDIR/$SPEKVERS"
+			mv "$SPEKDLDIR/$SPEKVERS/$SPEKEXESPEK64PATH" "$SPEKDLDIR/$SPEKVERS"
+
+			writelog "INFO" "${FUNCNAME[0]} - Successfully extracted '${SPEK}32.dll' and '${SPEK}64.dll' from '$( basename "$POSSIBLESPEKEXE" )'"
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - SpecialK executable did not contain both '$SPEKEXESPEK32PATH' and '$SPEKEXESPEK64PATH' -- Not extracting"
+		fi
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - Cannot extract custom SpecialK EXE because dependency '$INNOEXTRACT' is missing!"
+	fi
+}
+
 function dlSpecialK {
 	if [ -n "$1" ]; then
 		SPEKVERS="$1"
@@ -9809,11 +9834,11 @@ function dlSpecialK {
 	SPEKARC="${SPEK}.7z"
 
 	mkProjDir "$SPEKDLDIR/$SPEKVERS"
+	mkProjDir "$SPEKDLDIR/custom"  # Ensure custom is here, in case user downloads SpecialK and then wants to use custom -- Very minor QoL
 
-	if [ "$SPEKVERS" == "default" ]; then
-		SPEKDLURL="$SPEKURL/$SPEKARC"
-	elif [ "$SPEKVERS" == "latest" ]; then
-		SPEKDLURL="$SPEKGHURL/$SPEKVERS/download/$SPEKARC"
+	if [ "$SPEKVERS" == "stable" ]; then
+		SPEKDLURL="$SPEKURL$SPEKARC"
+		writelog "INFO" "${FUNCNAME[0]} - Using Stable SpecialK download URL '$SPEKDLURL'"
 	elif [ "$SPEKVERS" == "nightly" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Using SpecialK Nightly release, fetching from nightly.link"
 
@@ -9830,29 +9855,61 @@ function dlSpecialK {
 
 		writelog "INFO" "${FUNCNAME[0]} - SpecialK DL URL is '$SPEKDLURL'"
 		writelog "INFO" "${FUNCNAME[0]} - SpecialK Archive name from DL URL is '$SPEKARC'"
+	elif [ "$SPEKVERS" == "custom" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - SpecialK version '$SPEKVERS' selected, not downloading anything"
 	else
 		SPEKDLURL="$SPEKGHURL/download/SK_${SPEKVERS//./_}/$SPEKARC"
 	fi
 
 	SPEKDL="$SPEKDLDIR/$SPEKVERS/$SPEKARC"
 
-	if [ ! -f "$SPEKDL" ]; then
-		notiShow "$(strFix "$NOTY_DLCUSTOMPROTON" "$SPEK")"
-		dlCheck "$SPEKDLURL" "$SPEKDL" "X" "Downloading '$SPEKDLURL' to '$SPEKDLDIR'"
-		extSpek "$SPEKDL"
-	elif [ "$AUTOSPEK" -eq 1 ] && { [ "$SPEKVERS" == "default" ] || [ "$SPEKVERS" == "latest" ] || [ "$SPEKVERS" == "nightly" ] ;}; then
-		writelog "INFO" "${FUNCNAME[0]} - AUTOSPEK is enabled and SPEKVERS is '$SPEKVERS' - so looking for $SPEK updates" "E"
-		# XXXXXX todo remove previous download?
-		notiShow "$(strFix "$NOTY_DLCUSTOMPROTON" "$SPEK")"
-		dlCheck "$SPEKDLURL" "$SPEKDL" "X" "Downloading '$SPEKDLURL' to '$SPEKDLDIR'"
-		extSpek "$SPEKDL"
-	else
-		writelog "INFO" "${FUNCNAME[0]} - Already have the archive '${SPEKDL}'" "E"
-	fi
-
 	SPEK32SRC="$SPEKDLDIR/$SPEKVERS/${SPEK}32.dll"
 	SPEK64SRC="$SPEKDLDIR/$SPEKVERS/${SPEK}64.dll"
 
+	SPEK32BASE="${SPEK}32.dll"
+	SPEK64BASE="${SPEK}64.dll"
+
+	## For custom SpecialK, we either use existing placed DLLs or attempt to extract them from a SpecialK EXE
+	## If we have no custom exe and no SpecialK32/64 DLL pair, SpecialK will not be installed
+	if [ "$SPEKVERS" == "custom" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Custom SpecialK version selected -- Looking for manually placed SpecialK DLLs or EXE to extract them from"
+		POSSIBLECUSTOMSPEKEXE="$( find "$SPEKDLDIR/$SPEKVERS" -type f -name "*.exe" -print -quit )"
+		POSSIBLECUSTOMSPEKEXE="$( realpath "$POSSIBLECUSTOMSPEKEXE" )"
+
+		if [ -f "$SPEK32SRC" ] && [ -f "$SPEK64SRC" ]; then
+			notiShow "$NOTY_USESPEKCUSTOMDLL"
+			writelog "INFO" "${FUNCNAME[0]} - Found '${SPEK}32.dll' and '${SPEK}64.dll' -- Using this as SpecialK version"
+		elif [ -f "$POSSIBLECUSTOMSPEKEXE" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Found possible SpecialK EXE '$POSSIBLECUSTOMSPEKEXE' -- Attempting to extract SpecialK DLLs from this executable"
+			extractSpecialKEXE "$POSSIBLECUSTOMSPEKEXE"
+		fi
+	else  # download SpecialK
+		if [ ! -f "$SPEK32SRC" ] && [ ! -f "$SPEK64SRC" ]; then
+			notiShow "$(strFix "$NOTY_DLCUSTOMPROTON" "$SPEK")"
+			dlCheck "$SPEKDLURL" "$SPEKDL" "X" "Downloading '$SPEKDLURL' to '$SPEKDLDIR'"
+			extSpek "$SPEKDL"
+		elif [ "$AUTOSPEK" -eq 1 ] && { [ "$SPEKVERS" == "stable" ] || [ "$SPEKVERS" == "nightly" ] ;}; then
+			writelog "INFO" "${FUNCNAME[0]} - AUTOSPEK is enabled and SPEKVERS is '$SPEKVERS' - so looking for $SPEK updates" "E"
+			notiShow "$(strFix "$NOTY_DLCUSTOMPROTON" "$SPEK")"
+			dlCheck "$SPEKDLURL" "$SPEKDL" "X" "Downloading '$SPEKDLURL' to '$SPEKDLDIR'"
+			extSpek "$SPEKDL"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Already have the SpecialK DLLs, nothing to update" "E"
+		fi
+	fi
+
+	writelog "INFO" "${FUNCNAME[0]} - Cleaning up SpecialK version folder '$SPEKDLDIR/$SPEKVERS'"
+	# Clean up everything that isn't SPEK32SRC and SPEK64SRC
+	for SPEKVERDIRFILE in "$SPEKDLDIR/$SPEKVERS"/*; do
+		SPEKVERDIRFILEBASENAME="$( basename "$SPEKVERDIRFILE" )"
+		SPEKVERDIRFILEREALPATH="$( realpath "$SPEKVERDIRFILE" )"  # Just in case
+		if [ "$SPEKVERDIRFILEBASENAME" != "$SPEK32BASE" ] && [ "$SPEKVERDIRFILEBASENAME" != "$SPEK64BASE" ]; then
+			rmFileIfExists "$SPEKVERDIRFILEREALPATH"
+			rmDirIfExists "$SPEKVERDIRFILEREALPATH"
+		fi
+	done
+
+	# Check to make sure DLLs are still satisfied
 	if [ -f "$SPEK32SRC" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - '$SPEK32SRC' is ready" "E"
 	else
@@ -9976,21 +10033,6 @@ function prepareSpecialKIni {
 
 		writeValueToIni "$COGE" "$UWI" "false" "true" "$SPEKINI"  # SpecialK may already detect and set this appropriately now
 		writeValueToIni "$ROSD" "$SIVC" "true" "false" "$SPEKINI"  # Seems to be needed to prevent crashing sometimes
-	fi
-}
-
-function createDLSpekList {
-	# maybe improve later
-
-	if [ "$USESPECIALK" -eq 1 ]; then
-		writelog "INFO" "${FUNCNAME[0]} - $SPEK is enabled, looking for available versions online"
-		while read -r line; do
-			mapfile -t -O "${#SKDLList[@]}" SKDLList <<< "$line"
-		done <<< "$("$WGET" -q "$SPEKGHURL" -O - 2> >(grep -v "SSL_INIT") | grep "download*.*\.7z" | grep -oE '\"/[^\\"]+' | sed "s|^\"/${SPEK}O/${SPEK}/releases/download/SK_||g" | sed "s|/${SPEK}.7z||g" | sed "s|_|.|g")" # '
-		SPEKYADLIST="latest!$(printf "!%s\n" "${SKDLList[@]//\"/}" | tr -d '\n' | sed "s:^!::" | sed "s:!$::")"
-	else
-		writelog "SKIP" "${FUNCNAME[0]} - Skipping looking for available SpecialK versions, because USESPECIALK is disabled"
-		SPEKYADLIST="latest"
 	fi
 }
 
@@ -10134,7 +10176,7 @@ function useSpecialK {
 	fi
 
 	if [ "$USESPECIALK" -eq 1 ]; then
-		if [ "$AUTOSPEK" -eq 1 ] && { [ "$SPEKVERS" == "default" ] || [ "$SPEKVERS" == "latest" ];}; then
+		if [ "$AUTOSPEK" -eq 1 ] && { [ "$SPEKVERS" == "stable" ] || [ "$SPEKVERS" == "nightly" ];}; then
 			writelog "INFO" "${FUNCNAME[0]} - Updating $SPEK in the gamedir because AUTOSPEK is enabled"
 		fi
 
