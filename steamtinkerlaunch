@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20231119-7"
+PROGVERS="v14.0.20231120-1"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -9817,7 +9817,7 @@ function dlSpecialK {
 		writelog "INFO" "${FUNCNAME[0]} - Using SpecialK Nightly release, fetching from nightly.link"
 
 		SPEKAPIURLPATH="${SPEKPROJURL//$GHURL}"
-		SPEKNIGHTLYHASH="$( fetchLatestGitHubActionsBuild "${AGHURL}/repos${SPEKAPIURLPATH}" 1 "Builds" | cut -d ';' -f2 )"
+		SPEKNIGHTLYHASH="$( fetchLatestGitHubActionsBuild "${AGHURL}/repos${SPEKAPIURLPATH}" 1 "Builds" 0 | cut -d ';' -f2 )"  # Get commit hash for latest SpecialK artifact from only success workflows named "Builds"
 		SPEKNIGHTLYURL="https://nightly.link${SPEKAPIURLPATH}/workflows/build-windows/main"
 
 		writelog "INFO" "${FUNCNAME[0]} - SpecialK GitHub Actions hash is '$SPEKNIGHTLYHASH'"
@@ -14756,13 +14756,19 @@ function fetchLatestGitHubActionsBuild {
     PROJAPIURL="$1"
     ARTIFACTNUM=$2
 	WORKFLOWNAME="$3"
+	ALLOWFAILEDWORKFLOWS="${4:-1}"  # default to allow failed builds
 
     # /actions/runs
-	ARTIFACTRUNSRESPJQ=".workflow_runs[0]"
+	ARTIFACTRUNSRESPJQ=".workflow_runs"
 	## optionally filter by workflow name if we give one
 	if [ -n "$WORKFLOWNAME" ]; then
-		ARTIFACTRUNSRESPJQ="[.workflow_runs[] | select(.name==\"${WORKFLOWNAME}\")] | first"
+		ARTIFACTRUNSRESPJQ="[ ${ARTIFACTRUNSRESPJQ}[] | select(.name==\"${WORKFLOWNAME}\")]"
     fi
+	## optionally filter to only success builds
+	if [ "$ALLOWFAILEDWORKFLOWS" -eq 0 ]; then
+		ARTIFACTRUNSRESPJQ="[ ${ARTIFACTRUNSRESPJQ}[] | select (.conclusion==\"success\") ]"  # conclusion can be success/failure
+	fi
+	ARTIFACTRUNSRESPJQ="${ARTIFACTRUNSRESPJQ} | first"
 	ARTIFACTRUNSRESP="$( curl -s "${PROJAPIURL}/actions/runs" | "$JQ" "${ARTIFACTRUNSRESPJQ}" )"
 	ARTIFACTRUNSUITEID="$( echo "$ARTIFACTRUNSRESP" | "$JQ" '.check_suite_id' )"
     LATESTARTIFACTURL="$( echo "$ARTIFACTRUNSRESP" | "$JQ" '.artifacts_url' | cut -d '"' -f 2 )"
