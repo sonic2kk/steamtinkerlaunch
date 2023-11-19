@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20231120-2"
+PROGVERS="v14.0.20231121-1 (warn-blank-getGameName)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -890,18 +890,29 @@ function getGameName {
 			if [ ! -x "$(command -v "$JQ")" ]; then
 				writelog "WARN" "${FUNCNAME[0]} - Can't get data from '$APIDL' because '$JQ' is not installed"
 			else
-				writelog "INFO" "${FUNCNAME[0]} - Searching Game Name for '$1' in $APIDL"
-				GNRAW="$("$JQ" ".applist.apps[] | select (.appid==$1) | .name" "$APIDL")"
+				if [ -n "$1" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Searching Game Name for '$1' in $APIDL"
+					GNRAW="$("$JQ" ".applist.apps[] | select (.appid==$1) | .name" "$APIDL")"
+				else
+					writelog "WARN" "${FUNCNAME[0]} - Incoming AppID is empty: '$1' -- cannot use jq to get AppID, experimentally skipping..."
+				fi
 
 				if [ -n "$GNRAW" ]; then
 					writelog "INFO" "${FUNCNAME[0]} - Found Game Name '$GNRAW' in $APIDL"
+				else
+					writelog "WARN" "${FUNCNAME[0]} - Still could not get game name from AppID using Steam API, maybe we're dealing with a Non-Steam Game?"
 				fi
 			fi
 		else
 			writelog "SKIP" "${FUNCNAME[0]} - file '$APIDL' not found"
 		fi
 	fi
-	writelog "INFO" "${FUNCNAME[0]} - Outgoing game name is '${GNRAW//\"/}'"
+
+	if [ -n "$GNRAW" ];
+		writelog "INFO" "${FUNCNAME[0]} - Outgoing game name is '${GNRAW//\"/}'"
+	else
+		writelog "WARN" "${FUNCNAME[0]} - Outgoing game name is NOT set, maybe we had a Non-Steam Game?"
+	fi
 
 	GAMENAME="${GNRAW//\"/}"
 }
