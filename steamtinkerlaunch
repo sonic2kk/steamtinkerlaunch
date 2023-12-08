@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20231130-1"
+PROGVERS="v14.0.20231209-1"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -3082,6 +3082,8 @@ function setDefaultCfgValues {
 		if [ -z "$HMMCOMPDATA" ]                        ; then  HMMCOMPDATA="$STLHMMDIR/$CODA"; fi
 		if [ -z "$HMMDLVER" ]                           ; then  HMMDLVER="$HMMSTABLE"; fi
 		if [ -z "$USEMO2PROTON" ]						; then	USEMO2PROTON="$NON"; fi
+		if [ -z "$USEMO2CUSTOMINSTALLER" ]				; then  USEMO2CUSTOMINSTALLER="0"; fi
+		if [ -z "$MO2CUSTOMINSTALLER" ]					; then  MO2CUSTOMINSTALLER="$NON"; fi
 		if [ -z "$USEHMMPROTON" ]                       ; then  USEHMMPROTON="$NON"; fi
 		if [ -z "$USETERM" ]							; then	USETERM="$(command -v "xterm")"; fi
 		if [ -z "$TERMARGS" ]							; then	TERMARGS="-e"; fi
@@ -3632,6 +3634,10 @@ function saveCfg {
 			echo "MO2COMPDATA=\"$MO2COMPDATA\""
 			echo "## $DESC_USEMO2PROTON"
 			echo "USEMO2PROTON=\"$USEMO2PROTON\""
+			echo "## $DESC_USEMO2CUSTOMINSTALLER"
+			echo "USEMO2CUSTOMINSTALLER=\"$USEMO2CUSTOMINSTALLER\""
+			echo "## $DESC_MO2CUSTOMINSTALLER"
+			echo "MO2CUSTOMINSTALLER=\"$MO2CUSTOMINSTALLER\""
 			echo "## $DESC_HMMCOMPDATA"
 			echo "HMMCOMPDATA=\"$HMMCOMPDATA\""
 			echo "## $DESC_USEHMMPROTON"
@@ -5845,6 +5851,8 @@ function AllSettingsEntriesDummyFunction {
 --field="$(spanFont "$GUI_OPTSMO2" "H")":LBL "SKIP" `#CAT_MO2` `#HEAD_Vortex` `#MENU_GAME` `#MENU_GLOBAL` \
 --field="     $GUI_MO2COMPDATA!$DESC_MO2COMPDATA ('MO2COMPDATA')":DIR "${MO2COMPDATA/#-/ -}" `#CAT_MO2` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_USEMO2PROTON!$DESC_USEMO2PROTON ('USEMO2PROTON')":CB "$(cleanDropDown "${USEMO2PROTON/#-/ -}" "$PROTYADLIST")" `#CAT_MO2` `#MENU_GLOBAL` \
+--field="     $GUI_USEMO2CUSTOMINSTALLER!$DESC_USEMO2CUSTOMINSTALLER ('USEMO2CUSTOMINSTALLER')":CHK "${USEMO2CUSTOMINSTALLER/#- -}" `#CAT_MO2` `#SUB_Checkbox` `#MENU_GLOBAL` \
+--field="     $GUI_MO2CUSTOMINSTALLER!$DESC_MO2CUSTOMINSTALLER ('MO2CUSTOMINSTALLER')":FL "${MO2CUSTOMINSTALLER/#-/ -}" `#CAT_MO2` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_MO2MODE!$DESC_MO2MODE ('MO2MODE')":CB "$(cleanDropDown "${MO2MODE/#-/ -}" "disabled!gui")" `#CAT_MO2` `#MENU_GAME` \
 --field="     $GUI_WAITMO2!$DESC_WAITMO2 ('WAITMO2')":NUM "${WAITMO2/#-/ -}" `#CAT_MO2` `#MENU_GAME` \
 #ENDSETENTRIES
@@ -16840,8 +16848,16 @@ function getLatestMO2Ver {
 }
 
 function dlLatestMO2 {
-	getLatestMO2Ver
+	# Custom executable
+	# Only download MO2 if MO2CUSTOMINSTALLER is disabled, AND if a custom installer is not valid (if undefined, or $NON, or doesn't exist)
+	if [ "$USEMO2CUSTOMINSTALLER" -eq 1 ] && checkCustomModToolInstaller "ModOrganizer 2" "$MO2CUSTOMINSTALLER"; then
+		writelog "INFO" "${FUNCNAME[0]} - Valid ModOrganizer 2 custom installer executable found ('$MO2CUSTOMINSTALLER') -- Using this to install MO2 instead of downloading from GitHub"
+		MO2SPATH="$( realpath "$MO2CUSTOMINSTALLER" )"  # Use custom exe
+		return
+	fi
 
+	# Regular download from GitHub
+	getLatestMO2Ver
 	if [ -n "$MO2SETUP" ]; then
 		mkProjDir "$MO2DLDIR"
 		MO2SPATH="$MO2DLDIR/$MO2SETUP"
@@ -16930,6 +16946,31 @@ function setMO2Vars {
 
 		writelog "INFO" "${FUNCNAME[0]} - Using $SETMO2PROT for $MO"
 		setModWine "SETMO2PROT" "MO2RUNPROT" "MO2WINE"
+	fi
+}
+
+# Helper to check if custom exe for mod tool is valid
+# $1 = name of tool (for display purpses), $2 = path to custom executable
+# Intended for commandline primarily, not installMO2/etc directly - Could probably be re-used for Vortex
+function checkCustomModToolInstaller {
+	if [ -z "$1" ]; then
+		writelog "WARN" "${FUNCNAME[0]} - Did not pass tool name"
+	fi
+
+	if [ -n "$2" ] && [ "$2" != "$NON" ]; then  # Ensure file is given
+		if [ -f "$2" ] && [ -s "$2" ]; then  # Ensure file is file and is > 0bytes
+			writelog "INFO" "${FUNCNAME[0]} - Got valid $1 executable '$2' is a valid file -- Will use this to install $1"
+			echo "Got valid $1 executable '$2' is a valid file -- Will use this to install $1"
+			return 0
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Custom $1 executable '$2' is not a valid file -- Skipping"
+			echo "Custom $1 executable '$2' is not a valid file -- Skipping"
+			return 1
+		fi
+	else
+		writelog "INFO" "${FUNCNAME[0]} - Custom executable ('$2') is not defined -- Skipping"
+		echo "Custom executable ('$2') is not defined -- Skipping"
+		return 1
 	fi
 }
 
@@ -21744,6 +21785,7 @@ function howto {
 	echo "         download|d                  download latest MO2 release"
 	echo "         getprefix|gp                Output path to MO2 prefix"
 	echo "         install|i                   install MO2 (includes download)"
+	echo "          <path>                      optional path for custom MO2 installer executable"
 	echo "         list-supported|ls           list games supported by MO2"
 	echo "         list-installed|li           list installed games supported by MO2"
 	echo "         resetmime                   (Re)set MimeType and application menu entries"
@@ -22143,6 +22185,12 @@ function commandline {
 			if [ "$2" == "download" ] || [ "$2" == "d" ]; then
 				dlLatestMO2
 			elif [ "$2" == "install" ] || [ "$2" == "i" ]; then
+				# Get path to custom MO2 exe from commandline -- Untested for now
+				if [ -n "$3" ]; then
+					USEMO2CUSTOMINSTALLER=1
+					MO2CUSTOMINSTALLER="$3"
+				fi
+
 				StatusWindow "$(strFix "$NOTY_INSTSTART" "$MO")" "installMO2" "InstallMO2Status"
 			elif [ "$2" == "start" ] || [ "$2" == "s" ]; then
 				startMO2
