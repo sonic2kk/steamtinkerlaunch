@@ -20795,6 +20795,7 @@ function getRequireToolAppidPath {
 
 # Function to get SLR to append to game/program launch
 # Primarily used to set SLRCMD so it can be appended, but also sets the reaper command
+# TODO: refactor to use early returns and less indentation where possible
 function setSLRReap {
 	# This function has gotten a bit messy with all the override options, but these are used to allow setSLRReap to be re-used outside of regular game launches such as for Vortex.
 
@@ -20897,9 +20898,15 @@ function setSLRReap {
 				if [ -n "${NATIVE_SLRCMD[*]}" ]; then
 					writelog "INFO" "${FUNCNAME[0]} - Building Steam Linux Runtime command for native game"
 					SLRCMD=("${PROTON_SLRCMD[@]}" "${NATIVE_SLRCMD[@]}")  # Not really "Proton" for native games, but naming is hard
-				else
+				elif [ -n "${PROTON_SLRCMD[*]}" ]; then
 					writelog "INFO" "${FUNCNAME[0]} - Building Steam Linux Runtime command for Proton game"
 					SLRCMD=("${PROTON_SLRCMD[@]}")
+				else
+					if [ "${REQUIRED_APPID}" = "${SLRAID}" ]; then  # Assume native when REQUIRED_APPID is set to the native Linux SLRAID
+						writelog "WARN" "${FUNCNAME[0]} - No native linux Steam Linux Runtime found, game will not use Steam Linux Runtime"
+					else  # If not native, can only be Proton
+						writelog "WARN" "${FUNCNAME[0]} - No Proton Steam Linux Runtime found, game will not use Steam Linux Runtime"
+					fi
 				fi
 			fi
 		fi
