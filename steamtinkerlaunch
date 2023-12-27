@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20231212-1"
+PROGVERS="v14.0.20231227-1 (reshade-noini)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -3170,6 +3170,7 @@ function setDefaultCfgValues {
 		if [ -z "$USERESHADE" ]							; then	USERESHADE="0"; fi
 		if [ -z "$CUSTOMCMDRESHADE" ]					; then	CUSTOMCMDRESHADE="0"; fi
 		if [ -z "$RESHADEUPDATE" ]						; then	RESHADEUPDATE="0"; fi
+		if [ -z "$CREATERESHINI" ]						; then  CREATERESHINI="1"; fi
 		if [ -z "$RSOVRD" ] 							; then  RSOVRD="0"; fi
 		if [ -z "$RSOVRVERS" ] 							; then  RSOVRVERS="$RSVERS"; fi
 		if [ -z "$RESHADEDLLNAME" ]						; then  RESHADEDLLNAME="$DXGI"; fi
@@ -3820,6 +3821,8 @@ function saveCfg {
 			echo "CUSTOMCMDRESHADE=\"$CUSTOMCMDRESHADE\""
 			echo "## $DESC_RESHADEUPDATE"
 			echo "RESHADEUPDATE=\"$RESHADEUPDATE\""
+			echo "## $DESC_CREATERESHINI"
+			echo "CREATERESHINI=\"$CREATERESHINI\""
 			echo "## $DESC_RESHADEDLLNAME"
 			echo "RESHADEDLLNAME=\"$RESHADEDLLNAME\""
 			echo "## $DESC_RESHADEOVERRIDETOGGLE"
@@ -5682,6 +5685,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_CUSTOMCMDRESHADE!$DESC_CUSTOMCMDRESHADE ('CUSTOMCMDRESHADE')":CHK "${CUSTOMCMDRESHADE/#-/ -}" `#CAT_Shader` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_DOWNLOAD_RESHADE!$DESC_DOWNLOAD_RESHADE ('DOWNLOAD_RESHADE')":CHK "${DOWNLOAD_RESHADE/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_RESHADEUPDATE!$DESC_RESHADEUPDATE ('RESHADEUPDATE')":CHK "${RESHADEUPDATE/#-/ -}" `#CAT_Shader` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_CREATERESHINI!$DESC_CREATERESHINI ('CREATERESHINI')":CHK "${CREATERESHINI/#-/ -}" `#CAT_Shader` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_RESHADEOVERRIDETOGGLE!$DESC_RESHADEOVERRIDETOGGLE ('RSOVRD')":CHK "${RSOVRD/#-/ -}" `#CAT_Shader` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_RSVERS!$DESC_RSVERS ('RSVERS')" "${RSVERS/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#MENU_GLOBAL` \
 --field="     $GUI_USERSSPEKVERS!$DESC_USERSSPEKVERS ('USERSSPEKVERS')":CHK "${USERSSPEKVERS/#-/ -}" `#CAT_Shader` `#SUB_ReShade` `#MENU_GLOBAL` \
@@ -9620,6 +9624,37 @@ function installReshadeForSpecialK {
 	fi
 }
 
+# Helper to create ReShade INI
+function createReShadeINI {
+	if [ "$CREATERESHINI" -eq 0 ]; then
+		writelog "SKIP" "${FUNCNAME[0]} - ReShade INI creation is disabled (CREATERESHINI is '$CREATERESHINI') -- Skipping"
+		return
+	fi
+
+	writelog "INFO" "${FUNCNAME[0]} - Creating ReShade INI file"
+
+	if [ -f "$FRSINI" ]; then
+		if grep -q "EffectSearchPaths=.\$RSSUB\Shaders" "$FRSINI"; then
+			writelog "SKIP" "${FUNCNAME[0]} - Already have '$FRSINI' with default paths pointing to '$RSSUB'"
+		else
+			writelog "SKIP" "${FUNCNAME[0]} - Found a '$FRSINI' without default paths pointing to '$RSSUB' - not touching it"
+		fi
+	else
+		if [ -f "$FRSOINI" ] && grep -q "EffectSearchPaths=.*$RSSUB.*Shaders" "$FRSOINI"; then
+			writelog "INFO" "${FUNCNAME[0]} - Re-enabling previously disabled '$FRSOINI'"
+			mv "$FRSOINI" "$FRSINI"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Creating initial '$FRSINI' with default paths pointing to '$RSSUB'"
+			{
+				echo "[GENERAL]"
+				echo "EffectSearchPaths=.\\$RSSUB\Shaders"
+				echo "TextureSearchPaths=.\\$RSSUB\Textures"
+				echo "PreprocessorDefinitions=RESHADE_DEPTH_LINEARIZATION_FAR_PLANE=1000.0,RESHADE_DEPTH_INPUT_IS_UPSIDE_DOWN=0,RESHADE_DEPTH_INPUT_IS_REVERSED=1,RESHADE_DEPTH_INPUT_IS_LOGARITHMIC=0"
+			} > "$FRSINI"
+		fi
+	fi
+}
+
 function checkReshade {
 	setShadDestDir
 
@@ -9655,26 +9690,7 @@ function checkReshade {
 	fi
 
 	if [ "$USERESHADE" -eq 1 ]; then
-		if [ -f "$FRSINI" ]; then
-			if grep -q "EffectSearchPaths=.\$RSSUB\Shaders" "$FRSINI"; then
-				writelog "SKIP" "${FUNCNAME[0]} - Already have '$FRSINI' with default paths pointing to '$RSSUB'"
-			else
-				writelog "SKIP" "${FUNCNAME[0]} - Found a '$FRSINI' without default paths pointing to '$RSSUB' - not touching it"
-			fi
-		else
-			if [ -f "$FRSOINI" ] && grep -q "EffectSearchPaths=.*$RSSUB.*Shaders" "$FRSOINI"; then
-				writelog "INFO" "${FUNCNAME[0]} - Re-enabling previously disabled '$FRSOINI'"
-				mv "$FRSOINI" "$FRSINI"
-			else
-				writelog "INFO" "${FUNCNAME[0]} - Creating initial '$FRSINI' with default paths pointing to '$RSSUB'"
-				{
-					echo "[GENERAL]"
-					echo "EffectSearchPaths=.\\$RSSUB\Shaders"
-					echo "TextureSearchPaths=.\\$RSSUB\Textures"
-					echo "PreprocessorDefinitions=RESHADE_DEPTH_LINEARIZATION_FAR_PLANE=1000.0,RESHADE_DEPTH_INPUT_IS_UPSIDE_DOWN=0,RESHADE_DEPTH_INPUT_IS_REVERSED=1,RESHADE_DEPTH_INPUT_IS_LOGARITHMIC=0"
-				} > "$FRSINI"
-			fi
-		fi
+		createReShadeINI
 
 		# EXPERIMENTALLY RE-ENABLED
 		# NOTE that this has no ReShade updating or version override checks, so it is missing many features that regular ReShade has!
