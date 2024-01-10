@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20230112-1"
+PROGVERS="v14.0.20230111-2 (sgdb-artwork-gui)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -329,6 +329,7 @@ SOMEWINEDEBUGOPTIONS="-all,+steam,+vrclient,+vulkan"
 DEFSGDBHERODIMS="3840x1240,1920x620"
 DEFSGDBBOXARTDIMS="600x900"
 DEFSGDBTENFOOTDIMS="920x430,460x215"
+SGDBHASFILEOPTS="skip!backup!replace"
 SGDBTYPEOPTS="static!animated!static,animated!animated,static"
 SGDBTAGOPTS="any!true!false"
 SGDBHEROSTYLEOPTS="alternate,blurred,material"
@@ -581,6 +582,7 @@ HEADLINEFONT="larger"
 FONTSIZES="!xx-small!x-small!small!smaller!medium!large!larger!!x-large!xx-large!"
 SREG="system.reg"
 NSGA="non-steam game"
+FSGDBA="FetchSteamGridDBArtwork"
 SGA="set game artwork"
 BTVP="$DRC/Program Files/Black Tree Gaming Ltd/${VTX^}"
 VTXRAA="resources/app.asar"
@@ -1532,6 +1534,96 @@ function getSteamGridDBArtwork {
 
 		commandlineGetSteamGridDBArtwork --search-id="$SGDBSEARCHAID" --steam
 	done <<< "${1}"
+}
+
+# GUI frontend for below 'commandlineGetSteamGridDBArtwork'
+function getSteamGridDBArtworkGUI {
+	writelog "INFO" "${FUNCNAME[0]} - Starting the Gui for SteamGridDB Artwork selection"
+
+	FSGDBAWFILENAMEAPPID="$1"
+
+	# TODO this is not setting resolution correctly -- figure out why
+	export CURWIKI="$PPW/SteamGridDB"
+	TITLE="${PROGNAME}-$FSGDBA"
+	pollWinRes "$TITLE"
+
+	## TODO adjust dialog size, it's too tall and probably too wide
+	## TODO display game banner like we do in Set Game Art?
+	#
+	# Remove below after implementation:
+	#
+	# Menu will work by having boxes for a Steam AppID, SteamGridDB Game ID, or Game Name
+	# - If Steam AppID box is populated, ignore Game ID box and search on Steam AppID (--search-id="$FSGDBSN" and store "--steam" as variable to pass to cmd)
+	# - Otherwise use Game ID box (store "--nonsteam" as variable to pass to cmd)
+	# Will also have box for Game Name which we will always pass (if no match found for name, we should fall back to one of the AppIDs given)
+	# If all boxes are empty, nothing will happen
+	# Show notifier to display some feedback, and use logging to note what values we got and what is being prioritised
+	# Since we'll have the AppID handy, we can specify the filename_appid
+	#
+	# SGDBHASFILE will use the global option by default and populate the dropdown with the relevant option, just like the command does
+	# It will use the Global Menu default, but also allows the user to specify a different action this time
+	#
+	# FSGDBAW = Fetcch SteamGridDB ArtWork :-)
+	FSGDBAWGUISET="$("$YAD" --f1-action="$F1ACTION" --window-icon="$STLICON" --form --scroll --center --on-top "$WINDECO" \
+	--title="$TITLE" --separator="|" \
+	--text="$(spanFont "$GUI_FSGDBAW" "H")\n${DESC_FSGDBAW}" \
+	--field=" ":LBL " " \
+	--field="$GUI_FSGDBAWAPPID!$DESC_FSGDBAWAPPID ('FSGDBAWAPPID')" "${FSGDBAWAPPID/#-/ -}" \
+	--field="$GUI_FSGDBAWGAMEID!$DESC_FSGDBAWGAMEID ('FSGDBAWGAMEID')" "${FSGDBAWGAMEID/#-/ -}" \
+	--field="$GUI_FSGDBAWSEARCHNAME!$DESC_FSGDBAWSEARCHNAME ('FSGDBAWSEARCHNAME')" "${FSGDBAWSEARCHNAME/#-/ -}" \
+	--field="$GUI_SGDBHASFILE!$DESC_SGDBHASFILE ('FSGDBAWHASFILE')":CB "$(cleanDropDown "${SGDBHASFILE/#-/ -}" "${SGDBHASFILEOPTS}")" \
+	--field="$GUI_FSGDBAWAPPLYARTWORK!$DESC_FSGDBAWAPPLYARTWORK ('FSGDBAWAPPLYARTWORK')":CHK "1" \
+	--button="$BUT_CAN":0 --button="$BUT_DONE":2 "$GEOM")"
+
+	case $? in
+		0) writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_CAN'" ;;
+		2)
+			{
+				writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_DONE'"
+				mapfile -d "|" -t -O "${#FSGDBAWARR[@]}" FSGDBAWARR < <(printf '%s' "$FSGDBAWGUISET")
+				
+				FSGDBAWAPPID="${FSGDBAWARR[1]}"
+				FSGDBAWGAMEID="${FSGDBAWARR[2]}"
+				FSGDBAWSEARCHNAME="${FSGDBAWARR[3]}"
+				FSGDBAWHASFILE="--${FSGDBAWARR[4]}-existing"  # i.e. turns 'replace' into '--replace-existing'
+				FSGDBAWAPPLYARTWORK="${FSGDBAWARR[5]}"
+
+				if [ -z "${FSGDBAWAPPID}" ] && [ -z "${FSGDBAWGAMEID}" ] && [ -z "${FSGDBAWSEARCHNAME}" ]; then
+					# TODO Notifier for error?
+					writelog "ERROR" "${FUNCNAME[0]} - You must pass at least a Steam AppID, SteamGridDB Game ID, or SteamGridDB Game Name"
+					return
+				fi
+
+				# TODO Notifier for what we're searching on (Steam/NonSteam/etc)?
+
+				FSGDBAWGAMETYPEFLAG="--nonsteam"  # Default to non-steam, since Game ID and Game Name will use SGDB /game/ endpoint
+				if [ -n "$FSGDBAWAPPID" ]; then
+					FSGDBAWGAMETYPEFLAG="--steam"  # Only use SGDB Steam game endpoint if we pass a Steam AppID to search for artwork on
+					FSGDBAWSEARCHID="${FSGDBAWAPPID}"
+				else
+					FSGDBAWSEARCHID="${FSGDBAWGAMEID}"
+				fi
+
+				FSGDBAWAPPLYARTWORKFLAG="--apply"  # Checkbox is defaulted to 1 (enabled), so default flag to '--apply'
+				if [ "$FSGDBAWAPPLYARTWORK" -eq 0 ]; then
+					FSGDBAWAPPLYARTWORKFLAG="--no-apply"
+				fi
+
+				# Extra logging, mainly for debugging purposes
+				writelog "INFO" "${FUNCNAME[0]} - FSGDBAWAPPID: ${FSGDBAWAPPID}"
+				writelog "INFO" "${FUNCNAME[0]} - FSGDBAWGAMEID: ${FSGDBAWGAMEID}"
+				writelog "INFO" "${FUNCNAME[0]} - FSGDBAWSEARCHNAME: ${FSGDBAWSEARCHNAME}"
+				writelog "INFO" "${FUNCNAME[0]} - FSGDBAWHASFILE: ${FSGDBAWHASFILE}"
+				writelog "INFO" "${FUNCNAME[0]} - FSGDBAWAPPLYARTWORK: ${FSGDBAWAPPLYARTWORK}"
+				writelog "INFO" "${FUNCNAME[0]} - ############################################"
+				writelog "INFO" "${FUNCNAME[0]} - FSGDBAWGAMETYPEFLAG: ${FSGDBAWGAMETYPEFLAG}"
+				writelog "INFO" "${FUNCNAME[0]} - FSGDBAWAPPLYARTWORKFLAG: ${FSGDBAWAPPLYARTWORKFLAG}"
+
+				# Execute actual fetching of artwork, could probably put notifier here
+				writelog "INFO" "${FUNCNAME[0]} - Executing 'commandlineGetSteamGridDBArtwork --search-id=\"${FSGDBAWGAMEID}\" --search-name=\"${FSGDBAWSEARCHNAME}\" --filename-appid=\"${FSGDBAWFILENAMEAPPID}\" \"${FSGDBAWHASFILE}\" \"${FSGDBAWGAMETYPEFLAG}\"'"
+				commandlineGetSteamGridDBArtwork --search-id="${FSGDBAWGAMEID}" --search-name="${FSGDBAWSEARCHNAME}" --filename-appid="${FSGDBAWFILENAMEAPPID}" "${FSGDBAWHASFILE}" "${FSGDBAWAPPLYARTWORKFLAG}" "${FSGDBAWGAMETYPEFLAG}"
+			}
+	esac
 }
 
 # Used to get either Steam or Non-Steam artwork depending on a flag -- Used internally and for commandline usage
@@ -5533,7 +5625,7 @@ function AllSettingsEntriesDummyFunction {
 --field="$(spanFont "$GUI_OPTSGRID" "H")":LBL "SKIP" `#CAT_SteamGridDB` `#HEAD_SteamGridDB` `#MENU_GLOBAL` \
 --field="     $GUI_SGDBDLTOSTEAM!$DESC_SGDBDLTOSTEAM ('SGDBDLTOSTEAM')":CHK "${SGDBDLTOSTEAM/#-/ -}" `#CAT_SteamGridDB` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_SGDBAPIKEY!$DESC_SGDBAPIKEY ('SGDBAPIKEY')":CBE "${SGDBAPIKEY/#-/ -}" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
---field="     $GUI_SGDBHASFILE!$DESC_SGDBHASFILE ('SGDBHASFILE')":CB "$(cleanDropDown "${SGDBHASFILE/#-/ -}" "skip!backup!replace")" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
+--field="     $GUI_SGDBHASFILE!$DESC_SGDBHASFILE ('SGDBHASFILE')":CB "$(cleanDropDown "${SGDBHASFILE/#-/ -}" "${SGDBHASFILEOPTS}")" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
 --field="     $GUI_SGDBAUTODL!$DESC_SGDBAUTODL ('SGDBAUTODL')":CB "$(cleanDropDown  "${SGDBAUTODL/#-/ -}" "$NON!after_game!before_game!no_meta")" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
 --field="     $GUI_SGDBDLHERO!$DESC_SGDBDLHERO ('SGDBDLHERO')":CHK "${SGDBDLHERO/#-/ -}" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
 --field="     $GUI_SGDBDIMS!$DESC_SGDBDIMS ('SGDBHERODIMS')":CBE "$(cleanDropDown "${SGDBHERODIMS/#-/ -}" "${DEFSGDBHERODIMS//,/\!}")" `#CAT_SteamGridDB` `#MENU_GLOBAL` \
@@ -22484,9 +22576,21 @@ function commandline {
 	elif [ "$1" == "steamgriddb" ] || [ "$1" == "sgdb" ]; then
 		# This is the new SteamGridDB commandline usage, we just expose direct function to commandline
 
-		# TODO if search ID is not provided but the first argument is an integer, assume it is the AppID
-		# Will allow for usage like `steamtinkerlaunch sgdb 730 --apply` which is very clean
-		commandlineGetSteamGridDBArtwork "$@"
+		# No arguments passed, skip
+		if [ -z "$2" ]; then
+			echo "Need to pass arguments to SteamGridDB command, see 'steamtinkerlaunch help' for usage."
+			return
+		fi
+
+		if [ -z "$3" ]; then
+			# TODO ensure this new path does not break 'commandlineGetSteamGridDBArtwork' usage in any way!
+			## Show GUI if only 3rd argument given (assume is AppID), i.e if user just entered "steamtinkerlaunch sgdb <appid>"
+			getSteamGridDBArtworkGUI "$3"
+		else
+			# TODO if search ID is not provided but the first argument is an integer, assume it is the AppID
+			## Will allow for usage like `steamtinkerlaunch sgdb 730 --apply` which is very clean
+			commandlineGetSteamGridDBArtwork "$@"
+		fi
 	elif [ "$1" == "getsteamgriddbid" ] || [ "$1" == "sgdbid" ]; then
 		getSGDBGameIDFromTitle "$2"
 	elif [ "$1" == "update" ]; then
