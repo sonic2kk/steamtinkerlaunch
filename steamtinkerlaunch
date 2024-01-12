@@ -7834,40 +7834,51 @@ function getIDFromTitle {
 
 function getTitleFromID {
 	SEARCHSTEAMSHORTCUTS="${2:-0}"  # Default to not searching Steam shortcuts
+	FOUNDGAMETITLE=""
 
 	if [ -z "$1" ]; then
 		echo "A Game ID is required as argument"
-	else
-		if [ -f "$GEMETA/${1}.conf" ]; then
-			if grep -q "^NAME" "$GEMETA/${1}.conf"; then
-				grep "^NAME" "$GEMETA/${1}.conf" | cut -d '"' -f2
-			else
-				getAppInfoData "$1" "name"
-			fi
+		return 1;
+	fi
+
+	# Search meta file if we have one for Game Title
+	if [ -f "$GEMETA/${1}.conf" ]; then
+		if grep -q "^NAME" "$GEMETA/${1}.conf"; then
+			FOUNDGAMETITLE="$( grep "^NAME" "$GEMETA/${1}.conf" | cut -d '"' -f2 )"
 		else
-			# Try to get AppManifest based on passed ID if we don't have a data file
-			GAMEMANIFEST="$( listAppManifests | grep -m1 "appmanifest_${1}.acf" )"
-
-			if [ -n "$GAMEMANIFEST" ]; then
-				getValueFromAppManifest "name" "$GAMEMANIFEST"
-			elif [ "$SEARCHSTEAMSHORTCUTS" -eq "1" ] && haveAnySteamShortcuts ; then
-				# Steam shortcuts
-				while read -r SCVDFE; do
-					SVDFENAME="$( parseSteamShortcutEntryAppName "$SCVDFE" )"
-					SVDFEAID="$( parseSteamShortcutEntryAppID "$SCVDFE" )"
-
-					if [ "$SVDFEAID" -eq "$1" ]; then
-						echo "$SVDFENAME"
-						break
-					fi
-				done <<< "$( getSteamShortcutHex )"
-			else
-				echo "No Title found for '$1'"
-
-				return 1
-			fi
+			FOUNDGAMETITLE="$( getAppInfoData "$1" "name" )"
 		fi
 	fi
+
+	# Try to get title from Steam appmanifest if we didn't find Game Title in meta file
+	if [ -z "$FOUNDGAMETITLE" ]; then
+		GAMEMANIFEST="$( listAppManifests | grep -m1 "appmanifest_${1}.acf" )"
+
+		if [ -n "$GAMEMANIFEST" ]; then
+			FOUNDGAMETITLE="$( getValueFromAppManifest "name" "$GAMEMANIFEST" )"
+		fi
+	fi
+
+	# If we still haven't found the Game Title in the game meta file or appmanifest, check Steam Shortcuts if the option is enabled and if we have any
+	if [ -z "$FOUNDGAMETITLE" ] && [ "$SEARCHSTEAMSHORTCUTS" -eq "1" ] && haveAnySteamShortcuts ; then
+		while read -r SCVDFE; do
+			SVDFENAME="$( parseSteamShortcutEntryAppName "$SCVDFE" )"
+			SVDFEAID="$( parseSteamShortcutEntryAppID "$SCVDFE" )"
+
+			if [ "$SVDFEAID" -eq "$1" ]; then
+				FOUNDGAMETITLE="$SVDFENAME"
+				break
+			fi
+		done <<< "$( getSteamShortcutHex )"
+	fi
+
+	# If we didn't find the name in the STL meta file, Steam appmanifest, or shortcuts.vdf, give up
+	if [ -z "$FOUNDGAMETITLE" ]; then
+		echo "No Title found for '$1'"
+		return 1
+	fi
+
+	echo "$FOUNDGAMETITLE"
 }
 
 # Relies on game executable existing in STL meta file (i.e. any game launched before with STL)
@@ -25389,7 +25400,7 @@ function steamdeckBeforeGame {
 			writelog "INFO" "${FUNCNAME[0]} - Final Deck Check: Looks like we're in Game Mode (FIXGAMESCOPE is '$FIXGAMESCOPE')"
 			writelog "INFO" "${FUNCNAME[0]} - Force-enabling DXVK_HDR=1 for Steam Deck Game Mode, allows HDR support for Steam Deck OLED and HDR displays attached to Steam Deck"
 
-			# Override config value without updating the stored value itself, to preserve compatibility with Desktop Mode 
+			# Override config value without updating the stored value itself, to preserve compatibility with Desktop Mode
 			export DXVK_HDR=1
 		else
 			writelog "INFO" "${FUNCNAME[0]} - Final Deck Check: Looks like we're in Desktop Mode (FIXGAMESCOPE is '$FIXGAMESCOPE')"
