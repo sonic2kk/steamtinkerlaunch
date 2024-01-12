@@ -8,7 +8,7 @@ assignees: ''
 ---
 
 <!--
-Feel free to search through currently open issues to see if someone else has already suggested this feature and to see any corresponding discussion. You can also check the changelog on the wiki to see if this has been addressed in the latest master: https://github.com/frostworx/steamtinkerlaunch/wiki/Changelog
+Feel free to search through currently open issues to see if someone else has already suggested this feature and to see any corresponding discussion. You can test the latest version of SteamTinkerLaunch from the master branch to see if the feature has already been implemented, or you can  You can also check the changelog on the wiki to see if this has been addressed in the latest master: https://github.com/sonic2kk/steamtinkerlaunch/wiki/Changelog
 -->
 
 ## System Information
