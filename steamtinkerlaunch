@@ -16904,6 +16904,7 @@ function askVortex {
 # vtxWinecfg and mo2Winecfg are separate functions and separate from oneTimeWinetricks in case they may need some custom logics
 function vtxWinecfg {
 	setVortexVars
+	fallbackIfNoRunProton "$USEVORTEXPROTON"
 	getWinecfgExecutable
 
 	if [ -d "$VORTEXPFX" ]; then
@@ -16930,6 +16931,30 @@ function vtxWinetricks {
 }
 
 #### VORTEX STOP ####
+
+# Takes a custom Proton version name and sets it to RUNPROTON -- Mostly used for mo2winecfg and vtxWinecfg
+function fallbackIfNoRunProton {
+	NEWRUNPROTONNAME="$1"
+	if [ -n "$RUNPROTON" ]; then
+		writelog "SKIP" "${FUNCNAME[0]} - RUNPROTON is already defined as '$RUNPROTON' -- Skipping"
+		return
+	fi
+
+	NEWRUNPROTONPATH="$( getProtPathFromCSV "${NEWRUNPROTONNAME}" )"
+	if [ -z "$NEWRUNPROTONPATH" ]; then
+		writelog "ERROR" "${FUNCNAME[0]} - Could not find path to NEWRUNPROTONNAME '${NEWRUNPROTONPATH}' (is it defined in ProtonCSV.txt?) -- Aborting"
+		return
+	fi
+
+	# NEWRUNPROTONPATH points to Proton script file, so use -f
+	if [ ! -f "$NEWRUNPROTONPATH" ]; then
+		writelog "ERROR" "${FUNCNAME[0]} - Found Proton path path '${NEWRUNPROTONPATH}' in ProtonCSV for '${NEWRUNPROTONNAME}', but this path does not exist! Aborting"
+		return
+	fi
+
+	writelog "INFO" "${FUNCNAME[0]} - RUNPROTON is empty and found valid replacement based on '${NEWRUNPROTONPATH}' - Updated RUNPROTON path is '${NEWRUNPROTONPATH}'"
+	RUNPROTON="$NEWRUNPROTONPATH"
+}
 
 function warnInvalidModToolLaunch {
 	MODTOOLNAME="$1"
@@ -17597,13 +17622,7 @@ function checkMO2 {
 
 function mo2Winecfg {
 	setMO2Vars
-	# Ensure we have a RUNPROTON path
-	if [ -z "$RUNPROTON" ]; then
-		USEMO2PROTONPATH="$( getProtPathFromCSV "${USEMO2PROTON}" )"
-		writelog "INFO" "${FUNCNAME[0]} - RUNPROTON is empty, setting it to '${USEMO2PROTONPATH}'"
-
-		RUNPROTON="${USEMO2PROTONPATH}"
-	fi
+	fallbackIfNoRunProton "$USEMO2PROTON"
 	getWinecfgExecutable
 	if [ -d "$MO2PFX" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Running Winecfg for MO2"
