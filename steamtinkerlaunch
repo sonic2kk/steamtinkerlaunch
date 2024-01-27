@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20240128-4"
+PROGVERS="v14.0.20240128-4 (flatten-getgamedir)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -8054,80 +8054,86 @@ function getGameDir {
 	FOUNDINSTEAMSHORTCUTS=0
 
 	if [ -z "$1" ]; then
+		writelog "ERROR" "${FUNCNAME[0]} - Missing GameID or Game Title to search on -- Nothing to do!"
 		echo "A Game ID or Game Title is required as argument"
-	else
-		# First assume user entered AppID, then if no AppManifest found, try get AppID from name and search on that
-		SEARCHMANIFEST="$( listAppManifests | grep -m1 "appmanifest_${1}.acf" )"
+
+		return 1
+	fi
+
+	# First assume user entered AppID, then if no AppManifest found, try get AppID from name and search on that
+	SEARCHMANIFEST="$( listAppManifests | grep -m1 "appmanifest_${1}.acf" )"
+	if [ -z "$SEARCHMANIFEST" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Could not find App Manifest with entered argument '$1' - Assuming it is a game title and trying to find its AppID from title"
+		SEARCHGETIDFROMTITLE="$( getIDFromTitle "$1" | head -n1 )"
+
+		writelog "INFO" "${FUNCNAME[0]} - called 'getIDFromTitle' for argument '$1', it returned '$SEARCHGETIDFROMTITLE'"
+		SEARCHAID="$( echo "$SEARCHGETIDFROMTITLE" | cut -d "(" -f 1 | xargs)"
+
+		writelog "INFO" "${FUNCNAME[0]} - Extracted AppID from 'getIDFromTitle' result is '$SEARCHAID' - Searching for App Manifest with this AppID"
+
+		SEARCHMANIFEST="$( listAppManifests | grep -m1 "appmanifest_${SEARCHAID}.acf" )"
+
+		# This nesting is ugly, but mostly exists for logging purposes
 		if [ -z "$SEARCHMANIFEST" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Could not find App Manifest with entered argument '$1' - Assuming it is a game title and trying to find its AppID from title"
-			SEARCHGETIDFROMTITLE="$( getIDFromTitle "$1" | head -n1 )"
-
-			writelog "INFO" "${FUNCNAME[0]} - called 'getIDFromTitle' for argument '$1', it returned '$SEARCHGETIDFROMTITLE'"
-			SEARCHAID="$( echo "$SEARCHGETIDFROMTITLE" | cut -d "(" -f 1 | xargs)"
-
-			writelog "INFO" "${FUNCNAME[0]} - Extracted AppID from 'getIDFromTitle' result is '$SEARCHAID' - Searching for App Manifest with this AppID"
-
-			SEARCHMANIFEST="$( listAppManifests | grep -m1 "appmanifest_${SEARCHAID}.acf" )"
-			if [ -z "$SEARCHMANIFEST" ]; then
-				if [ "$SEARCHSTEAMSHORTCUTS" -eq 0 ]; then
-					writelog "ERROR" "${FUNCNAME[0]} - Could not find game directory for '$1' - Maybe it is not installed"
-					echo "Could not find game directory for '$1'"
-					return 1
-				else
-					writelog "WARN" "${FUNCNAME[0]} - Could not find game directory for '$1' - Will search on Steam Shortcuts next"
-				fi
+			if [ "$SEARCHSTEAMSHORTCUTS" -eq 0 ]; then
+				writelog "ERROR" "${FUNCNAME[0]} - Could not find game directory for '$1' - Maybe it is not installed"
+				echo "Could not find game directory for '$1'"
+				return 1
 			else
-				writelog "INFO" "${FUNCNAME[0]} - Found matching App Manifest '$SEARCHMANIFEST'"
+				writelog "WARN" "${FUNCNAME[0]} - Could not find game directory for '$1' - Will search on Steam Shortcuts next"
 			fi
 		else
-			writelog "INFO" "${FUNCNAME[0]} - Found matching App Manifest file for presumed entered AppID '$1' - Manifest file is '$SEARCHMANIFEST'"
+			writelog "INFO" "${FUNCNAME[0]} - Found matching App Manifest '$SEARCHMANIFEST'"
 		fi
+	else
+		writelog "INFO" "${FUNCNAME[0]} - Found matching App Manifest file for presumed entered AppID '$1' - Manifest file is '$SEARCHMANIFEST'"
+	fi
 
-		APPMAINSTDIR="$( getValueFromAppManifest "installdir" "$SEARCHMANIFEST" 2>/dev/null )"
-		APPMALIBFLDR="$( dirname "$SEARCHMANIFEST" )"
-		GAMINSTDIR="$APPMALIBFLDR/common/$APPMAINSTDIR"
-		MUSINSTDIR="$APPMALIBFLDR/music/$APPMAINSTDIR"  # Fixes a not found error for installed soundtracks
+	APPMAINSTDIR="$( getValueFromAppManifest "installdir" "$SEARCHMANIFEST" 2>/dev/null )"
+	APPMALIBFLDR="$( dirname "$SEARCHMANIFEST" )"
+	GAMINSTDIR="$APPMALIBFLDR/common/$APPMAINSTDIR"
+	MUSINSTDIR="$APPMALIBFLDR/music/$APPMAINSTDIR"  # Fixes a not found error for installed soundtracks
 
-		# If still not found, optionally search Steam shortcuts
-		if [ ! -d "$GAMINSTDIR" ] && [ "$SEARCHSTEAMSHORTCUTS" -eq 1 ] && haveAnySteamShortcuts ; then
-			while read -r SCVDFE; do
-				SCVDFEAID="$( parseSteamShortcutEntryAppID "$SCVDFE" )"
-				SCVDFENAME="$( parseSteamShortcutEntryAppName "$SCVDFE" )"
-				SCVDFEEXE="$( parseSteamShortcutEntryExe "$SCVDFE" )"
+	# If still not found, optionally search Steam shortcuts
+	if [ ! -d "$GAMINSTDIR" ] && [ "$SEARCHSTEAMSHORTCUTS" -eq 1 ] && haveAnySteamShortcuts ; then
+		while read -r SCVDFE; do
+			SCVDFEAID="$( parseSteamShortcutEntryAppID "$SCVDFE" )"
+			SCVDFENAME="$( parseSteamShortcutEntryAppName "$SCVDFE" )"
+			SCVDFEEXE="$( parseSteamShortcutEntryExe "$SCVDFE" )"
 
-				## If we have a match, build a hardcoded compatdata pointing at the Steam Root compatdata dir and if it exists, return that
-				## Seems like this is always where Steam generates compatdata for Non-Steam Games
-				## may instead be primary drive which defaults to Steam Root, but for now looks like Steam Root is the main place, so should work most of the time
-				if [ "$SCVDFEAID" -eq "$1" ] 2>/dev/null || [[ ${SCVDFENAME,,} == *"${1,,}"* ]]; then
-					APPMAGN="${SCVDFENAME}"
-					APPMAAID="${SCVDFEAID}"
-					GAMINSTDIR="$( dirname "${SCVDFEEXE}" )"  # Could still fail if EXE dir no longer exists, but edge case
+			## If we have a match, build a hardcoded compatdata pointing at the Steam Root compatdata dir and if it exists, return that
+			## Seems like this is always where Steam generates compatdata for Non-Steam Games
+			## may instead be primary drive which defaults to Steam Root, but for now looks like Steam Root is the main place, so should work most of the time
+			if [ "$SCVDFEAID" -eq "$1" ] 2>/dev/null || [[ ${SCVDFENAME,,} == *"${1,,}"* ]]; then
+				APPMAGN="${SCVDFENAME}"
+				APPMAAID="${SCVDFEAID}"
+				GAMINSTDIR="$( dirname "${SCVDFEEXE}" )"  # Could still fail if EXE dir no longer exists, but edge case
 
-					# TODO make this a function later, we use this a lot
-					GAMINSTDIR="${GAMINSTDIR#\"}"
-					GAMINSTDIR="${GAMINSTDIR%\"}"
+				# TODO make this a function later, we use this a lot
+				GAMINSTDIR="${GAMINSTDIR#\"}"
+				GAMINSTDIR="${GAMINSTDIR%\"}"
 
-					FOUNDINSTEAMSHORTCUTS=1
-					break
-				fi
-			done <<< "$( getSteamShortcutHex )"
-		fi
-
-		if [ -d "$GAMINSTDIR" ] || [ -d "$MUSINSTDIR" ]; then
-			# Don't fetch these if we found and set the information already from a Steam shortcuts
-			if [ "$FOUNDINSTEAMSHORTCUTS" -eq 0 ]; then
-				APPMAGN="$( getValueFromAppManifest "name" "$SEARCHMANIFEST" )"
-				APPMAAID="$( getValueFromAppManifest "appid" "$SEARCHMANIFEST" )"
+				FOUNDINSTEAMSHORTCUTS=1
+				break
 			fi
+		done <<< "$( getSteamShortcutHex )"
+	fi
 
-			if [ -z "$ONLYPATH" ]; then
-				printf "%s (%s) -> %s\n" "$APPMAGN" "$APPMAAID" "$GAMINSTDIR"
-			else
-				printf "%s\n" "$GAMINSTDIR"  # Only output path, used by "listSteamGames"
-			fi
-		else
-			echo "Could not find install directory for '$1'"
-		fi
+	if [ ! -d "${GAMINSTDIR}" ] && [ ! -d "${MUSINSTDIR}" ]; then
+		echo "Could not find install directory for '$1'"
+		return 1
+	fi
+
+	# Don't fetch these if we found and set the information already from a Steam shortcuts
+	if [ "$FOUNDINSTEAMSHORTCUTS" -eq 0 ]; then
+		APPMAGN="$( getValueFromAppManifest "name" "$SEARCHMANIFEST" )"
+		APPMAAID="$( getValueFromAppManifest "appid" "$SEARCHMANIFEST" )"
+	fi
+
+	if [ -z "$ONLYPATH" ]; then
+		printf "%s (%s) -> %s\n" "$APPMAGN" "$APPMAAID" "$GAMINSTDIR"
+	else
+		printf "%s\n" "$GAMINSTDIR"  # Only output path, used by "listSteamGames"
 	fi
 }
 
