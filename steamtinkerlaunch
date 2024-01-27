@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20240127-3"
+PROGVERS="v14.0.20240127-1 (spek-ini-encoding-change)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -60,6 +60,7 @@ GDB="gdb"
 XDGMIME="xdg-mime"
 XDGO="xdg-open"
 OBSCAP="obs-gamecapture"
+ICONV="iconv"
 
 CHECKHMD=1
 X32D="x32dbg"
@@ -163,6 +164,7 @@ DEFWINEDPI="96"
 WINEDPIVALUES="${DEFWINEDPI}!120!150!240"
 SGDBTIMEOUT="15"
 SGDBRETRIES="5"
+SPEKINIENCODING="utf-16le"  # SpecialK INI files must be UTF-16LE -- See: https://github.com/sonic2kk/steamtinkerlaunch/issues/1020
 
 ### default vars ###
 
@@ -10105,6 +10107,47 @@ function writeValueToIni {
 	fi
 }
 
+# Convert a text file from using one encoding to another
+# i.e. converting SpecialK INI file from using ASCII/UTF-8 to UTF-16LE (https://github.com/sonic2kk/steamtinkerlaunch/issues/1020)
+function changeFileEncoding {
+	NEWFILEENCODING="$1"
+	BACKUPORIGINALFILE="$2"
+
+	# Use same output filename as input filename unless output filename is explicitly specified
+	INFILENAME="$3"
+	OUTFILENAME="${4:-$INFILENAME}"
+
+	if [ ! -f "$INFILENAME" ]; then
+		writelog "ERROR" "${FUNCNAME[0]} - Incoming file does not exist, nothing to do"
+		return
+	fi
+
+	if [ "${BACKUPORIGINALFILE}" -eq 1 ]; then
+		BACKUPINFILE="${INFILE}.stlbak"
+
+		writelog "INFO" "${FUNCNAME[0]} - BACKUPORIGINALFILE is enabled, backing up '${INFILENAME}' to '${BACKUPINFILE}'"
+		cp "$INFILENAME" "$BACKUPINFILE"
+	fi
+
+	writelog "INFO" "${FUNCNAME[0]} - Converting file '$INFILENAME' to use encoding '$NEWFILEENCODING' and storing it  at '$OUTFILENAME'"
+	"$ICONV" -t "$NEWFILEENCODING" -o "$INFILENAME" "$OUTFILENAME"
+}
+
+function getTextFileEncoding {
+	TEXTFILEPATH="$1"
+	TEXTFILEINFO="$( file -bi "$TEXTFILEPATH" | cut -d ';' -f2 | xargs )"  # Assume output as something like 'text/plain; charset=blah'
+
+	echo "${TEXTFILEINFO,,}"
+}
+
+# Create empty SpecialK INI file with encoding set to UTF-16LE
+function createBaseSpekIni {
+	SPEKINIPATH="$1"
+
+	touch "$SPEKINI"
+	changeFileEncoding "$SPEKINIENCODING" "1" "$SPEKINIPATH"
+}
+
 function prepareSpecialKIni {
 	SPEKDLLNAMEFORINI="$( basename "$SPEKDST" )"
 	SPEKINI="${SPEKDLLNAMEFORINI//.dll/.ini}"  # Name INI after chosen SpecialK DLL name
@@ -10116,9 +10159,17 @@ function prepareSpecialKIni {
 	SIVC="ShowInVideoCapture"
 
 	if [ -n "$SPEKINI" ]; then
-		if [ ! -f "$SPEKINI" ]; then
+		if [ -f "$SPEKINI" ]; then
+			# If encoding is not UTF-16LE, make a new INI
+			if [ "$( getTextFileEncoding "$SPEKINI" )" != "$SPEKINIENCODING" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - SpecialK INI file does not match required encoding '$SPEKINIENCODING' -- Will create a new INI with correct encoding"
+
+				rmFileIfExists "$SPEKINI"
+				createBaseSpekIni "$SPEKINI"
+			fi
+		else
 			writelog "INFO" "${FUNCNAME[0]} - SpecialK INI '$SPEKINI' does not exist, creating initial blank INI"
-			touch "$SPEKINI"
+			createBaseSpekIni "$SPEKINI"
 		fi
 
 		writeValueToIni "$COGE" "$UWI" "false" "true" "$SPEKINI"  # SpecialK may already detect and set this appropriately now
@@ -10193,7 +10244,7 @@ function useSpecialK {
 
 		# Make sure we don't track DLL renames
 		rmFileIfExists "$SPEKENA"
-		touch "$SPEKENA"
+		createBaseSpekIni "$SPEKENA"
 
 		if [ "$SPEKDLLCONFLICTFOUND" -eq 0 ] && [ "$SHOULDINSTALLSPEK" -eq 1 ]; then
 			installd3d47dll "$SPEKD3D47DLL" "$SPEKDDIR"
