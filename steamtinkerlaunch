@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20240128-1"
+PROGVERS="v14.0.20240128-2"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -7896,49 +7896,54 @@ function getGameExe {
 	SEARCHSTEAMSHORTCUTS="${2:-0}"  # Default to not searching Steam shortcuts
 
 	if [ -z "$1" ]; then
+		writelog "ERROR" "${FUNCNAME[0]} - Called getGameExe without AppID -- Nothing to do!"
 		echo "A Game ID is required as argument"
-	else
-		INAID="$1"
-		EXE=""
-		NOTFOUNDSTR="No Executable or SteamTinkerLaunch file found for '$1'"
 
-		# Try to get appid from game name -- If nultiple values, just pick first one
-		if ! [ "$INAID" -eq "$INAID" ] 2>/dev/null; then
-			INAID="$( getIDFromTitle "$INAID" | head -n1 )"
-			INAID="$( trimWhitespaces "${INAID%(*}")"
-		fi
-
-		EXEGAMNAM="$( getTitleFromID "$INAID" )"
-
-		if [ -n "$INAID" ] && [ -f "$GEMETA/${INAID}.conf" ]; then
-			# Some games might only have "EXECUTABLE" in their meta conf file
-			EXE="$(grep "^EXECUTABLE" "$GEMETA/${INAID}.conf" | cut -d '"' -f2)"
-			if [ -z "${EXE}" ]; then
-				EXE="$(grep "^GAMEEXE" "$GEMETA/${INAID}.conf" | cut -d '"' -f2)"
-			fi
-
-			if [ -n "$EXE" ]; then
-				EXE="$EXEGAMNAM ($INAID) -> $( getGameDir "$INAID" "only" )/$EXE"
-			fi
-		fi
-
-		if [ -z "$EXE" ] && [ "$SEARCHSTEAMSHORTCUTS" -eq 1 ] && haveAnySteamShortcuts ; then
-			# Have to search on all shortcuts because we need to check game name as fallback
-			while read -r SCVDFE; do
-				SCVDFEAID="$( parseSteamShortcutEntryAppID "$SCVDFE" )"
-				SCVDFENAME="$( parseSteamShortcutEntryAppName "$SCVDFE" )"
-				SCVDFEEXE="$( parseSteamShortcutEntryExe "$SCVDFE" )"
-
-				if [ "$SCVDFEAID" -eq "$1" ] 2>/dev/null || [[ ${SCVDFENAME,,} == *"${1,,}"* ]]; then
-					SCVDFEEXE="${SCVDFEEXE#\"}"
-					EXE="$SCVDFENAME ($SCVDFEAID) -> ${SCVDFEEXE%\"}"
-					break
-				fi
-			done <<< "$( getSteamShortcutHex )"
-		fi
-
-		echo "${EXE:-$NOTFOUNDSTR}"
+		return 1
 	fi
+
+	INAID="$1"
+	EXE=""
+	NOTFOUNDSTR="No Executable or SteamTinkerLaunch file found for '$1'"
+
+	# Try to get appid from game name -- If multiple values, just pick first one
+	if ! [ "$INAID" -eq "$INAID" ] 2>/dev/null; then
+		INAID="$( getIDFromTitle "$INAID" | head -n1 )"
+		INAID="$( trimWhitespaces "${INAID%(*}")"
+	fi
+
+	EXEGAMNAM="$( getTitleFromID "$INAID" )"
+
+	# Try to get game EXE from STL meta file
+	if [ -n "$INAID" ] && [ -f "$GEMETA/${INAID}.conf" ]; then
+		# Some games might only have "EXECUTABLE" in their meta conf file
+		EXE="$(grep "^EXECUTABLE" "$GEMETA/${INAID}.conf" | cut -d '"' -f2)"
+		if [ -z "${EXE}" ]; then
+			EXE="$(grep "^GAMEEXE" "$GEMETA/${INAID}.conf" | cut -d '"' -f2)"
+		fi
+
+		if [ -n "$EXE" ]; then
+			EXE="$EXEGAMNAM ($INAID) -> $( getGameDir "$INAID" "only" )/$EXE"
+		fi
+	fi
+
+	# Search on game shortcuts if EXE still not found
+	if [ -z "$EXE" ] && [ "$SEARCHSTEAMSHORTCUTS" -eq 1 ] && haveAnySteamShortcuts ; then
+		# Have to search on all shortcuts because we need to check game name as fallback
+		while read -r SCVDFE; do
+			SCVDFEAID="$( parseSteamShortcutEntryAppID "$SCVDFE" )"
+			SCVDFENAME="$( parseSteamShortcutEntryAppName "$SCVDFE" )"
+			SCVDFEEXE="$( parseSteamShortcutEntryExe "$SCVDFE" )"
+
+			if [ "$SCVDFEAID" -eq "$1" ] 2>/dev/null || [[ ${SCVDFENAME,,} == *"${1,,}"* ]]; then
+				SCVDFEEXE="${SCVDFEEXE#\"}"
+				EXE="$SCVDFENAME ($SCVDFEAID) -> ${SCVDFEEXE%\"}"
+				break
+			fi
+		done <<< "$( getSteamShortcutHex )"
+	fi
+
+	echo "${EXE:-$NOTFOUNDSTR}"
 }
 
 function getCompatData {
