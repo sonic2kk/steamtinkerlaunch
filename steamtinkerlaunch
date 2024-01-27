@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20240128-3"
+PROGVERS="v14.0.20240128-4"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -23295,32 +23295,36 @@ function dlX64Dbg {
 	DLCH="$DLDST/commithash.txt"
 	if [ -f "$DLCH" ]; then
 		writelog "SKIP" "${FUNCNAME[0]} - '$X64D' is already ready"
+		return
+	fi
+
+	mkProjDir "$DLDST"
+	X64ZIP="$(getLatestX64dbgSnap)"
+	X64ZIPBASE="$( basename "$X64ZIP" )"
+
+	# Download x64dbg
+	if [ ! -f "$DLDST/$X64ZIPBASE" ]; then
+		notiShow "$(strFix "$NOTY_DLCUSTOMPROTON" "$X64ZIP")" "S"
+		dlCheck "$X64ZIP"  "$DLDST/$X64ZIPBASE" "X" "Downloading 'x64dbg'"
+		notiShow "$(strFix "$NOTY_DLCUSTOMPROTON2" "$X64ZIP")" "S"
+	fi
+
+	DLDST="$X64DBGDLDIR"
+	if [ ! -s "$DLDST" ]; then
+		writelog "SKIP" "${FUNCNAME[0]} - Downloaded file '$DLDST/$X64ZIPBASE' is empty - removing"
+		rm "$DLDST/$X64ZIPBASE" 2>/dev/null
+		return
+	fi
+
+	# Extract x64dbg
+	notiShow "$(strFix "$NOTY_DLCUSTOMPROTON3" "$X64ZIPBASE")" "S"
+	writelog "INFO" "${FUNCNAME[0]} - Download of '$X64ZIPBASE' to '$DLDST' was successful"
+	"$UNZIP" -q "$DLDST/$X64ZIPBASE" -d "$DLDST" 2>/dev/null
+	notiShow "$GUI_DONE" "S"
+	if [ -f "$DLCH" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Extracted '$X64ZIPBASE' to '$DLDST'"
 	else
-		mkProjDir "$DLDST"
-		X64ZIP="$(getLatestX64dbgSnap)"
-		X64ZIPBASE="$( basename "$X64ZIP" )"
-
-		if [ ! -f "$DLDST/$X64ZIPBASE" ]; then
-			notiShow "$(strFix "$NOTY_DLCUSTOMPROTON" "$X64ZIP")" "S"
-			dlCheck "$X64ZIP"  "$DLDST/$X64ZIPBASE" "X" "Downloading 'x64dbg'"
-			notiShow "$(strFix "$NOTY_DLCUSTOMPROTON2" "$X64ZIP")" "S"
-		fi
-
-		DLDST="$X64DBGDLDIR"
-		if [ ! -s "$DLDST" ]; then
-			writelog "SKIP" "${FUNCNAME[0]} - Downloaded file '$DLDST/$X64ZIPBASE' is empty - removing"
-			rm "$DLDST/$X64ZIPBASE" 2>/dev/null
-		else
-			notiShow "$(strFix "$NOTY_DLCUSTOMPROTON3" "$X64ZIPBASE")" "S"
-			writelog "INFO" "${FUNCNAME[0]} - Download of '$X64ZIPBASE' to '$DLDST' was successful"
-			"$UNZIP" -q "$DLDST/$X64ZIPBASE" -d "$DLDST" 2>/dev/null
-			notiShow "$GUI_DONE" "S"
-			if [ -f "$DLCH" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Extracted '$X64ZIPBASE' to '$DLDST'"
-			else
-				writelog "SKIP" "${FUNCNAME[0]} - Extracting of file '$DLDST/$X64ZIPBASE' failed"
-			fi
-		fi
+		writelog "SKIP" "${FUNCNAME[0]} - Extracting of file '$DLDST/$X64ZIPBASE' failed"
 	fi
 }
 
