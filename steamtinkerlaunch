@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20240128-2"
+PROGVERS="v14.0.20240128-3"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -7950,80 +7950,84 @@ function getCompatData {
 	SEARCHSTEAMSHORTCUTS="${2:-0}"  # Default to not searching Steam shortcuts
 
 	if [ -z "$1" ]; then
+		writelog "ERROR" "${FUNCNAME[0]} - No AppID or Game Title provided -- Nothing to do!"
 		echo "A Game ID or Game Title is required as argument"
-	else
-		# Sometimes the name here is not extact e.g. "SonicFrontiers" for "Sonic Frontiers", so the else fallback fetches using getGameDir
-		# If the compat folder doesn't exist *at all* then the final else will get triggered, but this should probably always exist (even if its empty)
-		if [ -d "$STLCOMPDAT" ]; then
-			unset FCOMPDAT
 
-			# Skips games which have ';' in the name (i.e. "ROBOTICS;NOTES"), as this throws off the 'cut' command, and instead we fall back to the getGameDir check
-			if [ "$1" -eq "$1" ] 2>/dev/null; then  # This is for AppID check (-eq will fail if not integer expression)
-				while read -r "complink"; do
-					TEST="$(readlink "$complink" | grep "/$1$")"
-					if [ -d "$TEST" ] && ! [[ "${complink##*/}" == *";"* ]]; then
-						FCOMPDAT="${complink##*/};$TEST"
-					fi
-				done <<< "$(find "$STLCOMPDAT")"
-			else  # This is for Game Name checks
-				TEST="$(find "$STLCOMPDAT" -iname "*${1}*" | head -n1)"
-				if [ -n "$TEST" ] && ! [[ "${TEST##*/}" == *";"* ]]; then
-					FCOMPDAT="${TEST##*/};$(readlink "$TEST")"
+		return 1
+	fi
+
+	# SteamTinkerLaunch stores a symlinkk to the prefix of each game launched with it,
+	# so if we have this folder we can try to find if we have a symlink to the desired game's prefix as it may be faster
+	if [ -d "$STLCOMPDAT" ]; then
+		# Skips games which have ';' in the name (i.e. "ROBOTICS;NOTES"), as this throws off the 'cut' command, and instead we fall back to the getGameDir check
+		if [ "$1" -eq "$1" ] 2>/dev/null; then  # This is for AppID check (-eq will fail if not integer expression)
+			while read -r "complink"; do
+				TEST="$(readlink "$complink" | grep "/$1$")"
+				if [ -d "$TEST" ] && ! [[ "${complink##*/}" == *";"* ]]; then
+					FCOMPDAT="${complink##*/};$TEST"
 				fi
+			done <<< "$(find "$STLCOMPDAT")"
+		else  # This is for Game Name checks
+			TEST="$(find "$STLCOMPDAT" -iname "*${1}*" | head -n1)"
+			if [ -n "$TEST" ] && ! [[ "${TEST##*/}" == *";"* ]]; then
+				FCOMPDAT="${TEST##*/};$(readlink "$TEST")"
 			fi
+		fi
 
-			if [ -n "$FCOMPDAT" ]; then
-				COMPATGAMENAME="$( echo "$FCOMPDAT" | cut -d ";" -f 1 )"
-				COMPATGAMEPATH="$( echo "$FCOMPDAT" | cut -d ";" -f 2 )"
-				COMPATGAMEAID="$( basename "$COMPATGAMEPATH" )"
+		# If we found a matching compatdata, return it here
+		if [ -n "$FCOMPDAT" ]; then
+			COMPATGAMENAME="$( echo "$FCOMPDAT" | cut -d ";" -f 1 )"
+			COMPATGAMEPATH="$( echo "$FCOMPDAT" | cut -d ";" -f 2 )"
+			COMPATGAMEAID="$( basename "$COMPATGAMEPATH" )"
 
-				echo "${COMPATGAMENAME} (${COMPATGAMEAID}) -> ${COMPATGAMEPATH}"
-			else
-				# If no symlink found in STL dir, check the game's library folder, with fallback to the Steam root library folder (i.e. non-steam games)
-				writelog "INFO" "${FUNCNAME[0]} - Could not find compatdata named in STL symlink dir, searching with getGameLibraryFolder..."
-				SEARCHGAMEDIR="$( getGameDir "$1" )"
+			echo "${COMPATGAMENAME} (${COMPATGAMEAID}) -> ${COMPATGAMEPATH}"
 
-				COMPATGAMESTR=""  # Final output string
-				NOTFOUNDSTR="No $CODA dir found for '$1'"
-				COMPATGAMEPATH="${SEARCHGAMEDIR##*-> }"
-				if [ -d "$COMPATGAMEPATH" ]; then
-					COMPATGAMENAME="$( echo "${SEARCHGAMEDIR%(*}" | xargs )" # e.g. TEKKEN 7
-					COMPATGAMEAID="$( echo "$SEARCHGAMEDIR" | grep -oE '\([^)]+\)' | tail -n1 | sed 's:(::g;s:)::g' )"  # e.g. 389730
-
-					LIFOCOMPATDIR="$( realpath "$COMPATGAMEPATH/../../$CODA/$COMPATGAMEAID" )"
-					SROOTCOMPATDIR="$SROOT/$SA/$CODA/$COMPATGAMEAID"
-
-					COMPATDATADIR="$( [ -d "$LIFOCOMPATDIR" ] && echo "$LIFOCOMPATDIR" || echo "$SROOTCOMPATDIR" )"
-					if [ -d "$COMPATDATADIR" ]; then
-						COMPATGAMESTR="$COMPATGAMENAME ($COMPATGAMEAID) -> $COMPATDATADIR"
-					fi
-				fi
-
-				# Check Steam Shortcuts for games never launched with STL
-				if [ ! -d "$SEARCHGAMEDIR" ] && [ "$SEARCHSTEAMSHORTCUTS" -eq 1 ] && haveAnySteamShortcuts ; then
-					while read -r SCVDFE; do
-						SCVDFEAID="$( parseSteamShortcutEntryAppID "$SCVDFE" )"
-						SCVDFENAME="$( parseSteamShortcutEntryAppName "$SCVDFE" )"
-
-						## If we have a match, build a hardcoded compatdata pointing at the Steam Root compatdata dir and if it exists, return that
-						## Seems like this is always where Steam generates compatdata for Non-Steam Games
-						## may instead be primary drive which defaults to Steam Root, but for now looks like Steam Root is the main place, so should work most of the time
-						if [ "$SCVDFEAID" -eq "$1" ] 2>/dev/null || [[ ${SCVDFENAME,,} == *"${1,,}"* ]]; then
-							SCVDFECODA="$SROOT/$SA/$CODA/${SCVDFEAID}"
-							if [ -d "$SCVDFECODA" ]; then
-								COMPATGAMESTR="$SCVDFENAME ($SCVDFEAID) -> $SCVDFECODA"
-							fi
-							break
-						fi
-					done <<< "$( getSteamShortcutHex )"
-				fi
-
-				echo "${COMPATGAMESTR:-$NOTFOUNDSTR}"
-			fi
-		else
-			echo "No $CODA dir found for '$1'"
+			return 0
 		fi
 	fi
+
+	unset FCOMPDAT
+
+	# If no symlink found in STL dir, check the game's library folder, with fallback to the Steam root library folder (i.e. Non-Steam Games)
+	writelog "INFO" "${FUNCNAME[0]} - Could not find compatdata named in STL symlink dir, searching with getGameLibraryFolder..."
+	SEARCHGAMEDIR="$( getGameDir "$1" )"
+
+	COMPATGAMESTR=""  # Final output string
+	NOTFOUNDSTR="No $CODA dir found for '$1'"
+	COMPATGAMEPATH="${SEARCHGAMEDIR##*-> }"
+	if [ -d "$COMPATGAMEPATH" ]; then
+		COMPATGAMENAME="$( echo "${SEARCHGAMEDIR%(*}" | xargs )" # e.g. TEKKEN 7
+		COMPATGAMEAID="$( echo "$SEARCHGAMEDIR" | grep -oE '\([^)]+\)' | tail -n1 | sed 's:(::g;s:)::g' )"  # e.g. 389730
+
+		LIFOCOMPATDIR="$( realpath "$COMPATGAMEPATH/../../$CODA/$COMPATGAMEAID" )"
+		SROOTCOMPATDIR="$SROOT/$SA/$CODA/$COMPATGAMEAID"
+
+		COMPATDATADIR="$( [ -d "$LIFOCOMPATDIR" ] && echo "$LIFOCOMPATDIR" || echo "$SROOTCOMPATDIR" )"
+		if [ -d "$COMPATDATADIR" ]; then
+			COMPATGAMESTR="$COMPATGAMENAME ($COMPATGAMEAID) -> $COMPATDATADIR"
+		fi
+	fi
+
+	# Check Steam Shortcuts for games never launched with STL
+	if [ ! -d "$SEARCHGAMEDIR" ] && [ "$SEARCHSTEAMSHORTCUTS" -eq 1 ] && haveAnySteamShortcuts ; then
+		while read -r SCVDFE; do
+			SCVDFEAID="$( parseSteamShortcutEntryAppID "$SCVDFE" )"
+			SCVDFENAME="$( parseSteamShortcutEntryAppName "$SCVDFE" )"
+
+			## If we have a match, build a hardcoded compatdata pointing at the Steam Root compatdata dir and if it exists, return that
+			## Seems like this is always where Steam generates compatdata for Non-Steam Games
+			## may instead be primary drive which defaults to Steam Root, but for now looks like Steam Root is the main place, so should work most of the time
+			if [ "$SCVDFEAID" -eq "$1" ] 2>/dev/null || [[ ${SCVDFENAME,,} == *"${1,,}"* ]]; then
+				SCVDFECODA="$SROOT/$SA/$CODA/${SCVDFEAID}"
+				if [ -d "$SCVDFECODA" ]; then
+					COMPATGAMESTR="$SCVDFENAME ($SCVDFEAID) -> $SCVDFECODA"
+				fi
+				break
+			fi
+		done <<< "$( getSteamShortcutHex )"
+	fi
+
+	echo "${COMPATGAMESTR:-$NOTFOUNDSTR}"
 }
 
 # Credit to StackOverflow community wiki
