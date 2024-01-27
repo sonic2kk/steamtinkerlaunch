@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20240127-2"
+PROGVERS="v14.0.20240127-3 (gamescope-gsarr-refactor)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -1575,7 +1575,7 @@ function getSteamGridDBArtworkGUI {
 			{
 				writelog "INFO" "${FUNCNAME[0]} - Selected '$BUT_DONE'"
 				mapfile -d "|" -t -O "${#FSGDBAWARR[@]}" FSGDBAWARR < <(printf '%s' "$FSGDBAWGUISET")
-				
+
 				FSGDBAWAPPID="${FSGDBAWARR[1]}"
 				FSGDBAWGAMEID="${FSGDBAWARR[2]}"
 				FSGDBAWSEARCHNAME="${FSGDBAWARR[3]}"
@@ -11464,72 +11464,94 @@ function GameScopeGui {
 				    }
 				;;
 				4)	{
-						# TODO This section could still be simplified a bit further probably
+						## TODO This section could still be simplified a bit further probably
 
 						# Get selected GameScope options
 						mapfile -d "|" -t -O "${#GSARR[@]}" GSARR < <(printf '%s' "$GASCOS")
+
+						# Use "relative positioning" type system by calculating the position/index of each heading, and using this to get the values at a given index in the GSARR array
+						# for example GSFILTERHEADING=16, then the first element will be GSFILTERHEADING + 1
+						# This is ${GSARR[17]}, but if we were to add another option to the General settings, we would only need to bump GSGENERALOPTSLEN to 16
+						GSGENERALHEADING=0  # Index in GSARR of General heading label
+						GSGENERALOPTSLEN=15
+
+						GSFILTERINGHEADING=$(( GSGENERALHEADING +  GSGENERALOPTSLEN + 1 )) # Index in GSARR of Filtering heading label
+						GSFILTERINGOPTSLEN=6
+
+						GSHDRHEADING=$(( GSFILTERINGHEADING + GSFILTERINGOPTSLEN + 1 ))
+						GSHDROPTSLEN=6
+
+						GSVRHEADING=$(( GSHDRHEADING + GSHDROPTSLEN + 1 ))
+						GSVROPTSLEN=12
+
+						GSEMBEDDEDHEADING=$(( GSVRHEADING + GSVROPTSLEN + 1 ))
+						GSEMBEDDEDOPTSLEN=5
+
+						GSADVANCEDHEADING=$(( GSEMBEDDEDHEADING + GSEMBEDDEDOPTSLEN + 1 ))
+						# GSADVANCEDOPTSLEN=12  # Commented because Shellcheck gets angry about this being unused, but it is a good reference
+
 						# GSARR[0] is the General heading
-						GSINTRES="${GSARR[1]}"
-						GSSHWRES="${GSARR[2]}"
-						GSFLR="${GSARR[3]}"
-						GSFLU="${GSARR[4]}"
-						USEGAMESCOPE="${GSARR[5]}"
-						GSFS="${GSARR[6]}"
-						GSBW="${GSARR[7]}"
-						GSSE="${GSARR[8]}"
-						GSFWF="${GSARR[9]}"
-						GSFGC="${GSARR[10]}"
-						GSFGK="${GSARR[11]}"
-						GSFOOR="${GSARR[12]}"
-						GSENABLECUSTCUR="${GSARR[13]}"
-						GSCURSOR="${GSARR[14]}"
-						GSMOUSESENSITIVITY="${GSARR[15]}"
+						GSINTRES="${GSARR[$GSGENERALHEADING + 1]}"
+						GSSHWRES="${GSARR[$GSGENERALHEADING + 2]}"
+						GSFLR="${GSARR[$GSGENERALHEADING + 3]}"
+						GSFLU="${GSARR[$GSGENERALHEADING + 4]}"
+						USEGAMESCOPE="${GSARR[$GSGENERALHEADING + 5]}"
+						GSFS="${GSARR[$GSGENERALHEADING + 6]}"
+						GSBW="${GSARR[$GSGENERALHEADING + 7]}"
+						GSSE="${GSARR[$GSGENERALHEADING + 8]}"
+						GSFWF="${GSARR[$GSGENERALHEADING + 9]}"
+						GSFGC="${GSARR[$GSGENERALHEADING + 10]}"
+						GSFGK="${GSARR[$GSGENERALHEADING + 11]}"
+						GSFOOR="${GSARR[$GSGENERALHEADING + 12]}"
+						GSENABLECUSTCUR="${GSARR[$GSGENERALHEADING + 13]}"
+						GSCURSOR="${GSARR[$GSGENERALHEADING + 14]}"
+						GSMOUSESENSITIVITY="${GSARR[$GSGENERALHEADING + 15]}"
 						# GSARR[16] is the Filtering heading
-						GSFLTR="${GSARR[17]}"
-						GSSCALE="${GSARR[18]}"
-						GSFSRS="${GSARR[19]}"
-						GSMSF="${GSARR[20]}"
-						GSRSEP="${GSARR[21]}"
-						GSRSTI="${GSARR[22]}"
+						GSFLTR="${GSARR[$GSFILTERINGHEADING + 1]}"
+						GSSCALE="${GSARR[$GSFILTERINGHEADING + 2]}"
+						GSFSRS="${GSARR[$GSFILTERINGHEADING + 3]}"
+						GSMSF="${GSARR[$GSFILTERINGHEADING + 4]}"
+						GSRSEP="${GSARR[$GSFILTERINGHEADING + 5]}"
+						GSRSTI="${GSARR[$GSFILTERINGHEADING + 6]}"
 						# GSARR[23] is the HDR heading
-						GSHDR="${GSARR[24]}"
-						GSHDRWGFS="${GSARR[25]}"
-						GSHDRSCNITS="${GSARR[26]}"
-						GSHDRITM="${GSARR[27]}"
-						GSHDRITMSDRNITS="${GSARR[28]}"
-						GSHDRITMTGTNITS="${GSARR[29]}"
+						GSHDR="${GSARR[$GSHDRHEADING + 1]}"
+						GSHDRWGFS="${GSARR[$GSHDRHEADING + 2]}"
+						GSHDRSCNITS="${GSARR[$GSHDRHEADING + 3]}"
+						GSHDRITM="${GSARR[$GSHDRHEADING + 4]}"
+						GSHDRITMSDRNITS="${GSARR[$GSHDRHEADING + 5]}"
+						GSHDRITMTGTNITS="${GSARR[$GSHDRHEADING + 6]}"
 						# GSARR[30] is the VR heading
-						GSVR="${GSARR[31]}"
-						GSVREXNA="${GSARR[32]}"
-						GSVRDEFNAM="${GSARR[33]}"
-						GSVROVERLAYKEY="${GSARR[34]}"
-						GSVRICONENABLE="${GSARR[35]}"
-						GSVRICON="${GSARR[36]}"
-						GSVRSHOIMM="${GSARR[37]}"
-						GSVRCONTROLBAR="${GSARR[38]}"
-						GSVRCONTROLBARKEYBOARD="${GSARR[39]}"
-						GSVRCONTROLBARCLOSE="${GSARR[40]}"
-						GSVRSCROLLSSPEED="${GSARR[41]}"
-						GSVRMODAL="${GSARR[42]}"
+						GSVR="${GSARR[$GSVRHEADING + 1]}"
+						GSVREXNA="${GSARR[$GSVRHEADING + 2]}"
+						GSVRDEFNAM="${GSARR[$GSVRHEADING + 3]}"
+						GSVROVERLAYKEY="${GSARR[$GSVRHEADING + 4]}"
+						GSVRICONENABLE="${GSARR[$GSVRHEADING + 5]}"
+						GSVRICON="${GSARR[$GSVRHEADING + 6]}"
+						GSVRSHOIMM="${GSARR[$GSVRHEADING + 7]}"
+						GSVRCONTROLBAR="${GSARR[$GSVRHEADING + 8]}"
+						GSVRCONTROLBARKEYBOARD="${GSARR[$GSVRHEADING + 9]}"
+						GSVRCONTROLBARCLOSE="${GSARR[$GSVRHEADING + 10]}"
+						GSVRSCROLLSSPEED="${GSARR[$GSVRHEADING + 11]}"
+						GSVRMODAL="${GSARR[$GSVRHEADING + 12]}"
 						# GSARR[43] is the Embedded heading
-						GSDEFTOUCHMODE="${GSARR[44]}"
-						GSIMMEDIATEFLIPS="${GSARR[45]}"
-						GSADAPTIVESYNC="${GSARR[46]}"
-						GSPREFOUT="${GSARR[47]}"
-						GSDRMMODE="${GSARR[48]}"
+						GSDEFTOUCHMODE="${GSARR[$GSEMBEDDEDHEADING + 1]}"
+						GSIMMEDIATEFLIPS="${GSARR[$GSEMBEDDEDHEADING + 2]}"
+						GSADAPTIVESYNC="${GSARR[$GSEMBEDDEDHEADING + 3]}"
+						GSPREFOUT="${GSARR[$GSEMBEDDEDHEADING + 4]}"
+						GSDRMMODE="${GSARR[$GSEMBEDDEDHEADING + 5]}"
 						# GSARR[49] is the Advanced heading
-						GSSTATSPATHENABLE="${GSARR[50]}"
-						GSSTATSPATH="${GSARR[51]}"
-						GSHIDECURSORDELAY="${GSARR[52]}"
-						GSFORCECOMP="${GSARR[53]}"
-						GSDEBUGHUD="${GSARR[54]}"
-						GSFORCEHDRSUPPORT="${GSARR[55]}"
-						GSFORCEHDROUTPUT="${GSARR[56]}"
-						GSPREFERVKDEVICE="${GSARR[57]}"
-						GSWAYLAND="${GSARR[58]}"
-						GSRT="${GSARR[59]}"
-						GSHDLS="${GSARR[60]}"
-						USEGAMESCOPEWSI="${GSARR[61]}"
+						GSSTATSPATHENABLE="${GSARR[$GSADVANCEDHEADING + 1]}"
+						GSSTATSPATH="${GSARR[$GSADVANCEDHEADING + 2]}"
+						GSHIDECURSORDELAY="${GSARR[$GSADVANCEDHEADING + 3]}"
+						GSFORCECOMP="${GSARR[$GSADVANCEDHEADING + 4]}"
+						GSDEBUGHUD="${GSARR[$GSADVANCEDHEADING + 5]}"
+						GSFORCEHDRSUPPORT="${GSARR[$GSADVANCEDHEADING + 6]}"
+						GSFORCEHDROUTPUT="${GSARR[$GSADVANCEDHEADING + 7]}"
+						GSPREFERVKDEVICE="${GSARR[$GSADVANCEDHEADING + 8]}"
+						GSWAYLAND="${GSARR[$GSADVANCEDHEADING + 9]}"
+						GSRT="${GSARR[$GSADVANCEDHEADING + 10]}"
+						GSHDLS="${GSARR[$GSADVANCEDHEADING + 11]}"
+						USEGAMESCOPEWSI="${GSARR[$GSADVANCEDHEADING + 12]}"
 
 						# Build the GameScope arguments string
 						unset GAMESCOPE_ARGS
