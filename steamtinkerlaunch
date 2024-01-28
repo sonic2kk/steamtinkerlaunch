@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20240129-2"
+PROGVERS="v14.0.20240129-3 (flatten-getidfromtitle)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -7805,38 +7805,41 @@ function listSteamGames {
 function getIDFromTitle {
 	SEARCHSTEAMSHORTCUTS="${2:-0}"  # Default to not searching Steam shortcuts
 	if [ -z "$1" ]; then
+		writelog "ERROR" "${FUNCNAME[0]} - No game title was provided to search on -- Nothing to do!"
 		echo "A Game Title (part of it might be enough) is required as argument"
-	else
-		# Check installed game appmanifests for name matches
-		FOUNDMATCHES=()
 
-		# Steam games
-		while read -r APPMA; do
-			APPMATITLE="$( getValueFromAppManifest "name" "$APPMA" )"
-			if [[ ${APPMATITLE,,} == *"${1,,}"* ]]; then
-				APPMAAID="$( basename "${APPMA%.*}" | cut -d '_' -f2 )"
-				FOUNDGAMNAM="$( printf "%s\t\t(%s)" "$APPMAAID" "$APPMATITLE" )"  # Doing it this way makes tabs even for some reason
+		return 1
+	fi
+	# Check installed game appmanifests for name matches
+	FOUNDMATCHES=()
+
+	# Steam games
+	while read -r APPMA; do
+		APPMATITLE="$( getValueFromAppManifest "name" "$APPMA" )"
+		if [[ ${APPMATITLE,,} == *"${1,,}"* ]]; then
+			APPMAAID="$( basename "${APPMA%.*}" | cut -d '_' -f2 )"
+			FOUNDGAMNAM="$( printf "%s\t\t(%s)" "$APPMAAID" "$APPMATITLE" )"  # Doing it this way makes tabs even for some reason
+			FOUNDMATCHES+=( "$FOUNDGAMNAM" )
+		fi
+	done <<< "$( listAppManifests )"
+
+	# Steam shortcuts
+	if [ "$SEARCHSTEAMSHORTCUTS" -eq "1" ] && haveAnySteamShortcuts ; then
+		while read -r SCVDFE; do
+			SVDFENAME="$( parseSteamShortcutEntryAppName "$SCVDFE" )"
+			SVDFEAID="$( parseSteamShortcutEntryAppID "$SCVDFE" )"
+
+			if [[ ${SVDFENAME,,} == *"${1,,}"* ]]; then
+				FOUNDGAMNAM="$( printf "%s\t\t(%s)" "$SVDFEAID" "$SVDFENAME" )"
 				FOUNDMATCHES+=( "$FOUNDGAMNAM" )
 			fi
-		done <<< "$( listAppManifests )"
+		done <<< "$( getSteamShortcutHex )"
+	fi
 
-		# Steam shortcuts
-		if [ "$SEARCHSTEAMSHORTCUTS" -eq "1" ] && haveAnySteamShortcuts ; then
-			while read -r SCVDFE; do
-				SVDFENAME="$( parseSteamShortcutEntryAppName "$SCVDFE" )"
-				SVDFEAID="$( parseSteamShortcutEntryAppID "$SCVDFE" )"
-
-				if [[ ${SVDFENAME,,} == *"${1,,}"* ]]; then
-					FOUNDGAMNAM="$( printf "%s\t\t(%s)" "$SVDFEAID" "$SVDFENAME" )"
-					FOUNDMATCHES+=( "$FOUNDGAMNAM" )
-				fi
-			done <<< "$( getSteamShortcutHex )"
-		fi
-		if [ "${#FOUNDMATCHES[@]}" -gt 0 ]; then
-			printf "%s\n" "${FOUNDMATCHES[@]}"
-		else
-			echo "Could not find AppID for name '$1'."
-		fi
+	if [ "${#FOUNDMATCHES[@]}" -gt 0 ]; then
+		printf "%s\n" "${FOUNDMATCHES[@]}"
+	else
+		echo "Could not find AppID for name '$1'."
 	fi
 }
 
