@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20240128-4 (flatten-getgamedir)"
+PROGVERS="v14.0.20240129-1 (flatten-getgamedir)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -8053,6 +8053,7 @@ function getGameDir {
 	SEARCHSTEAMSHORTCUTS="${3:-0}"  # Default to not searching Steam shortcuts
 	FOUNDINSTEAMSHORTCUTS=0
 
+	# Exit early if no search name/appid is given
 	if [ -z "$1" ]; then
 		writelog "ERROR" "${FUNCNAME[0]} - Missing GameID or Game Title to search on -- Nothing to do!"
 		echo "A Game ID or Game Title is required as argument"
@@ -8073,12 +8074,10 @@ function getGameDir {
 
 		SEARCHMANIFEST="$( listAppManifests | grep -m1 "appmanifest_${SEARCHAID}.acf" )"
 
-		# This nesting is ugly, but mostly exists for logging purposes
+		# This nesting is ugly, but only exists for logging purposes
 		if [ -z "$SEARCHMANIFEST" ]; then
 			if [ "$SEARCHSTEAMSHORTCUTS" -eq 0 ]; then
 				writelog "ERROR" "${FUNCNAME[0]} - Could not find game directory for '$1' - Maybe it is not installed"
-				echo "Could not find game directory for '$1'"
-				return 1
 			else
 				writelog "WARN" "${FUNCNAME[0]} - Could not find game directory for '$1' - Will search on Steam Shortcuts next"
 			fi
@@ -8119,12 +8118,14 @@ function getGameDir {
 		done <<< "$( getSteamShortcutHex )"
 	fi
 
+	# Exit now if we didn't find the game directory
 	if [ ! -d "${GAMINSTDIR}" ] && [ ! -d "${MUSINSTDIR}" ]; then
 		echo "Could not find install directory for '$1'"
 		return 1
 	fi
 
-	# Don't fetch these if we found and set the information already from a Steam shortcuts
+	# Don't fetch these if we found and set the information already from a Steam shortcuts, since we already set these variables if we found a Steam shortcut
+	# We don't get here if we didn't find a game dir for either a Steam game or shortcut
 	if [ "$FOUNDINSTEAMSHORTCUTS" -eq 0 ]; then
 		APPMAGN="$( getValueFromAppManifest "name" "$SEARCHMANIFEST" )"
 		APPMAAID="$( getValueFromAppManifest "appid" "$SEARCHMANIFEST" )"
