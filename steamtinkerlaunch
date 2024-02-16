@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20240131-1"
+PROGVERS="v14.0.20240216-1 (primerun-zink-change)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -12384,6 +12384,34 @@ function setVulkanPostProcessor {
 	fi
 }
 
+function checkWinesync {
+	if [ "$ENABLE_WINESYNC" -eq 1 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Enabling Winesync variables because 'ENABLE_WINESYNC' is '$ENABLE_WINESYNC'"
+		export WINEESYNC=0
+		export WINEFSYNC=0
+		export WINEFSYNC_FUTEX2=0
+	fi
+}
+
+function checkPrimerun {
+	if [ "$USEPRIMERUN" -eq 1 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Enabling Primerun variables because 'USEPRIMERUN' is '$USEPRIMERUN'"
+		export __NV_PRIME_RENDER_OFFLOAD=1
+		export __VK_LAYER_NV_optimus=NVIDIA_only
+		export __GLX_VENDOR_LIBRARY_NAME=nvidia
+		export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json
+	fi
+}
+
+function checkZink {
+	if [ "$USEZINK" -eq 1 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Enabling Zink variables because 'USEZINK' is '$USEZINK'"
+		export __GLX_VENDOR_LIBRARY_NAME=mesa
+		export MESA_LOADER_DRIVER_OVERRIDE=zink
+		export GALLIUM_DRIVER=zink
+	fi
+}
+
 function setCommandLaunchVars {
 	if [ "$USEGAMEMODERUN" -eq 1 ]; then
 		GMR="$(command -v "$GAMEMODERUN")"
@@ -12419,24 +12447,10 @@ function setCommandLaunchVars {
 		fi
 	fi
 
-	if [ "$USEZINK" -eq 1 ]; then
-		export __GLX_VENDOR_LIBRARY_NAME=mesa
-		export MESA_LOADER_DRIVER_OVERRIDE=zink
-		export GALLIUM_DRIVER=zink
-	fi
-
-	if [ "$ENABLE_WINESYNC" -eq 1 ]; then
-		export WINEESYNC=0
-		export WINEFSYNC=0
-		export WINEFSYNC_FUTEX2=0
-	fi
-
-	if [ "$USEPRIMERUN" -eq 1 ]; then
-		export __NV_PRIME_RENDER_OFFLOAD=1
-		export __VK_LAYER_NV_optimus=NVIDIA_only
-		export __GLX_VENDOR_LIBRARY_NAME=nvidia
-		export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json
-	fi
+	# NOTE: Primerun and Zink both set ' __GLX_VENDOR_LIBRARY_NAME', so Zink has to go after Primerun as shown to activate correctly
+	checkWinesync
+	checkPrimerun
+	checkZink
 
 	# This could be expanded in future as a general option to force Wayland for games/engines that support it, e.g. '-wayland' flag for unity
 	if [ "$SDLUSEWAYLAND" -eq 1 ]; then
@@ -12448,7 +12462,7 @@ function setCommandLaunchVars {
 		export RADV_PERFTEST=$STLRAD_PFTST
 	fi
 
-	setVulkanPostProcessor  # i.e. vkShade
+	setVulkanPostProcessor
 	setWineDpiScaling
 }
 
@@ -12534,7 +12548,6 @@ function launchCustomProg {
 	fi
 
 	if [ -z "$CUSTOMCMD" ] || [[ "$CUSTOMCMD" =~ ${DUMMYBIN}$ ]]; then
-
 		writelog "INFO" "${FUNCNAME[0]} - CUSTOMCMD variable is empty - opening file requester"
 		fixShowGnAid
 
