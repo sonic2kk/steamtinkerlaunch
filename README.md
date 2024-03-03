@@ -95,7 +95,6 @@ Several great people have mentioned SteamTinkerLaunch on their platforms/channel
 | **[Hex DSL](https://www.youtube.com/c/HexDSL)** | Made a [YouTube video](https://www.youtube.com/watch?v=rdXQRMwMfPE) showcasing SteamTinkerLaunch |
 | **[tuxfoo](https://www.youtube.com/channel/UCWpoyqSBIXtylRLFgP3PFfg)** | Made a [YouTube video](https://www.youtube.com/watch?v=l1KjIANTIKs) showcasing SteamTinkerLaunch
 | **[Linux Game Cast](https://linuxgamecast.com/)** | Mentioned SteamTinkerLaunch on their [casts](https://www.youtube.com/watch?v=djuZdnE83fE&t=436s) [several](https://www.youtube.com/watch?v=yVsTMhx8E7c&t=983s) [times](https://www.youtube.com/watch?v=qhybhTGV3mA&t=1279s), and [counting]((https://linuxgamecast.com/2021/11/linux-game-cast-484-yami-pedro))! |
-| **[Mark Dougherty](https://linuxgamingcentral.com/)** | Has written [several](https://linuxgamingcentral.com/posts/news-stl-v10-released/) [articles](https://linuxgamingcentral.com/posts/stl-v11-released/) about SteamTinkerLaunch |
 | **[Kevin Wammer](https://overkill.wtf/author/kevin/)** | Wrote [this article](https://overkill.wtf/steam-deck-steam-tinker-launch-stl/) |
 | **[Starlogical from HiTechLoLife](https://www.youtube.com/c/HiTechLoLife)** | Created [this video](https://www.youtube.com/watch?v=4FRU2fuvLlw) describing SteamTinkerLaunch |
 | **[joker1007](https://joker1007.hatenablog.com)** (Japanese) | Wrote a [huge article](https://joker1007.hatenablog.com/entry/2022/11/28/014825) on SteamTinkerLaunch for Japanese users |
