@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20240307-2"
+PROGVERS="v14.0.20240128-5 (flatten-sbsvr-funcs)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -8426,19 +8426,24 @@ function SBSrunVRVideoPlayer {
 }
 
 function SBSinitVRVideoPlayer {
-	if [ "$RUNSBSVR" -eq 1 ]; then
-		if [ -n "$GAMEWINXID" ]; then
-			if [ "$GAMEWINXID" == "0x0" ]; then
-				writelog "SKIP" "${FUNCNAME[0]} GAMEWINXID '$GAMEWINXID' is invalid - skipping VR"
-				RUNSBSVR=0
-			else
-				writelog "INFO" "${FUNCNAME[0]} Using the gamewindow id '$GAMEWINXID' for stereoscopic 3D VR"
-				SBSrunVRVideoPlayer	"$GAMEWINXID" 2>/dev/null &
-			fi
-		fi
-	else
+	if [ "$RUNSBSVR" -eq 0 ]; then
 		writelog "SKIP" "${FUNCNAME[0]} - Skipping because RUNSBSVR was set to 0"
+		return
 	fi
+
+	if [ -z "$GAMEWINXID" ]; then
+		writelog "SKIP" "${FUNCNAME[0]} - Could not find GAMEWINXID -- Skipping"
+		return
+	fi
+
+	if [ "$GAMEWINXID" == "0x0" ]; then
+		writelog "SKIP" "${FUNCNAME[0]} GAMEWINXID '$GAMEWINXID' is invalid - skipping VR"
+		RUNSBSVR=0
+		return
+	fi
+
+	writelog "INFO" "${FUNCNAME[0]} Using the gamewindow id '$GAMEWINXID' for stereoscopic 3D VR"
+	SBSrunVRVideoPlayer	"$GAMEWINXID" 2>/dev/null &
 }
 
 function SBSstopVRVideoPlayer {
@@ -8615,84 +8620,92 @@ function initSBSVR {
 }
 
 function startSBSVR {
-	if [ "$RUNSBSVR" -eq 1 ]; then
-		MAXWAIT=20
-		COUNTER=0
-
-		writelog "INFO" "${FUNCNAME[0]} - Waiting for parallel process to detect VR HMD presence"
-
-		while [ -f "$VRINITLOCK" ]; do
-			if [ -f "$CLOSETMP" ] || [[ "$COUNTER" -ge "$MAXWAIT" ]]; then
-				break
-			fi
-			COUNTER=$((COUNTER+1))
-			sleep 1
-		done
-
-		loadCfg "$VRINITRESULT"
-		rm "$VRINITRESULT"
-
-		if [ "$RUNSBSVR" -eq 1 ]; then
-			if [ -f "$SBSTWEAKCFG" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Loading SBS configfile '$SBSTWEAKCFG' to get current values"
-				loadCfg "$SBSTWEAKCFG"
-			fi
-			writelog "INFO" "${FUNCNAME[0]} - Preparing VR launch for '$AID'"
-			waitForGameWindowName
-			waitForGameWindowXid
-			SBSinitVRVideoPlayer
-			SBSstopVRVideoPlayer
-		else
-			writelog "SKIP" "${FUNCNAME[0]} - VR mode was cancelled, because the parallel process could not initialize VR"
-		fi
+	if [ "$RUNSBSVR" -eq 0 ]; then
+		return
 	fi
+
+	MAXWAIT=20
+	COUNTER=0
+
+	writelog "INFO" "${FUNCNAME[0]} - Waiting for parallel process to detect VR HMD presence"
+
+	while [ -f "$VRINITLOCK" ]; do
+		if [ -f "$CLOSETMP" ] || [[ "$COUNTER" -ge "$MAXWAIT" ]]; then
+			break
+		fi
+		COUNTER=$((COUNTER+1))
+		sleep 1
+	done
+
+	loadCfg "$VRINITRESULT"
+	rm "$VRINITRESULT"
+
+	if [ "$RUNSBSVR" -eq 0 ]; then
+		writelog "SKIP" "${FUNCNAME[0]} - VR mode was cancelled, because the parallel process could not initialize VR"
+		return
+	fi
+
+	if [ -f "$SBSTWEAKCFG" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Loading SBS configfile '$SBSTWEAKCFG' to get current values"
+		loadCfg "$SBSTWEAKCFG"
+	fi
+	writelog "INFO" "${FUNCNAME[0]} - Preparing VR launch for '$AID'"
+	waitForGameWindowName
+	waitForGameWindowXid
+	SBSinitVRVideoPlayer
+	SBSstopVRVideoPlayer
+
+
 }
 
 function checkHMDPresent {
 	if "$PGREP" -a "vrcompositor" >/dev/null ; then
 		writelog "INFO" "${FUNCNAME[0]} - Looks like SteamVR is already running - skipping this function"
-	else
-		if [ "$CHECKHMD" -eq 1 ]; then
-			UUDEV="/lib/udev/rules.d"
-			EUDEV="/etc/udev/rules.d"
-			SVR="steam-vr"
-			NOVRP="1142"
-			FOUNDHMD=0
-
-			SVRRULE="$(find "$UUDEV" -name "*$SVR*")"
-			if [ -z "$SVRRULE" ]; then
-				SVRRULE="$(find "$EUDEV" -name "*$SVR*")"
-			fi
-
-			if [ -n "$SVRRULE" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Found $SVR udev rule - trying to find one of the VR devices before starting SteamVR"
-
-				while read -r line; do
-					IDV="$(cut -d ',' -f3 <<< "$line" | grep -oP '"\K[^"]+')"
-					IDP="$(cut -d ',' -f4 <<< "$line" | grep -v "$NOVRP" | grep -oP '"\K[^"]+')"
-					if [ -n "$IDV" ] && [ -n "$IDP" ]; then
-						IDVP="$IDV:$IDP"
-						if "$LSUSB" | grep -q "$IDVP"; then
-							FOUNDHMD=1
-						fi
-					fi
-				done < "$SVRRULE"
-			else
-				echo "no $SVR udev rule found"
-				writelog "WARN" "${FUNCNAME[0]} - No $SVR udev rule found. As it might be stored under a different name, this is just a warning"
-			fi
-
-			if [ "$FOUNDHMD" -eq 1 ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Found $SVR hardware using '$LSUSB' - continuing"
-			else
-				writelog "SKIP" "${FUNCNAME[0]} - No $SVR hardware found using '$LSUSB' - cancelling the SteamVR start"
-				RUNSBSVR=0
-				echo "RUNSBSVR=\"0\"" > "$VRINITLOCK"
-			fi
-		else
-			writelog "SKIP" "${FUNCNAME[0]} - Skipping, as '$LSUSB' was not found"
-		fi
+		return
 	fi
+
+	if [ "$CHECKHMD" -eq 0 ]; then
+		writelog "SKIP" "${FUNCNAME[0]} - Skipping, as '$LSUSB' was not found"
+		return
+	fi
+
+	UUDEV="/lib/udev/rules.d"
+	EUDEV="/etc/udev/rules.d"
+	SVR="steam-vr"
+	NOVRP="1142"
+	FOUNDHMD=0
+
+	SVRRULE="$(find "$UUDEV" -name "*$SVR*")"
+	if [ -z "$SVRRULE" ]; then
+		SVRRULE="$(find "$EUDEV" -name "*$SVR*")"
+	fi
+
+	if [ -n "$SVRRULE" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Found $SVR udev rule - trying to find one of the VR devices before starting SteamVR"
+
+		while read -r line; do
+			IDV="$(cut -d ',' -f3 <<< "$line" | grep -oP '"\K[^"]+')"
+			IDP="$(cut -d ',' -f4 <<< "$line" | grep -v "$NOVRP" | grep -oP '"\K[^"]+')"
+			if [ -n "$IDV" ] && [ -n "$IDP" ]; then
+				IDVP="$IDV:$IDP"
+				if "$LSUSB" | grep -q "$IDVP"; then
+					FOUNDHMD=1
+				fi
+			fi
+		done < "$SVRRULE"
+	else
+		echo "no $SVR udev rule found"
+		writelog "WARN" "${FUNCNAME[0]} - No $SVR udev rule found. As it might be stored under a different name, this is just a warning"
+	fi
+
+	if [ "$FOUNDHMD" -eq 1 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Found $SVR hardware using '$LSUSB' - continuing"
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - No $SVR hardware found using '$LSUSB' - cancelling the SteamVR start"
+		RUNSBSVR=0
+		echo "RUNSBSVR=\"0\"" > "$VRINITLOCK"
+	fi
+
 }
 
 # start game in side-by-side VR:
@@ -8702,53 +8715,55 @@ function checkSBSVRLaunch {
 		RUNSBSVR=1
 	fi
 
-	if [ -n "$RUNSBSVR" ]; then
-		if [ "$RUNSBSVR" -eq 1 ]; then
-		# override game configs with a sbs-tweak config if available:
-
-			# first look for a global tweak:
-			if [ -f "$GLOBALSBSTWEAKCFG" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - VR using overrides found in '$GLOBALSBSTWEAKCFG'"
-				loadCfg "$GLOBALSBSTWEAKCFG"
-			fi
-
-			# then for a user tweak - (overriding the global one):
-			if [ -f "$SBSTWEAKCFG" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - VR using overrides found in '$SBSTWEAKCFG'"
-				loadCfg "$SBSTWEAKCFG"
-			fi
-
-			# start the whole side-by-side process:
-			if [ "$1" != "$NON" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - ${FUNCNAME[0]} - Using argument 1 as GAMEWINDOW '$GAMEWINDOW'"
-				export GAMEWINDOW="$1"
-			fi
-
-			writelog "INFO" "${FUNCNAME[0]} - ${FUNCNAME[0]} - Starting VRlaunch for '$AID'"
-			if [ "$RUNSBSVR" -eq 1 ]; then
-				initSBSVR &
-			else
-				writelog "SKIP" "${FUNCNAME[0]} - ERROR - RUNSBSVR is '$RUNSBSVR' which is invalid - setting to 0"
-				RUNSBSVR=0
-			fi
-		fi
+	if [ -z "$RUNSBSVR" ] || [ "$RUNSBSVR" -eq 0 ]; then
+		return
 	fi
+	# override game configs with a sbs-tweak config if available:
+	# first look for a global tweak:
+	if [ -f "$GLOBALSBSTWEAKCFG" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - VR using overrides found in '$GLOBALSBSTWEAKCFG'"
+		loadCfg "$GLOBALSBSTWEAKCFG"
+	fi
+
+	# then for a user tweak - (overriding the global one):
+	if [ -f "$SBSTWEAKCFG" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - VR using overrides found in '$SBSTWEAKCFG'"
+		loadCfg "$SBSTWEAKCFG"
+	fi
+
+	# start the whole side-by-side process:
+	if [ "$1" != "$NON" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - ${FUNCNAME[0]} - Using argument 1 as GAMEWINDOW '$GAMEWINDOW'"
+		export GAMEWINDOW="$1"
+	fi
+
+	writelog "INFO" "${FUNCNAME[0]} - ${FUNCNAME[0]} - Starting VRlaunch for '$AID'"
+	if [ "$RUNSBSVR" -eq 1 ]; then
+		initSBSVR &
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - ERROR - RUNSBSVR is '$RUNSBSVR' which is invalid - setting to 0"
+		RUNSBSVR=0
+	fi
+
 }
 
 function checkSBSLaunch {
-	if [ "$RUNSBS" -eq 1 ]; then
-		# first look for a global tweak:
-		if [ -f "$GLOBALSBSTWEAKCFG" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Using SBS overrides found in '$GLOBALSBSTWEAKCFG'"
-			loadCfg "$GLOBALSBSTWEAKCFG"
-		fi
-
-		# then for a user tweak - (overriding the global one):
-		if [ -f "$SBSTWEAKCFG" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Using SBS overrides found in '$SBSTWEAKCFG'"
-			loadCfg "$SBSTWEAKCFG"
-		fi
+	if [ "$RUNSBS" -eq 0 ]; then
+		return
 	fi
+
+	# first look for a global tweak:
+	if [ -f "$GLOBALSBSTWEAKCFG" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Using SBS overrides found in '$GLOBALSBSTWEAKCFG'"
+		loadCfg "$GLOBALSBSTWEAKCFG"
+	fi
+
+	# then for a user tweak - (overriding the global one):
+	if [ -f "$SBSTWEAKCFG" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Using SBS overrides found in '$SBSTWEAKCFG'"
+		loadCfg "$SBSTWEAKCFG"
+	fi
+
 }
 
 function dld3d47 {
