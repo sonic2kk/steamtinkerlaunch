@@ -6,7 +6,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20240307-1"
+PROGVERS="v14.0.20240307-2 (gamescope-args-incorrect-ending-fix)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -20007,7 +20007,13 @@ function gameScopeArgs {  # This implementation could be VASTLY improved!
 	unset GAMESCOPEARGSARR  # Reset array and re-assign it to copied array with updated argument values
 	GAMESCOPEARGSARR=("${GAMESCOPEARGSARR_COPY[@]}")
 
-	## TODO handle GameScope arguments that don't end in `--`
+	# Ensure GameScope args always end with "--", otherwise GameScope will try to use everyting following it as a GameScope command and fail
+	# With the GameScope GUI we add "--" to the end, but if the user manually updates their launch options, this will help prevent them from getting into a failed state
+	if [ "${GAMESCOPEARGSARR[-1]}" != "--" ]; then
+		writelog "WARN" "${FUNCNAME[0]} - Last Gamescope argument is not '--' so manually appending this to the end of GAMESCOPESARGSARR"
+		writelog "WARN" "${FUNCNAME[0]} - This is invalid syntax but manually fixing it"
+		GAMESCOPEARGSARR+=("--")
+	fi
 
 	if [ "${#GAMESCOPEARGSARR[@]}" -ge 1 ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Using following gamescope arguments: '${GAMESCOPEARGSARR[*]}'"
