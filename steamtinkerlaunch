@@ -7,7 +7,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20240529-1"
+PROGVERS="v14.0.20240312-1 (nonsteamgame-allowoverlay-openvr-fix)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -22513,10 +22513,59 @@ function commandline {
 	elif [ "$1" == "debug" ]; then
 		## Why are you looking here? :-)
 
-		# Don't let the user run the internal debug command
-		writelog "WARN" "${FUNCNAME[0]} - No debug for you!"
-		echo "No debug for you!"
+		DEBUG_CONFIG="${FLCV//.vdf/ testing.vdf}"
+		DEBUGNOSTAID="-222353304"
+		# FLCVVDF="$( getVdfSection "UserLocalConfigStore" "" "0" "$DEBUG_CONFIG" )"
+		# FLCVAPPSSECTION="$( getVdfSection "Apps" "" "1" "$DEBUG_CONFIG" )"
+		# echo "$FLCVVDF"
+		# editVdfSectionValue ""
+
+		# getVdfSection "UserLocalConfigStore" "" "" "$DEBUG_CONFIG"
+
+		# return
+
+
+		FLCVAPPSSECTION="$( getVdfSection "Apps" "" "1" "$DEBUG_CONFIG" )"  # Does "Apps" key exist at Indent 1?
+
+		# This will create an "Apps" section if it doesn't exist
+		if [ -z "$FLCVAPPSSECTION" ]; then
+			echo "Apps Section does not exist - Create it"
+			createVdfEntry "$DEBUG_CONFIG" "UserLocalConfigStore" "Apps" "" "0" ""
+			# FLCVAPPSSECTION="$( getVdfSection "Apps" "" "1" "$DEBUG_CONFIG" )"
+		else
+			echo "Woohoo, we have an apps section! Nothing to do"
+		fi		
+		
+		# Next, we need to do basically the same for the AppID. If a section with the AppID doesn't exist, create it
+		FLCVAPPSHASNOSTAID="$( getNestedVdfSection "Apps/${DEBUGNOSTAID}" "1" "$DEBUG_CONFIG" )"
+		if ! grep -q -- "$DEBUGNOSTAID" <<< "$FLCVAPPSHASNOSTAID"; then
+			echo "No AppID section in Apps, we need to create it!"
+			createVdfEntry "$DEBUG_CONFIG" "Apps" "$DEBUGNOSTAID" "" "2" ""  # creates in the wrong place :/
+		else
+			echo "Win! We have the Non-Steam AppID section in the Apps section! Let's update it"
+		fi
+
+		## This work
+		# FLCVNOONSTEAMAPPSECTION="$( getNestedVdfSection "Apps/-222353304" "2" "$DEBUG_CONFIG" )"
+		# echo "$FLCVNOONSTEAMAPPSECTION"
+
+		# echo "$FLCV"
+		# LCVAPPSSECTION="$( getVdfSection "Apps" "" "" "$FLCV" )"
+		# if [ -z "$LCVAPPSSECTION" ]; then
+			# echo "Bing bong need to create Apps section"
+			# createVdfEntry ""
+		# fi
+
+		# echo "$LCVAPPSSECTION"
+
+
 		return
+
+
+		# # Don't let the user run the internal debug command
+		# writelog "WARN" "${FUNCNAME[0]} - No debug for you!"
+		# echo "No debug for you!"
+		# return
 
 		# DEBUGNOSTAID="-222353304"
 
@@ -23717,6 +23766,7 @@ function safequoteVdfBlockName {
 }
 
 ## Use sed to grab a section of a given VDF file based on its indentation level
+## TODO check if ENDPATTERN actually works?
 function getVdfSection {
     STARTPATTERN="$( safequoteVdfBlockName "$1" )"
     ENDPATTERN="${2:-\}}"  # Default end pattern to end of block
@@ -23728,18 +23778,29 @@ function getVdfSection {
         INDENT="$(( $( guessVdfIndent "$STARTPATTERN" "$VDF" ) ))"
     fi
 
-    INDENTSTR="$( generateVdfIndentString "$INDENT" "[[:space:]]" )"
-    INDENTEDSTARTPATTERN="${INDENTSTR}${STARTPATTERN}"
+	# Only generate indent string if given tab length > 0
+	# Allows for parsing top-level VDF section i.e. "UserLocalConfigStore" in localconfig.vdf
+	INDENTSTR=""
+	if [ "$INDENT" -gt 0 ]; then
+    	INDENTSTR="$( generateVdfIndentString "$INDENT" "[[:space:]]" )"
+    else
+		writelog "INFO" "${FUNCNAME[0]} - Indent is 0 ("$INDENT")"
+	fi
+	INDENTEDSTARTPATTERN="${INDENTSTR}${STARTPATTERN}"
     INDENTEDENDPATTERN="${INDENTSTR}${ENDPATTERN}"
 
 	writelog "INFO" "${FUNCNAME[0]} - Searching for VDF block with name '$STARTPATTERN' in VDF file '$VDF'"
+	writelog "INFO" "${FUNCNAME[0]} - Start pattern is '$INDENTEDSTARTPATTERN'"
 
 	# This is a very hacky solution to allow 'getNestedVdfSection' to use this function
 	# It needs the start pattern exact match but other functions can't use this
+	#
+	# TODO the '^${INDENTEDSTARTPATTERN}' was added here, make sure this doesn't break other usages
+	# TODO if this doesn't break anything, check if "STOPAFTERFIRSTMATCH" is still needed 
 	if [ -n "$STOPAFTERFIRSTMATCH" ]; then
-		sed -n "/${INDENTEDSTARTPATTERN}/I,/^${INDENTEDENDPATTERN}/I { p; /${INDENTEDENDPATTERN}/I q }" "$VDF"
+		sed -n "/^${INDENTEDSTARTPATTERN}/I,/^${INDENTEDENDPATTERN}/I { p; /${INDENTEDENDPATTERN}/I q }" "$VDF"
 	else
-		sed -n "/${INDENTEDSTARTPATTERN}/I,/^${INDENTEDENDPATTERN}/I p" "$VDF"
+		sed -n "/^${INDENTEDSTARTPATTERN}/I,/^${INDENTEDENDPATTERN}/I p" "$VDF"
 	fi
 }
 
@@ -23748,21 +23809,30 @@ function getVdfSection {
 function checkVdfSectionAlreadyExists {
     SEARCHBLOCK="$( safequoteVdfBlockName "${1:-\"}" )"  # Default to the first quotation, should be the start VDF file
     BLOCKNAME="$( safequoteVdfBlockName "$2" )"  # Block name to  search for
-    VDF="$3"
+	VDF="$3"
+	INDENT="$4"  # Optional to check from
+
+	# Only set block indent if we gave an indent initally, otherwise use empty string so getVdfSection will ignore indent
+	if [ -n "$INDENT" ]; then
+		BLOCKINDENT="$(( INDENT + 1 ))"
+	else
+		BLOCKINDENT=""
+	fi
 
     if [ -z "$BLOCKNAME" ]; then
 		writelog "ERROR" "${FUNCNAME[0]} - BLOCKNAME was not provided, skipping..."
         return
     fi
 
-    SEARCHBLOCKVDFSECTION="$( getVdfSection "$SEARCHBLOCK" "" "" "$VDF" )"
+    SEARCHBLOCKVDFSECTION="$( getVdfSection "$SEARCHBLOCK" "" "$INDENT" "$VDF" )"
     if [ -z "$SEARCHBLOCKVDFSECTION" ]; then
 		writelog "WARN" "${FUNCNAME[0]} - Could not find VDF section with name '$SEARCHBLOCK' in VDF file '$VDF' -- Skipping"
         return 0
     fi
 
+	# Need to pass Indent + 1 because the block we're searching for is 1 deeper, i.e. searching "CompatToolMapping", the AppID key will be 1 indent deeper
     printf "%s" "$SEARCHBLOCKVDFSECTION" > "/tmp/tmp.vdf"
-    getVdfSection "$BLOCKNAME" "" "" "/tmp/tmp.vdf" | grep -iq "$BLOCKNAME"
+    getVdfSection "$BLOCKNAME" "" "$BLOCKINDENT" "/tmp/tmp.vdf" | grep -iq "$BLOCKNAME"
 }
 
 function getNestedVdfSection {
@@ -23807,9 +23877,24 @@ function createVdfEntry {
     PARENTBLOCKNAME="$( safequoteVdfBlockName "$2" )"  # Block to start from, e.g. "CompatToolMapping"
     NEWBLOCKNAME="$( safequoteVdfBlockName "$3" )"  # Name of new block, e.g. "<AppID>"
     POSITION="${4:-bottom}"  # POSITION to insert into, can be either top/bottom -- Bottom by default
+	INDENT="$5"  # Indent that PARENTBLOCKNAME is at (0 = top of file)
+	CHECKDUPLICATES="${6:-1}"  # Flag to check for duplicate section names 
 
-    ## Ensure no duplicates are written out
-    if checkVdfSectionAlreadyExists "$PARENTBLOCKNAME" "$NEWBLOCKNAME" "$VDF"; then
+	# If no indent is given, guess the indent, otherwise use the specified one
+	if [ -z "$INDENT" ]; then
+		## Calculate indents for new block (one more than PARENTBLOCKNAME indent)
+		BASETABAMOUNT="$(( $( guessVdfIndent "${PARENTBLOCKNAME}" "$VDF" ) + 1 ))"
+		BLOCKTABAMOUNT="$(( BASETABAMOUNT + 1 ))"
+	else
+		BASETABAMOUNT="$INDENT"
+		# Has to be +2 if indent is specified because it needs to account for spacing of parent block and new block
+		# e.g. is INDENT=0, BASETABAMOUNT for new block will be 0 + 1 = 1, then the BLOCKTABAMOUNT needs to be inside that, so it needs to be (0 + 1) + 1 = +2
+		# When we guess the indent and don't specify one explicitly we don't care about this
+		BLOCKTABAMOUNT="$(( BASETABAMOUNT + 2 ))"
+	fi
+
+    ## Ensure no duplicates are written out (duplicate names can exist at different indent levels)
+    if [ "$CHECKDUPLICATES" -eq 1 ] && checkVdfSectionAlreadyExists "$PARENTBLOCKNAME" "$NEWBLOCKNAME" "$VDF" "$BASETABAMOUNT"; then
         # echo "Block already exists, skipping..."
 		writelog "SKIP" "${FUNCNAME[0]} - Block '$NEWBLOCKNAME' already exists in parent block '$PARENTBLOCKNAME' - Skipping"
         return
@@ -23818,20 +23903,21 @@ function createVdfEntry {
 	writelog "INFO" "${FUNCNAME[0]} - Creating VDF data block to append to '$PARENTBLOCKNAME'"
 
     ## Create array from args, skip first four to get array of key/value pairs for VDF block
-    NEWBLOCKVALUES=("${@:5}")
+    NEWBLOCKVALUES=("${@:7}")
     NEWBLOCKVALUESDELIM="!"
-
-    ## Calculate indents for new block (one more than PARENTBLOCKNAME indent)
-    BASETABAMOUNT="$(( $( guessVdfIndent "${PARENTBLOCKNAME}" "$VDF" ) + 1 ))"
-    BLOCKTABAMOUNT="$(( BASETABAMOUNT + 1 ))"
 
     ## Tab amounts represented as string
     BASETABSTR="$( generateVdfIndentString "$BASETABAMOUNT" )"
     BLOCKTABSTR="$( generateVdfIndentString "$BLOCKTABAMOUNT" )"
 
+	writelog "INFO" "${FUNCNAME[0]} - BASETABSTR is '$BASETABSTR'"
+	writelog "INFO" "${FUNCNAME[0]} - BLOCKTABSTR is '$BLOCKTABSTR'"
+
     ## Calculations for line numbers
-    PARENTBLOCKLENGTH="$( getVdfSection "$PARENTBLOCKNAME" "" "" "$VDF" | wc -l )"
-    BLOCKLINESTART="$( grep -in "${PARENTBLOCKNAME}" "$VDF" | cut -d ':' -f1 | xargs )"
+    PARENTBLOCKLENGTH="$( getVdfSection "$PARENTBLOCKNAME" "" "$INDENT" "$VDF" | wc -l )"
+    BLOCKLINESTART="$( grep -Pin -- "^${BASETABSTR}${PARENTBLOCKNAME}" "$VDF" | head -n1 | cut -d ':' -f1 | xargs )"
+
+	writelog "INFO" "${FUNCNAME[0]} - BLOCKLINESTART is '$BLOCKLINESTART'"
 
     TOPOFBLOCK="$(( BLOCKLINESTART + 1 ))"
     BOTTOMOFBLOCK="$(( BLOCKLINESTART + PARENTBLOCKLENGTH - 2 ))"
@@ -24325,6 +24411,25 @@ function addNonSteamGame {
 		fi
 	}
 
+	function updateLocalConfigApps {
+		# Add key for specific AppID to localconfig.vdf's Apps section, creating the initial 'Apps' section if it doesn't exist
+		# Used to set AllowOverlay and OpenVR when adding Non-Steam Games
+		# Note that this may need reworked when we allow the user to select their Steam user,
+		# so the AppID path will change (maybe string substitution would work, idk, or maybe we'll implement it so STL picks up and uses the latest Steam User only and always, so the path is build correctly)
+
+		LCVAID="$1"  # AppID for section name, i.e. '"-1123145"'
+		LCVKEYNAME="$2"  # Key to write into section, i.e. '"OverlayAppEnable"'
+		LCVKEYVAL="$3"  # Value to assign to key, i.e. '"1"'
+
+		if [ ! -f "$FLCV" ]; then
+			writelog "WARN" "${FUNCNAME[0]} - No localconfig.vdf found at '${FLCV}' -- Nothing to do."
+			return
+		fi
+
+		LCVAPPSSECTION="$( getVdfSection "Apps" "" "2" "$FLCV" )"
+		# if [ ! ]
+	}
+
 	NOSTHIDE=0  # Set in localconfig.vdf along with tags and overlay settings
 	NOSTADC=1
 	NOSTAO=1
@@ -24630,6 +24735,12 @@ function addNonSteamGame {
 			writelog "INFO" "${FUNCNAME[0]} - Finished adding Non-Steam Game compatibility tool to '$CFGVDF'"
 		fi
 	fi
+
+	writelog "INFO" "${FUNCNAME[0]} - Updating 'localconfig.vdf' to set OpenVR and AllowOverlay values, using Signed 32bit AppID '$NOSTAIDVDF'"
+	# Update "Apps" section in localconfig.vdf to create the section for the new Non-Steam Game and set AllowOverlay and OpenVR accordingly
+	# In future if more options are stored here we can also set them in the same way
+	updateLocalConfigApps "$NOSTAIDVDF" "OverlayAppEnable" "$NOSTAO"
+	updateLocalConfigApps "$NOSTAIDVDF" "DisableLaunchInVR" "$(( 1-NOSTVR ))"  # localconfig.vdf tracks where OpenVR is DISabled rather than ENabled, so flip the boolean
 
 	writelog "INFO" "${FUNCNAME[0]} - Finished adding new $NSGA"
 	SGACOPYMETHOD=""  # Unset doesn't work for some reason with '--flag'
