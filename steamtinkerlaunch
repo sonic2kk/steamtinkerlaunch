@@ -7,7 +7,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20240316-4 (shellcheck-0-10-0-fixes)"
+PROGVERS="v14.0.20240316-5 (shellcheck-0-10-0-fixes)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -9780,11 +9780,13 @@ function createReShadeINI {
 			writelog "INFO" "${FUNCNAME[0]} - Re-enabling previously disabled '$FRSOINI'"
 			mv "$FRSOINI" "$FRSINI"
 		else
+			# This used to use echo but was changed to use printf to address ShellCheck SC2028
+			# In testing using both echo and printf produced the same string result, but if this causes issues we can re-evaluate
 			writelog "INFO" "${FUNCNAME[0]} - Creating initial '$FRSINI' with default paths pointing to '$RSSUB'"
 			{
 				echo "[GENERAL]"
-				echo "EffectSearchPaths=.\\$RSSUB\Shaders"
-				echo "TextureSearchPaths=.\\$RSSUB\Textures"
+				printf "EffectSearchPaths=.\\%s\Shaders\n" "$RSSUB"
+				printf "TextureSearchPaths=.\\%s\Textures\n" "$RSSUB"
 				echo "PreprocessorDefinitions=RESHADE_DEPTH_LINEARIZATION_FAR_PLANE=1000.0,RESHADE_DEPTH_INPUT_IS_UPSIDE_DOWN=0,RESHADE_DEPTH_INPUT_IS_REVERSED=1,RESHADE_DEPTH_INPUT_IS_LOGARITHMIC=0"
 			} > "$FRSINI"
 		fi
@@ -14872,7 +14874,7 @@ function setModGameSyms {
 						writelog "INFO" "${FUNCNAME[0]} - Game Dir is '$MEFD' - adding the windows variant into the registry, because it is required for this game"
 						grep -i -B2 "^\"installed path\"=" "$MSREG" | grep -v "^#\|LastKey\|CurrentVersion\|^--" | head -n1 | sed "s:^\[Software:\[HKEY_LOCAL_MACHINE\\\Software:" | sed "s:\\\\Wow6432Node::" >> "$MODGREG"
 						# the path could be grepped as well, but at least two games had the Steamworks Shared path in the reg value instead here
-						echo "\"installed path\"=\"Z:${MEFD//\//\\\\}\\\\\"" >> "$MODGREG"
+						printf "\"installed path\"=\"Z:%s\\\\\"\n" "${MEFD//\//\\\\}" >> "$MODGREG"
 					else
 						writelog "SKIP" "${FUNCNAME[0]} - Game Dir '$MEFD' not found"
 					fi
@@ -17365,17 +17367,21 @@ function manageMO2GInstance {
 							MO2GAZDI="Z:${MO2GADI//\//\\\\}"
 							mkProjDir "$MOIN"
 							touch "$MOININI"
+							# This used to use `echo` but was changed because of ShellCheck SC2028
+							# The behaviour was different too, echo was returning '\\\\' but printf was returning '\\'
+							# Based on the rest of the paths, I think printf's '\\' is actually correct, but if this breaks anything,
+							# we can re-evaluate.
 							{
 							echo "[General]"
 							echo "gameName=$MO2GAMINI"
 							echo "selected_profile=@ByteArray(Default)"
 							echo "gamePath=@ByteArray($MO2GAZDI)"
 							echo "[Settings]"
-							echo "download_directory=${GLOBZMOIN}\\\\downloads"
-							echo "cache_directory=${GLOBZMOIN}\\\\webcache"
-							echo "mod_directory=${GLOBZMOIN}\\\mods"
-							echo "overwrite_directory=${GLOBZMOIN}\\\\overwrite"
-							echo "profiles_directory=${GLOBZMOIN}\\\\profiles"
+							printf "download_directory=%s\\\\downloads\n" "${GLOBZMOIN}"
+							printf "cache_directory=%s\\\\webcache\n" "${GLOBZMOIN}"
+							printf "mod_directory=%s\\\mods\n" "${GLOBZMOIN}"
+							printf "overwrite_directory=%s\\\\overwrite\n" "${GLOBZMOIN}"
+							printf "profiles_directory=%s\\\\profiles\n" "${GLOBZMOIN}"
 							} >> "$MOININI"
 							MOINEW=1
 						else
@@ -22375,6 +22381,11 @@ function commandline {
 		fetchGameSLRGui "$2"
 	elif [ "$1" == "debug" ]; then
 		## Why are you looking here? :-)
+
+		# Don't let the user run the internal debug command
+		writelog "WARN" "${FUNCNAME[0]} - No debug for you!"
+		echo "No debug for you!"
+		return
 
 		# DEBUGNOSTAID="-222353304"
 
