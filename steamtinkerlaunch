@@ -12683,6 +12683,14 @@ function launchCustomProg {
 			writelog "INFO" "${FUNCNAME[0]} - Generated arguments for custom command are now '${FINALOUTCMD[*]}'"
 		fi
 
+		# Create custom command arguments using printf "%q" in an attempt to better preserve paths with backslashes
+		if [ -z "$CUSTOMCMD_ARGS" ] || [ "$CUSTOMCMD_ARGS" == "$NON" ]; then
+			RUNCUSTOMCMD_ARGS=""
+		else
+			mapfile -d " " -t -O "${#RUNCUSTOMCMD_ARGS[@]}" RUNCUSTOMCMD_ARGS < <(printf '%q' "$CUSTOMCMD_ARGS")
+			writelog "INFO" "${FUNCNAME[0]} - Starting the custom program '$CUSTOMCMD' with args: '${RUNCUSTOMCMD_ARGS[*]}'"
+		fi
+
 		# Cannot always rely on `file` to return `PE32` even for Windows executables -- See #710 (seems to be when exe files are built on Linux they are not PE32)
 		if [ "$(file "$CUSTCOM" | grep -c "PE32")" -eq 1 ] || grep -q ".bat" <<< "$CUSTCOM" || [ "$CUSTOMCMDFORCEWIN" -eq 1 ]; then
 			if [ "$CUSTOMCMDFORCEWIN" -eq 1 ]; then
@@ -12701,36 +12709,28 @@ function launchCustomProg {
 				writelog "INFO" "${FUNCNAME[0]} - '$CUSTCOM' seems to be a MS console program - starting using '$WICO'"
 				if [ "$FORK_CUSTOMCMD" -eq 1 ]; then
 					writelog "INFO" "${FUNCNAME[0]} - FORK_CUSTOMCMD is set to 1 - forking the custom program in background and continue"
-					extProtonRun "FC" "$LACO" "$CUSTOMCMD_ARGS"
+					extProtonRun "FC" "$LACO" "$RUNCUSTOMCMD_ARGS"
 				elif [ "$ONLY_CUSTOMCMD" -eq 1 ] && [ -n "${FINALOUTCMD[*]}" ]; then
 					writelog "INFO" "${FUNCNAME[0]} - ONLY_CUSTOMCMD is set to 1 and we have some arguments in FINALOUTCMD - passing to extProtonRun to build a valid start command"
-					extProtonRun "R" "$LACO" "$CUSTOMCMD_ARGS" "$FINALOUTCMD"  # extProtonRun will handle adding the FINALOUTCMD args to
+					extProtonRun "R" "$LACO" "$RUNCUSTOMCMD_ARGS" "$FINALOUTCMD"  # extProtonRun will handle adding the FINALOUTCMD args to
 				else
-					extProtonRun "RC" "$LACO" "$CUSTOMCMD_ARGS"
+					extProtonRun "RC" "$LACO" "$RUNCUSTOMCMD_ARGS"
 				fi
 			else  # GUI Wine/Proton program
 				writelog "INFO" "${FUNCNAME[0]} - '$CUSTCOM' seems to be a MS gui program - starting regularly"
 
 				if [ "$FORK_CUSTOMCMD" -eq 1 ]; then
 					writelog "INFO" "${FUNCNAME[0]} - FORK_CUSTOMCMD is set to 1 - forking the custom program in background and continue"
-					extProtonRun "F" "$LACO" "$CUSTOMCMD_ARGS"
+					extProtonRun "F" "$LACO" "$RUNCUSTOMCMD_ARGS"
 				elif [ "$ONLY_CUSTOMCMD" -eq 1 ] && [ -n "$FINALOUTCMD" ]; then
 					writelog "INFO" "${FUNCNAME[0]} - ONLY_CUSTOMCMD is set to 1 and we have some arguments in FINALOUTCMD - passing to extProtonRun to build a valid start command"
-					extProtonRun "R" "$LACO" "$CUSTOMCMD_ARGS" "${FINALOUTCMD[*]}"  # extProtonRun will handle adding the FINALOUTCMD args
+					extProtonRun "R" "$LACO" "$RUNCUSTOMCMD_ARGS" "${FINALOUTCMD[*]}"  # extProtonRun will handle adding the FINALOUTCMD args
 				else
-					extProtonRun "R" "$LACO" "$CUSTOMCMD_ARGS"
+					extProtonRun "R" "$LACO" "$RUNCUSTOMCMD_ARGS"
 				fi
 			fi
 		else  # Native custom command
 			writelog "INFO" "${FUNCNAME[0]} - Seems like we may have a Linux executable here"
-
-			# Arguments to append to executable
-			if [ -z "$CUSTOMCMD_ARGS" ] || [ "$CUSTOMCMD_ARGS" == "$NON" ]; then
-				RUNCUSTOMCMD_ARGS=""
-			else
-				writelog "INFO" "${FUNCNAME[0]} - Starting the custom program '$CUSTOMCMD' with args: '$CUSTOMCMD_ARGS'"
-				mapfile -d " " -t -O "${#RUNCUSTOMCMD_ARGS[@]}" RUNCUSTOMCMD_ARGS < <(printf '%s' "$CUSTOMCMD_ARGS")
-			fi
 
 			# Custom program args to preceed executable (e.g. /usr/bin/gamemode /usr/bin/gamescope -- ./game.sh)
 			if [ -z "$FINALOUTCMD" ]; then
