@@ -7,7 +7,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20240323-1 (extProtonRun-printf-q)"
+PROGVERS="v14.0.20240323-2 (extProtonRun-printf-q)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -7079,12 +7079,37 @@ function extProtonRun {
 		if [ -z "$PROGARGS" ] || [ "$PROGARGS" == "$NON" ]; then
 			RUNPROGARGS=""
 		else
-			mapfile -d " " -t -O "${#RUNPROGARGS[@]}" RUNPROGARGS < <(printf '%q' "$PROGARGS")
+			mapfile -d " " -t -O "${#TMP_RUNPROGARGS[@]}" TMP_RUNPROGARGS < <( printf "%q" "$PROGARGS" )
+
+			# Basically check for and join paths that contain spaces because above mapfile will strip them
+			# TODO: This does NOT work with paths that use forward slashes 
+			for i in "${!TMP_RUNPROGARGS[@]}"; do
+				# Remove trailing backslash, i.e. turn `--launch\` into `--launch`
+				TMP_RUNPROGARGS[i]="${TMP_RUNPROGARGS[i]%\\}"
+
+				# If the last seen element in the array ended with a backslash, assume
+				# this is an incomplete path and join them
+				#
+				# This is not perfect as valid paths that just end with backslashes will not work,
+				# but we can document this on the wiki
+				#
+				# i.e. "Z:\this\is\a\path\ MY_VAR=2" will not work, but "Z:\this\is\a\path MY_VAR=2" will work
+				if [[ $LASTRUNPROGARG = *"\\" ]]; then
+					# Remove 'i-1' (previous element), because 'i' (current element) will contain 'i-1'
+					unset "TMP_RUNPROGARGS[i-1]"
+					TMP_RUNPROGARGS[i]="${LASTRUNPROGARG} ${TMP_RUNPROGARGS[i]}"        
+				fi
+				LASTRUNPROGARG="${TMP_RUNPROGARGS[i]}"
+			done
+
+			# Generate new array with null strings removed.
+			mapfile -t -O "${#RUNPROGARGS[@]}" RUNPROGARGS < <( printf "%s\n" "${TMP_RUNPROGARGS[@]}" | grep -v "^$" )
 		fi
 
 		FWAIT=2
 
 		# mirrors above RUNPROGARGS
+		# TODO what if we try to pass paths with spaces? This could be problematic here...
 		if [ -z "$EXTPROGRAMARGS" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - No external program args here it seems"
 			RUNEXTPROGRAMARGS=( "" )
