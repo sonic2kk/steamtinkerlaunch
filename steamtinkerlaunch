@@ -7,7 +7,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20240325-1"
+PROGVERS="v14.0.20240325-2"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -10945,18 +10945,24 @@ function updateConfigEntry {
 					CFGVALUE=""
 				fi
 
+				# Help prevent expanding incoming config values by escaping them (i.e. when using with sed)
+				ESCAPED_CFGVALUE="$( printf "%s\n" "$CFGVALUE" | sed 's/\\/\\\\/g' )"
+
 				# only save value if it changed
+				# sed needs escaped string because otherwise it'll expand escape sequences in strings with backslashes
+				# i.e. config values with Windows paths, '\home\test' will have '\t' expanded as a tab character
+				# We have to use the regular one for echo though.
 				if { [ "${!CFGCAT}" != "$CFGVALUE" ] && [ "${!CFGCAT}" != "${CFGVALUE//$STLCFGDIR/STLCFGDIR}" ];} || [ -f "$FUPDATE" ]; then
 					CFGVALUE="${CFGVALUE//$STLCFGDIR/STLCFGDIR}"
 					if [ "$(grep -c "#${CFGCAT}=" "$CFGFILE")" -eq 1 ]; then
 						writelog "INFO" "${FUNCNAME[0]} - Option '$CFGCAT' commented out in config '${CFGFILE##*/}' - activating it with the new value '$CFGVALUE'"
-						sed -i "/^#${CFGCAT}=/c$CFGCAT=\"$CFGVALUE\"" "$CFGFILE"
+						sed -i "/^#${CFGCAT}=/c$CFGCAT=\"$ESCAPED_CFGVALUE\"" "$CFGFILE"
 					elif [ "$(grep -c "^${CFGCAT}=" "$CFGFILE")" -eq 0 ]; then
 						writelog "INFO" "${FUNCNAME[0]} - '$CFGCAT' option missing in config '${CFGFILE##*/}' - adding a new line"
 						echo "$CFGCAT=\"$CFGVALUE\"" >> "$CFGFILE"
 					else
 						writelog "INFO" "${FUNCNAME[0]} - Option '$CFGCAT' is updated with the new value '$CFGVALUE' in config '${CFGFILE##*/}'"
-						sed -i "/^${CFGCAT}=/c$CFGCAT=\"$CFGVALUE\"" "$CFGFILE"
+						sed -i "/^${CFGCAT}=/c$CFGCAT=\"$ESCAPED_CFGVALUE\"" "$CFGFILE"
 					fi
 					rm "$FUPDATE" 2>/dev/null
 				fi
