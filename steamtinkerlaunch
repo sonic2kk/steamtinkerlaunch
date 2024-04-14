@@ -17564,6 +17564,12 @@ function startMO2 {
 		mkProjDir "$PFXSUTEMP"
 		cd "${MO2EXE%/*}" >/dev/null || return
 
+		if [ -n "$MOINST" ] && [ "$MOINST" == "portable" ]; then
+			updateMO2PortConf
+		else
+			updateMO2GlobConf
+		fi
+
 		if [ -n "$MO2INST" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - WINEDEBUG=\"-all\" WINEPREFIX=\"$MO2PFX\" \"$MO2WINE\" \"$MO2EXE\" -i \"$MO2INST\"" E
 			WINEDEBUG="-all" WINEPREFIX="$MO2PFX" "$MO2WINE" "$MO2EXE" -i "$MO2INST" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}_${IFILE##*/}.log"
@@ -17619,6 +17625,16 @@ function dlMod2nexurl {
 			cd "${GMO2EXE%/*}" >/dev/null || return
 			writelog "INFO" "${FUNCNAME[0]} - Starting portable '$RUNPROTON run ${MO}.exe $1'"
 			STEAM_COMPAT_CLIENT_INSTALL_PATH="$STEAM_COMPAT_CLIENT_INSTALL_PATH" STEAM_COMPAT_DATA_PATH="$STEAM_COMPAT_DATA_PATH" "$RUNPROTON" run "${MO}.exe" "$1" 2>&1 | tee /tmp/RUNMO2DL.log
+			cd - >/dev/null || return
+		elif [ -d "${GMO2EXE%/*}" ] && [ -n "$MO2PFX" ] && [ -n "$MO2WINE" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Download Url '$1' for game '$MONGURL' using data from portable '$MYPORTDLDAT'"
+			cd "${GMO2EXE%/*}" >/dev/null || return
+			writelog "INFO" "${FUNCNAME[0]} - Starting portable MO2 in prefix '$MO2PFX' using '$MO2WINE'"
+			if [ "$MO2INST" ]; then
+				WINEDEBUG="-all" WINEPREFIX="$MO2PFX" "$MO2WINE" "$GMO2EXE" -i "$MO2INST" "$1" 2>&1 | tee /tmp/RUNMO2DL.log
+			else
+				WINEDEBUG="-all" WINEPREFIX="$MO2PFX" "$MO2WINE" "$GMO2EXE" "$1" 2>&1 | tee /tmp/RUNMO2DL.log
+			fi
 			cd - >/dev/null || return
 		else
 			writelog "ERROR" "${FUNCNAME[0]} - Attempted to download Url '$1' for game '$MONGURL', but seems like portable '$MYPORTDLDAT' has incomplete data - trying global $MO" "E"
@@ -19744,8 +19760,11 @@ function updateMO2PortConf {
 	writelog "INFO" "${FUNCNAME[0]} - Updating '$MYPORTDLDAT' with up to date data"
 
 	{
-		echo "GMO2EXE=\"$GMO2EXE\""
+		echo "GMO2EXE=\"$MO2EXE\""
 		echo "RUNPROTON=\"$RUNPROTON\""
+		echo "MO2PFX=\"$MO2PFX\""
+		echo "MO2WINE=\"$MO2WINE\""
+		echo "MO2INST=\"$MO2INST\""
 		echo "STEAM_COMPAT_CLIENT_INSTALL_PATH=\"$STEAM_COMPAT_CLIENT_INSTALL_PATH\""
 		echo "STEAM_COMPAT_DATA_PATH=\"$STEAM_COMPAT_DATA_PATH\""
 	} > "$MYPORTDLDAT"
