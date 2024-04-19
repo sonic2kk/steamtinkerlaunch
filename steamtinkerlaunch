@@ -7,7 +7,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20240415-1"
+PROGVERS="v14.0.20240420-1"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -159,7 +159,11 @@ FIXGAMESCOPE=0
 SMALLDESK=0
 VTX_DOTNET_ROOT="c:\\Program Files\\dotnet\\\\"
 STLQUIET=0
-SLRAID="1070560"  # Hardcoded SLR AppID for native games -- See `setSLRReap`
+
+# Hardcoded SLR AppID for native games -- See `setSLRReap`
+# TODO refactor to be array for native AIDs? Some games (CS2) can use SLR 3.0
+# We should allow the user to choose whether to use SLE 1.0 or 3.0 for native games
+SLRAID="1070560"
 DEFWINEDPI="96"
 WINEDPIVALUES="${DEFWINEDPI}!120!150!240"
 SGDBTIMEOUT="15"
@@ -2271,8 +2275,10 @@ function setGameVars {
 	fi
 
 	if grep -q "$SLR" <<< "$@"; then
+		writelog "INFO" "${FUNCNAME[0]} - Found SLR is launch option"
 		HAVESLR=1
 	else
+		writelog "INFO" "${FUNCNAME[0]} - No SLR is in launch option"
 		HAVESLR=0
 	fi
 
@@ -2379,6 +2385,12 @@ function setGameVars {
 		done <<< "$(printf "%s\n" "${WIPCGCMD[@]}")"
 	fi
 
+	# SLRCT = Steam Linux Runtime from Compatibility Tool
+	# Refers to instances where the SLR comes in the launch command for a game
+	# This can happen if you launch a game with SLR 1.0 or 3.0 selected as a compatibility tool, as Steam
+	# will give the launch command wrapped with the SLR.
+	#
+	# See setSLRReap for implementation on how we use this
 	if grep -q "$SLR" <<< "${WIPDGCMD[@]}"; then
 		HAVESLRCT=1
 	else
@@ -20145,7 +20157,8 @@ function fixCustomMeta {
 }
 
 function initPlay {
-	HAVESLR=0
+	# HAVESLR=0  # Previously enabled to force disable SLR from launch command, but now we can handle SLR from launch command and safely ignore it if not present
+	## TODO: Are any of these other values still needed?
 	HAVESLRCT=0
 	HAVEREAP=0
 	HAVESCTP=0
@@ -21110,18 +21123,29 @@ function setSLRReap {
 
 	# USESLR tells whether the user has chosen to get the SLR, HAVESLR refers to the legacy check for the SLR passed from the compat tool/Steam launch command
 	if [[ ( -n "$USESLR" && -n "$HAVESLR" ) || -n "$OVERRIDESLR" ]]; then
-
-		# Legacy SLR fetching (from Steam start command)
+		# SLR fetching from Steam start command
 		# --------------
-		# This is very legacy and won't happen anymore outside of very old compat tools
+		# Sometimes the SLR comes from the compatibility tool (hence SLRCT, SLR Compat Tool) -- This only happens with Proton <= 4.11, and more critically, with games that are using
+		# a Steam Linux Runtime compatibility tool. Some games, like CS2, have an SLR forced by Valve Testing and this cannot be disabled by the user
+		#
+		# In this case, we want to take the SLR given to us by the compatibility tool and use that
+		# HAVESLRCT=1 will only be true if the SLR is coming from the compatibility tool
 		if [ "$HAVESLRCT" -eq 1 ] && [ "$USESLR" -eq 1 ]; then
 			writelog "INFO" "${FUNCNAME[0]} - ## SLR is enabled via USESLR=$USESLR - prepending SLR from Compatibility Tool to the current launch command"
+			writelog "INFO" "${FUNCNAME[0]} - ## This can happen if a game is running with a Steam Linux Runtime compatibility tool enabled"
 			SLRCMD=("${RUNSLRCT[@]}")
-		fi
-
-		# This is very legacy as well, same as above but for native games
-		if [ "$HAVESLR" -eq 1 ] && [ "$USESLR" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - RUNSLRCT is '${RUNSLRCT[*]}'"
+		# This is very, very legacy and will likely never happen again
+		# While the above case covers games that get their SLR from the compatibility tool (only old Proton versions, and any native game using SLR 1.0 or 3.0),
+		# this case covers *regular native games* that pass the SLR in their start command, which should not happen anymore
+		#
+		# The reason we use an 'elif' is because games should only meet one of these conditions:
+		# - SLR comes from the selected compatibility tool (e.g. if a user selects SLR 1.0 for a native game, or if one is selected for them)
+		# - SLR comes from the game start command even if no compat tool is used (should not happen anymore, legacy Steam behaviour)
+		# - SLR is not given to us *at all*, so we use the SLR fetching below
+		elif [ "$HAVESLR" -eq 1 ] && [ "$USESLR" -eq 1 ]; then
 			writelog "INFO" "${FUNCNAME[0]} - ## SLR is enabled via USESLR=$USESLR - prepending SLR from command line to the current launch command"
+			writelog "INFO" "${FUNCNAME[0]} - RUNSLR is '${RUNSLR[*]}'"
 			SLRCMD=("${RUNSLR[@]}")
 		fi
 
@@ -21131,7 +21155,7 @@ function setSLRReap {
 		fi
 		# --------------
 
-		# Modern SLR fetching (from toolmanifest.vdf / native Linux SLR AppID)
+		# SLR fetching (from toolmanifest.vdf / native Linux SLR AppID)
 		# ---------------
 		RUNFORCESLR=0
 		if [[ ( "$HAVESLR" -eq 0 && "$USESLR" -eq 1 ) || -n "$OVERRIDESLR" ]]; then
