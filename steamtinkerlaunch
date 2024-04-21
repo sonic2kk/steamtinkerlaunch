@@ -7,7 +7,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20240420-1"
+PROGVERS="v14.0.20240421-1"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -3187,6 +3187,7 @@ function setDefaultCfgValues {
 		if [ -z "$KEEPSTLOPEN" ]						; then	KEEPSTLOPEN="0"; fi
 		if [ -z "$USESLR" ]								; then	USESLR="1"; fi
 		if [ -z "$FORCESLR" ]							; then	FORCESLR="0"; fi
+		if [ -z "$IGNORECOMPATSLR" ]					; then	IGNORECOMPATSLR="0"; fi
 		if [ -z "$USEREAP" ]							; then	USEREAP="1"; fi
 		if [ -z "$FORCEREAP" ]							; then	FORCEREAP="0"; fi
 		if [ -z "$USEPROTON" ]							; then	USEPROTON="$(getDefaultProton)"; fi
@@ -3765,6 +3766,8 @@ function saveCfg {
 			echo "USESLR=\"$USESLR\""
 			echo "## $DESC_FORCESLR"
 			echo "FORCESLR=\"$FORCESLR\""
+			echo "## $DESC_IGNORECOMPATSLR"
+			echo "IGNORECOMPATSLR=\"$IGNORECOMPATSLR\""
 			echo "## $DESC_USEREAP"
 			echo "USEREAP=\"$USEREAP\""
 			echo "## $DESC_FORCEREAP"
@@ -5707,6 +5710,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_USEPROTON!$DESC_USEPROTON ('USEPROTON')":CB "$(cleanDropDown  "${USEPROTON/#-/ -}" "$PROTYADLIST")" `#CAT_Proton` `#MENU_GAME` \
 --field="     $GUI_USESLR!$DESC_USESLR ('USESLR')":CHK "${USESLR/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_FORCESLR!$DESC_FORCESLR ('FORCESLR')":CHK "${FORCESLR/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_IGNORECOMPATSLR!$DESC_IGNORECOMPATSLR ('IGNORECOMPATSLR')":CHK "${IGNORECOMPATSLR/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_USEREAP!$DESC_USEREAP ('USEREAP')":CHK "${USEREAP/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_FORCEREAP!$DESC_FORCEREAP ('FORCEREAP')":CHK "${FORCEREAP/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_AUTOLASTPROTON!$DESC_AUTOLASTPROTON ('AUTOLASTPROTON')":CHK "${AUTOLASTPROTON/#-/ -}" `#CAT_Proton` `#SUB_Checkbox` `#MENU_GLOBAL` \
@@ -21130,7 +21134,7 @@ function setSLRReap {
 		#
 		# In this case, we want to take the SLR given to us by the compatibility tool and use that
 		# HAVESLRCT=1 will only be true if the SLR is coming from the compatibility tool
-		if [ "$HAVESLRCT" -eq 1 ] && [ "$USESLR" -eq 1 ]; then
+		if [ "$HAVESLRCT" -eq 1 ] && [ "$USESLR" -eq 1 ] && [ "$IGNORECOMPATSLR" -eq 0 ]; then
 			writelog "INFO" "${FUNCNAME[0]} - ## SLR is enabled via USESLR=$USESLR - prepending SLR from Compatibility Tool to the current launch command"
 			writelog "INFO" "${FUNCNAME[0]} - ## This can happen if a game is running with a Steam Linux Runtime compatibility tool enabled"
 			SLRCMD=("${RUNSLRCT[@]}")
@@ -21143,10 +21147,18 @@ function setSLRReap {
 		# - SLR comes from the selected compatibility tool (e.g. if a user selects SLR 1.0 for a native game, or if one is selected for them)
 		# - SLR comes from the game start command even if no compat tool is used (should not happen anymore, legacy Steam behaviour)
 		# - SLR is not given to us *at all*, so we use the SLR fetching below
-		elif [ "$HAVESLR" -eq 1 ] && [ "$USESLR" -eq 1 ]; then
+		elif [ "$HAVESLR" -eq 1 ] && [ "$USESLR" -eq 1 ] && [ "$IGNORECOMPATSLR" -eq 0 ]; then
 			writelog "INFO" "${FUNCNAME[0]} - ## SLR is enabled via USESLR=$USESLR - prepending SLR from command line to the current launch command"
 			writelog "INFO" "${FUNCNAME[0]} - RUNSLR is '${RUNSLR[*]}'"
 			SLRCMD=("${RUNSLR[@]}")
+		# If the user enables "IGNORECOMPATSLR", disable HAVESLR so that the below logic for Pressure Vessel Funtime will kick in and fetch the SLR manually
+		# HAVESLR controls whether we Have an SLR coming from the incoming command line options, which is nowadays only really the case for native titles with a Compat Tool forced/selected by Valve Testing
+		elif [ "$HAVESLRCT" -eq 1 ] && [ "$USESLR" -eq 1 ] && [ "$IGNORECOMPATSLR" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - ## SLR was found in incoming Start Command, likely from a compatibility tool, but 'IGNORECOMPATSLR' is '${IGNORECOMPATSLR}'"
+			writelog "INFO" "${FUNCNAME[0]} - ## Ignoring this incoming SLR from the selected Steam Linux Runtime Compatibility Tool and instead letting SteamTinkerLaunch find the Steam Linux Runtime instead"
+			writelog "WARN" "${FUNCNAME[0]} - ## Note that some games require a specific Steam Linux Runtime version, and if a given Steam Linux Runtime version that SteamTinkerLaunch looks for is not found, or if the version found does not match what a game might require, launching may fail"
+
+			HAVESLR=0
 		fi
 
 		# Legacy case to ignore SLR gotten from commandline
@@ -21157,6 +21169,7 @@ function setSLRReap {
 
 		# SLR fetching (from toolmanifest.vdf / native Linux SLR AppID)
 		# ---------------
+		# TODO This could probably be refactored to have less indentation and return early...
 		RUNFORCESLR=0
 		if [[ ( "$HAVESLR" -eq 0 && "$USESLR" -eq 1 ) || -n "$OVERRIDESLR" ]]; then
 			if [ -n "$LASTSLR" ] && [ -f "${LASTSLR% --verb*}" ] && [ "$FORCESLR" -eq 1 ]; then
