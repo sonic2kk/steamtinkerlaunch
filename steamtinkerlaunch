@@ -19783,12 +19783,21 @@ function updateMO2PortConf {
 	MONGURL="$(grep -i "\"$MO2GAM\"" "$MO2GAMES" | head -n1 | cut -d ';' -f4)"
 	MONGURL="${MONGURL//\"}"
 
+	if [ -z "${MONGURL}" ]; then
+		# Fall back to AID if MO2GAM couldn't be found
+		if [ ! -z "$AID" ]; then
+			MONGURL="$(grep -i "\"$AID\"" "$MO2GAMES" | head -n1 | cut -d ';' -f4)"
+			MONGURL="${MONGURL//\"}"
+			if [ -z "${MONGURL}" ]; then
+				writelog "WARN" "${FUNCNAME[0]} - extracting the gamename MONGURL from '$MO2GAMES' by looking for '$MO2GAM' or '$AID' failed - the file '$MYPORTDLDAT' won't be found"
+			fi
+		else
+			writelog "WARN" "${FUNCNAME[0]} - extracting the gamename MONGURL from '$MO2GAMES' by looking for '$MO2GAM' failed - the file '$MYPORTDLDAT' won't be found (and no AID to fall back to)"
+		fi
+	fi
+
 	mkProjDir "$STLMO2DLDATDIR"
 	MYPORTDLDAT="${STLMO2DLDATDIR}/${MONGURL}.conf"
-
-	if [ -z "${MONGURL}" ]; then
-		writelog "WARN" "${FUNCNAME[0]} - extracting the gamename MONGURL from '$MO2GAMES' by looking for '$MO2GAM' failed - the file '$MYPORTDLDAT' won't be found"
-	fi
 
 	writelog "INFO" "${FUNCNAME[0]} - Updating '$MYPORTDLDAT' with up to date data"
 
