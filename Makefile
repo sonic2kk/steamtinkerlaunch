@@ -18,8 +18,8 @@ install:
 	install -Dm644 "misc/steamtinkerlaunch.svg" -t "$(PREFIX)/share/icons/hicolor/scalable/apps"
 
 uninstall:
-	rm -rf "${PREFIX}/share/icons/hicolor/scalable/apps/misc/steamtinkerlaunch.svg"
-	rm -rf "${PREFIX}/share/applications/misc/steamtinkerlaunch.desktop"
+	rm -f "${PREFIX}/share/icons/hicolor/scalable/apps/steamtinkerlaunch.svg"
+	rm -f "${PREFIX}/share/applications/steamtinkerlaunch.desktop"
 	rm -rf "${PREFIX}/share/doc/steamtinkerlaunch"
 
 	rm -rf "${PREFIX}/share/steamtinkerlaunch"
