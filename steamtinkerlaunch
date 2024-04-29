@@ -7,7 +7,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20240612-1"
+PROGVERS="v14.0.20240330-2 (finalize-mo2-silent)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -5964,7 +5964,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_USEMO2PROTON!$DESC_USEMO2PROTON ('USEMO2PROTON')":CB "$(cleanDropDown "${USEMO2PROTON/#-/ -}" "$PROTYADLIST")" `#CAT_MO2` `#MENU_GLOBAL` \
 --field="     $GUI_USEMO2CUSTOMINSTALLER!$DESC_USEMO2CUSTOMINSTALLER ('USEMO2CUSTOMINSTALLER')":CHK "${USEMO2CUSTOMINSTALLER/#- -}" `#CAT_MO2` `#SUB_Checkbox` `#MENU_GLOBAL` \
 --field="     $GUI_MO2CUSTOMINSTALLER!$DESC_MO2CUSTOMINSTALLER ('MO2CUSTOMINSTALLER')":FL "${MO2CUSTOMINSTALLER/#-/ -}" `#CAT_MO2` `#SUB_Directories` `#MENU_GLOBAL` \
---field="     $GUI_MO2MODE!$DESC_MO2MODE ('MO2MODE')":CB "$(cleanDropDown "${MO2MODE/#-/ -}" "disabled!gui")" `#CAT_MO2` `#MENU_GAME` \
+--field="     $GUI_MO2MODE!$DESC_MO2MODE ('MO2MODE')":CB "$(cleanDropDown "${MO2MODE/#-/ -}" "disabled!gui!silent")" `#CAT_MO2` `#MENU_GAME` \
 --field="     $GUI_WAITMO2!$DESC_WAITMO2 ('WAITMO2')":NUM "${WAITMO2/#-/ -}" `#CAT_MO2` `#MENU_GAME` \
 #ENDSETENTRIES
 }
@@ -17786,64 +17786,61 @@ function checkMO2 {
 		return
 	fi
 
+	# MO2 disabled means don't use MO2 at all
 	if [ "$MO2MODE" == "disabled" ]; then
 		writelog "SKIP" "${FUNCNAME[0]} - MO2MODE is 'disabled' -- Skipping checkMO2!"
 		return
 	fi
 
-	# if [ "$MO2MODE" != "disabled" ]; then    # This check is because MO2 was once planned to have a silent mode, but no idea if/when this will be implemented, so just explicitly check for GUI
-	if [ "$MO2MODE" == "gui" ]; then
-		writelog "INFO" "${FUNCNAME[0]} - MO2MODE is '$MO2MODE' - starting MO2"
+	# MO2 Wait Requester logic to choose between GUI, Silent, Cancel, or default MO2 mode if the Wait Requester times out
+	writelog "INFO" "${FUNCNAME[0]} - MO2MODE is '$MO2MODE' - starting MO2"
+	if [ "$WAITMO2" -gt 0 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Opening $MO Requester with timeout '$WAITMO2'"
+		fixShowGnAid
+		export CURWIKI="$PPW/Mod-Organizer-2"
+		TITLE="${PROGNAME}-Open-Mod-Organizer2"
+		pollWinRes "$TITLE"
 
-		if [ "$WAITMO2" -gt 0 ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Opening $MO Requester with timeout '$WAITMO2'"
-			fixShowGnAid
-			export CURWIKI="$PPW/Mod-Organizer-2"
-			TITLE="${PROGNAME}-Open-Mod-Organizer2"
-			pollWinRes "$TITLE"
+		setShowPic
+		"$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
+		--title="$TITLE" \
+		--text="$(spanFont "$SGNAID - $GUI_ASKMO2" "H")" \
+		--button="$BUT_MO2_GUI":0 \
+		--button="$BUT_MO2_SIL":4 \
+		--button="$BUT_MO2_SKIP":6 \
+		--timeout="$WAITMO2" \
+		--timeout-indicator=top \
+		"$GEOM"
 
-			setShowPic
-			"$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
-			--title="$TITLE" \
-			--text="$(spanFont "$SGNAID - $GUI_ASKMO2" "H")" \
-			--button="$BUT_MO2_GUI":0 \
-			--button="$BUT_MO2_SKIP":6 \
-			--timeout="$WAITMO2" \
-			--timeout-indicator=top \
-			"$GEOM"
-
-			case $? in
-				0)  {
-						writelog "INFO" "${FUNCNAME[0]} - Selected to start $MO with gui"
-						MO2MODE="gui"
-					}
-				;;
-				4)  {
-						writelog "INFO" "${FUNCNAME[0]} - Selected to start $MO with mods silently -- defaulting to gui since silent mode is not implemented"
-						MO2MODE="gui"
-					}
-				;;
-				6)  {
-						writelog "INFO" "${FUNCNAME[0]} - Selected CANCEL - Not starting $MO at all"
-						MO2MODE="disabled"
-					}
-				;;
-				70) {
-						writelog "INFO" "${FUNCNAME[0]} - TIMEOUT - Starting $MO2 gui" # with mods silently"
-						MO2MODE="gui"
-					}
-				;;
-			esac
-		else
-			writelog "INFO" "${FUNCNAME[0]} - $MO Requester was skipped because WAITMO2 is '$WAITMO2' - not changing MO2MODE '$MO2MODE'"
-		fi
-		prepareMO2 "$AID" "$MO2MODE"
-		if [ "$MO2MODE" != "disabled" ] && [ "$USECUSTOMCMD" -eq 1 ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Disabling custom command, because $MO2 is enabled"
-			USECUSTOMCMD=0
-		fi
+		case $? in
+			0)  {
+					writelog "INFO" "${FUNCNAME[0]} - Selected to start $MO with gui"
+					MO2MODE="gui"
+				}
+			;;
+			4)  {
+					writelog "INFO" "${FUNCNAME[0]} - Selected to start $MO with mods silently"
+					MO2MODE="silent"
+				}
+			;;
+			6)  {
+					writelog "INFO" "${FUNCNAME[0]} - Selected CANCEL - Not starting $MO at all"
+					MO2MODE="disabled"
+				}
+			;;
+			70) {
+					writelog "INFO" "${FUNCNAME[0]} - TIMEOUT - Starting $MO2 with default ModOrganizer 2 mode" # with mods silently"
+				}
+			;;
+		esac
 	else
-		writelog "WARN" "${FUNCNAME[0]} - Unknown MO2MODE value '$MO2MODE' -- This is safe as checkMO2 has been skipped, but it is still unusual"
+		writelog "INFO" "${FUNCNAME[0]} - $MO Requester was skipped because WAITMO2 is '$WAITMO2' - not changing MO2MODE '$MO2MODE'"
+	fi
+
+	prepareMO2 "$AID" "$MO2MODE"
+	if [ "$MO2MODE" != "disabled" ] && [ "$USECUSTOMCMD" -eq 1 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Disabling custom command, because $MO2 is enabled"
+		USECUSTOMCMD=0
 	fi
 }
 
