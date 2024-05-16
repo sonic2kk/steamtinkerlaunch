@@ -7,7 +7,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20240616-3"
+PROGVERS="v14.0.20240516-2 (customcmd-slr-ver-2)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -7082,6 +7082,7 @@ function extProtonRun {
 	PROGARGS="$3"
 	EXTPROGRAMARGS="$4"  # e.g. args like GameScope/GameMode taken from `buildCustomCmdLaunch` for ONLY_CUSTOMCMD
 	EXTWINERUN=0
+	EXTPROTUSESLR="${5:-0}"  # Should extProtonRun fetch and use SLR (default to 0 -- turned off)
 
 	if [ "$USEWINE" -eq 1 ] && [[ ! "$WINEVERSION" =~ ${DUMMYBIN}$ ]] && [ "$WINEVERSION" != "$NON" ]; then
 		EXTWINERUN=1
@@ -7143,17 +7144,38 @@ function extProtonRun {
 			mapfile -d " " -t -O "${#RUNEXTPROGRAMARGS[@]}" RUNEXTPROGRAMARGS < <(printf '%s' "$EXTPROGRAMARGS")
 		fi
 
-		# __DEBUG_EXTPROTRUN_SLR=1
-		# if [ "$__DEBUG_EXTPROTRUN_SLR" -eq 1 ]; Then
-		# 	writelog "INFO" "${FUNCNAME[0]} - Running custom command with Proton SLR"
-		# 	setSLRReap
+		# Have to set SLR in extProtonRun because we can't pass the array to the function
+		# Hopefully unsetting is safe and doesn't mean places that need the SLR will lose it from this 'unset'
+		if [ "$EXTPROTUSESLR" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - EXTPROTUSESLR is '$EXTPROTUSESLR' -- Attempting to find and use SLR with extProtonRun"
+			
+			unset "${SLRCMD[@]}"
+			setSLRReap
+		fi
 
-		# 	if [ -n "${SLRCMD[0]}" ]; then
-		# 		writelog "INFO" "${FUNCNAME[0]} - Appending SLR to "
-		# 	else
-		# 		writelog "WARN" "${FUNCNAME[0]} - Could not find SLR! extProtonRun will NOT use "
-		# 	fi
-		# fi
+		# append SLR to beginning of RUNEXTPROGRAMARGS, if SLR is defined
+		# TODO this is ugly, can it be done better?
+		if [ -n "${SLRCMD[*]}" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Gotten SLR, using RUNEXTPROGRAMARGS array to contain it and add it to launch command"
+			
+			if [ -n "${RUNEXTPROGRAMARGS[*]}" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Backing up existing RUNEXTPROGRAMARGS ('${RUNEXTPROGRAMARGS[*]}')"
+				OLDRUNEXTPROGRAMARGS=( "${RUNEXTPROGRAMARGS[@]}" )
+			fi
+
+			unset "${RUNEXTPROGRAMARGS[@]}"
+			RUNEXTPROGRAMARGS=( "${SLRCMD[@]}" )
+
+			if [ -n "${OLDRUNEXTPROGRAMARGS[*]}" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Restoring OLDRUNEXTPROGRAMARGS ('${OLDRUNEXTPROGRAMARGS[*]}')"
+				RUNEXTPROGRAMARGS+=( "${OLDRUNEXTPROGRAMARGS[@]}" )
+			fi
+
+			writelog "INFO" "${FUNCNAME[0]} - RUNEXTPROGRAMARGS is now '${RUNEXTPROGRAMARGS[*]}'"
+		else
+			writelog "WARN" "${FUNCNAME[0]} - EXTPROTUSESLR was '$EXTPROTUSESLR' but SLR was not found -- extProtonRun will NOT be able to use SLR even though it was requested!"
+		fi
+		unset "${SLRCMD[@]}"
 
 		# TODO pass "$EXTPROGRAMARGS" to programs running with Wine as well(?)
 		# TODO refactor a bit to be a little cleaner if possible
@@ -7239,7 +7261,19 @@ function extProtonRun {
 				else
 					notiShow "$( strFix "$NOTY_CUSTPROG_REG" "$CUSTPROGNAME" )"
 					if [ -n "${RUNEXTPROGRAMARGS[0]}" ]; then
-						"${RUNEXTPROGRAMARGS[@]}" "$RUNPROTON" run "$PROGRAM" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log"
+						writelog "INFO" "${FUNCNAME[0]} - '${RUNEXTPROGRAMARGS[0]}'"
+						writelog "INFO" "${FUNCNAME[0]} - '${RUNEXTPROGRAMARGS[1]}'"
+						writelog "INFO" "${FUNCNAME[0]} - '${RUNEXTPROGRAMARGS[2]}'"
+						writelog "INFO" "${FUNCNAME[0]} - '${RUNEXTPROGRAMARGS[3]}'"
+						writelog "INFO" "${FUNCNAME[0]} - '${RUNEXTPROGRAMARGS[4]}'"
+						writelog "INFO" "${FUNCNAME[0]} - '${RUNEXTPROGRAMARGS[5]}'"
+						writelog "INFO" "${FUNCNAME[0]} - '${RUNEXTPROGRAMARGS[6]}'"
+						writelog "INFO" "${FUNCNAME[0]} - '${RUNEXTPROGRAMARGS[7]}'"
+						writelog "INFO" "${FUNCNAME[0]} - '${RUNEXTPROGRAMARGS[8]}'"
+						writelog "INFO" "${FUNCNAME[0]} - '${RUNEXTPROGRAMARGS[9]}'"
+						writelog "INFO" "${FUNCNAME[0]} - '${RUNEXTPROGRAMARGS[10]}'"
+						# writelog "INFO" "${FUNCNAME[0]} - \"${RUNEXTPROGRAMARGS[*]}\" \"$RUNPROTON\" run \"$PROGRAM\""
+						"${RUNEXTPROGRAMARGS[@]}" "$RUNPROTON" waitforexitandrun "$PROGRAM" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log"
 					else
 						"$RUNPROTON" run "$PROGRAM" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log"
 					fi
@@ -12819,30 +12853,28 @@ function launchCustomProg {
 				writelog "INFO" "${FUNCNAME[0]} - '$CUSTCOM' seems to be a MS Windows program - starting through proton"
 			fi
 
-			# TODO set Proton SLR here and add to CUSTOMCMD_ARGS if defined
-
 			if [ "$USEWICO" -eq 1 ] && [ "$(file "$CUSTCOM" | grep -c "(console)")" -eq 1 ]; then  # Command line Wine/Proton custom program
 				writelog "INFO" "${FUNCNAME[0]} - '$CUSTCOM' seems to be a MS console program - starting using '$WICO'"
 				if [ "$FORK_CUSTOMCMD" -eq 1 ]; then
 					writelog "INFO" "${FUNCNAME[0]} - FORK_CUSTOMCMD is set to 1 - forking the custom program in background and continue"
-					extProtonRun "FC" "$LACO" "$CUSTOMCMD_ARGS"
+					extProtonRun "FC" "$LACO" "$CUSTOMCMD_ARGS" "" "${__DEBUG_CUSTCMD_SLR}"
 				elif [ "$ONLY_CUSTOMCMD" -eq 1 ] && [ -n "${FINALOUTCMD[*]}" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - ONLY_CUSTOMCMD is set to 1 and we have some arguments in FINALOUTCMD - passing to extProtonRun to build a valid start command"
-					extProtonRun "R" "$LACO" "$CUSTOMCMD_ARGS" "$FINALOUTCMD"  # extProtonRun will handle adding the FINALOUTCMD args to
+					writelog "INFO" "${FUNCNAME[0]} - ONLY_CUSTOMCMD is set to 1 and we have some arguments in FINALOUTCMD - passing to extProtonRun to build a valid start command"	
+					extProtonRun "R" "$LACO" "$CUSTOMCMD_ARGS" "$FINALOUTCMD" "${__DEBUG_CUSTCMD_SLR}"  # extProtonRun will handle adding the FINALOUTCMD args to
 				else
-					extProtonRun "RC" "$LACO" "$CUSTOMCMD_ARGS"
+					extProtonRun "RC" "$LACO" "$CUSTOMCMD_ARGS" "" "${__DEBUG_CUSTCMD_SLR}"
 				fi
 			else  # GUI Wine/Proton program
 				writelog "INFO" "${FUNCNAME[0]} - '$CUSTCOM' seems to be a MS gui program - starting regularly"
 
 				if [ "$FORK_CUSTOMCMD" -eq 1 ]; then
 					writelog "INFO" "${FUNCNAME[0]} - FORK_CUSTOMCMD is set to 1 - forking the custom program in background and continue"
-					extProtonRun "F" "$LACO" "$CUSTOMCMD_ARGS"
+					extProtonRun "F" "$LACO" "$CUSTOMCMD_ARGS" "" "${__DEBUG_CUSTCMD_SLR}"
 				elif [ "$ONLY_CUSTOMCMD" -eq 1 ] && [ -n "$FINALOUTCMD" ]; then
 					writelog "INFO" "${FUNCNAME[0]} - ONLY_CUSTOMCMD is set to 1 and we have some arguments in FINALOUTCMD - passing to extProtonRun to build a valid start command"
-					extProtonRun "R" "$LACO" "$CUSTOMCMD_ARGS" "${FINALOUTCMD[*]}"  # extProtonRun will handle adding the FINALOUTCMD args
+					extProtonRun "R" "$LACO" "$CUSTOMCMD_ARGS" "${FINALOUTCMD[*]}" "${__DEBUG_CUSTCMD_SLR}""${__DEBUG_CUSTCMD_SLR}"  # extProtonRun will handle adding the FINALOUTCMD args
 				else
-					extProtonRun "R" "$LACO" "$CUSTOMCMD_ARGS"
+					extProtonRun "R" "$LACO" "$CUSTOMCMD_ARGS" "" "${__DEBUG_CUSTCMD_SLR}"
 				fi
 			fi
 		else  # Native custom command
@@ -12868,6 +12900,7 @@ function launchCustomProg {
 			FWAIT=2
 
 			# TODO set native Linux SLR here and append to RUNEXTPROGRAMARGS
+			# * Do we need to add a "force native" var to setSLRReap? Game could be Proton but customcmd could be native, need to handle both
 			# TODO should respect selected SLR once #1087 is implemented
 
 			# Launch native custom command
