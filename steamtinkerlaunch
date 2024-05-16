@@ -7143,6 +7143,18 @@ function extProtonRun {
 			mapfile -d " " -t -O "${#RUNEXTPROGRAMARGS[@]}" RUNEXTPROGRAMARGS < <(printf '%s' "$EXTPROGRAMARGS")
 		fi
 
+		# __DEBUG_EXTPROTRUN_SLR=1
+		# if [ "$__DEBUG_EXTPROTRUN_SLR" -eq 1 ]; Then
+		# 	writelog "INFO" "${FUNCNAME[0]} - Running custom command with Proton SLR"
+		# 	setSLRReap
+
+		# 	if [ -n "${SLRCMD[0]}" ]; then
+		# 		writelog "INFO" "${FUNCNAME[0]} - Appending SLR to "
+		# 	else
+		# 		writelog "WARN" "${FUNCNAME[0]} - Could not find SLR! extProtonRun will NOT use "
+		# 	fi
+		# fi
+
 		# TODO pass "$EXTPROGRAMARGS" to programs running with Wine as well(?)
 		# TODO refactor a bit to be a little cleaner if possible
 		CUSTPROGNAME="$( basename "$PROGRAM" )"
@@ -12665,6 +12677,19 @@ function launchCustomProg {
 		CUSTOMCMD="$WICO"
 	fi
 
+	__DEBUG_CUSTCMD_SLR=1
+
+	# if [ "$__DEBUG_EXTPROTRUN_SLR" -eq 1 ]; Then
+	# 	writelog "INFO" "${FUNCNAME[0]} - Running custom command with Proton SLR"
+	# 	setSLRReap
+
+	# 	if [ -n "${SLRCMD[0]}" ]; then
+	# 		writelog "INFO" "${FUNCNAME[0]} - Appending SLR to "
+	# 	else
+	# 		writelog "WARN" "${FUNCNAME[0]} - Could not find SLR! extProtonRun will NOT use "
+	# 	fi
+	# fi
+
 	if [ -z "$CUSTOMCMD" ] || [[ "$CUSTOMCMD" =~ ${DUMMYBIN}$ ]]; then
 		writelog "INFO" "${FUNCNAME[0]} - CUSTOMCMD variable is empty - opening file requester"
 		fixShowGnAid
@@ -12794,6 +12819,8 @@ function launchCustomProg {
 				writelog "INFO" "${FUNCNAME[0]} - '$CUSTCOM' seems to be a MS Windows program - starting through proton"
 			fi
 
+			# TODO set Proton SLR here and add to CUSTOMCMD_ARGS if defined
+
 			if [ "$USEWICO" -eq 1 ] && [ "$(file "$CUSTCOM" | grep -c "(console)")" -eq 1 ]; then  # Command line Wine/Proton custom program
 				writelog "INFO" "${FUNCNAME[0]} - '$CUSTCOM' seems to be a MS console program - starting using '$WICO'"
 				if [ "$FORK_CUSTOMCMD" -eq 1 ]; then
@@ -12839,6 +12866,9 @@ function launchCustomProg {
 			fi
 
 			FWAIT=2
+
+			# TODO set native Linux SLR here and append to RUNEXTPROGRAMARGS
+			# TODO should respect selected SLR once #1087 is implemented
 
 			# Launch native custom command
 			NATIVEPROGNAME="$( basename "$LACO" )"
@@ -21694,6 +21724,8 @@ function launchSteamGame {
 
 	writelog "INFO" "${FUNCNAME[0]} - Initial game command is '${INGCMD[*]}'"
 
+	# Refetch SLR, in case we set it for custom command as well
+	# i.e. custom command could use native SLR, but we might want to use Proton SLR for the game, or vice versa
 	unset "${SLRCMD[@]}"
 	setSLRReap
 
