@@ -343,6 +343,7 @@ SGDBTNFTSTYLEOPTS="alternate,blurred,white_logo,material"
 GETSTAID="99[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]99"
 
 STLGAMES="$STLCFGDIR/games"
+STLSTEAMDECKLASTVERS="$STLCFGDIR/lastvers"
 STLGDESKD="$STLGAMES/desktop"
 STLIDFD="$STLGAMES/desktopfiles"
 STLISLDFD="$STLGAMES/sldesktopfiles"
@@ -26496,7 +26497,13 @@ function checkSteamDeckDependencies {
 		local CHECKCMD
 		CHECKCMD="$($DEPCMD &> /dev/null --version && echo "OK" || echo "NOK")"
 
-		if [ -f "$(command -v "$DEPCMD")" ] && [ "$CHECKCMD" = "OK" ]; then
+
+		# The check now says, don't update dependencies if all of these conditions are true:
+		#  1. The dependency file exists
+		#  2. The dependency can actually be ran, confirming it is a valid file
+		#  3. SteamTinkerLaunch has not updated, so there would be no change in dependency version and thus no need to update
+		# If any of these are false, we need to check our dependencies (if a file is missing we would need to update, or if it cannot be used we need to update, and also if STL updated we may need a newer version, so update).
+		if [ -f "$(command -v "$DEPCMD")" ] && [ "$CHECKCMD" = "OK" ] && [ "$( checkSteamDeckSTLUpdated )" -eq 0 ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Using '$DEPCMD' binary found in path: '$(command -v "$DEPCMD")'"
 			echo "Dependency '$DEPCMD' already installed, nothing to do."
 		else
@@ -26529,6 +26536,8 @@ function checkSteamDeckDependencies {
 
 	installDependencyVersionFromURL "$INNOEXTRACT" "$INNOEXTRACTFILE" "$STLDEPS" "$INNOEXTRACTURL" || steamDeckInstallFail
 	installDependencyVersionFromURL "$CABEXTRACT" "$CABEXTRACTFILE" "$STLDEPS" "$CABEXTRACTURL" || steamDeckInstallFail
+
+	updateSteamDeckLastVers # If everything went well, we update the lastversion file
 
 	if [ -f "$(command -v "yad")" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Using yad binary found in path: '$(command -v "yad")'"
@@ -26705,6 +26714,7 @@ function steamdedeckt {
 
 		if [ "$STEAMDECKSTEAMRUN" -eq 0 ]; then
 			installFilesSteamDeck
+			checkSteamDeckLastVers
 			checkSteamDeckDependencies
 
 			# Don't remove dependencies offline
@@ -26760,6 +26770,20 @@ function restoreGtkCss {
 			writelog "INFO" "${FUNCNAME[0]} - recovering original gtk.css from '${GTKCSSFILE}_ORIGNAL'"
 			mv "${GTKCSSFILE}_ORIGNAL" "$GTKCSSFILE"
 		fi
+	fi
+}
+
+function checkSteamDeckLastVers {
+	# This function just makes sure that the 'lastvers' file exists at the defined path
+	if ! [ -f "$STLSTEAMDECKLASTVERS" ]; then
+		echo "$PROGVERS" > "$STLSTEAMDECKLASTVERS"
+	fi
+}
+
+function updateSteamDeckLastVers {
+	# This function updates the 'lastvers' file after a dependency update if there was a version change
+	if [ "$( checkSteamDeckSTLUpdated )" -eq 1 ]; then
+		echo "$PROGVERS" > "$STLSTEAMDECKLASTVERS"
 	fi
 }
 
@@ -26913,6 +26937,21 @@ function getSteamDeckCompatInfo {
     fi
 
 	echo "$COMPATINFO"
+}
+
+# This function will check if the version in `$STLSTEAMDECKLASTVERS` does not match the current version
+# For example, if we had v14.0 installed before, 'lastvers' would have v14.0
+# Then, if we were updating to v15.0, 'lastvers' would be 'v14.0' but 'PROGVERS' would be 'v15.0'
+function checkSteamDeckSTLUpdated {
+	# This is how updateCfgFile gets the config file version, so re-use it
+	CHECKLASTVERSSTEAMDECK="$( cat "$STLSTEAMDECKLASTVERS" )"
+	if [ "$CHECKLASTVERSSTEAMDECK" = "$PROGVERS" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Last known SteamTinkerLaunch install version ('$CHECKLASTVERSSTEAMDECK') and the current version ('$PROGVERS') match -- There has been no update since last launch"
+		return 0
+	else
+		writelog "INFO" "${FUNCNAME[0]} - Last known SteamTinkerLaunch install version ('$CHECKLASTVERSSTEAMDECK') and the current version ('$PROGVERS') do NOT match -- It seems there has been an update!"
+		return 1
+	fi
 }
 
 # Clear dependencies in /home/deck/stl/deps so that they can be redownloaded the next time SteamTinkerLaunch is ran on Steam Deck
