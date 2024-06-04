@@ -22514,6 +22514,7 @@ function commandline {
 		## Why are you looking here? :-)
 
 		DEBUG_CONFIG="${FLCV//.vdf/ testing.vdf}"
+		DEBUG_CONFIGVDF="${CFGVDF//.vdf/ testing.vdf}"
 		DEBUGNOSTAID="-222353304"
 		# FLCVVDF="$( getVdfSection "UserLocalConfigStore" "" "0" "$DEBUG_CONFIG" )"
 		# FLCVAPPSSECTION="$( getVdfSection "Apps" "" "1" "$DEBUG_CONFIG" )"
@@ -22545,6 +22546,22 @@ function commandline {
 			echo "Win! We have the Non-Steam AppID section in the Apps section! Let's update it"
 		fi
 
+		# echo "$FLCVAPPSHASNOSTAID"
+		FLCV__SECTIONAID="$( echo "$FLCVAPPSHASNOSTAID" | head -n1 | tr -d '"' | xargs )"
+		FLCV__OVERLAYAPPENABLE="$( getVdfSectionValue "$FLCVAPPSHASNOSTAID" "OverlayAppEnable" "1" )"
+		FLCV__DISABLELAUNCHINVR="$( getVdfSectionValue "$FLCVAPPSHASNOSTAID" "DisableLaunchInVR" "1" )"
+		echo "OverlayAppEnable for ${FLCV__SECTIONAID} is ${FLCV__OVERLAYAPPENABLE}"
+		echo "DisableLaunchInVR for ${FLCV__SECTIONAID} is ${FLCV__DISABLELAUNCHINVR}"
+
+		# Test to see if updating compat tool in config.vdf still works (probably doesn't)
+		NSGVDFVALS=( "name!boobs" "config!" "priority!250" )
+		createVdfEntry "$DEBUG_CONFIGVDF" "CompatToolMapping" "4072613992" "" "" "" "${NSGVDFVALS[@]}"
+
+
+		echo "Current global compat tool is $( getGlobalSteamCompatToolInternalName )"
+
+		# NOTE: The non-steam game ID in this section uses the signed 32bit AppID
+
 		## This work
 		# FLCVNOONSTEAMAPPSECTION="$( getNestedVdfSection "Apps/-222353304" "2" "$DEBUG_CONFIG" )"
 		# echo "$FLCVNOONSTEAMAPPSECTION"
@@ -22560,6 +22577,14 @@ function commandline {
 
 
 		return
+
+
+
+
+		### This part of debug is for testing updating the JSON blob in the localconfig VDF
+		### that holds information about which Collections a non-steam game is using
+
+
 
 
 		# # Don't let the user run the internal debug command
@@ -23881,10 +23906,18 @@ function createVdfEntry {
 	CHECKDUPLICATES="${6:-1}"  # Flag to check for duplicate section names 
 
 	# If no indent is given, guess the indent, otherwise use the specified one
+	#
+	# BASETABAMOUNT = Indent for the start of the new section, i.e. one indent in from the parent block
+	# BLOCKTABAMOUNT = Indent for the block inside of the section
+	#
+	# Ex: With CompatToolMapping, BASETABAMOUNT represents the indent for the AppID, such as "22300"
+	#                             BLOCKTABAMOUNT represents the indent for the contents of the block under this name
 	if [ -z "$INDENT" ]; then
 		## Calculate indents for new block (one more than PARENTBLOCKNAME indent)
 		BASETABAMOUNT="$(( $( guessVdfIndent "${PARENTBLOCKNAME}" "$VDF" ) + 1 ))"
 		BLOCKTABAMOUNT="$(( BASETABAMOUNT + 1 ))"
+
+		writelog "INFO" "${FUNCNAME[0]} - Guessed BASETABAMOUNT='${BASETABAMOUNT}'"
 	else
 		BASETABAMOUNT="$INDENT"
 		# Has to be +2 if indent is specified because it needs to account for spacing of parent block and new block
@@ -23893,9 +23926,11 @@ function createVdfEntry {
 		BLOCKTABAMOUNT="$(( BASETABAMOUNT + 2 ))"
 	fi
 
+	# Indents for PARENTBLOCK
+	PARENTBLOCKTABAMOUNT="$(( BASETABAMOUNT - 1 ))"
+
     ## Ensure no duplicates are written out (duplicate names can exist at different indent levels)
-    if [ "$CHECKDUPLICATES" -eq 1 ] && checkVdfSectionAlreadyExists "$PARENTBLOCKNAME" "$NEWBLOCKNAME" "$VDF" "$BASETABAMOUNT"; then
-        # echo "Block already exists, skipping..."
+    if [ "$CHECKDUPLICATES" -eq 1 ] && checkVdfSectionAlreadyExists "$PARENTBLOCKNAME" "$NEWBLOCKNAME" "$VDF" "$PARENTBLOCKTABAMOUNT"; then
 		writelog "SKIP" "${FUNCNAME[0]} - Block '$NEWBLOCKNAME' already exists in parent block '$PARENTBLOCKNAME' - Skipping"
         return
     fi
@@ -23904,18 +23939,24 @@ function createVdfEntry {
 
     ## Create array from args, skip first four to get array of key/value pairs for VDF block
     NEWBLOCKVALUES=("${@:7}")
+
+	writelog "INFO" "${FUNCNAME[0]} - ${NEWBLOCKVALUES[*]}"
+
     NEWBLOCKVALUESDELIM="!"
 
     ## Tab amounts represented as string
+    PARENTBLOCKTABSTR="$( generateVdfIndentString "$PARENTBLOCKTABAMOUNT" )"
     BASETABSTR="$( generateVdfIndentString "$BASETABAMOUNT" )"
     BLOCKTABSTR="$( generateVdfIndentString "$BLOCKTABAMOUNT" )"
 
 	writelog "INFO" "${FUNCNAME[0]} - BASETABSTR is '$BASETABSTR'"
 	writelog "INFO" "${FUNCNAME[0]} - BLOCKTABSTR is '$BLOCKTABSTR'"
 
+	writelog "INFO" "${FUNCNAME[0]} - Grep is '^${BASETABSTR}${PARENTBLOCKNAME}'"
+
     ## Calculations for line numbers
     PARENTBLOCKLENGTH="$( getVdfSection "$PARENTBLOCKNAME" "" "$INDENT" "$VDF" | wc -l )"
-    BLOCKLINESTART="$( grep -Pin -- "^${BASETABSTR}${PARENTBLOCKNAME}" "$VDF" | head -n1 | cut -d ':' -f1 | xargs )"
+    BLOCKLINESTART="$( grep -Pin -- "^${PARENTBLOCKTABSTR}${PARENTBLOCKNAME}" "$VDF" | head -n1 | cut -d ':' -f1 | xargs )"
 
 	writelog "INFO" "${FUNCNAME[0]} - BLOCKLINESTART is '$BLOCKLINESTART'"
 
@@ -24736,11 +24777,12 @@ function addNonSteamGame {
 		fi
 	fi
 
-	writelog "INFO" "${FUNCNAME[0]} - Updating 'localconfig.vdf' to set OpenVR and AllowOverlay values, using Signed 32bit AppID '$NOSTAIDVDF'"
+	# TODO: Implement this
+	# writelog "INFO" "${FUNCNAME[0]} - Updating 'localconfig.vdf' to set OpenVR and AllowOverlay values, using Signed 32bit AppID '$NOSTAIDVDF'"
 	# Update "Apps" section in localconfig.vdf to create the section for the new Non-Steam Game and set AllowOverlay and OpenVR accordingly
 	# In future if more options are stored here we can also set them in the same way
-	updateLocalConfigApps "$NOSTAIDVDF" "OverlayAppEnable" "$NOSTAO"
-	updateLocalConfigApps "$NOSTAIDVDF" "DisableLaunchInVR" "$(( 1-NOSTVR ))"  # localconfig.vdf tracks where OpenVR is DISabled rather than ENabled, so flip the boolean
+	# updateLocalConfigApps "$NOSTAIDVDF" "OverlayAppEnable" "$NOSTAO"
+	# updateLocalConfigApps "$NOSTAIDVDF" "DisableLaunchInVR" "$(( 1-NOSTVR ))"  # localconfig.vdf tracks where OpenVR is DISabled rather than ENabled, so flip the boolean
 
 	writelog "INFO" "${FUNCNAME[0]} - Finished adding new $NSGA"
 	SGACOPYMETHOD=""  # Unset doesn't work for some reason with '--flag'
