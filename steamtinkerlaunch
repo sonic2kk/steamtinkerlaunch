@@ -22531,7 +22531,7 @@ function commandline {
 		# This will create an "Apps" section if it doesn't exist
 		if [ -z "$FLCVAPPSSECTION" ]; then
 			echo "Apps Section does not exist - Create it"
-			# UPDATE 4TH JUNE 2024: ACTUALLY CREATES SUCCESSFULLY!
+			# TODO does creating the "Apps" block work?
 			createVdfEntry "$DEBUG_CONFIG" "UserLocalConfigStore" "Apps" "" "0" ""
 		else
 			echo "Woohoo, we have an apps section! Nothing to do"
@@ -22541,17 +22541,30 @@ function commandline {
 		FLCVAPPSHASNOSTAID="$( getNestedVdfSection "Apps/${DEBUGNOSTAID}" "1" "$DEBUG_CONFIG" )"
 		if ! grep -q -- "$DEBUGNOSTAID" <<< "$FLCVAPPSHASNOSTAID"; then
 			echo "No AppID section in Apps, we need to create it!"
+
+			# UPDATE 4TH JUNE 2024: ACTUALLY CREATES SUCCESSFULLY!
+			# Create block for given AppID with new values
+			# This block didn't exist, so assign it these values
 			DEBUG_NEWLCVDF_ENTRY=( "OverlayAppEnable!1" "DisableLaunchInVR!2" )
 			createVdfEntry "$DEBUG_CONFIG" "Apps" "$DEBUGNOSTAID" "" "2" "" "${DEBUG_NEWLCVDF_ENTRY[@]}"  # creates in the wrong place :/
 		else
 			echo "Win! We have the Non-Steam AppID section in the Apps section! Let's update it"
+			# The block actually exists, so we need to update the given values for 'OverlayAppEnable' and 'DisableLaunchInVR'
+
+			# TODO make this cleaner, maybe make editVdfSectionValues  that works like createVdfEntry's array?
+			# UPDATED_LOCALCONFIGVDF_SECTION_VALUES=( "OverlayAppEnable!1" "DisableLaunchInVR!2" )
+			# editVdfSectionValues "$FLCVAPPSHASNOSTAID" "$DEBUG_CONFIG" "${UPDATED_LOCALCONFIGVDF_SECTION_VALUES[@]}"
+
+			# This does work though
+			editVdfSectionValue "$FLCVAPPSHASNOSTAID" "OverlayAppEnable" "overlay" "$DEBUG_CONFIG"
+			FLCVAPPSHASNOSTAID="$( getNestedVdfSection "Apps/${DEBUGNOSTAID}" "1" "$DEBUG_CONFIG" )"
+			editVdfSectionValue "$FLCVAPPSHASNOSTAID" "DisableLaunchInVR" "vr" "$DEBUG_CONFIG"
 		fi
 
 		# Re-fetch FLCVAPPSHASNOSTAID to make sure we have our updated AppID block
 		# This means if FLCVAPPSHASNOSTAID was blank (block didn't exist) we will have the one we just created
 		FLCVAPPSHASNOSTAID="$( getNestedVdfSection "Apps/${DEBUGNOSTAID}" "1" "$DEBUG_CONFIG" )"
 
-		# echo "$FLCVAPPSHASNOSTAID"
 		FLCV__SECTIONAID="$( echo "$FLCVAPPSHASNOSTAID" | head -n1 | tr -d '"' | xargs )"
 		FLCV__OVERLAYAPPENABLE="$( getVdfSectionValue "$FLCVAPPSHASNOSTAID" "OverlayAppEnable" "1" )"
 		FLCV__DISABLELAUNCHINVR="$( getVdfSectionValue "$FLCVAPPSHASNOSTAID" "DisableLaunchInVR" "1" )"
@@ -22587,6 +22600,8 @@ function commandline {
 
 		### This part of debug is for testing updating the JSON blob in the localconfig VDF
 		### that holds information about which Collections a non-steam game is using
+		###
+		### It may also be some now-outdated testing for localconfig.vdf parsing
 
 
 
