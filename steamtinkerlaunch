@@ -22541,6 +22541,10 @@ function commandline {
 		## -----
 		## Mark Non-Steam Game game with given AppID as 'hidden'
 		## Could be extended to add to categories once we can get the category
+		
+		## TODO is 'hidden' category always named so, or can it used the LevelDB Collection naming too?
+		##      it looks like hidden is actually stored in the LevelDB with the name "Hidden", but not with "from-tag-Hidden" like other pre-library-update collections
+		##      so maybe the collection will always just be called "hidden"?
 		NOUSCOEXISTS=0
 		DEBUG_LOCOVDF="$STUIDPATH/config/localconfig bsak.vdf"
 
@@ -24102,6 +24106,39 @@ function updateLocalConfigAppsValue {
 			addVdfSectionValue "${FLCVAPPAID}" "${LCVKEYNAME}" "${LCVKEYVAL}" "${FLCV}"
 		fi
 	fi
+}
+
+## localconfig.vdf stores information about which Non-Steam Games are in which collections in a stringified JSON object with the key "user-collections"
+##
+## Each entry in this object is a key/object pair, where the key is the internal Collection name, and the Object contains information about
+## which games (by 32bit unsigned AppID) are in this Collection by an "added" array of IDs on this object
+## This means each internal collection name appears only once, and localconfig.vdf keeps an array of AppIDs as to which games are added to these collections
+##
+## This function will take a collection DisplayName (such as "Hidden", "from-tag-SEGA", or "uc-zGsgCL84GNzg") and add the AppID to the JSON array
+## in localconfig.vdf, allowing us to add a given Non-Steam Game AppID to a Steam Collection.
+##
+## Only Non-Steam Games are stored this way, regular Steam game collection association information is stored in a
+## LevelDB at "$STEAMROOT/config/htmlcache/Local Storage/leveldb"
+##
+## Example JSON: {"hidden":{"id":"hidden","added":[4291994901],"removed":[]},"uc-zGsgCL84GNzg":{"id":"uc-zGsgCL84GNzg","added":[4291994901],"removed":[]}}
+## Note how "hidden" is a standalone special Collection name because it is created and used by the Steam Client, but there is also "uc-zGsgCL84GNzg" for a
+## user-created Collection.
+##
+## This is because Steam can store a user-created collections as either "from-tag-collectionname" OR "uc-<blahblahblah>"
+## Collections with names starting with "from-tag" were created before the Steam Client update, renaming them to "Collections"
+## Collections with names starting with "uc" are "user-collections" and were created after this migration. The characters after this name are random LevelDB
+## identifiers and there is no known way to reverse-engineer them, so they must be retrived from LevelDB.
+##
+## We can retrieve these "Internal Collection Names" using DumpSteamCollections (https://github.com/sonic2kk/DumpSteamCollections) which will fetch them by name
+## We can already get the Steam Client Display-Name for Collections with our function "filterUnwantedSteamCategories", so we just have to feed it to DumpSteamCollections
+## to get the Internal Collection Name to insert into the JSON array.
+function addGameToLocalConfigUserCollections {
+	writelog "INFO" "${FUNCNAME[0]} - STUB"
+
+	NSGCOLAID="$1"  # AppID to add to Collection
+	NSGCOLNAM="$2"  # Case-Sensitive Display Name of Collection (such as "Hidden", "Fallout"), we will use this to fetch the 
+
+	# TODO how to implement? We can't use DumpSteamCollections while Steam is running... Should we cache the Steam Collections in /dev/shm/steamtiinkerlaunch ?
 }
 
 ### END TEXT-BASED VDF INTERACTION FUNCTIONS
