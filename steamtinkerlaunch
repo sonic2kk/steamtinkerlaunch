@@ -7,7 +7,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20240605-1 (nonsteamgame-allowoverlay-openvr-fix)"
+PROGVERS="v14.0.20240605-2 (nonsteamgame-allowoverlay-openvr-fix)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -23751,13 +23751,6 @@ function getVdfSection {
 
 	# This is a very hacky solution to allow 'getNestedVdfSection' to use this function
 	# It needs the start pattern exact match but other functions can't use this
-	#
-	# TODO the '^${INDENTEDSTARTPATTERN}' was added here, make sure this doesn't break other usages
-	# TODO if this doesn't break anything, check if "STOPAFTERFIRSTMATCH" is still needed
-	#
-	# TODO UPDATED 4TH JUNE 2024 -- MAKE EXTRA SURE THIS DOESN'T BREAK ANYTHING!!
-	# createVdfEntry seems to work fine but absolutely check
-	# UPDATE 5th JUNE 2024 -- Seems to work fine, adding compat tool mapping and localconfig.vdf entries seems to work okay
 	if [ -n "$STOPAFTERFIRSTMATCH" ]; then
 		sed -n "/^${INDENTEDSTARTPATTERN}/I,/^${INDENTEDENDPATTERN}/I { p; /${INDENTEDENDPATTERN}/I q }" "$VDF"
 	else
@@ -23871,7 +23864,6 @@ function createVdfEntry {
 
     ## Create array from args, skip first four to get array of key/value pairs for VDF block
     NEWBLOCKVALUES=("${@:7}")
-	
 	writelog "INFO" "${FUNCNAME[0]} - NEWBLOCKVALUES are ${NEWBLOCKVALUES[*]}"
 
     NEWBLOCKVALUESDELIM="!"
@@ -23888,15 +23880,13 @@ function createVdfEntry {
 	writelog "INFO" "${FUNCNAME[0]} - Grep is '^${BASETABSTR}${PARENTBLOCKNAME}'"
 
     ## Calculations for line numbers
-    ## PARENTBLOCKLENGTH Is 1 too short
+    ## PARENTBLOCKLENGTH is 1 line too short
 	PARENTBLOCKLENGTH="$( getVdfSection "$PARENTBLOCKNAME" "" "$INDENT" "$VDF" | wc -l )"
 	PARENTBLOCKLENGTH="$(( PARENTBLOCKLENGTH + 1 ))"
 
     BLOCKLINESTART="$( grep -Pin -- "^${PARENTBLOCKTABSTR}${PARENTBLOCKNAME}" "$VDF" | head -n1 | cut -d ':' -f1 | xargs )"
-
-	writelog "INFO" "${FUNCNAME[0]} - BLOCKLINESTART is '$BLOCKLINESTART'"
-
     TOPOFBLOCK="$(( BLOCKLINESTART + 2 ))"
+	writelog "INFO" "${FUNCNAME[0]} - BLOCKLINESTART is '$BLOCKLINESTART'"
 
 	# HACK: If parent block indent is -1, we can assume this means we want to add this VDF entry as the LAST block in the file
 	#       If we want to add a block to the end of the file, we only need to move up 2 lines (last line is always blank)
