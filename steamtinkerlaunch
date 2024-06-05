@@ -22525,8 +22525,8 @@ function commandline {
 
 		# return
 
-
-		FLCVAPPSSECTION="$( getVdfSection "Apps" "" "1" "$DEBUG_CONFIG" )"  # Does "Apps" key exist at Indent 1?
+		# Check if "Apps" section exists at Indent 1
+		FLCVAPPSSECTION="$( getVdfSection "Apps" "" "1" "$DEBUG_CONFIG" )"
 
 		# This will create an "Apps" section if it doesn't exist
 		if [ -z "$FLCVAPPSSECTION" ]; then
@@ -22535,30 +22535,43 @@ function commandline {
 			createVdfEntry "$DEBUG_CONFIG" "UserLocalConfigStore" "Apps" "" "0" ""
 		else
 			echo "Woohoo, we have an apps section! Nothing to do"
-		fi		
+		fi
+
+		# return
 		
 		# Next, we need to do basically the same for the AppID. If a section with the AppID doesn't exist, create it
 		FLCVAPPSHASNOSTAID="$( getNestedVdfSection "Apps/${DEBUGNOSTAID}" "1" "$DEBUG_CONFIG" )"
 		if ! grep -q -- "$DEBUGNOSTAID" <<< "$FLCVAPPSHASNOSTAID"; then
+			# This case adds a new entry
+
 			echo "No AppID section in Apps, we need to create it!"
 
 			# UPDATE 4TH JUNE 2024: ACTUALLY CREATES SUCCESSFULLY!
 			# Create block for given AppID with new values
 			# This block didn't exist, so assign it these values
-			DEBUG_NEWLCVDF_ENTRY=( "OverlayAppEnable!1" "DisableLaunchInVR!2" )
+			DEBUG_NEWLCVDF_ENTRY=( "OverlayAppEnable!overlay" "DisableLaunchInVR!app" )
 			createVdfEntry "$DEBUG_CONFIG" "Apps" "$DEBUGNOSTAID" "" "2" "" "${DEBUG_NEWLCVDF_ENTRY[@]}"  # creates in the wrong place :/
 		else
+			# This case edits an existing entry
+
 			echo "Win! We have the Non-Steam AppID section in the Apps section! Let's update it"
 			# The block actually exists, so we need to update the given values for 'OverlayAppEnable' and 'DisableLaunchInVR'
 
 			# TODO make this cleaner, maybe make editVdfSectionValues  that works like createVdfEntry's array?
 			# UPDATED_LOCALCONFIGVDF_SECTION_VALUES=( "OverlayAppEnable!1" "DisableLaunchInVR!2" )
 			# editVdfSectionValues "$FLCVAPPSHASNOSTAID" "$DEBUG_CONFIG" "${UPDATED_LOCALCONFIGVDF_SECTION_VALUES[@]}"
+			
+			# TODO this doesn't work because of the '!' delimiter for some reason
+			# THISISATEST=( "theri!fdshd" "frsg!frsg" )
+			# editVdfSectionValues "$FLCVAPPSHASNOSTAID" "$DEBUG_CONFIG" "${THISISATEST[@]}"
 
 			# This does work though
 			editVdfSectionValue "$FLCVAPPSHASNOSTAID" "OverlayAppEnable" "overlay" "$DEBUG_CONFIG"
 			FLCVAPPSHASNOSTAID="$( getNestedVdfSection "Apps/${DEBUGNOSTAID}" "1" "$DEBUG_CONFIG" )"
 			editVdfSectionValue "$FLCVAPPSHASNOSTAID" "DisableLaunchInVR" "vr" "$DEBUG_CONFIG"
+
+			# TODO what if the section exists but is empty, or otherwise is missing these values?
+			#      should editVdfSectionValue do this check for us and create it with addVdfSectionValue?
 		fi
 
 		# Re-fetch FLCVAPPSHASNOSTAID to make sure we have our updated AppID block
@@ -23844,6 +23857,7 @@ function getVdfSection {
 	#
 	# TODO UPDATED 4TH JUNE 2024 -- MAKE EXTRA SURE THIS DOESN'T BREAK ANYTHING!!
 	# createVdfEntry seems to work fine but absolutely check
+	# UPDATE 5th JUNE 2024 -- Seems to work fine, adding compat tool mapping and localconfig.vdf entries seems to work okay
 	if [ -n "$STOPAFTERFIRSTMATCH" ]; then
 		sed -n "/^${INDENTEDSTARTPATTERN}/I,/^${INDENTEDENDPATTERN}/I { p; /${INDENTEDENDPATTERN}/I q }" "$VDF"
 	else
@@ -23967,19 +23981,42 @@ function createVdfEntry {
     BASETABSTR="$( generateVdfIndentString "$BASETABAMOUNT" )"
     BLOCKTABSTR="$( generateVdfIndentString "$BLOCKTABAMOUNT" )"
 
+	writelog "INFO" "${FUNCNAME[0]} - PARENTBLOCKTABAMOUNT is '$PARENTBLOCKTABAMOUNT'"
 	writelog "INFO" "${FUNCNAME[0]} - BASETABSTR is '$BASETABSTR'"
 	writelog "INFO" "${FUNCNAME[0]} - BLOCKTABSTR is '$BLOCKTABSTR'"
 
 	writelog "INFO" "${FUNCNAME[0]} - Grep is '^${BASETABSTR}${PARENTBLOCKNAME}'"
 
     ## Calculations for line numbers
-    PARENTBLOCKLENGTH="$( getVdfSection "$PARENTBLOCKNAME" "" "$INDENT" "$VDF" | wc -l )"
+    ## PARENTBLOCKLENGTH Is 1 too short
+	PARENTBLOCKLENGTH="$( getVdfSection "$PARENTBLOCKNAME" "" "$INDENT" "$VDF" | wc -l )"
+	PARENTBLOCKLENGTH="$(( PARENTBLOCKLENGTH + 1 ))"
+
     BLOCKLINESTART="$( grep -Pin -- "^${PARENTBLOCKTABSTR}${PARENTBLOCKNAME}" "$VDF" | head -n1 | cut -d ':' -f1 | xargs )"
 
 	writelog "INFO" "${FUNCNAME[0]} - BLOCKLINESTART is '$BLOCKLINESTART'"
 
-    TOPOFBLOCK="$(( BLOCKLINESTART + 1 ))"
-    BOTTOMOFBLOCK="$(( BLOCKLINESTART + PARENTBLOCKLENGTH - 2 ))"
+    TOPOFBLOCK="$(( BLOCKLINESTART + 2 ))"
+
+	# HACK: If parent block indent is -1, we can assume this means we want to add this VDF entry as the LAST block in the file
+	#       If we want to add a block to the end of the file, we only need to move up 2 lines (last line is always blank)
+	#       But if we're not at the end of the file we can assume we need to move up 3 lines (to account for the block/entry FOLLOWING the block we want to add)
+	#
+	#      For appending to the end of the VDF file, we want to start appending at the line that has the last closing brace (since the last line is blank, going up 2 lines gives us the line with the ending brace)
+	#      For appending in any other case, we assume we have to move up 3 lines
+	#
+	#     To fix this we assume a default line offset of 3, but if PARENTBLOCKTABAMOUNT is 1, then we set the line offset to 2
+	#     These are basically magic numbers discovered by trial and error, and a fix to make the logic more consistent is welcome
+	BOTTOMOFBLOCKOFFSET=3
+	if [ "$PARENTBLOCKTABAMOUNT" -eq -1 ]; then
+		BOTTOMOFBLOCKOFFSET=2
+	fi
+
+    BOTTOMOFBLOCK="$(( BLOCKLINESTART + PARENTBLOCKLENGTH - BOTTOMOFBLOCKOFFSET ))"
+
+	writelog "INFO" "${FUNCNAME[0]} - PARENTBLOCKLENGTH is '${PARENTBLOCKLENGTH}' lines"
+	writelog "INFO" "${FUNCNAME[0]} - TOPOFBLOCK is line '${TOPOFBLOCK}'"
+	writelog "INFO" "${FUNCNAME[0]} - BOTTOMOFBLOCK is line '${BOTTOMOFBLOCK}'"
 
     ## Decide which line to insert new block into (uses if/else for ease of logging)
     if [[ "${POSITION,,}" == "top" ]]; then
@@ -24032,7 +24069,6 @@ function editVdfSectionValue {
 	UPDATEDVDFSECTION="$( echo "${VDFSECTION}"| sed "s/${VDFPROPERTYORGVAL}/${VDFPROPERTYNEWVAL}/g" )"
 
 	backupVdfFile "$VDF"
-
 	substituteVdfSection "$VDFSECTION" "$UPDATEDVDFSECTION" "$VDF"
 }
 
@@ -24124,6 +24160,60 @@ function getGlobalSteamCompatToolInternalName {
 		writelog "SKIP" "${FUNCNAME[0]} - Could not find CompatToolMapping section in '$CFGVDF' - Giving up"
 	fi
 }
+
+function updateLocalConfigAppsValue {
+	# Add key for specific AppID to localconfig.vdf's Apps section, creating the initial 'Apps' section if it doesn't exist
+	# Used to set AllowOverlay and OpenVR when adding Non-Steam Games
+	# Note that this may need reworked when we allow the user to select their Steam user
+
+	LCVAID="$1"  # AppID for section name, i.e. '"-1123145"' (must be signed 32bit integer)
+	LCVKEYNAME="$2"  # Key to write into section, i.e. '"OverlayAppEnable"'
+	LCVKEYVAL="$3"  # Value to assign to key, i.e. '"1"'
+	
+	# This part in particular may need reworked if/when we add the option to select a Steam User
+	if [ ! -f "$FLCV" ]; then
+		writelog "WARN" "${FUNCNAME[0]} - No localconfig.vdf found at '${FLCV}' -- Nothing to do."
+		return
+	else
+		writelog "INFO" "${FUNCNAME[0]} - Using localconfig.vdf (FLCV) file at '$FLCV'"
+	fi
+
+	# Get the "Apps" section in localconfig.vdf
+	FLCVAPPSSECTION="$( getVdfSection "Apps" "" "1" "${FLCV}" )"
+	if [ -z "$FLCVAPPSSECTION" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - ${FLCV} is missing 'Apps' section, creating it now"
+		createVdfEntry "${FLCV}" "UserLocalConfigStore" "Apps" "" "0" ""
+	else
+		writelog "INFO" "${FUNCNAME[0]} - localconfig.vdf already has 'Apps' section, nothing to do"
+	fi
+
+	# Next we need to check if the given AppID 
+	FLCVAPPAID="$( getNestedVdfSection "Apps/${LCVAID}" "1" "$FLCV" )"
+	if ! grep -q -- "$LCVAID" <<< "$FLCVAPPAID"; then
+		# This case adds a new entry under the "Apps" section with the initial content: "LCVKEYNAME"		"LCVKEYVAL"
+		writelog "INFO" "${FUNCNAME[0]} - No existing section in 'Apps' section for AppID '${LCVAID}' with key/value pair '${LCVKEYNAME}!${LCVKEYVAL}'"
+
+		FLCVAPPAIDENTRY=( "${LCVKEYNAME}!${LCVKEYVAL}" )
+		createVdfEntry "${FLCV}" "Apps" "${LCVAID}" "" "2" "" "${FLCVAPPAIDENTRY[@]}"
+	else
+		# This case is where the "AppID" section already exists under "Apps", so we want to add the value to the section if it doesn't exist,
+		# or update the existing section
+		writelog "INFO" "${FUNCNAME[0]} - 'Apps' section already has block for AppID '${LCVAID}', checking if the key '${LCVKEYNAME}' already exists"
+
+		# Check if the "Apps/AppID" section has the given key already
+		LCVFSECTIONVAL="$( getVdfSectionValue "${FLCVAPPAID}" "${LCVKEYNAME}" "1" )"
+		writelog "INFO" "${FUNCNAME[0]} - LCVFSECTIONVAL is '$LCVFSECTIONVAL'"
+		# editVdfSectionValue "${FLCVAPPAID}" "${LCVKEYNAME}" "${LCVKEYVAL}" "${FLCV}" "1"
+		if [ -n "$LCVFSECTIONVAL" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Key '${LCVKEYNAME}' already exists in 'Apps/${LCVAID}' section, updating its value from '${LCVFSECTIONVAL}' to '${LCVKEYVAL}'"
+			editVdfSectionValue "${FLCVAPPAID}" "${LCVKEYNAME}" "${LCVKEYVAL}" "${FLCV}"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - Key '${LCVKEYNAME}' does not exist in 'Apps/${LCVAID}' section, adding it now with value '${LCVKEYVAL}'"
+			addVdfSectionValue "${FLCVAPPAID}" "${LCVKEYNAME}" "${LCVKEYVAL}" "${FLCV}"
+		fi
+	fi
+}
+
 ### END TEXT-BASED VDF INTERACTION FUNCTIONS
 
 function startSettings {
@@ -24470,25 +24560,6 @@ function addNonSteamGame {
 		fi
 	}
 
-	function updateLocalConfigApps {
-		# Add key for specific AppID to localconfig.vdf's Apps section, creating the initial 'Apps' section if it doesn't exist
-		# Used to set AllowOverlay and OpenVR when adding Non-Steam Games
-		# Note that this may need reworked when we allow the user to select their Steam user,
-		# so the AppID path will change (maybe string substitution would work, idk, or maybe we'll implement it so STL picks up and uses the latest Steam User only and always, so the path is build correctly)
-
-		LCVAID="$1"  # AppID for section name, i.e. '"-1123145"'
-		LCVKEYNAME="$2"  # Key to write into section, i.e. '"OverlayAppEnable"'
-		LCVKEYVAL="$3"  # Value to assign to key, i.e. '"1"'
-
-		if [ ! -f "$FLCV" ]; then
-			writelog "WARN" "${FUNCNAME[0]} - No localconfig.vdf found at '${FLCV}' -- Nothing to do."
-			return
-		fi
-
-		LCVAPPSSECTION="$( getVdfSection "Apps" "" "2" "$FLCV" )"
-		# if [ ! ]
-	}
-
 	NOSTHIDE=0  # Set in localconfig.vdf along with tags and overlay settings
 	NOSTADC=1
 	NOSTAO=1
@@ -24766,6 +24837,12 @@ function addNonSteamGame {
 
 		printf '\x02%s\x00%b\x00\x00\x00' "IsHidden" "\x0${NOSTHIDE:-0}"
 		printf '\x02%s\x00%b\x00\x00\x00' "AllowDesktopConfig" "\x0${NOSTADC:-0}"
+
+		# These values are now stored in localconfig.vdf under the "Apps" section,
+		# under a block using the Non-Steam Game Signed 32bit AppID. (i.e., -223056321)
+		# This is handled by `updateLocalConfigAppsValue` below
+		#
+		# Unsure if required, but still write these to the shortcuts.vdf file for consistency
 		printf '\x02%s\x00%b\x00\x00\x00' "AllowOverlay" "\x0${NOSTAO:-0}"
 		printf '\x02%s\x00%b\x00\x00\x00' "OpenVR" "\x0${NOSTVR:-0}"
 
@@ -24775,7 +24852,7 @@ function addNonSteamGame {
 		printf '\x02%s\x00\x00\x00\x00\x00' "LastPlayTime"
 		printf '\x01%s\x00\x00' "FlatpakAppID"
 		printf '\x00%s\x00' "tags"
-		splitTags "$NOSTTAGS"  # TODO tags are now stored in localconfig.vdf, see #949
+		splitTags "$NOSTTAGS"  # TODO tags are now stored in localconfig.vdf (see #949) but we still write them here anyway
 		printf '\x08\x08\x08\x08'
 	} >> "$SCPATH"
 
@@ -24790,17 +24867,16 @@ function addNonSteamGame {
 		else
 			writelog "INFO" "${FUNCNAME[0]} - Adding selected compatibility tool '$NOSTCOMPATTOOL' for Non-Steam Game"
 			NSGVDFVALS=( "name!${NOSTCOMPATTOOL}" "config!" "priority!250" )
-			createVdfEntry "$CFGVDF" "CompatToolMapping" "$NOSTAIDGRID" "" "${NSGVDFVALS[@]}"
+			createVdfEntry "$CFGVDF" "CompatToolMapping" "$NOSTAIDGRID" "" "" "" "${NSGVDFVALS[@]}"
 			writelog "INFO" "${FUNCNAME[0]} - Finished adding Non-Steam Game compatibility tool to '$CFGVDF'"
 		fi
 	fi
 
-	# TODO: Implement this
-	# writelog "INFO" "${FUNCNAME[0]} - Updating 'localconfig.vdf' to set OpenVR and AllowOverlay values, using Signed 32bit AppID '$NOSTAIDVDF'"
 	# Update "Apps" section in localconfig.vdf to create the section for the new Non-Steam Game and set AllowOverlay and OpenVR accordingly
 	# In future if more options are stored here we can also set them in the same way
-	# updateLocalConfigApps "$NOSTAIDVDF" "OverlayAppEnable" "$NOSTAO"
-	# updateLocalConfigApps "$NOSTAIDVDF" "DisableLaunchInVR" "$(( 1-NOSTVR ))"  # localconfig.vdf tracks where OpenVR is DISabled rather than ENabled, so flip the boolean
+	writelog "INFO" "${FUNCNAME[0]} - Updating 'localconfig.vdf' to set OpenVR and AllowOverlay values, using Signed 32bit AppID '$NOSTAIDVDF'"
+	updateLocalConfigAppsValue "$NOSTAIDVDF" "OverlayAppEnable" "$NOSTAO"
+	updateLocalConfigAppsValue "$NOSTAIDVDF" "DisableLaunchInVR" "$(( 1-NOSTVR ))"  # localconfig.vdf tracks where OpenVR is DISabled rather than ENabled, so flip the boolean
 
 	writelog "INFO" "${FUNCNAME[0]} - Finished adding new $NSGA"
 	SGACOPYMETHOD=""  # Unset doesn't work for some reason with '--flag'
