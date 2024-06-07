@@ -7,7 +7,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20240606-1"
+PROGVERS="v14.0.20240608-1"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -2764,7 +2764,14 @@ function getProtonInternalName {
 		VPP="$1"  # Valve Proton Path
 
 		writelog "INFO" "${FUNCNAME[0]} - Checking if Proton version at '$VPP' is a Valve Proton version"
-		if [ -d "$VPP/dist" ] && [ ! -f "$VPP/$CTVDF" ]; then
+		# We used to check only for 'dist', but Proton 9.0 onwards (including Experimental & Hotfix) use 'files' instead of 'dist'
+		# The only assumption we can make for a Valve Proton version now is if it's missing the compatibilitytools.vdf file, since
+		# They Valve Proton can have either 'files' or 'dist'
+		#
+		# The main thing we *need* to check for is "$VPP/$CTVDF" (compatibilitytools.vdf in the compat tool folder), as all
+		# third-party compat tools should have this and Valve Proton versions do not (their info is stored in appinfo.vdf internal to Steam)
+		# The checks for 'files' and 'dist' are just for sanity to make sure this is a valid Proton version altogether
+		if [[ ! -f "$VPP/$CTVDF" && ( -d "$VPP/dist" || -d "$VPP/files" ) ]]; then
 			writelog "INFO" "${FUNCNAME[0]} - Looks like we have a Valve Proton release here"
 			return 0
 		else
