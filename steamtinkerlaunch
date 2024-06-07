@@ -7,7 +7,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20240608-1"
+PROGVERS="v14.0.20240608-2 (list-all-nonsteam-games)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -7781,78 +7781,96 @@ function pickGameWindowNameMeta {
 # Can take two types of commands:
 # - `steamtinkerlaunch list owned/installed` - Returns "Game Name (AppID)"
 # - `steamtinkerlaunch list owned/installed id/name/path/full` - Returns either AppID, Game Name, Game Paths, or all in the format "Game Name (AppID) -> /path/to/game"
+#
+# This function is not very efficient, Non-Steam Games in particular are inefficient because we read shortcuts.vdf each time we want to parse info
+# We parse it once to get the IDs, then again in each `getTitleFromID` and `getGameDir` call. This makes it pretty slow
+# It works for now, but in future we should enhance it
 function listSteamGames {
 	function getGameCount {
+		TOTALGAMESOWNEDPRINTFSTR=""
+
 		if [ "$LSFILTER" == "owned" ] || [ "$LSFILTER" == "o" ]; then
-			printf "Total games owned: %s\n" "${#LISTAIDSARR[@]}"
+			TOTALGAMESOWNEDPRINTFSTR="Total games owned"
+		elif [ "$LSFILTER" == "non-steam" ] || [ "$LSFILTER" == "nsg" ]; then
+			TOTALGAMESOWNEDPRINTFSTR="Total Non-Steam Games in library"
 		else
-			printf "Total games installed: %s\n" "${#LISTAIDSARR[@]}"
+			TOTALGAMESOWNEDPRINTFSTR="Total games installed"
 		fi
+
+		printf "${TOTALGAMESOWNEDPRINTFSTR}: %s\n" "${#LISTAIDSARR[@]}"
 	}
 
-	LSFILTER="$1"  # e.g. "owned", "installed"
+	LSFILTER="$1"  # e.g. "owned", "installed", "non-steam"
 	LSTYPE="$2"  # e.g. "id", "name", "path", "count", "full"
 	LISTAIDS=""
+
+	SEARCHSTEAMSHORTCUTS="0"
 
 	if [ "$LSFILTER" == "owned" ] || [ "$LSFILTER" == "o" ]; then
 		LISTAIDS="$( getOwnedAids )"
 	elif [ "$LSFILTER" == "installed" ] || [ "$LSFILTER" == "i" ]; then
-		if [ "$(listInstalledGameIDs | wc -l)" -eq 0 ]; then
-			writelog "SKIP" "${FUNCNAME[0]} - No installed games found!" "E"
-			echo "No installed games found!"
+		LISTAIDS="$( listInstalledGameIDs )"
+	elif [ "$LSFILTER" == "non-steam" ] || [ "$LSFILTER" == "nsg" ]; then
+		LISTAIDS="$( listNonSteamGameIDs )"
+		SEARCHSTEAMSHORTCUTS="1"  # Only search Steam Shortcuts if we passed that filter type
+	else
+		writelog "INFO" "${FUNCNAME[0]} - Unknown argument passed to 'list' command - '$LSFILTER'"
+		echo "unknown argument passed to 'list' command - '$LSFILTER'"
+
+		exit
+	fi
+
+	if [ -z "$LISTAIDS" ]; then
+		writelog "SKIP" "${FUNCNAME[0]} - No games found for given filter '$LSFILTER'"
+		echo "No games found for filter '$LSFILTER'."
+
+		exit
+	fi
+
+	readarray -t LISTAIDSARR <<<"$LISTAIDS"
+
+	if [ "$LSTYPE" == "id" ]; then
+		for AID in "${LISTAIDSARR[@]}"; do
+			echo "$AID"
+		done
+	elif [ "$LSTYPE" == "name" ]; then
+		for AID in "${LISTAIDSARR[@]}"; do
+			getTitleFromID "${AID}" "${SEARCHSTEAMSHORTCUTS}"
+		done
+	elif [ "$LSTYPE" == "path" ]; then
+		if [ "$LSFILTER" == "owned" ] || [ "$LSFILTER" == "o" ]; then
+			echo "Cannot use 'path' option when returning 'owned' games, as not all owned games will have an installation path!"
+			echo "Use another option instead, or leave blank to only return path for games which have an installation path."
 
 			exit
 		else
-			LISTAIDS="$( listInstalledGameIDs )"
+			for AID in "${LISTAIDSARR[@]}"; do
+				getGameDir "$AID" "1" "${SEARCHSTEAMSHORTCUTS}"
+			done
 		fi
-	else
-		echo "unknown argument passed to 'list' command - '$LSFILTER'"
-	fi
+	elif [ "$LSTYPE" == "count" ]; then
+		printf "\n%s" "$( getGameCount )"
+	elif [ "$LSTYPE" == "full" ] || [ -z "$LSTYPE" ]; then  # This is the default if id/name/path/full is not passed
+		for AID in "${LISTAIDSARR[@]}"; do
+			GAMDIR="$( getGameDir "$AID" "" "${SEARCHSTEAMSHORTCUTS}" )"
+			GAMDIREXISTS=$?
 
-	if [ -n "$LISTAIDS" ]; then
-		readarray -t LISTAIDSARR <<<"$LISTAIDS"
-
-		if [ "$LSTYPE" == "id" ]; then
-			for AID in "${LISTAIDSARR[@]}"; do
-				echo "$AID"
-			done
-		elif [ "$LSTYPE" == "name" ]; then
-			for AID in "${LISTAIDSARR[@]}"; do
-				getTitleFromID "${AID}"
-			done
-		elif [ "$LSTYPE" == "path" ]; then
-			if [ "$LSFILTER" == "owned" ] || [ "$LSFILTER" == "o" ]; then
-				echo "Cannot use 'path' option when returning 'owned' games, as not all owned games will have an installation path!"
-				echo "Use another option instead, or leave blank to only return path for games which have an installation path."
-			else
-				for AID in "${LISTAIDSARR[@]}"; do
-					getGameDir "$AID" "1"
-				done
-			fi
-		elif [ "$LSTYPE" == "count" ]; then
-			printf "\n%s" "$( getGameCount )"
-		elif [ "$LSTYPE" == "full" ] || [ -z "$LSTYPE" ]; then  # This is the default if id/name/path/full is not passed
-			for AID in "${LISTAIDSARR[@]}"; do
-				GAMDIR="$( getGameDir "$AID" )"
-				GAMDIREXISTS=$?
-
-				# Only display game dir if the game is installed, i.e. if getGameDir does not return 1
-				# This means we won't return an error if we're returning OWNED games, as some owned games may not have paths
-				if [ "$GAMDIREXISTS" -eq 1 ]; then
-					GAMNAM="$( getTitleFromID "$AID" )"
-					GAMNAMEXISTS=$?
-					if [ "$GAMNAMEXISTS" -eq 1 ]; then
-						echo "$AID"  # Game name unknown, probably never installed before? Just return AppID in this case
-					else
-						echo "$GAMNAM ($AID)"
-					fi
+			# Only display game dir if the game is installed, i.e. if getGameDir does not return 1
+			# This means we won't return an error if we're returning OWNED games, as some owned games may not have paths
+			if [ "$GAMDIREXISTS" -eq 1 ]; then
+				GAMNAM="$( getTitleFromID "$AID" "${SEARCHSTEAMSHORTCUTS}" )"
+				GAMNAMEXISTS=$?
+				if [ "$GAMNAMEXISTS" -eq 1 ]; then
+					echo "$AID"  # Game name unknown, probably never installed before? Just return AppID in this case
 				else
-					echo "$GAMDIR"
+					echo "$GAMNAM ($AID)"
 				fi
-			done
+			else
+				echo "$GAMDIR"
+			fi
+		done
 
-			printf "\n%s" "$( getGameCount )"  # Show total for "full"
-		fi
+		printf "\n%s\n" "$( getGameCount )"  # Show total for "full"
 	fi
 }
 
@@ -8318,6 +8336,15 @@ function getSteamShortcutHex {
 function getSteamShortcutsVdfFileHex {
 	SCPATH="$STUIDPATH/config/$SCVDF"
 	xxd -p -c 0 "$SCPATH"
+}
+
+function listNonSteamGameIDs {
+	NONSTEAMGAMEAIDS=()
+
+	writelog "INFO" "${FUNCNAME[0]} - Reading all Non-Steam AppIDs from shortcuts.vdf"
+	while read -r SCVDFE; do
+		parseSteamShortcutEntryAppID "$SCVDFE"
+	done <<< "$( getSteamShortcutHex )"
 }
 
 function haveAnySteamShortcuts {
