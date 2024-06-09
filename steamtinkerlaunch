@@ -19240,27 +19240,26 @@ function getProtonDBRating {
 	fi
 
 	PDBAPI="https://www.protondb.com/api/v1/reports/summaries/XXX.json"
-
 	if [ ! -x "$(command -v "$JQ")" ]; then
 		writelog "WARN" "${FUNCNAME[0]} - Can't get data from '${PDBAPI//XXX/$AID}' because '$JQ' is not installed"
-	else
-		DMIN=1440
+		return
+	fi
 
-		if [ -n "$PDBRATINGCACHE" ] && [ "$PDBRATINGCACHE" -ge 1 ]; then
-			PDBDLDIR="$STLDLDIR/proton/rating"
-			mkProjDir "$PDBDLDIR"
-			PDBAJ="$PDBDLDIR/${AID}.json"
-			if [ ! -f "$PDBAJ" ] || test "$(find "$PDBAJ" -mmin +"$(( DMIN * PDBRATINGCACHE ))")"; then
-				rm "$PDBAJ" 2>/dev/null
-				dlCheck "${PDBAPI//XXX/$AID}" "$PDBAJ" "X" "$NON"
-			fi
-
-			if [ -f "$PDBAJ" ]; then
-				"$JQ" -r '. | "\(.confidence);\(.score);\(.total);\(.trendingTier);\(.bestReportedTier)"' "$PDBAJ"
-			fi
-		else
-			"$WGET" -q "${PDBAPI//XXX/$AID}" -O - 2> >(grep -v "SSL_INIT") | "$JQ" -r '. | "\(.confidence);\(.score);\(.total);\(.trendingTier);\(.bestReportedTier)"'
+	DMIN=1440
+	if [ -n "$PDBRATINGCACHE" ] && [ "$PDBRATINGCACHE" -ge 1 ]; then
+		PDBDLDIR="$STLDLDIR/proton/rating"
+		mkProjDir "$PDBDLDIR"
+		PDBAJ="$PDBDLDIR/${AID}.json"
+		if [ ! -f "$PDBAJ" ] || test "$(find "$PDBAJ" -mmin +"$(( DMIN * PDBRATINGCACHE ))")"; then
+			rm "$PDBAJ" 2>/dev/null
+			dlCheck "${PDBAPI//XXX/$AID}" "$PDBAJ" "X" "$NON"
 		fi
+
+		if [ -f "$PDBAJ" ]; then
+			"$JQ" -r '. | "\(.confidence);\(.score);\(.total);\(.trendingTier);\(.bestReportedTier)"' "$PDBAJ"
+		fi
+	else
+		"$WGET" -q "${PDBAPI//XXX/$AID}" -O - 2> >(grep -v "SSL_INIT") | "$JQ" -r '. | "\(.confidence);\(.score);\(.total);\(.trendingTier);\(.bestReportedTier)"'
 	fi
 }
 
