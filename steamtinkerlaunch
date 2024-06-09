@@ -7,7 +7,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20240609-3"
+PROGVERS="v14.0.20240610-1 (script-trimming)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -26520,20 +26520,22 @@ function getSteamDeckCompatInfo {
 # This also serves as a quickfix for #719, as dependencies an be quickly removed and then re-downloaded to ensure better compatibility with SteamOS updates
 # In future, STL should auto-bump these somehow
 function clearDeckDeps {
-	if [ "$ONSTEAMDECK" -eq 1 ]; then
-		# This should be set by steamdedeckt, the regex check at the end is just for extra peace of mind that we don't rm -rf an incorrect directory!
-		if [ -n "$STLDEPS" ] && [ -d "$STLDEPS" ]  && [[ $STLDEPS == *"deps"* ]]; then
-			writelog "INFO" "${FUNCNAME[0]} - Removing '$STLDEPS' directory"
-			rm -rf "$STLDEPS"
-			writelog "INFO" "${FUNCNAME[0]} - Successfully removed '$STLDEPS'"
-			echo "Removed Steam Deck dependencies, they will be re-downloaded on next launch."
-		else
-			writelog "SKIP" "${FUNCNAME[0]} - Could not find STL Steam Deck dependencies directory, STLDEPS is '$STLDEPS' - Nothing to do."
-			echo "Could not find STL Steam Deck dependencies directory, skipping"
-		fi
-	else
+	if [ "$ONSTEAMDECK" -eq 0 ]; then
 		writelog "SKIP" "${FUNCNAME[0]} - Not on Steam Deck, nothing to do"
 		echo "Not on Steam Deck, nothing to do."
+
+		return
+	fi
+
+	# This should be set by steamdedeckt, the regex check at the end is just for extra peace of mind that we don't rm -rf an incorrect directory!
+	if [ -n "$STLDEPS" ] && [ -d "$STLDEPS" ]  && [[ $STLDEPS == *"deps"* ]]; then
+		writelog "INFO" "${FUNCNAME[0]} - Removing '$STLDEPS' directory"
+		rm -rf "$STLDEPS"
+		writelog "INFO" "${FUNCNAME[0]} - Successfully removed '$STLDEPS'"
+		echo "Removed Steam Deck dependencies, they will be re-downloaded on next launch."
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - Could not find STL Steam Deck dependencies directory, STLDEPS is '$STLDEPS' - Nothing to do."
+		echo "Could not find STL Steam Deck dependencies directory, skipping"
 	fi
 }
 
