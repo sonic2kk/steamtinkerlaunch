@@ -13620,7 +13620,6 @@ function prepareUEVRpatch {
 }
 
 function checkIGCSInjector {
-
 	if [ "$UUUSEPATCH" -eq 1 ] || [ "$UUUSEVR" -eq 1 ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Enabling '$UUU' with '$IGCS' as UUU patch mode is enabled"
 		UUUSEIGCS=1
@@ -13631,114 +13630,117 @@ function checkIGCSInjector {
 		USEIGCS=1
 	fi
 
-	if [ "$USEIGCS" -eq 1 ]; then
-		IGCSEXE="${IGCS}.exe"
-		IGCSDST="$EFD/$IGCSEXE"
-		if [ ! -f "$IGCSDST" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - '$IGCSDST' not found"
-			IGCSDL="$STLDLDIR/igcs/"
-			IGCSSRC="$IGCSDL/$IGCSEXE"
-			mkProjDir "$IGCSDL"
+	if [ "$USEIGCS" -eq 0 ]; then
+		return
+	fi
 
-			if [ ! -f "$IGCSSRC" ]; then
-				IGCSDST="$IGCSDL/${IGCSZIP##*/}"
-				if [ ! -f "$IGCSDST" ]; then
-					dlCheck "$IGCSZIP" "$IGCSDST" "X" "'$IGCSDST' not found - downloading automatically from '$IGCSZIP'"
-				fi
-				"$UNZIP" "$IGCSDST" -d "$IGCSDL"
-			fi
+	IGCSEXE="${IGCS}.exe"
+	IGCSDST="$EFD/$IGCSEXE"
+	if [ ! -f "$IGCSDST" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - '$IGCSDST' not found"
+		IGCSDL="$STLDLDIR/igcs/"
+		IGCSSRC="$IGCSDL/$IGCSEXE"
+		mkProjDir "$IGCSDL"
 
-			if [ -f "$IGCSSRC" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Copying '$IGCSSRC' to '$IGCSDST'"
-				cp "$IGCSSRC" "$IGCSDST"
+		if [ ! -f "$IGCSSRC" ]; then
+			IGCSDST="$IGCSDL/${IGCSZIP##*/}"
+			if [ ! -f "$IGCSDST" ]; then
+				dlCheck "$IGCSZIP" "$IGCSDST" "X" "'$IGCSDST' not found - downloading automatically from '$IGCSZIP'"
 			fi
-		else
-			writelog "INFO" "${FUNCNAME[0]} - '$IGCSDST' found"
+			"$UNZIP" "$IGCSDST" -d "$IGCSDL"
 		fi
 
-		if [ -f "$IGCSDST" ]; then
-			IGCSINI="$EFD/${IGCS}.ini"
-			WSE="$(find "$EFD" -name "*-Win64-Shipping.exe" | head -n1)"
+		if [ -f "$IGCSSRC" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Copying '$IGCSSRC' to '$IGCSDST'"
+			cp "$IGCSSRC" "$IGCSDST"
+		fi
+	else
+		writelog "INFO" "${FUNCNAME[0]} - '$IGCSDST' found"
+	fi
+
+	if [ ! -f "$IGCSDST" ]; then
+		writelog "SKIP" "${FUNCNAME[0]} - '$IGCSDST' not found and could not be created - skipping '$IGCS'"
+		return
+	fi
+
+	IGCSINI="$EFD/${IGCS}.ini"
+	WSE="$(find "$EFD" -name "*-Win64-Shipping.exe" | head -n1)"
+
+	if [ -n "$WSE" ]; then
+		prepareUEVRpatch "${WSE%/*}/../$UUUPATCH"
+	fi
+
+	if [ ! -f "$IGCSINI" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - '$IGCSINI' not found - creating it"
+		echo "[InjectionData]" > "$IGCSINI"
+		echo "Process=$GAMEEXE" >> "$IGCSINI"
+		if [ "$UUUSEIGCS" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - WSE is '$WSE'"
 
 			if [ -n "$WSE" ]; then
-				prepareUEVRpatch "${WSE%/*}/../$UUUPATCH"
-			fi
-
-			if [ ! -f "$IGCSINI" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - '$IGCSINI' not found - creating it"
-				echo "[InjectionData]" > "$IGCSINI"
-				echo "Process=$GAMEEXE" >> "$IGCSINI"
-				if [ "$UUUSEIGCS" -eq 1 ]; then
-					writelog "INFO" "${FUNCNAME[0]} - WSE is '$WSE'"
-
-					if [ -n "$WSE" ]; then
-						echo "Process=${WSE##*/}" >> "$IGCSINI"
-					else
-						echo "Process=$GAMEEXE" >> "$IGCSINI"
-					fi
-					writelog "INFO" "${FUNCNAME[0]} - Using '${UUU}.dll' as dll in '$IGCSINI'"
-					echo "Dll=${UUU}.dll" >> "$IGCSINI"
-				else
-					echo "Process=$GAMEEXE" >> "$IGCSINI"
-				fi
-			fi
-
-			IGCSDLL="$(grep "^Dll=" "$IGCSINI" | cut -d '=' -f2)"
-			if [ "$UUUSEIGCS" -eq 1 ]; then
-				if [ "$IGCSDLL" != "${UUU}.dll" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - Updating dll in '$IGCSINI' to '${UUU}.dll' because 'UUUSEIGCS' is enabled"
-					sed "/^Dll=/d" -i "$IGCSINI"
-					echo "Dll=${UUU}.dll" >> "$IGCSINI"
-				fi
-			fi
-
-			IGCSDLL="$(grep "^Dll=" "$IGCSINI" | cut -d '=' -f2)"
-			if [ ! -f "$EFD/$IGCSDLL" ]; then
-				if [ "$UUUSEIGCS" -eq 1 ]; then
-					UUUDL="$STLDLDIR/uuu"
-					UUUSRC="$UUUDL/$IGCSDLL"
-					mkProjDir "$UUUDL"
-					writelog "INFO" "${FUNCNAME[0]} - 'UUUSEIGCS' is enabled, but '$EFD/$IGCSDLL' is not available - checking if '$UUUSRC' is available"
-					if [ ! -f "$UUUSRC" ]; then
-						if [ -x "$(command -v "$XDGO" 2>/dev/null)" ]; then
-							writelog "WARN" "${FUNCNAME[0]} - '$UUUSRC' was not found - opening Info requester, because it needs to be downloaded manually from '$UUUURL' and extracted to '$UUUDL'"
-							export CURWIKI="$PPW/$UUU"
-							TITLE="${PROGNAME}-$UUU-Info"
-							pollWinRes "$TITLE"
-							setShowPic
-
-							"$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
-							--title="$TITLE" --text="$(spanFont "$(strFix "$GUI_UUUINFO1" "$UUU")" "H")" \
-							--field="Url: :RW" "$UUUURL" \
-							--field="$GUI_UUUINFO2:LBL" " " \
-							--field="$UUUDL":FBTN "$XDGO $UUUDL" "$GEOM"
-						else
-							writelog "SKIP" "${FUNCNAME[0]} - '$UUUSRC' was not found, but can't open the Info requester, because '$XDGO' was not found"
-						fi
-					fi
-
-					if [ -f "$UUUSRC" ]; then
-						writelog "INFO" "${FUNCNAME[0]} - Copying '$UUUSRC' to '$EFD'"
-						cp "$UUUSRC" "$EFD"
-					else
-						writelog "SKIP" "${FUNCNAME[0]} -'$UUUSRC' could not be found - skipping"
-					fi
-				else
-					writelog "INFO" "${FUNCNAME[0]} - No valid dll found in '$IGCSINI' - Choose one"
-					selectIGCSdll
-				fi
-			fi
-
-			IGCSDLL="$(grep "^Dll=" "$IGCSINI" | cut -d '=' -f2)"
-			if [ -f "$EFD/$IGCSDLL" ]; then
-				injectIGCS &
-				postIGCS &
+				echo "Process=${WSE##*/}" >> "$IGCSINI"
 			else
-				writelog "SKIP" "${FUNCNAME[0]} - Still no valid dll found in '$IGCSINI' - giving up"
+				echo "Process=$GAMEEXE" >> "$IGCSINI"
+			fi
+			writelog "INFO" "${FUNCNAME[0]} - Using '${UUU}.dll' as dll in '$IGCSINI'"
+			echo "Dll=${UUU}.dll" >> "$IGCSINI"
+		else
+			echo "Process=$GAMEEXE" >> "$IGCSINI"
+		fi
+	fi
+
+	IGCSDLL="$(grep "^Dll=" "$IGCSINI" | cut -d '=' -f2)"
+	if [ "$UUUSEIGCS" -eq 1 ]; then
+		if [ "$IGCSDLL" != "${UUU}.dll" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Updating dll in '$IGCSINI' to '${UUU}.dll' because 'UUUSEIGCS' is enabled"
+			sed "/^Dll=/d" -i "$IGCSINI"
+			echo "Dll=${UUU}.dll" >> "$IGCSINI"
+		fi
+	fi
+
+	IGCSDLL="$(grep "^Dll=" "$IGCSINI" | cut -d '=' -f2)"
+	if [ ! -f "$EFD/$IGCSDLL" ]; then
+		if [ "$UUUSEIGCS" -eq 1 ]; then
+			UUUDL="$STLDLDIR/uuu"
+			UUUSRC="$UUUDL/$IGCSDLL"
+			mkProjDir "$UUUDL"
+			writelog "INFO" "${FUNCNAME[0]} - 'UUUSEIGCS' is enabled, but '$EFD/$IGCSDLL' is not available - checking if '$UUUSRC' is available"
+			if [ ! -f "$UUUSRC" ]; then
+				if [ -x "$(command -v "$XDGO" 2>/dev/null)" ]; then
+					writelog "WARN" "${FUNCNAME[0]} - '$UUUSRC' was not found - opening Info requester, because it needs to be downloaded manually from '$UUUURL' and extracted to '$UUUDL'"
+					export CURWIKI="$PPW/$UUU"
+					TITLE="${PROGNAME}-$UUU-Info"
+					pollWinRes "$TITLE"
+					setShowPic
+
+					"$YAD" --f1-action="$F1ACTION" --image "$SHOWPIC" --image-on-top --window-icon="$STLICON" --form --center --on-top "$WINDECO" \
+					--title="$TITLE" --text="$(spanFont "$(strFix "$GUI_UUUINFO1" "$UUU")" "H")" \
+					--field="Url: :RW" "$UUUURL" \
+					--field="$GUI_UUUINFO2:LBL" " " \
+					--field="$UUUDL":FBTN "$XDGO $UUUDL" "$GEOM"
+				else
+					writelog "SKIP" "${FUNCNAME[0]} - '$UUUSRC' was not found, but can't open the Info requester, because '$XDGO' was not found"
+				fi
+			fi
+
+			if [ -f "$UUUSRC" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Copying '$UUUSRC' to '$EFD'"
+				cp "$UUUSRC" "$EFD"
+			else
+				writelog "SKIP" "${FUNCNAME[0]} -'$UUUSRC' could not be found - skipping"
 			fi
 		else
-			writelog "SKIP" "${FUNCNAME[0]} - '$IGCSDST' not found and could not be created - skipping '$IGCS'"
+			writelog "INFO" "${FUNCNAME[0]} - No valid dll found in '$IGCSINI' - Choose one"
+			selectIGCSdll
 		fi
+	fi
+
+	IGCSDLL="$(grep "^Dll=" "$IGCSINI" | cut -d '=' -f2)"
+	if [ -f "$EFD/$IGCSDLL" ]; then
+		injectIGCS &
+		postIGCS &
+	else
+		writelog "SKIP" "${FUNCNAME[0]} - Still no valid dll found in '$IGCSINI' - giving up"
 	fi
 }
 
