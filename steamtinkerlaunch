@@ -13919,36 +13919,36 @@ function togWindows {
 	function windowraise {
 		if [ ! -f "$STLMINWIN" ]; then
 			writelog "SKIP" "${FUNCNAME[0]} - Skipping, because no minimized window file STLMINWIN found"
-		else
+			return
+		fi
+
+		while read -r WN; do
+			WINNAME="${WN##*[[:blank:]]}"
+			writelog "INFO" "${FUNCNAME[0]} - Raising '$WINNAME'"
+			"$XDO" "${FUNCNAME[0]}" "$WINNAME"
+			COUNTER=0
+			MAXTRY=3
+			while grep -q "_NET_WM_STATE_HIDDEN" -q <<< "$("$XPROP" -id "$WINNAME")"; do
+				if [[ "$COUNTER" -ge "$MAXTRY" ]]; then
+					echo "$WINNAME" >> "${STLMINWIN}_lazy"
+					break
+				else
+					writelog "INFO" "${FUNCNAME[0]} - '$WINNAME' minimized after $COUNTER tries - raising again"
+					"$XDO" "${FUNCNAME[0]}" "$WINNAME"
+					COUNTER=$((COUNTER+1))
+				fi
+			done
+		done < "$STLMINWIN"
+
+		if [ -f "${STLMINWIN}_lazy" ]; then
 			while read -r WN; do
 				WINNAME="${WN##*[[:blank:]]}"
-				writelog "INFO" "${FUNCNAME[0]} - Raising '$WINNAME'"
+				writelog "INFO" "${FUNCNAME[0]} - Raising lazy '$WINNAME'"
 				"$XDO" "${FUNCNAME[0]}" "$WINNAME"
-				COUNTER=0
-				MAXTRY=3
-				while grep -q "_NET_WM_STATE_HIDDEN" -q <<< "$("$XPROP" -id "$WINNAME")"; do
-					if [[ "$COUNTER" -ge "$MAXTRY" ]]; then
-						echo "$WINNAME" >> "${STLMINWIN}_lazy"
-						break
-					else
-						writelog "INFO" "${FUNCNAME[0]} - '$WINNAME' minimized after $COUNTER tries - raising again"
-						"$XDO" "${FUNCNAME[0]}" "$WINNAME"
-						COUNTER=$((COUNTER+1))
-					fi
-				done
-
-			done < "$STLMINWIN"
-
-			if [ -f "${STLMINWIN}_lazy" ]; then
-				while read -r WN; do
-					WINNAME="${WN##*[[:blank:]]}"
-					writelog "INFO" "${FUNCNAME[0]} - Raising lazy '$WINNAME'"
-					"$XDO" "${FUNCNAME[0]}" "$WINNAME"
-				done < "${STLMINWIN}_lazy"
-			fi
-
-			rm "$STLMINWIN" "${STLMINWIN}_lazy" 2>/dev/null
+			done < "${STLMINWIN}_lazy"
 		fi
+
+		rm "$STLMINWIN" "${STLMINWIN}_lazy" 2>/dev/null
 	}
 
 	if [ "$TOGGLEWINDOWS" -eq 1 ]; then
