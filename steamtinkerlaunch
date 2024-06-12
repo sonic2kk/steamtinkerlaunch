@@ -7,7 +7,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20240609-3"
+PROGVERS="v14.0.20240612-1"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -7674,75 +7674,79 @@ function getGameWinNameFromXid {
 function getGameWindowPID {
 	if [ "$MO2MODE" == "gui" ]; then
 		writelog "SKIP" "${FUNCNAME[0]} - Skipping check for window pid, because MO2MODE is '$MO2MODE'"
-	else
-		if [ -n "$GAMEWINPID" ]; then
-			writelog "SKIP" "${FUNCNAME[0]} - Already have the GAMEWINPID '$GAMEWINPID'"
-			echo "$GAMEWINPID"
+	fi
+
+	if [ -n "$GAMEWINPID" ]; then
+		writelog "SKIP" "${FUNCNAME[0]} - Already have the GAMEWINPID '$GAMEWINPID'"
+		echo "$GAMEWINPID"
+
+		return
+	fi
+	
+	MAXWAIT=20
+	COUNTER=0
+	TESTPID="$NON"
+	WASCLOSED=0
+
+	touch "$PIDLOCK"
+
+	while [ "$COUNTER" -lt "$MAXWAIT" ]; do
+		if [ -f "$CLOSETMP" ]; then
+			writelog "WAIT" "${FUNCNAME[0]} - ${PROGNAME,,} is just closing - leaving loop"
+			WASCLOSED=1
+			break
+		fi
+		TESTPID="$("$XDO" getactivewindow getwindowpid)"
+		SYMCWD="$(readlink "/proc/$TESTPID/cwd")"
+		SYMEXE="$(readlink "/proc/$TESTPID/exe")"
+
+		if [ -z "$TESTPID" ]; then
+			continue
+		fi
+
+		if [ -n "$HAVPA" ]; then
+			writelog "WAIT" "${FUNCNAME[0]} - Found PID '$TESTPID' for game 'HAVPA' '$HAVPA' - leaving loop"
+			FOUNDWIN="$YES"
+			break;
+		elif [ -n "$EXECUTABLE" ] && [ "$EXECUTABLE" == "$(cat "/proc/$TESTPID/comm")" ]; then
+			writelog "WAIT" "${FUNCNAME[0]} - Found PID '$TESTPID' for game 'EXECUTABLE' '$EXECUTABLE' - leaving loop"
+			FOUNDWIN="$YES"
+			break;
+		elif [ -n "$GE" ] && [ "$GE" == "$(cut -d '.' -f1 < "/proc/$TESTPID/comm")" ]; then
+			writelog "WAIT" "${FUNCNAME[0]} - Found PID '$TESTPID' for game executable 'GE' '$GE' - leaving loop"
+			FOUNDWIN="$YES"
+			break;
 		else
-			MAXWAIT=20
-			COUNTER=0
-			TESTPID="$NON"
-			WASCLOSED=0
-
-			touch "$PIDLOCK"
-
-			while [ "$COUNTER" -lt "$MAXWAIT" ]; do
-				if [ -f "$CLOSETMP" ]; then
-					writelog "WAIT" "${FUNCNAME[0]} - ${PROGNAME,,} is just closing - leaving loop"
-					WASCLOSED=1
-					break
-				fi
-				TESTPID="$("$XDO" getactivewindow getwindowpid)"
-				SYMCWD="$(readlink "/proc/$TESTPID/cwd")"
-				SYMEXE="$(readlink "/proc/$TESTPID/exe")"
-
-				if [ -n "$TESTPID" ]; then
-					if [ -n "$HAVPA" ]; then
-						writelog "WAIT" "${FUNCNAME[0]} - Found PID '$TESTPID' for game 'HAVPA' '$HAVPA' - leaving loop"
-						FOUNDWIN="$YES"
-						break;
-					elif [ -n "$EXECUTABLE" ] && [ "$EXECUTABLE" == "$(cat "/proc/$TESTPID/comm")" ]; then
-						writelog "WAIT" "${FUNCNAME[0]} - Found PID '$TESTPID' for game 'EXECUTABLE' '$EXECUTABLE' - leaving loop"
-						FOUNDWIN="$YES"
-						break;
-					elif [ -n "$GE" ] && [ "$GE" == "$(cut -d '.' -f1 < "/proc/$TESTPID/comm")" ]; then
-						writelog "WAIT" "${FUNCNAME[0]} - Found PID '$TESTPID' for game executable 'GE' '$GE' - leaving loop"
-						FOUNDWIN="$YES"
-						break;
-					else
-						# might not even be required anymore - maybe remove later:
-						if [[ "$SYMCWD" == "$EFD" ]] && [[ "$SYMEXE" != *"$YAD"* ]]; then
-							writelog "WAIT" "${FUNCNAME[0]} - Found PID '$TESTPID' for CWD '$SYMCWD' with EXE '$SYMEXE' - leaving loop"
-							FOUNDWIN="$YES"
-							break;
-						fi
-						if [ -n "$STEAM_COMPAT_CLIENT_INSTALL_PATH" ] && [[ "$SYMCWD" == "$STEAM_COMPAT_CLIENT_INSTALL_PATH" ]] && [[ "$SYMEXE" != *"$YAD"* ]]; then
-							writelog "WAIT" "${FUNCNAME[0]} - Found PID '$TESTPID' for STEAM_COMPAT_CLIENT_INSTALL_PATH '$SYMCWD' with EXE '$SYMEXE' - leaving loop"
-							FOUNDWIN="$YES"
-							break;
-						fi
-					fi
-				fi
-				writelog "WAIT" "${FUNCNAME[0]} - Sec $COUNTER/$MAXWAIT Game Window with pwd '$EFD' not yet in front"
-				COUNTER=$((COUNTER+1))
-				sleep 1
-			done
-
-			rm "$PIDLOCK" 2>/dev/null
-
-			if [ "$FOUNDWIN" == "$YES" ]; then
-				if [ "$TESTPID" == "$NON" ]; then
-					writelog "SKIP" "${FUNCNAME[0]} - FAIL - Found PID returned but it is empty: '$TESTPID'"
-				fi
-				writelog "INFO" "${FUNCNAME[0]} - Found PID '$TESTPID' for running exe '$(readlink "/proc/$TESTPID/exe")'"
-				echo "$TESTPID"
-			else
-				if [ "$WASCLOSED" -eq 0 ]; then
-					writelog "SKIP" "${FUNCNAME[0]} - ERROR - timeout waiting for '$EFD' window"
-					echo "$NON"
-				fi
+			# might not even be required anymore - maybe remove later:
+			if [[ "$SYMCWD" == "$EFD" ]] && [[ "$SYMEXE" != *"$YAD"* ]]; then
+				writelog "WAIT" "${FUNCNAME[0]} - Found PID '$TESTPID' for CWD '$SYMCWD' with EXE '$SYMEXE' - leaving loop"
+				FOUNDWIN="$YES"
+				break;
+			fi
+			if [ -n "$STEAM_COMPAT_CLIENT_INSTALL_PATH" ] && [[ "$SYMCWD" == "$STEAM_COMPAT_CLIENT_INSTALL_PATH" ]] && [[ "$SYMEXE" != *"$YAD"* ]]; then
+				writelog "WAIT" "${FUNCNAME[0]} - Found PID '$TESTPID' for STEAM_COMPAT_CLIENT_INSTALL_PATH '$SYMCWD' with EXE '$SYMEXE' - leaving loop"
+				FOUNDWIN="$YES"
+				break;
 			fi
 		fi
+
+		writelog "WAIT" "${FUNCNAME[0]} - Sec $COUNTER/$MAXWAIT Game Window with pwd '$EFD' not yet in front"
+		COUNTER=$((COUNTER+1))
+		sleep 1
+	done
+
+	rm "$PIDLOCK" 2>/dev/null
+
+	if [ "$FOUNDWIN" == "$YES" ]; then
+		if [ "$TESTPID" == "$NON" ]; then
+			writelog "SKIP" "${FUNCNAME[0]} - FAIL - Found PID returned but it is empty: '$TESTPID'"
+		fi
+
+		writelog "INFO" "${FUNCNAME[0]} - Found PID '$TESTPID' for running exe '$(readlink "/proc/$TESTPID/exe")'"
+		echo "$TESTPID"
+	elif [ "$WASCLOSED" -eq 0 ]; then
+		writelog "SKIP" "${FUNCNAME[0]} - ERROR - timeout waiting for '$EFD' window"
+		echo "$NON"
 	fi
 }
 
