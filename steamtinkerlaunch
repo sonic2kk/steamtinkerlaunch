@@ -7,7 +7,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20240616-2 (customcmd-slr-ver-2)"
+PROGVERS="v14.0.20240617-1 (customcmd-slr-ver-2)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -12881,6 +12881,36 @@ function launchCustomProg {
 			# TODO set native Linux SLR here and append to RUNEXTPROGRAMARGS
 			# * Do we need to add a "force native" var to setSLRReap? Game could be Proton but customcmd could be native, need to handle both
 			# TODO should respect selected SLR once #1087 is implemented
+			if [ "$__DEBUG_CUSTCMD_SLR" -eq 1 ]; then
+				unset "${SLRCMD[@]}"
+
+				writelog "INFO" "${FUNCNAME[0]} - Steam Linux Runtime enabled, attempting to fetch Steam Linux Runtime for native Custom Command"
+				setNonGameSLRReap  # One-Time Run calls this without any arguments for native titles, maybe it'll work here?
+			fi
+
+			# TODO if this works, it's much simpler than what we use in extProtonRun -- Can we make the logic as simple as this?
+			if [ -n "${SLRCMD[*]}" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Got Steam Linux Runtime for native title: ${SLRCMD[*]}"
+
+				OLDRUNEXTPROGRAMARGS=( "${RUNEXTPROGRAMARGS[@]}" )
+
+				unset "${RUNEXTPROGRAMARGS[@]}"
+				RUNEXTPROGRAMARGS=( "${SLRCMD[@]}" )
+
+				# OLDRUNEXTPROGRAMARGS should only contain one item, the passed args for the custom command
+				# if the first item here is not empty, assume we have to include the old pass args in the new array
+				#
+				# if blank, it means OLDRUNEXTPROGRAMARGS was most likely empty (or started with a blank element, which would cause a crash anyway)
+				# so we can just create RUNEXTPROGRAMARGS with the SLR as the only element
+				if [ -n "${OLDRUNEXTPROGRAMARGS[0]}" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Seems like some arguments were given to the custom command, including them alongside the Steam Linux Runtime arguments"
+					RUNEXTPROGRAMARGS+=( "${OLDRUNEXTPROGRAMARGS[@]}" )
+				fi
+
+				unset "${SLRCMD[@]}"
+			elif [ -z "${SLRCMD[*]}" ] && [ "$__DEBUG_CUSTCMD_SLR" -eq 1 ]; then
+				writelog "WARN" "${FUNCNAME[0]} - Attempted to fetch Steam Linux Runtime but failed to find one!"
+			fi
 
 			# Launch native custom command
 			NATIVEPROGNAME="$( basename "$LACO" )"
