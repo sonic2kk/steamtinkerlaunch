@@ -7,7 +7,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20240616-3"
+PROGVERS="v14.0.20240617-1"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -3210,6 +3210,7 @@ function setDefaultCfgValues {
 		if [ -z "$ONLY_CUSTOMCMD" ]						; then	ONLY_CUSTOMCMD="0";	fi
 		if [ -z "$FORK_CUSTOMCMD" ]						; then	FORK_CUSTOMCMD="0";	fi
 		if [ -z "$EXTPROGS_CUSTOMCMD" ]					; then  EXTPROGS_CUSTOMCMD="0"; fi
+		if [ -z "$CUSTOMCMD_USESLR" ]					; then  CUSTOMCMD_USESLR="1"; fi
 		if [ -z "$CUSTOMCMDFORCEWIN" ]					; then  CUSTOMCMDFORCEWIN="0"; fi
 		if [ -z "$WAITFORCUSTOMCMD" ]					; then	WAITFORCUSTOMCMD="0"; fi
 		if [ -z "$INJECT_CUSTOMCMD" ]					; then	INJECT_CUSTOMCMD="0"; fi
@@ -3806,6 +3807,8 @@ function saveCfg {
 			echo "FORK_CUSTOMCMD=\"$FORK_CUSTOMCMD\""
 			echo "## $DESC_EXTPROGS_CUSTOMCMD"
 			echo "EXTPROGS_CUSTOMCMD=\"$EXTPROGS_CUSTOMCMD\""
+			echo "## $DESC_CUSTOMCMD_USESLR"
+			echo "CUSTOMCMD_USESLR=\"$CUSTOMCMD_USESLR\""
 			echo "## $DESC_CUSTOMCMD_FORCEWIN"
 			echo "CUSTOMCMDFORCEWIN=\"$CUSTOMCMDFORCEWIN\""
 			echo "## $DESC_WAITFORCUSTOMCMD"
@@ -5678,6 +5681,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_CUSTOMCMD_ARGS!$DESC_CUSTOMCMD_ARGS ('CUSTOMCMD_ARGS')" "$( printf "%s" "${CUSTOMCMD_ARGS/#-/ -}" )" `#CAT_Misc` `#MENU_GAME` \
 --field="     $GUI_FORK_CUSTOMCMD!$DESC_FORK_CUSTOMCMD ('FORK_CUSTOMCMD')":CHK "${FORK_CUSTOMCMD/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_EXTPROGS_CUSTOMCMD!$DESC_EXTPROGS_CUSTOMCMD ('EXTPROGS_CUSTOMCMD')":CHK "${EXTPROGS_CUSTOMCMD/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_CUSTOMCMD_USESLR!$DESC_CUSTOMCMD_USESLR ('CUSTOMCMD_USESLR')":CHK "${CUSTOMCMD_USESLR/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_ONLY_CUSTOMCMD!$DESC_ONLY_CUSTOMCMD ('ONLY_CUSTOMCMD')":CHK "${ONLY_CUSTOMCMD/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_CUSTOMCMD_FORCEWIN!$DESC_CUSTOMCMD_FORCEWIN ('CUSTOMCMDFORCEWIN')":CHK "${CUSTOMCMDFORCEWIN/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_WAITFORCUSTOMCMD!$DESC_WAITFORCUSTOMCMD ('WAITFORCUSTOMCMD')":NUM "${WAITFORCUSTOMCMD/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
@@ -7082,6 +7086,7 @@ function extProtonRun {
 	PROGARGS="$3"
 	EXTPROGRAMARGS="$4"  # e.g. args like GameScope/GameMode taken from `buildCustomCmdLaunch` for ONLY_CUSTOMCMD
 	EXTWINERUN=0
+	EXTPROTUSESLR="${5:-0}"  # Should extProtonRun fetch and use SLR (default to 0 -- turned off)
 
 	if [ "$USEWINE" -eq 1 ] && [[ ! "$WINEVERSION" =~ ${DUMMYBIN}$ ]] && [ "$WINEVERSION" != "$NON" ]; then
 		EXTWINERUN=1
@@ -7142,6 +7147,39 @@ function extProtonRun {
 			writelog "INFO" "${FUNCNAME[0]} - Looks like we got some external program args, '${EXTPROGRAMARGS}'"
 			mapfile -d " " -t -O "${#RUNEXTPROGRAMARGS[@]}" RUNEXTPROGRAMARGS < <(printf '%s' "$EXTPROGRAMARGS")
 		fi
+
+		# Have to set SLR in extProtonRun because we can't pass the array to the function
+		# Hopefully unsetting is safe and doesn't mean places that need the SLR will lose it from this 'unset'
+		if [ "$EXTPROTUSESLR" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - EXTPROTUSESLR is '$EXTPROTUSESLR' -- Attempting to find and use SLR with extProtonRun"
+			
+			unset "${SLRCMD[@]}"
+			setSLRReap
+		fi
+
+		# append SLR to beginning of RUNEXTPROGRAMARGS, if SLR is defined
+		# TODO this is the exact same logic as in launchCustomProg (except the log messages are slightly different), is there any way to share it?
+		if [ -n "${SLRCMD[*]}" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Gotten Steam Linux Runtime for Proton launch, using RUNEXTPROGRAMARGS array to contain it and add it to launch command"
+
+			OLDRUNEXTPROGRAMARGS=( "${RUNEXTPROGRAMARGS[@]}" )
+
+			unset "${RUNEXTPROGRAMARGS[@]}"
+			RUNEXTPROGRAMARGS=( "${SLRCMD[@]}" )
+
+			# OLDRUNEXTPROGRAMARGS should only contain one item, the passed args for the custom command
+			# if the first item here is not empty, assume we have to include the old pass args in the new array
+			#
+			# if blank, it means OLDRUNEXTPROGRAMARGS was most likely empty (or started with a blank element, which would cause a crash anyway)
+			# so we can just create RUNEXTPROGRAMARGS with the SLR as the only element
+			if [ -n "${OLDRUNEXTPROGRAMARGS[0]}" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Seems like some arguments were given to the custom command, including them alongside the Steam Linux Runtime arguments"
+				RUNEXTPROGRAMARGS+=( "${OLDRUNEXTPROGRAMARGS[@]}" )
+			fi
+		elif [ -z "${SLRCMD[*]}" ] && [ "$CUSTOMCMD_USESLR" -eq 1 ]; then
+			writelog "WARN" "${FUNCNAME[0]} - Attempted to fetch Steam Linux Runtime but failed to find one!"
+		fi
+		unset "${SLRCMD[@]}"
 
 		# TODO pass "$EXTPROGRAMARGS" to programs running with Wine as well(?)
 		# TODO refactor a bit to be a little cleaner if possible
@@ -7227,7 +7265,8 @@ function extProtonRun {
 				else
 					notiShow "$( strFix "$NOTY_CUSTPROG_REG" "$CUSTPROGNAME" )"
 					if [ -n "${RUNEXTPROGRAMARGS[0]}" ]; then
-						"${RUNEXTPROGRAMARGS[@]}" "$RUNPROTON" run "$PROGRAM" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log"
+						writelog "INFO" "${FUNCNAME[0]} - \"${RUNEXTPROGRAMARGS[*]}\" \"$RUNPROTON\" run \"$PROGRAM\""
+						"${RUNEXTPROGRAMARGS[@]}" "$RUNPROTON" waitforexitandrun "$PROGRAM" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log"
 					else
 						"$RUNPROTON" run "$PROGRAM" 2>&1 | tee "$STLSHM/${FUNCNAME[0]}.log"
 					fi
@@ -12185,6 +12224,7 @@ function OneTimeRunReset {
 }
 
 # Called when a user passes arguments for onetimerun
+# TODO a way to use default game Proton version, either if '--proton' is not supplied or if '--proton="default"'?
 function commandlineOneTimeRun {
 	setOneTimeRunVars "$1"
 	# Get incoming arguments
@@ -12238,6 +12278,7 @@ function commandlineOneTimeRun {
 	fi
 
 	# Ensure EXE is given and that directory to run the exe in is valid, and also ensure we have a valid Proton version to run the exe with
+	# TODO refactor to flatten
 	if [ -n "$OTEXE" ] && [ -f "$OTEXE" ]; then  # Valid executable required (Windows executable or Linux executable/file/etc, not really an EXE for Linux but oh well - Naming is hard!)
 		if [ "$USEEXEDIR" -eq 1 ]; then  # Use EXE dir as working dir
 			OTRUNDIR="$( dirname "$OTEXE" )"
@@ -12798,24 +12839,24 @@ function launchCustomProg {
 				writelog "INFO" "${FUNCNAME[0]} - '$CUSTCOM' seems to be a MS console program - starting using '$WICO'"
 				if [ "$FORK_CUSTOMCMD" -eq 1 ]; then
 					writelog "INFO" "${FUNCNAME[0]} - FORK_CUSTOMCMD is set to 1 - forking the custom program in background and continue"
-					extProtonRun "FC" "$LACO" "$CUSTOMCMD_ARGS"
+					extProtonRun "FC" "$LACO" "$CUSTOMCMD_ARGS" "" "${CUSTOMCMD_USESLR}"
 				elif [ "$ONLY_CUSTOMCMD" -eq 1 ] && [ -n "${FINALOUTCMD[*]}" ]; then
-					writelog "INFO" "${FUNCNAME[0]} - ONLY_CUSTOMCMD is set to 1 and we have some arguments in FINALOUTCMD - passing to extProtonRun to build a valid start command"
-					extProtonRun "R" "$LACO" "$CUSTOMCMD_ARGS" "$FINALOUTCMD"  # extProtonRun will handle adding the FINALOUTCMD args to
+					writelog "INFO" "${FUNCNAME[0]} - ONLY_CUSTOMCMD is set to 1 and we have some arguments in FINALOUTCMD - passing to extProtonRun to build a valid start command"	
+					extProtonRun "R" "$LACO" "$CUSTOMCMD_ARGS" "$FINALOUTCMD" "${CUSTOMCMD_USESLR}"  # extProtonRun will handle adding the FINALOUTCMD args to
 				else
-					extProtonRun "RC" "$LACO" "$CUSTOMCMD_ARGS"
+					extProtonRun "RC" "$LACO" "$CUSTOMCMD_ARGS" "" "${CUSTOMCMD_USESLR}"
 				fi
 			else  # GUI Wine/Proton program
 				writelog "INFO" "${FUNCNAME[0]} - '$CUSTCOM' seems to be a MS gui program - starting regularly"
 
 				if [ "$FORK_CUSTOMCMD" -eq 1 ]; then
 					writelog "INFO" "${FUNCNAME[0]} - FORK_CUSTOMCMD is set to 1 - forking the custom program in background and continue"
-					extProtonRun "F" "$LACO" "$CUSTOMCMD_ARGS"
+					extProtonRun "F" "$LACO" "$CUSTOMCMD_ARGS" "" "${CUSTOMCMD_USESLR}"
 				elif [ "$ONLY_CUSTOMCMD" -eq 1 ] && [ -n "$FINALOUTCMD" ]; then
 					writelog "INFO" "${FUNCNAME[0]} - ONLY_CUSTOMCMD is set to 1 and we have some arguments in FINALOUTCMD - passing to extProtonRun to build a valid start command"
-					extProtonRun "R" "$LACO" "$CUSTOMCMD_ARGS" "${FINALOUTCMD[*]}"  # extProtonRun will handle adding the FINALOUTCMD args
+					extProtonRun "R" "$LACO" "$CUSTOMCMD_ARGS" "${FINALOUTCMD[*]}" "${CUSTOMCMD_USESLR}" "${CUSTOMCMD_USESLR}"  # extProtonRun will handle adding the FINALOUTCMD args
 				else
-					extProtonRun "R" "$LACO" "$CUSTOMCMD_ARGS"
+					extProtonRun "R" "$LACO" "$CUSTOMCMD_ARGS" "" "${CUSTOMCMD_USESLR}"
 				fi
 			fi
 		else  # Native custom command
@@ -12840,6 +12881,39 @@ function launchCustomProg {
 
 			FWAIT=2
 
+			# TODO should respect selected SLR once #1087 is implemented
+			if [ "$CUSTOMCMD_USESLR" -eq 1 ]; then
+				unset "${SLRCMD[@]}"
+
+				writelog "INFO" "${FUNCNAME[0]} - Steam Linux Runtime enabled, attempting to fetch Steam Linux Runtime for native Custom Command"
+				# "2" is the FORCESLRTYPE, meaning we want to force to get the native SLR -- We do this in case we are trying to launch a native custom command with a Proton title
+				# In this case, setSLRReap is going to have the Proton SLR vars set from the game launch, so we need to force it here to use the native SLR 
+				setNonGameSLRReap "2"
+			fi
+
+			# TODO this is the exact same logic as in extProtonRun (except the log messages are slightly different), is there any way to share it?
+			if [ -n "${SLRCMD[*]}" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Gotten Steam Linux Runtime for native launch, using RUNEXTPROGRAMARGS array to contain it and add it to launch command"
+
+				OLDRUNEXTPROGRAMARGS=( "${RUNEXTPROGRAMARGS[@]}" )
+
+				unset "${RUNEXTPROGRAMARGS[@]}"
+				RUNEXTPROGRAMARGS=( "${SLRCMD[@]}" )
+
+				# OLDRUNEXTPROGRAMARGS should only contain one item, the passed args for the custom command
+				# if the first item here is not empty, assume we have to include the old pass args in the new array
+				#
+				# if blank, it means OLDRUNEXTPROGRAMARGS was most likely empty (or started with a blank element, which would cause a crash anyway)
+				# so we can just create RUNEXTPROGRAMARGS with the SLR as the only element
+				if [ -n "${OLDRUNEXTPROGRAMARGS[0]}" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Seems like some arguments were given to the custom command, including them alongside the Steam Linux Runtime arguments"
+					RUNEXTPROGRAMARGS+=( "${OLDRUNEXTPROGRAMARGS[@]}" )
+				fi
+			elif [ -z "${SLRCMD[*]}" ] && [ "$CUSTOMCMD_USESLR" -eq 1 ]; then
+				writelog "WARN" "${FUNCNAME[0]} - Attempted to fetch Steam Linux Runtime but failed to find one!"
+			fi
+			unset "${SLRCMD[@]}"
+
 			# Launch native custom command
 			NATIVEPROGNAME="$( basename "$LACO" )"
 			if [ -n "$1" ]; then
@@ -12853,16 +12927,20 @@ function launchCustomProg {
 				if [ "$FORK_CUSTOMCMD" -eq 1 ]; then  # Forked native custom program
 					writelog "INFO" "${FUNCNAME[0]} - FORK_CUSTOMCMD is set to 1 - forking the custom program in background and continue"
 					if [ -n "${RUNEXTPROGRAMARGS[0]}" ]; then
+						writelog "INFO" "${FUNCNAME[0]} - \"${RUNEXTPROGRAMARGS[*]}\" \"${LACO}\" \"${RUNCUSTOMCMD_ARGS[*]}\""
 						(sleep "$FWAIT"; notiShow "$( strFix "$NOTY_CUSTPROG_FORKED_NATIVE" "$NATIVEPROGNAME" )"; "${RUNEXTPROGRAMARGS[@]}" "$LACO" "${RUNCUSTOMCMD_ARGS[@]}") &
 					else
+						writelog "INFO" "${FUNCNAME[0]} - \"${LACO}\" \"${RUNCUSTOMCMD_ARGS[*]}\""
 						(sleep "$FWAIT"; notiShow "$( strFix "$NOTY_CUSTPROG_FORKED_NATIVE" "$NATIVEPROGNAME" )"; "$LACO" "${RUNCUSTOMCMD_ARGS[@]}") &
 					fi
 				else  # Regular native executable
 					writelog "INFO" "${FUNCNAME[0]} - Starting native custom command regularly"
 					notiShow "$( strFix "$NOTY_CUSTPROG_REG_NATIVE" "$NATIVEPROGNAME" )"
 					if [ -n "${RUNEXTPROGRAMARGS[0]}" ]; then
+						writelog "INFO" "${FUNCNAME[0]} - \"${RUNEXTPROGRAMARGS[*]}\" \"${LACO}\" \"${RUNCUSTOMCMD_ARGS[*]}\""
 						"${RUNEXTPROGRAMARGS[@]}" "$LACO" "${RUNCUSTOMCMD_ARGS[@]}"
 					else
+						writelog "INFO" "${FUNCNAME[0]} - \"${LACO}\" \"${RUNCUSTOMCMD_ARGS[*]}\""
 						"$LACO" "${RUNCUSTOMCMD_ARGS[@]}"
 					fi
 				fi
@@ -16860,15 +16938,18 @@ function setNonGameSLRReap {
 	HAVEREAP="${HAVEREAP:-0}"
 	HAVESLRCT="${HAVESLRCT:-0}"
 
-	FORCEPROTONSLR="$1"
+	# 0 - No SLR force, let setSLRReap determine what Proton version to use (Default)
+	# 1 - Proton SLR
+	# 2 - Native SLR
+	FORCESLRTYPE="$1"
 
 	# Only get SLRPROTONNAME if we're forcing Proton, otherwise ignore
-	if [ -n "$FORCEPROTONSLR" ] && [ "$FORCEPROTONSLR" -eq 1 ]; then
+	if [ -n "$FORCESLRTYPE" ] && [ "$FORCESLRTYPE" -eq 1 ]; then
 		SLRPROTONNAME="$( getProtPathFromCSV "$2" )"  # This could be the name of the Proton version to run i.e. Vortex
 	fi
 
 	unset "${SLRCMD[@]}"
-	setSLRReap "1" "$FORCEPROTONSLR" "$SLRPROTONNAME"  # Get SLRCMD, optionally enforcing Proton (so we don't fall back to native Linux) and setting the Proton version to fetch the SLR info from (e.g. whether to use soldier, sniper, etc)
+	setSLRReap "1" "$FORCESLRTYPE" "$SLRPROTONNAME"  # Get SLRCMD, optionally enforcing Proton (so we don't fall back to native Linux) and setting the Proton version to fetch the SLR info from (e.g. whether to use soldier, sniper, etc)
 }
 
 function setVortexVars {
@@ -21202,7 +21283,7 @@ function setSLRReap {
 
 	# These variables are only passed for Non-Game SLR launches i.e. Vortex, they are ignored for game launches and use fallback values
 	OVERRIDESLR="$1"  # Always get SLR, ignoring other vars that specify otherwise
-	SLRFORCEPROTON="${2:-0}"  # Force fetch the Proton SLR ignoring value of ISGAME
+	SLRFORCETYPE="${2:-0}"  # Force fetch the Proton SLR (1), or native SLR (2), ignoring value of ISGAME
 	SLRPROTONVER="$3"  # Proton version to fetch the SLR version from (where to find the toolmanifest.vdf from) -- Optional, will fall back to RUNPROTON set by game
 
 	# Allow overriding USESLR/HAVESLR and forcing to fetch the SLR anyway (used for times when SLR is needed outside of regular game launch e.g. Vortex)
@@ -21284,7 +21365,8 @@ function setSLRReap {
 				# Pressure Vessel Funtime 2nd Edition Ver. 2.31
 				writelog "INFO" "${FUNCNAME[0]} - Now executing Pressure Vessel Funtime 2nd Edition Ver. 2.31"
 				# Get SLR Paths
-				if [ "$ISGAME" -eq 3 ] && [ "$SLRFORCEPROTON" -eq 0 ]; then  # ISGAME -eq 3 is always true for running outside of Steam eg One-Time Run...
+				# Use native SLR: if ( ( game is native AND NOT forcing Proton ) OR forcing native )
+				if [[ ( "$ISGAME" -eq 3 && "$SLRFORCETYPE" -eq 0 ) || "$SLRFORCETYPE" -eq 2 ]]; then
 					# Native games already have a hardcoded initial native SLR AppID, so we can get the path from this hardcoded AppID
 					# However they need to get the required "nested" SLR from the toolmanifest from the hardcoded native SLR - This is the SLR that the regular native SLR runs inside of
 					# This nested AppID is stored in the hardcoded SLR's toolmanifest
@@ -21694,6 +21776,8 @@ function launchSteamGame {
 
 	writelog "INFO" "${FUNCNAME[0]} - Initial game command is '${INGCMD[*]}'"
 
+	# Refetch SLR, in case we set it for custom command as well
+	# i.e. custom command could use native SLR, but we might want to use Proton SLR for the game, or vice versa
 	unset "${SLRCMD[@]}"
 	setSLRReap
 
