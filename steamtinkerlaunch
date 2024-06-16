@@ -7,7 +7,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20240619-1"
+PROGVERS="v14.0.20240617-1 (fix-gamelaunch-steamappscommon)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -26840,6 +26840,7 @@ function main {
 		writelog "INFO" "${FUNCNAME[0]} - No arguments provided. See '$PROGCMD --help' for possible command line parameters" "E"
 	else
 		writelog "INFO" "${FUNCNAME[0]} - Checking command line: incoming arguments '${*}'"
+		writelog "INFO" "${FUNCNAME[0]} - Checking command line: first argument '${1}'"
 
 		if [ -n "$SteamAppId" ] && [ "$SteamAppId" -eq "0" ]; then
 			if grep -q "\"$1\"" <<< "$(sed -n "/^#STARTCMDLINE/,/^#ENDCMDLINE/p;/^#ENDCMDLINE/q" "$0" | grep if)"; then
@@ -26857,6 +26858,10 @@ function main {
 			fi
 		elif grep -q "$SAC" <<< "$@" || grep -q "$L2EA" <<< "$@"; then
 			if grep -q "update" <<< "$@" || grep -q "^play" <<< "$@" ; then
+				commandline "$@"
+			# HACK: Since we check for steamapps/common ($SAC), commands which contain this (such as a one-time run path) will incorrectly get triggered as a game launch
+			#       As a workaround, skip a hardcoded set of commands and pass directly to commandline (i.e. if we have OTR as our first option, pass down to commandline function and run otr)
+			elif grep -qE "otr|onetimerun" <<< "${1}"; then
 				commandline "$@"
 			else
 				setGameVars "$@"
