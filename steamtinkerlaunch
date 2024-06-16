@@ -3210,6 +3210,7 @@ function setDefaultCfgValues {
 		if [ -z "$ONLY_CUSTOMCMD" ]						; then	ONLY_CUSTOMCMD="0";	fi
 		if [ -z "$FORK_CUSTOMCMD" ]						; then	FORK_CUSTOMCMD="0";	fi
 		if [ -z "$EXTPROGS_CUSTOMCMD" ]					; then  EXTPROGS_CUSTOMCMD="0"; fi
+		if [ -z "$CUSTOMCMD_USESLR" ]					; then  CUSTOMCMD_USESLR="1"; fi
 		if [ -z "$CUSTOMCMDFORCEWIN" ]					; then  CUSTOMCMDFORCEWIN="0"; fi
 		if [ -z "$WAITFORCUSTOMCMD" ]					; then	WAITFORCUSTOMCMD="0"; fi
 		if [ -z "$INJECT_CUSTOMCMD" ]					; then	INJECT_CUSTOMCMD="0"; fi
@@ -3806,6 +3807,8 @@ function saveCfg {
 			echo "FORK_CUSTOMCMD=\"$FORK_CUSTOMCMD\""
 			echo "## $DESC_EXTPROGS_CUSTOMCMD"
 			echo "EXTPROGS_CUSTOMCMD=\"$EXTPROGS_CUSTOMCMD\""
+			echo "## $DESC_CUSTOMCMD_USESLR"
+			echo "CUSTOMCMD_USESLR=\"$CUSTOMCMD_USESLR\""
 			echo "## $DESC_CUSTOMCMD_FORCEWIN"
 			echo "CUSTOMCMDFORCEWIN=\"$CUSTOMCMDFORCEWIN\""
 			echo "## $DESC_WAITFORCUSTOMCMD"
@@ -5678,6 +5681,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_CUSTOMCMD_ARGS!$DESC_CUSTOMCMD_ARGS ('CUSTOMCMD_ARGS')" "$( printf "%s" "${CUSTOMCMD_ARGS/#-/ -}" )" `#CAT_Misc` `#MENU_GAME` \
 --field="     $GUI_FORK_CUSTOMCMD!$DESC_FORK_CUSTOMCMD ('FORK_CUSTOMCMD')":CHK "${FORK_CUSTOMCMD/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_EXTPROGS_CUSTOMCMD!$DESC_EXTPROGS_CUSTOMCMD ('EXTPROGS_CUSTOMCMD')":CHK "${EXTPROGS_CUSTOMCMD/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
+--field="     $GUI_CUSTOMCMD_USESLR!$DESC_CUSTOMCMD_USESLR ('CUSTOMCMD_USESLR')":CHK "${CUSTOMCMD_USESLR/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_ONLY_CUSTOMCMD!$DESC_ONLY_CUSTOMCMD ('ONLY_CUSTOMCMD')":CHK "${ONLY_CUSTOMCMD/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_CUSTOMCMD_FORCEWIN!$DESC_CUSTOMCMD_FORCEWIN ('CUSTOMCMDFORCEWIN')":CHK "${CUSTOMCMDFORCEWIN/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
 --field="     $GUI_WAITFORCUSTOMCMD!$DESC_WAITFORCUSTOMCMD ('WAITFORCUSTOMCMD')":NUM "${WAITFORCUSTOMCMD/#-/ -}" `#CAT_Misc` `#SUB_Checkbox` `#MENU_GAME` \
@@ -12703,7 +12707,7 @@ function launchCustomProg {
 	fi
 
 	# TODO replace with GUI option
-	__DEBUG_CUSTCMD_SLR=1
+	# __DEBUG_CUSTCMD_SLR=1
 
 	if [ -z "$CUSTOMCMD" ] || [[ "$CUSTOMCMD" =~ ${DUMMYBIN}$ ]]; then
 		writelog "INFO" "${FUNCNAME[0]} - CUSTOMCMD variable is empty - opening file requester"
@@ -12838,24 +12842,24 @@ function launchCustomProg {
 				writelog "INFO" "${FUNCNAME[0]} - '$CUSTCOM' seems to be a MS console program - starting using '$WICO'"
 				if [ "$FORK_CUSTOMCMD" -eq 1 ]; then
 					writelog "INFO" "${FUNCNAME[0]} - FORK_CUSTOMCMD is set to 1 - forking the custom program in background and continue"
-					extProtonRun "FC" "$LACO" "$CUSTOMCMD_ARGS" "" "${__DEBUG_CUSTCMD_SLR}"
+					extProtonRun "FC" "$LACO" "$CUSTOMCMD_ARGS" "" "${CUSTOMCMD_USESLR}"
 				elif [ "$ONLY_CUSTOMCMD" -eq 1 ] && [ -n "${FINALOUTCMD[*]}" ]; then
 					writelog "INFO" "${FUNCNAME[0]} - ONLY_CUSTOMCMD is set to 1 and we have some arguments in FINALOUTCMD - passing to extProtonRun to build a valid start command"	
-					extProtonRun "R" "$LACO" "$CUSTOMCMD_ARGS" "$FINALOUTCMD" "${__DEBUG_CUSTCMD_SLR}"  # extProtonRun will handle adding the FINALOUTCMD args to
+					extProtonRun "R" "$LACO" "$CUSTOMCMD_ARGS" "$FINALOUTCMD" "${CUSTOMCMD_USESLR}"  # extProtonRun will handle adding the FINALOUTCMD args to
 				else
-					extProtonRun "RC" "$LACO" "$CUSTOMCMD_ARGS" "" "${__DEBUG_CUSTCMD_SLR}"
+					extProtonRun "RC" "$LACO" "$CUSTOMCMD_ARGS" "" "${CUSTOMCMD_USESLR}"
 				fi
 			else  # GUI Wine/Proton program
 				writelog "INFO" "${FUNCNAME[0]} - '$CUSTCOM' seems to be a MS gui program - starting regularly"
 
 				if [ "$FORK_CUSTOMCMD" -eq 1 ]; then
 					writelog "INFO" "${FUNCNAME[0]} - FORK_CUSTOMCMD is set to 1 - forking the custom program in background and continue"
-					extProtonRun "F" "$LACO" "$CUSTOMCMD_ARGS" "" "${__DEBUG_CUSTCMD_SLR}"
+					extProtonRun "F" "$LACO" "$CUSTOMCMD_ARGS" "" "${CUSTOMCMD_USESLR}"
 				elif [ "$ONLY_CUSTOMCMD" -eq 1 ] && [ -n "$FINALOUTCMD" ]; then
 					writelog "INFO" "${FUNCNAME[0]} - ONLY_CUSTOMCMD is set to 1 and we have some arguments in FINALOUTCMD - passing to extProtonRun to build a valid start command"
-					extProtonRun "R" "$LACO" "$CUSTOMCMD_ARGS" "${FINALOUTCMD[*]}" "${__DEBUG_CUSTCMD_SLR}""${__DEBUG_CUSTCMD_SLR}"  # extProtonRun will handle adding the FINALOUTCMD args
+					extProtonRun "R" "$LACO" "$CUSTOMCMD_ARGS" "${FINALOUTCMD[*]}" "${CUSTOMCMD_USESLR}" "${CUSTOMCMD_USESLR}"  # extProtonRun will handle adding the FINALOUTCMD args
 				else
-					extProtonRun "R" "$LACO" "$CUSTOMCMD_ARGS" "" "${__DEBUG_CUSTCMD_SLR}"
+					extProtonRun "R" "$LACO" "$CUSTOMCMD_ARGS" "" "${CUSTOMCMD_USESLR}"
 				fi
 			fi
 		else  # Native custom command
@@ -12883,7 +12887,7 @@ function launchCustomProg {
 			# TODO set native Linux SLR here and append to RUNEXTPROGRAMARGS
 			# * Do we need to add a "force native" var to setSLRReap? Game could be Proton but customcmd could be native, need to handle both
 			# TODO should respect selected SLR once #1087 is implemented
-			if [ "$__DEBUG_CUSTCMD_SLR" -eq 1 ]; then
+			if [ "$CUSTOMCMD_USESLR" -eq 1 ]; then
 				unset "${SLRCMD[@]}"
 
 				writelog "INFO" "${FUNCNAME[0]} - Steam Linux Runtime enabled, attempting to fetch Steam Linux Runtime for native Custom Command"
@@ -12910,7 +12914,7 @@ function launchCustomProg {
 				fi
 
 				unset "${SLRCMD[@]}"
-			elif [ -z "${SLRCMD[*]}" ] && [ "$__DEBUG_CUSTCMD_SLR" -eq 1 ]; then
+			elif [ -z "${SLRCMD[*]}" ] && [ "$CUSTOMCMD_USESLR" -eq 1 ]; then
 				writelog "WARN" "${FUNCNAME[0]} - Attempted to fetch Steam Linux Runtime but failed to find one!"
 			fi
 
