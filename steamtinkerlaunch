@@ -7,7 +7,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20240617-3 (customcmd-slr-ver-2)"
+PROGVERS="v14.0.20240617-4 (customcmd-slr-ver-2)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -7158,26 +7158,25 @@ function extProtonRun {
 		fi
 
 		# append SLR to beginning of RUNEXTPROGRAMARGS, if SLR is defined
-		# TODO this is ugly, can it be done better?
 		if [ -n "${SLRCMD[*]}" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Gotten SLR, using RUNEXTPROGRAMARGS array to contain it and add it to launch command"
-			
-			if [ -n "${RUNEXTPROGRAMARGS[*]}" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Backing up existing RUNEXTPROGRAMARGS ('${RUNEXTPROGRAMARGS[*]}')"
-				OLDRUNEXTPROGRAMARGS=( "${RUNEXTPROGRAMARGS[@]}" )
-			fi
+			writelog "INFO" "${FUNCNAME[0]} - Gotten Steam Linux Runtime for Proton launch, using RUNEXTPROGRAMARGS array to contain it and add it to launch command"
+
+			OLDRUNEXTPROGRAMARGS=( "${RUNEXTPROGRAMARGS[@]}" )
 
 			unset "${RUNEXTPROGRAMARGS[@]}"
 			RUNEXTPROGRAMARGS=( "${SLRCMD[@]}" )
 
-			if [ -n "${OLDRUNEXTPROGRAMARGS[*]}" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Restoring OLDRUNEXTPROGRAMARGS ('${OLDRUNEXTPROGRAMARGS[*]}')"
+			# OLDRUNEXTPROGRAMARGS should only contain one item, the passed args for the custom command
+			# if the first item here is not empty, assume we have to include the old pass args in the new array
+			#
+			# if blank, it means OLDRUNEXTPROGRAMARGS was most likely empty (or started with a blank element, which would cause a crash anyway)
+			# so we can just create RUNEXTPROGRAMARGS with the SLR as the only element
+			if [ -n "${OLDRUNEXTPROGRAMARGS[0]}" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Seems like some arguments were given to the custom command, including them alongside the Steam Linux Runtime arguments"
 				RUNEXTPROGRAMARGS+=( "${OLDRUNEXTPROGRAMARGS[@]}" )
 			fi
-
-			writelog "INFO" "${FUNCNAME[0]} - RUNEXTPROGRAMARGS is now '${RUNEXTPROGRAMARGS[*]}'"
-		else
-			writelog "WARN" "${FUNCNAME[0]} - EXTPROTUSESLR was '$EXTPROTUSESLR' but SLR was not found -- extProtonRun will NOT be able to use SLR even though it was requested!"
+		elif [ -z "${SLRCMD[*]}" ] && [ "$CUSTOMCMD_USESLR" -eq 1 ]; then
+			writelog "WARN" "${FUNCNAME[0]} - Attempted to fetch Steam Linux Runtime but failed to find one!"
 		fi
 		unset "${SLRCMD[@]}"
 
@@ -12706,9 +12705,6 @@ function launchCustomProg {
 		CUSTOMCMD="$WICO"
 	fi
 
-	# TODO replace with GUI option
-	# __DEBUG_CUSTCMD_SLR=1
-
 	if [ -z "$CUSTOMCMD" ] || [[ "$CUSTOMCMD" =~ ${DUMMYBIN}$ ]]; then
 		writelog "INFO" "${FUNCNAME[0]} - CUSTOMCMD variable is empty - opening file requester"
 		fixShowGnAid
@@ -12884,8 +12880,6 @@ function launchCustomProg {
 
 			FWAIT=2
 
-			# TODO set native Linux SLR here and append to RUNEXTPROGRAMARGS
-			# * Do we need to add a "force native" var to setSLRReap? Game could be Proton but customcmd could be native, need to handle both
 			# TODO should respect selected SLR once #1087 is implemented
 			if [ "$CUSTOMCMD_USESLR" -eq 1 ]; then
 				unset "${SLRCMD[@]}"
@@ -12896,7 +12890,7 @@ function launchCustomProg {
 
 			# TODO if this works, it's much simpler than what we use in extProtonRun -- Can we make the logic as simple as this?
 			if [ -n "${SLRCMD[*]}" ]; then
-				writelog "INFO" "${FUNCNAME[0]} - Got Steam Linux Runtime for native title: ${SLRCMD[*]}"
+				writelog "INFO" "${FUNCNAME[0]} - Gotten Steam Linux Runtime for native launch, using RUNEXTPROGRAMARGS array to contain it and add it to launch command"
 
 				OLDRUNEXTPROGRAMARGS=( "${RUNEXTPROGRAMARGS[@]}" )
 
@@ -12912,11 +12906,12 @@ function launchCustomProg {
 					writelog "INFO" "${FUNCNAME[0]} - Seems like some arguments were given to the custom command, including them alongside the Steam Linux Runtime arguments"
 					RUNEXTPROGRAMARGS+=( "${OLDRUNEXTPROGRAMARGS[@]}" )
 				fi
-
-				unset "${SLRCMD[@]}"
 			elif [ -z "${SLRCMD[*]}" ] && [ "$CUSTOMCMD_USESLR" -eq 1 ]; then
 				writelog "WARN" "${FUNCNAME[0]} - Attempted to fetch Steam Linux Runtime but failed to find one!"
 			fi
+			unset "${SLRCMD[@]}"
+
+			writelog "INFO" "${FUNCNAME[0]} - RUNEXTPROGRAMARGS is now '${RUNEXTPROGRAMARGS[@]}'"
 
 			# Launch native custom command
 			NATIVEPROGNAME="$( basename "$LACO" )"
@@ -12931,16 +12926,20 @@ function launchCustomProg {
 				if [ "$FORK_CUSTOMCMD" -eq 1 ]; then  # Forked native custom program
 					writelog "INFO" "${FUNCNAME[0]} - FORK_CUSTOMCMD is set to 1 - forking the custom program in background and continue"
 					if [ -n "${RUNEXTPROGRAMARGS[0]}" ]; then
+						writelog "INFO" "${FUNCNAME[0]} - \"${RUNEXTPROGRAMARGS[*]}\" \"${LACO}\" \"${RUNCUSTOMCMD_ARGS[*]}\""
 						(sleep "$FWAIT"; notiShow "$( strFix "$NOTY_CUSTPROG_FORKED_NATIVE" "$NATIVEPROGNAME" )"; "${RUNEXTPROGRAMARGS[@]}" "$LACO" "${RUNCUSTOMCMD_ARGS[@]}") &
 					else
+						writelog "INFO" "${FUNCNAME[0]} - \"${LACO}\" \"${RUNCUSTOMCMD_ARGS[*]}\""
 						(sleep "$FWAIT"; notiShow "$( strFix "$NOTY_CUSTPROG_FORKED_NATIVE" "$NATIVEPROGNAME" )"; "$LACO" "${RUNCUSTOMCMD_ARGS[@]}") &
 					fi
 				else  # Regular native executable
 					writelog "INFO" "${FUNCNAME[0]} - Starting native custom command regularly"
 					notiShow "$( strFix "$NOTY_CUSTPROG_REG_NATIVE" "$NATIVEPROGNAME" )"
 					if [ -n "${RUNEXTPROGRAMARGS[0]}" ]; then
+						writelog "INFO" "${FUNCNAME[0]} - \"${RUNEXTPROGRAMARGS[*]}\" \"${LACO}\" \"${RUNCUSTOMCMD_ARGS[*]}\""
 						"${RUNEXTPROGRAMARGS[@]}" "$LACO" "${RUNCUSTOMCMD_ARGS[@]}"
 					else
+						writelog "INFO" "${FUNCNAME[0]} - \"${LACO}\" \"${RUNCUSTOMCMD_ARGS[*]}\""
 						"$LACO" "${RUNCUSTOMCMD_ARGS[@]}"
 					fi
 				fi
