@@ -7,7 +7,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20240617-4 (customcmd-slr-ver-2)"
+PROGVERS="v14.0.20240617-5 (customcmd-slr-ver-2)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -12885,7 +12885,9 @@ function launchCustomProg {
 				unset "${SLRCMD[@]}"
 
 				writelog "INFO" "${FUNCNAME[0]} - Steam Linux Runtime enabled, attempting to fetch Steam Linux Runtime for native Custom Command"
-				setNonGameSLRReap  # One-Time Run calls this without any arguments for native titles, maybe it'll work here?
+				# "2" is the FORCESLRTYPE, meaning we want to force to get the native SLR -- We do this in case we are trying to launch a native custom command with a Proton title
+				# In this case, setSLRReap is going to have the Proton SLR vars set from the game launch, so we need to force it here to use the native SLR 
+				setNonGameSLRReap "2"
 			fi
 
 			# TODO if this works, it's much simpler than what we use in extProtonRun -- Can we make the logic as simple as this?
@@ -16935,15 +16937,18 @@ function setNonGameSLRReap {
 	HAVEREAP="${HAVEREAP:-0}"
 	HAVESLRCT="${HAVESLRCT:-0}"
 
-	FORCEPROTONSLR="$1"
+	# 0 - No SLR force, let setSLRReap determine what Proton version to use (Default)
+	# 1 - Proton SLR
+	# 2 - Native SLR
+	FORCESLRTYPE="$1"
 
 	# Only get SLRPROTONNAME if we're forcing Proton, otherwise ignore
-	if [ -n "$FORCEPROTONSLR" ] && [ "$FORCEPROTONSLR" -eq 1 ]; then
+	if [ -n "$FORCESLRTYPE" ] && [ "$FORCESLRTYPE" -eq 1 ]; then
 		SLRPROTONNAME="$( getProtPathFromCSV "$2" )"  # This could be the name of the Proton version to run i.e. Vortex
 	fi
 
 	unset "${SLRCMD[@]}"
-	setSLRReap "1" "$FORCEPROTONSLR" "$SLRPROTONNAME"  # Get SLRCMD, optionally enforcing Proton (so we don't fall back to native Linux) and setting the Proton version to fetch the SLR info from (e.g. whether to use soldier, sniper, etc)
+	setSLRReap "1" "$FORCESLRTYPE" "$SLRPROTONNAME"  # Get SLRCMD, optionally enforcing Proton (so we don't fall back to native Linux) and setting the Proton version to fetch the SLR info from (e.g. whether to use soldier, sniper, etc)
 }
 
 function setVortexVars {
@@ -21277,7 +21282,7 @@ function setSLRReap {
 
 	# These variables are only passed for Non-Game SLR launches i.e. Vortex, they are ignored for game launches and use fallback values
 	OVERRIDESLR="$1"  # Always get SLR, ignoring other vars that specify otherwise
-	SLRFORCEPROTON="${2:-0}"  # Force fetch the Proton SLR ignoring value of ISGAME
+	SLRFORCETYPE="${2:-0}"  # Force fetch the Proton SLR (1), or native SLR (2), ignoring value of ISGAME
 	SLRPROTONVER="$3"  # Proton version to fetch the SLR version from (where to find the toolmanifest.vdf from) -- Optional, will fall back to RUNPROTON set by game
 
 	# Allow overriding USESLR/HAVESLR and forcing to fetch the SLR anyway (used for times when SLR is needed outside of regular game launch e.g. Vortex)
@@ -21359,7 +21364,8 @@ function setSLRReap {
 				# Pressure Vessel Funtime 2nd Edition Ver. 2.31
 				writelog "INFO" "${FUNCNAME[0]} - Now executing Pressure Vessel Funtime 2nd Edition Ver. 2.31"
 				# Get SLR Paths
-				if [ "$ISGAME" -eq 3 ] && [ "$SLRFORCEPROTON" -eq 0 ]; then  # ISGAME -eq 3 is always true for running outside of Steam eg One-Time Run...
+				# Use native SLR: if ( ( game is native AND NOT forcing Proton ) OR forcing native )
+				if [[ ( "$ISGAME" -eq 3 && "$SLRFORCETYPE" -eq 0 ) || "$SLRFORCETYPE" -eq 2 ]]; then
 					# Native games already have a hardcoded initial native SLR AppID, so we can get the path from this hardcoded AppID
 					# However they need to get the required "nested" SLR from the toolmanifest from the hardcoded native SLR - This is the SLR that the regular native SLR runs inside of
 					# This nested AppID is stored in the hardcoded SLR's toolmanifest
