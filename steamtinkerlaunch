@@ -7,7 +7,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20240617-3 (fix-gamelaunch-steamappscommon)"
+PROGVERS="v14.0.20240618-1 (fix-gamelaunch-steamappscommon)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -26864,10 +26864,14 @@ function main {
 			if grep -q "update" <<< "$@" || grep -q "^play" <<< "$@" ; then
 				commandline "$@"
 			# HACK: Since we check for steamapps/common ($SAC), commands which contain this (such as a one-time run path) will incorrectly get triggered as a game launch
-			#       As a workaround, skip a hardcoded set of commands and pass directly to commandline (i.e. if we have OTR as our first option, pass down to commandline function and run otr)
-			elif grep -qwE "${STLINCOMINGSKIPCOMMANDS}" <<< "${1}"; then
+			#       As a workaround, skip interpreting a hardcoded set of commands as start parameters and pass directly to commandline (i.e. if we have OTR as our first option, pass down to commandline function and run otr)
+			#
+			#       We also check to make sure the first argument doesn't contain any slashes (i.e. game start commands' first argument could be a path, so it would contain a slash)
+			#       This allows us to distinguish between '/home/otr' which could be a game launch command, and the 'otr' command
+			elif grep -qwE "${STLINCOMINGSKIPCOMMANDS}" <<< "${1}" && [[ "${1}" != *"/"* ]]; then
 				commandline "$@"
 			else
+				# If we get here, this should be an actual game start command!
 				setGameVars "$@"
 				if [ "$ISGAME" -eq 2 ] || [ "$ISGAME" -eq 3 ]; then
 					prepareLaunch
