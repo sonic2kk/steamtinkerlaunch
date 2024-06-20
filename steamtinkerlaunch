@@ -7,7 +7,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20240618-1 (fix-gamelaunch-steamappscommon)"
+PROGVERS="v14.0.20240621-1 (fix-gamelaunch-steamappscommon)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -26859,15 +26859,18 @@ function main {
 		elif grep -q "$SAC" <<< "$@" || grep -q "$L2EA" <<< "$@"; then
 			# We check if incoming commands contain 'steamapps/common' to interpret them as game launch commands
 			# But if $1 is a known command in this list, explicitly pass it to 'commandline' as we know it is NOT a game command
+			# This prevents commands which contain 'steamapps/common' ANYWHERE in their command (including as paths as parameters to other flags) from being interpreted as a game launch
+			#
+			# If $1 is a known steamtinkerlaunch command (with 'steamtinkerlaunch otr', $1 would be 'otr') then intervene and force this to the 'commandline' function as it is a known steamtinkerlaunch command
 			STLINCOMINGSKIPCOMMANDS="otr|onetimerun"
 
 			if grep -q "update" <<< "$@" || grep -q "^play" <<< "$@" ; then
 				commandline "$@"
 			# HACK: Since we check for steamapps/common ($SAC), commands which contain this (such as a one-time run path) will incorrectly get triggered as a game launch
-			#       As a workaround, skip interpreting a hardcoded set of commands as start parameters and pass directly to commandline (i.e. if we have OTR as our first option, pass down to commandline function and run otr)
+			#       As a workaround, skip interpreting a hardcoded set of commands as start parameters and pass directly to commandline (i.e. if we have 'otr' as our first option, pass down to commandline function and run otr)
 			#
 			#       We also check to make sure the first argument doesn't contain any slashes (i.e. game start commands' first argument could be a path, so it would contain a slash)
-			#       This allows us to distinguish between '/home/otr' which could be a game launch command, and the 'otr' command
+			#       This allows us to distinguish between '/home/otr' which could be a game launch command, and the 'steamtinkerlaunch otr' command (where $1 is 'otr')
 			elif grep -qwE "${STLINCOMINGSKIPCOMMANDS}" <<< "${1}" && [[ "${1}" != *"/"* ]]; then
 				commandline "$@"
 			else
