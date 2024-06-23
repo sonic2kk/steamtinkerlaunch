@@ -7,7 +7,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20240623-1"
+PROGVERS="v14.0.20240623-2"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -12235,6 +12235,7 @@ function OneTimeRunReset {
 
 # Called when a user passes arguments for onetimerun
 # TODO a way to use default game Proton version, either if '--proton' is not supplied or if '--proton="default"'?
+# TODO add a way to use PROTON_LOG with custom command?
 function commandlineOneTimeRun {
 	setOneTimeRunVars "$1"
 	# Get incoming arguments
@@ -12312,9 +12313,27 @@ function commandlineOneTimeRun {
 					return
 				fi
 				writelog "INFO" "${FUNCNAME[0]} - Trying to find Proton version to launch executable with from given Proton name '$RUNOTPROTON'"
+
+				# If user did not pass '--proton', then use the game's Proton version
+				if [ -z "$RUNOTPROTON" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Did not get RUNOTPROTON from '--proton' option (perhaps this option was omitted?), so using per-game Proton version (USEPROTON) '$USEPROTON'"
+					RUNOTPROTON="$USEPROTON"
+					OTPROTON="$USEPROTON"
+				fi
+
 				RUNOTPROTON="$(getProtPathFromCSV "$RUNOTPROTON")"
 				if [ ! -f "$RUNOTPROTON" ]; then
-					RUNOTPROTON="$(fixProtonVersionMismatch "OTPROTON" "$STLGAMECFG" X)"  # TODO re-check to make sure this is valid?
+					writelog "INFO" "${FUNCNAME[0]} - RUNOTPROTON '$RUNOTPROTON' could not be found in ProtonCSV -- Attempting to resolve mismatch"
+					# "1" forces fixProtonVersionMismatch to run even though ISGAME != 2 (ISGAME -eq 2 means Proton game, but ISGAME may not be 2 for One-Time Run, so we force Proton version resolution)
+					if [ -n "$RUNOTPROTON" ]; then
+						RUNOTPROTON="$(fixProtonVersionMismatch "RUNOTPROTON" "$STLGAMECFG" "1" X)"
+					else
+						writelog "INFO" "${FUNCNAME[0]} - Attemptiing to resolve Proton version mismatch for blank RUNOTPROTON '$RUNOTPROTON' by instead trying to resolve based on USEPROTON '$USEPROTON' which should hopefully not be blank"
+						RUNOTPROTON="$(fixProtonVersionMismatch "USEPROTON" "$STLGAMECFG" "1" X)"
+					fi
+
+					# Update OTPROTON to make sure it matches any Proton version mismatch fixes / to have a value if One-Time Run was called without '--proton' (i.e use the Game Proton version)
+					OTPROTON="$( getProtNameFromPath "$RUNOTPROTON" )"
 				fi
 			else
 				writelog "INFO" "${FUNCNAME[0]} - Given executable detected as native Linux binary, this is usually correct but if this was detected incorrectly you should force Proton!"
@@ -12337,8 +12356,8 @@ function commandlineOneTimeRun {
 				# NOTE: Having save here means values won't save unless a launch is successful -- This is probably ok, but just a note for future reference
 				if [ "$OTSAVE" == "TRUE" ];then  # Save one-time settings to game config file -- Really only useful for OneTimeRunGUI
 					writelog "INFO" "${FUNCNAME[0]} - Saving One time run settings into '$STLGAMECFG'"
-					# Only save Proton version if we're using a Windows executable, otherwise we don't set a Proton version!
 
+					# Only save Proton version if we're using a Windows executable, otherwise we don't set a Proton version!
 					if [ "$ISWINDOWSEXE" -eq 1 ]; then
 						touch "$FUPDATE"
 						updateConfigEntry "OTPROTON" "$OTPROTON" "$STLGAMECFG"
@@ -19392,7 +19411,8 @@ function getProtonDBRating {
 }
 
 function fixProtonVersionMismatch {
-	if [ "$ISGAME" -eq 2 ]; then
+	FORCEPROTONMISMATCHRESOLVE="${3:-0}"  # I.e. passed by One-Time Run where "ISGAME -eq 3"
+	if [ "$ISGAME" -eq 2 ] || [ "$FORCEPROTONMISMATCHRESOLVE" -eq 1 ]; then
 		ORGPROTCAT="$1"
 		MIMAPROT="${!1}"
 
@@ -22391,7 +22411,7 @@ function howto {
 	echo "                                       such as Proton version where possible."
 	echo "         <args>:"
 	echo "         --exe=                        Absolute path to the One-Time executable (can be Windows or Linux executable)"
-	echo "         --proton=                     Name of the Proton version to use (see steamtinkerlaunch lp), ignored if not Windows executable"
+	echo "         --proton=                     Name of the Proton version to use (see steamtinkerlaunch lp). Defaults to Per-Game Proton version ('USEPROTON'), ignored if not Windows executable"
 	echo "         --workingdir=                 Working directory to launch the executable from"
 	echo "         --useexedir                   Use the same directory as the executable as the working directory (overrides --workingdir)"
 	echo "         --args=                       Arguments to append to the end of the executable launch"
