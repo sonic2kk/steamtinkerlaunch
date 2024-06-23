@@ -7,7 +7,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20240618-1 (otr-default-proton-ver)"
+PROGVERS="v14.0.20240618-2 (otr-default-proton-ver)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -12318,9 +12318,9 @@ function commandlineOneTimeRun {
 				if [ -z "$RUNOTPROTON" ]; then
 					writelog "INFO" "${FUNCNAME[0]} - Did not get RUNOTPROTON from '--proton' option (perhaps this option was omitted?), so using per-game Proton version (USEPROTON) '$USEPROTON'"
 					RUNOTPROTON="$USEPROTON"
+					OTPROTON="$USEPROTON"
 				fi
 
-				# TODO does OTPROTON need updated after a Proton version mismatch resolution?
 				RUNOTPROTON="$(getProtPathFromCSV "$RUNOTPROTON")"
 				if [ ! -f "$RUNOTPROTON" ]; then
 					writelog "INFO" "${FUNCNAME[0]} - RUNOTPROTON '$RUNOTPROTON' could not be found in ProtonCSV -- Attempting to resolve mismatch"
@@ -12331,6 +12331,9 @@ function commandlineOneTimeRun {
 						writelog "INFO" "${FUNCNAME[0]} - Attemptiing to resolve Proton version mismatch for blank RUNOTPROTON '$RUNOTPROTON' by instead trying to resolve based on USEPROTON '$USEPROTON' which should hopefully not be blank"
 						RUNOTPROTON="$(fixProtonVersionMismatch "USEPROTON" "$STLGAMECFG" "1" X)"
 					fi
+
+					# Update OTPROTON to make sure it matches any Proton version mismatch fixes / to have a value if One-Time Run was called without '--proton' (i.e use the Game Proton version)
+					OTPROTON="$( getProtNameFromPath "$RUNOTPROTON" )"
 				fi
 			else
 				writelog "INFO" "${FUNCNAME[0]} - Given executable detected as native Linux binary, this is usually correct but if this was detected incorrectly you should force Proton!"
@@ -12357,10 +12360,6 @@ function commandlineOneTimeRun {
 					# Only save Proton version if we're using a Windows executable, otherwise we don't set a Proton version!
 					if [ "$ISWINDOWSEXE" -eq 1 ]; then
 						touch "$FUPDATE"
-						writelog "INFO" "${FUNCNAME[0]} - OTPROTON is '$OTPROTON'"
-						writelog "INFO" "${FUNCNAME[0]} - RUNOTPROTON is '$RUNOTPROTON'"
-						writelog "INFO" "${FUNCNAME[0]} - These should match, and if not, we need to make them match! They may not match if the given Proton version was left out of the command (as it was not set in --proton=\"\") or if there was a Proton version mismatch and '$RUNOTPROTON' needs a mismatch resolution"
-						
 						updateConfigEntry "OTPROTON" "$OTPROTON" "$STLGAMECFG"
 					fi
 					touch "$FUPDATE"
