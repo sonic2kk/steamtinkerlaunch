@@ -26507,7 +26507,8 @@ function checkSteamDeckDependencies {
 		#  2. The dependency can actually be ran, confirming it is a valid file
 		#  3. SteamTinkerLaunch has not updated or autoupdater isn't enabled, so there would be no change in dependency version and thus no need to update
 		# If any of these are false, we need to check our dependencies (if a file is missing we would need to update, or if it cannot be used we need to update, and also if STL updated we may need a newer version, so update).
-		if [[ -f "$(command -v "$DEPCMD")" && "$CHECKCMD" = "OK" && ( "$( checkSteamDeckSTLUpdated )" -eq 0 || "$STEAMDECK_AUTOUP" -eq 0 ) ]]; then
+		if [[ -f "$(command -v "$DEPCMD")" && "$CHECKCMD" = "OK" ]] \
+		&& ! ( [ "$STEAMDECK_AUTOUP" -eq 1 ] && checkSteamDeckSTLUpdated ); then
 			writelog "INFO" "${FUNCNAME[0]} - Using '$DEPCMD' binary found in path: '$(command -v "$DEPCMD")'"
 			echo "Dependency '$DEPCMD' already installed, nothing to do."
 		else
@@ -26953,10 +26954,10 @@ function checkSteamDeckSTLUpdated {
 	CHECKLASTVERSSTEAMDECK="$( cat "$STLSTEAMDECKLASTVERS" )"
 	if [ "$CHECKLASTVERSSTEAMDECK" = "$PROGVERS" ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Last known SteamTinkerLaunch install version ('$CHECKLASTVERSSTEAMDECK') and the current version ('$PROGVERS') match -- There has been no update since last launch"
-		return 0
+		return 1
 	else
 		writelog "INFO" "${FUNCNAME[0]} - Last known SteamTinkerLaunch install version ('$CHECKLASTVERSSTEAMDECK') and the current version ('$PROGVERS') do NOT match -- It seems there has been an update!"
-		return 1
+		return 0
 	fi
 }
 
