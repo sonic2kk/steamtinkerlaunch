@@ -7,7 +7,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20240622-1 (mo2-silent-mode-custom-executable)"
+PROGVERS="v14.0.20240623-2 (mo2-silent-mode-custom-executable)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -3364,6 +3364,7 @@ function setDefaultCfgValues {
 		if [ -z "$SORTGARGS" ]							; then	SORTGARGS="0"; fi
 		if [ -z "$MO2MODE" ]							; then	MO2MODE="disabled"; fi
 		if [ -z "$WAITMO2" ]							; then	WAITMO2="2"; fi
+		if [ -z "$MO2SILENTMODEEXEOVERRIDE" ]			; then  MO2SILENTMODEEXEOVERRIDE="$NON"; fi
 		if [ -z "$USESPECIALK" ]						; then	USESPECIALK="0"; fi
 		if [ -z "$SPEKDLLNAME" ]						; then  SPEKDLLNAME="$AUTO"; fi
 		if [ -z "$USERESHSPEKPLUGIN" ]					; then  USERESHSPEKPLUGIN="1"; fi
@@ -4079,6 +4080,8 @@ function saveCfg {
 			echo "SORTGARGS=\"$SORTGARGS\""
 			echo "## $DESC_WAITMO2"
 			echo "WAITMO2=\"$WAITMO2\""
+			echo "## $DESC_MO2SILENTMODEEXEOVERRIDE"
+			echo "MO2SILENTMODEDESC_MO2SILENTMODEEXEOVERRIDE=\"$MO2SILENTMODEDESC_MO2SILENTMODEEXEOVERRIDE\""
 			echo "## $DESC_MO2MODE"
 			echo "MO2MODE=\"$MO2MODE\""
 			echo "## $DESC_USESPECIALK"
@@ -5970,6 +5973,7 @@ function AllSettingsEntriesDummyFunction {
 --field="     $GUI_MO2CUSTOMINSTALLER!$DESC_MO2CUSTOMINSTALLER ('MO2CUSTOMINSTALLER')":FL "${MO2CUSTOMINSTALLER/#-/ -}" `#CAT_MO2` `#SUB_Directories` `#MENU_GLOBAL` \
 --field="     $GUI_MO2MODE!$DESC_MO2MODE ('MO2MODE')":CB "$(cleanDropDown "${MO2MODE/#-/ -}" "disabled!gui!silent")" `#CAT_MO2` `#MENU_GAME` \
 --field="     $GUI_WAITMO2!$DESC_WAITMO2 ('WAITMO2')":NUM "${WAITMO2/#-/ -}" `#CAT_MO2` `#MENU_GAME` \
+--field="     $GUI_MO2SILENTMODEEXEOVERRIDE!$DESC_MO2SILENTMODEEXEOVERRIDE ('MO2SILENTMODEEXEOVERRIDE')":CBE "$(cleanDropDown "${MO2SILENTMODEEXEOVERRIDE/#-/ -}" "$MO2SILENTMODEEXEPROFILES" )" `#CAT_MO2` `#MENU_GAME` \
 #ENDSETENTRIES
 }
 
@@ -6365,6 +6369,7 @@ function MainMenu {
 	writelog "INFO" "${FUNCNAME[0]} - Preparing to load Main Menu"
 
 	createDLReShadeList
+	createMO2SilentModeExeProfilesList
 	prepareMenu "$@"
 
 	setShowPic
@@ -17731,6 +17736,41 @@ function prepareMO2 {
 	fi
 }
 
+function createMO2SilentModeExeProfilesList {
+	# Get all of the ModOrganizer 2 executables launch configurations in the instance's INI 
+	# The user can use this to override which 'moshortcut://' is launched in Silent Mode
+	#
+	# TODO make sure this doesn't regress Non-Steam Games
+	# TODO check how this may impact load times for the Main Menu
+
+	MO2SILENTMODEEXEPROFILES="$NON"
+	MO2GAMES="$GLOBALMISCDIR/mo2games.txt"
+
+	# Taken from manageMO2GInstance
+	MO2GA1="$(grep -m1 "\"$AID\"" "$MO2GAMES" | cut -d ';' -f1)"
+	MO2GAM="${MO2GA1//\"}"
+	if [ -z "$MO2GAM" ]; then
+		writelog "SKIP" "${FUNCNAME[0]} - Does not appear that '$AID' is a ModOrganizer 2 game, nothing to do"
+		return
+	fi
+
+	# MO2COMPDATA taken from setMO2Vars
+	MOIN="${MO2COMPDATA//\"/}/pfx/$DRCU/$STUS/$ADLO/$MO/${MO2GAM}/${MO}.ini"
+	writelog "INFO" "${FUNCNAME[0]} - MOIN is '${MOIN}'"
+	if [ ! -f "$MOIN" ]; then
+		writelog "SKIP" "${FUNCNAME[0]} - Nothing to do, ModOrganizer 2 instance INI for '$MO2GAM ($AID)' doesn't exist at '$MOIN' -- Perhaps this game has never been managed with MO2 before?"
+		return
+	fi
+
+	# Executables are stored in INI in format '1\title=Executable Name', where '1' is its position in the MO2 executable profile list
+	while read -r MO2EXEPROF; do
+		# Remove \r with Windows line encoding in INI (\n should already be removed)
+		MO2SILENTMODEEXEPROFILES="${MO2SILENTMODEEXEPROFILES}!${MO2EXEPROF//$'\r'/}"
+	done <<< "$( sed -n 's/^[0-9]\\title=//p' "$MOIN" )"
+
+	writelog "INFO" "${FUNCNAME[0]} - ${MO2SILENTMODEEXEPROFILES}"
+}
+
 function startMO2 {
 	prepareMO2 "$NON" "gui"
 	if [ -d "${MO2EXE%/*}" ] ; then
@@ -20011,8 +20051,32 @@ function prepMO2 {
 					MO2MODE="gui"
 				else
 					# TODO make this configurable in case user wants to use custom executable name (i.e. SKSE)
-					MO2SILENTMODESHORTCUT="$MO2GAMINI"
-					RUNCMD=("${RUNCMD[@]}" "$MO2EXE" "moshortcut://:$MO2SILENTMODESHORTCUT")
+					# MO2SILENTMODESHORTCUT="$MO2GAMINI"
+					MO2SILENTMODERUN="$MO2GAMINI"  # Executable profile to use in silent mode, defaults to INI but can be overridden
+
+					# Check if MO2 Silent Mode executable has been overwritten
+					if [ -n "$MO2SILENTMODEEXEOVERRIDE" ] && [ "$MO2SILENTMODEEXEOVERRIDE" != "$NON" ]; then
+						# TODO should we check if 'MO2SILENTMODEEXEOVERRIDE' exists in the INI?
+						# TODO how to get the INI path? -- UPDATE: Check createMO2SilentModeExeProfilesList
+						# - INI path is at '${MO2PFX}/drive_c/users/steamuser/AppData/Local/ModOrganizer/${MO2GAMINI}/ModOrganizer.ini'
+						# - We probably have some kind of path to this INI already somewhere if we write to it, and we can ue '${MO}.ini' for the INI
+						# - Once we have the path we can parse for the instance name using the same logic as 'createMO2SilentModeExeProfilesList'
+						writelog "INFO" "${FUNCNAME[0]} - Overridding ModOrganizer 2 Silent Mode shortcut with '$MO2SILENTMODEEXEOVERRIDE' because it is defined and is not '$NON'"
+						MO2SILENTMODERUN="$MO2SILENTMODEEXEOVERRIDE"
+					fi
+
+					# Run MO2 EXE with 'moshortcut://:' in for Silent Mode, as this will run a given Executable Profile
+					# This defaults to the Executable profile that matches the INI filename. We infer this from mo2games.txt
+					#
+					# For example, 'Oblivion' will always have 'Oblivion.ini' because we make sure we name the entries in mo2games.txt correctly,
+					# and MO2 will always create an Executable profile for *just* the game without its launcher (in this case, 'Oblivion'), so we can assume
+					# the INI name will always have a corresponding Executable profile (unless manually removed by the user, and in such a case, the override option allows them to fix that)
+					#
+					# Some games (like Skyrim Special Edition) may need to use another executable profile, like SKSE64, so a user can override this value and the command
+					# would become 'moshortcut://:SKSE64'
+					#
+					# TODO what happens if the given name is invalid? What does MO2 do?
+					RUNCMD=("${RUNCMD[@]}" "$MO2EXE" "moshortcut://:$MO2SILENTMODERUN")
 
 					writelog "INFO" "${FUNCNAME[0]} - Starting '$SGNAID' with $MO enabled mods with command '${RUNCMD[*]}'"
 					notiShow "$(strFix "$NOTY_STARTSIMO" "$GN" "$AID")"
