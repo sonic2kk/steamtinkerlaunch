@@ -7,7 +7,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20240623-2 (mo2-silent-mode-custom-executable)"
+PROGVERS="v14.0.20240623-3 (mo2-silent-mode-custom-executable)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -17739,10 +17739,6 @@ function prepareMO2 {
 function createMO2SilentModeExeProfilesList {
 	# Get all of the ModOrganizer 2 executables launch configurations in the instance's INI 
 	# The user can use this to override which 'moshortcut://' is launched in Silent Mode
-	#
-	# TODO make sure this doesn't regress Non-Steam Games
-	# TODO check how this may impact load times for the Main Menu
-
 	MO2SILENTMODEEXEPROFILES="$NON"
 	MO2GAMES="$GLOBALMISCDIR/mo2games.txt"
 
@@ -17768,7 +17764,7 @@ function createMO2SilentModeExeProfilesList {
 		MO2SILENTMODEEXEPROFILES="${MO2SILENTMODEEXEPROFILES}!${MO2EXEPROF//$'\r'/}"
 	done <<< "$( sed -n 's/^[0-9]\\title=//p' "$MOIN" )"
 
-	writelog "INFO" "${FUNCNAME[0]} - ${MO2SILENTMODEEXEPROFILES}"
+	writelog "INFO" "${FUNCNAME[0]} - MO2SILENTMODEEXEPROFILES list is '${MO2SILENTMODEEXEPROFILES}'"
 }
 
 function startMO2 {
@@ -20050,17 +20046,10 @@ function prepMO2 {
 					notiShow "$(strFix "$NOTY_NOMO" "$GN" "$AID")"
 					MO2MODE="gui"
 				else
-					# TODO make this configurable in case user wants to use custom executable name (i.e. SKSE)
-					# MO2SILENTMODESHORTCUT="$MO2GAMINI"
 					MO2SILENTMODERUN="$MO2GAMINI"  # Executable profile to use in silent mode, defaults to INI but can be overridden
 
 					# Check if MO2 Silent Mode executable has been overwritten
 					if [ -n "$MO2SILENTMODEEXEOVERRIDE" ] && [ "$MO2SILENTMODEEXEOVERRIDE" != "$NON" ]; then
-						# TODO should we check if 'MO2SILENTMODEEXEOVERRIDE' exists in the INI?
-						# TODO how to get the INI path? -- UPDATE: Check createMO2SilentModeExeProfilesList
-						# - INI path is at '${MO2PFX}/drive_c/users/steamuser/AppData/Local/ModOrganizer/${MO2GAMINI}/ModOrganizer.ini'
-						# - We probably have some kind of path to this INI already somewhere if we write to it, and we can ue '${MO}.ini' for the INI
-						# - Once we have the path we can parse for the instance name using the same logic as 'createMO2SilentModeExeProfilesList'
 						writelog "INFO" "${FUNCNAME[0]} - Overridding ModOrganizer 2 Silent Mode shortcut with '$MO2SILENTMODEEXEOVERRIDE' because it is defined and is not '$NON'"
 						MO2SILENTMODERUN="$MO2SILENTMODEEXEOVERRIDE"
 					fi
@@ -20075,7 +20064,7 @@ function prepMO2 {
 					# Some games (like Skyrim Special Edition) may need to use another executable profile, like SKSE64, so a user can override this value and the command
 					# would become 'moshortcut://:SKSE64'
 					#
-					# TODO what happens if the given name is invalid? What does MO2 do?
+					# If a given executable name is invalid, ModOrganizer 2 will show an error dialog stating so and will exit
 					RUNCMD=("${RUNCMD[@]}" "$MO2EXE" "moshortcut://:$MO2SILENTMODERUN")
 
 					writelog "INFO" "${FUNCNAME[0]} - Starting '$SGNAID' with $MO enabled mods with command '${RUNCMD[*]}'"
