@@ -650,8 +650,12 @@ function setSteamPaths {
 		if [ -f "$STLDEFGLOBALCFG" ] && grep -q "^STEAMUSERID=" "$STLDEFGLOBALCFG" ; then
 			STEAMUSERID="$(grep "^STEAMUSERID=" "$STLDEFGLOBALCFG" | grep -o "[[:digit:]]*")"
 			STUIDPATH="$SUSDA/$STEAMUSERID"
+
+			writelog "INFO" "${FUNCNAME[0]} - Parsing Steam UserID from global config as '$STEAMUSERID' -- STUIDPATH is now '$STUIDPATH'"
 		else
 			if [ -d "$SUSDA" ]; then
+				writelog "INFO" "${FUNCNAME[0]} - Trying to determine Steam UserID and userdata path"
+
 				STEAMUSERID=""
 				STUIDPATH=""
 
@@ -659,6 +663,7 @@ function setSteamPaths {
 				# fillLoginUsersCSV will fall back to taking the first userdata folder in the Steam userdata dir and will set it to MostRecent=1
 				# if it doesn't get any matches in loginusers.vdf, so we don't have to do the fallback here
 				if [ ! -f "$LOGINUSERSCSV" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Filling Users CSV"
 					fillLoginUsersCSV
 				fi
 
@@ -694,6 +699,11 @@ function setSteamPaths {
 				# Hopefully this never happens under normal usage... We should always be able to find the Steam User
 				if [ -z "${STEAMUSERID}" ] || [ -z "${STUIDPATH}" ]; then
 					writelog "WARN" "${FUNCNAME[0]} - Could not find any logged in Steam users in '$LOGINUSERSCSV' (are any users logged in?) - other variables depend on it, expect problems!" "E"
+				elif [ ! -d "${STUIDPATH}" ]; then
+					# If we were able to get the Most Recent Steam user but the userdata path for this user with this UserID does not actually exist, something has gone horribly wrong!
+					# One possible but unlikely scenario is that the MostRecent user in LognUsersCSV file was removed from the Steam Client, so the userdata path would no longer exist
+					# Users should remove /dev/shm/steamtinkerlaunch if the accounts or Steam Client config changes in any way so this would only be a temporary issue
+					writelog "WARN" "${FUNCNAME[0]} - Built Steam userdata path for User ID '${STEAMUSERID}' at path '${STUIDPATH}', but this path does not exist! This will probably cause problems!" "E"
 				fi
 			else
 				writelog "WARN" "${FUNCNAME[0]} - Steam '$USDA' directory not found, other variables depend on it - Expect problems" "E"
@@ -24351,7 +24361,7 @@ function fillLoginUsersCSV {
 	fi
 
 	# NOTE: For testing only
-	LOGUVDF="$HOME/.local/share/Steam/config/test_loginusers.vdf"
+	# LOGUVDF="$HOME/.local/share/Steam/config/test_loginusers.vdf"
 
 	# Toplevel block in loginusers.vdf is "users", get all block names ("[0-9]+" with one hardcoded indent, because we know we only have 1 indent)
 	#
@@ -24404,7 +24414,7 @@ function fillLoginUsersCSV {
 		# This value should really only ever be 0 or 1
 		LOGINUSERBLOCK="$( getVdfSection "${LOGINUSERLONGID}" "" "1" "${LOGUVDF}" )"
 		if [ -n "${LOGINUSERBLOCK}" ]; then
-			LOGINUSERMOSTRECENTVAL="$( getVdfSectionValue "${LOGINUSERBLOCK}" "MostRecent" "1" )"
+			LOGINUSERMOSTRECENTVAL="$( getVdfSectionValue "${LOGINUSERBLOCK}" "MostRecent" "1" | tr -d '"' )"
 
 			if [ -n "$LOGINUSERMOSTRECENTVAL" ]; then
 				LOGINUSERMOSTRECENT="$LOGINUSERMOSTRECENTVAL"
