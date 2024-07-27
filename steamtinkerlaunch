@@ -7,7 +7,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20240726-2"
+PROGVERS="v14.0.20240727-1"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -115,6 +115,7 @@ VARSIN="$STLSHM/vars-in.txt"
 FUPDATE="$STLSHM/fupdate.txt"
 STPAVARS="$STLSHM/steampaths.txt"
 PROTONCSV="$STLSHM/ProtonCSV.txt"
+LOGINUSERSCSV="$STLSHM/LoginUsersCSV.txt"
 SWRF="$STLSHM/SWR.txt"
 UWRF="$STLSHM/UWR.txt"
 EWRF="$STLSHM/EWR.txt"
@@ -556,6 +557,7 @@ SCVDF="shortcuts.vdf"
 SRSCV="7/remote/$SCV"
 LCV="localconfig.vdf"
 COCOV="config/config.vdf"
+LUCOV="config/loginusers.vdf"
 SCSHVDF="screenshots.vdf"
 SCRSH="760/$SCSHVDF"
 LASTRUN="$LOGDIR/lastrun.txt"
@@ -633,6 +635,7 @@ function setSteamPaths {
 		setSteamPath "DEFSTEAMAPPS" "$SA"
 		setSteamPath "DEFSTEAMAPPSCOMMON" "$SAC"
 		setSteamPath "CFGVDF" "$COCOV"
+		setSteamPath "LOGUVDF" "$LUCOV"
 		setSteamPath "LFVDF" "$SA/$LIFOVDF"
 		setSteamPath "FAIVDF" "$AAVDF"
 		setSteamPath "PIVDF" "$APVDF"
@@ -647,12 +650,61 @@ function setSteamPaths {
 		if [ -f "$STLDEFGLOBALCFG" ] && grep -q "^STEAMUSERID=" "$STLDEFGLOBALCFG" ; then
 			STEAMUSERID="$(grep "^STEAMUSERID=" "$STLDEFGLOBALCFG" | grep -o "[[:digit:]]*")"
 			STUIDPATH="$SUSDA/$STEAMUSERID"
+
+			writelog "INFO" "${FUNCNAME[0]} - Parsing Steam UserID from global config as '$STEAMUSERID' -- STUIDPATH is now '$STUIDPATH'"
 		else
 			if [ -d "$SUSDA" ]; then
-				# this works for 99% of all users, because most do have 1 steamuser on their system
-				# could pick most recent user (i.e. the current logged in user) from 'loginusers.vdf'
-				STUIDPATH="$(find "$SUSDA" -maxdepth 1 -type d -name "[1-9]*" | head -n1)"
-				STEAMUSERID="${STUIDPATH##*/}"
+				writelog "INFO" "${FUNCNAME[0]} - Trying to determine Steam UserID and userdata path"
+
+				STEAMUSERID=""
+				STUIDPATH=""
+
+				# Try to set the path to the userdata folder (this contains grids, shortcuts.vdf, etc)
+				# fillLoginUsersCSV will fall back to taking the first userdata folder in the Steam userdata dir and will set it to MostRecent=1
+				# if it doesn't get any matches in loginusers.vdf, so we don't have to do the fallback here
+				if [ ! -f "$LOGINUSERSCSV" ]; then
+					writelog "INFO" "${FUNCNAME[0]} - Filling Users CSV"
+					fillLoginUsersCSV
+				fi
+
+				# Try to find the Steam Userdata folder and current Steam UserID based on generated LoginUsersCSV
+				# This allows us to select the currently logged in user as the Steam User we want to use, meaning
+				# we will use their userdata directory.
+				#
+				# If the currently logged in user changes we will then be able to use their userdata directory instead
+				# This allows us to use the correct userdata folder for the currently logged in user by default when
+				# there are multiple Steam user accounts logged into the same machine
+				#
+				# See also: https://github.com/sonic2kk/steamtinkerlaunch/issues/1140
+				while read -r loginuser; do
+					LOGINUSERCSVSHORTAID="$( echo "${loginuser}" | cut -d ';' -f2  )"
+					LOGINUSERCSVMOSTRECENT="$( echo "${loginuser}" | cut -d ';' -f3  )"
+
+					# if the loginuser loop variable is the MostRecent in loginusers.vdf, then:
+					# - set the current Steam User ID to the Short UserID
+					# - set the Steam userdata path to the base path + the Short UserID
+					if [ "${LOGINUSERCSVMOSTRECENT}" -eq 1 ]; then
+						STEAMUSERID="${LOGINUSERCSVSHORTAID}"
+						STUIDPATH="${SUSDA}/${STEAMUSERID}"
+
+						writelog "INFO" "${FUNCNAME[0]} - Found MostRecent Steam User '${STEAMUSERID}' from '${LOGINUSERSCSV}' - STUIDPATH is now '${STUIDPATH}'"
+						break
+					fi
+				done < "$LOGINUSERSCSV"
+
+				# Since fillLoginUsersCSV should handle the fallback for us, if we still have no matches,
+				# assume no users found at all, meaning no users are logged in!
+				# This will cause problems, so log a warning
+				#
+				# Hopefully this never happens under normal usage... We should always be able to find the Steam User
+				if [ -z "${STEAMUSERID}" ] || [ -z "${STUIDPATH}" ]; then
+					writelog "WARN" "${FUNCNAME[0]} - Could not find any logged in Steam users in '$LOGINUSERSCSV' (are any users logged in?) - other variables depend on it, expect problems!" "E"
+				elif [ ! -d "${STUIDPATH}" ]; then
+					# If we were able to get the Most Recent Steam user but the userdata path for this user with this UserID does not actually exist, something has gone horribly wrong!
+					# One possible but unlikely scenario is that the MostRecent user in LognUsersCSV file was removed from the Steam Client, so the userdata path would no longer exist
+					# Users should remove /dev/shm/steamtinkerlaunch if the accounts or Steam Client config changes in any way so this would only be a temporary issue
+					writelog "WARN" "${FUNCNAME[0]} - Built Steam userdata path for User ID '${STEAMUSERID}' at path '${STUIDPATH}', but this path does not exist! This will probably cause problems!" "E"
+				fi
 			else
 				writelog "WARN" "${FUNCNAME[0]} - Steam '$USDA' directory not found, other variables depend on it - Expect problems" "E"
 			fi
@@ -24285,6 +24337,95 @@ function getGlobalSteamCompatToolInternalName {
 	fi
 }
 
+# Takes an signed 32bit integer and converts it to an unsigned 32bit integer
+# Steam uses this for Short UserIDs (userdata folder names) and Short Non-Steam Game AppIDs (Steam Shortcut Grid ID names)
+function generateSteamShortID {
+	echo $(( $1 & 0xFFFFFFFF ))
+}
+
+# Store loginusers data in CSV in in $STLSHM
+# We parse this info out of loginusers.vdf which stores has blocks grouped by Long UserID
+# We can convert down to the Short UserID from this.
+#
+# There should be a Short UserID folder in the SUSDA folder because each Steam User LongID in loginusers.vdf
+# should also have a corresponding Short UserID userdata folder.
+#
+# Columns for now are as follows (we can extend in future if we need to):
+# Long UserID,Short UserID,MostRecent
+function fillLoginUsersCSV {
+	# Don't overwrite LoginUsersCSV file if it exists and is not blank, only re-create it if SHM dir is cleared
+	# The loginusers are not likely to change after the SHM dir is created so this is a bit more efficient
+	if [ -f "$LOGINUSERSCSV" ] && [ -s "$LOGINUSERSCSV" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - '${LOGINUSERSCSV}' already exists -- Not re-creating"
+		return
+	fi
+
+	# NOTE: For testing only
+	# LOGUVDF="$HOME/.local/share/Steam/config/test_loginusers.vdf"
+
+	# Toplevel block in loginusers.vdf is "users", get all block names ("[0-9]+" with one hardcoded indent, because we know we only have 1 indent)
+	#
+	# TODO it would be nice to have a generic function to get all toplevel VDF block names like this, but
+	# We can't know the pattern and would need to know how to differentiate between a blockname and a property name
+	# It just so happens for loginusers that it only contains blocks
+	if [ -f "${LOGUVDF}" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Found loginusers file at '${LOGUVDF}' -- Will attempt to parse this file"
+		mapfile -t LOGINUSERLONGIDS < <(getVdfSection '"users"' "" "" "${LOGUVDF}" | grep -oP '^\t"[0-9]+"' | tr -d '\t"\ ')
+	else
+		writelog "WARN" "${FUNCNAME[0]} - loginusers file at '${LOGUVDF}' does not exist! Will fall back to taking first Steam userdata folder as only login user"
+	fi
+
+	# If we couldn't parse loginusers.vdf, fall back to taking the first userdata folder we can find from the Steam userdata dir
+	if [ "${#LOGINUSERLONGIDS}" -eq 0 ]; then
+		writelog "WARN" "${FUNCNAME[0]} - Could not find any loginusers in '${LOGUVDF}', either loginusers file doesn't exist or did not return any parsable data -- Falling back to old method of grabbing first directory in '$SUSDA'"
+
+		# If we don't have loginusers.vdf, we don't have the long UserID because you can't get the Long UserID from the Short UserID
+		# The Short UserID uses bitwise AND which loses information
+		#
+		# In this case we just default to 1 (to avoid conflicting with the '0' userdata folder from Steam)
+		# This should be fine as we never need the Long UserID
+		LOGINUSERLONGID="1"
+
+		# We used to do this in setSteamPaths before we tried to parse MostRecent login user
+		LOGINUSERSHORTID="$( find "$SUSDA" -maxdepth 1 -type d -name "[1-9]*" | head -n1)"
+		LOGINUSERSHORTID="${LOGINUSERSHORTID##*/}"
+
+		# LOGINUSERLONGID="$( generateSteamShortID "${LOGINUSERLONGID}" )"
+		LOGINUSERMOSTRECENT="1"  # Default to 1 as we would only have one loginuser in this case
+
+		writelog "INFO" "${FUNCNAME[0]} - Writing loginuser '${LOGINUSERLONGID},${LOGINUSERSHORTID},${LOGINUSERMOSTRECENT}' to '${LOGINUSERSCSV}'"
+		printf '%s;%s;%s\n' "${LOGINUSERLONGID}" "${LOGINUSERSHORTID}" "${LOGINUSERMOSTRECENT}" > "${LOGINUSERSCSV}"
+
+		# Don't move onto below loop
+		return
+	fi
+
+	# If we could parse loginusers.vdf, assume valid data and iterate over it, storing it in LoginUsersCSV
+	for LOGINUSERLONGID in "${LOGINUSERLONGIDS[@]}"; do
+		writelog "INFO" "the id is ${LOGINUSERLONGID}"
+
+		LOGINUSERSHORTID="$( generateSteamShortID "${LOGINUSERLONGID}" )"
+		LOGINUSERMOSTRECENT="0"  # Default MostRecent to 0
+
+		# Check if user is most recent by trying to get the corresponding LongID block in loginusers.vdf
+		# and then picking out the MostRecent field
+		#
+		# If we find any value for MostRecent in the Long UserID block, store it in LOGINUSERMOSTRECENT
+		# This value should really only ever be 0 or 1
+		LOGINUSERBLOCK="$( getVdfSection "${LOGINUSERLONGID}" "" "1" "${LOGUVDF}" )"
+		if [ -n "${LOGINUSERBLOCK}" ]; then
+			LOGINUSERMOSTRECENTVAL="$( getVdfSectionValue "${LOGINUSERBLOCK}" "MostRecent" "1" | tr -d '"' )"
+
+			if [ -n "$LOGINUSERMOSTRECENTVAL" ]; then
+				LOGINUSERMOSTRECENT="$LOGINUSERMOSTRECENTVAL"
+			fi
+		fi
+
+		writelog "INFO" "${FUNCNAME[0]} - Writing loginuser '${LOGINUSERLONGID},${LOGINUSERSHORTID},${LOGINUSERMOSTRECENT}' to '${LOGINUSERSCSV}'"
+		printf '%s;%s;%s\n' "${LOGINUSERLONGID}" "${LOGINUSERSHORTID}" "${LOGINUSERMOSTRECENT}"
+	done >"$LOGINUSERSCSV"
+}
+
 function updateLocalConfigAppsValue {
 	# Add key for specific AppID to localconfig.vdf's Apps section, creating the initial 'Apps' section if it doesn't exist
 	# Used to set AllowOverlay and OpenVR when adding Non-Steam Games
@@ -24654,10 +24795,6 @@ function addNonSteamGame {
 		bigToLittleEndian "$( dec2hex "$1" )"
 	}
 
-	# Takes an signed 32bit integer and converts it to an unsigned 32bit integer
-	function generateShortcutGridAppId {
-		echo $(( $1 & 0xFFFFFFFF ))
-	}
 	## ----------
 	### END MAGIC APPID FUNCTIONS
 
@@ -24837,7 +24974,7 @@ function addNonSteamGame {
 	NOSTAIDVDF="$( generateShortcutVDFAppId "${NOSTAPPNAME}${NOSTEXEPATH}" )"  # signed integer AppID, stored in the VDF as hexidecimal - ex: -598031679
 	NOSTAIDVDFHEX="$( generateShortcutVDFHexAppId "$NOSTAIDVDF" )"  # 4byte little-endian hexidecimal of above 32bit signed integer, which we write out to the binary VDF - ex: c1c25adc
 	NOSTAIDVDFHEXFMT="\x$(awk '{$1=$1}1' FPAT='.{2}' OFS="\\\x" <<< "$NOSTAIDVDFHEX")"  # binary-formatted string hex of the above which we actually write out - ex: \xc1\xc2\x5a\xdc
-	NOSTAIDGRID="$( generateShortcutGridAppId "$NOSTAIDVDF" )"  # unsigned 32bit ingeger version of "$NOSTAIDVDF", which is used as the AppID for Steam artwork ("grids"), as well as for our shortcuts
+	NOSTAIDGRID="$( generateSteamShortID "$NOSTAIDVDF" )"  # unsigned 32bit ingeger version of "$NOSTAIDVDF", which is used as the AppID for Steam artwork ("grids"), as well as for our shortcuts
 
 	writelog "INFO" "${FUNCNAME[0]} - === Adding new $NSGA ==="
 	writelog "INFO" "${FUNCNAME[0]} - Signed Integer Shortcut AppID: '${NOSTAIDVDF}'"
