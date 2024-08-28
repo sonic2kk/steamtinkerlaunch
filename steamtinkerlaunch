@@ -7,7 +7,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20240831-1"
+PROGVERS="v14.0.20240829-1 (gamescope-use-getgamescopearg-for-gsshwres-gsintres)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -11294,41 +11294,70 @@ function setGameScopeVars {
 		ARGTYPE="${6,,}"  # e.g. "chk", "cb", etc (matches Yad widget types mostly)
 
 		# Set values for undefined arguments
-		if [ -z "$VAR" ]; then
-			if grep -qw "$FLAG" <<< "$ARGS"; then
-				if [[ $ARGTYPE =~ "cb" ]] || [[ $ARGTYPE =~ "num" ]]; then
-					# Get the value given to the argument as the enabled/selected value, e.g. get '2' from '-U 2' if we passed '-U'
-					tr ' ' '\n' <<< "$ARGS" | grep -wA1 "$FLAG" | tail -n1
-				elif [[ $ARGTYPE =~ "path" ]] || [[ $ARGTYPE =~ "txt" ]]; then
-					# Get value given to arguments with two dashes, like `--`
-					echo "$ARGS" | sed 's:--:\n--:g' | grep -wA1 "$FLAG" | sed "s:${UNESCAPED_FLAG}::g;s:-:\n-:g" | head -n1 | xargs
-				else
-					echo "$TRUEVAL"
-				fi
+		if [ -n "$VAR" ]; then
+			return
+		fi
+
+		# If the flag is not in the args string, return the default value for display purposes
+		if ! grep -qw "$FLAG" <<< "$ARGS"; then
+			echo "$DEFVAL"
+			return
+		fi
+
+		if [[ $ARGTYPE =~ "cb" ]] || [[ $ARGTYPE =~ "num" ]]; then
+			# Get the value given to the argument as the enabled/selected value, e.g. get '2' from '-U 2' if we passed '-U'
+			# If the value does not contain only numbers (with or without decimals) then this will be blank and we return the default value 'DEFVAL'
+			#
+			# If we get passed an invalid GameScope commandline argument where a flag that is supposed to be followed by a NUMBER is not,
+			# we could end up returning the next argument, e.g. `-s -f` would return `-s` if we didn't include the `grep -P`
+			# Using the `grep -P` we filter out potential garbage returned by the rest of the parsing.
+			#
+			# We are most likely to encounter problems without this `grep -P` when it comes to the `GSINTRES` and `GSSHWRES`,
+			# as if these are blank we end up displaying 'x'.
+			#
+			# For comboboxes that can display text, we will just have to assume we are passed a valid string, as freetext comboboxes could contain
+			# anything and we cannot/should not try to assume what is valid for them in this way.
+			# This logic only exists to filter out non-numerical values for flags which expect to be given a numerical argument
+			#
+			# For more background, see: https://github.com/sonic2kk/steamtinkerlaunch/pull/1152#issuecomment-2316286429
+			GSPARSEDARGVAL="$( tr ' ' '\n' <<< "$ARGS" | grep -wA1 "$FLAG" | tail -n1 )"
+
+			# Don't validate parsed value for combobox, this is free-text and could be anything 
+			if ! [[ $ARGTYPE =~ "num" ]]; then
+				echo "$GSPARSEDARGVAL"
+				return
+			fi
+
+			# If we expect our flag to be followed by a numerical value (either integer or decimal), we need to make sure we actually return
+			# a numerical value, so the `grep` will ensure this
+			GSPARSEDARGNUMVAL="$( echo "${GSPARSEDARGVAL}" | grep -P "^([\d]+)(?:\.([\d]{1,2}?))?$" )"
+			if [ -n "${GSPARSEDARGNUMVAL}" ]; then
+				echo "$GSPARSEDARGNUMVAL"
 			else
 				echo "$DEFVAL"
 			fi
+		elif [[ $ARGTYPE =~ "path" ]] || [[ $ARGTYPE =~ "txt" ]]; then
+			# Get value given to arguments with two dashes, like `--`
+			echo "$ARGS" | sed 's:--:\n--:g' | grep -wA1 "$FLAG" | sed "s:${UNESCAPED_FLAG}::g;s:-:\n-:g" | head -n1 | xargs
+		else
+			echo "$TRUEVAL"
 		fi
 	}
 
 	function getGameScopeGeneralOpts {
-		# GameScope Show Resolution (corresponds to -W, -H options, uppercase) -- Actual GameScope window size -- Dropdown
-		if [ -z "$GSSHWRES" ]; then
-			if ! grep -qw "\-W" <<< "$GAMESCOPE_ARGS" || ! grep -qw "\-H" <<< "$GAMESCOPE_ARGS"; then
-				GSSHWRES="1280x720"
-			else
-				GSSHWRES="$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -wA1 "\-W" | tail -n1)x$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -wA1 "\-H" | tail -n1)"
-			fi
-		fi
+		# GameScope Show Resolution (corresponds to -W, -H options, uppercase) -- Actual GameScope window size (defaults to 1280x720) -- Dropdown
+		# Although this is a combobox, we still use "num" as the `getGameScopeArg` type because we want numeric validation
+		GSSHOWRESARGWIDTH="$( getGameScopeArg "$GAMESCOPE_ARGS" "-W" "$GSSHOWRESARGWIDTH" "" "1280" "num")"
+		GSSHOWRESARGHEIGHT="$( getGameScopeArg "$GAMESCOPE_ARGS" "-H" "$GSSHOWRESARGHEIGHT" "" "720" "num")"
 
-		# GameScope Internal Resolution (corresponds to -w, -h options, lowercase) -- Resolution that games see -- Dropdown
-		if [ -z "$GSINTRES" ]; then
-			if ! grep -qw "\-w" <<< "$GAMESCOPE_ARGS" || ! grep -qw "\-h" <<< "$GAMESCOPE_ARGS"; then
-				GSINTRES="1280x720"
-			else
-				GSINTRES="$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -wA1 "\-w" | tail -n1)x$(tr ' ' '\n' <<< "$GAMESCOPE_ARGS" | grep -wA1 "\-h" | tail -n1)"
-			fi
-		fi
+		GSSHWRES="${GSSHOWRESARGWIDTH}x${GSSHOWRESARGHEIGHT}"
+
+		# GameScope Internal Resolution (corresponds to -w, -h options, lowercase) -- Resolution that games see (defaults to 1280x720) -- Dropdown
+		# Although this is a combobox, we still use "num" as the `getGameScopeArg` type because we want numeric validation
+		GSINTRESARGWIDTH="$( getGameScopeArg "$GAMESCOPE_ARGS" "-W" "$GSINTRESARGWIDTH" "" "1280" "num")"
+		GSINTRESARGHEIGHT="$( getGameScopeArg "$GAMESCOPE_ARGS" "-H" "$GSINTRESARGHEIGHT" "" "720" "num")"
+
+		GSINTRES="${GSINTRESARGWIDTH}x${GSINTRESARGHEIGHT}"
 
 		# Default internal resolution to $NON ('none') if blank -- Ensures we don't pass invalid resolution to GameScope
 		if [ -z "$GSINTRES" ]; then  GSINTRES="$NON"; fi
