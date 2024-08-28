@@ -7,7 +7,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20240829-1 (gamescope-use-getgamescopearg-for-gsshwres-gsintres)"
+PROGVERS="v14.0.20240829-2 (gamescope-use-getgamescopearg-for-gsshwres-gsintres)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -11307,7 +11307,14 @@ function setGameScopeVars {
 		if [[ $ARGTYPE =~ "cb" ]] || [[ $ARGTYPE =~ "num" ]]; then
 			# Get the value given to the argument as the enabled/selected value, e.g. get '2' from '-U 2' if we passed '-U'
 			# If the value does not contain only numbers (with or without decimals) then this will be blank and we return the default value 'DEFVAL'
-			#
+			GSPARSEDARGVAL="$( tr ' ' '\n' <<< "$ARGS" | grep -wA1 "$FLAG" | tail -n1 )"
+
+			# Don't validate parsed value for combobox, this is free-text and could be anything 
+			if ! [[ $ARGTYPE =~ "num" ]]; then
+				echo "$GSPARSEDARGVAL"
+				return
+			fi
+
 			# If we get passed an invalid GameScope commandline argument where a flag that is supposed to be followed by a NUMBER is not,
 			# we could end up returning the next argument, e.g. `-s -f` would return `-s` if we didn't include the `grep -P`
 			# Using the `grep -P` we filter out potential garbage returned by the rest of the parsing.
@@ -11320,16 +11327,6 @@ function setGameScopeVars {
 			# This logic only exists to filter out non-numerical values for flags which expect to be given a numerical argument
 			#
 			# For more background, see: https://github.com/sonic2kk/steamtinkerlaunch/pull/1152#issuecomment-2316286429
-			GSPARSEDARGVAL="$( tr ' ' '\n' <<< "$ARGS" | grep -wA1 "$FLAG" | tail -n1 )"
-
-			# Don't validate parsed value for combobox, this is free-text and could be anything 
-			if ! [[ $ARGTYPE =~ "num" ]]; then
-				echo "$GSPARSEDARGVAL"
-				return
-			fi
-
-			# If we expect our flag to be followed by a numerical value (either integer or decimal), we need to make sure we actually return
-			# a numerical value, so the `grep` will ensure this
 			GSPARSEDARGNUMVAL="$( echo "${GSPARSEDARGVAL}" | grep -P "^([\d]+)(?:\.([\d]{1,2}?))?$" )"
 			if [ -n "${GSPARSEDARGNUMVAL}" ]; then
 				echo "$GSPARSEDARGNUMVAL"
