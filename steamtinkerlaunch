@@ -7,7 +7,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20240904-1"
+PROGVERS="v14.0.20240917-1-genericfy-steamdedeckt"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -12732,7 +12732,6 @@ function setCommandLaunchVars {
 			GSC="$(command -v "$GAMESCOPE")"
 
 			gameScopeArgs "$GAMESCOPE_ARGS"  # Create GameScope args array - Is called twice because we call `setCommandLaunchVars` above and in `buildCustomCmdLaunch` it seems
-		fi
 	fi
 
 	# NOTE: Primerun and Zink both set ' __GLX_VENDOR_LIBRARY_NAME', so Zink has to go after Primerun as shown to activate correctly
@@ -26253,8 +26252,10 @@ function steamdeckBeforeGame {
 
 		# Override config value without updating the stored value itself, to preserve compatibility with Desktop Mode
 		export DXVK_HDR=1
-	else if[ "$ONSTEAMDECK" -eq 1]; then
-		writelog "INFO" "${FUNCNAME[0]} - Final Deck Check: Looks like we're in Desktop Mode (FIXGAMESCOPE is '$FIXGAMESCOPE')"
+	else 
+		if [ "$ONSTEAMDECK" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Final Deck Check: Looks like we're in Desktop Mode (FIXGAMESCOPE is '$FIXGAMESCOPE')"
+		fi
 	fi
 
 	if [ "$USEGAMESCOPE" -eq 1 ] && [ "$FIXGAMESCOPE" -eq 1 ]; then
@@ -26624,9 +26625,11 @@ function steamdedeckt {
 if grep -q "generate-drm-mode" <<< "$(pgrep -a "$GAMESCOPE")"; then
 	writelog "INFO" "${FUNCNAME[0]} - Detected '$GAMESCOPE' running 'forced' - assuming we're running in Steam Game Mode"
 	FIXGAMESCOPE=1
-else if [ -f "/sys/class/dmi/id/sys_vendor" ] && grep -q "Valve" "/sys/class/dmi/id/sys_vendor"; then
-	writelog "INFO" "${FUNCNAME[0]} - Did not detect a running '$GAMESCOPE' process - assuming we're running in Desktop Mode"
-	SMALLDESK=1
+else 
+	if [ -f "/sys/class/dmi/id/sys_vendor" ] && grep -q "Valve" "/sys/class/dmi/id/sys_vendor"; then
+		writelog "INFO" "${FUNCNAME[0]} - Did not detect a running '$GAMESCOPE' process - assuming we're running in Desktop Mode"
+		SMALLDESK=1
+	fi
 fi
 writelog "INFO" "${FUNCNAME[0]} - Set 'FIXGAMESCOPE' to '$FIXGAMESCOPE'"
 writelog "INFO" "${FUNCNAME[0]} - Set 'SMALLDESK' to '$SMALLDESK'"
