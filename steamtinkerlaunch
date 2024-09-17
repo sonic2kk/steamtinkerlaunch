@@ -26623,9 +26623,46 @@ function installFilesSteamDeck {
 }
 
 function steamdedeckt {
+# Differentiate between Game Mode and Desktop Mode on Steam Deck
+if grep -q "generate-drm-mode" <<< "$(pgrep -a "$GAMESCOPE")"; then
+	writelog "INFO" "${FUNCNAME[0]} - Detected '$GAMESCOPE' running 'forced' - assuming we're running in Game Mode"
+	FIXGAMESCOPE=1
+else if [ -f "/sys/class/dmi/id/sys_vendor" ] && grep -q "Valve" "/sys/class/dmi/id/sys_vendor"; then
+	writelog "INFO" "${FUNCNAME[0]} - Did not detect a running '$GAMESCOPE' process - assuming we're running in Desktop Mode"
+	SMALLDESK=1
+fi
+writelog "INFO" "${FUNCNAME[0]} - Set 'FIXGAMESCOPE' to '$FIXGAMESCOPE'"
+writelog "INFO" "${FUNCNAME[0]} - Set 'SMALLDESK' to '$SMALLDESK'"
+	
+if [ -f "/sys/class/dmi/id/sys_vendor" ] && grep -q "Valve" "/sys/class/dmi/id/sys_vendor"; then
+	ONSTEAMDECK=1
+	GTKCSSFILE="$HOME/.config/gtk-3.0/gtk.css"
+	if [ ! -f "$GTKCSSFILE" ] ; then
+		writelog "SKIP" "${FUNCNAME[0]} - '$GTKCSSFILE' does not exist - skipping"
+	else
+		if grep -q "scrollbar" "$GTKCSSFILE"; then
+			writelog "SKIP" "${FUNCNAME[0]} - found a scrollbar entry in '$GTKCSSFILE'"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - backup '$GTKCSSFILE' to '${GTKCSSFILE}_ORIGNAL'"
+			cp "$GTKCSSFILE" "${GTKCSSFILE}_ORIGNAL"
+			# NOTE: This styles most, but not all, UI elements on Steam Deck
+			# It makes the scrollbar wider and easier to grab, and it adds a right margin so UI elements aren't covered by the scollbar
+			# However currently the UI is not as uniform on Steam Deck, because file choosers and text fields don't have this margin
+			# PRs are welcome to apply styling to these elements :-)
+			writelog "INFO" "${FUNCNAME[0]} - adding bigger scrollbar and customising some other UI elements using '$GTKCSSFILE'"
+			{
+				echo ".scrollbar.vertical slider,"
+				echo "scrollbar.vertical slider {"
+				echo "min-width: 15px;"
+				echo "}"
+				echo "spinbutton, combobox button {"
+				echo "margin-right: 20px;"
+				echo "}"
+			} >> "$GTKCSSFILE"
+		fi
+	fi	
+fi
 	if [ -f "/etc/os-release" ] && grep -q "steamdeck" "/etc/os-release"; then
-		ONSTEAMDECK=1
-
 		export STEAMDECKWASUPDATE=0
 		export STEAMDECKDIDINSTALL=1
 		export STEAMDECKSTEAMRUN=0  # Stores if we're running STL when Steam opens on Steam Deck
@@ -26651,16 +26688,6 @@ function steamdedeckt {
 			STLICON="$SCRIPTDIR/misc/steamtinkerlaunch.svg"
 		fi
 		export NOTYARGS="-i $STLICON -a $PROGNAME"
-
-		# Differentiate between Game Mode and Desktop Mode on Steam Deck
-		if grep -q "generate-drm-mode" <<< "$(pgrep -a "$GAMESCOPE")"; then
-			writelog "INFO" "${FUNCNAME[0]} - Detected '$GAMESCOPE' running 'forced' - assuming we're running in Game Mode"
-			FIXGAMESCOPE=1
-		else
-			writelog "INFO" "${FUNCNAME[0]} - Did not detect a running '$GAMESCOPE' process - assuming we're running in Desktop Mode"
-
-			SMALLDESK=1
-		fi
 
 		writelog "INFO" "${FUNCNAME[0]} - Set 'FIXGAMESCOPE' to '$FIXGAMESCOPE'"
 		writelog "INFO" "${FUNCNAME[0]} - Set 'SMALLDESK' to '$SMALLDESK'"
@@ -26711,34 +26738,6 @@ function steamdedeckt {
 			if [ "$INFLATPAK" -eq 0 ]; then
 				notiShow "$NOTY_STEAMDECK_ADDCOMPAT" "X"
 				CompatTool "add" "$PREFIX/$PROGCMD" >/dev/null
-			fi
-
-			GTKCSSFILE="$HOME/.config/gtk-3.0/gtk.css"
-
-			if [ ! -f "$GTKCSSFILE" ] ; then
-				writelog "SKIP" "${FUNCNAME[0]} - '$GTKCSSFILE' does not exist - skipping"
-			else
-				if grep -q "scrollbar" "$GTKCSSFILE"; then
-					writelog "SKIP" "${FUNCNAME[0]} - found a scrollbar entry in '$GTKCSSFILE'"
-				else
-					writelog "INFO" "${FUNCNAME[0]} - backup '$GTKCSSFILE' to '${GTKCSSFILE}_ORIGNAL'"
-					cp "$GTKCSSFILE" "${GTKCSSFILE}_ORIGNAL"
-
-					# NOTE: This styles most, but not all, UI elements on Steam Deck
-					# It makes the scrollbar wider and easier to grab, and it adds a right margin so UI elements aren't covered by the scollbar
-					# However currently the UI is not as uniform on Steam Deck, because file choosers and text fields don't have this margin
-					# PRs are welcome to apply styling to these elements :-)
-					writelog "INFO" "${FUNCNAME[0]} - adding bigger scrollbar and customising some other UI elements using '$GTKCSSFILE'"
-					{
-						echo ".scrollbar.vertical slider,"
-						echo "scrollbar.vertical slider {"
-						echo "min-width: 15px;"
-						echo "}"
-						echo "spinbutton, combobox button {"
-						echo "margin-right: 20px;"
-						echo "}"
-					} >> "$GTKCSSFILE"
-				fi
 			fi
 		else
 			writelog "INFO" "${FUNCNAME[0]} - Seems like we're being run by Steam here, not doing any installation steps"
