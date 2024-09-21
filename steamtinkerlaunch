@@ -7,7 +7,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20240917-1-genericfy-steamdedeckt"
+PROGVERS="v14.0.20240920-1-genericfy-steamdedeckt"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -4953,7 +4953,7 @@ function updateThisWinTemplate {
 }
 
 function updateWinRes {
-	if [ -z "$SAVESETSIZE" ] || [ "$ONSTEAMDECK" -eq 1 ]; then
+	if [ -z "$SAVESETSIZE" ] || [ "$FIXGAMESCOPE" -eq 1 ]; then
 		SAVESETSIZE=0
 	fi
 
@@ -10593,7 +10593,10 @@ function listScreenRes {
 
 function setInitWinXY {
 	DEFRESSHM="$STLSHM/defres.txt"
+	SCRW="$(getScreenRes w)"
+	SCRH="$(getScreenRes h)"
 	if [ -f "$DEFRESSHM" ] ; then
+
 		loadCfg "$DEFRESSHM" X
 		writelog "INFO" "${FUNCNAME[0]} - Using '${WINX}x${WINY}' from config '$DEFRESSHM'"
 	else
@@ -10601,12 +10604,14 @@ function setInitWinXY {
 			WINX="1280"
 			WINY="800"
 		else
-			SCRW="$(getScreenRes w)"
-			SCRH="$(getScreenRes h)"
-			WINX=$(( SCRW * 3 / 4))
-			WINY=$(( SCRH * 3 / 4))
+			if [ "$FIXGAMESCOPE" -eq 1 ];then
+				WINX="$SCRW"
+				WINY="$SCRH"
+			else
+				WINX=$(( SCRW * 3 / 4))
+				WINY=$(( SCRH * 3 / 4))
+			fi
 		fi
-
 		{
 		echo "WINX=\"$WINX\""
 		echo "WINY=\"$WINY\""
@@ -26622,7 +26627,7 @@ function installFilesSteamDeck {
 
 function steamdedeckt {
 # Differentiate between Steam Game Mode and Desktop Mode on Steam Deck
-if grep -q "generate-drm-mode" <<< "$(pgrep -a "$GAMESCOPE")"; then
+if grep -qi "steam" <<< "$(pgrep -a "$GAMESCOPE")"; then
 	writelog "INFO" "${FUNCNAME[0]} - Detected '$GAMESCOPE' running 'forced' - assuming we're running in Steam Game Mode"
 	FIXGAMESCOPE=1
 else 
