@@ -155,7 +155,10 @@ DUMMYBIN="echo"
 STLAIDSIZE="12"
 INFLATPAK=0
 WDIB="wine-discord-ipc-bridge"
-FIXGAMESCOPE=0
+GAMESCOPESESS=0
+GAMESCOPESESSX=0
+GAMESCOPESESSY=0
+GAMESCOPESESSCMD=""
 SMALLDESK=0
 VTX_DOTNET_ROOT="c:\\Program Files\\dotnet\\\\"
 STLQUIET=0
@@ -774,7 +777,7 @@ function OpenWikiPage {
 	if [ -n "$WIKURL" ]; then
 		if [ "$ONSTEAMDECK" -eq 1 ]; then
 			# Only open wiki on Steam Deck Game Mode
-			if [ "$FIXGAMESCOPE" -eq 0 ]; then
+			if [ "$GAMESCOPESESS" -eq 0 ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Opening wiki URL '$WIKURL' using xdg-open on Steam Deck since Yad AppImage does not have WebKit support"
 				"$XDGO" "$WIKURL"
 			else
@@ -2056,10 +2059,27 @@ function pollWinRes {
 	POSY=0
 	unset COLCOUNT
 
-	if [ "$ONSTEAMDECK" -eq 1 ]; then
-		SCREENRES="1280x800"
-		WINX=1280
-		WINY=800
+	if [ "$GAMESCOPESESS" -eq 1 ]; then
+		# Get the GameScope command from pgrep
+		GAMESCOPESESSCMD="$( pgrep -a "$GAMESCOPE" | head -n1 )"
+				
+		writelog "INFO" "${FUNCNAME[0]} - GameScope Session CMD from pgrep is '${GAMESCOPESESSCMD}'"
+		# ...
+		# There should probably be some check here where if there is no found GameScope start command to bail out
+		# ...
+		
+		# 1280 and 720 are defaults if no value is returned for width and height respectively.
+		# We could replace these defaults with whatever the autodetected width and height variable is.
+		#
+		# Variable names can be whatever you want, just make sure the name you assign and the name in the argument match
+		GAMESCOPESESSX="$( getGameScopeArg "$GAMESCOPESESSCMD" "-W" "$GAMESCOPESESSX" "" "1280" "num")"
+		GAMESCOPESESSY="$( getGameScopeArg "$GAMESCOPESESSCMD" "-H" "$GAMESCOPESESSY" "" "720" "num")"
+		
+		writelog "INFO" "${FUNCNAME[0]} - GameScope resolution from pgrep is '${GAMESCOPESESSX}x${GAMESCOPESESSY}'"
+		
+		SCREENRES="${GAMESCOPESESSX}x${GAMESCOPESESSY}"
+		WINX="$GAMESCOPESESSX"
+		WINY="$GAMESCOPESESSY"
 		setGeom
 	else
 		SCREENRES="$(getScreenRes r)"
@@ -2067,7 +2087,7 @@ function pollWinRes {
 
 	if [ -z "$SCREENRES" ]; then  SCREENRES="any"; fi
 
-	if [ "$FIXGAMESCOPE" -eq 0 ]; then  # skip this if FIXGAMESCOPE is 1 - so for now only if running in GameMode
+	if [ "$GAMESCOPESESS" -eq 0 ]; then  # skip this if GAMESCOPESESS is 1 - so for now only if running in GameMode
 		TEMPL="template"
 		GAMEGUICFG="$STLGUIDIR/$SCREENRES/${AID}/${TITLE}.conf"
 		TEMPLGUICFG="$STLGUIDIR/$SCREENRES/${TEMPL}/${TITLE}.conf"
@@ -2118,7 +2138,7 @@ function pollWinRes {
 	CURGUICFG="$GAMEGUICFG"
 	export CURGUICFG="$CURGUICFG"
 
-	if [ "$FIXGAMESCOPE" -eq 0 ]; then
+	if [ "$GAMESCOPESESS" -eq 0 ]; then
 		updateWinRes "$TITLE" "$GAMEGUICFG" "$TEMPLGUICFG" &
 	fi
 }
@@ -4209,7 +4229,7 @@ function saveCfg {
 }
 
 function notiShow {
-	if [ "$FIXGAMESCOPE" -eq 1 ]; then
+	if [ "$GAMESCOPESESS" -eq 1 ]; then
 		writelog "INFO" "${FUNCNAME[0]} - Skipping notifier on Steam Game Mode"
 		USENOTIFIER=0 # might avoid a 2nd try during this session
 	elif [ "$STLQUIET" -eq 1 ]; then
@@ -4953,7 +4973,7 @@ function updateThisWinTemplate {
 }
 
 function updateWinRes {
-	if [ -z "$SAVESETSIZE" ] || [ "$FIXGAMESCOPE" -eq 1 ]; then
+	if [ -z "$SAVESETSIZE" ] || [ "$GAMESCOPESESS" -eq 1 ]; then
 		SAVESETSIZE=0
 	fi
 
@@ -5431,7 +5451,7 @@ function openTrayIcon {
 		loadCfg "$STLGAMECFG"
 	fi
 
-	if [ "$FIXGAMESCOPE" -eq 1 ]; then
+	if [ "$GAMESCOPESESS" -eq 1 ]; then
 		writelog "SKIP" "${FUNCNAME[0]} - Skipping TrayIcon on Steam Game Mode" "X"
 	else
 		if [ -z "$YADTRAYPID" ] && [ "$USETRAYICON" -eq 1 ]; then
@@ -10600,17 +10620,12 @@ function setInitWinXY {
 		loadCfg "$DEFRESSHM" X
 		writelog "INFO" "${FUNCNAME[0]} - Using '${WINX}x${WINY}' from config '$DEFRESSHM'"
 	else
-		if [ "$ONSTEAMDECK" -eq 1 ]; then
-			WINX="1280"
-			WINY="800"
+		if [ "$GAMESCOPESESS" -eq 1 ];then
+			WINX="$GAMESCOPESESSX"
+			WINY="$GAMESCOPESESSY"
 		else
-			if [ "$FIXGAMESCOPE" -eq 1 ];then
-				WINX="$SCRW"
-				WINY="$SCRH"
-			else
-				WINX=$(( SCRW * 3 / 4))
-				WINY=$(( SCRH * 3 / 4))
-			fi
+			WINX=$(( SCRW * 3 / 4))
+			WINY=$(( SCRH * 3 / 4))
 		fi
 		{
 		echo "WINX=\"$WINX\""
@@ -12717,7 +12732,7 @@ function setCommandLaunchVars {
 
 	if [ "$USEGAMESCOPE" -eq 1 ]; then
 		if [ "$USEMANGOAPP" -eq 1 ]; then
-			if [ "$FIXGAMESCOPE" -eq 1 ]; then
+			if [ "$GAMESCOPESESS" -eq 1 ]; then
 				writelog "SKIP" "${FUNCNAME[0]} - Disabling USEMANGOAPP variable in Steam Game Mode, because Steam Deck uses $MANGOAPP already by default"
 				USEMANGOAPP=0
 			else
@@ -26251,26 +26266,26 @@ function steamdeckClose {
 }
 
 function steamdeckBeforeGame {
-	if [ "$FIXGAMESCOPE" -eq 1 ]; then
-		writelog "INFO" "${FUNCNAME[0]} - Final Deck Check: Looks like we're in Steam Game Mode (FIXGAMESCOPE is '$FIXGAMESCOPE')"
+	if [ "$GAMESCOPESESS" -eq 1 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Final Deck Check: Looks like we're in Steam Game Mode (GAMESCOPESESS is '$GAMESCOPESESS')"
 		writelog "INFO" "${FUNCNAME[0]} - Force-enabling DXVK_HDR=1 for Steam Game Mode, allows HDR support for Steam Deck OLED and HDR displays attached to Steam Deck"
 
 		# Override config value without updating the stored value itself, to preserve compatibility with Desktop Mode
 		export DXVK_HDR=1
 	else 
 		if [ "$ONSTEAMDECK" -eq 1 ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Final Deck Check: Looks like we're in Desktop Mode (FIXGAMESCOPE is '$FIXGAMESCOPE')"
+			writelog "INFO" "${FUNCNAME[0]} - Final Deck Check: Looks like we're in Desktop Mode (GAMESCOPESESS is '$GAMESCOPESESS')"
 		fi
 	fi
 
-	if [ "$USEGAMESCOPE" -eq 1 ] && [ "$FIXGAMESCOPE" -eq 1 ]; then
+	if [ "$USEGAMESCOPE" -eq 1 ] && [ "$GAMESCOPESESS" -eq 1 ]; then
 		writelog "SKIP" "${FUNCNAME[0]} - Disabling own GameScope on SteamDeck Steam Game Mode" "X"
 		USEGAMESCOPE=0
 	else
 		writelog "INFO" "${FUNCNAME[0]} - Allowing GameScope enabled on SteamDeck in Desktop Mode" "X"
 	fi
 
-	if [ "$USEGAMEMODERUN" -eq 1 ] && [ "$FIXGAMESCOPE" -eq 1 ]; then
+	if [ "$USEGAMEMODERUN" -eq 1 ] && [ "$GAMESCOPESESS" -eq 1 ]; then
 		writelog "SKIP" "${FUNCNAME[0]} - Disabling own Feral GameMode tool (gamemoderun) on SteamDeck Steam Game Mode" "X"
 		USEGAMEMODERUN=0
 	else
@@ -26629,14 +26644,14 @@ function steamdedeckt {
 # Differentiate between Steam Game Mode and Desktop Mode on Steam Deck
 if grep -qi "steam" <<< "$(pgrep -a "$GAMESCOPE")"; then
 	writelog "INFO" "${FUNCNAME[0]} - Detected '$GAMESCOPE' running 'forced' - assuming we're running in Steam Game Mode"
-	FIXGAMESCOPE=1
+	GAMESCOPESESS=1
 else 
 	if [ -f "/sys/class/dmi/id/sys_vendor" ] && grep -q "Valve" "/sys/class/dmi/id/sys_vendor"; then
 		writelog "INFO" "${FUNCNAME[0]} - Did not detect a running '$GAMESCOPE' process - assuming we're running in Desktop Mode"
 		SMALLDESK=1
 	fi
 fi
-writelog "INFO" "${FUNCNAME[0]} - Set 'FIXGAMESCOPE' to '$FIXGAMESCOPE'"
+writelog "INFO" "${FUNCNAME[0]} - Set 'GAMESCOPESESS' to '$GAMESCOPESESS'"
 writelog "INFO" "${FUNCNAME[0]} - Set 'SMALLDESK' to '$SMALLDESK'"
 	
 if [ -f "/sys/class/dmi/id/sys_vendor" ] && grep -q "Valve" "/sys/class/dmi/id/sys_vendor"; then
@@ -26694,7 +26709,7 @@ fi
 		fi
 		export NOTYARGS="-i $STLICON -a $PROGNAME"
 
-		writelog "INFO" "${FUNCNAME[0]} - Set 'FIXGAMESCOPE' to '$FIXGAMESCOPE'"
+		writelog "INFO" "${FUNCNAME[0]} - Set 'GAMESCOPESESS' to '$GAMESCOPESESS'"
 		writelog "INFO" "${FUNCNAME[0]} - Set 'SMALLDESK' to '$SMALLDESK'"
 
 		INTERNETCONNECTION=1
