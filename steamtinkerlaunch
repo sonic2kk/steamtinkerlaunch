@@ -7,7 +7,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20240904-1"
+PROGVERS="v14.0.20240922-2-genericfy-steamdedeckt"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -155,7 +155,11 @@ DUMMYBIN="echo"
 STLAIDSIZE="12"
 INFLATPAK=0
 WDIB="wine-discord-ipc-bridge"
-FIXGAMESCOPE=0
+GAMESCOPESESS=0
+GAMESCOPESESSRES=1280x800
+GAMESCOPESESSX=1280
+GAMESCOPESESSY=800
+GAMESCOPESESSCMD=""
 SMALLDESK=0
 VTX_DOTNET_ROOT="c:\\Program Files\\dotnet\\\\"
 STLQUIET=0
@@ -774,7 +778,7 @@ function OpenWikiPage {
 	if [ -n "$WIKURL" ]; then
 		if [ "$ONSTEAMDECK" -eq 1 ]; then
 			# Only open wiki on Steam Deck Game Mode
-			if [ "$FIXGAMESCOPE" -eq 0 ]; then
+			if [ "$GAMESCOPESESS" -eq 0 ]; then
 				writelog "INFO" "${FUNCNAME[0]} - Opening wiki URL '$WIKURL' using xdg-open on Steam Deck since Yad AppImage does not have WebKit support"
 				"$XDGO" "$WIKURL"
 			else
@@ -2056,18 +2060,51 @@ function pollWinRes {
 	POSY=0
 	unset COLCOUNT
 
-	if [ "$ONSTEAMDECK" -eq 1 ]; then
-		SCREENRES="1280x800"
-		WINX=1280
-		WINY=800
-		setGeom
+	if [ "$GAMESCOPESESS" -eq 1 ]; then
+		GAMESCOPESESS_CONFIG_FILE="$HOME/.config/gamescope/modes.cfg"
+		if [ -f "$GAMESCOPESESS_CONFIG_FILE" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Found Gamecope Resolution config file at '${GAMESCOPESESS_CONFIG_FILE}'."
+			# Extract the resolution
+    		GAMESCOPESESSRES=$(awk -F '[:@]' '{print $2}' "$GAMESCOPESESS_CONFIG_FILE" | xargs)
+
+    		# Split the resolution into width and height
+    		IFS='x' read -r GAMESCOPESESSX GAMESCOPESESSY <<< "$GAMESCOPESESSRES"
+			writelog "INFO" "${FUNCNAME[0]} - GameScope Session Resolution from config file is '${GAMESCOPESESSRES}'"
+
+			SCREENRES="${GAMESCOPESESSRES}"
+			WINX="$GAMESCOPESESSX"
+			WINY="$GAMESCOPESESSY"
+			setGeom
+		else
+			# Get the GameScope command from pgrep
+			GAMESCOPESESSCMD="$( pgrep -a "$GAMESCOPE" | head -n1 )"
+					
+			writelog "INFO" "${FUNCNAME[0]} - GameScope Session CMD from pgrep is '${GAMESCOPESESSCMD}'"
+			# ...
+			# There should probably be some check here where if there is no found GameScope start command to bail out
+			# ...
+			
+			# 1280 and 720 are defaults if no value is returned for width and height respectively.
+			# We could replace these defaults with whatever the autodetected width and height variable is.
+			#
+			# Variable names can be whatever you want, just make sure the name you assign and the name in the argument match
+			GAMESCOPESESSX="$( getGameScopeArg "$GAMESCOPESESSCMD" "-W" "$GAMESCOPESESSX" "" "1280" "num")"
+			GAMESCOPESESSY="$( getGameScopeArg "$GAMESCOPESESSCMD" "-H" "$GAMESCOPESESSY" "" "720" "num")"
+			
+			writelog "INFO" "${FUNCNAME[0]} - GameScope resolution from pgrep is '${GAMESCOPESESSX}x${GAMESCOPESESSY}'"
+			
+			SCREENRES="${GAMESCOPESESSX}x${GAMESCOPESESSY}"
+			WINX="$GAMESCOPESESSX"
+			WINY="$GAMESCOPESESSY"
+			setGeom
+		fi
 	else
 		SCREENRES="$(getScreenRes r)"
 	fi
 
 	if [ -z "$SCREENRES" ]; then  SCREENRES="any"; fi
 
-	if [ "$FIXGAMESCOPE" -eq 0 ]; then  # skip this if FIXGAMESCOPE is 1 - so for now only if running in GameMode on the Steam Deck
+	if [ "$GAMESCOPESESS" -eq 0 ]; then  # skip this if GAMESCOPESESS is 1 - so for now only if running in GameMode
 		TEMPL="template"
 		GAMEGUICFG="$STLGUIDIR/$SCREENRES/${AID}/${TITLE}.conf"
 		TEMPLGUICFG="$STLGUIDIR/$SCREENRES/${TEMPL}/${TITLE}.conf"
@@ -2118,7 +2155,7 @@ function pollWinRes {
 	CURGUICFG="$GAMEGUICFG"
 	export CURGUICFG="$CURGUICFG"
 
-	if [ "$FIXGAMESCOPE" -eq 0 ]; then
+	if [ "$GAMESCOPESESS" -eq 0 ]; then
 		updateWinRes "$TITLE" "$GAMEGUICFG" "$TEMPLGUICFG" &
 	fi
 }
@@ -4209,8 +4246,8 @@ function saveCfg {
 }
 
 function notiShow {
-	if [ "$ONSTEAMDECK" -eq 1 ] && [ "$FIXGAMESCOPE" -eq 1 ]; then
-		writelog "INFO" "${FUNCNAME[0]} - Skipping notifier on SteamDeck Game Mode"
+	if [ "$GAMESCOPESESS" -eq 1 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Skipping notifier on Steam Game Mode"
 		USENOTIFIER=0 # might avoid a 2nd try during this session
 	elif [ "$STLQUIET" -eq 1 ]; then
 		USENOTIFIER=0
@@ -4953,7 +4990,7 @@ function updateThisWinTemplate {
 }
 
 function updateWinRes {
-	if [ -z "$SAVESETSIZE" ] || [ "$ONSTEAMDECK" -eq 1 ]; then
+	if [ -z "$SAVESETSIZE" ] || [ "$GAMESCOPESESS" -eq 1 ]; then
 		SAVESETSIZE=0
 	fi
 
@@ -5431,8 +5468,8 @@ function openTrayIcon {
 		loadCfg "$STLGAMECFG"
 	fi
 
-	if [ "$ONSTEAMDECK" -eq 1 ] && [ "$FIXGAMESCOPE" -eq 1 ]; then
-		writelog "SKIP" "${FUNCNAME[0]} - Skipping TrayIcon on SteamDeck Game Mode" "X"
+	if [ "$GAMESCOPESESS" -eq 1 ]; then
+		writelog "SKIP" "${FUNCNAME[0]} - Skipping TrayIcon on Steam Game Mode" "X"
 	else
 		if [ -z "$YADTRAYPID" ] && [ "$USETRAYICON" -eq 1 ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Opening trayIcon:" "X"
@@ -10594,19 +10631,20 @@ function listScreenRes {
 function setInitWinXY {
 	DEFRESSHM="$STLSHM/defres.txt"
 	if [ -f "$DEFRESSHM" ] ; then
+
 		loadCfg "$DEFRESSHM" X
 		writelog "INFO" "${FUNCNAME[0]} - Using '${WINX}x${WINY}' from config '$DEFRESSHM'"
 	else
-		if [ "$ONSTEAMDECK" -eq 1 ]; then
-			WINX="1280"
-			WINY="800"
+		if [ "$GAMESCOPESESS" -eq 1 ];then
+			WINX="$GAMESCOPESESSX"
+			WINY="$GAMESCOPESESSY"
 		else
 			SCRW="$(getScreenRes w)"
 			SCRH="$(getScreenRes h)"
 			WINX=$(( SCRW * 3 / 4))
 			WINY=$(( SCRH * 3 / 4))
 		fi
-
+		
 		{
 		echo "WINX=\"$WINX\""
 		echo "WINY=\"$WINY\""
@@ -12712,14 +12750,13 @@ function setCommandLaunchVars {
 
 	if [ "$USEGAMESCOPE" -eq 1 ]; then
 		if [ "$USEMANGOAPP" -eq 1 ]; then
-			if [ "$ONSTEAMDECK" -eq 1 ]; then
-				if [ "$FIXGAMESCOPE" -eq 1 ]; then
-					writelog "SKIP" "${FUNCNAME[0]} - Disabling USEMANGOAPP variable in Steam Deck Game Mode, because Steam Deck uses $MANGOAPP already by default"
-					USEMANGOAPP=0
-				else
-					writelog "INFO" "${FUNCNAME[0]} - Allowing USEMANGOAPP variable in Steam Deck Desktop Mode"
-					USEMANGOAPP=1
-				fi
+			if [ "$GAMESCOPESESS" -eq 1 ]; then
+				writelog "SKIP" "${FUNCNAME[0]} - Disabling USEMANGOAPP variable in Steam Game Mode, because Steam Deck uses $MANGOAPP already by default"
+				USEMANGOAPP=0
+			else
+				writelog "INFO" "${FUNCNAME[0]} - Allowing USEMANGOAPP variable in Steam Deck Desktop Mode"
+				USEMANGOAPP=1
+			fi
 			else
 				writelog "SKIP" "${FUNCNAME[0]} - Not adding $GAMESCOPE to the game launch command, because $MANGOAPP is enabled, which triggers it automatically"
 				USEGAMESCOPE=0
@@ -12733,7 +12770,6 @@ function setCommandLaunchVars {
 			GSC="$(command -v "$GAMESCOPE")"
 
 			gameScopeArgs "$GAMESCOPE_ARGS"  # Create GameScope args array - Is called twice because we call `setCommandLaunchVars` above and in `buildCustomCmdLaunch` it seems
-		fi
 	fi
 
 	# NOTE: Primerun and Zink both set ' __GLX_VENDOR_LIBRARY_NAME', so Zink has to go after Primerun as shown to activate correctly
@@ -26248,35 +26284,35 @@ function steamdeckClose {
 }
 
 function steamdeckBeforeGame {
-	if [ "$ONSTEAMDECK" -eq 1 ]; then
-		if [ "$FIXGAMESCOPE" -eq 1 ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Final Deck Check: Looks like we're in Game Mode (FIXGAMESCOPE is '$FIXGAMESCOPE')"
-			writelog "INFO" "${FUNCNAME[0]} - Force-enabling DXVK_HDR=1 for Steam Deck Game Mode, allows HDR support for Steam Deck OLED and HDR displays attached to Steam Deck"
+	if [ "$GAMESCOPESESS" -eq 1 ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Final Deck Check: Looks like we're in Steam Game Mode (GAMESCOPESESS is '$GAMESCOPESESS')"
+		writelog "INFO" "${FUNCNAME[0]} - Force-enabling DXVK_HDR=1 for Steam Game Mode, allows HDR support for Steam Deck OLED and HDR displays attached to Steam Deck"
 
-			# Override config value without updating the stored value itself, to preserve compatibility with Desktop Mode
-			export DXVK_HDR=1
-		else
-			writelog "INFO" "${FUNCNAME[0]} - Final Deck Check: Looks like we're in Desktop Mode (FIXGAMESCOPE is '$FIXGAMESCOPE')"
+		# Override config value without updating the stored value itself, to preserve compatibility with Desktop Mode
+		export DXVK_HDR=1
+	else 
+		if [ "$ONSTEAMDECK" -eq 1 ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Final Deck Check: Looks like we're in Desktop Mode (GAMESCOPESESS is '$GAMESCOPESESS')"
 		fi
+	fi
 
-		if [ "$USEGAMESCOPE" -eq 1 ] && [ "$FIXGAMESCOPE" -eq 1 ]; then
-			writelog "SKIP" "${FUNCNAME[0]} - Disabling own GameScope on SteamDeck Game Mode" "X"
-			USEGAMESCOPE=0
-		else
-			writelog "INFO" "${FUNCNAME[0]} - Allowing GameScope enabled on SteamDeck in Desktop Mode" "X"
-		fi
+	if [ "$USEGAMESCOPE" -eq 1 ] && [ "$GAMESCOPESESS" -eq 1 ]; then
+		writelog "SKIP" "${FUNCNAME[0]} - Disabling own GameScope on SteamDeck Steam Game Mode" "X"
+		USEGAMESCOPE=0
+	else
+		writelog "INFO" "${FUNCNAME[0]} - Allowing GameScope enabled on SteamDeck in Desktop Mode" "X"
+	fi
 
-		if [ "$USEGAMEMODERUN" -eq 1 ] && [ "$FIXGAMESCOPE" -eq 1 ]; then
-			writelog "SKIP" "${FUNCNAME[0]} - Disabling own Feral GameMode tool (gamemoderun) on SteamDeck Game Mode" "X"
-			USEGAMEMODERUN=0
-		else
-			writelog "INFO" "${FUNCNAME[0]} - Allowing Feral GameMode tool (gamemoderun) enabled on SteamDeck in Desktop Mode" "X"
-		fi
+	if [ "$USEGAMEMODERUN" -eq 1 ] && [ "$GAMESCOPESESS" -eq 1 ]; then
+		writelog "SKIP" "${FUNCNAME[0]} - Disabling own Feral GameMode tool (gamemoderun) on SteamDeck Steam Game Mode" "X"
+		USEGAMEMODERUN=0
+	else
+		writelog "INFO" "${FUNCNAME[0]} - Allowing Feral GameMode tool (gamemoderun) enabled on SteamDeck in Desktop Mode" "X"
+	fi
 
-		if [ -n "$STLCTLID" ] && [ "$STLCTLID" != "$PLACEHOLDERAID" ]; then
-			writelog "INFO" "${FUNCNAME[0]} - Loading controller configuration for the current game via 'steam steam://forceinputappid/$AID'"
-			steam steam://forceinputappid/"$AID"
-		fi
+	if [ -n "$STLCTLID" ] && [ "$STLCTLID" != "$PLACEHOLDERAID" ]; then
+		writelog "INFO" "${FUNCNAME[0]} - Loading controller configuration for the current game via 'steam steam://forceinputappid/$AID'"
+		steam steam://forceinputappid/"$AID"
 	fi
 }
 
@@ -26623,9 +26659,50 @@ function installFilesSteamDeck {
 }
 
 function steamdedeckt {
-	if [ -f "/etc/os-release" ] && grep -q "steamdeck" "/etc/os-release"; then
-		ONSTEAMDECK=1
 
+# Differentiate between Steam Game Mode and Desktop Mode on Steam Deck 
+# TODO: make the check less generic as right now it may match steam running in a nested gamescope session and not embedded
+if grep -qi "steam" <<< "$(pgrep -a "$GAMESCOPE")"; then
+	writelog "INFO" "${FUNCNAME[0]} - Detected '$GAMESCOPE' running 'forced' - assuming we're running in Steam Game Mode"
+	GAMESCOPESESS=1
+else 
+	if [ -f "/sys/class/dmi/id/sys_vendor" ] && grep -q "Valve" "/sys/class/dmi/id/sys_vendor"; then
+		writelog "INFO" "${FUNCNAME[0]} - Did not detect a running '$GAMESCOPE' process - assuming we're running in Desktop Mode"
+		SMALLDESK=1
+	fi
+fi
+writelog "INFO" "${FUNCNAME[0]} - Set 'GAMESCOPESESS' to '$GAMESCOPESESS'"
+writelog "INFO" "${FUNCNAME[0]} - Set 'SMALLDESK' to '$SMALLDESK'"
+	
+if [ -f "/sys/class/dmi/id/sys_vendor" ] && grep -q "Valve" "/sys/class/dmi/id/sys_vendor"; then
+	ONSTEAMDECK=1
+	GTKCSSFILE="$HOME/.config/gtk-3.0/gtk.css"
+	if [ ! -f "$GTKCSSFILE" ] ; then
+		writelog "SKIP" "${FUNCNAME[0]} - '$GTKCSSFILE' does not exist - skipping"
+	else
+		if grep -q "scrollbar" "$GTKCSSFILE"; then
+			writelog "SKIP" "${FUNCNAME[0]} - found a scrollbar entry in '$GTKCSSFILE'"
+		else
+			writelog "INFO" "${FUNCNAME[0]} - backup '$GTKCSSFILE' to '${GTKCSSFILE}_ORIGNAL'"
+			cp "$GTKCSSFILE" "${GTKCSSFILE}_ORIGNAL"
+			# NOTE: This styles most, but not all, UI elements on Steam Deck
+			# It makes the scrollbar wider and easier to grab, and it adds a right margin so UI elements aren't covered by the scollbar
+			# However currently the UI is not as uniform on Steam Deck, because file choosers and text fields don't have this margin
+			# PRs are welcome to apply styling to these elements :-)
+			writelog "INFO" "${FUNCNAME[0]} - adding bigger scrollbar and customising some other UI elements using '$GTKCSSFILE'"
+			{
+				echo ".scrollbar.vertical slider,"
+				echo "scrollbar.vertical slider {"
+				echo "min-width: 15px;"
+				echo "}"
+				echo "spinbutton, combobox button {"
+				echo "margin-right: 20px;"
+				echo "}"
+			} >> "$GTKCSSFILE"
+		fi
+	fi	
+fi
+	if [ -f "/etc/os-release" ] && grep -q "steamdeck" "/etc/os-release"; then
 		export STEAMDECKWASUPDATE=0
 		export STEAMDECKDIDINSTALL=1
 		export STEAMDECKSTEAMRUN=0  # Stores if we're running STL when Steam opens on Steam Deck
@@ -26652,17 +26729,7 @@ function steamdedeckt {
 		fi
 		export NOTYARGS="-i $STLICON -a $PROGNAME"
 
-		# Differentiate between Game Mode and Desktop Mode on Steam Deck
-		if grep -q "generate-drm-mode" <<< "$(pgrep -a "$GAMESCOPE")"; then
-			writelog "INFO" "${FUNCNAME[0]} - Detected '$GAMESCOPE' running 'forced' - assuming we're running in Game Mode"
-			FIXGAMESCOPE=1
-		else
-			writelog "INFO" "${FUNCNAME[0]} - Did not detect a running '$GAMESCOPE' process - assuming we're running in Desktop Mode"
-
-			SMALLDESK=1
-		fi
-
-		writelog "INFO" "${FUNCNAME[0]} - Set 'FIXGAMESCOPE' to '$FIXGAMESCOPE'"
+		writelog "INFO" "${FUNCNAME[0]} - Set 'GAMESCOPESESS' to '$GAMESCOPESESS'"
 		writelog "INFO" "${FUNCNAME[0]} - Set 'SMALLDESK' to '$SMALLDESK'"
 
 		INTERNETCONNECTION=1
@@ -26711,34 +26778,6 @@ function steamdedeckt {
 			if [ "$INFLATPAK" -eq 0 ]; then
 				notiShow "$NOTY_STEAMDECK_ADDCOMPAT" "X"
 				CompatTool "add" "$PREFIX/$PROGCMD" >/dev/null
-			fi
-
-			GTKCSSFILE="$HOME/.config/gtk-3.0/gtk.css"
-
-			if [ ! -f "$GTKCSSFILE" ] ; then
-				writelog "SKIP" "${FUNCNAME[0]} - '$GTKCSSFILE' does not exist - skipping"
-			else
-				if grep -q "scrollbar" "$GTKCSSFILE"; then
-					writelog "SKIP" "${FUNCNAME[0]} - found a scrollbar entry in '$GTKCSSFILE'"
-				else
-					writelog "INFO" "${FUNCNAME[0]} - backup '$GTKCSSFILE' to '${GTKCSSFILE}_ORIGNAL'"
-					cp "$GTKCSSFILE" "${GTKCSSFILE}_ORIGNAL"
-
-					# NOTE: This styles most, but not all, UI elements on Steam Deck
-					# It makes the scrollbar wider and easier to grab, and it adds a right margin so UI elements aren't covered by the scollbar
-					# However currently the UI is not as uniform on Steam Deck, because file choosers and text fields don't have this margin
-					# PRs are welcome to apply styling to these elements :-)
-					writelog "INFO" "${FUNCNAME[0]} - adding bigger scrollbar and customising some other UI elements using '$GTKCSSFILE'"
-					{
-						echo ".scrollbar.vertical slider,"
-						echo "scrollbar.vertical slider {"
-						echo "min-width: 15px;"
-						echo "}"
-						echo "spinbutton, combobox button {"
-						echo "margin-right: 20px;"
-						echo "}"
-					} >> "$GTKCSSFILE"
-				fi
 			fi
 		else
 			writelog "INFO" "${FUNCNAME[0]} - Seems like we're being run by Steam here, not doing any installation steps"
