@@ -7,7 +7,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20240921-4-genericfy-steamdedeckt"
+PROGVERS="v14.0.20240922-2-genericfy-steamdedeckt"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -156,8 +156,9 @@ STLAIDSIZE="12"
 INFLATPAK=0
 WDIB="wine-discord-ipc-bridge"
 GAMESCOPESESS=0
-GAMESCOPESESSX=0
-GAMESCOPESESSY=0
+GAMESCOPESESSRES=1280x800
+GAMESCOPESESSX=1280
+GAMESCOPESESSY=800
 GAMESCOPESESSCMD=""
 SMALLDESK=0
 VTX_DOTNET_ROOT="c:\\Program Files\\dotnet\\\\"
@@ -2060,27 +2061,43 @@ function pollWinRes {
 	unset COLCOUNT
 
 	if [ "$GAMESCOPESESS" -eq 1 ]; then
-		# Get the GameScope command from pgrep
-		GAMESCOPESESSCMD="$( pgrep -a "$GAMESCOPE" | head -n1 )"
-				
-		writelog "INFO" "${FUNCNAME[0]} - GameScope Session CMD from pgrep is '${GAMESCOPESESSCMD}'"
-		# ...
-		# There should probably be some check here where if there is no found GameScope start command to bail out
-		# ...
-		
-		# 1280 and 720 are defaults if no value is returned for width and height respectively.
-		# We could replace these defaults with whatever the autodetected width and height variable is.
-		#
-		# Variable names can be whatever you want, just make sure the name you assign and the name in the argument match
-		GAMESCOPESESSX="$( getGameScopeArg "$GAMESCOPESESSCMD" "-W" "$GAMESCOPESESSX" "" "1280" "num")"
-		GAMESCOPESESSY="$( getGameScopeArg "$GAMESCOPESESSCMD" "-H" "$GAMESCOPESESSY" "" "720" "num")"
-		
-		writelog "INFO" "${FUNCNAME[0]} - GameScope resolution from pgrep is '${GAMESCOPESESSX}x${GAMESCOPESESSY}'"
-		
-		SCREENRES="${GAMESCOPESESSX}x${GAMESCOPESESSY}"
-		WINX="$GAMESCOPESESSX"
-		WINY="$GAMESCOPESESSY"
-		setGeom
+		GAMESCOPESESS_CONFIG_FILE="$HOME/.config/gamescope/modes.cfg"
+		if [ -f "$GAMESCOPESESS_CONFIG_FILE" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Found Gamecope Resolution config file at '${GAMESCOPESESS_CONFIG_FILE}'."
+			# Extract the resolution
+    		GAMESCOPESESSRES=$(awk -F '[:@]' '{print $2}' "$GAMESCOPESESS_CONFIG_FILE" | xargs)
+
+    		# Split the resolution into width and height
+    		IFS='x' read -r GAMESCOPESESSX GAMESCOPESESSY <<< "$GAMESCOPESESSRES"
+			writelog "INFO" "${FUNCNAME[0]} - GameScope Session Resolution from config file is '${GAMESCOPESESSRES}'"
+
+			SCREENRES="${GAMESCOPESESSRES}"
+			WINX="$GAMESCOPESESSX"
+			WINY="$GAMESCOPESESSY"
+			setGeom
+		else
+			# Get the GameScope command from pgrep
+			GAMESCOPESESSCMD="$( pgrep -a "$GAMESCOPE" | head -n1 )"
+					
+			writelog "INFO" "${FUNCNAME[0]} - GameScope Session CMD from pgrep is '${GAMESCOPESESSCMD}'"
+			# ...
+			# There should probably be some check here where if there is no found GameScope start command to bail out
+			# ...
+			
+			# 1280 and 720 are defaults if no value is returned for width and height respectively.
+			# We could replace these defaults with whatever the autodetected width and height variable is.
+			#
+			# Variable names can be whatever you want, just make sure the name you assign and the name in the argument match
+			GAMESCOPESESSX="$( getGameScopeArg "$GAMESCOPESESSCMD" "-W" "$GAMESCOPESESSX" "" "1280" "num")"
+			GAMESCOPESESSY="$( getGameScopeArg "$GAMESCOPESESSCMD" "-H" "$GAMESCOPESESSY" "" "720" "num")"
+			
+			writelog "INFO" "${FUNCNAME[0]} - GameScope resolution from pgrep is '${GAMESCOPESESSX}x${GAMESCOPESESSY}'"
+			
+			SCREENRES="${GAMESCOPESESSX}x${GAMESCOPESESSY}"
+			WINX="$GAMESCOPESESSX"
+			WINY="$GAMESCOPESESSY"
+			setGeom
+		fi
 	else
 		SCREENRES="$(getScreenRes r)"
 	fi
@@ -10612,7 +10629,7 @@ function listScreenRes {
 }
 
 function setInitWinXY {
-	DEFRESSHM="$STLSHM/defres.txt"	
+	DEFRESSHM="$STLSHM/defres.txt"
 	if [ -f "$DEFRESSHM" ] ; then
 
 		loadCfg "$DEFRESSHM" X
@@ -10627,6 +10644,7 @@ function setInitWinXY {
 			WINX=$(( SCRW * 3 / 4))
 			WINY=$(( SCRH * 3 / 4))
 		fi
+		
 		{
 		echo "WINX=\"$WINX\""
 		echo "WINY=\"$WINY\""
@@ -26641,7 +26659,9 @@ function installFilesSteamDeck {
 }
 
 function steamdedeckt {
-# Differentiate between Steam Game Mode and Desktop Mode on Steam Deck
+
+# Differentiate between Steam Game Mode and Desktop Mode on Steam Deck 
+# TODO: make the check less generic as right now it may match steam running in a nested gamescope session and not embedded
 if grep -qi "steam" <<< "$(pgrep -a "$GAMESCOPE")"; then
 	writelog "INFO" "${FUNCNAME[0]} - Detected '$GAMESCOPE' running 'forced' - assuming we're running in Steam Game Mode"
 	GAMESCOPESESS=1
