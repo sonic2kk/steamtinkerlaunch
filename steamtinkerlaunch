@@ -7,7 +7,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20241003-1"
+PROGVERS="v14.0.20240930-1 (dont-create-globalconfig-paths-without-steamvars)"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -2696,8 +2696,13 @@ function loadLanguage {
 	writelog "INFO" "${FUNCNAME[0]} - First load the default language '$STLDEFLANG' to make sure all variables are filled"
 	loadLangFile "$STLDEFLANG"
 
-	saveCfg "$STLDEFGLOBALCFG" X
-	loadCfg "$STLDEFGLOBALCFG" X
+	# Prevents loadLanguage from creating the global.conf too early when it may be missing values
+	# i.e. loadLanguage may be called before setSteamPaths, which can result in creating paths without the required Steam path variables set yet
+	#      This can happen with Luxtorpead, where the LUXTORPEDACMD may be written out before `setSteamPaths` has been called to set `STEAMCOMPATTOOL`
+	if [ -f "$STLDEFGLOBALCFG" ]; then
+		saveCfg "$STLDEFGLOBALCFG" X
+		loadCfg "$STLDEFGLOBALCFG" X
+	fi
 
 	writelog "INFO" "${FUNCNAME[0]} - Loading STLLANG from '$STLDEFGLOBALCFG'"
 
