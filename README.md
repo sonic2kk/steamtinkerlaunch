@@ -1,45 +1,32 @@
-# Steam Tinker Launch
+# SteamTinkerLaunch
 [![GitHub version](https://img.shields.io/github/v/tag/sonic2kk/steamtinkerlaunch?label=version&style=flat-square)](https://github.com/sonic2kk/steamtinkerlaunch/releases/latest)
 [![GitHub stars](https://img.shields.io/github/stars/sonic2kk/steamtinkerlaunch.svg?style=flat-square)](https://github.com/sonic2kk/steamtinkerlaunch/stargazers)
 ![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/sonic2kk/steamtinkerlaunch?style=flat-square)
 [![GitHub contributors](https://img.shields.io/github/contributors/sonic2kk/steamtinkerlaunch.svg?style=flat-square)](https://github.com/sonic2kk/steamtinkerlaunch/graphs/contributors)
-[![aur votes](https://img.shields.io/aur/votes/steamtinkerlaunch?label=aur%20votes&style=flat-square)](https://aur.archlinux.org/packages/steamtinkerlaunch)
-[![GitHub issues](https://img.shields.io/github/issues/sonic2kk/steamtinkerlaunch.svg?style=flat-square)](https://github.com/sonic2kk/steamtinkerlaunch/issues)
+[![AUR votes](https://img.shields.io/aur/votes/steamtinkerlaunch?label=aur%20votes&style=flat-square)](https://aur.archlinux.org/packages/steamtinkerlaunch)
+[![GitHub Issues](https://img.shields.io/github/issues/sonic2kk/steamtinkerlaunch.svg?style=flat-square)](https://github.com/sonic2kk/steamtinkerlaunch/issues)
 [![GitHub license](https://img.shields.io/github/license/sonic2kk/steamtinkerlaunch.svg?style=flat-square)](https://github.com/sonic2kk/steamtinkerlaunch/blob/dev/LICENSE)
 
 ## What is SteamTinkerLaunch?
 
 <img align="left" width="64" height="64" src="https://github.com/frostworx/repo-assets/blob/master/pics/steamtinkerlaunch-logo_64px.png" alt="**SteamTinkerLaunch** is a Linux wrapper tool for use with the Steam client">
 
-**Steam Tinker Launch** is a versatile Linux wrapper tool for use with the Steam client which allows for easy graphical configuration of game tools, such as [GameScope](https://github.com/sonic2kk/steamtinkerlaunch/wiki/GameScope), [MangoHud](https://github.com/sonic2kk/steamtinkerlaunch/wiki/MangoHud), [modding tools](https://github.com/sonic2kk/steamtinkerlaunch/wiki/Modding) and a bunch more. It supports both games using Proton and native Linux games, and works on both X11 and Wayland.
- 
-As described by _/u/TaylorRoyal23_ on [r/linux_gaming](https://www.reddit.com/r/linux_gaming/comments/ud58i2/comment/i6i3yf9/?utm_source=share&utm_medium=web2x&context=3):
-
-> _"An incredible wrapper with a menu that lets you easily toggle and modify various settings for games on Linux.
-Anything from proton versions, to startup and exit scripts, proton/dxvk/etc. settings, FSR, reshade,
-and even options for various tools like gamemode, replay-sorcery, gamescope, etc. Tons more too.
-I just set my default proton version to "steam tinker launcher" and then every game launches
-with a 2 second menu that allows you to easily change any of the settings.
-If you don't press any buttons it just goes with the defaults and launches the game.
-The menus can get a little confusing but it consolidates it all in one place and is way more simple
-than trying to remember dozens of commands for various settings that one might need."_
-
-![Main Menu](https://user-images.githubusercontent.com/7917345/231897862-401c8702-af1b-4a51-9ace-8a3f04ca2cf2.png)
+**SteamTinkerLaunch** is a versatile Linux wrapper tool for use with the Steam client which allows for easy graphical configuration of game tools, such as [GameScope](https://github.com/sonic2kk/steamtinkerlaunch/wiki/GameScope), [MangoHud](https://github.com/sonic2kk/steamtinkerlaunch/wiki/MangoHud), [modding tools](https://github.com/sonic2kk/steamtinkerlaunch/wiki/Modding) and a bunch more. It supports both games using Proton and native Linux games, and works on both X11 and Wayland.
 
 ## What Does It Do?
-SteamTinkerLaunch offers a huge variety of features, too many to list in this Readme. Please see the [Features List](https://github.com/sonic2kk/steamtinkerlaunch/wiki#features) and their associated wiki pages for a full breakdown. However, here are some of the key features offered by SteamTinkerLaunch. Note that some of these features may not work with Flatpak Steam!
+SteamTinkerLaunch offers a huge variety of features. Please see the [Features List](https://github.com/sonic2kk/steamtinkerlaunch/wiki#features) and their associated wiki pages for a full breakdown. Here are some of the key features offered by Steam Tinker Launch. Note that some of these features may not work with Flatpak Steam!
 
 | Feature | Description |
 | ------- | ----------- |
 | Custom Per-Game Environment Variables | Set custom environment variables on a per-game basis. Useful for adding command-line tweaks for various games. |
 | Custom Game Executable | Change the executable that Steam launches. Useful for custom game launchers/mod launchers.<br /><br />This option is extremely flexible, allowing for launching a custom executable with a game, instead of the game, before the game or after the game. See the [Custom Program wiki page](https://github.com/sonic2kk/steamtinkerlaunch/wiki/Custom-Command) for usage. |
-| Easy installation of Winetricks verbs | SteamTinkerLaunch can apply the necessary steps to install, for example, `dotnet48` or later in a Proton prefix, which can fix common issues with GUI tools running through Proton.<br /><br />It is **highly recommended** to install `dotnet48` using a community flavour of Proton such as GE-Proton or Proton 5.0. You will also want to ensure your Winetricks version is up-to-date. |
+| Easy Installation of winetricks Verbs | SteamTinkerLaunch can apply the necessary steps to install, for example, `dotnet48` or later in a Proton prefix, which can fix common issues with GUI tools running through Proton.<br /><br />It is **highly recommended** to install `dotnet48` using a community flavour of Proton such as GE-Proton or Proton 5.0. You will also want to ensure your Winetricks version is up-to-date. |
 | [ModOrganizer 2](https://github.com/ModOrganizer2/modorganizer) Support | Installs and sets up mod installation and organization tool ModOrganizer 2. Includes browser and command line integration for handling NXM links with `xdg-open`.<br /><br />See our [ModOrganizer 2 wiki page](https://github.com/sonic2kk/steamtinkerlaunch/wiki/Mod-Organizer-2) and [modding wiki page](https://github.com/sonic2kk/steamtinkerlaunch/wiki/Modding) for more details. |
 | [Vortex Mod Manager](https://www.nexusmods.com/about/vortex/) Support | Installs and sets up Nexus Mods' mod management tool Vortex Mod Manager. Includes browser and command line integration for handling NXM links with `xdg-open`.<br /><br />See our [Vortex wiki page](https://github.com/sonic2kk/steamtinkerlaunch/wiki/Vortex) and [modding wiki page](https://github.com/sonic2kk/steamtinkerlaunch/wiki/Modding) for more details. |
 | [SpecialK](https://github.com/SpecialKO) Support | Utility for enhancing and fixing common problems with Windows games.<br /><br />See our [SpecialK wiki page](https://github.com/sonic2kk/steamtinkerlaunch/wiki/SpecialK) for usage. May require additional [Optional Dependencies](https://github.com/sonic2kk/steamtinkerlaunch/wiki/Installation#optional-dependencies). |
 | [ReShade](https://reshade.me/) Support (Proton/Wine Only) | Supports the use of ReShade shaders to enhance the visual quality of Windows games. Note that ReShade does not support native Linux games.<br /><br />See our [ReShade wiki page](https://github.com/sonic2kk/steamtinkerlaunch/wiki/ReShade) for usage and information on using **ReShade** and **SpecialK** together. |
 | [Hedge Mod Manager](https://github.com/thesupersonic16/HedgeModManager) support | Supports automatic installation of the Open-Source Modern Sonic game mod manager as well as attempting to install workarounds for various games that require it.<br/><br/>Due to the nature of this tweaks relying on Winetricks some manual intervention may be required in some instances. Please see the [SteamTinkerLaunch Hedge Mod Manager wiki page](https://github.com/sonic2kk/steamtinkerlaunch/wiki/Hedge-Mod-Manager) for details. |
-| Custom Wine/Proton Download | Manages downloading custom Proton and Wine releases, such as GloriousEggroll's popular Proton flavour [GEProton](https://github.com/GloriousEggroll/proton-ge-custom). These versions are installed and managed by SteamTinkerLaunch. (**Requires `jq` to be installed!**)<br /><br />See our wiki pages on [Custom Proton Versions](https://github.com/sonic2kk/steamtinkerlaunch/wiki/Download-Custom-Proton) and [Custom Wine Versions](https://github.com/sonic2kk/steamtinkerlaunch/wiki/Download-Custom-Wine) for more details. |
+| Custom Wine/Proton Download | Manages downloading custom Wine and Proton releases. These versions are installed and managed by SteamTinkerLaunch. (**Requires `jq` to be installed!**)<br /><br />See our wiki pages on [Custom Proton Versions](https://github.com/sonic2kk/steamtinkerlaunch/wiki/Download-Custom-Proton) and [Custom Wine Versions](https://github.com/sonic2kk/steamtinkerlaunch/wiki/Download-Custom-Wine) for more details. |
 
 To find out about the latest release, check out the [stable release changelog](https://github.com/sonic2kk/steamtinkerlaunch/releases/latest). To find out about the latest bleeding-edge development changes not yet in a stable build, check out the [full changelog](https://github.com/sonic2kk/steamtinkerlaunch/wiki/Changelog).
 
