@@ -1,4 +1,4 @@
-# Steam Tinker Launch
+# SteamTinkerLaunch
 [![GitHub version](https://img.shields.io/github/v/tag/sonic2kk/steamtinkerlaunch?label=version&style=flat-square)](https://github.com/sonic2kk/steamtinkerlaunch/releases/latest)
 [![GitHub stars](https://img.shields.io/github/stars/sonic2kk/steamtinkerlaunch.svg?style=flat-square)](https://github.com/sonic2kk/steamtinkerlaunch/stargazers)
 ![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/sonic2kk/steamtinkerlaunch?style=flat-square)
@@ -7,11 +7,11 @@
 [![GitHub Issues](https://img.shields.io/github/issues/sonic2kk/steamtinkerlaunch.svg?style=flat-square)](https://github.com/sonic2kk/steamtinkerlaunch/issues)
 [![GitHub license](https://img.shields.io/github/license/sonic2kk/steamtinkerlaunch.svg?style=flat-square)](https://github.com/sonic2kk/steamtinkerlaunch/blob/dev/LICENSE)
 
-## What is Steam Tinker Launch?
+## What is SteamTinkerLaunch?
 
 <img align="left" width="64" height="64" src="https://github.com/frostworx/repo-assets/blob/master/pics/steamtinkerlaunch-logo_64px.png" alt="**SteamTinkerLaunch** is a Linux wrapper tool for use with the Steam client">
 
-**Steam Tinker Launch** is a versatile Linux wrapper tool for use with the Steam client which allows for easy graphical configuration of game tools, such as [GameScope](https://github.com/sonic2kk/steamtinkerlaunch/wiki/GameScope), [MangoHud](https://github.com/sonic2kk/steamtinkerlaunch/wiki/MangoHud), [modding tools](https://github.com/sonic2kk/steamtinkerlaunch/wiki/Modding) and a bunch more. It supports both games using Proton and native Linux games, and works on both X11 and Wayland.
+**SteamTinkerLaunch** is a versatile Linux wrapper tool for use with the Steam client which allows for easy graphical configuration of game tools, such as [GameScope](https://github.com/sonic2kk/steamtinkerlaunch/wiki/GameScope), [MangoHud](https://github.com/sonic2kk/steamtinkerlaunch/wiki/MangoHud), [modding tools](https://github.com/sonic2kk/steamtinkerlaunch/wiki/Modding) and a bunch more. It supports both games using Proton and native Linux games, and works on both X11 and Wayland.
 
 ## What Does It Do?
 SteamTinkerLaunch offers a huge variety of features. Please see the [Features List](https://github.com/sonic2kk/steamtinkerlaunch/wiki#features) and their associated wiki pages for a full breakdown. Here are some of the key features offered by Steam Tinker Launch. Note that some of these features may not work with Flatpak Steam!
