@@ -7,7 +7,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20250602"
+PROGVERS="v14.0.20251227"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -3149,7 +3149,7 @@ function setDefaultCfgValues {
 		if [ -z "$ROBERTAARGS" ]						; then	ROBERTAARGS="--wait-before-run"; fi
 		if [ -z "$LUXTORPEDACMD" ]						; then	LUXTORPEDACMD="$STEAMCOMPATOOLS/luxtorpeda/luxtorpeda.sh"; fi
 		if [ -z "$LUXTORPEDAARGS" ]						; then	LUXTORPEDAARGS="wait-before-run"; fi
-		if [ -z "$RSVERS" ]								; then	RSVERS="5.9.1"; fi
+		if [ -z "$RSVERS" ]								; then	RSVERS="6.6.2"; fi
 		if [ -z "$USERSSPEKVERS" ]						; then  USERSSPEKVERS="1"; fi
 		if [ -z "$RSSPEKVERS" ]							; then  RSSPEKVERS="5.4.2"; fi
 		if [ -z "$AUTOBUMPRESHADE" ]					; then	AUTOBUMPRESHADE="0"; fi
@@ -9154,12 +9154,22 @@ function SHADSRC {
 }
 
 function createShaderRepoList {
-	SHADREPOURL="https://www.pcgamingwiki.com/wiki/${RESH}"
+	SHADREPOURL="https://www.pcgamingwiki.com/w/api.php?action=parse&page=${RESH}&format=json&prop=text"
 	MAXAGE=1440
 
 	if [ ! -f "$SHADREPOLIST" ] || test "$(find "$SHADREPOLIST" -mmin +"$MAXAGE")"; then
-		# if this breaks, we'll use bundled static url list instead
-		"$WGET" -q "$SHADREPOURL" -O - 2> >(grep -v "SSL_INIT") | sed -n '/Repository</,/table>/p' | grep "^<td>" | awk 'ORS=NR%3?FS:RS' | grep -v "https://blues" | sed "s:<td><a rel=\"nofollow\" class=\"external text\" href=::; s:</a></td> <td>:;:; s:</td> <td>:;:; s:\">:\";:; s:<br />: :; s: ;:;:; s:/tree/master::; s:/reshade/Shaders::" > "$SHADREPOLIST"
+		# Use MediaWiki API to fetch shader repository list
+		if [ -x "$(command -v "$JQ")" ]; then
+			"$WGET" -q "$SHADREPOURL" -O - 2> >(grep -v "SSL_INIT") | "$JQ" -r '.parse.text."*"' 2>/dev/null | sed -n '/Repository</,/table>/p' | grep "^<td>" | awk 'ORS=NR%3?FS:RS' | sed "s:<td><a rel=\"nofollow\" class=\"external text\" href=::; s:</a></td> <td>:;:; s:</td> <td>:;:; s:\">:\";:; s:<br />: :; s: ;:;:; s:/tree/master::; s:/reshade/Shaders::" > "$SHADREPOLIST"
+		else
+			writelog "WARN" "${FUNCNAME[0]} - jq is not available for JSON parsing - Shader repository list cannot be fetched from API"
+		fi
+		
+		# If the fetch failed and the repo list is empty, ensure at least the custom list will be available
+		if [ ! -s "$SHADREPOLIST" ]; then
+			touch "$SHADREPOLIST"
+			writelog "WARN" "${FUNCNAME[0]} - Failed to fetch shader repository list from API - Will use custom list only"
+		fi
 	fi
 
 	RCL="repocustomlist.txt"
@@ -9175,6 +9185,7 @@ function createShaderRepoList {
 	fi
 
 	sed '/^$/d' -i "$SHADREPOLIST"
+	sed '/^#/d' -i "$SHADREPOLIST"
 }
 
 function unblockrssub {
