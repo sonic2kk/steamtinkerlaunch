@@ -10,6 +10,7 @@ import re
 import sys
 import urllib.request
 import urllib.error
+import urllib.parse
 
 
 def fetch_shader_repositories():
@@ -23,8 +24,8 @@ def fetch_shader_repositories():
         'formatversion': '2'
     }
     
-    # Build URL with parameters
-    query_string = '&'.join(f'{k}={v}' for k, v in params.items())
+    # Build URL with properly encoded parameters
+    query_string = urllib.parse.urlencode(params)
     url = f"{api_url}?{query_string}"
     
     try:
@@ -95,8 +96,7 @@ def fetch_shader_repositories():
                 description = description.replace(';', ',')
                 
                 # Clean URL (remove /tree/master and /reshade/Shaders suffixes)
-                repo_url = re.sub(r'/tree/master$', '', repo_url)
-                repo_url = re.sub(r'/reshade/Shaders$', '', repo_url)
+                repo_url = re.sub(r'(/tree/master|/reshade/Shaders)$', '', repo_url)
                 
                 # Format output: "URL";Name;Author;Description
                 repositories.append(f'"{repo_url}";{name};{author};{description}')

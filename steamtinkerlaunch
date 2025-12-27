@@ -9159,7 +9159,7 @@ function createShaderRepoList {
 	if [ ! -f "$SHADREPOLIST" ] || test "$(find "$SHADREPOLIST" -mmin +"$MAXAGE")"; then
 		# Use MediaWiki API to fetch shader repositories from PCGamingWiki
 		FETCHSCRIPT="$GLOBALMISCDIR/fetch_shader_repos.py"
-		if [ -f "$FETCHSCRIPT" ]; then
+		if [ -f "$FETCHSCRIPT" ] && [ -x "$(command -v python3)" ]; then
 			writelog "INFO" "${FUNCNAME[0]} - Fetching shader repositories from PCGamingWiki using MediaWiki API"
 			if python3 "$FETCHSCRIPT" > "$SHADREPOLIST" 2>/dev/null; then
 				writelog "INFO" "${FUNCNAME[0]} - Successfully fetched shader repositories"
@@ -9169,7 +9169,11 @@ function createShaderRepoList {
 				touch "$SHADREPOLIST"
 			fi
 		else
-			writelog "WARN" "${FUNCNAME[0]} - Fetch script not found at '$FETCHSCRIPT', using existing list if available"
+			if [ ! -x "$(command -v python3)" ]; then
+				writelog "WARN" "${FUNCNAME[0]} - python3 not found, cannot fetch shader repositories from API"
+			else
+				writelog "WARN" "${FUNCNAME[0]} - Fetch script not found at '$FETCHSCRIPT', using existing list if available"
+			fi
 			touch "$SHADREPOLIST"
 		fi
 	fi
