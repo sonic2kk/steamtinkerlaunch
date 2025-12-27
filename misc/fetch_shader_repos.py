@@ -89,6 +89,11 @@ def fetch_shader_repositories():
                     author = author.replace(entity, char)
                     description = description.replace(entity, char)
                 
+                # Remove semicolons from fields to prevent parsing issues
+                name = name.replace(';', ',')
+                author = author.replace(';', ',')
+                description = description.replace(';', ',')
+                
                 # Clean URL (remove /tree/master and /reshade/Shaders suffixes)
                 repo_url = re.sub(r'/tree/master$', '', repo_url)
                 repo_url = re.sub(r'/reshade/Shaders$', '', repo_url)
