@@ -9154,12 +9154,24 @@ function SHADSRC {
 }
 
 function createShaderRepoList {
-	SHADREPOURL="https://www.pcgamingwiki.com/wiki/${RESH}"
 	MAXAGE=1440
 
 	if [ ! -f "$SHADREPOLIST" ] || test "$(find "$SHADREPOLIST" -mmin +"$MAXAGE")"; then
-		# if this breaks, we'll use bundled static url list instead
-		"$WGET" -q "$SHADREPOURL" -O - 2> >(grep -v "SSL_INIT") | sed -n '/Repository</,/table>/p' | grep "^<td>" | awk 'ORS=NR%3?FS:RS' | grep -v "https://blues" | sed "s:<td><a rel=\"nofollow\" class=\"external text\" href=::; s:</a></td> <td>:;:; s:</td> <td>:;:; s:\">:\";:; s:<br />: :; s: ;:;:; s:/tree/master::; s:/reshade/Shaders::" > "$SHADREPOLIST"
+		# Use MediaWiki API to fetch shader repositories from PCGamingWiki
+		FETCHSCRIPT="$GLOBALMISCDIR/fetch_shader_repos.py"
+		if [ -f "$FETCHSCRIPT" ]; then
+			writelog "INFO" "${FUNCNAME[0]} - Fetching shader repositories from PCGamingWiki using MediaWiki API"
+			if python3 "$FETCHSCRIPT" > "$SHADREPOLIST" 2>/dev/null; then
+				writelog "INFO" "${FUNCNAME[0]} - Successfully fetched shader repositories"
+			else
+				writelog "WARN" "${FUNCNAME[0]} - Failed to fetch shader repositories from API, using existing list if available"
+				# If fetch fails and repolist doesn't exist, create empty file
+				touch "$SHADREPOLIST"
+			fi
+		else
+			writelog "WARN" "${FUNCNAME[0]} - Fetch script not found at '$FETCHSCRIPT', using existing list if available"
+			touch "$SHADREPOLIST"
+		fi
 	fi
 
 	RCL="repocustomlist.txt"
