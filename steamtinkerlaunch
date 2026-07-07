@@ -7,7 +7,7 @@
 PREFIX="/usr"
 PROGNAME="SteamTinkerLaunch"
 NICEPROGNAME="Steam Tinker Launch"
-PROGVERS="v14.0.20250602"
+PROGVERS="v14.0.20260707"
 PROGCMD="${0##*/}"
 PROGINTERNALPROTNAME="Proton-stl"
 SHOSTL="stl"
@@ -25350,7 +25350,10 @@ function saveOrgVars {
 	env | grep "=" | sort -o "$VARSIN"
 
 	# shellcheck disable=2034
-	ORG_LD_PRELOAD="$LD_PRELOAD"
+	# Keep the value main saved before it emptied LD_PRELOAD (see the overlay-deadlock
+	# note after setAIDCfgs). Unset-only default so an intentionally-empty saved value
+	# is preserved rather than overwritten with the current (already empty) LD_PRELOAD.
+	ORG_LD_PRELOAD="${ORG_LD_PRELOAD-${LD_PRELOAD-}}"
 	# shellcheck disable=2034
 	ORG_LD_LIBRARY_PATH="$LD_LIBRARY_PATH"
 	# shellcheck disable=2034
@@ -27085,6 +27088,17 @@ function main {
 
 	initAID "$@"
 	setAIDCfgs
+
+	# Empty LD_PRELOAD before the fork-heavy logging below (loadLanguage and the rest
+	# of main). When STL runs as a compatibility tool with the Steam overlay enabled,
+	# Steam preloads gameoverlayrenderer.so into this shell via LD_PRELOAD. Its atfork
+	# handler deadlocks the short-lived subprocesses writelog spawns, so STL hangs here
+	# and never launches the game (Steam sits at "running"). saveOrgVars/emptyVars
+	# already clear LD_PRELOAD, but not until after getCurrentCommandline further down,
+	# which is too late. Save the original now so restoreOrgVars still gives the overlay
+	# back to the game at launch.
+	ORG_LD_PRELOAD="${ORG_LD_PRELOAD-${LD_PRELOAD-}}"
+	LD_PRELOAD=""
 
 	writelog "INFO" "${FUNCNAME[0]} - Current SteamTinkerLaunch working directory is '$( pwd )'"
 
